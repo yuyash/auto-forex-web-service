@@ -38,7 +38,7 @@ def _recover_orphaned_tasks_on_startup(**_kwargs: object) -> None:
     from apps.trading.tasks.recovery import recover_orphaned_tasks_beat
 
     try:
-        recover_orphaned_tasks_beat.apply_async(countdown=10, queue="trading")
+        recover_orphaned_tasks_beat.apply_async(countdown=10, queue="system")
     except Exception:
         logger.exception("Failed to schedule orphaned task recovery on worker startup")
 
@@ -60,8 +60,8 @@ def _start_market_tick_supervisor(**_kwargs: object) -> None:
     try:
         from apps.market.tasks import ensure_tick_pubsub_running
 
-        # Route to the market queue explicitly (also covered by CELERY_TASK_ROUTES).
-        ensure_tick_pubsub_running.apply_async(countdown=5, queue="market")
+        # Route to the system queue explicitly (also covered by CELERY_TASK_ROUTES).
+        ensure_tick_pubsub_running.apply_async(countdown=5, queue="system")
     except Exception:
         # Avoid blocking worker startup.
         return

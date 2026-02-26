@@ -119,7 +119,10 @@ class StrategyConfiguration(UUIDModel):
         """
         from apps.trading.enums import StrategyType
 
-        return StrategyType(self.strategy_type)
+        try:
+            return StrategyType(self.strategy_type)
+        except ValueError:
+            return StrategyType.CUSTOM
 
     @property
     def config_dict(self) -> dict[str, Any]:

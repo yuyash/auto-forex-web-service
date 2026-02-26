@@ -24,7 +24,12 @@ import StrategyConfigForm from '../strategy/StrategyConfigForm';
 import { useStrategies } from '../../hooks/useStrategies';
 import { strategiesApi } from '../../services/api';
 import type { StrategyConfigCreateData } from '../../types/configuration';
-import type { StrategyConfig, ConfigSchema } from '../../types/strategy';
+import type {
+  StrategyConfig,
+  ConfigSchema,
+  DependsOnCondition,
+  JsonPrimitive,
+} from '../../types/strategy';
 import { STRATEGY_CONFIG_SCHEMAS } from './strategyConfigSchemas';
 
 // Validation schema
@@ -43,6 +48,31 @@ const configurationSchema = z.object({
 
 type ConfigurationFormData = z.infer<typeof configurationSchema>;
 
+const normalizeComparableValue = (value: unknown): JsonPrimitive => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    const lower = trimmed.toLowerCase();
+    if (lower === 'true') return true;
+    if (lower === 'false') return false;
+    if (trimmed === '') return null;
+    const asNumber = Number(trimmed);
+    if (!Number.isNaN(asNumber)) return asNumber;
+    return trimmed;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  return String(value);
+};
+
+const conditionMatchesValue = (
+  currentValue: unknown,
+  expected: JsonPrimitive
+): boolean => {
+  return normalizeComparableValue(currentValue) === expected;
+};
+
 interface ConfigurationFormProps {
   mode?: 'create' | 'edit';
   initialData?: Partial<ConfigurationFormData>;
@@ -50,96 +80,6 @@ interface ConfigurationFormProps {
   onCancel: () => void;
   isLoading?: boolean;
 }
-
-// Default parameters for each strategy type
-// These should match the required parameters in the backend strategy schemas
-const DEFAULT_PARAMETERS: Record<string, Record<string, unknown>> = {
-  floor: {
-    base_lot_size: 1.0,
-    lot_unit_size: 1000,
-    retracement_lot_mode: 'additive',
-    retracement_lot_amount: 1.0,
-    retracement_pips: 30,
-    take_profit_pips: 25,
-    max_layers: 3,
-    max_retracements_per_layer: 10,
-    retracement_trigger_progression: 'constant',
-    retracement_trigger_increment: 5.0,
-    take_profit_trigger_progression: 'constant',
-    take_profit_trigger_increment: 5.0,
-    take_profit_pips_mode: 'constant',
-    take_profit_pips_amount: 5.0,
-    entry_signal_lookback_candles: 50,
-    entry_signal_candle_granularity_seconds: 60,
-    allow_duplicate_units: false,
-    hedging_enabled: false,
-    margin_protection_enabled: true,
-    margin_rate: 0.04,
-    margin_cut_start_ratio: 0.6,
-    margin_cut_target_ratio: 0.5,
-    volatility_check_enabled: true,
-    volatility_lock_multiplier: 5.0,
-    volatility_unlock_multiplier: 1.5,
-    dynamic_parameter_adjustment_enabled: false,
-    atr_period: 14,
-    atr_baseline_period: 50,
-    market_condition_override_enabled: true,
-    market_condition_spread_limit_pips: 3.0,
-  },
-  ma_crossover: {
-    instrument: 'USD_JPY',
-    fast_period: 50,
-    slow_period: 200,
-    position_size: 1000,
-    stop_loss_pips: 50,
-    take_profit_pips: 100,
-  },
-  rsi: {
-    instrument: 'USD_JPY',
-    period: 14,
-    oversold: 30,
-    overbought: 70,
-    position_size: 1000,
-  },
-  macd: {
-    instrument: 'USD_JPY',
-    fast_period: 12,
-    slow_period: 26,
-    signal_period: 9,
-    position_size: 1000,
-  },
-  mean_reversion: {
-    instrument: 'USD_JPY',
-    period: 20,
-    std_dev: 2,
-    position_size: 1000,
-  },
-  scalping: {
-    instrument: 'USD_JPY',
-    position_size: 1000,
-    stop_loss_pips: 10,
-    take_profit_pips: 15,
-  },
-  swing_trading: {
-    instrument: 'USD_JPY',
-    position_size: 1000,
-    stop_loss_pips: 100,
-    take_profit_pips: 200,
-  },
-  stochastic: {
-    instrument: 'USD_JPY',
-    k_period: 14,
-    d_period: 3,
-    oversold: 20,
-    overbought: 80,
-    position_size: 1000,
-  },
-  arbitrage: {
-    instrument: 'USD_JPY',
-    position_size: 1000,
-    min_spread: 0.0001,
-  },
-};
 
 const getDefaultParameters = (
   strategyType: string,
@@ -161,9 +101,7 @@ const getDefaultParameters = (
     return merged;
   }
 
-  const fallback = DEFAULT_PARAMETERS[strategyType];
-  const base = fallback ? { ...fallback } : {};
-  return apiDefaults ? { ...base, ...apiDefaults } : base;
+  return apiDefaults ? { ...apiDefaults } : {};
 };
 
 const ConfigurationForm = ({
@@ -451,23 +389,21 @@ const ConfigurationForm = ({
     const fieldSchema = strategySchema.properties[key];
     if (!fieldSchema?.dependsOn) return true;
 
-    const matchesSingleCondition = (cond: {
-      field: string;
-      values: string[];
-      and?: Array<{ field: string; values: string[] }>;
-    }): boolean => {
+    const matchesSingleCondition = (cond: DependsOnCondition): boolean => {
       const dependentRaw = parameters[cond.field];
-      const dependentValue =
-        dependentRaw === undefined || dependentRaw === null
-          ? ''
-          : String(dependentRaw);
-      if (!cond.values.includes(dependentValue)) return false;
+      if (
+        !cond.values.some((expected) =>
+          conditionMatchesValue(dependentRaw, expected)
+        )
+      ) {
+        return false;
+      }
       if (!cond.and || cond.and.length === 0) return true;
       return cond.and.every((andCond) => {
         const rawCond = parameters[andCond.field];
-        const valueCond =
-          rawCond === undefined || rawCond === null ? '' : String(rawCond);
-        return andCond.values.includes(valueCond);
+        return andCond.values.some((expected) =>
+          conditionMatchesValue(rawCond, expected)
+        );
       });
     };
 

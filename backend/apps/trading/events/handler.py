@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from collections import defaultdict
 from decimal import Decimal
 from logging import Logger, getLogger
@@ -9,11 +10,10 @@ from logging import Logger, getLogger
 from apps.trading.dataclasses import EntryExecutionBinding, EventExecutionResult
 from apps.trading.enums import Direction
 from apps.trading.events import (
-    InitialEntryEvent,
+    ClosePositionEvent,
     MarginProtectionEvent,
-    RetracementEvent,
+    OpenPositionEvent,
     StrategyEvent,
-    TakeProfitEvent,
     VolatilityHedgeNeutralizeEvent,
     VolatilityLockEvent,
 )
@@ -21,6 +21,9 @@ from apps.trading.models import Order, Position, Trade, TradingEvent
 from apps.trading.order import OrderService, OrderServiceError
 
 logger: Logger = getLogger(name=__name__)
+
+
+EventDispatchFn = Callable[[StrategyEvent], EventExecutionResult]
 
 
 class EventHandler:
@@ -47,6 +50,38 @@ class EventHandler:
         self.position_map: dict[int, Position] = {}  # layer_number -> Position
         self.layer_position_ids: dict[int, list[str]] = defaultdict(list)
         self._position_cache: dict[str, Position] = {}
+        self._event_dispatch: dict[str, EventDispatchFn] = {
+            "open_position": self._dispatch_open_position,
+            "close_position": self._dispatch_close_position,
+            "volatility_lock": self._dispatch_volatility_lock,
+            "volatility_hedge_neutralize": self._dispatch_volatility_hedge_neutralize,
+            "margin_protection": self._dispatch_margin_protection,
+        }
+        self._category_dispatch: dict[str, EventDispatchFn] = {
+            "info": self._dispatch_informational,
+            "entry": self._dispatch_unhandled_category,
+            "exit": self._dispatch_unhandled_category,
+            "risk": self._dispatch_unhandled_category,
+        }
+
+    @staticmethod
+    def _event_type_key(strategy_event: StrategyEvent) -> str:
+        event_type = getattr(strategy_event, "event_type", "")
+        return str(getattr(event_type, "value", event_type))
+
+    def register_event_handler(self, event_type: str, handler: EventDispatchFn) -> None:
+        """Register/override a handler for a specific event_type."""
+        key = str(event_type).strip()
+        if not key:
+            raise ValueError("event_type must be non-empty")
+        self._event_dispatch[key] = handler
+
+    def register_category_handler(self, category: str, handler: EventDispatchFn) -> None:
+        """Register/override a handler for an event category."""
+        key = str(category).strip()
+        if not key:
+            raise ValueError("category must be non-empty")
+        self._category_dispatch[key] = handler
 
     @property
     def _task_pk(self):
@@ -102,14 +137,14 @@ class EventHandler:
             self._position_cache[str(position.id)] = position
         self.position_map[layer_number] = open_positions[-1]
 
-    def _find_take_profit_target(self, event: TakeProfitEvent) -> Position | None:
+    def _find_close_position_target(self, event: ClosePositionEvent) -> Position | None:
         # If the event carries a specific position_id, use it directly.
         if event.position_id:
             candidate = self._get_open_position_by_id(event.position_id)
             if candidate:
                 return candidate
             logger.warning(
-                "position_id %s from TakeProfitEvent not found or already closed, "
+                "position_id %s from ClosePositionEvent not found or already closed, "
                 "falling back to entry-time lookup for layer %s",
                 event.position_id,
                 event.layer_number,
@@ -222,54 +257,93 @@ class EventHandler:
         Raises:
             OrderServiceError: If order execution fails
         """
-        # Convert TradingEvent back to StrategyEvent
         strategy_event = StrategyEvent.from_dict(trading_event.details)
+        event_key = self._event_type_key(strategy_event)
+        event_handler = self._event_dispatch.get(event_key)
+        if event_handler:
+            return event_handler(strategy_event)
 
-        # Dispatch to appropriate handler based on event type
-        if isinstance(strategy_event, InitialEntryEvent):
-            position = self.handle_initial_entry(strategy_event)
-            binding = EntryExecutionBinding(
-                entry_id=strategy_event.entry_id,
-                position_id=str(position.id),
-            )
-            return EventExecutionResult(
-                realized_pnl_delta=Decimal("0"),
-                entry_binding=binding,
-            )
-        if isinstance(strategy_event, RetracementEvent):
-            position = self.handle_retracement(strategy_event)
-            binding = EntryExecutionBinding(
-                entry_id=strategy_event.entry_id,
-                position_id=str(position.id),
-            )
-            return EventExecutionResult(
-                realized_pnl_delta=Decimal("0"),
-                entry_binding=binding,
-            )
-        if isinstance(strategy_event, TakeProfitEvent):
-            return EventExecutionResult(
-                realized_pnl_delta=self.handle_take_profit(strategy_event),
-            )
-        if isinstance(strategy_event, VolatilityLockEvent):
-            return EventExecutionResult(
-                realized_pnl_delta=self.handle_volatility_lock(strategy_event),
-            )
-        if isinstance(strategy_event, VolatilityHedgeNeutralizeEvent):
-            return EventExecutionResult(
-                realized_pnl_delta=self.handle_volatility_hedge_neutralize(strategy_event),
-            )
-        if isinstance(strategy_event, MarginProtectionEvent):
-            return EventExecutionResult(
-                realized_pnl_delta=self.handle_margin_protection(strategy_event),
-            )
-        # ADD_LAYER and REMOVE_LAYER are informational only, no pnl impact.
+        category = str(getattr(strategy_event, "category", "info"))
+        category_handler = self._category_dispatch.get(category, self._dispatch_informational)
+        return category_handler(strategy_event)
+
+    def _dispatch_open_position(self, strategy_event: StrategyEvent) -> EventExecutionResult:
+        if not isinstance(strategy_event, OpenPositionEvent):
+            return self._dispatch_type_mismatch(strategy_event, OpenPositionEvent)
+        position = self.handle_open_position(strategy_event)
+        binding = EntryExecutionBinding(
+            entry_id=strategy_event.entry_id,
+            position_id=str(position.id),
+        )
+        return EventExecutionResult(
+            realized_pnl_delta=Decimal("0"),
+            entry_binding=binding,
+        )
+
+    def _dispatch_close_position(self, strategy_event: StrategyEvent) -> EventExecutionResult:
+        if not isinstance(strategy_event, ClosePositionEvent):
+            return self._dispatch_type_mismatch(strategy_event, ClosePositionEvent)
+        return EventExecutionResult(
+            realized_pnl_delta=self.handle_close_position(strategy_event),
+        )
+
+    def _dispatch_volatility_lock(self, strategy_event: StrategyEvent) -> EventExecutionResult:
+        if not isinstance(strategy_event, VolatilityLockEvent):
+            return self._dispatch_type_mismatch(strategy_event, VolatilityLockEvent)
+        return EventExecutionResult(
+            realized_pnl_delta=self.handle_volatility_lock(strategy_event),
+        )
+
+    def _dispatch_volatility_hedge_neutralize(
+        self, strategy_event: StrategyEvent
+    ) -> EventExecutionResult:
+        if not isinstance(strategy_event, VolatilityHedgeNeutralizeEvent):
+            return self._dispatch_type_mismatch(strategy_event, VolatilityHedgeNeutralizeEvent)
+        return EventExecutionResult(
+            realized_pnl_delta=self.handle_volatility_hedge_neutralize(strategy_event),
+        )
+
+    def _dispatch_margin_protection(self, strategy_event: StrategyEvent) -> EventExecutionResult:
+        if not isinstance(strategy_event, MarginProtectionEvent):
+            return self._dispatch_type_mismatch(strategy_event, MarginProtectionEvent)
+        return EventExecutionResult(
+            realized_pnl_delta=self.handle_margin_protection(strategy_event),
+        )
+
+    def _dispatch_informational(self, strategy_event: StrategyEvent) -> EventExecutionResult:
+        logger.debug(
+            "Informational event ignored by execution handler: event_type=%s, category=%s",
+            self._event_type_key(strategy_event),
+            getattr(strategy_event, "category", "info"),
+        )
         return EventExecutionResult(realized_pnl_delta=Decimal("0"))
 
-    def handle_initial_entry(self, event: InitialEntryEvent) -> Position:
-        """Open initial position for a layer.
+    def _dispatch_unhandled_category(self, strategy_event: StrategyEvent) -> EventExecutionResult:
+        logger.warning(
+            "No execution handler registered for event category '%s' (event_type=%s)",
+            getattr(strategy_event, "category", "unknown"),
+            self._event_type_key(strategy_event),
+        )
+        return EventExecutionResult(realized_pnl_delta=Decimal("0"))
+
+    def _dispatch_type_mismatch(
+        self,
+        strategy_event: StrategyEvent,
+        expected_cls: type[StrategyEvent],
+    ) -> EventExecutionResult:
+        logger.error(
+            "Event dispatch type mismatch for event_type=%s: expected %s, got %s",
+            self._event_type_key(strategy_event),
+            expected_cls.__name__,
+            strategy_event.__class__.__name__,
+        )
+        return EventExecutionResult(realized_pnl_delta=Decimal("0"))
+
+    def handle_open_position(self, event: OpenPositionEvent) -> Position:
+        """Open position for execution.
 
         Args:
-            event: Initial entry event with position details
+            event: Open position event with position details
 
         Returns:
             Position: Created position
@@ -305,56 +379,7 @@ class EventHandler:
         )
 
         logger.info(
-            "Initial entry executed: layer=%s, direction=%s, units=%s, position_id=%s",
-            event.layer_number,
-            direction,
-            event.units,
-            position.id,
-        )
-
-        return position
-
-    def handle_retracement(self, event: RetracementEvent) -> Position:
-        """Add to existing position (retracement).
-
-        Args:
-            event: Retracement event with position details
-
-        Returns:
-            Position: Updated or created position
-
-        Raises:
-            OrderServiceError: If order execution fails
-        """
-        direction = Direction(event.direction)
-        position, order = self.order_service.open_position(
-            instrument=self.instrument,
-            units=event.units,
-            direction=direction,
-            layer_index=event.layer_number,
-            merge_with_existing=False,
-            override_price=event.price if event.price else None,
-            tick_timestamp=event.timestamp,
-            retracement_count=event.retracement_count,
-        )
-
-        self._cache_position(event.layer_number, position)
-        self._record_trade(
-            direction=direction,
-            units=event.units,
-            instrument=position.instrument,
-            price=position.entry_price,
-            execution_method=str(event.event_type.value),
-            timestamp=event.timestamp,
-            layer_index=event.layer_number,
-            retracement_count=event.retracement_count,
-            oanda_trade_id=position.oanda_trade_id,
-            position=position,
-            order=order,
-        )
-
-        logger.info(
-            "Retracement executed: layer=%s, direction=%s, units=%s, count=%s, position_id=%s",
+            "Open position executed: layer=%s, direction=%s, units=%s, count=%s, position_id=%s",
             event.layer_number,
             direction,
             event.units,
@@ -364,15 +389,15 @@ class EventHandler:
 
         return position
 
-    def handle_take_profit(self, event: TakeProfitEvent) -> Decimal:
-        """Close position(s) for take profit.
+    def handle_close_position(self, event: ClosePositionEvent) -> Decimal:
+        """Close one or more positions.
 
         When the requested units exceed a single position's size, this
         method iterates through multiple positions in the same layer
         until the full amount is closed or no more open positions remain.
 
         Args:
-            event: Take profit event with close details
+            event: Close position event with close details
 
         Returns:
             Decimal: Realized pnl delta from this event
@@ -386,7 +411,7 @@ class EventHandler:
         realized_delta_total = Decimal("0")
 
         while True:
-            position = self._find_take_profit_target(event)
+            position = self._find_close_position_target(event)
             if not position:
                 if realized_delta_total == Decimal("0"):
                     logger.error(
@@ -396,7 +421,7 @@ class EventHandler:
                     )
                 else:
                     logger.warning(
-                        "Take profit: exhausted open positions for layer %s before fully "
+                        "Close position: exhausted open positions for layer %s before fully "
                         "closing requested %s units (%s remaining)",
                         event.layer_number,
                         total_requested,
@@ -440,14 +465,14 @@ class EventHandler:
 
             if not closed_position.is_open:
                 logger.info(
-                    "Take profit executed (full close): layer=%s, pnl=%s, position_id=%s",
+                    "Close position executed (full close): layer=%s, pnl=%s, position_id=%s",
                     event.layer_number,
                     realized_delta,
                     closed_position.id,
                 )
             else:
                 logger.info(
-                    "Take profit executed (partial close): layer=%s, units_closed=%s, remaining=%s, position_id=%s",
+                    "Close position executed (partial close): layer=%s, units_closed=%s, remaining=%s, position_id=%s",
                     event.layer_number,
                     units_to_close,
                     abs(closed_position.units),

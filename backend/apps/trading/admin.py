@@ -12,6 +12,7 @@ from apps.trading.models import (
     Trade,
     TradingEvent,
     TradingTask,
+    StrategyEventRecord,
 )
 from apps.trading.models.state import ExecutionState
 
@@ -76,6 +77,24 @@ class CeleryTaskStatusAdmin(admin.ModelAdmin):
 
 @admin.register(TradingEvent)
 class TradingEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "created_at",
+        "severity",
+        "event_type",
+        "task_type",
+        "task_id",
+        "user",
+        "account",
+        "instrument",
+    )
+    list_filter = ("severity", "event_type", "task_type", "created_at")
+    search_fields = ("event_type", "description", "instrument", "task_type", "task_id")
+    ordering = ("-created_at",)
+
+
+@admin.register(StrategyEventRecord)
+class StrategyEventRecordAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "created_at",

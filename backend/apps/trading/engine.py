@@ -142,7 +142,10 @@ class TradingEngine:
         Returns:
             Strategy type enum
         """
-        return StrategyType(self.strategy_config.strategy_type)
+        try:
+            return StrategyType(self.strategy_config.strategy_type)
+        except ValueError:
+            return StrategyType.CUSTOM
 
     def apply_event_execution_result(
         self,

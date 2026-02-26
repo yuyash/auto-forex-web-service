@@ -331,10 +331,14 @@ class TestSaveEvents:
         )
 
         mock_event = MagicMock()
+        mock_event.event_type = "margin_protection"
         mock_record = MagicMock()
 
-        # Patch at the import source since save_events does a lazy import
-        with patch("apps.trading.models.TradingEvent") as mock_te:
+        # Patch at the import source since save_events does a lazy import.
+        with (
+            patch("apps.trading.models.TradingEvent") as mock_te,
+            patch("apps.trading.models.StrategyEventRecord") as mock_se,
+        ):
             mock_te.from_event.return_value = mock_record
             result = executor.save_events([mock_event])
 
@@ -345,7 +349,100 @@ class TestSaveEvents:
                 execution_run_id=1,
             )
             mock_te.objects.bulk_create.assert_called_once_with([mock_record])
+            mock_se.objects.bulk_create.assert_not_called()
             assert result == [mock_record]
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_save_events_routes_strategy_internal_events(self, mock_handler):
+        from apps.trading.models import BacktestTask
+        from apps.trading.tasks.executor import TaskExecutor
+
+        task = MagicMock(spec=BacktestTask)
+        task.instrument = "EUR_USD"
+        task.pip_size = Decimal("0.0001")
+        task.initial_balance = Decimal("10000")
+        task.celery_task_id = "celery-123"
+
+        executor = TaskExecutor(
+            task=task,
+            engine=MagicMock(),
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=MagicMock(),
+            state_manager=MagicMock(),
+        )
+
+        strategy_event = MagicMock()
+        strategy_event.event_type = "add_layer"
+        strategy_record = MagicMock()
+
+        with (
+            patch("apps.trading.models.TradingEvent") as mock_te,
+            patch("apps.trading.models.StrategyEventRecord") as mock_se,
+        ):
+            mock_se.from_event.return_value = strategy_record
+            result = executor.save_events([strategy_event])
+
+            mock_te.from_event.assert_not_called()
+            mock_te.objects.bulk_create.assert_not_called()
+            mock_se.from_event.assert_called_once_with(
+                event=strategy_event,
+                context=executor.event_context,
+                celery_task_id="celery-123",
+                execution_run_id=1,
+            )
+            mock_se.objects.bulk_create.assert_called_once_with([strategy_record])
+            assert result == []
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_save_events_creates_generic_trading_event_and_strategy_event_for_floor_open(
+        self, mock_handler
+    ):
+        from apps.trading.models import BacktestTask
+        from apps.trading.tasks.executor import TaskExecutor
+
+        task = MagicMock(spec=BacktestTask)
+        task.instrument = "EUR_USD"
+        task.pip_size = Decimal("0.0001")
+        task.initial_balance = Decimal("10000")
+        task.celery_task_id = "celery-123"
+
+        executor = TaskExecutor(
+            task=task,
+            engine=MagicMock(),
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=MagicMock(),
+            state_manager=MagicMock(),
+        )
+
+        floor_event = MagicMock()
+        floor_event.event_type = "initial_entry"
+        floor_event.to_dict.return_value = {"event_type": "initial_entry", "entry_id": 10}
+
+        strategy_record = MagicMock()
+
+        with (
+            patch("apps.trading.models.TradingEvent") as mock_te,
+            patch("apps.trading.models.StrategyEventRecord") as mock_se,
+        ):
+            mock_se.from_event.return_value = strategy_record
+            result = executor.save_events([floor_event])
+
+            assert len(result) == 1
+            created_kwargs = mock_te.call_args.kwargs
+            assert created_kwargs["event_type"] == "open_position"
+            assert created_kwargs["details"]["event_type"] == "open_position"
+            assert created_kwargs["details"]["strategy_event_type"] == "initial_entry"
+            mock_te.from_event.assert_not_called()
+            mock_te.objects.bulk_create.assert_called_once()
+            mock_se.from_event.assert_called_once_with(
+                event=floor_event,
+                context=executor.event_context,
+                celery_task_id="celery-123",
+                execution_run_id=1,
+            )
+            mock_se.objects.bulk_create.assert_called_once_with([strategy_record])
 
 
 class TestResumeLifecycle:

@@ -32,7 +32,11 @@ class Command(BaseCommand):
         r = redis.from_url(settings.CELERY_BROKER_URL)
 
         # Define queues to check
-        queues = [queue_name] if queue_name else ["celery", "trading", "market", "default"]
+        queues = (
+            [queue_name]
+            if queue_name
+            else ["celery", "market", "trading", "backtest", "system", "default"]
+        )
 
         self.stdout.write(self.style.SUCCESS("\n=== Celery Queue Status ==="))
 

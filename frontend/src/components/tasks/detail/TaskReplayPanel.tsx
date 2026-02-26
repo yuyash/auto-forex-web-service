@@ -54,6 +54,7 @@ import {
   fetchTradesSince,
 } from '../../../utils/fetchAllTrades';
 import { useSupportedGranularities } from '../../../hooks/useMarketConfig';
+import { useTaskEvents, type TaskEvent } from '../../../hooks/useTaskEvents';
 import {
   useTaskPositions,
   type TaskPosition,
@@ -179,6 +180,35 @@ const toRfc3339Seconds = (value: string): string => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
+};
+
+const TRADING_OPEN_EVENT_TYPES = new Set([
+  'open_position',
+  'initial_entry',
+  'retracement',
+]);
+const TRADING_CLOSE_EVENT_TYPES = new Set([
+  'close_position',
+  'take_profit',
+  'margin_protection',
+  'volatility_lock',
+  'volatility_hedge_neutralize',
+]);
+
+const toEventMarkerTime = (event: TaskEvent): UTCTimestamp | null => {
+  const detailTimestamp =
+    typeof event.details?.timestamp === 'string'
+      ? event.details.timestamp
+      : undefined;
+  return (
+    parseUtcTimestamp(detailTimestamp) ?? parseUtcTimestamp(event.created_at)
+  );
+};
+
+const toEventDirection = (event: TaskEvent): 'long' | 'short' | null => {
+  const raw = String(event.details?.direction ?? '').toLowerCase();
+  if (raw === 'long' || raw === 'short') return raw;
+  return null;
 };
 
 const recommendGranularity = (
@@ -377,6 +407,33 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     taskType,
     executionRunId,
     status: 'open',
+    pageSize: 5000,
+    enableRealTimeUpdates,
+  });
+  const { events: taskLifecycleEvents } = useTaskEvents({
+    taskId,
+    taskType,
+    executionRunId,
+    source: 'task',
+    page: 1,
+    pageSize: 5000,
+    enableRealTimeUpdates,
+  });
+  const { events: tradingEvents } = useTaskEvents({
+    taskId,
+    taskType,
+    executionRunId,
+    source: 'trading',
+    page: 1,
+    pageSize: 5000,
+    enableRealTimeUpdates,
+  });
+  const { events: strategyEvents } = useTaskEvents({
+    taskId,
+    taskType,
+    executionRunId,
+    source: 'strategy',
+    page: 1,
     pageSize: 5000,
     enableRealTimeUpdates,
   });
@@ -1727,6 +1784,70 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     programmaticScrollRef,
   ]);
 
+  const eventMarkers = useMemo(() => {
+    const markers: Array<{
+      time: Time;
+      position: 'aboveBar' | 'belowBar';
+      shape: 'circle' | 'arrowUp' | 'arrowDown';
+      color: string;
+      text?: string;
+    }> = [];
+
+    for (const event of taskLifecycleEvents) {
+      const time = toEventMarkerTime(event);
+      if (!time) continue;
+      markers.push({
+        time,
+        position: 'aboveBar',
+        shape: 'circle',
+        color: '#2563eb',
+        text: event.event_type_display || event.event_type,
+      });
+    }
+
+    for (const event of tradingEvents) {
+      const time = toEventMarkerTime(event);
+      if (!time) continue;
+
+      const eventType = String(event.event_type || '').toLowerCase();
+      const direction = toEventDirection(event);
+      const isOpen = TRADING_OPEN_EVENT_TYPES.has(eventType);
+      const isClose = TRADING_CLOSE_EVENT_TYPES.has(eventType);
+
+      let color = '#111111';
+      if (isOpen && direction === 'long') color = '#16a34a';
+      else if (isOpen && direction === 'short') color = '#dc2626';
+      else if (isClose) color = '#6b7280';
+
+      markers.push({
+        time,
+        position: direction === 'short' ? 'aboveBar' : 'belowBar',
+        shape:
+          direction === 'short'
+            ? 'arrowDown'
+            : direction === 'long'
+              ? 'arrowUp'
+              : 'circle',
+        color,
+        text: event.event_type_display || event.event_type,
+      });
+    }
+
+    for (const event of strategyEvents) {
+      const time = toEventMarkerTime(event);
+      if (!time) continue;
+      markers.push({
+        time,
+        position: 'belowBar',
+        shape: 'circle',
+        color: '#111111',
+        text: event.event_type_display || event.event_type,
+      });
+    }
+
+    return markers.sort((a, b) => Number(a.time) - Number(b.time));
+  }, [taskLifecycleEvents, tradingEvents, strategyEvents]);
+
   // Update trade markers when trades or selection changes (without resetting the view)
   useEffect(() => {
     if (!seriesRef.current || !markersRef.current) return;
@@ -1781,11 +1902,17 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
     try {
       programmaticScrollRef.current = true;
-      markersRef.current.setMarkers(tradeMarkers);
+      markersRef.current.setMarkers([...eventMarkers, ...tradeMarkers]);
     } catch (e) {
       console.warn('Failed to set trade markers:', e);
     }
-  }, [trades, selectedTradeId, highlightedTradeIds, programmaticScrollRef]);
+  }, [
+    trades,
+    selectedTradeId,
+    highlightedTradeIds,
+    eventMarkers,
+    programmaticScrollRef,
+  ]);
 
   const handleGranularityChange = (e: SelectChangeEvent) => {
     // Save the current visible time range so we can restore it after new

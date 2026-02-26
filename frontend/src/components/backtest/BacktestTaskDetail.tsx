@@ -92,10 +92,16 @@ export const BacktestTaskDetail: React.FC = () => {
   } = useBacktestTask(taskId || undefined);
   const { strategies } = useStrategies();
 
+  const isTaskRunning = task?.status === TaskStatus.RUNNING;
+
   const overviewSummary = useTaskSummary(
     taskId,
     TaskType.BACKTEST,
-    task?.execution_run_id
+    task?.execution_run_id,
+    {
+      polling: isTaskRunning,
+      interval: 3000,
+    }
   );
 
   const { summary: s } = overviewSummary;

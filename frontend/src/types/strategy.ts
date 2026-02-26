@@ -6,6 +6,8 @@ export interface Strategy {
   config_schema: ConfigSchema;
 }
 
+export type JsonPrimitive = string | number | boolean | null;
+
 export interface ConfigSchema {
   type: string;
   title?: string;
@@ -13,6 +15,13 @@ export interface ConfigSchema {
   display_name?: string;
   properties: Record<string, ConfigProperty>;
   required?: string[];
+}
+
+export interface DependsOnCondition {
+  field: string;
+  values: JsonPrimitive[];
+  and?: DependsOnCondition[];
+  or?: DependsOnCondition[];
 }
 
 export interface ConfigProperty {
@@ -23,28 +32,20 @@ export interface ConfigProperty {
   minimum?: number;
   maximum?: number;
   enum?: (string | number)[];
+  properties?: Record<string, ConfigProperty>;
+  required?: string[];
   items?: {
     type: string;
+    enum?: (string | number)[];
+    properties?: Record<string, ConfigProperty>;
+    required?: string[];
+    minimum?: number;
+    maximum?: number;
   };
   /** Logical group for UI section grouping */
   group?: string;
   // Conditional visibility: show this field only when another field has specific values
-  dependsOn?: {
-    field: string;
-    values: string[];
-    and?: Array<{
-      field: string;
-      values: string[];
-    }>;
-    or?: Array<{
-      field: string;
-      values: string[];
-      and?: Array<{
-        field: string;
-        values: string[];
-      }>;
-    }>;
-  };
+  dependsOn?: DependsOnCondition;
 }
 
 export interface StrategyConfig {

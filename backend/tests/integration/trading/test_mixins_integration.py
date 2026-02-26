@@ -19,6 +19,7 @@ from apps.trading.models import (
     Metrics,
     Order,
     Position,
+    StrategyEventRecord,
     TaskLog,
     Trade,
     TradingEvent,
@@ -150,6 +151,91 @@ class TestEvents:
         response = client.get(f"/api/trading/tasks/backtest/{task.pk}/events/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 0
+
+    def test_scope_filter_task_events(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        TradingEvent.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            celery_task_id=task.celery_task_id,
+            event_type="status_changed",
+            severity="info",
+            description="Task restart requested",
+            user=task.user,
+            instrument="USD_JPY",
+            details={"kind": "task_restart_requested"},
+        )
+        TradingEvent.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            celery_task_id=task.celery_task_id,
+            event_type="initial_entry",
+            severity="info",
+            description="Open long",
+            user=task.user,
+            instrument="USD_JPY",
+            details={"event_type": "initial_entry"},
+        )
+
+        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/events/?scope=task")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 1
+        assert response.data["results"][0]["event_scope"] == "task"
+
+    def test_scope_filter_trading_events(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        TradingEvent.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            celery_task_id=task.celery_task_id,
+            event_type="status_changed",
+            severity="info",
+            description="Task stop requested",
+            user=task.user,
+            instrument="USD_JPY",
+            details={"kind": "task_stop_requested"},
+        )
+        TradingEvent.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            celery_task_id=task.celery_task_id,
+            event_type="open_position",
+            severity="info",
+            description="Open long position",
+            user=task.user,
+            instrument="USD_JPY",
+            details={"event_type": "initial_entry", "strategy_event_type": "initial_entry"},
+        )
+
+        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/events/?scope=trading")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 1
+        assert response.data["results"][0]["event_scope"] == "trading"
+
+    def test_strategy_events_endpoint(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        StrategyEventRecord.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            celery_task_id=task.celery_task_id,
+            event_type="add_layer",
+            severity="info",
+            description="Layer added",
+            user=task.user,
+            instrument="USD_JPY",
+            details={"event_type": "add_layer"},
+        )
+
+        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/strategy-events/")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 1
+        assert response.data["results"][0]["event_scope"] == "strategy"
 
 
 @pytest.mark.django_db

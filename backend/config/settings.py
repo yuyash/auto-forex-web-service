@@ -219,20 +219,26 @@ CELERY_WORKER_TASK_LOG_FORMAT = (
     "[%(asctime)s: %(levelname)s/%(processName)s] [%(task_name)s(%(task_id)s)] %(message)s"
 )
 
-# Avoid starvation from long-running tick publisher/subscriber tasks.
-# Route market tick jobs to a dedicated queue and trading/backtest jobs to another.
+# Queue strategy:
+# - market: live market data streaming
+# - trading: live trading task execution
+# - backtest: backtest task execution + backtest tick publishing
+# - system: maintenance/supervisor/recovery jobs
 CELERY_TASK_DEFAULT_QUEUE = os.getenv("CELERY_TASK_DEFAULT_QUEUE", "default")
 CELERY_TASK_ROUTES = {
-    # Market (long-running)
-    "market.tasks.ensure_tick_pubsub_running": {"queue": "market"},
+    # Market (live tick streaming)
+    "market.tasks.ensure_tick_pubsub_running": {"queue": "system"},
     "market.tasks.publish_oanda_ticks": {"queue": "market"},
     "market.tasks.subscribe_ticks_to_db": {"queue": "market"},
-    "market.tasks.publish_ticks_for_backtest": {"queue": "market"},
-    # Trading / backtest executions
+    "market.tasks.publish_ticks_for_backtest": {"queue": "backtest"},
+    # Trading executions (live)
     "trading.tasks.run_trading_task": {"queue": "trading"},
     "trading.tasks.stop_trading_task": {"queue": "trading"},
-    "trading.tasks.run_backtest_task": {"queue": "trading"},
-    "trading.tasks.recover_orphaned_tasks": {"queue": "trading"},
+    # Backtest executions
+    "trading.tasks.run_backtest_task": {"queue": "backtest"},
+    "trading.tasks.stop_backtest_task": {"queue": "backtest"},
+    # System maintenance
+    "trading.tasks.recover_orphaned_tasks": {"queue": "system"},
 }
 
 # Celery Beat periodic task schedule
@@ -240,7 +246,7 @@ CELERY_BEAT_SCHEDULE = {
     "recover-orphaned-tasks": {
         "task": "trading.tasks.recover_orphaned_tasks",
         "schedule": 300,  # Every 5 minutes
-        "options": {"queue": "trading"},
+        "options": {"queue": "system"},
     },
 }
 

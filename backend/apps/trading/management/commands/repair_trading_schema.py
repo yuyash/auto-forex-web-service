@@ -41,6 +41,7 @@ class Command(BaseCommand):
             "ALTER TABLE trades ADD COLUMN IF NOT EXISTS oanda_trade_id VARCHAR(64)",
             "ALTER TABLE trades ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
             "ALTER TABLE trades ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()",
+            "ALTER TABLE trades ALTER COLUMN direction DROP NOT NULL",
             # positions
             "ALTER TABLE positions ADD COLUMN IF NOT EXISTS celery_task_id VARCHAR(255)",
             "ALTER TABLE positions ADD COLUMN IF NOT EXISTS execution_run_id INTEGER NOT NULL DEFAULT 0",
@@ -51,6 +52,7 @@ class Command(BaseCommand):
             "ALTER TABLE orders ADD COLUMN IF NOT EXISTS execution_run_id INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE orders ADD COLUMN IF NOT EXISTS oanda_trade_id VARCHAR(64)",
             "ALTER TABLE orders ADD COLUMN IF NOT EXISTS position_id UUID",
+            "ALTER TABLE orders ALTER COLUMN direction DROP NOT NULL",
             # trading_events
             "ALTER TABLE trading_events ADD COLUMN IF NOT EXISTS execution_run_id INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE trading_events ADD COLUMN IF NOT EXISTS is_processed BOOLEAN NOT NULL DEFAULT FALSE",

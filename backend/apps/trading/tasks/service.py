@@ -18,7 +18,12 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.trading.enums import StopMode, TaskStatus
-from apps.trading.models import BacktestTask, TradingEvent, TradingTask
+from apps.trading.models import (
+    BacktestTask,
+    StrategyEventRecord,
+    TradingEvent,
+    TradingTask,
+)
 from apps.trading.tasks import (
     run_backtest_task,
     run_trading_task,
@@ -51,6 +56,65 @@ class TaskService:
         if celery_task_id:
             return AsyncResult(celery_task_id)
         return None
+
+    @staticmethod
+    def _emit_task_lifecycle_event(
+        *,
+        task: BacktestTask | TradingTask,
+        task_type: str | None = None,
+        kind: str,
+        description: str,
+        extra_details: dict[str, object] | None = None,
+    ) -> None:
+        resolved_task_type = task_type or TaskService._resolve_task_type(task)
+        details = {
+            "kind": kind,
+            "status": str(task.status),
+            "task_name": str(getattr(task, "name", "")),
+        }
+        if extra_details:
+            details.update(extra_details)
+
+        try:
+            TradingEvent.objects.create(
+                event_type="status_changed",
+                severity="info",
+                description=description,
+                user=getattr(task, "user", None),
+                account=getattr(task, "oanda_account", None),
+                instrument=getattr(task, "instrument", None),
+                task_type=resolved_task_type,
+                task_id=task.pk,
+                execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
+                celery_task_id=getattr(task, "celery_task_id", None),
+                details=details,
+            )
+        except Exception as exc:  # pragma: no cover - defensive logging path
+            logger.warning(
+                "[SERVICE:EVENT] Failed to persist lifecycle event - task_id=%s, kind=%s, error=%s",
+                task.pk,
+                kind,
+                exc,
+            )
+
+    @staticmethod
+    def _resolve_task_type(task: BacktestTask | TradingTask) -> str:
+        model_name = str(getattr(getattr(task, "_meta", None), "model_name", "")).lower()
+        if model_name == "backtesttask":
+            return "backtest"
+        if model_name == "tradingtask":
+            return "trading"
+
+        class_name = str(task.__class__.__name__).lower()
+        if class_name.startswith("backtest"):
+            return "backtest"
+        if class_name.startswith("trading"):
+            return "trading"
+
+        if hasattr(task, "start_time") and hasattr(task, "end_time"):
+            return "backtest"
+
+        return "trading"
 
     def start_task(self, task: BacktestTask | TradingTask) -> BacktestTask | TradingTask:
         """Submit a task to Celery for execution.
@@ -247,6 +311,12 @@ class TaskService:
                 task.pk,
                 task.celery_task_id,
                 task.status,
+            )
+            self._emit_task_lifecycle_event(
+                task=task,
+                task_type=task_type,
+                kind="task_start_requested",
+                description="Task start requested",
             )
 
             from celery import current_app
@@ -477,6 +547,13 @@ class TaskService:
                 )
 
             logger.info(f"[SERVICE:STOP] SUCCESS - Stop initiated for task_id={task_id}")
+            self._emit_task_lifecycle_event(
+                task=task,
+                task_type=task_type,
+                kind="task_stop_requested",
+                description="Task stop requested",
+                extra_details={"mode": stop_mode.value},
+            )
 
             return True
         except ValueError:
@@ -509,11 +586,13 @@ class TaskService:
         try:
             # Try to find the task in either BacktestTask or TradingTask
             task = None
+            task_type = "backtest"
             try:
                 task = BacktestTask.objects.get(pk=task_id)
             except BacktestTask.DoesNotExist:
                 try:
                     task = TradingTask.objects.get(pk=task_id)
+                    task_type = "trading"
                 except TradingTask.DoesNotExist as e:
                     logger.error(
                         "Task not found",
@@ -535,6 +614,12 @@ class TaskService:
             # Update task status to PAUSED
             task.status = TaskStatus.PAUSED
             task.save(update_fields=["status", "updated_at"])
+            self._emit_task_lifecycle_event(
+                task=task,
+                task_type=task_type,
+                kind="task_paused",
+                description="Task paused",
+            )
 
             logger.info(
                 "Task paused successfully",
@@ -573,11 +658,13 @@ class TaskService:
         try:
             # Try to find the task in either BacktestTask or TradingTask
             task = None
+            task_type = "backtest"
             try:
                 task = BacktestTask.objects.get(pk=task_id)
             except BacktestTask.DoesNotExist:
                 try:
                     task = TradingTask.objects.get(pk=task_id)
+                    task_type = "trading"
                 except TradingTask.DoesNotExist as e:
                     logger.error(
                         "Task not found",
@@ -602,6 +689,12 @@ class TaskService:
             task.status = TaskStatus.STOPPED
             task.completed_at = timezone.now()
             task.save(update_fields=["status", "completed_at", "updated_at"])
+            self._emit_task_lifecycle_event(
+                task=task,
+                task_type=task_type,
+                kind="task_cancelled",
+                description="Task cancelled",
+            )
 
             logger.info(
                 "Task cancelled successfully",
@@ -707,11 +800,35 @@ class TaskService:
             logger.info(
                 f"[SERVICE:RESTART] Clearing events - task_id={task_id}, task_type={task_type}"
             )
-            events_deleted = TradingEvent.objects.filter(
-                task_type=task_type, task_id=task.pk
-            ).delete()
+            events_deleted_count = 0
+            strategy_events_deleted_count = 0
+            try:
+                events_deleted = TradingEvent.objects.filter(
+                    task_type=task_type, task_id=task.pk
+                ).delete()
+                events_deleted_count = int(events_deleted[0])
+            except Exception as e:
+                logger.warning(
+                    "[SERVICE:RESTART] Failed to clear trading events - task_id=%s, error=%s",
+                    task_id,
+                    e,
+                )
+
+            try:
+                strategy_events_deleted = StrategyEventRecord.objects.filter(
+                    task_type=task_type, task_id=task.pk
+                ).delete()
+                strategy_events_deleted_count = int(strategy_events_deleted[0])
+            except Exception as e:
+                logger.warning(
+                    "[SERVICE:RESTART] Failed to clear strategy events - task_id=%s, error=%s",
+                    task_id,
+                    e,
+                )
+
             logger.info(
-                f"[SERVICE:RESTART] Events cleared - task_id={task_id}, count={events_deleted[0]}"
+                f"[SERVICE:RESTART] Events cleared - task_id={task_id}, trading_count={events_deleted_count}, "
+                f"strategy_count={strategy_events_deleted_count}"
             )
 
             # Clear execution state
@@ -750,6 +867,12 @@ class TaskService:
                 raise RuntimeError(
                     f"Failed to reset task status: expected CREATED, got {task.status}"
                 )
+            self._emit_task_lifecycle_event(
+                task=task,
+                task_type=task_type,
+                kind="task_restart_requested",
+                description="Task restart requested",
+            )
 
             # Resubmit the task
             logger.info(f"[SERVICE:RESTART] Resubmitting task - task_id={task_id}")
@@ -788,11 +911,13 @@ class TaskService:
         try:
             # Try to find the task in either BacktestTask or TradingTask
             task = None
+            task_type = "backtest"
             try:
                 task = BacktestTask.objects.get(pk=task_id)
             except BacktestTask.DoesNotExist:
                 try:
                     task = TradingTask.objects.get(pk=task_id)
+                    task_type = "trading"
                 except TradingTask.DoesNotExist as e:
                     logger.error(
                         "Task not found",
@@ -833,6 +958,12 @@ class TaskService:
             task.celery_task_id = None
             task.status = TaskStatus.CREATED
             task.save(update_fields=["celery_task_id", "status", "updated_at"])
+            self._emit_task_lifecycle_event(
+                task=task,
+                task_type=task_type,
+                kind="task_resume_requested",
+                description="Task resume requested",
+            )
 
             logger.info(
                 "Task resumed, resubmitting",

@@ -15,7 +15,7 @@ from django.utils import timezone as dj_timezone
 
 from apps.trading.dataclasses import EventContext, EventExecutionResult, StrategyResult
 from apps.trading.engine import TradingEngine
-from apps.trading.enums import TaskType
+from apps.trading.enums import EventScope, EventType, TaskType
 from apps.trading.events import StrategyEvent
 from apps.trading.events.handler import EventHandler as _EventHandlerCompat
 from apps.trading.models import BacktestTask, TradingEvent, TradingTask
@@ -300,22 +300,73 @@ class TaskExecutor:
         if not events:
             return []
 
-        from apps.trading.models import TradingEvent
+        from apps.trading.models import StrategyEventRecord, TradingEvent
 
-        # Create event records using from_event class method
-        event_records: List[TradingEvent] = [
-            TradingEvent.from_event(
-                event=event,
-                context=self.event_context,
-                celery_task_id=self.task.celery_task_id,
-                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
-            )
-            for event in events
-        ]
+        execution_run_id = int(getattr(self.task, "execution_run_id", 0) or 0)
+        trading_records: List[TradingEvent] = []
+        strategy_records: list[StrategyEventRecord] = []
 
-        # Bulk create
-        TradingEvent.objects.bulk_create(event_records)
-        return event_records
+        for event in events:
+            event_type = str(getattr(getattr(event, "event_type", None), "value", event.event_type))
+            event_scope = EventType.scope_of(event_type)
+            execution_event_type = EventType.execution_event_type_for(event_type)
+            requires_execution = EventType.requires_execution(event_type)
+
+            if requires_execution:
+                if execution_event_type != event_type:
+                    details = event.to_dict()
+                    details["strategy_event_type"] = event_type
+                    details["event_type"] = execution_event_type
+                    trading_records.append(
+                        TradingEvent(
+                            event_type=execution_event_type,
+                            severity="info",
+                            description=str(details),
+                            user=self.event_context.user,
+                            account=self.event_context.account,
+                            instrument=self.event_context.instrument,
+                            task_type=self.event_context.task_type.value,
+                            task_id=self.event_context.task_id,
+                            execution_run_id=execution_run_id,
+                            celery_task_id=self.task.celery_task_id,
+                            details=details,
+                        )
+                    )
+                else:
+                    trading_records.append(
+                        TradingEvent.from_event(
+                            event=event,
+                            context=self.event_context,
+                            celery_task_id=self.task.celery_task_id,
+                            execution_run_id=execution_run_id,
+                        )
+                    )
+
+            if event_scope == EventScope.TASK.value and not requires_execution:
+                trading_records.append(
+                    TradingEvent.from_event(
+                        event=event,
+                        context=self.event_context,
+                        celery_task_id=self.task.celery_task_id,
+                        execution_run_id=execution_run_id,
+                    )
+                )
+            elif event_scope == EventScope.STRATEGY.value:
+                strategy_records.append(
+                    StrategyEventRecord.from_event(
+                        event=event,
+                        context=self.event_context,
+                        celery_task_id=self.task.celery_task_id,
+                        execution_run_id=execution_run_id,
+                    )
+                )
+
+        if trading_records:
+            TradingEvent.objects.bulk_create(trading_records)
+        if strategy_records:
+            StrategyEventRecord.objects.bulk_create(strategy_records)
+
+        return trading_records
 
     def execute(self) -> None:
         """Execute the task."""
@@ -517,11 +568,10 @@ class TaskExecutor:
     ) -> bool:
         """Best-effort idempotency guard for resumed event replay."""
         from apps.trading.events import (
-            InitialEntryEvent,
+            ClosePositionEvent,
             MarginProtectionEvent,
-            RetracementEvent,
+            OpenPositionEvent,
             StrategyEvent,
-            TakeProfitEvent,
             VolatilityHedgeNeutralizeEvent,
             VolatilityLockEvent,
         )
@@ -530,7 +580,7 @@ class TaskExecutor:
         strategy_event = StrategyEvent.from_dict(trading_event.details)
         strategy_state = state.strategy_state if isinstance(state.strategy_state, dict) else {}
 
-        if isinstance(strategy_event, (InitialEntryEvent, RetracementEvent)):
+        if isinstance(strategy_event, OpenPositionEvent):
             entry_id = strategy_event.entry_id
             if entry_id is None:
                 return False
@@ -559,7 +609,7 @@ class TaskExecutor:
                 return bool(exists)
             return False
 
-        if isinstance(strategy_event, TakeProfitEvent):
+        if isinstance(strategy_event, ClosePositionEvent):
             position_id = str(strategy_event.position_id or "").strip()
             if not position_id:
                 return False

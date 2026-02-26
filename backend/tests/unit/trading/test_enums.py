@@ -82,13 +82,48 @@ class TestEventType:
         assert EventType.INITIAL_ENTRY == "initial_entry"
         assert EventType.RETRACEMENT == "retracement"
         assert EventType.TAKE_PROFIT == "take_profit"
+        assert EventType.OPEN_POSITION == "open_position"
+        assert EventType.CLOSE_POSITION == "close_position"
 
     def test_lifecycle_events(self):
         assert EventType.STRATEGY_STARTED == "strategy_started"
         assert EventType.STRATEGY_STOPPED == "strategy_stopped"
 
     def test_choices_count(self):
-        assert len(EventType.choices) == 17
+        assert len(EventType.choices) == 19
+
+    def test_scope_of_trading_event(self):
+        assert EventType.scope_of(EventType.OPEN_POSITION) == "trading"
+
+    def test_scope_of_task_event(self):
+        assert EventType.scope_of(EventType.STRATEGY_STARTED) == "task"
+
+    def test_scope_of_task_kind_override(self):
+        assert (
+            EventType.scope_of(
+                EventType.STATUS_CHANGED,
+                details={"kind": "task_restart_requested"},
+            )
+            == "task"
+        )
+
+    def test_requires_execution(self):
+        assert EventType.requires_execution(EventType.RETRACEMENT) is True
+        assert EventType.requires_execution(EventType.STRATEGY_STARTED) is False
+
+    def test_task_scoped_values(self):
+        values = EventType.task_scoped_values()
+        assert EventType.STATUS_CHANGED in values
+        assert EventType.STRATEGY_STOPPED in values
+        assert EventType.INITIAL_ENTRY not in values
+
+    def test_execution_event_type_aliases(self):
+        assert EventType.execution_event_type_for(EventType.INITIAL_ENTRY) == "open_position"
+        assert EventType.execution_event_type_for(EventType.RETRACEMENT) == "open_position"
+        assert EventType.execution_event_type_for(EventType.TAKE_PROFIT) == "close_position"
+        assert (
+            EventType.execution_event_type_for(EventType.MARGIN_PROTECTION) == "margin_protection"
+        )
 
 
 class TestStrategyType:

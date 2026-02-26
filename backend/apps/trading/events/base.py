@@ -549,6 +549,244 @@ class TakeProfitEvent(StrategyEvent):
         )
 
 
+@register_event(EventType.OPEN_POSITION)
+@dataclass
+class OpenPositionEvent(StrategyEvent):
+    """Generic trading event for opening a position."""
+
+    layer_number: int = 1
+    direction: str = ""
+    price: Decimal = Decimal("0")
+    units: int = 0
+    entry_time: datetime | None = None
+    retracement_count: int = 1
+    entry_id: int | None = None
+    strategy_event_type: str = ""
+
+    def __post_init__(self):
+        if not self.event_type:
+            self.event_type = EventType.OPEN_POSITION
+
+    @property
+    def category(self) -> str:
+        return "entry"
+
+    def activate(self, context: "EventContext") -> None:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            "Open position: layer=%s, direction=%s, units=%s",
+            self.layer_number,
+            self.direction,
+            self.units,
+            extra={
+                "task_id": str(context.task_id),
+                "task_type": context.task_type.value,
+                "instrument": context.instrument,
+                "event_type": self.event_type.value,
+            },
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        result = super().to_dict()
+        result.update(
+            {
+                "layer_number": self.layer_number,
+                "direction": str(self.direction),
+                "price": str(self.price),
+                "units": self.units,
+                "retracement_count": self.retracement_count,
+            }
+        )
+        if self.entry_id is not None:
+            result["entry_id"] = self.entry_id
+        if self.strategy_event_type:
+            result["strategy_event_type"] = self.strategy_event_type
+        if self.entry_time:
+            result["entry_time"] = self.entry_time.isoformat()
+        return result
+
+    @classmethod
+    def from_dict(cls, event_dict: dict[str, Any]) -> "OpenPositionEvent":
+        from decimal import Decimal as D
+
+        price_raw = event_dict.get("price", "0")
+        price = D(str(price_raw)) if price_raw else D("0")
+
+        timestamp_raw = event_dict.get("timestamp")
+        timestamp = None
+        if timestamp_raw:
+            if isinstance(timestamp_raw, datetime):
+                timestamp = timestamp_raw
+            else:
+                try:
+                    timestamp = datetime.fromisoformat(str(timestamp_raw))
+                except (ValueError, TypeError):
+                    pass
+
+        entry_time_raw = event_dict.get("entry_time")
+        entry_time = None
+        if entry_time_raw:
+            if isinstance(entry_time_raw, datetime):
+                entry_time = entry_time_raw
+            else:
+                try:
+                    entry_time = datetime.fromisoformat(str(entry_time_raw))
+                except (ValueError, TypeError):
+                    pass
+
+        return cls(
+            event_type=EventType.OPEN_POSITION,
+            timestamp=timestamp,
+            layer_number=int(event_dict.get("layer_number", 1)),
+            direction=str(event_dict.get("direction", "")),
+            price=price,
+            units=int(event_dict.get("units", 0)),
+            entry_time=entry_time,
+            retracement_count=int(event_dict.get("retracement_count", 1)),
+            entry_id=event_dict.get("entry_id"),
+            strategy_event_type=str(event_dict.get("strategy_event_type", "")),
+        )
+
+
+@register_event(EventType.CLOSE_POSITION)
+@dataclass
+class ClosePositionEvent(StrategyEvent):
+    """Generic trading event for closing a position."""
+
+    layer_number: int = 1
+    direction: str = ""
+    entry_price: Decimal = Decimal("0")
+    exit_price: Decimal = Decimal("0")
+    units: int = 0
+    pnl: Decimal = Decimal("0")
+    pips: Decimal = Decimal("0")
+    entry_time: datetime | None = None
+    exit_time: datetime | None = None
+    retracement_count: int = 1
+    entry_id: int | None = None
+    position_id: str | None = None
+    strategy_event_type: str = ""
+
+    def __post_init__(self):
+        if not self.event_type:
+            self.event_type = EventType.CLOSE_POSITION
+
+    @property
+    def category(self) -> str:
+        return "exit"
+
+    def activate(self, context: "EventContext") -> None:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            "Close position: layer=%s, units=%s",
+            self.layer_number,
+            self.units,
+            extra={
+                "task_id": str(context.task_id),
+                "task_type": context.task_type.value,
+                "instrument": context.instrument,
+                "event_type": self.event_type.value,
+            },
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        result = super().to_dict()
+        result.update(
+            {
+                "layer_number": self.layer_number,
+                "direction": str(self.direction),
+                "entry_price": str(self.entry_price),
+                "exit_price": str(self.exit_price),
+                "units": self.units,
+                "pnl": str(self.pnl),
+                "pips": str(self.pips),
+                "retracement_count": self.retracement_count,
+            }
+        )
+        if self.entry_id is not None:
+            result["entry_id"] = self.entry_id
+        if self.position_id is not None:
+            result["position_id"] = self.position_id
+        if self.strategy_event_type:
+            result["strategy_event_type"] = self.strategy_event_type
+        if self.entry_time:
+            result["entry_time"] = self.entry_time.isoformat()
+        if self.exit_time:
+            result["exit_time"] = self.exit_time.isoformat()
+        return result
+
+    @classmethod
+    def from_dict(cls, event_dict: dict[str, Any]) -> "ClosePositionEvent":
+        from decimal import Decimal as D
+
+        entry_price_raw = event_dict.get("entry_price", "0")
+        entry_price = D(str(entry_price_raw)) if entry_price_raw else D("0")
+
+        exit_price_raw = event_dict.get("exit_price", "0")
+        exit_price = D(str(exit_price_raw)) if exit_price_raw else D("0")
+
+        pnl_raw = event_dict.get("pnl", "0")
+        pnl = D(str(pnl_raw)) if pnl_raw else D("0")
+
+        pips_raw = event_dict.get("pips", "0")
+        pips = D(str(pips_raw)) if pips_raw else D("0")
+
+        timestamp_raw = event_dict.get("timestamp")
+        timestamp = None
+        if timestamp_raw:
+            if isinstance(timestamp_raw, datetime):
+                timestamp = timestamp_raw
+            else:
+                try:
+                    timestamp = datetime.fromisoformat(str(timestamp_raw))
+                except (ValueError, TypeError):
+                    pass
+
+        entry_time_raw = event_dict.get("entry_time")
+        entry_time = None
+        if entry_time_raw:
+            if isinstance(entry_time_raw, datetime):
+                entry_time = entry_time_raw
+            else:
+                try:
+                    entry_time = datetime.fromisoformat(str(entry_time_raw))
+                except (ValueError, TypeError):
+                    pass
+
+        exit_time_raw = event_dict.get("exit_time")
+        exit_time = None
+        if exit_time_raw:
+            if isinstance(exit_time_raw, datetime):
+                exit_time = exit_time_raw
+            else:
+                try:
+                    exit_time = datetime.fromisoformat(str(exit_time_raw))
+                except (ValueError, TypeError):
+                    pass
+
+        return cls(
+            event_type=EventType.CLOSE_POSITION,
+            timestamp=timestamp,
+            layer_number=int(event_dict.get("layer_number", 1)),
+            direction=str(event_dict.get("direction", "")),
+            entry_price=entry_price,
+            exit_price=exit_price,
+            units=int(event_dict.get("units", 0)),
+            pnl=pnl,
+            pips=pips,
+            entry_time=entry_time,
+            exit_time=exit_time,
+            retracement_count=int(event_dict.get("retracement_count", 1)),
+            entry_id=event_dict.get("entry_id"),
+            position_id=event_dict.get("position_id"),
+            strategy_event_type=str(event_dict.get("strategy_event_type", "")),
+        )
+
+
 @register_event(EventType.ADD_LAYER)
 @dataclass
 class AddLayerEvent(StrategyEvent):

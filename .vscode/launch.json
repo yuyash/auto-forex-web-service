@@ -34,7 +34,7 @@
         "-l",
         "info",
         "-Q",
-        "trading,default",
+        "trading",
         "--pool=solo",
         "-n",
         "trading_worker@%h"
@@ -80,6 +80,64 @@
       }
     },
     {
+      "name": "Celery: backtest worker",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "celery",
+      "args": [
+        "-A",
+        "config",
+        "worker",
+        "-l",
+        "info",
+        "-Q",
+        "backtest",
+        "--pool=threads",
+        "--concurrency=4",
+        "-n",
+        "backtest_worker@%h"
+      ],
+      "justMyCode": true,
+      "console": "internalConsole",
+      "cwd": "${workspaceFolder}/backend",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "config.settings",
+        "DB_HOST": "localhost",
+        "REDIS_URL": "redis://localhost:6379/0",
+        "OBJC_DISABLE_INITIALIZE_FORK_SAFETY": "YES"
+      }
+    },
+    {
+      "name": "Celery: system worker",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "celery",
+      "args": [
+        "-A",
+        "config",
+        "worker",
+        "-l",
+        "info",
+        "-Q",
+        "system,default",
+        "--pool=solo",
+        "-n",
+        "system_worker@%h"
+      ],
+      "justMyCode": true,
+      "console": "internalConsole",
+      "cwd": "${workspaceFolder}/backend",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "config.settings",
+        "CELERY_START_MARKET_TICK_SUPERVISOR": "1",
+        "DB_HOST": "localhost",
+        "REDIS_URL": "redis://localhost:6379/0",
+        "OBJC_DISABLE_INITIALIZE_FORK_SAFETY": "YES"
+      }
+    },
+    {
       "name": "Frontend: npm run dev",
       "type": "node",
       "request": "launch",
@@ -101,7 +159,9 @@
       "name": "Run App",
       "configurations": [
         "Django: runserver",
+        "Celery: system worker",
         "Celery: trading worker",
+        "Celery: backtest worker",
         "Celery: market worker",
         "Frontend: npm run dev"
       ]

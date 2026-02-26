@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.4.0",
+        "version": "1.4.1",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -1987,6 +1987,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "scope",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Event scope: all|trading|task"
+                    },
+                    {
+                        "in": "query",
                         "name": "severity",
                         "schema": {
                             "type": "string"
@@ -2638,6 +2646,90 @@
                 }
             }
         },
+        "/api/trading/tasks/backtest/{id}/strategy-events/": {
+            "get": {
+                "operationId": "trading_tasks_backtest_strategy_events_retrieve",
+                "description": "Retrieve paginated strategy-internal events.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "event_type",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Event type filter"
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_run_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by execution run ID"
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "severity",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Severity filter"
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch"
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskStrategyEventPaginatedResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/backtest/{id}/summary/": {
             "get": {
                 "operationId": "trading_tasks_backtest_summary_retrieve",
@@ -3049,6 +3141,14 @@
                         "schema": {
                             "type": "integer"
                         }
+                    },
+                    {
+                        "in": "query",
+                        "name": "scope",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Event scope: all|trading|task"
                     },
                     {
                         "in": "query",
@@ -3694,6 +3794,90 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/TradingTaskStopResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/trading/{id}/strategy-events/": {
+            "get": {
+                "operationId": "trading_tasks_trading_strategy_events_retrieve",
+                "description": "Retrieve paginated strategy-internal events.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "event_type",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Event type filter"
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_run_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Filter by execution run ID"
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "severity",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Severity filter"
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch"
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskStrategyEventPaginatedResponse"
                                 }
                             }
                         },
@@ -4414,6 +4598,8 @@
                     "initial_entry",
                     "retracement",
                     "take_profit",
+                    "open_position",
+                    "close_position",
                     "add_layer",
                     "remove_layer",
                     "volatility_lock",
@@ -4425,7 +4611,7 @@
                     "strategy_stopped"
                 ],
                 "type": "string",
-                "description": "* `tick_received` - Tick Received\n* `strategy_signal` - Strategy Signal\n* `trade_executed` - Trade Executed\n* `status_changed` - Status Changed\n* `error_occurred` - Error Occurred\n* `initial_entry` - Initial Entry\n* `retracement` - Retracement\n* `take_profit` - Take Profit\n* `add_layer` - Add Layer\n* `remove_layer` - Remove Layer\n* `volatility_lock` - Volatility Lock\n* `volatility_hedge_neutralize` - Volatility Hedge Neutralize\n* `margin_protection` - Margin Protection\n* `strategy_started` - Strategy Started\n* `strategy_paused` - Strategy Paused\n* `strategy_resumed` - Strategy Resumed\n* `strategy_stopped` - Strategy Stopped"
+                "description": "* `tick_received` - Tick Received\n* `strategy_signal` - Strategy Signal\n* `trade_executed` - Trade Executed\n* `status_changed` - Status Changed\n* `error_occurred` - Error Occurred\n* `initial_entry` - Initial Entry\n* `retracement` - Retracement\n* `take_profit` - Take Profit\n* `open_position` - Open Position\n* `close_position` - Close Position\n* `add_layer` - Add Layer\n* `remove_layer` - Remove Layer\n* `volatility_lock` - Volatility Lock\n* `volatility_hedge_neutralize` - Volatility Hedge Neutralize\n* `margin_protection` - Margin Protection\n* `strategy_started` - Strategy Started\n* `strategy_paused` - Strategy Paused\n* `strategy_resumed` - Strategy Resumed\n* `strategy_stopped` - Strategy Stopped"
             },
             "ExecutionInfo": {
                 "type": "object",
@@ -6574,6 +6760,79 @@
                     "strategy_id"
                 ]
             },
+            "StrategyEvent": {
+                "type": "object",
+                "description": "Serializer for strategy-internal events.",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "event_type": {
+                        "type": "string",
+                        "maxLength": 64
+                    },
+                    "event_type_display": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Human-readable display name for the event type."
+                    },
+                    "event_scope": {
+                        "type": "string",
+                        "readOnly": true,
+                        "default": "strategy"
+                    },
+                    "severity": {
+                        "type": "string",
+                        "maxLength": 16
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "user": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "account": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "instrument": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 32
+                    },
+                    "task_type": {
+                        "type": "string",
+                        "maxLength": 32
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true
+                    },
+                    "execution_run_id": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Execution run identifier for run-scoped event queries"
+                    },
+                    "details": {},
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "description",
+                    "event_scope",
+                    "event_type",
+                    "event_type_display",
+                    "id"
+                ]
+            },
             "StrategyList": {
                 "type": "object",
                 "description": "Serializer for listing available strategies.",
@@ -7019,6 +7278,34 @@
                     "results"
                 ]
             },
+            "TaskStrategyEventPaginatedResponse": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer"
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/StrategyEvent"
+                        }
+                    }
+                },
+                "required": [
+                    "count",
+                    "next",
+                    "previous",
+                    "results"
+                ]
+            },
             "TaskSummary": {
                 "type": "object",
                 "description": "Serializer for structured task summary response.\n\nReturns comprehensive task summary grouped into logical sections:\n- timestamp: Common timestamp from the last tick\n- pnl: Realized and unrealized PnL\n- counts: Trade and position counts\n- execution: Balance and ticks processed\n- tick: Last tick prices (bid, ask, mid)\n- task: Status, timing, and progress",
@@ -7294,6 +7581,11 @@
                         "description": "Human-readable display name for the event type.",
                         "readOnly": true
                     },
+                    "event_scope": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Event scope: trading or task."
+                    },
                     "severity": {
                         "type": "string",
                         "maxLength": 16
@@ -7339,6 +7631,7 @@
                 "required": [
                     "created_at",
                     "description",
+                    "event_scope",
                     "event_type",
                     "event_type_display",
                     "id"
