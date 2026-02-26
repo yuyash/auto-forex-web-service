@@ -21,6 +21,8 @@ import { useTranslation } from 'react-i18next';
 import type {
   ConfigSchema,
   ConfigProperty,
+  DependsOnCondition,
+  JsonPrimitive,
   StrategyConfig,
 } from '../../types/strategy';
 
@@ -36,6 +38,31 @@ interface ValidationErrors {
   [key: string]: string;
 }
 
+const normalizeComparableValue = (value: unknown): JsonPrimitive => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    const lower = trimmed.toLowerCase();
+    if (lower === 'true') return true;
+    if (lower === 'false') return false;
+    if (trimmed === '') return null;
+    const asNumber = Number(trimmed);
+    if (!Number.isNaN(asNumber)) return asNumber;
+    return trimmed;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  return String(value);
+};
+
+const conditionMatchesValue = (
+  currentValue: unknown,
+  expected: JsonPrimitive
+): boolean => {
+  return normalizeComparableValue(currentValue) === expected;
+};
+
 const StrategyConfigForm = ({
   configSchema,
   config,
@@ -47,25 +74,25 @@ const StrategyConfigForm = ({
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>(
     {}
   );
+  const [jsonDrafts, setJsonDrafts] = useState<Record<string, string>>({});
+  const [jsonDraftErrors, setJsonDraftErrors] = useState<
+    Record<string, string>
+  >({});
 
   const matchesDependsOn = (
     currentConfig: StrategyConfig,
-    dependsOn: NonNullable<ConfigProperty['dependsOn']>
+    dependsOn: DependsOnCondition
   ): boolean => {
-    const matchesSingleCondition = (cond: {
-      field: string;
-      values: string[];
-      and?: Array<{ field: string; values: string[] }>;
-    }): boolean => {
+    const matchesSingleCondition = (cond: DependsOnCondition): boolean => {
       const raw = currentConfig[cond.field];
-      const value = raw === undefined || raw === null ? '' : String(raw);
-      if (!cond.values.includes(value)) return false;
+      if (!cond.values.some((expected) => conditionMatchesValue(raw, expected)))
+        return false;
       if (!cond.and || cond.and.length === 0) return true;
       return cond.and.every((andCond) => {
-        const rawCond = currentConfig[andCond.field];
-        const valueCond =
-          rawCond === undefined || rawCond === null ? '' : String(rawCond);
-        return andCond.values.includes(valueCond);
+        const rawCondValue = currentConfig[andCond.field];
+        return andCond.values.some((expected) =>
+          conditionMatchesValue(rawCondValue, expected)
+        );
       });
     };
 
@@ -105,6 +132,24 @@ const StrategyConfigForm = ({
       onChange(updatedConfig);
     }
   }, [config, configSchema, onChange]);
+
+  useEffect(() => {
+    const nextDrafts: Record<string, string> = {};
+    Object.entries(configSchema.properties || {}).forEach(
+      ([fieldName, fieldSchema]) => {
+        if (
+          fieldSchema.type === 'object' ||
+          (fieldSchema.type === 'array' && fieldSchema.items?.type === 'object')
+        ) {
+          const value = config[fieldName] ?? fieldSchema.default;
+          if (value !== undefined) {
+            nextDrafts[fieldName] = JSON.stringify(value, null, 2);
+          }
+        }
+      }
+    );
+    setJsonDrafts((prev) => ({ ...nextDrafts, ...prev }));
+  }, [config, configSchema.properties]);
 
   // Validate config against schema
   const validateConfig = (currentConfig: StrategyConfig): ValidationErrors => {
@@ -193,7 +238,12 @@ const StrategyConfigForm = ({
         }
 
         // Enum validation
-        if (fieldSchema.enum && !fieldSchema.enum.includes(String(value))) {
+        if (
+          fieldSchema.enum &&
+          !fieldSchema.enum.some((option) =>
+            conditionMatchesValue(value, option)
+          )
+        ) {
           errors[fieldName] = t('validation.invalidOption', {
             defaultValue: 'Invalid option selected',
           });
@@ -225,6 +275,18 @@ const StrategyConfigForm = ({
     onChange(updatedConfig);
   };
 
+  const setJsonFieldError = (fieldName: string, message: string | null) => {
+    setJsonDraftErrors((prev) => {
+      const next = { ...prev };
+      if (message) {
+        next[fieldName] = message;
+      } else {
+        delete next[fieldName];
+      }
+      return next;
+    });
+  };
+
   const renderLabel = (label: string, description?: string) => {
     if (!description) return label;
     return (
@@ -245,7 +307,7 @@ const StrategyConfigForm = ({
   // Render field based on schema type
   const renderField = (fieldName: string, fieldSchema: ConfigProperty) => {
     const value = config[fieldName] ?? fieldSchema.default ?? '';
-    const error = validationErrors[fieldName];
+    const error = jsonDraftErrors[fieldName] || validationErrors[fieldName];
     const isRequired = configSchema.required?.includes(fieldName);
     const label = fieldSchema.title ?? formatFieldLabel(fieldName);
     const labelNode = renderLabel(label, fieldSchema.description);
@@ -407,6 +469,56 @@ const StrategyConfigForm = ({
 
     // Array field (comma-separated string input)
     if (fieldSchema.type === 'array') {
+      if (fieldSchema.items?.type === 'object') {
+        const jsonValue =
+          jsonDrafts[fieldName] ??
+          JSON.stringify(Array.isArray(value) ? value : [], null, 2);
+        return (
+          <TextField
+            key={fieldName}
+            fullWidth
+            label={labelNode}
+            value={jsonValue}
+            onChange={(e) => {
+              const raw = e.target.value;
+              setJsonDrafts((prev) => ({ ...prev, [fieldName]: raw }));
+              try {
+                const parsed = raw.trim() ? JSON.parse(raw) : [];
+                if (!Array.isArray(parsed)) {
+                  setJsonFieldError(
+                    fieldName,
+                    t('validation.invalidArray', {
+                      defaultValue: 'Must be a JSON array',
+                    })
+                  );
+                  return;
+                }
+                setJsonFieldError(fieldName, null);
+                handleFieldChange(fieldName, parsed);
+              } catch {
+                setJsonFieldError(
+                  fieldName,
+                  t('validation.invalidJson', {
+                    defaultValue: 'Must be valid JSON',
+                  })
+                );
+              }
+            }}
+            helperText={
+              error ||
+              fieldSchema.description ||
+              'Enter a JSON array (example: [{"take_profit_pips": 25}])'
+            }
+            error={!!error}
+            required={isRequired}
+            disabled={disabled}
+            multiline
+            minRows={4}
+          />
+        );
+      }
+
+      const itemType = fieldSchema.items?.type ?? 'string';
       const arrayValue = Array.isArray(value) ? value.join(', ') : '';
       return (
         <TextField
@@ -415,11 +527,23 @@ const StrategyConfigForm = ({
           label={labelNode}
           value={arrayValue}
           onChange={(e) => {
-            const items = e.target.value
+            const parsedItems = e.target.value
               .split(',')
               .map((item) => item.trim())
-              .filter((item) => item.length > 0);
-            handleFieldChange(fieldName, items);
+              .filter((item) => item.length > 0)
+              .map((item) => {
+                if (itemType === 'integer') {
+                  return Number.parseInt(item, 10);
+                }
+                if (itemType === 'number') {
+                  return Number.parseFloat(item);
+                }
+                if (itemType === 'boolean') {
+                  return item.toLowerCase() === 'true';
+                }
+                return item;
+              });
+            handleFieldChange(fieldName, parsedItems);
           }}
           helperText={
             error || fieldSchema.description || 'Enter comma-separated values'
@@ -431,13 +555,74 @@ const StrategyConfigForm = ({
       );
     }
 
+    if (fieldSchema.type === 'object') {
+      const jsonValue =
+        jsonDrafts[fieldName] ??
+        JSON.stringify(
+          typeof value === 'object' && value !== null && !Array.isArray(value)
+            ? value
+            : {},
+          null,
+          2
+        );
+      return (
+        <TextField
+          key={fieldName}
+          fullWidth
+          label={labelNode}
+          value={jsonValue}
+          onChange={(e) => {
+            const raw = e.target.value;
+            setJsonDrafts((prev) => ({ ...prev, [fieldName]: raw }));
+            try {
+              const parsed = raw.trim() ? JSON.parse(raw) : {};
+              if (
+                typeof parsed !== 'object' ||
+                parsed === null ||
+                Array.isArray(parsed)
+              ) {
+                setJsonFieldError(
+                  fieldName,
+                  t('validation.invalidObject', {
+                    defaultValue: 'Must be a JSON object',
+                  })
+                );
+                return;
+              }
+              setJsonFieldError(fieldName, null);
+              handleFieldChange(fieldName, parsed);
+            } catch {
+              setJsonFieldError(
+                fieldName,
+                t('validation.invalidJson', {
+                  defaultValue: 'Must be valid JSON',
+                })
+              );
+            }
+          }}
+          helperText={error || fieldSchema.description || 'Enter a JSON object'}
+          error={!!error}
+          required={isRequired}
+          disabled={disabled}
+          multiline
+          minRows={4}
+        />
+      );
+    }
+
     // Default: string field
+    const stringValue =
+      typeof value === 'string' || typeof value === 'number'
+        ? value
+        : value === null || value === undefined
+          ? ''
+          : String(value);
     return (
       <TextField
         key={fieldName}
         fullWidth
         label={labelNode}
-        value={value}
+        value={stringValue}
         onChange={(e) => handleFieldChange(fieldName, e.target.value)}
         helperText={error || fieldSchema.description}
         error={!!error}

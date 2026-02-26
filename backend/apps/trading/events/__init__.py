@@ -5,9 +5,11 @@ This package contains typed event classes for strategy events.
 
 from .base import (
     AddLayerEvent,
+    ClosePositionEvent,
     GenericStrategyEvent,
     InitialEntryEvent,
     MarginProtectionEvent,
+    OpenPositionEvent,
     RemoveLayerEvent,
     RetracementEvent,
     StrategyEvent,
@@ -19,9 +21,11 @@ from .base import (
 
 __all__ = [
     "AddLayerEvent",
+    "ClosePositionEvent",
     "GenericStrategyEvent",
     "InitialEntryEvent",
     "MarginProtectionEvent",
+    "OpenPositionEvent",
     "RemoveLayerEvent",
     "RetracementEvent",
     "StrategyEvent",

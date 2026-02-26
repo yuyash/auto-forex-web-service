@@ -165,9 +165,22 @@ class Strategy(ABC):
         Returns:
             StrategyResult: Updated state and list of emitted events
         """
-        from apps.trading.dataclasses import StrategyResult
+        from datetime import UTC, datetime
 
-        return StrategyResult(state=state, events=[])
+        from apps.trading.dataclasses import StrategyResult
+        from apps.trading.enums import EventType
+        from apps.trading.events import GenericStrategyEvent
+
+        return StrategyResult(
+            state=state,
+            events=[
+                GenericStrategyEvent(
+                    event_type=EventType.STRATEGY_STARTED,
+                    timestamp=datetime.now(UTC),
+                    data={"kind": "strategy_started"},
+                )
+            ],
+        )
 
     def on_resume(self, *, state: ExecutionState) -> StrategyResult:
         """Called when strategy resumes from a stopped state.
@@ -178,9 +191,22 @@ class Strategy(ABC):
         Returns:
             StrategyResult: Updated state and list of emitted events
         """
-        from apps.trading.dataclasses import StrategyResult
+        from datetime import UTC, datetime
 
-        return StrategyResult(state=state, events=[])
+        from apps.trading.dataclasses import StrategyResult
+        from apps.trading.enums import EventType
+        from apps.trading.events import GenericStrategyEvent
+
+        return StrategyResult(
+            state=state,
+            events=[
+                GenericStrategyEvent(
+                    event_type=EventType.STRATEGY_RESUMED,
+                    timestamp=datetime.now(UTC),
+                    data={"kind": "strategy_resumed"},
+                )
+            ],
+        )
 
     def on_stop(self, *, state: ExecutionState) -> StrategyResult:
         """Called when strategy stops.
@@ -191,9 +217,22 @@ class Strategy(ABC):
         Returns:
             StrategyResult: Updated state and list of emitted events
         """
-        from apps.trading.dataclasses import StrategyResult
+        from datetime import UTC, datetime
 
-        return StrategyResult(state=state, events=[])
+        from apps.trading.dataclasses import StrategyResult
+        from apps.trading.enums import EventType
+        from apps.trading.events import GenericStrategyEvent
+
+        return StrategyResult(
+            state=state,
+            events=[
+                GenericStrategyEvent(
+                    event_type=EventType.STRATEGY_STOPPED,
+                    timestamp=datetime.now(UTC),
+                    data={"kind": "strategy_stopped"},
+                )
+            ],
+        )
 
     def create_event_handler(
         self, *, order_service: "OrderService", instrument: str

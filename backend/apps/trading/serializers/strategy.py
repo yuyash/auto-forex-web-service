@@ -3,6 +3,7 @@
 import logging
 from typing import Any
 
+from django.conf import settings
 from rest_framework import serializers
 from rest_framework.request import Request
 
@@ -138,9 +139,12 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
                     extra={"strategy_type": strategy_type},
                     exc_info=True,
                 )
-                raise serializers.ValidationError(
-                    {"parameters": "Invalid strategy parameters."}
-                ) from exc
+                message = (
+                    str(exc)
+                    if bool(getattr(settings, "DEBUG", False))
+                    else "Invalid strategy parameters."
+                )
+                raise serializers.ValidationError({"parameters": message}) from exc
 
         if has_parameters:
             attrs["parameters"] = normalized_parameters

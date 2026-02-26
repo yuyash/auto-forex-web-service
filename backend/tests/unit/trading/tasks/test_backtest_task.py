@@ -153,17 +153,17 @@ class TestHandleExceptionBacktest:
 class TestTriggerBacktestPublisher:
     @patch("apps.market.tasks.publish_ticks_for_backtest")
     @patch("celery.current_app")
-    def test_market_worker_available(self, mock_app, mock_publish):
+    def test_backtest_worker_available(self, mock_app, mock_publish):
         from apps.trading.tasks.backtest import trigger_backtest_publisher
 
         task = MagicMock(pk=uuid4(), instrument="EUR_USD")
         task.start_time.isoformat.return_value = "2024-01-01T00:00:00"
         task.end_time.isoformat.return_value = "2024-01-02T00:00:00"
         mock_app.control.inspect.return_value.active_queues.return_value = {
-            "worker1": [{"name": "market"}],
+            "worker1": [{"name": "backtest"}],
         }
         trigger_backtest_publisher(task)
-        mock_publish.delay.assert_called_once()
+        mock_publish.apply_async.assert_called_once()
 
     @patch("apps.market.tasks.publish_ticks_for_backtest")
     @patch("celery.current_app")
@@ -173,10 +173,11 @@ class TestTriggerBacktestPublisher:
         task = MagicMock(pk=uuid4(), instrument="EUR_USD")
         task.start_time.isoformat.return_value = "2024-01-01T00:00:00"
         task.end_time.isoformat.return_value = "2024-01-02T00:00:00"
-        mock_app.control.inspect.return_value.active_queues.return_value = None
-        with pytest.raises(RuntimeError, match="No active market worker"):
-            trigger_backtest_publisher(task)
-        mock_publish.delay.assert_not_called()
+        mock_app.control.inspect.return_value.active_queues.return_value = {
+            "worker1": [{"name": "trading"}],
+        }
+        trigger_backtest_publisher(task)
+        mock_publish.apply_async.assert_called_once()
 
 
 class TestStopBacktestTask:

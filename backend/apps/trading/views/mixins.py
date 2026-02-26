@@ -6,6 +6,7 @@ used by both BacktestTaskViewSet and TradingTaskViewSet.
 
 from __future__ import annotations
 
+from django.db.models import Q
 from django.utils.dateparse import parse_datetime
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers
@@ -13,11 +14,12 @@ from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from apps.trading.enums import LogLevel
+from apps.trading.enums import EventType, LogLevel
 from apps.trading.models.logs import TaskLog
 from apps.trading.serializers.events import (
     OrderSerializer,
     PositionSerializer,
+    StrategyEventSerializer,
     TradeSerializer,
     TradingEventSerializer,
 )
@@ -214,6 +216,7 @@ class TaskSubResourceMixin:
             OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
             OpenApiParameter("event_type", str, description="Event type filter"),
             OpenApiParameter("severity", str, description="Severity filter"),
+            OpenApiParameter("scope", str, description="Event scope: all|trading|task"),
             OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
             OpenApiParameter("page", int),
             OpenApiParameter("page_size", int),
@@ -241,7 +244,70 @@ class TaskSubResourceMixin:
             execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
         event_type = request.query_params.get("event_type")
         severity = request.query_params.get("severity")
+        scope = (request.query_params.get("scope") or "all").strip().lower()
         queryset = TradingEvent.objects.filter(
+            task_type=self.task_type_label,
+            task_id=task.pk,
+            execution_run_id=execution_run_id,
+        ).order_by("-created_at")
+        if event_type:
+            queryset = queryset.filter(event_type=event_type)
+        if severity:
+            queryset = queryset.filter(severity=severity)
+        if scope in {"trading", "task"}:
+            task_scoped_event_types = EventType.task_scoped_values()
+            if scope == "task":
+                queryset = queryset.filter(
+                    Q(details__kind__startswith="task_") | Q(event_type__in=task_scoped_event_types)
+                )
+            else:
+                queryset = queryset.filter(
+                    Q(details__kind__isnull=True) | ~Q(details__kind__startswith="task_")
+                ).exclude(event_type__in=task_scoped_event_types)
+
+        since = _parse_since(request)
+        if since:
+            queryset = queryset.filter(created_at__gt=since)
+
+        paginator = TaskSubResourcePagination()
+        page = paginator.paginate_queryset(queryset, request)
+        serializer = TradingEventSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+    @extend_schema(
+        tags=["Trading"],
+        parameters=[
+            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
+            OpenApiParameter("event_type", str, description="Event type filter"),
+            OpenApiParameter("severity", str, description="Severity filter"),
+            OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
+            OpenApiParameter("page", int),
+            OpenApiParameter("page_size", int),
+        ],
+        responses={
+            200: inline_serializer(
+                "TaskStrategyEventPaginatedResponse",
+                fields={
+                    "count": serializers.IntegerField(),
+                    "next": serializers.CharField(allow_null=True),
+                    "previous": serializers.CharField(allow_null=True),
+                    "results": StrategyEventSerializer(many=True),
+                },
+            )
+        },
+        description="Retrieve paginated strategy-internal events.",
+    )
+    @action(detail=True, methods=["get"], url_path="strategy-events")
+    def strategy_events(self, request: Request, pk: int | None = None) -> Response:
+        from apps.trading.models import StrategyEventRecord
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        execution_run_id = _parse_execution_run_id(request)
+        if execution_run_id is None:
+            execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
+        event_type = request.query_params.get("event_type")
+        severity = request.query_params.get("severity")
+        queryset = StrategyEventRecord.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
             execution_run_id=execution_run_id,
@@ -257,7 +323,7 @@ class TaskSubResourceMixin:
 
         paginator = TaskSubResourcePagination()
         page = paginator.paginate_queryset(queryset, request)
-        serializer = TradingEventSerializer(page, many=True)
+        serializer = StrategyEventSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(

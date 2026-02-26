@@ -9,6 +9,7 @@ from apps.trading.serializers.backtest import (
     BacktestTaskSerializer,
 )
 from apps.trading.serializers.events import (
+    StrategyEventSerializer,
     TradeSerializer,
     TradingEventSerializer,
 )
@@ -44,6 +45,7 @@ __all__ = [
     "BacktestTaskSerializer",
     # Events, Trades
     "TradingEventSerializer",
+    "StrategyEventSerializer",
     "TradeSerializer",
     # Strategy
     "StrategyConfigCreateSerializer",

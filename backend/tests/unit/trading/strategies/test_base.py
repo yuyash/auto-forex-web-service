@@ -3,6 +3,7 @@
 from decimal import Decimal
 from unittest.mock import MagicMock
 
+from apps.trading.enums import EventType
 from apps.trading.strategies.base import Strategy
 
 
@@ -34,25 +35,29 @@ class TestStrategyBase:
         assert s.pip_size == Decimal("0.0001")
         assert s.account_currency == ""
 
-    def test_on_start_returns_empty_result(self):
+    def test_on_start_emits_strategy_started_event(self):
         s = ConcreteStrategy("EUR_USD", Decimal("0.0001"), {})
         state = MagicMock()
         result = s.on_start(state=state)
         assert result.state is state
-        assert result.events == []
+        assert len(result.events) == 1
+        assert result.events[0].event_type == EventType.STRATEGY_STARTED
 
-    def test_on_stop_returns_empty_result(self):
+    def test_on_stop_emits_strategy_stopped_event(self):
         s = ConcreteStrategy("EUR_USD", Decimal("0.0001"), {})
         state = MagicMock()
         result = s.on_stop(state=state)
         assert result.state is state
-        assert result.events == []
+        assert len(result.events) == 1
+        assert result.events[0].event_type == EventType.STRATEGY_STOPPED
 
-    def test_on_resume_returns_empty_result(self):
+    def test_on_resume_emits_strategy_resumed_event(self):
         s = ConcreteStrategy("EUR_USD", Decimal("0.0001"), {})
         state = MagicMock()
         result = s.on_resume(state=state)
         assert result.state is state
+        assert len(result.events) == 1
+        assert result.events[0].event_type == EventType.STRATEGY_RESUMED
 
     def test_deserialize_state_passthrough(self):
         s = ConcreteStrategy("EUR_USD", Decimal("0.0001"), {})

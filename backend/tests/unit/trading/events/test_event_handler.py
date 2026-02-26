@@ -7,12 +7,12 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+from apps.trading.dataclasses import EventExecutionResult
 from apps.trading.enums import EventType, TaskType
 from apps.trading.events import (
-    InitialEntryEvent,
+    ClosePositionEvent,
     MarginProtectionEvent,
-    RetracementEvent,
-    TakeProfitEvent,
+    OpenPositionEvent,
     VolatilityHedgeNeutralizeEvent,
     VolatilityLockEvent,
 )
@@ -68,8 +68,8 @@ class TestEventHandlerInit:
         assert handler.layer_position_ids == {}
 
 
-class TestHandleInitialEntry:
-    """Tests for handle_initial_entry."""
+class TestHandleOpenPosition:
+    """Tests for handle_open_position."""
 
     def test_opens_position_and_caches(self):
         svc = _make_order_service()
@@ -80,15 +80,15 @@ class TestHandleInitialEntry:
         handler = EventHandler(order_service=svc, instrument="EUR_USD")
         handler._record_trade = MagicMock()
 
-        event = InitialEntryEvent(
-            event_type=EventType.INITIAL_ENTRY,
+        event = OpenPositionEvent(
+            event_type=EventType.OPEN_POSITION,
             layer_number=1,
             direction="long",
             units=1000,
             price=Decimal("1.10000"),
         )
 
-        result = handler.handle_initial_entry(event)
+        result = handler.handle_open_position(event)
 
         assert result is position
         svc.open_position.assert_called_once()
@@ -105,41 +105,14 @@ class TestHandleInitialEntry:
         handler = EventHandler(order_service=svc, instrument="EUR_USD")
 
         with patch.object(handler, "_record_trade") as mock_record:
-            event = InitialEntryEvent(
-                event_type=EventType.INITIAL_ENTRY,
+            event = OpenPositionEvent(
+                event_type=EventType.OPEN_POSITION,
                 layer_number=1,
                 direction="long",
                 units=1000,
             )
-            handler.handle_initial_entry(event)
+            handler.handle_open_position(event)
             mock_record.assert_called_once()
-
-
-class TestHandleRetracement:
-    """Tests for handle_retracement."""
-
-    def test_opens_position_and_caches(self):
-        svc = _make_order_service()
-        position = _make_position()
-        order = MagicMock()
-        svc.open_position.return_value = (position, order)
-
-        handler = EventHandler(order_service=svc, instrument="EUR_USD")
-        handler._record_trade = MagicMock()
-
-        event = RetracementEvent(
-            event_type=EventType.RETRACEMENT,
-            layer_number=1,
-            direction="long",
-            units=500,
-            retracement_count=2,
-        )
-
-        result = handler.handle_retracement(event)
-
-        assert result is position
-        svc.open_position.assert_called_once()
-        assert handler.position_map[1] is position
 
     def test_passes_retracement_count(self):
         svc = _make_order_service()
@@ -149,21 +122,21 @@ class TestHandleRetracement:
         handler = EventHandler(order_service=svc, instrument="EUR_USD")
         handler._record_trade = MagicMock()
 
-        event = RetracementEvent(
-            event_type=EventType.RETRACEMENT,
+        event = OpenPositionEvent(
+            event_type=EventType.OPEN_POSITION,
             layer_number=2,
             direction="short",
             units=750,
             retracement_count=3,
         )
-        handler.handle_retracement(event)
+        handler.handle_open_position(event)
 
         call_kwargs = svc.open_position.call_args
         assert call_kwargs.kwargs.get("retracement_count") == 3
 
 
-class TestHandleTakeProfit:
-    """Tests for handle_take_profit."""
+class TestHandleClosePosition:
+    """Tests for handle_close_position."""
 
     def test_closes_position_returns_pnl(self):
         svc = _make_order_service()
@@ -173,18 +146,18 @@ class TestHandleTakeProfit:
         svc.close_position.return_value = (closed_position, Decimal("10.00"), MagicMock())
 
         handler = EventHandler(order_service=svc, instrument="EUR_USD")
-        handler._find_take_profit_target = MagicMock(return_value=position)
+        handler._find_close_position_target = MagicMock(return_value=position)
         handler._prune_closed_position = MagicMock()
         handler._record_trade = MagicMock()
 
-        event = TakeProfitEvent(
-            event_type=EventType.TAKE_PROFIT,
+        event = ClosePositionEvent(
+            event_type=EventType.CLOSE_POSITION,
             layer_number=1,
             direction="long",
             units=1000,
         )
 
-        result = handler.handle_take_profit(event)
+        result = handler.handle_close_position(event)
 
         assert result == Decimal("10.00")
         svc.close_position.assert_called_once()
@@ -192,16 +165,16 @@ class TestHandleTakeProfit:
     def test_no_target_position_returns_zero(self):
         svc = _make_order_service()
         handler = EventHandler(order_service=svc, instrument="EUR_USD")
-        handler._find_take_profit_target = MagicMock(return_value=None)
+        handler._find_close_position_target = MagicMock(return_value=None)
 
-        event = TakeProfitEvent(
-            event_type=EventType.TAKE_PROFIT,
+        event = ClosePositionEvent(
+            event_type=EventType.CLOSE_POSITION,
             layer_number=1,
             direction="long",
             units=1000,
         )
 
-        result = handler.handle_take_profit(event)
+        result = handler.handle_close_position(event)
 
         assert result == Decimal("0")
         svc.close_position.assert_not_called()
@@ -232,18 +205,18 @@ class TestHandleTakeProfit:
         ]
 
         handler = EventHandler(order_service=svc, instrument="EUR_USD")
-        handler._find_take_profit_target = MagicMock(side_effect=_find_target)
+        handler._find_close_position_target = MagicMock(side_effect=_find_target)
         handler._prune_closed_position = MagicMock()
         handler._record_trade = MagicMock()
 
-        event = TakeProfitEvent(
-            event_type=EventType.TAKE_PROFIT,
+        event = ClosePositionEvent(
+            event_type=EventType.CLOSE_POSITION,
             layer_number=1,
             direction="long",
             units=1000,
         )
 
-        result = handler.handle_take_profit(event)
+        result = handler.handle_close_position(event)
         assert result == Decimal("10.00")
         assert svc.close_position.call_count == 2
 
@@ -462,7 +435,7 @@ class TestClearPositions:
 class TestHandleEvent:
     """Tests for handle_event dispatch."""
 
-    def test_dispatches_initial_entry(self):
+    def test_dispatches_open_position(self):
         svc = _make_order_service()
         position = _make_position()
         svc.open_position.return_value = (position, MagicMock())
@@ -472,7 +445,8 @@ class TestHandleEvent:
 
         trading_event = MagicMock()
         trading_event.details = {
-            "event_type": "initial_entry",
+            "event_type": "open_position",
+            "strategy_event_type": "initial_entry",
             "layer_number": 1,
             "direction": "long",
             "units": 1000,
@@ -484,14 +458,15 @@ class TestHandleEvent:
         assert result.realized_pnl_delta == Decimal("0")
         assert result.entry_binding is not None
 
-    def test_dispatches_take_profit(self):
+    def test_dispatches_close_position(self):
         svc = _make_order_service()
         handler = EventHandler(order_service=svc, instrument="EUR_USD")
-        handler._find_take_profit_target = MagicMock(return_value=None)
+        handler._find_close_position_target = MagicMock(return_value=None)
 
         trading_event = MagicMock()
         trading_event.details = {
-            "event_type": "take_profit",
+            "event_type": "close_position",
+            "strategy_event_type": "take_profit",
             "layer_number": 1,
             "direction": "long",
             "units": 1000,
@@ -513,4 +488,26 @@ class TestHandleEvent:
 
         result = handler.handle_event(trading_event)
         assert result.realized_pnl_delta == Decimal("0")
+        assert result.entry_binding is None
+
+    def test_custom_event_handler_registration(self):
+        svc = _make_order_service()
+        handler = EventHandler(order_service=svc, instrument="EUR_USD")
+
+        def _custom_handler(_event):
+            return EventExecutionResult(
+                realized_pnl_delta=Decimal("123.45"),
+                entry_binding=None,
+            )
+
+        handler.register_event_handler("custom_event", _custom_handler)
+
+        trading_event = MagicMock()
+        trading_event.details = {
+            "event_type": "custom_event",
+            "payload": "ok",
+        }
+
+        result = handler.handle_event(trading_event)
+        assert result.realized_pnl_delta == Decimal("123.45")
         assert result.entry_binding is None

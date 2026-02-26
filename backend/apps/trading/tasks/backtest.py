@@ -298,38 +298,60 @@ def trigger_backtest_publisher(task: BacktestTask) -> None:
     from celery import current_app
 
     inspect = current_app.control.inspect()
-    active_queues = inspect.active_queues()
+    active_queues = inspect.active_queues() or {}
 
-    market_worker_available = False
-    if active_queues:
-        for worker, queues in active_queues.items():
-            for queue_info in queues:
-                if isinstance(queue_info, dict) and queue_info.get("name") == "market":
-                    market_worker_available = True
-                    logger.info(f"Market worker found - worker={worker}, task_id={task.pk}")
-                    break
+    backtest_workers: list[str] = []
+    worker_queue_map: dict[str, list[str]] = {}
+    for worker, queues in active_queues.items():
+        queue_names: list[str] = []
+        for queue_info in queues or []:
+            if not isinstance(queue_info, dict):
+                continue
+            queue_name = str(queue_info.get("name", "")).strip()
+            if not queue_name:
+                continue
+            queue_names.append(queue_name)
+        worker_queue_map[str(worker)] = queue_names
+        if "backtest" in queue_names:
+            backtest_workers.append(str(worker))
 
-    if not market_worker_available:
-        logger.error(
-            "NO_MARKET_WORKER - cannot start backtest publisher without market queue worker "
-            "- task_id=%s",
-            task.pk,
+    if not backtest_workers:
+        queue_diag = (
+            ", ".join(
+                f"{worker}=[{','.join(queue_names) or '-'}]"
+                for worker, queue_names in sorted(worker_queue_map.items())
+            )
+            or "none"
         )
-        raise RuntimeError(
-            "No active market worker detected. Start a worker that consumes the 'market' queue."
+        # Do not fail hard here: inspect can be temporarily unavailable even while
+        # workers are alive. We still submit publisher task and let normal timeout/
+        # task-level error handling decide failure if it truly cannot run.
+        logger.warning(
+            "NO_BACKTEST_WORKER_DETECTED - proceeding to submit publisher task anyway "
+            "- task_id=%s, active_workers=%s",
+            task.pk,
+            queue_diag,
         )
     else:
-        # Trigger async task
-        result = publish_ticks_for_backtest.delay(
-            instrument=task.instrument,
-            start=task.start_time.isoformat(),
-            end=task.end_time.isoformat(),
-            request_id=request_id,
-        )
         logger.info(
-            f"Publisher task submitted - task_id={task.pk}, "
-            f"publisher_celery_task_id={result.id}, channel=market:backtest:ticks:{request_id}"
+            "Backtest worker found - workers=%s, task_id=%s",
+            ",".join(backtest_workers),
+            task.pk,
         )
+    # Trigger async task to the backtest queue explicitly.
+    result = publish_ticks_for_backtest.apply_async(
+        kwargs={
+            "instrument": task.instrument,
+            "start": task.start_time.isoformat(),
+            "end": task.end_time.isoformat(),
+            "request_id": request_id,
+        },
+        queue="backtest",
+    )
+    logger.info(
+        f"Publisher task submitted - task_id={task.pk}, "
+        f"publisher_celery_task_id={result.id}, channel=market:backtest:ticks:{request_id}"
+    )
 
 
 @shared_task(bind=True, name="trading.tasks.stop_backtest_task")

@@ -16,17 +16,21 @@ export interface TaskEvent {
   id: string;
   event_type: string;
   event_type_display?: string;
+  event_scope?: 'task' | 'trading' | 'strategy';
   severity: string;
   description: string;
   details?: Record<string, unknown>;
   created_at: string;
 }
 
+export type TaskEventSource = 'trading' | 'task' | 'strategy';
+
 interface UseTaskEventsOptions {
   taskId: string | number;
   taskType: TaskType;
   /** Filter by execution run ID. When omitted, uses the latest execution run. */
   executionRunId?: number;
+  source?: TaskEventSource;
   eventType?: string;
   severity?: string;
   page?: number;
@@ -68,6 +72,7 @@ export const useTaskEvents = ({
   taskId,
   taskType,
   executionRunId,
+  source = 'trading',
   eventType,
   severity,
   page = 1,
@@ -86,7 +91,7 @@ export const useTaskEvents = ({
   const sinceRef = useRef<string | null>(null);
   const hasInitialFetchRef = useRef(false);
 
-  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${eventType}-${severity}-${page}-${pageSize}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${source}-${eventType}-${severity}-${page}-${pageSize}`;
   const prevParamsKeyRef = useRef(paramsKey);
   if (paramsKey !== prevParamsKeyRef.current) {
     prevParamsKeyRef.current = paramsKey;
@@ -121,10 +126,14 @@ export const useTaskEvents = ({
         }
         if (eventType) params.event_type = eventType;
         if (severity) params.severity = severity;
+        if (source !== 'strategy') {
+          params.scope = source;
+        }
         const effectiveSince = incremental ? sinceRef.current : null;
         if (effectiveSince) params.since = effectiveSince;
 
-        const url = `${apiConfig.BASE}${prefix}/${taskId}/events/`;
+        const endpoint = source === 'strategy' ? 'strategy-events' : 'events';
+        const url = `${apiConfig.BASE}${prefix}/${taskId}/${endpoint}/`;
         const headers = await getAuthHeaders();
 
         const response = await axios.get(url, {
@@ -179,7 +188,16 @@ export const useTaskEvents = ({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [taskId, taskType, executionRunId, eventType, severity, page, pageSize]
+    [
+      taskId,
+      taskType,
+      executionRunId,
+      source,
+      eventType,
+      severity,
+      page,
+      pageSize,
+    ]
   );
 
   useEffect(() => {
