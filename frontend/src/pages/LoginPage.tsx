@@ -21,6 +21,7 @@ interface LoginFormData {
 
 interface LoginResponse {
   token: string;
+  refresh_token: string;
   user: {
     id: number;
     email: string;
@@ -192,7 +193,7 @@ const LoginPage = () => {
         return;
       }
 
-      login(loginData.token, loginData.user);
+      login(loginData.token, loginData.refresh_token, loginData.user);
 
       // Redirect to default authenticated landing page
       navigate('/dashboard');

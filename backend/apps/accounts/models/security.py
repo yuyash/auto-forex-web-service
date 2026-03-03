@@ -216,3 +216,82 @@ class AccountSecurityEvent(models.Model):
         if self.user_id:  # type: ignore[attr-defined]
             return f"{base} user={self.user_id}"  # type: ignore[attr-defined]
         return base
+
+
+class RefreshToken(models.Model):
+    """Opaque refresh token for JWT token rotation.
+
+    Each login creates a refresh token that can be exchanged for a new
+    access token.  Tokens are rotated on every refresh (old revoked,
+    new issued) and can be revoked on logout.
+    """
+
+    user = models.ForeignKey(
+        "User",
+        on_delete=models.CASCADE,
+        related_name="refresh_tokens",
+        help_text="Owner of this refresh token",
+    )
+    session = models.ForeignKey(
+        "UserSession",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="refresh_tokens",
+        help_text="Session that created this token (for tracking)",
+    )
+    token = models.CharField(
+        max_length=255,
+        unique=True,
+        db_index=True,
+        help_text="Opaque refresh token value",
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        help_text="When the token was issued",
+    )
+    expires_at = models.DateTimeField(
+        help_text="When the token expires",
+    )
+    revoked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the token was revoked (null = active)",
+    )
+    ip_address = models.GenericIPAddressField(
+        null=True,
+        blank=True,
+        help_text="IP address that created this token",
+    )
+    user_agent = models.TextField(
+        default="",
+        blank=True,
+        help_text="User agent that created this token",
+    )
+
+    class Meta:
+        db_table = "refresh_tokens"
+        verbose_name = "Refresh Token"
+        verbose_name_plural = "Refresh Tokens"
+        indexes = [
+            models.Index(fields=["token"]),
+            models.Index(fields=["user", "revoked_at"]),
+            models.Index(fields=["expires_at"]),
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        token_status = "active" if self.is_valid else "revoked/expired"
+        return f"RefreshToken({self.user_id}, {token_status})"  # type: ignore[attr-defined]
+
+    @property
+    def is_valid(self) -> bool:
+        """Return True if the token is not revoked and not expired."""
+        if self.revoked_at is not None:
+            return False
+        return timezone.now() < self.expires_at
+
+    def revoke(self) -> None:
+        """Mark this token as revoked."""
+        self.revoked_at = timezone.now()
+        self.save(update_fields=["revoked_at"])
