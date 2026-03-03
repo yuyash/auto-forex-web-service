@@ -18,7 +18,7 @@ export interface AuthContextType {
   isAuthenticated: boolean;
   systemSettings: SystemSettings | null;
   systemSettingsLoading: boolean;
-  login: (token: string, user: User) => void;
+  login: (token: string, refreshToken: string, user: User) => void;
   logout: () => Promise<void>;
   refreshToken: () => Promise<boolean>;
   refetchSystemSettings: () => Promise<void>;

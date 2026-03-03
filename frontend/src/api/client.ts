@@ -157,6 +157,7 @@ export function transformApiError(error: unknown): TransformedApiError {
     if (statusCode === 401) {
       console.warn(`[API:AUTH] 401 Unauthorized - Clearing auth state`);
       localStorage.removeItem('token');
+      localStorage.removeItem('refresh_token');
       localStorage.removeItem('user');
       clearAuthToken();
       broadcastAuthLogout({

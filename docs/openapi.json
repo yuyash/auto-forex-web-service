@@ -119,10 +119,20 @@
         "/api/accounts/auth/refresh": {
             "post": {
                 "operationId": "auth_token_refresh",
-                "description": "Refresh JWT token using Bearer token in Authorization header.",
+                "description": "Exchange a refresh token for a new access + refresh token pair.",
                 "tags": [
                     "Accounts"
                 ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TokenRefreshRequestRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
                 "security": [
                     {}
                 ],
@@ -4864,11 +4874,15 @@
                     "token": {
                         "type": "string"
                     },
+                    "refresh_token": {
+                        "type": "string"
+                    },
                     "user": {
                         "$ref": "#/components/schemas/LoginUser"
                     }
                 },
                 "required": [
+                    "refresh_token",
                     "token",
                     "user"
                 ]
@@ -7447,10 +7461,25 @@
                     "error"
                 ]
             },
+            "TokenRefreshRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "refresh_token": {
+                        "type": "string",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "refresh_token"
+                ]
+            },
             "TokenRefreshResponse": {
                 "type": "object",
                 "properties": {
                     "token": {
+                        "type": "string"
+                    },
+                    "refresh_token": {
                         "type": "string"
                     },
                     "user": {
@@ -7458,6 +7487,7 @@
                     }
                 },
                 "required": [
+                    "refresh_token",
                     "token",
                     "user"
                 ]
