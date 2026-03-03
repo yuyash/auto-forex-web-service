@@ -60,6 +60,7 @@ class UserLoginView(APIView):
                 "LoginResponse",
                 fields={
                     "token": serializers.CharField(),
+                    "refresh_token": serializers.CharField(),
                     "user": inline_serializer(
                         "LoginUser",
                         fields={
@@ -264,9 +265,17 @@ class UserLoginView(APIView):
             user_agent=request.META.get("HTTP_USER_AGENT"),
         )
 
+        jwt_service = JWTService()
+        refresh_token = jwt_service.create_refresh_token(
+            user,
+            ip_address=ip_address,
+            user_agent=request.META.get("HTTP_USER_AGENT", ""),
+        )
+
         return Response(
             {
                 "token": token,
+                "refresh_token": refresh_token,
                 "user": {
                     "id": user.id,
                     "email": user.email,

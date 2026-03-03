@@ -7,6 +7,7 @@ This module exposes a class-based API (instantiate where used).
 
 from __future__ import annotations
 
+import secrets
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -91,3 +92,97 @@ class JWTService:
         if getattr(user, "is_locked", False):
             return None
         return self.generate_token(user)
+
+    # ------------------------------------------------------------------
+    # Refresh token (opaque, DB-backed)
+    # ------------------------------------------------------------------
+
+    def create_refresh_token(
+        self,
+        user: Any,
+        *,
+        ip_address: str | None = None,
+        user_agent: str = "",
+    ) -> str:
+        """Create an opaque refresh token stored in the database."""
+        from apps.accounts.models import RefreshToken
+
+        token_value = secrets.token_urlsafe(48)
+        expires_at = datetime.now(UTC) + timedelta(
+            seconds=int(getattr(settings, "REFRESH_TOKEN_EXPIRATION", 604800)),
+        )
+
+        RefreshToken.objects.create(
+            user=user,
+            token=token_value,
+            expires_at=expires_at,
+            ip_address=ip_address,
+            user_agent=user_agent or "",
+        )
+        return token_value
+
+    def rotate_refresh_token(
+        self,
+        refresh_token_value: str,
+        *,
+        ip_address: str | None = None,
+        user_agent: str = "",
+    ) -> tuple[str, str, Any] | None:
+        """Validate a refresh token, revoke it, and issue new access + refresh tokens.
+
+        If the token has already been revoked (replay attack), all of the
+        user's refresh tokens are revoked as a safety measure (family
+        revocation).
+
+        Returns ``(new_access_token, new_refresh_token, user)`` or ``None``.
+        """
+        from apps.accounts.models import RefreshToken
+
+        try:
+            rt = RefreshToken.objects.select_related("user").get(token=refresh_token_value)
+        except RefreshToken.DoesNotExist:
+            return None
+
+        # --- Family revocation: detect reuse of a revoked token ----------
+        if rt.revoked_at is not None:
+            # Someone is replaying an already-used token → compromise assumed.
+            self.revoke_all_refresh_tokens(rt.user)
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "Refresh token reuse detected for user %s — all tokens revoked",
+                rt.user_id,
+            )
+            return None
+
+        # Normal expiry check
+        if not rt.is_valid:
+            return None
+
+        user = rt.user
+        if not user.is_active or getattr(user, "is_locked", False):
+            return None
+
+        # Revoke old token
+        rt.revoke()
+
+        # Issue new pair
+        new_access = self.generate_token(user)
+        new_refresh = self.create_refresh_token(
+            user,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+        return new_access, new_refresh, user
+
+    @staticmethod
+    def revoke_all_refresh_tokens(user: Any) -> int:
+        """Revoke all active refresh tokens for a user. Returns count revoked."""
+        from django.utils import timezone
+
+        from apps.accounts.models import RefreshToken
+
+        return RefreshToken.objects.filter(
+            user=user,
+            revoked_at__isnull=True,
+        ).update(revoked_at=timezone.now())

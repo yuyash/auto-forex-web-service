@@ -106,6 +106,7 @@ cp .env.example .env
 # DB_PORT=5432
 # REDIS_URL=redis://localhost:6379/0
 # DEBUG=True
+# JWT_SECRET_KEY=<generate a unique key>
 
 # Install Python dependencies
 uv sync --all-extras
@@ -135,9 +136,12 @@ npm install
 ```bash
 # Generate Django SECRET_KEY
 python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+
+# Generate JWT_SECRET_KEY (must be different from SECRET_KEY)
+python -c "import secrets; print(secrets.token_urlsafe(64))"
 ```
 
-Update this value in `backend/.env`.
+Update both values in `backend/.env`.
 
 ### 6. Start Development Servers
 
@@ -198,6 +202,7 @@ cp .env.example .env
 # Minimum required:
 # - DB_PASSWORD
 # - SECRET_KEY
+# - JWT_SECRET_KEY (must differ from SECRET_KEY)
 ```
 
 ### 2. Generate Security Keys
@@ -205,9 +210,12 @@ cp .env.example .env
 ```bash
 # Generate Django SECRET_KEY
 python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+
+# Generate JWT_SECRET_KEY (must be different from SECRET_KEY)
+python -c "import secrets; print(secrets.token_urlsafe(64))"
 ```
 
-Update this value in `.env`.
+Update both values in `.env`.
 
 ### 3. Build and Start Services
 

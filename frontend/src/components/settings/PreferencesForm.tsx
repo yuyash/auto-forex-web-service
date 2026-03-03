@@ -144,7 +144,8 @@ const PreferencesForm = () => {
 
       // Update user in auth context if user data is returned
       if (data.user && user && token) {
-        login(token, data.user);
+        const currentRefreshToken = localStorage.getItem('refresh_token') || '';
+        login(token, currentRefreshToken, data.user);
       }
 
       // Update i18n language if it changed

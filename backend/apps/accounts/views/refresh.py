@@ -1,4 +1,4 @@
-"""JWT token refresh view."""
+"""JWT token refresh view using opaque refresh tokens."""
 
 from logging import Logger, getLogger
 
@@ -16,24 +16,36 @@ logger: Logger = getLogger(name=__name__)
 
 class TokenRefreshView(APIView):
     """
-    API endpoint for JWT token refresh.
+    API endpoint for JWT token refresh using opaque refresh tokens.
 
     POST /api/auth/refresh
-    - Refresh JWT token if valid
+    - Exchange a valid refresh_token for a new access + refresh token pair
+    - The old refresh token is revoked (rotation)
     """
 
     permission_classes = [AllowAny]
     authentication_classes: list = []
 
+    def get_client_ip(self, request: Request) -> str:
+        """Get client IP address from request."""
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+        if x_forwarded_for:
+            return x_forwarded_for.split(",")[0].strip()
+        return str(request.META.get("REMOTE_ADDR", ""))
+
     @extend_schema(
         operation_id="auth_token_refresh",
         tags=["Accounts"],
-        request=None,
+        request=inline_serializer(
+            "TokenRefreshRequest",
+            fields={"refresh_token": serializers.CharField()},
+        ),
         responses={
             200: inline_serializer(
                 "TokenRefreshResponse",
                 fields={
                     "token": serializers.CharField(),
+                    "refresh_token": serializers.CharField(),
                     "user": inline_serializer(
                         "TokenRefreshUser",
                         fields={
@@ -52,37 +64,37 @@ class TokenRefreshView(APIView):
                 fields={"error": serializers.CharField()},
             ),
         },
-        description="Refresh JWT token using Bearer token in Authorization header.",
+        description="Exchange a refresh token for a new access + refresh token pair.",
     )
     def post(self, request: Request) -> Response:
-        """Handle token refresh."""
-        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
-        if not auth_header.startswith("Bearer "):
+        """Handle token refresh via opaque refresh token."""
+        refresh_token_value = request.data.get("refresh_token", "").strip()
+        if not refresh_token_value:
             return Response(
-                {"error": "Invalid authorization header format."},
+                {"error": "refresh_token is required."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        token = auth_header.split(" ")[1] if len(auth_header.split(" ")) > 1 else ""
-        if not token:
+        ip_address = self.get_client_ip(request)
+        user_agent = request.META.get("HTTP_USER_AGENT", "")
+
+        result = JWTService().rotate_refresh_token(
+            refresh_token_value,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
+        if result is None:
+            logger.warning(
+                "Refresh token rejected (invalid/expired/revoked) from %s",
+                ip_address,
+            )
             return Response(
-                {"error": "No token provided."},
+                {"error": "Invalid or expired refresh token."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        new_token = JWTService().refresh_token(token)
-        if not new_token:
-            return Response(
-                {"error": "Invalid or expired token."},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-
-        user = JWTService().get_user_from_token(new_token)
-        if not user:
-            return Response(
-                {"error": "Failed to retrieve user information."},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        new_access, new_refresh, user = result
 
         logger.info(
             "Token refreshed for user %s",
@@ -92,7 +104,8 @@ class TokenRefreshView(APIView):
 
         return Response(
             {
-                "token": new_token,
+                "token": new_access,
+                "refresh_token": new_refresh,
                 "user": {
                     "id": user.id,
                     "email": user.email,

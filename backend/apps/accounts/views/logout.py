@@ -90,6 +90,9 @@ class UserLogoutView(APIView):
         for session in active_sessions:
             session.terminate()
 
+        # Revoke all refresh tokens for this user
+        revoked_count = JWTService.revoke_all_refresh_tokens(user)
+
         logger.info(
             "User %s logged out successfully from %s",
             user.email,
@@ -100,6 +103,7 @@ class UserLogoutView(APIView):
                 "ip_address": ip_address,
                 "user_agent": request.META.get("HTTP_USER_AGENT", ""),
                 "sessions_terminated": active_sessions.count(),
+                "refresh_tokens_revoked": revoked_count,
             },
         )
 

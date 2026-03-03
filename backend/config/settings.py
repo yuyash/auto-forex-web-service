@@ -68,6 +68,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "apps.accounts.middlewares.csp.CSPMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -171,7 +172,7 @@ CACHES = {
 # =============================================================================
 
 # Security settings
-JWT_EXPIRATION = int(os.getenv("JWT_EXPIRATION", "86400"))  # 24 hours
+JWT_EXPIRATION = int(os.getenv("JWT_EXPIRATION", "3600"))  # 1 hour
 MAX_LOGIN_ATTEMPTS = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
 LOCKOUT_DURATION = int(os.getenv("LOCKOUT_DURATION", "900"))  # 15 minutes
 RATE_LIMIT_REQUESTS = int(os.getenv("RATE_LIMIT_REQUESTS", "100"))
@@ -247,6 +248,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "trading.tasks.recover_orphaned_tasks",
         "schedule": 300,  # Every 5 minutes
         "options": {"queue": "system"},
+    },
+    "cleanup-expired-refresh-tokens": {
+        "task": "accounts.tasks.cleanup_expired_refresh_tokens",
+        "schedule": 3600,  # Every hour
+        "options": {"queue": "default"},
     },
 }
 
@@ -616,6 +622,14 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_SECURE = True
 
+# Content Security Policy — mitigates XSS (protects localStorage tokens)
+# Applied in both DEBUG and production; override via env if needed.
+CSP_DEFAULT_SRC = os.getenv("CSP_DEFAULT_SRC", "'self'")
+CSP_SCRIPT_SRC = os.getenv("CSP_SCRIPT_SRC", "'self'")
+CSP_STYLE_SRC = os.getenv("CSP_STYLE_SRC", "'self' 'unsafe-inline'")
+CSP_IMG_SRC = os.getenv("CSP_IMG_SRC", "'self' data:")
+CSP_CONNECT_SRC = os.getenv("CSP_CONNECT_SRC", "'self'")
+
 
 # =============================================================================
 # CORS Configuration
@@ -629,9 +643,20 @@ CORS_ALLOW_CREDENTIALS = True
 # JWT Configuration
 # =============================================================================
 
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", SECRET_KEY)
+_jwt_secret = os.getenv("JWT_SECRET_KEY", "")
+if not _jwt_secret:
+    import warnings
+
+    warnings.warn(
+        "JWT_SECRET_KEY is not set — falling back to SECRET_KEY. "
+        "Set a dedicated JWT_SECRET_KEY in production.",
+        stacklevel=1,
+    )
+    _jwt_secret = SECRET_KEY
+JWT_SECRET_KEY = _jwt_secret
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_DELTA = JWT_EXPIRATION
+REFRESH_TOKEN_EXPIRATION = int(os.getenv("REFRESH_TOKEN_EXPIRATION", "604800"))  # 7 days
 
 
 # =============================================================================

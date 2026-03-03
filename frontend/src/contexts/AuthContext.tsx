@@ -28,28 +28,41 @@ const AuthContext = globalWindow[AUTH_CONTEXT_KEY] as React.Context<
   AuthContextType | undefined
 >;
 
-const getInitialAuthState = (): { token: string | null; user: User | null } => {
+const getInitialAuthState = (): {
+  token: string | null;
+  user: User | null;
+  refreshToken: string | null;
+} => {
   try {
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
+    const storedRefreshToken = localStorage.getItem('refresh_token');
 
     if (storedToken && storedUser) {
       const parsedUser = JSON.parse(storedUser);
-      return { token: storedToken, user: parsedUser };
+      return {
+        token: storedToken,
+        user: parsedUser,
+        refreshToken: storedRefreshToken,
+      };
     }
   } catch (error) {
     console.error('Failed to parse stored user data:', error);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('refresh_token');
   }
 
-  return { token: null, user: null };
+  return { token: null, user: null, refreshToken: null };
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const initialState = getInitialAuthState();
   const [user, setUser] = useState<User | null>(initialState.user);
   const [token, setToken] = useState<string | null>(initialState.token);
+  const [refreshTokenValue, setRefreshTokenValue] = useState<string | null>(
+    initialState.refreshToken
+  );
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(
     null
   );
@@ -86,14 +99,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const login = useCallback((newToken: string, newUser: User) => {
-    setToken(newToken);
-    setUser(newUser);
-    localStorage.setItem('token', newToken);
-    localStorage.setItem('user', JSON.stringify(newUser));
-    // Configure OpenAPI client with the new token
-    setAuthToken(newToken);
-  }, []);
+  const login = useCallback(
+    (newToken: string, newRefreshToken: string, newUser: User) => {
+      setToken(newToken);
+      setRefreshTokenValue(newRefreshToken);
+      setUser(newUser);
+      localStorage.setItem('token', newToken);
+      localStorage.setItem('refresh_token', newRefreshToken);
+      localStorage.setItem('user', JSON.stringify(newUser));
+      // Configure OpenAPI client with the new token
+      setAuthToken(newToken);
+    },
+    []
+  );
 
   const logout = useCallback(async () => {
     // Call logout API endpoint if token exists
@@ -114,15 +132,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Clear local state and storage
     setToken(null);
+    setRefreshTokenValue(null);
     setUser(null);
     localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
     // Clear OpenAPI client token
     clearAuthToken();
   }, [token]);
 
   const refreshToken = useCallback(async (): Promise<boolean> => {
-    if (!token) {
+    if (!refreshTokenValue) {
       return false;
     }
 
@@ -131,8 +151,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({ refresh_token: refreshTokenValue }),
       });
 
       if (!response.ok) {
@@ -143,9 +163,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const data = await response.json();
 
-      if (data.token && data.user) {
+      if (data.token && data.refresh_token && data.user) {
         // Update token and user
-        login(data.token, data.user);
+        login(data.token, data.refresh_token, data.user);
         return true;
       }
 
@@ -155,7 +175,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await logout();
       return false;
     }
-  }, [token, login, logout]);
+  }, [refreshTokenValue, login, logout]);
 
   // Set up token refresh interval (refresh every 20 hours, token expires in 24 hours)
   useEffect(() => {
@@ -163,12 +183,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    // Refresh token every 20 hours (72000000 ms)
+    // Refresh token every 50 minutes (access token expires in 1 hour)
     const refreshInterval = setInterval(
       () => {
         refreshToken();
       },
-      20 * 60 * 60 * 1000
+      50 * 60 * 1000
     );
 
     return () => {

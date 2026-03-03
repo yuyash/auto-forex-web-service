@@ -100,6 +100,9 @@ DB_PASSWORD=your_secure_password
 SECRET_KEY=your_secret_key_here_min_50_chars
 DEBUG=True
 ALLOWED_HOSTS=localhost,127.0.0.1
+
+# JWT (must be different from SECRET_KEY)
+JWT_SECRET_KEY=your_jwt_secret_key_here
 ```
 
 **Generate secure keys:**
@@ -107,6 +110,9 @@ ALLOWED_HOSTS=localhost,127.0.0.1
 ```bash
 # Django SECRET_KEY
 python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+
+# JWT_SECRET_KEY
+python -c "import secrets; print(secrets.token_urlsafe(64))"
 ```
 
 ### 3. Build and Start Services
@@ -203,14 +209,20 @@ The Floor Strategy implements multi-layer position management with dynamic scali
 
 ## Security
 
-- JWT-based authentication with 24-hour expiration
+- JWT-based authentication with short-lived access tokens (1 hour) and long-lived refresh tokens (7 days)
+- Refresh token rotation — every refresh revokes the old token and issues a new pair
+- Refresh token reuse detection — if a revoked token is replayed, all user tokens are invalidated (family revocation)
+- Automatic cleanup of expired/revoked refresh tokens via Celery Beat (hourly)
+- Dedicated `JWT_SECRET_KEY` separate from Django `SECRET_KEY` to limit blast radius
+- Content Security Policy (CSP) headers on all responses to mitigate XSS
 - Password hashing with bcrypt
 - Rate limiting (5 attempts per 15 minutes)
 - IP-based blocking after failed login attempts
 - Account locking after 10 failed attempts
-- Encrypted storage of OANDA API tokens
+- Encrypted storage of OANDA API tokens (Fernet)
 - Role-based access control for admin endpoints
 - Comprehensive security event logging
+- HSTS, X-Frame-Options DENY, CSRF protection in production
 
 ## Monitoring
 

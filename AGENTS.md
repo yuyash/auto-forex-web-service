@@ -53,28 +53,31 @@ This document provides guidance for AI agents working on this project.
 - Celery: Redis broker with task routing
 - Channels: Redis channel layer for WebSocket
 - Logging: Rotating file handlers with per-app loggers
-- Security: HTTPS, HSTS, CSRF, XFrame protection
+- Security: HTTPS, HSTS, CSRF, XFrame protection, Content Security Policy (CSP)
 - CORS: Configurable allowed origins
-- JWT: HS256 algorithm with 24-hour expiration
+- JWT: HS256 algorithm with dedicated JWT_SECRET_KEY, 1-hour access token expiration
+- Refresh Tokens: Opaque DB-backed tokens, 7-day expiration, rotation on use, family revocation on reuse detection
 
 **Environment Variables** (`.env`):
 
 - `DB_PASSWORD` - PostgreSQL password
 - `SECRET_KEY` - Django secret key (min 50 chars)
+- `JWT_SECRET_KEY` - JWT signing key (must differ from SECRET_KEY)
 - `REDIS_PASSWORD` - Redis password (optional)
+- `REFRESH_TOKEN_EXPIRATION` - Refresh token lifetime in seconds (default: 604800 / 7 days)
 - Additional config via environment variables
 
 ### API Structure
 
 **Base URL**: `/api/`
 
-**Authentication**: JWT Bearer token in `Authorization` header
+**Authentication**: JWT Bearer token in `Authorization` header. Refresh via `POST /api/auth/refresh` with `refresh_token` in request body (no Bearer header needed).
 
 **Response Format**: JSON with consistent error structure
 
 **Endpoints**:
 
-- `/api/auth/` - Authentication (login, logout, token refresh)
+- `/api/auth/` - Authentication (login, logout, token refresh via refresh_token)
 - `/api/accounts/` - User account management
 - `/api/oanda/` - OANDA account integration
 - `/api/market/` - Market data queries
