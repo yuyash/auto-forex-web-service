@@ -1,388 +1,253 @@
 # AGENTS.md - Auto Forex Trader Project Guide
 
 This document provides guidance for AI agents working on this project.
+Backend- and frontend-specific details live in `backend/AGENTS.md` and `frontend/AGENTS.md` respectively.
+This file covers project-wide architecture, infrastructure, CI/CD, and development workflow rules.
 
-## Backend Architecture
+## Overview
 
-### Django Apps
+Auto Forex Trader is a full-stack web application for managing algorithmic forex trading on OANDA accounts.
+It provides real-time market data streaming, modular strategy execution, position tracking, backtesting, and risk management.
 
-#### 1. **accounts** - Authentication & User Management
+### Repository Layout
 
-- User model with custom authentication
-- JWT token generation and validation
-- Session management with Redis backend
-- Security monitoring and IP blocking
-- User settings and preferences
-- Notification preferences
-- HTTP access logging middleware
+```
+.
+├── backend/              # Django 5.2 LTS application (REST API, WebSocket, Celery workers)
+├── frontend/             # React 19 + TypeScript + Vite SPA
+├── nginx/                # Reverse proxy configs (dev & prod Dockerfiles, conf.d/)
+├── docs/                 # Generated OpenAPI schema (openapi.json), GitHub Pages API docs
+├── docker-compose.yaml   # Development stack (builds from source)
+├── docker-compose.prod.yaml  # Production stack (pulls pre-built images from DockerHub)
+├── .github/              # GitHub Actions workflows & Dependabot
+├── .pre-commit-config.yaml
+├── .env.example          # Secrets-only template (DB_PASSWORD, SECRET_KEY, JWT_SECRET_KEY, REDIS_PASSWORD)
+└── DEVELOPMENT.md        # Detailed local & Docker dev setup guide
+```
 
-#### 2. **health** - System Health Checks
+## Architecture
 
-- Database connectivity checks
-- Redis connectivity checks
-- Celery worker status
-- System resource monitoring (CPU, memory)
-- Health check endpoint for load balancers
+The system runs as a set of Docker containers on a single host:
 
-#### 3. **market** - Market Data & OANDA Integration
+| Service     | Role                                                  |
+| ----------- | ----------------------------------------------------- |
+| nginx       | Reverse proxy, SSL termination (prod), static files   |
+| backend     | Django + Daphne (ASGI) — REST API & WebSocket server  |
+| celery      | Async task workers (queues: default, trading, market) |
+| celery-beat | Periodic task scheduler (django-celery-beat)          |
+| frontend    | React SPA served by its own Nginx container           |
+| postgres    | PostgreSQL 17                                         |
+| redis       | Cache, session store, Celery broker                   |
+| certbot     | Let's Encrypt certificate renewal (prod only)         |
 
-- OANDA API integration (v20)
-- Real-time market data streaming via WebSocket
-- Tick data publishing to Redis pub/sub
-- Market data storage and retrieval
-- Instrument configuration
-- Backtesting data management
+All services communicate over a Docker bridge network (`forex_network`).
+In development, `docker-compose.yaml` builds images from source and mounts local code for hot-reload.
+In production, `docker-compose.prod.yaml` pulls pre-built images from DockerHub and adds SSL via certbot.
 
-#### 4. **trading** - Trading Strategies & Execution
+## Technology Stack
 
-- Trading strategy definitions and configurations
-- Strategy execution engine
-- Position management and lifecycle
-- Order execution and tracking
-- Trade history and reconciliation
-- Risk management enforcement
-- Performance metrics calculation
+| Layer          | Technologies                                                      |
+| -------------- | ----------------------------------------------------------------- |
+| Backend        | Python 3.13, Django 5.2 LTS, DRF, Django Channels, Celery, Daphne |
+| Frontend       | React 19, TypeScript, Vite, Material-UI, react-financial-charts   |
+| Database       | PostgreSQL 17                                                     |
+| Cache/Broker   | Redis 7                                                           |
+| Infrastructure | Docker, Docker Compose, Nginx, Let's Encrypt                      |
+| CI/CD          | GitHub Actions, DockerHub (multi-arch amd64/arm64)                |
+| Package Mgmt   | uv (Python), npm (Node.js)                                        |
+| Linting        | ruff, ty (backend), ESLint, Prettier (frontend)                   |
+| Testing        | pytest + hypothesis (backend), Vitest + Playwright (frontend)     |
+| Security       | bandit (SAST), detect-private-key, Dependabot                     |
+| API Docs       | drf-spectacular → OpenAPI JSON → Swagger UI on GitHub Pages       |
 
-### Configuration
+## Security Considerations
 
-**Django Settings** (`backend/config/settings.py`):
+- Never commit `.env` files. Only `.env.example` (with placeholder values) is tracked.
+- `SECRET_KEY` and `JWT_SECRET_KEY` must be distinct, cryptographically random, and at least 50 characters.
+- OANDA API tokens are encrypted at rest with Fernet.
+- The backend enforces JWT authentication with refresh-token rotation and family revocation.
+- CSP, HSTS, X-Frame-Options DENY, and CSRF protection are enabled in production.
+- `bandit` runs as a pre-commit hook for Python SAST.
+- `detect-private-key` pre-commit hook prevents accidental key commits.
+- AWS credentials are mounted read-only (`~/.aws:/root/.aws:ro`) — never bake them into images.
+- Rate limiting and IP-based blocking protect authentication endpoints.
 
-- Database: PostgreSQL with connection pooling
-- Cache: Redis with Django cache framework
-- Session: Redis-backed sessions
-- Celery: Redis broker with task routing
-- Channels: Redis channel layer for WebSocket
-- Logging: Rotating file handlers with per-app loggers
-- Security: HTTPS, HSTS, CSRF, XFrame protection, Content Security Policy (CSP)
-- CORS: Configurable allowed origins
-- JWT: HS256 algorithm with dedicated JWT_SECRET_KEY, 1-hour access token expiration
-- Refresh Tokens: Opaque DB-backed tokens, 7-day expiration, rotation on use, family revocation on reuse detection
+## Build & Test
 
-**Environment Variables** (`.env`):
+### Docker (recommended)
 
-- `DB_PASSWORD` - PostgreSQL password
-- `SECRET_KEY` - Django secret key (min 50 chars)
-- `JWT_SECRET_KEY` - JWT signing key (must differ from SECRET_KEY)
-- `REDIS_PASSWORD` - Redis password (optional)
-- `REFRESH_TOKEN_EXPIRATION` - Refresh token lifetime in seconds (default: 604800 / 7 days)
-- Additional config via environment variables
+```bash
+# Build and start all services
+docker compose build
+docker compose up -d
 
-### API Structure
+# Run backend tests
+docker compose exec backend pytest
 
-**Base URL**: `/api/`
+# Run frontend tests
+docker compose exec frontend npm run test
+```
 
-**Authentication**: JWT Bearer token in `Authorization` header. Refresh via `POST /api/auth/refresh` with `refresh_token` in request body (no Bearer header needed).
+### Local Development
 
-**Response Format**: JSON with consistent error structure
-
-**Endpoints**:
-
-- `/api/auth/` - Authentication (login, logout, token refresh via refresh_token)
-- `/api/accounts/` - User account management
-- `/api/oanda/` - OANDA account integration
-- `/api/market/` - Market data queries
-- `/api/strategies/` - Strategy management
-- `/api/positions/` - Position queries
-- `/api/trades/` - Trade history
-- `/api/health/` - System health checks
-- `/api/docs/` - Swagger UI (development only)
-- `/api/redoc/` - ReDoc (development only)
-
-### Celery Task Architecture
-
-**Task Queues**:
-
-- `default` - General tasks
-- `market` - Long-running market data tasks
-- `trading` - Strategy execution and backtesting tasks
-
-**Celery Beat Scheduler**: Uses database scheduler for persistent scheduled tasks
-
----
-
-## Frontend Architecture
-
-### Routing (`App.tsx`)
-
-All page components are lazy-loaded via `React.lazy()`. Uses `react-router-dom`.
-
-**Public routes**: `/login`, `/register` (conditionally enabled via `systemSettings`)
-
-**Protected routes** (wrapped in `ProtectedRoute` + `AppLayout`):
-
-| Path                       | Page                      |
-| -------------------------- | ------------------------- |
-| `/dashboard`               | `DashboardPage`           |
-| `/configurations`          | `ConfigurationsPage`      |
-| `/configurations/:id`      | `ConfigurationDetailPage` |
-| `/configurations/new`      | `ConfigurationFormPage`   |
-| `/configurations/:id/edit` | `ConfigurationFormPage`   |
-| `/backtest-tasks`          | `BacktestTasksPage`       |
-| `/backtest-tasks/new`      | `BacktestTaskFormPage`    |
-| `/backtest-tasks/:id`      | `BacktestTaskDetailPage`  |
-| `/backtest-tasks/:id/edit` | `BacktestTaskFormPage`    |
-| `/trading-tasks`           | `TradingTasksPage`        |
-| `/trading-tasks/new`       | `TradingTaskFormPage`     |
-| `/trading-tasks/:id`       | `TradingTaskDetailPage`   |
-| `/trading-tasks/:id/edit`  | `TradingTaskFormPage`     |
-| `/settings`                | `SettingsPage`            |
-| `/settings/accounts/:id`   | `OandaAccountDetailPage`  |
-| `/profile`                 | `ProfilePage`             |
-
-**Provider hierarchy**: `ErrorBoundary` → `AccessibilityProvider` → `ThemeProvider` → `QueryProvider` → `ToastProvider` → `BrowserRouter` → `AuthProvider`
-
-### Component Organization (`src/components/`)
-
-- `auth/` - `ProtectedRoute`
-- `backtest/` - `BacktestTaskCard`, `BacktestTaskForm`, `BacktestTaskDetail`, `FloorLayerLog`, `detail/`
-- `charts/` - `EquityOHLCChart` (react-financial-charts + d3)
-- `common/` - Shared UI: `DataTable`, `VirtualizedTable`, `VirtualizedList`, `ConfirmDialog`, `Toast`, `ErrorBoundary`, `PageErrorBoundary`, `ValidatedTextField`, `FormFieldError`, `FormErrorSummary`, `LoadingSpinner`, `SkeletonLoader`, `Breadcrumbs`, `SkipLinks`, `GlobalKeyboardShortcuts`, `ChartContainer`, `TaskControlButtons`, `ExecutionDataProvider`, `LazyTabPanel`, `LanguageSelector`
-- `configurations/` - `ConfigurationCard`, `ConfigurationForm`, `ParametersForm`, `ConfigurationDeleteDialog`, `strategyConfigSchemas.ts`
-- `dashboard/` - `ActiveTasksWidget`, `MarketChart`, `OpenOrdersPanel`, `OpenPositionsPanel`, `QuickActionsWidget`, `RecentBacktestsWidget`
-- `layout/` - `AppLayout`, `AppHeader`, `AppFooter`, `Sidebar`, `ResponsiveNavigation`
-- `settings/` - `AccountManagement`, `AddAccountModal`, `PreferencesForm`, `StrategyDefaults`
-- `strategy/` - `StrategyConfigForm`, `StrategyControls`, `StrategySelector`, `StrategyStatus`
-- `tasks/` - Shared task components: `actions/`, `charts/`, `detail/`, `display/`, `forms/`, `TaskProgress`
-- `trading/` - `TradingTaskCard`, `TradingTaskForm`, `TradingTaskDetail`, `TradingTaskChart`, `detail/`
-
-### API Layer
-
-**Two-layer architecture**:
-
-1. `src/api/` - Low-level Axios client with JWT interceptor (auto-refresh on 401)
-2. `src/services/api/` - Domain-specific API services:
-   - `accounts.ts`, `backtestTasks.ts`, `tradingTasks.ts`, `configurations.ts`, `strategies.ts`, `market.ts`
-
-**Polling services** (`src/services/polling/`):
-
-- `TaskPollingService` - HTTP polling with exponential backoff (interval: 3s, maxRetries: 5)
-- `TickPollingService` - Market tick polling
-
-## Development Workflow
-
-### Local Development Setup
-
-**Option 1: Local Development (Without Docker)**
-
-Prerequisites:
-
-- Python 3.13+
-- Node.js 18+
-- PostgreSQL 17
-- Redis 7
-- uv (Python package manager)
-
-Setup:
+See `DEVELOPMENT.md` for full instructions. Summary:
 
 ```bash
 # Backend
 cd backend
-cp .env.example .env
 uv sync --all-extras
-uv run python manage.py migrate
-uv run python manage.py createsuperuser
+uv run pytest                          # tests
+uv run ruff check . && uv run ruff format --check .  # lint
+uv run ty check                        # type check
 
 # Frontend
 cd frontend
-npm install
+npm ci
+npm run test                           # Vitest
+npm run lint                           # ESLint
+npx tsc --noEmit                       # type check
 ```
 
-Run (4 terminal windows):
+### Pre-commit Hooks
+
+Pre-commit is configured at the repo root.
+Several hooks (ty, Django checks, pytest) invoke tools from the backend Python virtualenv,
+so you must activate it before running pre-commit or committing:
 
 ```bash
-# Terminal 1: Django
-cd backend && uv run python manage.py runserver 0.0.0.0:8000
-
-# Terminal 2: Celery Worker
-cd backend && uv run celery -A config worker -l info --concurrency=4
-
-# Terminal 3: Celery Beat
-cd backend && uv run celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
-
-# Terminal 4: React
-cd frontend && npm run dev
+source backend/.venv/bin/activate
+pre-commit install --install-hooks -t pre-commit -t pre-push
 ```
 
-**Option 2: Docker Development**
+The virtualenv must also be active for `git commit` and `git push` to succeed, since the hooks shell out to `backend/.venv/bin/`.
+
+On every commit (pre-commit stage):
+
+- Trailing whitespace, EOF fixer, YAML/JSON/TOML checks, large file guard, merge conflict detection, private key detection
+- `ruff check --fix` and `ruff format` on `backend/`
+- `ty check` on `backend/`
+- `bandit` security scan on `backend/`
+- `interrogate` docstring coverage on `backend/`
+- `prettier` formatting on `frontend/` (ts, tsx, js, jsx, json, css, md)
+- `eslint` on `frontend/`
+- TypeScript type check (`tsc --noEmit`) on `frontend/`
+- Django system check, migration check, and OpenAPI schema generation
+
+On every push (pre-push stage):
+
+- `pytest` on `backend/`
+- Frontend build check (`npm run build`)
+- `npm ci` lockfile integrity check
+- `vitest` on `frontend/`
+
+### CI (GitHub Actions)
+
+| Workflow               | Trigger                         | What it does                                                                                               |
+| ---------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `test.yml`             | PR → main, develop              | Lint + type-check + unit/integration tests (backend & frontend), coverage ≥ 60%, Docker Compose validation |
+| `build-and-deploy.yml` | Push/PR → main, develop         | Build multi-arch Docker images, push to DockerHub, deploy to production on `main` push                     |
+| `version-bump.yml`     | Push → main                     | Auto-bump version (major/minor/patch) from conventional commits, create PR                                 |
+| `api-docs.yml`         | Push → main (API-related paths) | Generate OpenAPI schema, deploy Swagger UI to GitHub Pages                                                 |
+
+## Commit and Push
+
+### Branching Strategy
+
+1. Always create a new branch from `main`:
+   ```bash
+   git checkout main
+   git pull origin main
+   git checkout -b <type>/<short-description>
+   ```
+2. Branch naming convention: `<type>/<short-description>` (e.g., `feat/add-trailing-stop`, `fix/margin-calc-error`, `chore/update-deps`).
+3. Push the branch and open a Pull Request targeting `main` (or `develop` for staging).
+
+### Commit Messages
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+<type>(<optional scope>): <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+Allowed types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
+
+Examples:
+
+- `feat(strategy): add trailing stop-loss to floor strategy`
+- `fix(auth): prevent refresh token reuse after revocation`
+- `docs: update API endpoint descriptions`
+- `chore(deps): bump Django to 5.2.1`
+
+Breaking changes: append `!` after type/scope (e.g., `feat(api)!: remove v1 endpoints`) or add `BREAKING CHANGE:` in the footer.
+
+The `version-bump.yml` workflow reads these prefixes to determine semver bumps:
+
+- `feat` → minor
+- `fix`, `perf`, `refactor` → patch
+- `!` or `BREAKING CHANGE` → major
+
+### Pre-commit / Pre-push Checks
+
+All hooks described in the "Build & Test" section run automatically.
+Do not use `--no-verify` to skip them — CI will catch the same issues and block the PR.
+
+### Pull Request Rules
+
+- PRs require passing CI checks before merge.
+- Keep PRs focused — one feature or fix per PR.
+- Update or add tests for any behavioral change.
+- Update `docs/openapi.json` if API endpoints change (auto-generated by pre-commit hook).
+
+## Deploy
+
+### Production Deployment (Automated)
+
+Merging to `main` triggers the `build-and-deploy.yml` workflow:
+
+1. Builds multi-arch (amd64/arm64) Docker images for backend and frontend.
+2. Pushes images to DockerHub with tags: `latest`, branch name, and commit SHA.
+3. SSHs into the production server and:
+   - Copies `docker-compose.prod.yaml` and `nginx/` config.
+   - Pulls latest images.
+   - Runs `docker compose down && docker compose up -d`.
+   - Syncs PostgreSQL password if needed.
+   - Prunes old images.
+   - Verifies all services are healthy.
+
+### Required GitHub Secrets
+
+| Secret               | Description                          |
+| -------------------- | ------------------------------------ |
+| `DOCKERHUB_USERNAME` | DockerHub account username           |
+| `DOCKERHUB_TOKEN`    | DockerHub access token               |
+| `SSH_PRIVATE_KEY`    | SSH key for production server access |
+| `SERVER_HOST`        | Production server hostname/IP        |
+| `SERVER_USER`        | SSH user on production server        |
+| `DEPLOY_PATH`        | Deployment directory on server       |
+| `SSH_PORT`           | SSH port (default: 22)               |
+
+### Manual Deployment
 
 ```bash
-cp .env.example .env
-docker-compose build
-docker-compose up -d
-docker-compose exec backend python manage.py migrate
-docker-compose exec backend python manage.py createsuperuser
+# On the production server
+cd /path/to/deploy
+docker compose pull
+docker compose down
+docker compose up -d
 ```
 
-Access:
+### SSL Certificates
 
-- Frontend: http://localhost:5173 (dev) or http://localhost (Docker)
-- Backend API: http://localhost:8000/api
-- Admin: http://localhost:8000/admin
-- API Docs: http://localhost:8000/api/docs
-
-### Code Quality Tools
-
-**Backend**:
-
-- **Linting**: `ruff check .` - Fast Python linter
-- **Formatting**: `ruff format .` - Code formatter
-- **Type Checking**: `ty check` - Type checker
-- **Security**: `bandit` - Security issue detection
-- **Docstring Coverage**: `interrogate` - Docstring coverage
-
-**Frontend**:
-
-- **Linting**: `npm run lint` - ESLint
-- **Formatting**: `npm run format` - Prettier
-- **Type Checking**: `npm run build` - TypeScript compilation
-
-**Pre-commit Hooks** (`.pre-commit-config.yaml`):
-
-- Trailing whitespace, file endings
-- YAML, JSON, TOML validation
-- Ruff lint and format
-- Type checking (ty)
-- Security checks (bandit)
-- Docstring coverage (interrogate)
-- Prettier formatting
-- Django system checks
-- ESLint and TypeScript checks
-- Pytest and Vitest (on pre-push)
-
-### Testing
-
-**Backend Tests**:
+Production uses Let's Encrypt via certbot (auto-renewal every 12 hours).
+Initial certificate generation:
 
 ```bash
-# Unit tests
-uv run pytest tests/unit/ -v
-
-# Integration tests
-uv run pytest tests/integration/ -v
-
-# All tests with coverage
-uv run pytest --cov=. --cov-report=html
-
-# Specific test file
-uv run pytest tests/unit/test_auth.py -v
-
-# Tests matching pattern
-uv run pytest -k "test_login" -v
+docker compose run --rm certbot certonly --webroot \
+  --webroot-path=/var/www/certbot \
+  -d yourdomain.com -d www.yourdomain.com
 ```
-
-**Frontend Tests**:
-
-```bash
-# Unit tests
-npm run test
-
-# Watch mode
-npm run test:watch
-
-# UI mode
-npm run test:ui
-
-# E2E tests
-npm run test:e2e
-```
-
-**Test Configuration**:
-
-- Backend: pytest with pytest-django, pytest-cov, pytest-xdist
-- Frontend: Vitest with React Testing Library
-- E2E: Playwright
-- Coverage threshold: 60% (backend)
-
-### Database Migrations
-
-```bash
-# Create migrations
-uv run python manage.py makemigrations
-
-# Apply migrations
-uv run python manage.py migrate
-
-# Show migration status
-uv run python manage.py showmigrations
-
-# Reverse migration
-uv run python manage.py migrate app_name 0001
-```
-
-### Django Management Commands
-
-```bash
-# Create superuser
-uv run python manage.py createsuperuser
-
-# Create regular user
-uv run python manage.py create_user --username user1 --email user1@example.com
-
-# Delete user
-uv run python manage.py delete_user --username user1
-
-# Django shell
-uv run python manage.py shell
-
-# Collect static files
-uv run python manage.py collectstatic --noinput
-
-# System checks
-uv run python manage.py check
-```
-
-## CI/CD Pipeline
-
-### GitHub Actions Workflows
-
-**1. Test Workflow** (`.github/workflows/test.yml`)
-
-- Triggers: Pull requests to main/develop
-- Backend tests:
-  - Ruff lint and format check
-  - Type checking (ty)
-  - Unit tests with coverage
-  - Integration tests with parallel execution
-  - Coverage threshold check (60%)
-- Frontend tests:
-  - ESLint
-  - TypeScript type check
-  - Vitest
-- Docker Compose validation
-
-**2. Build and Deploy Workflow** (`.github/workflows/build-and-deploy.yml`)
-
-- Triggers: Push to main/develop, pull requests
-- Build backend Docker image (multi-platform: amd64, arm64)
-- Build frontend Docker image (multi-platform: amd64, arm64)
-- Push to DockerHub
-- Deploy to production (main branch only)
-- Verify deployment health
-
-**3. API Documentation Workflow** (`.github/workflows/api-docs.yml`)
-
-- Generates OpenAPI schema
-- Publishes API documentation
-
-### Deployment Process
-
-**Production Deployment**:
-
-1. Push to main branch triggers build workflow
-2. Docker images built and pushed to DockerHub
-3. SSH into production server
-4. Pull latest images
-5. Run migrations
-6. Restart services
-7. Verify health checks
-
-**Environment Variables** (Production):
-
-- `DEBUG=False`
-- `ALLOWED_HOSTS` - Production domain
-- `SECRET_KEY` - Secure random key
-- `DB_PASSWORD` - Secure database password
-- `REDIS_PASSWORD` - Secure Redis password
-- `OANDA_PRACTICE_API` - OANDA practice endpoint
-- `OANDA_LIVE_API` - OANDA live endpoint
-- AWS credentials for backtesting

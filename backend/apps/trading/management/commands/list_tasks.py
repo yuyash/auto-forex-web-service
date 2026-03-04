@@ -19,7 +19,7 @@ class Command(BaseCommand):
             self.stdout.write("  (none)")
         for task in backtest_tasks:
             self.stdout.write(
-                f"  #{task.pk}: {task.name} - {task.status} (started: {task.started_at or 'never'})"
+                f"  {task.pk}: {task.name} - {task.status} (started: {task.started_at or 'never'})"
             )
 
         # List trading tasks
@@ -29,7 +29,7 @@ class Command(BaseCommand):
             self.stdout.write("  (none)")
         for task in trading_tasks:
             self.stdout.write(
-                f"  #{task.pk}: {task.name} - {task.status} (started: {task.started_at or 'never'})"
+                f"  {task.pk}: {task.name} - {task.status} (started: {task.started_at or 'never'})"
             )
 
         self.stdout.write("")
