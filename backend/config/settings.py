@@ -325,9 +325,11 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 50,
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.AnonRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
         "user": "120/minute",
+        "anon": "30/minute",
     },
     "DEFAULT_FILTER_BACKENDS": [
         "rest_framework.filters.SearchFilter",
