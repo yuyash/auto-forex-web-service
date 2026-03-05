@@ -146,6 +146,14 @@ const ALLOWED_GRANULARITIES = [
 
 const ALLOWED_VALUES = new Set(ALLOWED_GRANULARITIES.map((g) => g.value));
 
+const POLLING_INTERVAL_OPTIONS = [
+  { value: 10_000, label: '10s' },
+  { value: 30_000, label: '30s' },
+  { value: 60_000, label: '1m' },
+  { value: 300_000, label: '5m' },
+  { value: 900_000, label: '15m' },
+];
+
 const parseUtcTimestamp = (value: unknown): UTCTimestamp | null => {
   if (typeof value === 'number' && Number.isFinite(value)) {
     if (value > 1_000_000_000_000) {
@@ -216,7 +224,7 @@ const recommendGranularity = (
   toIso: string | undefined,
   available: string[]
 ): string => {
-  if (!fromIso || !toIso || available.length === 0) return 'H1';
+  if (!fromIso || !toIso || available.length === 0) return 'M1';
 
   const fromMs = new Date(fromIso).getTime();
   const toMs = new Date(toIso).getTime();
@@ -255,7 +263,7 @@ const fetchCandles = async (
     params.set('from_time', toRfc3339Seconds(startTime));
     params.set('to_time', toRfc3339Seconds(endTime));
   } else {
-    params.set('count', '5000');
+    params.set('count', '1440');
     if (startTime) params.set('from_time', toRfc3339Seconds(startTime));
     if (endTime) params.set('to_time', toRfc3339Seconds(endTime));
   }
@@ -389,6 +397,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const [chartInstance, setChartInstance] = useState<IChartApi | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pollingIntervalMs, setPollingIntervalMs] = useState(10_000);
   const [error, setError] = useState<string | null>(null);
   const { granularities } = useSupportedGranularities();
 
@@ -1152,7 +1161,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     return recommendGranularity(startTime, endTime, availableValues);
   }, [granularityOptions, startTime, endTime]);
 
-  const [granularity, setGranularity] = useState<string>('H1');
+  const [granularity, setGranularity] = useState<string>('M1');
   // Stores the visible time range before a granularity change so we can
   // restore it after new candles load, preventing the chart from jumping.
   const savedVisibleRangeRef = useRef<{ from: number; to: number } | null>(
@@ -1195,9 +1204,9 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   // Periodic PnL refresh while task is running
   useEffect(() => {
     if (!enableRealTimeUpdates) return;
-    const interval = setInterval(refetchPnl, 10000);
+    const interval = setInterval(refetchPnl, pollingIntervalMs);
     return () => clearInterval(interval);
-  }, [enableRealTimeUpdates, refetchPnl]);
+  }, [enableRealTimeUpdates, refetchPnl, pollingIntervalMs]);
 
   const replaySummary = useMemo(() => {
     const totalTradesRaw =
@@ -1506,9 +1515,9 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
   useEffect(() => {
     if (!enableRealTimeUpdates) return undefined;
-    const id = setInterval(fetchReplayData, 10000);
+    const id = setInterval(fetchReplayData, pollingIntervalMs);
     return () => clearInterval(id);
-  }, [enableRealTimeUpdates, fetchReplayData]);
+  }, [enableRealTimeUpdates, fetchReplayData, pollingIntervalMs]);
 
   useEffect(() => {
     tradesRef.current = trades;
@@ -1732,7 +1741,9 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     sequenceLineRef.current.setPosition(currentTick.timestamp, price);
 
     // Auto-scroll: keep the sequence line at the horizontal centre of the
-    // viewport.  We use logical-index based positioning so that market gaps
+    // viewport (backtest) or at the 3/4 position from the left (trading),
+    // since trading has no future candles to display on the right.
+    // We use logical-index based positioning so that market gaps
     // don't shift the line away from the visual centre.
     if (autoFollow && enableRealTimeUpdates) {
       const ts = chartRef.current?.timeScale();
@@ -1764,12 +1775,20 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             logicalCenter = lo;
           }
 
-          const halfCandles = AUTO_FOLLOW_CANDLES / 2;
+          // For trading tasks, place the position line at 3/4 from the left
+          // so the right side (no future data) is minimal.
+          // For backtest tasks, keep it centred.
+          const isTrading = taskType === TaskType.TRADING;
+          const leftCandles = isTrading
+            ? AUTO_FOLLOW_CANDLES * 0.75
+            : AUTO_FOLLOW_CANDLES / 2;
+          const rightCandles = AUTO_FOLLOW_CANDLES - leftCandles;
+
           programmaticScrollRef.current = true;
           try {
             ts.setVisibleLogicalRange({
-              from: logicalCenter - halfCandles,
-              to: logicalCenter + halfCandles,
+              from: logicalCenter - leftCandles,
+              to: logicalCenter + rightCandles,
             });
           } catch (e) {
             console.warn('Failed to set visible range during auto-follow:', e);
@@ -2193,6 +2212,34 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         >
           {isRefreshing && <CircularProgress size={16} thickness={5} />}
         </Box>
+
+        <FormControl
+          sx={{ minWidth: 100, '& .MuiInputBase-root': { height: 32 } }}
+        >
+          <InputLabel
+            id="replay-polling-interval-label"
+            sx={{ fontSize: '0.75rem' }}
+          >
+            Polling
+          </InputLabel>
+          <Select
+            labelId="replay-polling-interval-label"
+            value={pollingIntervalMs}
+            label="Polling"
+            onChange={(e) => setPollingIntervalMs(Number(e.target.value))}
+            sx={{ fontSize: '0.75rem' }}
+          >
+            {POLLING_INTERVAL_OPTIONS.map((opt) => (
+              <MenuItem
+                key={opt.value}
+                value={opt.value}
+                sx={{ fontSize: '0.75rem' }}
+              >
+                {opt.label}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
 
         <FormControl
           sx={{ minWidth: 110, '& .MuiInputBase-root': { height: 32 } }}
