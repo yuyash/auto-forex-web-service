@@ -9,7 +9,7 @@ import { defineConfig, devices } from '@playwright/test';
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
-  testDir: './e2e',
+  testDir: './tests/e2e',
 
   /* Maximum time one test can run for */
   timeout: 60 * 1000,
@@ -136,6 +136,6 @@ export default defineConfig({
   outputDir: 'test-results/',
 
   /* Global setup and teardown */
-  // globalSetup: require.resolve('./e2e/global-setup.ts'),
-  // globalTeardown: require.resolve('./e2e/global-teardown.ts'),
+  // globalSetup: require.resolve('./tests/e2e/global-setup.ts'),
+  // globalTeardown: require.resolve('./tests/e2e/global-teardown.ts'),
 });
