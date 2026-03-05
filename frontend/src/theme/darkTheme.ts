@@ -93,6 +93,30 @@ const typography = {
 };
 
 const components = {
+  MuiCssBaseline: {
+    styleOverrides: {
+      body: {
+        scrollbarColor: `${palette.divider} ${palette.background.default}`,
+        '&::-webkit-scrollbar, & *::-webkit-scrollbar': {
+          width: 8,
+          height: 8,
+          backgroundColor: palette.background.default,
+        },
+        '&::-webkit-scrollbar-thumb, & *::-webkit-scrollbar-thumb': {
+          borderRadius: 4,
+          backgroundColor: palette.divider,
+          border: `2px solid ${palette.background.default}`,
+        },
+        '&::-webkit-scrollbar-thumb:hover, & *::-webkit-scrollbar-thumb:hover':
+          {
+            backgroundColor: palette.text.secondary,
+          },
+        '&::-webkit-scrollbar-track, & *::-webkit-scrollbar-track': {
+          backgroundColor: palette.background.default,
+        },
+      },
+    },
+  },
   MuiButton: {
     defaultProps: { size: 'small' as const },
     styleOverrides: {

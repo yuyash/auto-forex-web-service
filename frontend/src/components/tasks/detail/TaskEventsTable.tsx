@@ -182,24 +182,13 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
   }
 
   return (
-    <Box
-      sx={{
-        px: 3,
-        pt: 1,
-        pb: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        flex: 1,
-        minHeight: 0,
-      }}
-    >
+    <Box sx={{ p: 3 }}>
       <Box
         sx={{
-          mb: 1,
+          mb: 2,
           display: 'flex',
           gap: 2,
           alignItems: 'center',
-          flexShrink: 0,
         }}
       >
         <Typography variant="h6">Task Events</Typography>
@@ -251,6 +240,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
         rowsPerPageOptions={[rowsPerPage]}
         storageKey="task-events"
         tableMaxHeight="none"
+        hidePagination
         selectable
         getRowId={getRowId}
         selectedRowIds={selection.selectedRowIds}
@@ -272,7 +262,6 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
           setPage(0);
         }}
         rowsPerPageOptions={[50, 100, 200, 500]}
-        sx={{ flexShrink: 0 }}
       />
     </Box>
   );
