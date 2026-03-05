@@ -107,7 +107,7 @@ const DEFAULT_GRANULARITY_OPTIONS: GranularityOption[] = [
  *   isLoading={isLoading}
  *   error={error}
  * >
- *   <EquityOHLCChart data={data} />
+ *   <MyChart data={data} />
  * </ChartContainer>
  * ```
  */

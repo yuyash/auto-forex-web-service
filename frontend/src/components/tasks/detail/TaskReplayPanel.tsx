@@ -1532,7 +1532,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       height: dynamicHeight,
       layout: {
         background: { color: isDark ? '#131722' : '#ffffff' },
-        textColor: isDark ? '#d1d4dc' : '#334155',
+        textColor: isDark ? '#ffffff' : '#334155',
       },
       grid: {
         vertLines: { visible: false },
@@ -1590,7 +1590,11 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     series.attachPrimitive(highlight);
     highlightRef.current = highlight;
 
-    const adaptive = new AdaptiveTimeScale({ timezone });
+    const adaptive = new AdaptiveTimeScale(
+      { timezone },
+      isDark ? '#ffffff' : '#334155',
+      isDark ? '#2a2e39' : '#e2e8f0'
+    );
     series.attachPrimitive(adaptive);
     adaptiveRef.current = adaptive;
 
