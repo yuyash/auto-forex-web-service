@@ -526,7 +526,7 @@ export default function MarketChart({
       height: initialHeight,
       layout: {
         background: { color: isDark ? '#131722' : '#ffffff' },
-        textColor: isDark ? '#d1d4dc' : '#334155',
+        textColor: isDark ? '#ffffff' : '#334155',
       },
       grid: {
         vertLines: { visible: false },
@@ -564,9 +564,19 @@ export default function MarketChart({
     series.attachPrimitive(highlight);
     highlightRef.current = highlight;
 
-    const adaptive = new AdaptiveTimeScale({ timezone });
+    const adaptive = new AdaptiveTimeScale(
+      { timezone },
+      isDark ? '#ffffff' : '#334155',
+      isDark ? '#2a2e39' : '#e2e8f0'
+    );
     series.attachPrimitive(adaptive);
     adaptiveRef.current = adaptive;
+
+    // Restore cached data after theme-triggered re-creation
+    if (candlesRef.current.length > 0) {
+      series.setData(candlesRef.current);
+      applyOverlays();
+    }
 
     // ── Scroll-based lazy loading ──
     // When the user scrolls so that the visible logical range extends
@@ -726,7 +736,7 @@ export default function MarketChart({
           fontSize: '12px',
           fontFamily:
             '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          color: isDark ? '#d1d4dc' : '#334155',
+          color: isDark ? '#ffffff' : '#334155',
           backgroundColor: isDark
             ? 'rgba(30,34,45,0.9)'
             : 'rgba(255,255,255,0.85)',
