@@ -396,24 +396,30 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser: ArgumentParser) -> None:
         parser.add_argument(
+            "--from-csv",
+            default=None,
+            help="Load tick data from a CSV file instead of Athena. "
+            "CSV must have columns: instrument, timestamp, bid, ask, mid.",
+        )
+        parser.add_argument(
             "--start",
-            required=True,
-            help="Start date/datetime (YYYY-MM-DD or ISO8601 datetime).",
+            default=None,
+            help="Start date/datetime (YYYY-MM-DD or ISO8601 datetime). Required for Athena mode.",
         )
         parser.add_argument(
             "--end",
-            required=True,
-            help="End date/datetime (YYYY-MM-DD or ISO8601 datetime). End is inclusive.",
+            default=None,
+            help="End date/datetime (YYYY-MM-DD or ISO8601 datetime). End is inclusive. Required for Athena mode.",
         )
         parser.add_argument(
             "--database",
-            required=True,
-            help="Athena database name.",
+            default=None,
+            help="Athena database name. Required for Athena mode.",
         )
         parser.add_argument(
             "--table",
-            required=True,
-            help="Athena table name.",
+            default=None,
+            help="Athena table name. Required for Athena mode.",
         )
         parser.add_argument(
             "--profile",
@@ -444,10 +450,91 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args: Any, **options: Any) -> None:
-        start_raw: str = options["start"]
-        end_raw: str = options["end"]
-        database: str = options["database"]
-        table: str = options["table"]
+        csv_path: str | None = options.get("from_csv")
+
+        if csv_path:
+            self._handle_csv(csv_path)
+        else:
+            self._handle_athena(options)
+
+    def _handle_csv(self, csv_path: str) -> None:
+        """Load tick data from a CSV file."""
+        import csv as csv_mod
+        from pathlib import Path
+
+        path = Path(csv_path)
+        if not path.exists():
+            raise CommandError(f"CSV file not found: {csv_path}")
+
+        upsert_kwargs: dict[str, Any] = {
+            "update_conflicts": True,
+            "update_fields": ["bid", "ask", "mid"],
+            "unique_fields": ["instrument", "timestamp"],
+        }
+
+        def _flush(batch: list[TickData]) -> int:
+            if not batch:
+                return 0
+            unique: dict[tuple[str, datetime], TickData] = {}
+            for obj in batch:
+                unique[(str(obj.instrument), obj.timestamp)] = obj
+            unique_batch = list(unique.values())
+            TickData.objects.bulk_create(unique_batch, **upsert_kwargs)
+            return len(unique_batch)
+
+        total_created = 0
+        batch: list[TickData] = []
+        batch_size = 1000
+
+        with path.open(newline="") as f:
+            reader = csv_mod.DictReader(f)
+            with transaction.atomic():
+                for row in reader:
+                    instrument = row["instrument"]
+                    timestamp = _parse_timestamp(row["timestamp"])
+                    bid = _coerce_decimal(row["bid"])
+                    ask = _coerce_decimal(row["ask"])
+                    mid_raw = row.get("mid", "").strip()
+                    mid = _coerce_decimal(mid_raw) if mid_raw else TickData.calculate_mid(bid, ask)
+
+                    batch.append(
+                        TickData(
+                            instrument=instrument,
+                            timestamp=timestamp,
+                            bid=bid,
+                            ask=ask,
+                            mid=mid,
+                        )
+                    )
+
+                    if len(batch) >= batch_size:
+                        total_created += _flush(batch)
+                        batch.clear()
+
+                if batch:
+                    total_created += _flush(batch)
+
+        self.stdout.write(self.style.SUCCESS(f"Inserted {total_created} tick rows from {csv_path}"))
+
+    def _handle_athena(self, options: dict[str, Any]) -> None:
+        """Load tick data from AWS Athena."""
+        start_raw = options.get("start")
+        end_raw = options.get("end")
+        database = options.get("database")
+        table = options.get("table")
+
+        if not all([start_raw, end_raw, database, table]):
+            raise CommandError(
+                "--start, --end, --database, and --table are required for Athena mode. "
+                "Use --from-csv for CSV mode."
+            )
+
+        # After the guard above, these are guaranteed to be non-None strings.
+        assert start_raw is not None
+        assert end_raw is not None
+        assert database is not None
+        assert table is not None
+
         profile: str | None = options.get("profile")
         role_arn: str | None = options.get("role_arn")
         output_bucket: str | None = options.get("output_bucket")
@@ -488,15 +575,9 @@ class Command(BaseCommand):
         def _flush(batch: list[TickData]) -> int:
             if not batch:
                 return 0
-
-            # Postgres raises CARDINALITY_VIOLATION if the same conflict key
-            # appears multiple times in one INSERT ... ON CONFLICT statement.
-            # This can happen if the upstream data contains duplicates, or if
-            # multiple nanosecond timestamps collapse to the same microsecond.
             unique: dict[tuple[str, datetime], TickData] = {}
             for obj in batch:
                 unique[(str(obj.instrument), obj.timestamp)] = obj
-
             unique_batch = list(unique.values())
             TickData.objects.bulk_create(unique_batch, **upsert_kwargs)
             return len(unique_batch)
@@ -518,18 +599,15 @@ class Command(BaseCommand):
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 raise CommandError(f"Failed to build partition filter: {exc}") from exc
 
-            # Use parameterized query construction to prevent SQL injection
-            # Note: Athena doesn't support traditional parameterized queries,
-            # but we validate inputs and use safe string formatting
             query = (
                 "SELECT\n"
                 "    ticker,\n"
                 "    bid_price,\n"
                 "    ask_price,\n"
                 "    participant_timestamp\n"
-                f'FROM "{database}"."{table}"\n'  # nosec B608 - database/table validated by Athena
-                f"WHERE {partition_filter_sql}\n"  # nosec B608 - generated by internal function
-                f"  AND ticker = {quoted_ticker}\n"  # nosec B608 - quoted by Athena client
+                f'FROM "{database}"."{table}"\n'  # nosec B608
+                f"WHERE {partition_filter_sql}\n"  # nosec B608
+                f"  AND ticker = {quoted_ticker}\n"  # nosec B608
                 "ORDER BY participant_timestamp ASC"
             )
 
