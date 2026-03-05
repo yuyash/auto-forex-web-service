@@ -1,5 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+/**
+ * TradingTaskDetailPage
+ *
+ * Main detail view for trading tasks, matching BacktestTaskDetail's 7-tab layout:
+ * Overview | Trend | Positions | Trades | Orders | Events | Logs
+ */
+
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Container,
@@ -10,93 +17,30 @@ import {
   Breadcrumbs,
   Link,
   CircularProgress,
-  IconButton,
-  Button,
   Alert,
-  Menu,
-  MenuItem,
-  useTheme,
-  useMediaQuery,
+  Grid,
+  Divider,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
-import {
-  ArrowBack as ArrowBackIcon,
-  ContentCopy as ContentCopyIcon,
-  Edit as EditIcon,
-  MoreVert as MoreVertIcon,
-  // PauseIcon kept for future re-enable of pause feature
-  // Pause as PauseIcon,
-} from '@mui/icons-material';
+import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { useTradingTask } from '../hooks/useTradingTasks';
-import {
-  useStartTradingTask,
-  useStopTradingTask,
-  usePauseTradingTask,
-  useResumeTradingTask,
-  useRestartTradingTask,
-  useRerunTradingTask,
-  useCopyTradingTask,
-  useDeleteTradingTask,
-} from '../hooks/useTradingTaskMutations';
 import { useTaskPolling } from '../hooks/useTaskPolling';
-import { useInvalidateExecutions } from '../hooks/useTaskExecutions';
-import { StatusBadge } from '../components/tasks/display/StatusBadge';
-import { ErrorDisplay } from '../components/tasks/display/ErrorDisplay';
-import { TaskActionButtons } from '../components/tasks/actions/TaskActionButtons';
-import { CopyTaskDialog } from '../components/tasks/actions/CopyTaskDialog';
-import { DeleteTaskDialog } from '../components/tasks/actions/DeleteTaskDialog';
-import {
-  StopOptionsDialog,
-  type StopOption,
-} from '../components/tasks/actions/StopOptionsDialog';
-import { RestartOptionsDialog } from '../components/tasks/actions/RestartOptionsDialog';
-import { LiveTaskTab } from '../components/trading/detail/LiveTaskTab';
-import { TaskPerformanceTab } from '../components/trading/detail/TaskPerformanceTab';
 import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
-import { TaskExecutionsTab } from '../components/backtest/detail/TaskExecutionsTab';
-import { TradingTaskConfigTab } from '../components/trading/detail/TradingTaskConfigTab';
+import { TaskControlButtons } from '../components/common/TaskControlButtons';
+import { TaskEventsTable } from '../components/tasks/detail/TaskEventsTable';
+import { StatusBadge } from '../components/tasks/display/StatusBadge';
+import { TaskLogsTable } from '../components/tasks/detail/TaskLogsTable';
+import { TaskPositionsTable } from '../components/tasks/detail/TaskPositionsTable';
+import { TaskTradesTable } from '../components/tasks/detail/TaskTradesTable';
+import { TaskReplayPanel } from '../components/tasks/detail/TaskReplayPanel';
+import { TaskOrdersTable } from '../components/tasks/detail/TaskOrdersTable';
+import { useTaskSummary } from '../hooks/useTaskSummary';
 import { TaskStatus, TaskType } from '../types/common';
-
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-
-  if (value !== index) {
-    return null;
-  }
-
-  return (
-    <div
-      role="tabpanel"
-      id={`task-tabpanel-${index}`}
-      aria-labelledby={`task-tab-${index}`}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        flex: 1,
-        minHeight: 0,
-        overflow: 'auto',
-      }}
-      {...other}
-    >
-      <Box
-        sx={{
-          py: 3,
-          display: 'flex',
-          flexDirection: 'column',
-          flex: 1,
-          minHeight: 0,
-        }}
-      >
-        {children}
-      </Box>
-    </div>
-  );
-}
+import { DeleteTaskDialog } from '../components/tasks/actions/DeleteTaskDialog';
+import { useDeleteTradingTask } from '../hooks/useTradingTaskMutations';
+import { invalidateTradingTasksCache } from '../hooks/useTradingTasks';
+import { LazyTabPanel } from '../components/common/LazyTabPanel';
 
 function a11yProps(index: number) {
   return {
@@ -108,310 +52,92 @@ function a11yProps(index: number) {
 export default function TradingTaskDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const taskId = id || '';
-
-  const [tabValue, setTabValue] = useState(2); // Default to Executions tab (index 2)
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [stopDialogOpen, setStopDialogOpen] = useState(false);
-  const [restartDialogOpen, setRestartDialogOpen] = useState(false);
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const deleteTask = useDeleteTradingTask();
+
+  // Get tab from URL, default to 'overview'
+  const tabParam = searchParams.get('tab') || 'overview';
+  const tabMap: Record<string, number> = {
+    overview: 0,
+    trend: 1,
+    positions: 2,
+    trades: 3,
+    orders: 4,
+    events: 5,
+    logs: 6,
+    equity: 1,
+    replay: 1,
+  };
+  const tabNames = [
+    'overview',
+    'trend',
+    'positions',
+    'trades',
+    'orders',
+    'events',
+    'logs',
+  ];
+  const [tabValue, setTabValue] = useState(tabMap[tabParam] || 0);
 
   const { data: task, isLoading, error, refetch } = useTradingTask(taskId);
   const { strategies } = useStrategies();
 
-  // Use HTTP polling for task status updates (Requirements 1.2, 1.3, 4.3, 4.4)
+  const isTaskRunning = task?.status === TaskStatus.RUNNING;
+
+  const overviewSummary = useTaskSummary(
+    taskId,
+    TaskType.TRADING,
+    task?.execution_run_id,
+    {
+      polling: isTaskRunning,
+      interval: 3000,
+    }
+  );
+
+  const { summary: s } = overviewSummary;
+  const polledTick = s.tick.timestamp
+    ? {
+        timestamp: s.tick.timestamp,
+        price: s.tick.mid != null ? String(s.tick.mid) : null,
+      }
+    : null;
+
+  // Use HTTP polling for task status updates
   const {
     status: polledStatus,
-    refetch: refetchPolledStatus,
     startPolling,
     isPolling,
   } = useTaskPolling(taskId, 'trading', {
     enabled: !!taskId,
     pollStatus: true,
-    interval: 3000, // Poll every 3 seconds for active tasks
+    interval: 3000,
   });
 
   // Refetch when status changes
   const prevStatusRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (polledStatus) {
-      console.log('[TradingTaskDetail] Polled status update:', polledStatus);
-
-      // Always clear transitioning state when polled status shows task is not running
-      // This handles cases where task stops externally (e.g., stream error)
-      if (
-        polledStatus.status === TaskStatus.STOPPED ||
-        polledStatus.status === TaskStatus.CREATED ||
-        polledStatus.status === TaskStatus.FAILED ||
-        polledStatus.status === TaskStatus.COMPLETED
-      ) {
-        setIsTransitioning(false);
-      }
-
-      if (
-        task &&
-        prevStatusRef.current &&
-        polledStatus.status !== prevStatusRef.current
-      ) {
-        console.log('[TradingTaskDetail] Status changed, refetching task data');
-        refetch().then(() => {
-          setIsTransitioning(false);
-        });
+      if (polledStatus.status !== prevStatusRef.current) {
+        refetch();
       }
       prevStatusRef.current = polledStatus.status;
     }
-  }, [polledStatus, task, refetch]);
+  }, [polledStatus, refetch]);
 
-  // Restart polling when task transitions from terminal to non-terminal state
-  useEffect(() => {
-    if (!task) return;
-
-    const isNonTerminalStatus = (status: TaskStatus) =>
-      status === TaskStatus.CREATED ||
-      status === TaskStatus.STARTING ||
-      status === TaskStatus.RUNNING ||
-      status === TaskStatus.PAUSED ||
-      status === TaskStatus.STOPPING;
-
-    // If task is in non-terminal state but polling is stopped, restart it
-    if (isNonTerminalStatus(task.status) && !isPolling) {
-      console.log('[TradingTaskDetail] Task restarted, resuming polling');
-      startPolling();
-    }
-  }, [task, isPolling, startPolling]);
-
-  // Refetch task data after mutations complete
-  useEffect(() => {
-    const handleMutationSuccess = () => {
-      refetch();
-    };
-
-    // Listen for custom events from mutations
-    window.addEventListener('trading-task-mutated', handleMutationSuccess);
-    return () => {
-      window.removeEventListener('trading-task-mutated', handleMutationSuccess);
-    };
-  }, [refetch]);
-
-  // Log status for debugging (must be before any early returns)
-  useEffect(() => {
-    if (task) {
-      console.log('[TradingTaskDetail] Status:', {
-        taskStatus: task.status,
-        polledStatus: polledStatus?.status,
-      });
-    }
-  }, [task, polledStatus?.status]);
-
-  const startTask = useStartTradingTask();
-  const stopTask = useStopTradingTask();
-  const pauseTask = usePauseTradingTask();
-  const resumeTask = useResumeTradingTask();
-  const restartTask = useRestartTradingTask();
-  const rerunTask = useRerunTradingTask();
-  const copyTask = useCopyTradingTask();
-  const deleteTask = useDeleteTradingTask();
-  const { invalidateTradingExecutions } = useInvalidateExecutions();
-
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  // Derive tab value from URL parameter
+  const currentTabValue =
+    tabMap[tabParam] !== undefined ? tabMap[tabParam] : tabValue;
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
-  };
-
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
+    const tabName = tabNames[newValue];
+    setSearchParams({ tab: tabName });
   };
 
   const handleBack = () => {
     navigate('/trading-tasks');
-  };
-
-  const handleEdit = () => {
-    navigate(`/trading-tasks/${taskId}/edit`);
-    handleMenuClose();
-  };
-
-  const handleStart = async () => {
-    console.log('[TradingTask] Starting task:', {
-      taskId,
-      taskName: task?.name,
-    });
-    try {
-      setActionError(null);
-      setIsTransitioning(true); // Optimistic update (Requirement 3.1)
-      const result = await startTask.mutate(taskId);
-      console.log('[TradingTask] Start task response:', result);
-      await refetch(); // Force immediate refetch to show updated status
-      refetchPolledStatus();
-      invalidateTradingExecutions(taskId); // Refresh executions list
-      handleMenuClose();
-    } catch (error) {
-      console.error('[TradingTask] Failed to start task:', error);
-      setActionError((error as Error).message);
-    } finally {
-      setIsTransitioning(false);
-    }
-  };
-
-  const handlePause = async () => {
-    try {
-      setActionError(null);
-      setIsTransitioning(true);
-      await pauseTask.mutate(taskId);
-      await refetch();
-      refetchPolledStatus();
-      handleMenuClose();
-    } catch (error) {
-      setActionError((error as Error).message);
-    } finally {
-      setIsTransitioning(false);
-    }
-  };
-
-  const handleResume = async () => {
-    console.log('[TradingTask] Resuming task:', {
-      taskId,
-      taskName: task?.name,
-    });
-    try {
-      setActionError(null);
-      setIsTransitioning(true);
-      const result = await resumeTask.mutate(taskId);
-      console.log('[TradingTask] Resume task response:', result);
-      await refetch();
-      refetchPolledStatus();
-      invalidateTradingExecutions(taskId);
-      handleMenuClose();
-    } catch (error) {
-      console.error('[TradingTask] Failed to resume task:', error);
-      setActionError((error as Error).message);
-    } finally {
-      setIsTransitioning(false);
-    }
-  };
-
-  const handleRestart = () => {
-    setRestartDialogOpen(true);
-    handleMenuClose();
-  };
-
-  const handleRestartConfirm = async (clearState: boolean) => {
-    console.log('[TradingTask] Restarting task:', {
-      taskId,
-      taskName: task?.name,
-      clearState,
-    });
-    try {
-      setActionError(null);
-      setIsTransitioning(true);
-      const result = await restartTask.mutate({ id: taskId, clearState });
-      console.log('[TradingTask] Restart task response:', result);
-      await refetch();
-      refetchPolledStatus();
-      invalidateTradingExecutions(taskId);
-      setRestartDialogOpen(false);
-    } catch (error) {
-      console.error('[TradingTask] Failed to restart task:', error);
-      setActionError((error as Error).message);
-    } finally {
-      setIsTransitioning(false);
-    }
-  };
-
-  const handleRerun = async () => {
-    console.log('[TradingTask] Rerunning task:', {
-      taskId,
-      taskName: task?.name,
-    });
-    try {
-      setActionError(null);
-      setIsTransitioning(true); // Optimistic update (Requirement 3.1)
-      const result = await rerunTask.mutate(taskId);
-      console.log('[TradingTask] Rerun task response:', result);
-      // Force immediate refetch after mutation completes
-      await refetch();
-      refetchPolledStatus();
-      invalidateTradingExecutions(taskId); // Refresh executions list
-      handleMenuClose();
-    } catch (error) {
-      console.error('[TradingTask] Failed to rerun task:', error);
-      setActionError((error as Error).message);
-    } finally {
-      setIsTransitioning(false);
-    }
-  };
-
-  const handleCopy = () => {
-    setCopyDialogOpen(true);
-    handleMenuClose();
-  };
-
-  const handleCopyConfirm = async (newName: string) => {
-    try {
-      const newTask = await copyTask.mutate({
-        id: taskId,
-        data: { new_name: newName },
-      });
-      navigate(`/trading-tasks/${newTask.id}`);
-    } catch {
-      // Error handled by mutation hook
-    }
-  };
-
-  const handleDelete = () => {
-    setDeleteDialogOpen(true);
-    handleMenuClose();
-  };
-
-  const handleDeleteConfirm = async () => {
-    try {
-      setIsTransitioning(true);
-      await deleteTask.mutate(taskId);
-      // Cache is invalidated inside the mutation hook.
-      // Navigate with state so the list page knows to refetch.
-      navigate('/trading-tasks', { state: { deleted: true } });
-    } catch {
-      // Error handled by mutation hook
-    } finally {
-      setIsTransitioning(false);
-    }
-  };
-
-  const handleStop = () => {
-    setStopDialogOpen(true);
-    handleMenuClose();
-  };
-
-  const handleStopConfirm = async (option: StopOption) => {
-    console.log('[TradingTask] Stopping task:', {
-      taskId,
-      taskName: task?.name,
-      stopMode: option,
-    });
-    try {
-      setActionError(null);
-      setIsTransitioning(true);
-      const result = await stopTask.mutate({ id: taskId, mode: option });
-      console.log('[TradingTask] Stop task response:', result);
-      await refetch(); // Force immediate refetch to show updated status
-      refetchPolledStatus();
-      invalidateTradingExecutions(taskId); // Refresh executions list
-      setStopDialogOpen(false);
-    } catch (error) {
-      console.error('[TradingTask] Failed to stop task:', error);
-      setActionError((error as Error).message);
-    } finally {
-      setIsTransitioning(false);
-    }
   };
 
   if (isLoading) {
@@ -434,46 +160,14 @@ export default function TradingTaskDetailPage() {
   if (error || !task) {
     return (
       <Container maxWidth={false} sx={{ py: 4 }}>
-        <ErrorDisplay
-          error={error || new Error('Task not found')}
-          title="Failed to load task"
-        />
+        <Alert severity="error">{error?.message || 'Task not found'}</Alert>
       </Container>
     );
   }
 
-  // Merge status sources:
-  // - task.status comes from the detail endpoint (react-query cached)
-  // - polledStatus.status comes from the /status/ endpoint (more “real-time”)
-  // If they disagree, prefer the polled status for terminal/stop transitions so
-  // the UI doesn't stay stuck showing RUNNING.
-  const currentStatus =
-    polledStatus && polledStatus.status !== task.status
-      ? polledStatus.status
-      : task.status;
-
-  const canStart = currentStatus === TaskStatus.CREATED;
-  // TODO: Pause/Resume are temporarily disabled. Remove the overrides below to re-enable.
-  // eslint-disable-next-line no-constant-binary-expression
-  const canResume = false && Boolean(task?.can_resume);
-  const canRestart =
-    currentStatus === TaskStatus.STOPPED ||
-    currentStatus === TaskStatus.PAUSED ||
-    currentStatus === TaskStatus.FAILED;
-  const canRerun =
-    (currentStatus === TaskStatus.COMPLETED ||
-      currentStatus === TaskStatus.FAILED) &&
-    !canResume &&
-    !canRestart;
-
-  const canStop =
-    currentStatus === TaskStatus.RUNNING || currentStatus === TaskStatus.PAUSED;
-  // eslint-disable-next-line no-constant-binary-expression
-  const canPause = false && currentStatus === TaskStatus.RUNNING;
-  const canEdit =
-    currentStatus !== TaskStatus.RUNNING && currentStatus !== TaskStatus.PAUSED;
-  const canDelete =
-    currentStatus !== TaskStatus.RUNNING && currentStatus !== TaskStatus.PAUSED;
+  const pnlCurrency = task.instrument?.includes('_')
+    ? task.instrument.split('_')[1]
+    : 'N/A';
 
   return (
     <Container
@@ -484,7 +178,7 @@ export default function TradingTaskDetailPage() {
         flexDirection: 'column',
         flex: 1,
         minHeight: 0,
-        overflow: 'hidden',
+        overflow: 'auto',
       }}
     >
       {/* Breadcrumbs */}
@@ -500,56 +194,31 @@ export default function TradingTaskDetailPage() {
         <Typography color="text.primary">{task.name}</Typography>
       </Breadcrumbs>
 
-      {/* Live Trading Warning */}
-      {currentStatus === TaskStatus.RUNNING && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          This task is actively trading with real money. Monitor carefully and
-          use the emergency stop button if needed.
-        </Alert>
-      )}
-
       {/* Header */}
       <Paper sx={{ p: 2, pb: 1, mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-          <IconButton onClick={handleBack} sx={{ mt: -1 }}>
-            <ArrowBackIcon />
-          </IconButton>
-
           <Box sx={{ flex: 1 }}>
             <Box
               sx={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 2,
-                p: '8px',
-                mb: '8px',
+                p: '4px',
+                mb: '4px',
               }}
             >
               <Typography variant="h4" component="h1">
                 {task.name}
               </Typography>
-              <StatusBadge status={currentStatus} />
-              {currentStatus === TaskStatus.RUNNING && (
-                <Box
-                  sx={{
-                    width: 12,
-                    height: 12,
-                    borderRadius: '50%',
-                    bgcolor: 'success.main',
-                    animation: 'pulse 2s infinite',
-                    '@keyframes pulse': {
-                      '0%, 100%': { opacity: 1 },
-                      '50%': { opacity: 0.5 },
-                    },
-                  }}
-                  title="Live"
-                />
-              )}
+              <StatusBadge status={polledStatus?.status || task.status} />
             </Box>
 
-            <Typography variant="body2" color="text.secondary">
-              Account: {task.account_name} • Configuration: {task.config_name} •
-              Strategy: {getStrategyDisplayName(strategies, task.strategy_type)}
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ pl: '4px' }}
+            >
+              {getStrategyDisplayName(strategies, task.strategy_type)}
             </Typography>
 
             {task.description && (
@@ -558,122 +227,111 @@ export default function TradingTaskDetailPage() {
               </Typography>
             )}
 
-            {actionError && (
-              <Box sx={{ mt: 2 }}>
-                <Alert
-                  severity="error"
-                  onClose={() => setActionError(null)}
-                  aria-label="Task action error"
-                >
-                  {actionError}
-                </Alert>
-              </Box>
+            {/* Progress Percentage */}
+            {(polledStatus?.status || task.status) === TaskStatus.RUNNING && (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 2, fontWeight: 600 }}
+              >
+                {Math.round(Math.min(Math.max(s.task.progress, 0), 100))}%
+                completed
+              </Typography>
             )}
           </Box>
 
-          {isMobile ? (
-            <IconButton onClick={handleMenuOpen}>
-              <MoreVertIcon />
-            </IconButton>
-          ) : (
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {/* Use TaskActionButtons component (Requirement 4.5) */}
-              <TaskActionButtons
-                status={currentStatus}
-                onStart={
-                  currentStatus === TaskStatus.CREATED ? handleStart : undefined
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <TaskControlButtons
+              taskId={taskId}
+              status={polledStatus?.status || task.status}
+              onStart={async (id) => {
+                const { tradingTasksApi } = await import(
+                  '../services/api/tradingTasks'
+                );
+                await tradingTasksApi.start(id);
+                refetch();
+                if (!isPolling) {
+                  startPolling();
                 }
-                onPause={canPause ? handlePause : undefined}
-                onResume={handleResume}
-                onRestart={handleRestart}
-                onStop={handleStop}
-                onRerun={handleRerun}
-                onDelete={handleDelete}
-                loading={isTransitioning}
-                canResume={task.can_resume}
-                hasOpenPositions={task.has_open_positions}
-              />
-              <Button
-                variant="outlined"
-                startIcon={<ContentCopyIcon />}
-                onClick={handleCopy}
-              >
-                Copy
-              </Button>
-              {canEdit && (
-                <Button
-                  variant="outlined"
-                  startIcon={<EditIcon />}
-                  onClick={handleEdit}
-                >
-                  Edit
-                </Button>
-              )}
+              }}
+              onStop={async (id) => {
+                const { tradingTasksApi } = await import(
+                  '../services/api/tradingTasks'
+                );
+                await tradingTasksApi.stop(id);
+                refetch();
+              }}
+              onRestart={async (id) => {
+                const { tradingTasksApi } = await import(
+                  '../services/api/tradingTasks'
+                );
+                await tradingTasksApi.restart(id);
+                refetch();
+                if (!isPolling) {
+                  startPolling();
+                }
+              }}
+              onResume={async (id) => {
+                const { tradingTasksApi } = await import(
+                  '../services/api/tradingTasks'
+                );
+                await tradingTasksApi.resume(id);
+                refetch();
+                if (!isPolling) {
+                  startPolling();
+                }
+              }}
+              onPause={async (id) => {
+                const { tradingTasksApi } = await import(
+                  '../services/api/tradingTasks'
+                );
+                await tradingTasksApi.pause(id);
+                refetch();
+              }}
+            />
+            <Box sx={{ display: 'flex' }}>
+              <Tooltip title="Edit">
+                <span>
+                  <IconButton
+                    onClick={() => navigate(`/trading-tasks/${taskId}/edit`)}
+                    disabled={
+                      (polledStatus?.status || task.status) ===
+                        TaskStatus.RUNNING ||
+                      (polledStatus?.status || task.status) ===
+                        TaskStatus.PAUSED
+                    }
+                    aria-label="Edit"
+                  >
+                    <EditIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="Delete">
+                <span>
+                  <IconButton
+                    onClick={() => setDeleteDialogOpen(true)}
+                    disabled={
+                      (polledStatus?.status || task.status) ===
+                        TaskStatus.RUNNING ||
+                      (polledStatus?.status || task.status) ===
+                        TaskStatus.PAUSED
+                    }
+                    color="error"
+                    aria-label="Delete"
+                  >
+                    <DeleteIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
             </Box>
-          )}
+          </Box>
         </Box>
-
-        <Menu
-          anchorEl={anchorEl}
-          open={Boolean(anchorEl)}
-          onClose={handleMenuClose}
-        >
-          {canStart && (
-            <MenuItem onClick={handleStart} disabled={isTransitioning}>
-              Start
-            </MenuItem>
-          )}
-          {canResume && (
-            <MenuItem onClick={handleResume} disabled={isTransitioning}>
-              Resume
-            </MenuItem>
-          )}
-          {canRestart && (
-            <MenuItem
-              onClick={handleRestart}
-              sx={{ color: 'warning.main' }}
-              disabled={isTransitioning}
-            >
-              Restart
-            </MenuItem>
-          )}
-          {canStop && (
-            <MenuItem
-              onClick={handleStop}
-              sx={{ color: 'error.main' }}
-              disabled={isTransitioning}
-            >
-              Stop
-            </MenuItem>
-          )}
-          {canPause && (
-            <MenuItem
-              onClick={handlePause}
-              sx={{ color: 'warning.main' }}
-              disabled={isTransitioning}
-            >
-              Pause
-            </MenuItem>
-          )}
-          {canRerun && (
-            <MenuItem onClick={handleRerun} disabled={isTransitioning}>
-              Rerun
-            </MenuItem>
-          )}
-          <MenuItem onClick={handleCopy}>Copy</MenuItem>
-          {canEdit && <MenuItem onClick={handleEdit}>Edit</MenuItem>}
-          {canDelete && (
-            <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>
-              Delete
-            </MenuItem>
-          )}
-        </Menu>
       </Paper>
 
       {/* Tabs */}
       <Paper
         sx={{
-          mb: 3,
+          mb: 1,
           display: 'flex',
           flexDirection: 'column',
           flex: 1,
@@ -682,69 +340,356 @@ export default function TradingTaskDetailPage() {
         }}
       >
         <Tabs
-          value={tabValue}
+          value={currentTabValue}
           onChange={handleTabChange}
           aria-label="task detail tabs"
           sx={{ borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}
         >
-          <Tab label="Live" {...a11yProps(0)} />
-          <Tab label="Performance" {...a11yProps(1)} />
-          <Tab label="Executions" {...a11yProps(2)} />
-          <Tab label="Configuration" {...a11yProps(3)} />
+          <Tab label="Overview" {...a11yProps(0)} />
+          <Tab label="Trend" {...a11yProps(1)} />
+          <Tab label="Positions" {...a11yProps(2)} />
+          <Tab label="Trades" {...a11yProps(3)} />
+          <Tab label="Orders" {...a11yProps(4)} />
+          <Tab label="Events" {...a11yProps(5)} />
+          <Tab label="Logs" {...a11yProps(6)} />
         </Tabs>
 
-        <TabPanel value={tabValue} index={0}>
-          <LiveTaskTab task={task} />
-        </TabPanel>
+        {/* Overview Tab */}
+        <LazyTabPanel value={currentTabValue} index={0}>
+          <Box sx={{ p: 3 }}>
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="h6" gutterBottom>
+                  Task Information
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Name
+                    </Typography>
+                    <Typography variant="body1">{task.name}</Typography>
+                  </Box>
 
-        <TabPanel value={tabValue} index={1}>
-          <TaskPerformanceTab task={task} />
-        </TabPanel>
+                  {task.description && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Description
+                      </Typography>
+                      <Typography variant="body1">
+                        {task.description}
+                      </Typography>
+                    </Box>
+                  )}
 
-        <TabPanel value={tabValue} index={2}>
-          <TaskExecutionsTab taskId={taskId} taskType={TaskType.TRADING} />
-        </TabPanel>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Instrument
+                    </Typography>
+                    <Typography variant="body1">{task.instrument}</Typography>
+                  </Box>
 
-        <TabPanel value={tabValue} index={3}>
-          <TradingTaskConfigTab task={task} />
-        </TabPanel>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Pip Size
+                    </Typography>
+                    <Typography variant="body1">
+                      {task.pip_size
+                        ? parseFloat(task.pip_size)
+                        : task.pip_size}
+                    </Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Status
+                    </Typography>
+                    <Box sx={{ mt: 0.5 }}>
+                      <StatusBadge
+                        status={polledStatus?.status || task.status}
+                        showIcon={false}
+                      />
+                    </Box>
+                  </Box>
+                </Box>
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="h6" gutterBottom>
+                  Configuration
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Strategy Configuration
+                    </Typography>
+                    <Link
+                      component="button"
+                      variant="body1"
+                      onClick={() =>
+                        navigate(`/configurations/${task.config_id}`)
+                      }
+                      sx={{ textAlign: 'left', display: 'block' }}
+                    >
+                      {task.config_name}
+                    </Link>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Strategy Type
+                    </Typography>
+                    <Typography
+                      variant="body1"
+                      sx={{ textTransform: 'capitalize' }}
+                    >
+                      {getStrategyDisplayName(strategies, task.strategy_type)}
+                    </Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      OANDA Account
+                    </Typography>
+                    <Typography variant="body1">
+                      {task.account_name || 'N/A'}
+                    </Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Sell on Stop
+                    </Typography>
+                    <Typography variant="body1">
+                      {task.sell_on_stop ? 'Yes' : 'No'}
+                    </Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Dry Run
+                    </Typography>
+                    <Typography variant="body1">
+                      {task.dry_run ? 'Yes' : 'No'}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="h6" gutterBottom>
+                  Results
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Realized PnL ({pnlCurrency})
+                    </Typography>
+                    <Typography
+                      variant="body1"
+                      color={
+                        s.pnl.realized >= 0 ? 'success.main' : 'error.main'
+                      }
+                    >
+                      {s.pnl.realized >= 0 ? '+' : ''}
+                      {s.pnl.realized.toFixed(2)} {pnlCurrency}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Unrealized PnL ({pnlCurrency})
+                    </Typography>
+                    <Typography
+                      variant="body1"
+                      color={
+                        s.pnl.unrealized >= 0 ? 'success.main' : 'error.main'
+                      }
+                    >
+                      {s.pnl.unrealized >= 0 ? '+' : ''}
+                      {s.pnl.unrealized.toFixed(2)} {pnlCurrency}
+                    </Typography>
+                  </Box>
+                  {s.execution.currentBalance != null && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Current Balance
+                      </Typography>
+                      <Typography variant="body1">
+                        {s.execution.currentBalance.toFixed(2)} {pnlCurrency}
+                      </Typography>
+                    </Box>
+                  )}
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Total Trades (count)
+                    </Typography>
+                    <Typography variant="body1">
+                      {s.counts.totalTrades}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Open Positions
+                    </Typography>
+                    <Typography variant="body1">
+                      {s.counts.openPositions}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Closed Positions
+                    </Typography>
+                    <Typography variant="body1">
+                      {s.counts.closedPositions}
+                    </Typography>
+                  </Box>
+                  {s.execution.ticksProcessed > 0 && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        Ticks Processed
+                      </Typography>
+                      <Typography variant="body1">
+                        {s.execution.ticksProcessed.toLocaleString()}
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
+              </Grid>
+
+              {(task.started_at || task.completed_at) && (
+                <Grid size={{ xs: 12 }}>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="h6" gutterBottom>
+                    Execution Timeline
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {task.started_at && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Started At
+                        </Typography>
+                        <Typography variant="body1">
+                          {new Date(task.started_at).toLocaleString()}
+                        </Typography>
+                      </Box>
+                    )}
+                    {task.completed_at && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Completed At
+                        </Typography>
+                        <Typography variant="body1">
+                          {new Date(task.completed_at).toLocaleString()}
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                </Grid>
+              )}
+            </Grid>
+          </Box>
+        </LazyTabPanel>
+
+        {/* Trend Tab */}
+        <LazyTabPanel value={currentTabValue} index={1}>
+          <TaskReplayPanel
+            taskId={taskId}
+            taskType={TaskType.TRADING}
+            instrument={task.instrument}
+            executionRunId={task.execution_run_id}
+            latestExecution={task.latest_execution}
+            currentTick={polledTick ?? null}
+            enableRealTimeUpdates={
+              (polledStatus?.status || task.status) === TaskStatus.RUNNING
+            }
+            pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
+            configId={task.config_id}
+          />
+        </LazyTabPanel>
+
+        {/* Positions Tab */}
+        <LazyTabPanel value={currentTabValue} index={2}>
+          <TaskPositionsTable
+            taskId={taskId}
+            taskType={TaskType.TRADING}
+            executionRunId={task.execution_run_id}
+            enableRealTimeUpdates={
+              (polledStatus?.status || task.status) === TaskStatus.RUNNING
+            }
+            currentPrice={
+              polledTick?.price != null ? parseFloat(polledTick.price) : null
+            }
+            pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
+          />
+        </LazyTabPanel>
+
+        {/* Trades Tab */}
+        <LazyTabPanel value={currentTabValue} index={3}>
+          <TaskTradesTable
+            taskId={taskId}
+            taskType={TaskType.TRADING}
+            executionRunId={task.execution_run_id}
+            enableRealTimeUpdates={
+              (polledStatus?.status || task.status) === TaskStatus.RUNNING
+            }
+            pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
+          />
+        </LazyTabPanel>
+
+        {/* Orders Tab */}
+        <LazyTabPanel value={currentTabValue} index={4}>
+          <TaskOrdersTable
+            taskId={taskId}
+            taskType={TaskType.TRADING}
+            executionRunId={task.execution_run_id}
+            enableRealTimeUpdates={
+              (polledStatus?.status || task.status) === TaskStatus.RUNNING
+            }
+          />
+        </LazyTabPanel>
+
+        {/* Events Tab */}
+        <LazyTabPanel value={currentTabValue} index={5}>
+          <TaskEventsTable
+            taskId={taskId}
+            taskType={TaskType.TRADING}
+            executionRunId={task.execution_run_id}
+            enableRealTimeUpdates={
+              (polledStatus?.status || task.status) === TaskStatus.RUNNING
+            }
+          />
+        </LazyTabPanel>
+
+        {/* Logs Tab */}
+        <LazyTabPanel value={currentTabValue} index={6}>
+          <TaskLogsTable
+            taskId={taskId}
+            taskType={TaskType.TRADING}
+            executionRunId={task.execution_run_id}
+            enableRealTimeUpdates={
+              (polledStatus?.status || task.status) === TaskStatus.RUNNING
+            }
+          />
+        </LazyTabPanel>
       </Paper>
-
-      {/* Dialogs */}
-      <CopyTaskDialog
-        open={copyDialogOpen}
-        taskName={task.name}
-        onCancel={() => setCopyDialogOpen(false)}
-        onConfirm={handleCopyConfirm}
-        isLoading={copyTask.isLoading}
-      />
 
       <DeleteTaskDialog
         open={deleteDialogOpen}
         taskName={task.name}
         taskStatus={task.status}
         onCancel={() => setDeleteDialogOpen(false)}
-        onConfirm={handleDeleteConfirm}
+        onConfirm={async () => {
+          try {
+            await deleteTask.mutate(taskId);
+            setDeleteDialogOpen(false);
+            invalidateTradingTasksCache();
+            navigate('/trading-tasks', { state: { deleted: true } });
+          } catch {
+            // Error handled by mutation hook
+          }
+        }}
         isLoading={deleteTask.isLoading}
-      />
-
-      <StopOptionsDialog
-        open={stopDialogOpen}
-        taskName={task.name}
-        onCancel={() => setStopDialogOpen(false)}
-        onConfirm={handleStopConfirm}
-        isLoading={stopTask.isLoading}
-      />
-
-      <RestartOptionsDialog
-        open={restartDialogOpen}
-        taskName={task.name}
-        hasOpenPositions={task.has_open_positions}
-        openPositionsCount={task.open_positions_count}
-        hasStrategyState={task.has_strategy_state}
-        onCancel={() => setRestartDialogOpen(false)}
-        onConfirm={handleRestartConfirm}
-        isLoading={restartTask.isLoading}
+        hasExecutionHistory={true}
       />
     </Container>
   );
