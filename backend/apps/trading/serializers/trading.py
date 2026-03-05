@@ -42,6 +42,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "sell_on_stop",
+            "dry_run",
             "pip_size",
             "status",
             # State management fields
@@ -114,6 +115,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "sell_on_stop",
+            "dry_run",
             "pip_size",
             "status",
             "created_at",
@@ -157,11 +159,13 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "sell_on_stop",
+            "dry_run",
         ]
         extra_kwargs = {
             "name": {"required": False},
             "description": {"required": False},
             "sell_on_stop": {"required": False},
+            "dry_run": {"required": False},
         }
 
     def validate_config_id(self, value: StrategyConfiguration) -> StrategyConfiguration:

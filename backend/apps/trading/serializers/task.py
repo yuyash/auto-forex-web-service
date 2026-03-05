@@ -123,6 +123,7 @@ class TradingTaskSerializer(TaskSerializer):
             "account_name",
             "account_type",
             "sell_on_stop",
+            "dry_run",
             "pip_size",
             "instrument",
             "strategy_state",
