@@ -52,6 +52,7 @@ const tradingTaskSchema = z.object({
   config_id: z.string().min(1, 'Configuration is required'),
   name: z.string().min(1, 'Name is required').max(255),
   description: z.string().optional(),
+  dry_run: z.boolean().optional(),
   risk_acknowledged: z.boolean().optional(),
 });
 
@@ -88,6 +89,7 @@ export default function TradingTaskForm({
       config_id: initialData?.config_id || '',
       name: initialData?.name || '',
       description: initialData?.description || '',
+      dry_run: false,
       risk_acknowledged: false,
     },
   });
@@ -224,6 +226,7 @@ export default function TradingTaskForm({
         config_id: completeData.config_id,
         name: completeData.name,
         description: completeData.description,
+        dry_run: completeData.dry_run,
       };
 
       if (taskId) {
@@ -418,6 +421,33 @@ export default function TradingTaskForm({
                   )}
                 />
               </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <Controller
+                  name="dry_run"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={field.value ?? false}
+                          onChange={field.onChange}
+                        />
+                      }
+                      label="Dry Run (Simulation Mode)"
+                    />
+                  )}
+                />
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: 'block', ml: 4 }}
+                >
+                  When enabled, orders are simulated locally and never sent to
+                  OANDA. Useful for testing strategies with real market data
+                  without risking actual funds.
+                </Typography>
+              </Grid>
             </Grid>
           </Box>
         );
@@ -498,6 +528,20 @@ export default function TradingTaskForm({
                   </Box>
                 </Paper>
               </Grid>
+
+              {formData.dry_run && (
+                <Grid size={{ xs: 12 }}>
+                  <Alert severity="warning">
+                    <Typography variant="subtitle2" gutterBottom>
+                      Dry Run Mode Enabled
+                    </Typography>
+                    <Typography variant="body2">
+                      Orders will be simulated locally. No real orders will be
+                      placed on OANDA.
+                    </Typography>
+                  </Alert>
+                </Grid>
+              )}
 
               {selectedAccount?.api_type === 'live' && (
                 <>

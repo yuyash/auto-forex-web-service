@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.6.0",
+        "version": "1.6.1",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -6152,6 +6152,10 @@
                     "sell_on_stop": {
                         "type": "boolean",
                         "description": "Close all positions when task is stopped"
+                    },
+                    "dry_run": {
+                        "type": "boolean",
+                        "description": "Simulate order execution without placing real orders on OANDA"
                     }
                 }
             },
@@ -7784,6 +7788,10 @@
                         "type": "boolean",
                         "description": "Close all positions when task is stopped"
                     },
+                    "dry_run": {
+                        "type": "boolean",
+                        "description": "Simulate order execution without placing real orders on OANDA"
+                    },
                     "pip_size": {
                         "type": "string",
                         "format": "decimal",
@@ -7859,6 +7867,10 @@
                     "sell_on_stop": {
                         "type": "boolean",
                         "description": "Close all positions when task is stopped"
+                    },
+                    "dry_run": {
+                        "type": "boolean",
+                        "description": "Simulate order execution without placing real orders on OANDA"
                     }
                 }
             },
@@ -7887,6 +7899,10 @@
                     "sell_on_stop": {
                         "type": "boolean",
                         "description": "Close all positions when task is stopped"
+                    },
+                    "dry_run": {
+                        "type": "boolean",
+                        "description": "Simulate order execution without placing real orders on OANDA"
                     }
                 }
             },
@@ -7922,6 +7938,10 @@
                     "sell_on_stop": {
                         "type": "boolean",
                         "description": "Close all positions when task is stopped"
+                    },
+                    "dry_run": {
+                        "type": "boolean",
+                        "description": "Simulate order execution without placing real orders on OANDA"
                     },
                     "pip_size": {
                         "type": "string",

@@ -859,6 +859,7 @@ class TradingExecutor(TaskExecutor):
         task: TradingTask,
         engine: TradingEngine,
         data_source: TickDataSource,
+        dry_run: bool = False,
     ) -> None:
         """Initialize the trading executor.
 
@@ -866,6 +867,7 @@ class TradingExecutor(TaskExecutor):
             task: Trading task instance
             engine: Trading engine instance
             data_source: Tick data source
+            dry_run: If True, simulate orders without placing real orders on OANDA
         """
         # Create event context
         event_context = EventContext(
@@ -877,11 +879,11 @@ class TradingExecutor(TaskExecutor):
             task_type=TaskType.TRADING,
         )
 
-        # Create OrderService with dry_run=False for live trading
+        # Create OrderService (respect dry_run flag)
         order_service = OrderService(
             account=task.oanda_account,
             task=task,
-            dry_run=False,  # Live trading mode - execute real orders
+            dry_run=dry_run,
         )
 
         # Create state manager

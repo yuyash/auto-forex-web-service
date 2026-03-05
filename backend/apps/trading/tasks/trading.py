@@ -165,12 +165,12 @@ def execute_trading(task: TradingTask) -> None:
         instrument=task.instrument,
     )
 
-    # Create manager
-    # Create executor
+    # Create executor (respect task-level dry_run flag)
     executor = TradingExecutor(
         task=task,
         engine=engine,
         data_source=data_source,
+        dry_run=task.dry_run,
     )
 
     # Execute
