@@ -87,7 +87,7 @@ jobs:
             echo "::error::Unit tests failed with exit code $UNIT_EXIT_CODE"
             exit $UNIT_EXIT_CODE
           fi
-          echo "✅ Unit tests passed"
+          echo "Unit tests passed"
 
       # Integration tests
       - name: Run integration tests with parallel execution
@@ -111,7 +111,7 @@ jobs:
             echo "::error::Integration tests failed with exit code $INTEGRATION_EXIT_CODE"
             exit $INTEGRATION_EXIT_CODE
           fi
-          echo "✅ Integration tests passed"
+          echo "Integration tests passed"
 
       - name: Check coverage threshold
         env:
@@ -135,7 +135,34 @@ jobs:
             echo "::error::Coverage threshold not met (required: 60%)"
             exit $COVERAGE_EXIT_CODE
           fi
-          echo "✅ Coverage threshold met (60%)"
+          echo "Coverage threshold met (60%)"
+
+      # E2E tests — use real PostgreSQL + Redis
+      - name: Run E2E tests
+        env:
+          DB_NAME: test_db
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          DB_HOST: localhost
+          DB_PORT: 5432
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key-for-ci-only-minimum-50-characters-long
+          JWT_SECRET_KEY: test-jwt-secret-key-for-ci-only-minimum-50-characters-long
+          DEBUG: "False"
+          ALLOWED_HOSTS: localhost,127.0.0.1
+          DJANGO_SETTINGS_MODULE: config.settings_e2e
+          OANDA_ACCOUNT_ID: ${{ secrets.OANDA_ACCOUNT_ID }}
+          OANDA_API_TOKEN: ${{ secrets.OANDA_API_TOKEN }}
+        run: |
+          echo "::group::Running E2E tests"
+          uv run pytest tests/e2e/ -v --timeout=300 --junitxml=junit-e2e.xml
+          E2E_EXIT_CODE=$?
+          echo "::endgroup::"
+          if [ $E2E_EXIT_CODE -ne 0 ]; then
+            echo "::error::E2E tests failed with exit code $E2E_EXIT_CODE"
+            exit $E2E_EXIT_CODE
+          fi
+          echo "E2E tests passed"
 
       - name: Publish test results
         uses: EnricoMi/publish-unit-test-result-action@v2
@@ -144,6 +171,7 @@ jobs:
           files: |
             backend/junit-unit.xml
             backend/junit-integration.xml
+            backend/junit-e2e.xml
           check_name: Backend Test Results
           comment_mode: off
 
@@ -171,7 +199,16 @@ jobs:
           path: |
             ./backend/junit-unit.xml
             ./backend/junit-integration.xml
+            ./backend/junit-e2e.xml
           retention-days: 7
+
+      - name: Upload E2E API report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-api-report
+          path: ./backend/e2e-api-test-results.html
+          retention-days: 30
 
   test-frontend:
     name: Frontend Tests

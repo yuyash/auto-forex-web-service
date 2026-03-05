@@ -127,6 +127,10 @@ class TradingTask(UUIDModel):
         default=False,
         help_text="Close all positions when task is stopped",
     )
+    dry_run = models.BooleanField(
+        default=False,
+        help_text="Simulate order execution without placing real orders on OANDA",
+    )
     instrument = models.CharField(
         max_length=20,
         default="USD_JPY",
@@ -236,6 +240,7 @@ class TradingTask(UUIDModel):
             name=new_name,
             description=self.description,
             status=TaskStatus.CREATED,
+            dry_run=self.dry_run,
         )
 
         return new_task

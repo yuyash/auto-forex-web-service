@@ -9,7 +9,7 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
-        args: ["--maxkb=1000"]
+        args: ["--maxkb=6000"]
       - id: check-json
       - id: check-toml
       - id: check-merge-conflict
@@ -77,7 +77,7 @@ repos:
 
       - id: openapi-schema-generate
         name: OpenAPI Schema Generate
-        entry: bash -c 'cd backend && uv run python manage.py spectacular --file ../docs/openapi.json --format openapi-json --validate --fail-on-warn && if [ -s ../docs/openapi.json ] && [ "$(tail -c 1 ../docs/openapi.json | wc -l)" -eq 0 ]; then printf "\n" >> ../docs/openapi.json; fi && cd .. && git add docs/openapi.json'
+        entry: bash -c 'tmpf=$(mktemp) && cd backend && .venv/bin/python manage.py spectacular --file "$tmpf" --format openapi-json --validate --fail-on-warn && printf "\n" >> "$tmpf" && if ! diff -q "$tmpf" ../docs/openapi.json >/dev/null 2>&1; then cp "$tmpf" ../docs/openapi.json; fi && rm -f "$tmpf"'
         language: system
         pass_filenames: false
         files: ^backend/
@@ -91,7 +91,7 @@ repos:
 
       - id: pytest
         name: Run pytest
-        entry: bash -c 'cd backend && source .venv/bin/activate && pytest -v --tb=short'
+        entry: bash -c 'cd backend && source .venv/bin/activate && pytest tests/unit/ tests/integration/ -v --tb=short'
         language: system
         pass_filenames: false
         files: ^backend/.*\.py$

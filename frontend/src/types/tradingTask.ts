@@ -16,6 +16,7 @@ export interface TradingTask {
   description: string;
   status: TaskStatus;
   sell_on_stop: boolean;
+  dry_run: boolean;
   latest_execution?: ExecutionSummary;
   // State management fields
   has_strategy_state: boolean;
@@ -37,6 +38,7 @@ export interface TradingTaskCreateData {
   name: string;
   description?: string;
   sell_on_stop?: boolean;
+  dry_run?: boolean;
 }
 
 export interface TradingTaskUpdateData {
@@ -45,6 +47,7 @@ export interface TradingTaskUpdateData {
   description?: string;
   account_id?: string;
   sell_on_stop?: boolean;
+  dry_run?: boolean;
 }
 
 export interface TradingTaskListParams {
