@@ -91,57 +91,42 @@ GRANT ALL PRIVILEGES ON DATABASE "auto-forex" TO postgres;
 \q
 ```
 
-### 3. Backend Setup
+### 3. Configure Environment Variables
 
 ```bash
-# Navigate to backend directory
-cd backend
-
-# Copy environment file
+# Copy the example file
 cp .env.example .env
 
-# Edit .env with your local settings
-# Make sure these are set:
-# DB_HOST=localhost
-# DB_PORT=5432
-# REDIS_URL=redis://localhost:6379/0
-# DEBUG=True
-# JWT_SECRET_KEY=<generate a unique key>
+# Generate SECRET_KEY and JWT_SECRET_KEY, then paste them into .env
+python -c "from django.core.management.utils import get_random_secret_key; print('SECRET_KEY=' + get_random_secret_key())"
+python -c "import secrets; print('JWT_SECRET_KEY=' + secrets.token_urlsafe(64))"
 
-# Install Python dependencies
+# Edit .env — set at minimum:
+#   DB_PASSWORD=<your postgres password>
+#   SECRET_KEY=<generated above>
+#   JWT_SECRET_KEY=<generated above, must differ from SECRET_KEY>
+#   DB_HOST=localhost
+#   REDIS_URL=redis://localhost:6379/0
+#   DEBUG=True
+```
+
+### 4. Backend Setup
+
+```bash
+cd backend
+
 uv sync --all-extras
-
-# Run migrations
 uv run python manage.py migrate
-
-# Create superuser
 uv run python manage.py createsuperuser
-
-# Collect static files
 uv run python manage.py collectstatic --noinput
 ```
 
-### 4. Frontend Setup
+### 5. Frontend Setup
 
 ```bash
-# Navigate to frontend directory (from project root)
-cd frontend
-
-# Install dependencies
+cd ../frontend
 npm install
 ```
-
-### 5. Generate Security Keys
-
-```bash
-# Generate Django SECRET_KEY
-python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
-
-# Generate JWT_SECRET_KEY (must be different from SECRET_KEY)
-python -c "import secrets; print(secrets.token_urlsafe(64))"
-```
-
-Update both values in `backend/.env`.
 
 ### 6. Start Development Servers
 
@@ -192,58 +177,49 @@ Frontend will be available at: http://localhost:5173
 
 Run the entire stack using Docker Compose without SSL/HTTPS configuration.
 
-### 1. Setup Environment Variables
+### 1. Configure Environment Variables
 
 ```bash
-# Copy environment file
+cd backend
+
+# Copy the example file
 cp .env.example .env
 
-# Edit .env with your settings
-# Minimum required:
-# - DB_PASSWORD
-# - SECRET_KEY
-# - JWT_SECRET_KEY (must differ from SECRET_KEY)
+# Generate SECRET_KEY and JWT_SECRET_KEY, then paste them into .env
+python -c "from django.core.management.utils import get_random_secret_key; print('SECRET_KEY=' + get_random_secret_key())"
+python -c "import secrets; print('JWT_SECRET_KEY=' + secrets.token_urlsafe(64))"
+
+# Edit .env — set at minimum:
+#   DB_PASSWORD=<your password>
+#   SECRET_KEY=<generated above>
+#   JWT_SECRET_KEY=<generated above, must differ from SECRET_KEY>
 ```
 
-### 2. Generate Security Keys
+### 2. Build and Start Services
 
 ```bash
-# Generate Django SECRET_KEY
-python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+# Return to project root
+cd ..
 
-# Generate JWT_SECRET_KEY (must be different from SECRET_KEY)
-python -c "import secrets; print(secrets.token_urlsafe(64))"
-```
-
-Update both values in `.env`.
-
-### 3. Build and Start Services
-
-```bash
 # Build all containers
-docker-compose build
+docker compose build
 
 # Start all services in detached mode
-docker-compose up -d
+docker compose up -d
 
 # View logs (optional)
-docker-compose logs -f
+docker compose logs -f
 ```
 
-### 4. Initialize Database
+### 3. Initialize Database
 
 ```bash
-# Run migrations
-docker-compose exec backend python manage.py migrate
-
-# Create superuser
-docker-compose exec backend python manage.py createsuperuser
-
-# Collect static files (if needed)
-docker-compose exec backend python manage.py collectstatic --noinput
+docker compose exec backend python manage.py migrate
+docker compose exec backend python manage.py createsuperuser
+docker compose exec backend python manage.py collectstatic --noinput
 ```
 
-### 5. Access the Application
+### 4. Access the Application
 
 - **Frontend**: http://localhost (via Nginx on port 80)
 - **Backend API**: http://localhost/api
@@ -251,29 +227,29 @@ docker-compose exec backend python manage.py collectstatic --noinput
 - **Direct Backend**: http://localhost:8000 (bypassing Nginx)
 - **Direct Frontend**: http://localhost:5173 (bypassing Nginx)
 
-### 6. Useful Docker Commands
+### 5. Useful Docker Commands
 
 ```bash
 # Stop all services
-docker-compose down
+docker compose down
 
 # Stop and remove volumes (WARNING: deletes database data)
-docker-compose down -v
+docker compose down -v
 
 # Restart a specific service
-docker-compose restart backend
+docker compose restart backend
 
 # View logs for specific service
-docker-compose logs -f backend
+docker compose logs -f backend
 
 # Execute command in container
-docker-compose exec backend python manage.py shell
+docker compose exec backend python manage.py shell
 
 # Rebuild specific service
-docker-compose build backend
+docker compose build backend
 
 # View running containers
-docker-compose ps
+docker compose ps
 ```
 
 ---
@@ -293,7 +269,7 @@ uv run pytest
 uv run pytest --cov=. --cov-report=html
 
 # Docker
-docker-compose exec backend pytest
+docker compose exec backend pytest
 ```
 
 #### Code Quality Checks
@@ -325,19 +301,19 @@ cd backend
 uv run python manage.py makemigrations
 
 # Create migrations (Docker)
-docker-compose exec backend python manage.py makemigrations
+docker compose exec backend python manage.py makemigrations
 
 # Apply migrations (local)
 uv run python manage.py migrate
 
 # Apply migrations (Docker)
-docker-compose exec backend python manage.py migrate
+docker compose exec backend python manage.py migrate
 
 # Django shell (local)
 uv run python manage.py shell
 
 # Django shell (Docker)
-docker-compose exec backend python manage.py shell
+docker compose exec backend python manage.py shell
 ```
 
 ### Frontend Development
@@ -345,7 +321,6 @@ docker-compose exec backend python manage.py shell
 #### Running Tests
 
 ```bash
-# Local development
 cd frontend
 npm run test
 
@@ -370,11 +345,8 @@ npm run lint
 # Format
 npm run format
 
-# Check formatting
-npm run format:check
-
 # Type checking
-npm run build  # TypeScript compilation happens during build
+npm run build
 ```
 
 #### Build for Production
@@ -389,10 +361,6 @@ npm run build
 #### Local Development
 
 ```bash
-# Backend logs are in terminal where runserver is running
-# Celery logs are in terminal where worker is running
-# Frontend logs are in terminal where npm run dev is running
-
 # Application logs
 tail -f backend/logs/django.log
 tail -f backend/logs/celery.log
@@ -402,15 +370,15 @@ tail -f backend/logs/celery.log
 
 ```bash
 # All services
-docker-compose logs -f
+docker compose logs -f
 
 # Specific service
-docker-compose logs -f backend
-docker-compose logs -f celery
-docker-compose logs -f frontend
+docker compose logs -f backend
+docker compose logs -f celery
+docker compose logs -f frontend
 
 # Last 100 lines
-docker-compose logs --tail=100 backend
+docker compose logs --tail=100 backend
 ```
 
 ---
@@ -428,8 +396,8 @@ brew services list | grep postgresql  # macOS
 sudo systemctl status postgresql      # Linux
 
 # Docker:
-docker-compose ps postgres
-docker-compose logs postgres
+docker compose ps postgres
+docker compose logs postgres
 ```
 
 #### Redis Connection Error
@@ -442,8 +410,8 @@ sudo systemctl status redis      # Linux
 redis-cli ping  # Should return PONG
 
 # Docker:
-docker-compose ps redis
-docker-compose logs redis
+docker compose ps redis
+docker compose logs redis
 ```
 
 #### Migration Errors
@@ -455,32 +423,16 @@ cd backend
 uv run python manage.py flush
 
 # Docker:
-docker-compose exec backend python manage.py flush
-
-# Or drop and recreate database
-# Local:
-sudo -u postgres psql
-DROP DATABASE forex_trading;
-CREATE DATABASE forex_trading;
-GRANT ALL PRIVILEGES ON DATABASE forex_trading TO postgres;
-\q
-
-# Then run migrations again
+docker compose exec backend python manage.py flush
 ```
 
 #### Celery Not Processing Tasks
 
 ```bash
-# Check Celery worker is running
-# Check Redis connection
-# Check Celery logs for errors
-
-# Restart Celery (local)
-# Stop with Ctrl+C and restart
-
-# Restart Celery (Docker)
-docker-compose restart celery
-docker-compose restart celery-beat
+# Restart Celery (local): stop with Ctrl+C and restart
+# Restart Celery (Docker):
+docker compose restart celery
+docker compose restart celery-beat
 ```
 
 ### Frontend Issues
@@ -488,10 +440,7 @@ docker-compose restart celery-beat
 #### Port Already in Use
 
 ```bash
-# Find process using port 5173
 lsof -i :5173
-
-# Kill the process
 kill -9 <PID>
 
 # Or use different port
@@ -502,20 +451,9 @@ npm run dev -- --port 3000
 #### Module Not Found Errors
 
 ```bash
-# Reinstall dependencies
 cd frontend
 rm -rf node_modules package-lock.json
 npm install
-```
-
-#### Build Errors
-
-```bash
-# Clear cache and rebuild
-cd frontend
-rm -rf node_modules dist .vite
-npm install
-npm run build
 ```
 
 ### Docker Issues
@@ -523,48 +461,24 @@ npm run build
 #### Container Won't Start
 
 ```bash
-# Check logs
-docker-compose logs <service-name>
-
-# Rebuild container
-docker-compose build <service-name>
-docker-compose up -d <service-name>
+docker compose logs <service-name>
+docker compose build <service-name>
+docker compose up -d <service-name>
 ```
 
 #### Port Conflicts
 
 ```bash
-# Check what's using the port
 lsof -i :8000  # Backend
 lsof -i :5173  # Frontend
 lsof -i :5432  # PostgreSQL
 lsof -i :6379  # Redis
-
-# Stop conflicting service or change port in docker-compose.yaml
-```
-
-#### Volume Permission Issues
-
-```bash
-# Fix permissions
-sudo chown -R $USER:$USER .
-
-# Or remove volumes and recreate
-docker-compose down -v
-docker-compose up -d
 ```
 
 #### Out of Disk Space
 
 ```bash
-# Clean up Docker
 docker system prune -a --volumes
-
-# Remove unused images
-docker image prune -a
-
-# Remove unused volumes
-docker volume prune
 ```
 
 ### General Issues
@@ -572,15 +486,15 @@ docker volume prune
 #### Environment Variables Not Loading
 
 ```bash
-# Make sure .env file exists
-ls -la .env
+# Make sure backend/.env file exists
+ls -la backend/.env
 
 # Check file format (no spaces around =)
-cat .env
+cat backend/.env
 
-# Restart services after changing .env
+# Restart services after changing backend/.env
 # Local: Restart all terminal processes
-# Docker: docker-compose down && docker-compose up -d
+# Docker: docker compose down && docker compose up -d
 ```
 
 #### CORS Errors
@@ -600,16 +514,5 @@ cat .env
 After setting up your development environment:
 
 1. Read the [README.md](README.md) for project overview
-2. Check [docs/ENVIRONMENT_VARIABLES.md](docs/ENVIRONMENT_VARIABLES.md) for configuration details
-3. Review the API documentation at http://localhost:8000/api/docs
-4. Explore the admin panel at http://localhost:8000/admin
-5. Start developing your features!
-
-## Additional Resources
-
-- [Django Documentation](https://docs.djangoproject.com/)
-- [Django REST Framework](https://www.django-rest-framework.org/)
-- [React Documentation](https://react.dev/)
-- [Vite Documentation](https://vitejs.dev/)
-- [Material-UI Documentation](https://mui.com/)
-- [Celery Documentation](https://docs.celeryproject.org/)
+2. Review the API documentation at http://localhost:8000/api/docs
+3. Explore the admin panel at http://localhost:8000/admin
