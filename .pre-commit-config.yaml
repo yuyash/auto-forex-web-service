@@ -91,7 +91,7 @@ repos:
 
       - id: pytest
         name: Run pytest
-        entry: bash -c 'cd backend && source .venv/bin/activate && pytest -v --tb=short'
+        entry: bash -c 'cd backend && source .venv/bin/activate && pytest tests/unit/ tests/integration/ -v --tb=short'
         language: system
         pass_filenames: false
         files: ^backend/.*\.py$

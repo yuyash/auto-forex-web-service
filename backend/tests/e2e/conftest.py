@@ -23,8 +23,14 @@ from tests.e2e.helpers import (
     CsvTickDataSource,
 )
 
-# Register the API report plugin
-pytest_plugins = ["tests.e2e.plugin_api_report"]
+# API report plugin is loaded via conftest hooks below
+from tests.e2e.plugin_api_report import (  # noqa: F401
+    pytest_configure,
+    pytest_runtest_logreport,
+    pytest_runtest_setup,
+    pytest_runtest_teardown,
+    pytest_sessionfinish,
+)
 
 User = get_user_model()
 
