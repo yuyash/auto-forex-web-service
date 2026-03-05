@@ -4,7 +4,7 @@
  * Displays task events with server-side pagination.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Box,
   Chip,
@@ -173,33 +173,6 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
     },
   ];
 
-  // Measure available height so the table fills the viewport
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const [tableMaxHeight, setTableMaxHeight] = useState<string>(
-    'calc(100vh - 640px)'
-  );
-
-  const measure = useCallback(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    const top = el.getBoundingClientRect().top;
-    const reserved = 44 + 52 + 52 + 24 + 68;
-    const available = window.innerHeight - top - reserved;
-    setTableMaxHeight(`${Math.max(200, Math.round(available))}px`);
-  }, []);
-
-  useEffect(() => {
-    let raf: number;
-    raf = requestAnimationFrame(() => {
-      raf = requestAnimationFrame(measure);
-    });
-    window.addEventListener('resize', measure);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', measure);
-    };
-  }, [measure]);
-
   if (error) {
     return (
       <Box sx={{ p: 3 }}>
@@ -210,7 +183,6 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
 
   return (
     <Box
-      ref={rootRef}
       sx={{
         px: 3,
         pt: 1,
@@ -219,7 +191,6 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
         flexDirection: 'column',
         flex: 1,
         minHeight: 0,
-        overflow: 'hidden',
       }}
     >
       <Box
@@ -279,7 +250,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
         defaultRowsPerPage={rowsPerPage}
         rowsPerPageOptions={[rowsPerPage]}
         storageKey="task-events"
-        tableMaxHeight={tableMaxHeight}
+        tableMaxHeight="none"
         selectable
         getRowId={getRowId}
         selectedRowIds={selection.selectedRowIds}

@@ -4,7 +4,7 @@
  * Displays task logs with server-side pagination.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Box,
   Chip,
@@ -170,33 +170,6 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     },
   ];
 
-  // Measure available height so the table fills the viewport
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const [tableMaxHeight, setTableMaxHeight] = useState<string>(
-    'calc(100vh - 640px)'
-  );
-
-  const measure = useCallback(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    const top = el.getBoundingClientRect().top;
-    const reserved = 44 + 52 + 52 + 24 + 68;
-    const available = window.innerHeight - top - reserved;
-    setTableMaxHeight(`${Math.max(200, Math.round(available))}px`);
-  }, []);
-
-  useEffect(() => {
-    let raf: number;
-    raf = requestAnimationFrame(() => {
-      raf = requestAnimationFrame(measure);
-    });
-    window.addEventListener('resize', measure);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', measure);
-    };
-  }, [measure]);
-
   if (error) {
     return (
       <Box sx={{ p: 3 }}>
@@ -207,7 +180,6 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
 
   return (
     <Box
-      ref={rootRef}
       sx={{
         px: 3,
         pt: 1,
@@ -216,7 +188,6 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
         flexDirection: 'column',
         flex: 1,
         minHeight: 0,
-        overflow: 'hidden',
       }}
     >
       <Box
@@ -263,7 +234,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
         defaultRowsPerPage={rowsPerPage}
         rowsPerPageOptions={[rowsPerPage]}
         storageKey="task-logs"
-        tableMaxHeight={tableMaxHeight}
+        tableMaxHeight="none"
         selectable
         getRowId={getRowId}
         selectedRowIds={selection.selectedRowIds}

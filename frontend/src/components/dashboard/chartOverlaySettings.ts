@@ -17,5 +17,5 @@ export const DEFAULT_OVERLAY_SETTINGS: OverlaySettings = {
   bollinger: true,
   volume: true,
   supportResistance: false,
-  markers: true,
+  markers: false,
 };
