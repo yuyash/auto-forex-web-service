@@ -685,6 +685,9 @@ export default function MarketChart({
         markersRef.current = null;
       }
     };
+    // applyOverlays is intentionally excluded — overlay changes are handled
+    // by a dedicated useEffect to avoid recreating the chart on every toggle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [height, fillHeight, granularity, timezone, isDark]);
 
   // Fetch data when instrument/granularity changes
