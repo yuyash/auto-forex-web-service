@@ -522,7 +522,7 @@ const StrategyConfigForm = ({
         const currentArray = Array.isArray(value) ? (value as number[]) : [];
         const itemMin = fieldSchema.items?.minimum;
         const labelTpl =
-          ((fieldSchema as Record<string, unknown>)[
+          ((fieldSchema as unknown as Record<string, unknown>)[
             `itemLabel_${i18n.language}`
           ] as string) ??
           fieldSchema.itemLabel ??

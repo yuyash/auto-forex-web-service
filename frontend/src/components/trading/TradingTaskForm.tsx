@@ -46,9 +46,9 @@ import {
 } from '../../hooks/useStrategies';
 
 const steps = [
-  t('trading:form.steps.account'),
-  t('trading:form.steps.configuration'),
-  t('trading:form.steps.review'),
+  'trading:form.steps.account',
+  'trading:form.steps.configuration',
+  'trading:form.steps.review',
 ];
 
 // Validation schema
@@ -628,7 +628,7 @@ export default function TradingTaskForm({
       <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
         {steps.map((label) => (
           <Step key={label}>
-            <StepLabel>{label}</StepLabel>
+            <StepLabel>{t(label)}</StepLabel>
           </Step>
         ))}
       </Stepper>
