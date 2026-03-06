@@ -172,6 +172,7 @@ const ConfigurationForm = ({
     handleSubmit,
     watch,
     setValue,
+    trigger,
     formState: { errors },
   } = useForm<ConfigurationFormData>({
     resolver: zodResolver(configurationSchema),
@@ -316,9 +317,20 @@ const ConfigurationForm = ({
     strategyDefaults,
   ]);
 
-  const handleNext = (e?: React.MouseEvent) => {
+  const handleNext = async (e?: React.MouseEvent) => {
     // Prevent form submission
     e?.preventDefault();
+
+    // Validate current step before advancing
+    if (!isEditMode && activeStep === 0) {
+      const valid = await trigger(['name']);
+      if (!valid) return;
+    }
+    if (!isEditMode && activeStep === 1) {
+      const valid = await trigger(['strategy_type']);
+      if (!valid) return;
+    }
+
     setActiveStep((prev) => prev + 1);
   };
 

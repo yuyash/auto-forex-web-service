@@ -347,7 +347,7 @@ const AppFooter = () => {
         direction="row"
         spacing={2}
         alignItems="center"
-        justifyContent="space-between"
+        justifyContent="flex-start"
         flexWrap="wrap"
       >
         {/* Version Info */}

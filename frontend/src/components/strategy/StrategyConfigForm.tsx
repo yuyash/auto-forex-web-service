@@ -133,6 +133,37 @@ const StrategyConfigForm = ({
     }
   }, [config, configSchema, onChange]);
 
+  // Auto-resize linkedCount arrays when the source field value changes.
+  useEffect(() => {
+    if (!configSchema.properties) return;
+
+    let updatedConfig: StrategyConfig | null = null;
+
+    Object.entries(configSchema.properties).forEach(
+      ([fieldName, fieldSchema]) => {
+        if (!fieldSchema.linkedCount || fieldSchema.type !== 'array') return;
+
+        const { field: countField, offset = 0 } = fieldSchema.linkedCount;
+        const targetLen = Math.max(0, Number(config[countField] ?? 0) + offset);
+        const current = config[fieldName];
+        if (!Array.isArray(current)) return;
+
+        if (current.length !== targetLen) {
+          if (!updatedConfig) updatedConfig = { ...config };
+          const resized = [...current];
+          // Pad with default (last value or 0)
+          while (resized.length < targetLen) {
+            resized.push(resized.length > 0 ? resized[resized.length - 1] : 0);
+          }
+          // Trim excess
+          updatedConfig[fieldName] = resized.slice(0, targetLen);
+        }
+      }
+    );
+
+    if (updatedConfig) onChange(updatedConfig);
+  }, [config, configSchema, onChange]);
+
   useEffect(() => {
     const nextDrafts: Record<string, string> = {};
     Object.entries(configSchema.properties || {}).forEach(
@@ -467,8 +498,81 @@ const StrategyConfigForm = ({
       );
     }
 
-    // Array field (comma-separated string input)
+    // Array field
     if (fieldSchema.type === 'array') {
+      // --- Per-step numeric inputs (linkedCount) ---
+      if (fieldSchema.linkedCount && fieldSchema.items?.type === 'number') {
+        const countField = fieldSchema.linkedCount.field;
+        const offset = fieldSchema.linkedCount.offset ?? 0;
+        const countValue = Number(config[countField] ?? 0) + offset;
+        const stepCount = Math.max(0, countValue);
+        const currentArray = Array.isArray(value) ? (value as number[]) : [];
+        const itemMin = fieldSchema.items?.minimum;
+        const labelTpl = fieldSchema.itemLabel ?? `${label} {index}`;
+
+        return (
+          <Box key={fieldName}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              {renderLabel(label, fieldSchema.description)}
+            </Typography>
+            {stepCount === 0 ? (
+              <Typography variant="caption" color="text.secondary">
+                {t('validation.linkedCountZero', {
+                  defaultValue: `Set ${countField} first to configure per-step values.`,
+                })}
+              </Typography>
+            ) : (
+              <Stack spacing={1}>
+                {Array.from({ length: stepCount }, (_, i) => {
+                  const stepLabel = labelTpl.replace('{index}', String(i + 1));
+                  const stepValue = currentArray[i] ?? '';
+                  return (
+                    <TextField
+                      key={`${fieldName}_${i}`}
+                      label={stepLabel}
+                      type="number"
+                      size="small"
+                      value={stepValue}
+                      onChange={(e) => {
+                        const parsed = parseFloat(e.target.value);
+                        const next = [...currentArray];
+                        // Ensure array is long enough
+                        while (next.length <= i) next.push(0);
+                        next[i] = isNaN(parsed) ? 0 : parsed;
+                        // Trim trailing zeros beyond stepCount
+                        handleFieldChange(fieldName, next.slice(0, stepCount));
+                      }}
+                      disabled={disabled}
+                      error={
+                        !!error ||
+                        (itemMin !== undefined &&
+                          typeof stepValue === 'number' &&
+                          stepValue < itemMin)
+                      }
+                      helperText={
+                        itemMin !== undefined &&
+                        typeof stepValue === 'number' &&
+                        stepValue < itemMin
+                          ? t('validation.minimum', {
+                              defaultValue: `Must be at least ${itemMin}`,
+                              min: itemMin,
+                            })
+                          : undefined
+                      }
+                      inputProps={{
+                        min: itemMin,
+                        step: 'any',
+                      }}
+                      sx={{ maxWidth: 280 }}
+                    />
+                  );
+                })}
+              </Stack>
+            )}
+          </Box>
+        );
+      }
+
       if (fieldSchema.items?.type === 'object') {
         const jsonValue =
           jsonDrafts[fieldName] ??

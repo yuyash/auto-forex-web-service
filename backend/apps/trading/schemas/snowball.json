@@ -1,0 +1,346 @@
+{
+  "display_name": "Snowball Strategy",
+  "type": "object",
+  "description": "Dual-basket hedging strategy with rotational profit-taking and averaging-down.",
+  "properties": {
+    "base_units": {
+      "type": "integer",
+      "title": "Base Units",
+      "description": "Base lot size in currency units (e.g. 1000 = 1 lot).",
+      "default": 1000,
+      "minimum": 1,
+      "group": "Core Parameters"
+    },
+    "m_pips": {
+      "type": "number",
+      "title": "Trend Take-Profit (pips)",
+      "description": "Profit target for the trend-side rotational take-profit.",
+      "default": 50,
+      "minimum": 1,
+      "group": "Trend Take-Profit"
+    },
+    "trend_lot_size": {
+      "type": "integer",
+      "title": "Trend Lot Size",
+      "description": "Lot count for each trend-side entry and re-entry. Multiplied by Base Units to get currency units.",
+      "default": 1,
+      "minimum": 1,
+      "group": "Trend Take-Profit"
+    },
+    "r_max": {
+      "type": "integer",
+      "title": "Max Steps (r_max)",
+      "description": "Maximum number of counter-trend steps per cycle (including the initial entry).",
+      "default": 7,
+      "minimum": 2,
+      "group": "Core Parameters"
+    },
+    "f_max": {
+      "type": "integer",
+      "title": "Max Cycle Retries (f_max)",
+      "description": "How many times the counter-trend cycle can restart after reaching r_max.",
+      "default": 3,
+      "minimum": 0,
+      "group": "Core Parameters"
+    },
+    "post_r_max_base_factor": {
+      "type": "number",
+      "title": "Post r_max Base Factor",
+      "description": "Multiplier applied to base_units when a new cycle starts after r_max.",
+      "default": 1,
+      "minimum": 0.1,
+      "group": "Core Parameters"
+    },
+    "interval_mode": {
+      "type": "string",
+      "title": "Interval Mode",
+      "description": "How counter-trend add intervals are calculated. Manual mode allows per-step custom values.",
+      "enum": [
+        "constant",
+        "additive",
+        "subtractive",
+        "multiplicative",
+        "divisive",
+        "manual"
+      ],
+      "default": "constant",
+      "group": "Counter-Trend Interval"
+    },
+    "n_pips_head": {
+      "type": "number",
+      "title": "Interval Head (pips)",
+      "description": "Starting pip interval for counter-trend adds.",
+      "default": 30,
+      "minimum": 1,
+      "dependsOn": {
+        "field": "interval_mode",
+        "values": [
+          "constant",
+          "additive",
+          "subtractive",
+          "multiplicative",
+          "divisive"
+        ]
+      },
+      "group": "Counter-Trend Interval"
+    },
+    "n_pips_tail": {
+      "type": "number",
+      "title": "Interval Tail (pips)",
+      "description": "Ending pip interval for counter-trend adds (after decay).",
+      "default": 14,
+      "minimum": 1,
+      "dependsOn": {
+        "field": "interval_mode",
+        "values": [
+          "constant",
+          "additive",
+          "subtractive",
+          "multiplicative",
+          "divisive"
+        ]
+      },
+      "group": "Counter-Trend Interval"
+    },
+    "n_pips_flat_steps": {
+      "type": "integer",
+      "title": "Flat Steps",
+      "description": "Number of initial steps that use the head interval before decay begins.",
+      "default": 2,
+      "minimum": 0,
+      "dependsOn": {
+        "field": "interval_mode",
+        "values": [
+          "constant",
+          "additive",
+          "subtractive",
+          "multiplicative",
+          "divisive"
+        ]
+      },
+      "group": "Counter-Trend Interval"
+    },
+    "n_pips_gamma": {
+      "type": "number",
+      "title": "Interval Gamma",
+      "description": "Decay curve coefficient. >1 = slow start, <1 = fast start.",
+      "default": 1.4,
+      "minimum": 0.01,
+      "dependsOn": {
+        "field": "interval_mode",
+        "values": [
+          "constant",
+          "additive",
+          "subtractive",
+          "multiplicative",
+          "divisive"
+        ]
+      },
+      "group": "Counter-Trend Interval"
+    },
+    "manual_intervals": {
+      "type": "array",
+      "title": "Manual Intervals (pips)",
+      "description": "Per-step pip intervals when interval_mode is 'manual'. One value per add step (r_max − 1 entries).",
+      "default": [],
+      "items": {
+        "type": "number",
+        "minimum": 1
+      },
+      "dependsOn": {
+        "field": "interval_mode",
+        "values": ["manual"]
+      },
+      "group": "Counter-Trend Interval",
+      "linkedCount": {
+        "field": "r_max",
+        "offset": -1
+      },
+      "itemLabel": "Step {index} interval (pips)"
+    },
+
+    "counter_tp_mode": {
+      "type": "string",
+      "title": "Close Price Mode",
+      "description": "How the close price for each counter-trend step is calculated.",
+      "enum": [
+        "fixed",
+        "additive",
+        "subtractive",
+        "multiplicative",
+        "divisive",
+        "weighted_avg"
+      ],
+      "default": "fixed",
+      "group": "Counter-Trend Take-Profit"
+    },
+    "counter_tp_pips": {
+      "type": "number",
+      "title": "Take-Profit (pips)",
+      "description": "Fixed pip offset from entry price (fixed mode) or base value for progression modes.",
+      "default": 25,
+      "minimum": 0.1,
+      "dependsOn": {
+        "field": "counter_tp_mode",
+        "values": [
+          "fixed",
+          "additive",
+          "subtractive",
+          "multiplicative",
+          "divisive"
+        ]
+      },
+      "group": "Counter-Trend Take-Profit"
+    },
+    "counter_tp_step_amount": {
+      "type": "number",
+      "title": "Step Amount (pips)",
+      "description": "Pips added or subtracted per step. Step 1 = base, Step 2 = base ± amount, Step 3 = base ± 2×amount, etc.",
+      "default": 2.5,
+      "minimum": 0.1,
+      "dependsOn": {
+        "field": "counter_tp_mode",
+        "values": ["additive", "subtractive"]
+      },
+      "group": "Counter-Trend Take-Profit"
+    },
+    "counter_tp_multiplier": {
+      "type": "number",
+      "title": "Step Multiplier",
+      "description": "Multiplier per step. Step 1 = base, Step 2 = base × multiplier, Step 3 = base × multiplier², etc.",
+      "default": 1.2,
+      "minimum": 0.01,
+      "dependsOn": {
+        "field": "counter_tp_mode",
+        "values": ["multiplicative", "divisive"]
+      },
+      "group": "Counter-Trend Take-Profit"
+    },
+    "round_step_pips": {
+      "type": "number",
+      "title": "Round Step (pips)",
+      "description": "Rounding unit for interval and TP calculations.",
+      "default": 0.1,
+      "minimum": 0.1,
+      "group": "Counter-Trend Take-Profit"
+    },
+
+    "dynamic_tp_enabled": {
+      "type": "boolean",
+      "title": "Dynamic Take-Profit (ATR)",
+      "description": "Automatically adjust trend take-profit based on ATR volatility.",
+      "default": false,
+      "group": "Dynamic Take-Profit (ATR)"
+    },
+    "atr_period": {
+      "type": "integer",
+      "title": "ATR Period",
+      "description": "Number of candles for ATR calculation.",
+      "default": 14,
+      "minimum": 1,
+      "dependsOn": { "field": "dynamic_tp_enabled", "values": [true] },
+      "group": "Dynamic Take-Profit (ATR)"
+    },
+    "atr_timeframe": {
+      "type": "string",
+      "title": "ATR Timeframe",
+      "description": "Candle granularity for ATR calculation.",
+      "enum": ["M1", "M5", "M15", "M30", "H1", "H4"],
+      "default": "M1",
+      "dependsOn": { "field": "dynamic_tp_enabled", "values": [true] },
+      "group": "Dynamic Take-Profit (ATR)"
+    },
+    "atr_baseline_lookback": {
+      "type": "integer",
+      "title": "ATR Baseline Lookback",
+      "description": "Number of candles for baseline ATR calculation.",
+      "default": 96,
+      "minimum": 1,
+      "dependsOn": { "field": "dynamic_tp_enabled", "values": [true] },
+      "group": "Dynamic Take-Profit (ATR)"
+    },
+    "m_pips_min": {
+      "type": "number",
+      "title": "Dynamic m_pips Min",
+      "description": "Lower bound for ATR-adjusted trend take-profit.",
+      "default": 12,
+      "minimum": 1,
+      "dependsOn": { "field": "dynamic_tp_enabled", "values": [true] },
+      "group": "Dynamic Take-Profit (ATR)"
+    },
+    "m_pips_max": {
+      "type": "number",
+      "title": "Dynamic m_pips Max",
+      "description": "Upper bound for ATR-adjusted trend take-profit.",
+      "default": 45,
+      "minimum": 1,
+      "dependsOn": { "field": "dynamic_tp_enabled", "values": [true] },
+      "group": "Dynamic Take-Profit (ATR)"
+    },
+
+    "margin_protection_enabled": {
+      "type": "boolean",
+      "title": "Margin Protection",
+      "description": "Enable multi-level margin protection (rebalance, shrink, lock, emergency stop).",
+      "default": true,
+      "group": "Margin Protection"
+    },
+    "m_th": {
+      "type": "number",
+      "title": "Margin Level 1 - Shrink (%)",
+      "description": "Margin ratio threshold to enter shrink mode (stop new entries, partial close).",
+      "default": 70,
+      "minimum": 1,
+      "maximum": 99,
+      "dependsOn": { "field": "margin_protection_enabled", "values": [true] },
+      "group": "Margin Protection"
+    },
+    "n_th": {
+      "type": "number",
+      "title": "Margin Level 2 - Lock (%)",
+      "description": "Margin ratio threshold to enter lock mode (add net-zero hedge).",
+      "default": 85,
+      "minimum": 1,
+      "maximum": 99,
+      "dependsOn": { "field": "margin_protection_enabled", "values": [true] },
+      "group": "Margin Protection"
+    },
+    "spread_guard_pips": {
+      "type": "number",
+      "title": "Spread Guard (pips)",
+      "description": "Maximum spread allowed for new entries and lock release.",
+      "default": 2.5,
+      "minimum": 0,
+      "dependsOn": { "field": "margin_protection_enabled", "values": [true] },
+      "group": "Margin Protection"
+    },
+    "cooldown_sec": {
+      "type": "integer",
+      "title": "Cooldown (seconds)",
+      "description": "Waiting period after lock release before resuming normal trading.",
+      "default": 300,
+      "minimum": 0,
+      "dependsOn": { "field": "margin_protection_enabled", "values": [true] },
+      "group": "Margin Protection"
+    },
+    "rebalance_start_ratio": {
+      "type": "number",
+      "title": "Rebalance Start (%)",
+      "description": "Margin ratio at which BUY/SELL rebalancing begins.",
+      "default": 60,
+      "minimum": 1,
+      "dependsOn": { "field": "margin_protection_enabled", "values": [true] },
+      "group": "Margin Protection"
+    },
+    "rebalance_end_ratio": {
+      "type": "number",
+      "title": "Rebalance End (%)",
+      "description": "Margin ratio target at which rebalancing stops.",
+      "default": 50,
+      "minimum": 1,
+      "dependsOn": { "field": "margin_protection_enabled", "values": [true] },
+      "group": "Margin Protection"
+    }
+  },
+  "required": ["base_units", "m_pips", "r_max"]
+}

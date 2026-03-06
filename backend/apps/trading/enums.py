@@ -231,6 +231,7 @@ class StrategyType(models.TextChoices):
     """
 
     FLOOR = "floor", "Floor Strategy"
+    SNOWBALL = "snowball", "Snowball Strategy"
     CUSTOM = "custom", "Custom Strategy"
 
 
