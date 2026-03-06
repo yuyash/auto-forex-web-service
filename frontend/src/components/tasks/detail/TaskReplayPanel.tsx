@@ -1805,6 +1805,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     granularity,
     autoFollow,
     programmaticScrollRef,
+    taskType,
   ]);
 
   const eventMarkers = useMemo(() => {
