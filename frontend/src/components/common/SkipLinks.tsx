@@ -1,10 +1,13 @@
 import { Box, Link } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Skip links for keyboard navigation accessibility
  * Allows keyboard users to skip to main content or navigation
  */
 const SkipLinks = () => {
+  const { t } = useTranslation('common');
+
   return (
     <Box
       sx={{
@@ -36,7 +39,7 @@ const SkipLinks = () => {
           },
         }}
       >
-        Skip to main content
+        {t('accessibility.skipToMainContent')}
       </Link>
       <Link
         href="#navigation"
@@ -50,7 +53,7 @@ const SkipLinks = () => {
           },
         }}
       >
-        Skip to navigation
+        {t('accessibility.skipToNavigation')}
       </Link>
     </Box>
   );

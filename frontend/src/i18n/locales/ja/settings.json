@@ -18,7 +18,21 @@
     "practice": "練習",
     "live": "本番",
     "balance": "残高",
+    "nav": "NAV",
+    "marginUsed": "使用証拠金",
+    "marginAvailable": "利用可能証拠金",
+    "unrealizedPnL": "未実現損益",
+    "openTrades": "オープントレード",
+    "openPositions": "オープンポジション",
+    "pendingOrders": "保留注文",
     "currency": "通貨",
+    "positionMode": "ポジションモード",
+    "hedgingEnabled": "ヘッジ有効",
+    "oandaAccountFlags": "OANDAアカウントフラグ / パラメータ",
+    "accountDetails": "アカウント詳細",
+    "setAsDefault": "デフォルトアカウントに設定",
+    "defaultAccountDescription": "デフォルトアカウントはマーケットデータと最新ティックデータの収集に使用されます。デフォルトに設定できるアカウントは1つだけです。",
+    "leaveBlankToKeepToken": "既存のトークンを保持する場合は空欄にしてください",
     "confirmDelete": "このアカウントを削除してもよろしいですか？"
   },
   "preferences": {
@@ -47,6 +61,9 @@
     "riskPerTrade": "取引あたりのリスク（％）",
     "maxPositions": "最大同時ポジション数",
     "info": "これらのデフォルト値は、新しい取引戦略を作成する際に使用されます。個々の戦略でこれらを上書きすることができます。"
+  },
+  "profile": {
+    "title": "プロフィール"
   },
   "security": {
     "title": "セキュリティ設定",

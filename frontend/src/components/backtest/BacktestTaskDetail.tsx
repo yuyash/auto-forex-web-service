@@ -8,6 +8,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   Container,
@@ -53,6 +54,7 @@ function a11yProps(index: number) {
 }
 
 export const BacktestTaskDetail: React.FC = () => {
+  const { t } = useTranslation(['backtest', 'common']);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -170,7 +172,9 @@ export const BacktestTaskDetail: React.FC = () => {
   if (error || !task) {
     return (
       <Container maxWidth={false} sx={{ py: 4 }}>
-        <Alert severity="error">{error?.message || 'Task not found'}</Alert>
+        <Alert severity="error">
+          {error?.message || t('common:errors.taskNotFound')}
+        </Alert>
       </Container>
     );
   }
@@ -199,7 +203,7 @@ export const BacktestTaskDetail: React.FC = () => {
           onClick={handleBack}
           sx={{ cursor: 'pointer', textDecoration: 'none' }}
         >
-          Backtest Tasks
+          {t('backtest:pages.title')}
         </Link>
         <Typography color="text.primary">{task.name}</Typography>
       </Breadcrumbs>
@@ -244,8 +248,8 @@ export const BacktestTaskDetail: React.FC = () => {
                 color="text.secondary"
                 sx={{ mt: 2, fontWeight: 600 }}
               >
-                {Math.round(Math.min(Math.max(s.task.progress, 0), 100))}%
-                completed
+                {Math.round(Math.min(Math.max(s.task.progress, 0), 100))}%{' '}
+                {t('backtest:detail.completed')}
               </Typography>
             )}
           </Box>
@@ -296,7 +300,7 @@ export const BacktestTaskDetail: React.FC = () => {
               }}
             />
             <Box sx={{ display: 'flex' }}>
-              <Tooltip title="Edit">
+              <Tooltip title={t('common:actions.edit')}>
                 <span>
                   <IconButton
                     onClick={() => navigate(`/backtest-tasks/${taskId}/edit`)}
@@ -306,13 +310,13 @@ export const BacktestTaskDetail: React.FC = () => {
                       (polledStatus?.status || task.status) ===
                         TaskStatus.PAUSED
                     }
-                    aria-label="Edit"
+                    aria-label={t('common:actions.edit')}
                   >
                     <EditIcon />
                   </IconButton>
                 </span>
               </Tooltip>
-              <Tooltip title="Delete">
+              <Tooltip title={t('common:actions.delete')}>
                 <span>
                   <IconButton
                     onClick={() => setDeleteDialogOpen(true)}
@@ -323,7 +327,7 @@ export const BacktestTaskDetail: React.FC = () => {
                         TaskStatus.PAUSED
                     }
                     color="error"
-                    aria-label="Delete"
+                    aria-label={t('common:actions.delete')}
                   >
                     <DeleteIcon />
                   </IconButton>
@@ -351,13 +355,13 @@ export const BacktestTaskDetail: React.FC = () => {
           aria-label="task detail tabs"
           sx={{ borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}
         >
-          <Tab label="Overview" {...a11yProps(0)} />
-          <Tab label="Trend" {...a11yProps(1)} />
-          <Tab label="Positions" {...a11yProps(2)} />
-          <Tab label="Trades" {...a11yProps(3)} />
-          <Tab label="Orders" {...a11yProps(4)} />
-          <Tab label="Events" {...a11yProps(5)} />
-          <Tab label="Logs" {...a11yProps(6)} />
+          <Tab label={t('backtest:tabs.overview')} {...a11yProps(0)} />
+          <Tab label={t('backtest:tabs.trend')} {...a11yProps(1)} />
+          <Tab label={t('backtest:tabs.positions')} {...a11yProps(2)} />
+          <Tab label={t('backtest:tabs.trades')} {...a11yProps(3)} />
+          <Tab label={t('backtest:tabs.orders')} {...a11yProps(4)} />
+          <Tab label={t('backtest:tabs.events')} {...a11yProps(5)} />
+          <Tab label={t('backtest:tabs.logs')} {...a11yProps(6)} />
         </Tabs>
 
         {/* Overview Tab */}
@@ -366,12 +370,12 @@ export const BacktestTaskDetail: React.FC = () => {
             <Grid container spacing={3}>
               <Grid size={{ xs: 12, md: 6 }}>
                 <Typography variant="h6" gutterBottom>
-                  Task Information
+                  {t('backtest:detail.taskInformation')}
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Name
+                      {t('common:labels.name')}
                     </Typography>
                     <Typography variant="body1">{task.name}</Typography>
                   </Box>
@@ -379,7 +383,7 @@ export const BacktestTaskDetail: React.FC = () => {
                   {task.description && (
                     <Box>
                       <Typography variant="caption" color="text.secondary">
-                        Description
+                        {t('common:labels.description')}
                       </Typography>
                       <Typography variant="body1">
                         {task.description}
@@ -389,14 +393,14 @@ export const BacktestTaskDetail: React.FC = () => {
 
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Instrument
+                      {t('common:labels.instrument')}
                     </Typography>
                     <Typography variant="body1">{task.instrument}</Typography>
                   </Box>
 
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Pip Size
+                      {t('common:labels.pipSize')}
                     </Typography>
                     <Typography variant="body1">
                       {task.pip_size
@@ -407,7 +411,7 @@ export const BacktestTaskDetail: React.FC = () => {
 
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Status
+                      {t('common:labels.status')}
                     </Typography>
                     <Box sx={{ mt: 0.5 }}>
                       <StatusBadge
@@ -421,12 +425,12 @@ export const BacktestTaskDetail: React.FC = () => {
 
               <Grid size={{ xs: 12, md: 6 }}>
                 <Typography variant="h6" gutterBottom>
-                  Configuration
+                  {t('common:labels.configuration')}
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Strategy Configuration
+                      {t('common:labels.strategyConfiguration')}
                     </Typography>
                     <Link
                       component="button"
@@ -442,7 +446,7 @@ export const BacktestTaskDetail: React.FC = () => {
 
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Strategy Type
+                      {t('common:labels.strategyType')}
                     </Typography>
                     <Typography
                       variant="body1"
@@ -454,7 +458,7 @@ export const BacktestTaskDetail: React.FC = () => {
 
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Data Source
+                      {t('backtest:detail.dataSource')}
                     </Typography>
                     <Typography
                       variant="body1"
@@ -466,7 +470,7 @@ export const BacktestTaskDetail: React.FC = () => {
 
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Initial Balance
+                      {t('backtest:detail.initialBalance')}
                     </Typography>
                     <Typography variant="body1">
                       ${parseFloat(task.initial_balance).toFixed(2)}
@@ -475,7 +479,7 @@ export const BacktestTaskDetail: React.FC = () => {
 
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Commission Per Trade
+                      {t('backtest:detail.commissionPerTrade')}
                     </Typography>
                     <Typography variant="body1">
                       ${parseFloat(task.commission_per_trade).toFixed(2)}
@@ -487,12 +491,12 @@ export const BacktestTaskDetail: React.FC = () => {
               <Grid size={{ xs: 12 }}>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="h6" gutterBottom>
-                  Backtest Period
+                  {t('backtest:detail.backtestPeriod')}
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Start Time
+                      {t('backtest:detail.startTime')}
                     </Typography>
                     <Typography variant="body1">
                       {new Date(task.start_time).toLocaleString()}
@@ -500,7 +504,7 @@ export const BacktestTaskDetail: React.FC = () => {
                   </Box>
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      End Time
+                      {t('backtest:detail.endTime')}
                     </Typography>
                     <Typography variant="body1">
                       {new Date(task.end_time).toLocaleString()}
@@ -512,12 +516,12 @@ export const BacktestTaskDetail: React.FC = () => {
               <Grid size={{ xs: 12 }}>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="h6" gutterBottom>
-                  Results
+                  {t('backtest:detail.results')}
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Realized PnL ({pnlCurrency})
+                      {t('backtest:detail.realizedPnl')} ({pnlCurrency})
                     </Typography>
                     <Typography
                       variant="body1"
@@ -531,7 +535,7 @@ export const BacktestTaskDetail: React.FC = () => {
                   </Box>
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Unrealized PnL ({pnlCurrency})
+                      {t('backtest:detail.unrealizedPnl')} ({pnlCurrency})
                     </Typography>
                     <Typography
                       variant="body1"
@@ -546,7 +550,7 @@ export const BacktestTaskDetail: React.FC = () => {
                   {s.execution.currentBalance != null && (
                     <Box>
                       <Typography variant="caption" color="text.secondary">
-                        Current Balance
+                        {t('backtest:detail.currentBalance')}
                       </Typography>
                       <Typography variant="body1">
                         {s.execution.currentBalance.toFixed(2)} {pnlCurrency}
@@ -555,7 +559,7 @@ export const BacktestTaskDetail: React.FC = () => {
                   )}
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Total Trades (count)
+                      {t('backtest:detail.totalTradesCount')}
                     </Typography>
                     <Typography variant="body1">
                       {s.counts.totalTrades}
@@ -563,7 +567,7 @@ export const BacktestTaskDetail: React.FC = () => {
                   </Box>
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Open Positions
+                      {t('backtest:detail.openPositions')}
                     </Typography>
                     <Typography variant="body1">
                       {s.counts.openPositions}
@@ -571,7 +575,7 @@ export const BacktestTaskDetail: React.FC = () => {
                   </Box>
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Closed Positions
+                      {t('backtest:detail.closedPositions')}
                     </Typography>
                     <Typography variant="body1">
                       {s.counts.closedPositions}
@@ -580,7 +584,7 @@ export const BacktestTaskDetail: React.FC = () => {
                   {s.execution.ticksProcessed > 0 && (
                     <Box>
                       <Typography variant="caption" color="text.secondary">
-                        Ticks Processed
+                        {t('backtest:detail.ticksProcessed')}
                       </Typography>
                       <Typography variant="body1">
                         {s.execution.ticksProcessed.toLocaleString()}
@@ -594,13 +598,13 @@ export const BacktestTaskDetail: React.FC = () => {
                 <Grid size={{ xs: 12 }}>
                   <Divider sx={{ my: 2 }} />
                   <Typography variant="h6" gutterBottom>
-                    Execution Timeline
+                    {t('backtest:detail.executionTimeline')}
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     {task.started_at && (
                       <Box>
                         <Typography variant="caption" color="text.secondary">
-                          Started At
+                          {t('backtest:detail.startedAt')}
                         </Typography>
                         <Typography variant="body1">
                           {new Date(task.started_at).toLocaleString()}
@@ -610,7 +614,7 @@ export const BacktestTaskDetail: React.FC = () => {
                     {task.completed_at && (
                       <Box>
                         <Typography variant="caption" color="text.secondary">
-                          Completed At
+                          {t('backtest:detail.completedAt')}
                         </Typography>
                         <Typography variant="body1">
                           {new Date(task.completed_at).toLocaleString()}

@@ -3,6 +3,7 @@ import { Box, Typography, Button, Paper, Stack } from '@mui/material';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import HomeIcon from '@mui/icons-material/Home';
+import i18n from '../../i18n/config';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -101,13 +102,14 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             <ErrorOutlineIcon color="error" sx={{ fontSize: 64, mb: 2 }} />
             <Typography variant="h5" gutterBottom>
               {isAppLevel
-                ? 'Application Error'
+                ? i18n.t('common:errors.applicationError')
                 : isPageLevel
-                  ? 'Page Error'
-                  : 'Component Error'}
+                  ? i18n.t('common:errors.pageError')
+                  : i18n.t('common:errors.componentError')}
             </Typography>
             <Typography variant="body1" color="text.secondary" paragraph>
-              {this.state.error?.message || 'An unexpected error occurred'}
+              {this.state.error?.message ||
+                i18n.t('common:errors.unexpectedError')}
             </Typography>
 
             {import.meta.env.DEV && this.state.errorInfo && (
@@ -139,7 +141,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
                 onClick={this.handleReset}
                 startIcon={<RefreshIcon />}
               >
-                Try Again
+                {i18n.t('common:actions.tryAgain')}
               </Button>
               {(isAppLevel || isPageLevel) && (
                 <Button
@@ -148,7 +150,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
                   onClick={this.handleGoHome}
                   startIcon={<HomeIcon />}
                 >
-                  Go to Dashboard
+                  {i18n.t('common:actions.goToDashboard')}
                 </Button>
               )}
             </Stack>

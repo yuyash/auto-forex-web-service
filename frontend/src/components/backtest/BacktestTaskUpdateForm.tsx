@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   Box,
@@ -81,6 +82,7 @@ export default function BacktestTaskUpdateForm({
   taskDescription,
   initialData,
 }: BacktestTaskUpdateFormProps) {
+  const { t } = useTranslation(['backtest', 'common']);
   const navigate = useNavigate();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const updateTask = useUpdateBacktestTask();
@@ -175,19 +177,19 @@ export default function BacktestTaskUpdateForm({
     <Box>
       <Paper sx={{ p: 3, mb: 3, bgcolor: 'grey.50' }}>
         <Typography variant="h6" gutterBottom>
-          Task Information (Read-only)
+          {t('trading:updateForm.taskInfoReadOnly')}
         </Typography>
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, md: 6 }}>
             <Typography variant="subtitle2" color="text.secondary">
-              Task Name
+              {t('backtest:form.taskName')}
             </Typography>
             <Typography variant="body1">{taskName}</Typography>
           </Grid>
           {taskDescription && (
             <Grid size={{ xs: 12 }}>
               <Typography variant="subtitle2" color="text.secondary">
-                Description
+                {t('common:labels.description')}
               </Typography>
               <Typography variant="body1">{taskDescription}</Typography>
             </Grid>
@@ -203,10 +205,10 @@ export default function BacktestTaskUpdateForm({
         )}
 
         <Typography variant="h6" gutterBottom>
-          Configuration
+          {t('common:labels.configuration')}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Update the strategy configuration for this backtest task
+          {t('backtest:form.chooseStrategyConfig')}
         </Typography>
 
         <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -231,18 +233,19 @@ export default function BacktestTaskUpdateForm({
             <Grid size={{ xs: 12 }}>
               <Alert severity="info">
                 <Typography variant="subtitle2" gutterBottom>
-                  Configuration Preview
+                  {t('trading:form.configurationPreview')}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Type:</strong>{' '}
+                  <strong>{t('trading:form.type')}:</strong>{' '}
                   {getStrategyDisplayName(
                     strategies,
                     selectedConfig.strategy_type
                   )}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Description:</strong>{' '}
-                  {selectedConfig.description || 'No description'}
+                  <strong>{t('common:labels.description')}:</strong>{' '}
+                  {selectedConfig.description ||
+                    t('trading:form.noDescription')}
                 </Typography>
               </Alert>
             </Grid>
@@ -250,10 +253,10 @@ export default function BacktestTaskUpdateForm({
         </Grid>
 
         <Typography variant="h6" gutterBottom>
-          Backtest Parameters
+          {t('backtest:form.backtestParameters')}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Update the backtest time range, instrument, and initial settings
+          {t('backtest:form.updateParameters')}
         </Typography>
 
         <Grid container spacing={3}>
@@ -273,7 +276,7 @@ export default function BacktestTaskUpdateForm({
                       onEndDateChange={endField.onChange}
                       maxDate={new Date()}
                       required
-                      helperText="Backtesting requires historical data. Future dates are not allowed."
+                      helperText={t('backtest:form.dateRangeHelperText')}
                     />
                   )}
                 />
@@ -304,7 +307,7 @@ export default function BacktestTaskUpdateForm({
                 <BalanceInput
                   value={field.value}
                   onChange={field.onChange}
-                  label="Initial Balance"
+                  label={t('backtest:detail.initialBalance')}
                   currency="USD"
                   error={errors.initial_balance?.message}
                   helperText={errors.initial_balance?.message}
@@ -321,7 +324,7 @@ export default function BacktestTaskUpdateForm({
                 <TextField
                   {...field}
                   fullWidth
-                  label="Commission Per Trade"
+                  label={t('backtest:form.commissionPerTrade')}
                   type="number"
                   inputProps={{ min: 0, step: 0.01 }}
                   error={!!errors.commission_per_trade}
@@ -339,13 +342,13 @@ export default function BacktestTaskUpdateForm({
                 <TextField
                   {...field}
                   fullWidth
-                  label="Pip Size (Optional)"
+                  label={t('backtest:form.pipSizeOptional')}
                   type="number"
                   inputProps={{ min: 0, step: 0.00001 }}
                   error={!!errors.pip_size}
                   helperText={
                     errors.pip_size?.message ||
-                    'Leave empty to auto-fetch from OANDA account'
+                    t('backtest:form.pipSizeHelperText')
                   }
                 />
               )}
@@ -367,17 +370,14 @@ export default function BacktestTaskUpdateForm({
                   label={
                     <Box>
                       <Typography variant="body1">
-                        Close all positions at backtest completion
+                        {t('backtest:form.closePositionsAtCompletion')}
                       </Typography>
                       <Typography
                         variant="body2"
                         color="text.secondary"
                         sx={{ mt: 0.5 }}
                       >
-                        When enabled, all open positions will be automatically
-                        closed at the final market price when the backtest
-                        finishes. This provides realistic P&L calculations. When
-                        disabled, positions remain open for analysis.
+                        {t('backtest:form.closePositionsDescription')}
                       </Typography>
                     </Box>
                   }
@@ -392,7 +392,7 @@ export default function BacktestTaskUpdateForm({
             variant="outlined"
             onClick={() => navigate('/backtest-tasks')}
           >
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
 
           <Button
@@ -400,7 +400,7 @@ export default function BacktestTaskUpdateForm({
             variant="contained"
             disabled={updateTask.isLoading}
           >
-            Update Task
+            {t('common:actions.updateTask')}
           </Button>
         </Box>
       </form>

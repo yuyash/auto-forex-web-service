@@ -3,6 +3,7 @@
  */
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Box, Typography } from '@mui/material';
 import type { Trade } from '../../types/execution';
 
@@ -23,6 +24,8 @@ export const TradingTaskChart: React.FC<TradingTaskChartProps> = ({
   instrument,
   height = 400,
 }) => {
+  const { t } = useTranslation('trading');
+
   return (
     <Box
       sx={{
@@ -36,7 +39,7 @@ export const TradingTaskChart: React.FC<TradingTaskChartProps> = ({
       }}
     >
       <Typography variant="body2" color="text.secondary">
-        Price chart for {instrument} (coming soon)
+        {t('chart.comingSoon', { instrument })}
       </Typography>
     </Box>
   );

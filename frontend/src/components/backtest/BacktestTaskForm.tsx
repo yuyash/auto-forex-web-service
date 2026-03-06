@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   Box,
@@ -44,7 +45,6 @@ import {
   type TickDataRange,
 } from '../../services/api/market';
 
-const steps = ['Configuration', 'Parameters', 'Review'];
 const DEFAULT_DATE_RANGE_DAYS = 30;
 
 const createDefaultDateRange = () => {
@@ -87,6 +87,7 @@ interface ReviewContentProps {
 }
 
 function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
+  const { t } = useTranslation(['backtest', 'common']);
   const {
     name,
     description,
@@ -103,7 +104,7 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
     <Grid container spacing={2}>
       <Grid size={{ xs: 12 }}>
         <Typography variant="subtitle2" color="text.secondary">
-          Task Name
+          {t('backtest:form.taskName')}
         </Typography>
         <Typography variant="body1">{name}</Typography>
       </Grid>
@@ -111,7 +112,7 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
       {description && (
         <Grid size={{ xs: 12 }}>
           <Typography variant="subtitle2" color="text.secondary">
-            Description
+            {t('common:labels.description')}
           </Typography>
           <Typography variant="body1">{description}</Typography>
         </Grid>
@@ -119,7 +120,7 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
 
       <Grid size={{ xs: 12 }}>
         <Typography variant="subtitle2" color="text.secondary">
-          Configuration
+          {t('common:labels.configuration')}
         </Typography>
         <Typography variant="body1">{selectedConfig.name}</Typography>
         {selectedConfig.description && (
@@ -131,14 +132,14 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
 
       <Grid size={{ xs: 12, md: 6 }}>
         <Typography variant="subtitle2" color="text.secondary">
-          Data Source
+          {t('backtest:detail.dataSource')}
         </Typography>
         <Typography variant="body1">PostgreSQL</Typography>
       </Grid>
 
       <Grid size={{ xs: 12, md: 6 }}>
         <Typography variant="subtitle2" color="text.secondary">
-          Date Range
+          {t('backtest:config.dateRange')}
         </Typography>
         <Typography variant="body1">
           {new Date(start_time).toLocaleDateString()} -{' '}
@@ -148,14 +149,14 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
 
       <Grid size={{ xs: 12, md: 6 }}>
         <Typography variant="subtitle2" color="text.secondary">
-          Instrument
+          {t('common:labels.instrument')}
         </Typography>
         <Typography variant="body1">{instrument}</Typography>
       </Grid>
 
       <Grid size={{ xs: 12, md: 6 }}>
         <Typography variant="subtitle2" color="text.secondary">
-          Initial Balance
+          {t('backtest:detail.initialBalance')}
         </Typography>
         <Typography variant="body1">
           {new Intl.NumberFormat('en-US', {
@@ -167,7 +168,7 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
 
       <Grid size={{ xs: 12, md: 6 }}>
         <Typography variant="subtitle2" color="text.secondary">
-          Commission Per Trade
+          {t('backtest:detail.commissionPerTrade')}
         </Typography>
         <Typography variant="body1">
           {new Intl.NumberFormat('en-US', {
@@ -179,21 +180,21 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
 
       <Grid size={{ xs: 12, md: 6 }}>
         <Typography variant="subtitle2" color="text.secondary">
-          Pip Size
+          {t('common:labels.pipSize')}
         </Typography>
         <Typography variant="body1">
           {pip_size !== undefined && pip_size !== null
             ? pip_size
-            : 'Auto (derived from instrument)'}
+            : t('backtest:form.pipSizeHelperText')}
         </Typography>
       </Grid>
 
       <Grid size={{ xs: 12 }}>
         <Typography variant="subtitle2" color="text.secondary">
-          Close Positions at Completion
+          {t('backtest:form.closePositionsAtCompletion')}
         </Typography>
         <Typography variant="body1">
-          {sell_at_completion ? 'Yes' : 'No'}
+          {sell_at_completion ? t('common:labels.yes') : t('common:labels.no')}
         </Typography>
       </Grid>
     </Grid>
@@ -204,7 +205,13 @@ export default function BacktestTaskForm({
   taskId,
   initialData,
 }: BacktestTaskFormProps) {
+  const { t } = useTranslation(['backtest', 'common']);
   const navigate = useNavigate();
+  const steps = [
+    t('backtest:form.steps.configuration'),
+    t('backtest:form.steps.parameters'),
+    t('backtest:form.steps.review'),
+  ];
   const defaultDateRange = useMemo(() => {
     const range = createDefaultDateRange();
     return {
@@ -482,10 +489,10 @@ export default function BacktestTaskForm({
         return (
           <Box>
             <Typography variant="h6" gutterBottom>
-              Select Configuration
+              {t('backtest:form.selectConfiguration')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Choose a strategy configuration for this backtest task
+              {t('backtest:form.chooseStrategyConfig')}
             </Typography>
 
             <Grid container spacing={3}>
@@ -510,18 +517,19 @@ export default function BacktestTaskForm({
                 <Grid size={{ xs: 12 }}>
                   <Alert severity="info">
                     <Typography variant="subtitle2" gutterBottom>
-                      Configuration Preview
+                      {t('trading:form.configurationPreview')}
                     </Typography>
                     <Typography variant="body2">
-                      <strong>Type:</strong>{' '}
+                      <strong>{t('trading:form.type')}:</strong>{' '}
                       {getStrategyDisplayName(
                         strategies,
                         selectedConfig.strategy_type
                       )}
                     </Typography>
                     <Typography variant="body2">
-                      <strong>Description:</strong>{' '}
-                      {selectedConfig.description || 'No description'}
+                      <strong>{t('common:labels.description')}:</strong>{' '}
+                      {selectedConfig.description ||
+                        t('trading:form.noDescription')}
                     </Typography>
                   </Alert>
                 </Grid>
@@ -535,7 +543,7 @@ export default function BacktestTaskForm({
                     <TextField
                       {...field}
                       fullWidth
-                      label="Task Name"
+                      label={t('backtest:form.taskName')}
                       required
                       error={!!errors.name}
                       helperText={errors.name?.message}
@@ -552,7 +560,7 @@ export default function BacktestTaskForm({
                     <TextField
                       {...field}
                       fullWidth
-                      label="Description"
+                      label={t('common:labels.description')}
                       multiline
                       rows={3}
                       error={!!errors.description}
@@ -569,11 +577,10 @@ export default function BacktestTaskForm({
         return (
           <Box>
             <Typography variant="h6" gutterBottom>
-              Backtest Parameters
+              {t('backtest:form.backtestParameters')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Configure the backtest time range, instrument, and initial
-              settings
+              {t('backtest:form.configureParameters')}
             </Typography>
 
             <Grid container spacing={3}>
@@ -593,7 +600,7 @@ export default function BacktestTaskForm({
                           onEndDateChange={endField.onChange}
                           maxDate={new Date()}
                           required
-                          helperText="Backtesting requires historical data. Future dates are not allowed."
+                          helperText={t('backtest:form.dateRangeHelperText')}
                         />
                       )}
                     />
@@ -604,7 +611,9 @@ export default function BacktestTaskForm({
               {/* Tick data availability info */}
               {dataRangeLoading && (
                 <Grid size={{ xs: 12 }}>
-                  <Alert severity="info">Checking tick data range...</Alert>
+                  <Alert severity="info">
+                    {t('backtest:form.checkingTickDataRange')}
+                  </Alert>
                 </Grid>
               )}
               {dataRangeError && (
@@ -635,7 +644,7 @@ export default function BacktestTaskForm({
                     <BalanceInput
                       value={field.value}
                       onChange={field.onChange}
-                      label="Initial Balance"
+                      label={t('backtest:detail.initialBalance')}
                       currency="USD"
                       error={errors.initial_balance?.message}
                       helperText={errors.initial_balance?.message}
@@ -652,7 +661,7 @@ export default function BacktestTaskForm({
                     <TextField
                       {...field}
                       fullWidth
-                      label="Commission Per Trade"
+                      label={t('backtest:form.commissionPerTrade')}
                       type="number"
                       inputProps={{ min: 0, step: 0.01 }}
                       error={!!errors.commission_per_trade}
@@ -670,11 +679,12 @@ export default function BacktestTaskForm({
                     <TextField
                       {...field}
                       fullWidth
-                      label="Instrument"
-                      placeholder="e.g., EUR_USD, USD_JPY"
+                      label={t('common:labels.instrument')}
+                      placeholder={t('backtest:form.instrumentPlaceholder')}
                       error={!!errors.instrument}
                       helperText={
-                        errors.instrument?.message || 'Trading pair to backtest'
+                        errors.instrument?.message ||
+                        t('backtest:form.instrumentHelperText')
                       }
                     />
                   )}
@@ -694,13 +704,13 @@ export default function BacktestTaskForm({
                         field.onChange(val === '' ? undefined : Number(val));
                       }}
                       fullWidth
-                      label="Pip Size (Optional)"
+                      label={t('backtest:form.pipSizeOptional')}
                       type="number"
                       inputProps={{ min: 0, step: 0.00001 }}
                       error={!!errors.pip_size}
                       helperText={
                         errors.pip_size?.message ||
-                        'Leave empty to auto-derive from instrument. Common values: 0.0001 (EUR_USD), 0.01 (USD_JPY)'
+                        t('backtest:form.pipSizeHelperTextLong')
                       }
                     />
                   )}
@@ -722,18 +732,14 @@ export default function BacktestTaskForm({
                       label={
                         <Box>
                           <Typography variant="body1">
-                            Close all positions at backtest completion
+                            {t('backtest:form.closePositionsAtCompletion')}
                           </Typography>
                           <Typography
                             variant="body2"
                             color="text.secondary"
                             sx={{ mt: 0.5 }}
                           >
-                            When enabled, all open positions will be
-                            automatically closed at the final market price when
-                            the backtest finishes. This provides realistic P&L
-                            calculations. When disabled, positions remain open
-                            for analysis.
+                            {t('backtest:form.closePositionsDescription')}
                           </Typography>
                         </Box>
                       }
@@ -778,10 +784,10 @@ export default function BacktestTaskForm({
         return (
           <Box>
             <Typography variant="h6" gutterBottom>
-              Review & Submit
+              {t('backtest:form.reviewAndSubmit')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Review your backtest task configuration before submitting
+              {t('backtest:form.reviewBeforeSubmitting')}
             </Typography>
 
             {/* Show validation errors on review step */}
@@ -858,7 +864,7 @@ export default function BacktestTaskForm({
             onClick={handleBack}
             variant="outlined"
           >
-            Back
+            {t('common:actions.back')}
           </Button>
 
           <Box sx={{ display: 'flex', gap: 2 }}>
@@ -866,7 +872,7 @@ export default function BacktestTaskForm({
               variant="outlined"
               onClick={() => navigate('/backtest-tasks')}
             >
-              Cancel
+              {t('common:actions.cancel')}
             </Button>
 
             {activeStep === steps.length - 1 ? (
@@ -878,11 +884,13 @@ export default function BacktestTaskForm({
                   canSubmitRef.current = true;
                 }}
               >
-                {taskId ? 'Update Task' : 'Create Task'}
+                {taskId
+                  ? t('common:actions.updateTask')
+                  : t('common:actions.createTask')}
               </Button>
             ) : (
               <Button variant="contained" onClick={handleNext}>
-                Next
+                {t('common:actions.next')}
               </Button>
             )}
           </Box>

@@ -27,7 +27,7 @@ const TabPanel = (props: TabPanelProps) => {
 };
 
 const SettingsPage = () => {
-  const { t } = useTranslation(['settings', 'common']);
+  const { t } = useTranslation('settings');
   const [tabValue, setTabValue] = useState(0);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
@@ -39,7 +39,7 @@ const SettingsPage = () => {
       <Breadcrumbs />
       <Box>
         <Typography variant="h4" gutterBottom>
-          {t('settings:title', 'Settings')}
+          {t('title')}
         </Typography>
 
         {/* Tabs for different settings sections */}
@@ -50,12 +50,12 @@ const SettingsPage = () => {
             aria-label="settings tabs"
           >
             <Tab
-              label={t('settings:tabs.accounts', 'Accounts')}
+              label={t('tabs.accounts')}
               id="settings-tab-0"
               aria-controls="settings-tabpanel-0"
             />
             <Tab
-              label={t('settings:tabs.security', 'Security')}
+              label={t('tabs.security')}
               id="settings-tab-1"
               aria-controls="settings-tabpanel-1"
             />
@@ -73,13 +73,10 @@ const SettingsPage = () => {
         <TabPanel value={tabValue} index={1}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h6" gutterBottom>
-              {t('settings:security.title', 'Security Settings')}
+              {t('security.title')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {t(
-                'settings:security.placeholder',
-                'Security settings (password change, 2FA) will be implemented in a future task'
-              )}
+              {t('security.placeholder')}
             </Typography>
           </Paper>
         </TabPanel>

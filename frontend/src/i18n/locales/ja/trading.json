@@ -1,0 +1,126 @@
+{
+  "pages": {
+    "title": "トレーディングタスク",
+    "createTitle": "トレーディングタスクを作成",
+    "editTitle": "トレーディングタスクを編集",
+    "createSubtitle": "新しい自動取引タスクを設定します",
+    "editSubtitle": "トレーディングタスクの設定を更新します"
+  },
+  "tabs": {
+    "all": "すべて",
+    "running": "実行中",
+    "paused": "一時停止",
+    "stopped": "停止",
+    "overview": "概要",
+    "trend": "トレンド",
+    "positions": "ポジション",
+    "trades": "取引",
+    "orders": "注文",
+    "events": "イベント",
+    "logs": "ログ",
+    "replay": "リプレイ"
+  },
+  "filters": {
+    "searchTasks": "タスクを検索...",
+    "allConfigurations": "すべての設定",
+    "sortBy": "並び替え",
+    "newestFirst": "新しい順",
+    "oldestFirst": "古い順",
+    "nameAZ": "名前（A-Z）",
+    "nameZA": "名前（Z-A）",
+    "recentlyUpdated": "最近更新"
+  },
+  "empty": {
+    "noTasksFound": "トレーディングタスクが見つかりません",
+    "createFirstTask": "最初のトレーディングタスクを作成して自動取引を開始しましょう",
+    "noRunningTasks": "実行中のタスクはありません",
+    "noPausedTasks": "一時停止中のタスクはありません",
+    "noStoppedTasks": "停止中のタスクはありません"
+  },
+  "warnings": {
+    "oneTaskPerAccountTitle": "重要：アカウントごとに1タスク",
+    "oneTaskPerAccountMessage": "1つのアカウントで同時に実行できるトレーディングタスクは1つだけです。アクティブなタスクがあるアカウントで新しいタスクを開始すると、既存のタスクが停止されます。",
+    "liveTrading": "ライブ取引中：実際の資金がリスクにさらされています。注意深く監視してください。",
+    "cannotDeleteRunning": "実行中または一時停止中のタスクは削除できません。先に停止してください。"
+  },
+  "detail": {
+    "taskInformation": "タスク情報",
+    "results": "結果",
+    "executionTimeline": "実行タイムライン",
+    "startedAt": "開始日時",
+    "completedAt": "完了日時",
+    "realizedPnl": "実現損益",
+    "unrealizedPnl": "未実現損益",
+    "currentBalance": "現在残高",
+    "totalTradesCount": "総取引数",
+    "openPositions": "オープンポジション",
+    "closedPositions": "クローズドポジション",
+    "ticksProcessed": "処理ティック数",
+    "completed": "完了"
+  },
+  "form": {
+    "selectTradingAccount": "取引アカウントを選択",
+    "chooseOandaAccount": "ライブ取引用のOANDAアカウントを選択してください",
+    "selectConfiguration": "設定構成を選択",
+    "chooseStrategyConfig": "このトレーディングタスクの戦略設定を選択してください",
+    "reviewAndConfirm": "確認と送信",
+    "reviewBeforeCreating": "作成前にトレーディングタスクの設定を確認してください",
+    "taskSummary": "タスク概要",
+    "taskName": "タスク名",
+    "account": "アカウント",
+    "accountDetails": "アカウント詳細",
+    "accountId": "アカウントID",
+    "type": "タイプ",
+    "balance": "残高",
+    "currency": "通貨",
+    "configurationPreview": "設定プレビュー",
+    "noDescription": "説明なし",
+    "dryRunMode": "ドライラン（シミュレーションモード）",
+    "dryRunDescription": "有効にすると、注文はローカルでシミュレートされ、OANDAには送信されません。実際の資金をリスクにさらさずに、リアルな市場データで戦略をテストするのに便利です。",
+    "dryRunModeEnabled": "ドライランモード有効",
+    "dryRunWarning": "注文はローカルでシミュレートされます。OANDAに実際の注文は発注されません。",
+    "activeTaskDetected": "アクティブなタスクを検出",
+    "activeTaskWarning": "このアカウントには既にアクティブなトレーディングタスクがあります：",
+    "activeTaskInstruction": "1つのアカウントで同時に実行できるタスクは1つだけです。新しいタスクを開始する前に、既存のタスクを停止してください。",
+    "selectAnAccount": "アカウントを選択",
+    "loadingAccounts": "アカウントを読み込み中...",
+    "noAccountsAvailable": "利用可能なOANDAアカウントがありません",
+    "steps": {
+      "account": "アカウント",
+      "configuration": "設定構成",
+      "review": "確認"
+    }
+  },
+  "risk": {
+    "liveRiskWarningTitle": "ライブ取引リスク警告",
+    "liveRiskWarningBody": "ライブ取引には大きな損失リスクが伴います。ご自身の経験、目的、財務状況、その他の関連する状況を踏まえて、取引が適切かどうか慎重にご検討ください。",
+    "realMoneyAtRisk": "実際の資金がリスクにさらされます",
+    "pastPerformance": "過去のパフォーマンスは将来の結果を保証するものではありません",
+    "monitorClosely": "トレーディングタスクを注意深く監視してください",
+    "canStopAnytime": "いつでもタスクを停止できます",
+    "acknowledgeRisks": "ライブ取引のリスクを理解し、承認します",
+    "practiceAccountTitle": "練習アカウント",
+    "practiceAccountBody": "これは仮想資金の練習アカウントです。実際の資金のリスクはありません。"
+  },
+  "chart": {
+    "comingSoon": "{{instrument}}の価格チャート（近日公開）"
+  },
+  "card": {
+    "livePnl": "ライブ損益",
+    "totalReturn": "総リターン",
+    "winRate": "勝率",
+    "totalTrades": "総取引数",
+    "taskExecutionFailed": "タスク実行に失敗しました"
+  },
+  "toast": {
+    "startedSuccessfully": "トレーディングタスクが正常に開始されました",
+    "stoppedSuccessfully": "トレーディングタスクが正常に停止されました",
+    "resumedSuccessfully": "トレーディングタスクが正常に再開されました",
+    "restartedSuccessfully": "トレーディングタスクが正常に再起動されました",
+    "deletedSuccessfully": "トレーディングタスクが正常に削除されました"
+  },
+  "updateForm": {
+    "taskInfoReadOnly": "タスク情報（読み取り専用）",
+    "updateStrategyConfig": "このトレーディングタスクの戦略設定を更新します"
+  }
+}

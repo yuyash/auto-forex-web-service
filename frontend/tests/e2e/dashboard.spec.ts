@@ -17,7 +17,7 @@ test.describe('Dashboard', () => {
 
     // Dashboard should have widget sections
     await expect(
-      authenticatedPage.locator('text=Market Chart').first()
+      authenticatedPage.locator('text=Price Chart').first()
     ).toBeVisible({ timeout: 10000 });
   });
 

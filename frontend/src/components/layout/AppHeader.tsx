@@ -151,7 +151,7 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
               to="/configurations"
               sx={{ textTransform: 'none' }}
             >
-              Configurations
+              {t('navigation.configurations')}
             </Button>
             <Button
               color="inherit"
@@ -160,7 +160,7 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
               to="/backtest-tasks"
               sx={{ textTransform: 'none' }}
             >
-              Backtest
+              {t('navigation.backtest')}
             </Button>
             <Button
               color="inherit"
@@ -169,7 +169,7 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
               to="/trading-tasks"
               sx={{ textTransform: 'none' }}
             >
-              Trading
+              {t('navigation.trading')}
             </Button>
           </Box>
         )}
@@ -255,13 +255,13 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
               <ListItemIcon>
                 <Person fontSize="small" />
               </ListItemIcon>
-              <ListItemText>Profile</ListItemText>
+              <ListItemText>{t('navigation.profile')}</ListItemText>
             </MenuItem>
             <MenuItem onClick={handleAccountsClick}>
               <ListItemIcon>
                 <AccountBalanceWallet fontSize="small" />
               </ListItemIcon>
-              <ListItemText>Accounts</ListItemText>
+              <ListItemText>{t('navigation.accounts')}</ListItemText>
             </MenuItem>
             <MenuItem onClick={handleSettingsClick}>
               <ListItemIcon>

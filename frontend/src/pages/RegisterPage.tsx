@@ -92,13 +92,29 @@ const RegisterPage = () => {
 
     // Determine strength label and color
     if (score <= 2) {
-      return { score: (score / 6) * 100, label: 'Weak', color: 'error' };
+      return {
+        score: (score / 6) * 100,
+        label: t('passwordStrength.weak'),
+        color: 'error',
+      };
     } else if (score <= 4) {
-      return { score: (score / 6) * 100, label: 'Medium', color: 'warning' };
+      return {
+        score: (score / 6) * 100,
+        label: t('passwordStrength.medium'),
+        color: 'warning',
+      };
     } else if (score === 5) {
-      return { score: (score / 6) * 100, label: 'Good', color: 'info' };
+      return {
+        score: (score / 6) * 100,
+        label: t('passwordStrength.good'),
+        color: 'info',
+      };
     } else {
-      return { score: 100, label: 'Strong', color: 'success' };
+      return {
+        score: 100,
+        label: t('passwordStrength.strong'),
+        color: 'success',
+      };
     }
   };
 
@@ -114,38 +130,36 @@ const RegisterPage = () => {
 
     // Username validation
     if (!formData.username) {
-      newErrors.username = 'Username is required';
+      newErrors.username = t('validation.usernameRequired');
     } else if (formData.username.length < 3) {
-      newErrors.username = 'Username must be at least 3 characters';
+      newErrors.username = t('validation.usernameMinLength');
     }
 
     // Email validation
     if (!formData.email) {
-      newErrors.email = 'Email is required';
+      newErrors.email = t('validation.emailRequired');
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Invalid email format';
+      newErrors.email = t('validation.invalidEmailFormat');
     }
 
     // Password validation
     if (!formData.password) {
-      newErrors.password = 'Password is required';
+      newErrors.password = t('validation.passwordRequired');
     } else if (formData.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters';
+      newErrors.password = t('validation.passwordMinLength');
     } else if (!/[a-z]/.test(formData.password)) {
-      newErrors.password =
-        'Password must contain at least one lowercase letter';
+      newErrors.password = t('validation.passwordLowercase');
     } else if (!/[A-Z]/.test(formData.password)) {
-      newErrors.password =
-        'Password must contain at least one uppercase letter';
+      newErrors.password = t('validation.passwordUppercase');
     } else if (!/[0-9]/.test(formData.password)) {
-      newErrors.password = 'Password must contain at least one number';
+      newErrors.password = t('validation.passwordNumber');
     }
 
     // Confirm password validation
     if (!formData.confirmPassword) {
-      newErrors.confirmPassword = 'Please confirm your password';
+      newErrors.confirmPassword = t('validation.confirmPasswordRequired');
     } else if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
+      newErrors.confirmPassword = t('validation.passwordsDoNotMatch');
     }
 
     setErrors(newErrors);
@@ -200,8 +214,7 @@ const RegisterPage = () => {
       // Success - show message and redirect to login
       const registerData = data as RegisterResponse;
       setSuccessMessage(
-        registerData.message ||
-          'Registration successful! Redirecting to login...'
+        registerData.message || t('auth.registrationSuccessful')
       );
 
       // Redirect to login page after 2 seconds
@@ -211,7 +224,7 @@ const RegisterPage = () => {
     } catch (error) {
       console.error('Registration error:', error);
       setErrors({
-        general: 'An unexpected error occurred. Please try again.',
+        general: t('errors.unexpectedError'),
       });
     } finally {
       setIsLoading(false);
@@ -351,7 +364,7 @@ const RegisterPage = () => {
                   }}
                 >
                   <Typography variant="caption" color="text.secondary">
-                    Password Strength:
+                    {t('passwordStrength.label')}
                   </Typography>
                   <Typography
                     variant="caption"

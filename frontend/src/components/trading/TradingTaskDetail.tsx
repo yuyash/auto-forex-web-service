@@ -8,6 +8,7 @@
 
 import React, { useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   Container,
@@ -53,6 +54,7 @@ function a11yProps(index: number) {
 }
 
 export const TradingTaskDetail: React.FC = () => {
+  const { t } = useTranslation(['trading', 'common']);
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -132,7 +134,9 @@ export const TradingTaskDetail: React.FC = () => {
   if (error || !task) {
     return (
       <Container maxWidth={false} sx={{ py: 4 }}>
-        <Alert severity="error">{error?.message || 'Task not found'}</Alert>
+        <Alert severity="error">
+          {error?.message || t('common:errors.taskNotFound')}
+        </Alert>
       </Container>
     );
   }
@@ -151,7 +155,7 @@ export const TradingTaskDetail: React.FC = () => {
           onClick={handleBack}
           sx={{ cursor: 'pointer', textDecoration: 'none' }}
         >
-          Trading Tasks
+          {t('trading:pages.title')}
         </Link>
         <Typography color="text.primary">{task.name}</Typography>
       </Breadcrumbs>
@@ -197,8 +201,8 @@ export const TradingTaskDetail: React.FC = () => {
                 color="text.secondary"
                 sx={{ mt: 2, fontWeight: 600 }}
               >
-                {Math.round(Math.min(Math.max(s.task.progress, 0), 100))}%
-                completed
+                {Math.round(Math.min(Math.max(s.task.progress, 0), 100))}%{' '}
+                {t('trading:detail.completed')}
               </Typography>
             )}
           </Box>
@@ -244,7 +248,7 @@ export const TradingTaskDetail: React.FC = () => {
               }}
             />
             <Box sx={{ display: 'flex' }}>
-              <Tooltip title="Edit">
+              <Tooltip title={t('common:actions.edit')}>
                 <span>
                   <IconButton
                     onClick={() => navigate(`/trading-tasks/${taskId}/edit`)}
@@ -252,13 +256,13 @@ export const TradingTaskDetail: React.FC = () => {
                       task.status === TaskStatus.RUNNING ||
                       task.status === TaskStatus.PAUSED
                     }
-                    aria-label="Edit"
+                    aria-label={t('common:actions.edit')}
                   >
                     <EditIcon />
                   </IconButton>
                 </span>
               </Tooltip>
-              <Tooltip title="Delete">
+              <Tooltip title={t('common:actions.delete')}>
                 <span>
                   <IconButton
                     onClick={() => setDeleteDialogOpen(true)}
@@ -267,7 +271,7 @@ export const TradingTaskDetail: React.FC = () => {
                       task.status === TaskStatus.PAUSED
                     }
                     color="error"
-                    aria-label="Delete"
+                    aria-label={t('common:actions.delete')}
                   >
                     <DeleteIcon />
                   </IconButton>
@@ -286,13 +290,13 @@ export const TradingTaskDetail: React.FC = () => {
           aria-label="task detail tabs"
           sx={{ borderBottom: 1, borderColor: 'divider' }}
         >
-          <Tab label="Overview" {...a11yProps(0)} />
-          <Tab label="Positions" {...a11yProps(1)} />
-          <Tab label="Trades" {...a11yProps(2)} />
-          <Tab label="Replay" {...a11yProps(3)} />
-          <Tab label="Events" {...a11yProps(4)} />
-          <Tab label="Logs" {...a11yProps(5)} />
-          <Tab label="Orders" {...a11yProps(6)} />
+          <Tab label={t('trading:tabs.overview')} {...a11yProps(0)} />
+          <Tab label={t('trading:tabs.positions')} {...a11yProps(1)} />
+          <Tab label={t('trading:tabs.trades')} {...a11yProps(2)} />
+          <Tab label={t('trading:tabs.replay')} {...a11yProps(3)} />
+          <Tab label={t('trading:tabs.events')} {...a11yProps(4)} />
+          <Tab label={t('trading:tabs.logs')} {...a11yProps(5)} />
+          <Tab label={t('trading:tabs.orders')} {...a11yProps(6)} />
         </Tabs>
 
         {/* Overview Tab */}
@@ -301,12 +305,12 @@ export const TradingTaskDetail: React.FC = () => {
             <Grid container spacing={3}>
               <Grid size={{ xs: 12, md: 6 }}>
                 <Typography variant="h6" gutterBottom>
-                  Task Information
+                  {t('trading:detail.taskInformation')}
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Name
+                      {t('common:labels.name')}
                     </Typography>
                     <Typography variant="body1">{task.name}</Typography>
                   </Box>
@@ -314,7 +318,7 @@ export const TradingTaskDetail: React.FC = () => {
                   {task.description && (
                     <Box>
                       <Typography variant="caption" color="text.secondary">
-                        Description
+                        {t('common:labels.description')}
                       </Typography>
                       <Typography variant="body1">
                         {task.description}
@@ -324,14 +328,14 @@ export const TradingTaskDetail: React.FC = () => {
 
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Instrument
+                      {t('common:labels.instrument')}
                     </Typography>
                     <Typography variant="body1">{task.instrument}</Typography>
                   </Box>
 
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Pip Size
+                      {t('common:labels.pipSize')}
                     </Typography>
                     <Typography variant="body1">
                       {task.pip_size
@@ -342,7 +346,7 @@ export const TradingTaskDetail: React.FC = () => {
 
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Status
+                      {t('common:labels.status')}
                     </Typography>
                     <Box sx={{ mt: 0.5 }}>
                       <StatusBadge status={task.status} showIcon={false} />
@@ -353,12 +357,12 @@ export const TradingTaskDetail: React.FC = () => {
 
               <Grid size={{ xs: 12, md: 6 }}>
                 <Typography variant="h6" gutterBottom>
-                  Configuration
+                  {t('common:labels.configuration')}
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Strategy Configuration
+                      {t('common:labels.strategyConfiguration')}
                     </Typography>
                     <Link
                       component="button"
@@ -374,7 +378,7 @@ export const TradingTaskDetail: React.FC = () => {
 
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Strategy Type
+                      {t('common:labels.strategyType')}
                     </Typography>
                     <Typography
                       variant="body1"
@@ -386,7 +390,7 @@ export const TradingTaskDetail: React.FC = () => {
 
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      OANDA Account
+                      {t('common:labels.oandaAccount')}
                     </Typography>
                     <Typography variant="body1">
                       {task.account_name || 'N/A'}
@@ -395,10 +399,12 @@ export const TradingTaskDetail: React.FC = () => {
 
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Sell on Stop
+                      {t('common:labels.sellOnStop')}
                     </Typography>
                     <Typography variant="body1">
-                      {task.sell_on_stop ? 'Yes' : 'No'}
+                      {task.sell_on_stop
+                        ? t('common:labels.yes')
+                        : t('common:labels.no')}
                     </Typography>
                   </Box>
                 </Box>
@@ -407,12 +413,12 @@ export const TradingTaskDetail: React.FC = () => {
               <Grid size={{ xs: 12 }}>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="h6" gutterBottom>
-                  Results
+                  {t('trading:detail.results')}
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Realized PnL ({pnlCurrency})
+                      {t('trading:detail.realizedPnl')} ({pnlCurrency})
                     </Typography>
                     <Typography
                       variant="body1"
@@ -426,7 +432,7 @@ export const TradingTaskDetail: React.FC = () => {
                   </Box>
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Unrealized PnL ({pnlCurrency})
+                      {t('trading:detail.unrealizedPnl')} ({pnlCurrency})
                     </Typography>
                     <Typography
                       variant="body1"
@@ -441,7 +447,7 @@ export const TradingTaskDetail: React.FC = () => {
                   {s.execution.currentBalance != null && (
                     <Box>
                       <Typography variant="caption" color="text.secondary">
-                        Current Balance
+                        {t('trading:detail.currentBalance')}
                       </Typography>
                       <Typography variant="body1">
                         {s.execution.currentBalance.toFixed(2)} {pnlCurrency}
@@ -450,7 +456,7 @@ export const TradingTaskDetail: React.FC = () => {
                   )}
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Total Trades (count)
+                      {t('trading:detail.totalTradesCount')}
                     </Typography>
                     <Typography variant="body1">
                       {s.counts.totalTrades}
@@ -458,7 +464,7 @@ export const TradingTaskDetail: React.FC = () => {
                   </Box>
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Open Positions
+                      {t('trading:detail.openPositions')}
                     </Typography>
                     <Typography variant="body1">
                       {s.counts.openPositions}
@@ -466,7 +472,7 @@ export const TradingTaskDetail: React.FC = () => {
                   </Box>
                   <Box>
                     <Typography variant="caption" color="text.secondary">
-                      Closed Positions
+                      {t('trading:detail.closedPositions')}
                     </Typography>
                     <Typography variant="body1">
                       {s.counts.closedPositions}
@@ -475,7 +481,7 @@ export const TradingTaskDetail: React.FC = () => {
                   {s.execution.ticksProcessed > 0 && (
                     <Box>
                       <Typography variant="caption" color="text.secondary">
-                        Ticks Processed
+                        {t('trading:detail.ticksProcessed')}
                       </Typography>
                       <Typography variant="body1">
                         {s.execution.ticksProcessed.toLocaleString()}
@@ -489,13 +495,13 @@ export const TradingTaskDetail: React.FC = () => {
                 <Grid size={{ xs: 12 }}>
                   <Divider sx={{ my: 2 }} />
                   <Typography variant="h6" gutterBottom>
-                    Execution Timeline
+                    {t('trading:detail.executionTimeline')}
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     {task.started_at && (
                       <Box>
                         <Typography variant="caption" color="text.secondary">
-                          Started At
+                          {t('trading:detail.startedAt')}
                         </Typography>
                         <Typography variant="body1">
                           {new Date(task.started_at).toLocaleString()}
@@ -505,7 +511,7 @@ export const TradingTaskDetail: React.FC = () => {
                     {task.completed_at && (
                       <Box>
                         <Typography variant="caption" color="text.secondary">
-                          Completed At
+                          {t('trading:detail.completedAt')}
                         </Typography>
                         <Typography variant="body1">
                           {new Date(task.completed_at).toLocaleString()}

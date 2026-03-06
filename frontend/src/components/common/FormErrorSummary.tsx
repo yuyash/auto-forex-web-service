@@ -1,5 +1,6 @@
 import React from 'react';
 import { Alert, AlertTitle, List, ListItem, ListItemText } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 interface FormErrorSummaryProps {
   errors: Record<string, string | string[]>;
@@ -12,8 +13,11 @@ interface FormErrorSummaryProps {
  */
 const FormErrorSummary: React.FC<FormErrorSummaryProps> = ({
   errors,
-  title = 'Please fix the following errors:',
+  title,
 }) => {
+  const { t } = useTranslation('common');
+  const displayTitle = title ?? t('validation.pleaseFixErrors');
+
   const errorEntries = Object.entries(errors).filter(
     ([, value]) => value && (Array.isArray(value) ? value.length > 0 : true)
   );
@@ -24,7 +28,7 @@ const FormErrorSummary: React.FC<FormErrorSummaryProps> = ({
 
   return (
     <Alert severity="error" sx={{ mb: 3 }}>
-      <AlertTitle>{title}</AlertTitle>
+      <AlertTitle>{displayTitle}</AlertTitle>
       <List dense disablePadding>
         {errorEntries.map(([field, error]) => {
           const errorMessages = Array.isArray(error) ? error : [error];

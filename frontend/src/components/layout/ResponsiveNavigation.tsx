@@ -12,11 +12,12 @@ import {
   Assignment as TaskIcon,
   PlayCircleOutline as TradingTaskIcon,
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface NavigationItem {
   path: string;
-  label: string;
+  labelKey: string;
   icon: React.ReactElement;
   adminOnly?: boolean;
 }
@@ -24,27 +25,27 @@ interface NavigationItem {
 const navigationItems: NavigationItem[] = [
   {
     path: '/dashboard',
-    label: 'Dashboard',
+    labelKey: 'navigation.dashboard',
     icon: <DashboardIcon />,
   },
   {
     path: '/configurations',
-    label: 'Configurations',
+    labelKey: 'navigation.configurations',
     icon: <ConfigIcon />,
   },
   {
     path: '/backtest-tasks',
-    label: 'Backtest',
+    labelKey: 'navigation.backtest',
     icon: <TaskIcon />,
   },
   {
     path: '/trading-tasks',
-    label: 'Trading',
+    labelKey: 'navigation.trading',
     icon: <TradingTaskIcon />,
   },
   {
     path: '/settings',
-    label: 'Settings',
+    labelKey: 'navigation.settings',
     icon: <SettingsIcon />,
   },
 ];
@@ -54,6 +55,7 @@ const ResponsiveNavigation = () => {
   const location = useLocation();
   const theme = useTheme();
   const { user } = useAuth();
+  const { t } = useTranslation('common');
 
   // Filter navigation items based on user role and exclude Settings/Admin from mobile
   const filteredItems = navigationItems.filter(
@@ -93,7 +95,7 @@ const ResponsiveNavigation = () => {
         {filteredItems.map((item) => (
           <BottomNavigationAction
             key={item.path}
-            label={item.label}
+            label={t(item.labelKey)}
             value={item.path}
             icon={item.icon}
             sx={{

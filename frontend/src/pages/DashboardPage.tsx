@@ -34,7 +34,7 @@ import {
 import type { Granularity } from '../types/chart';
 
 const DashboardPage = () => {
-  const { t } = useTranslation('dashboard');
+  const { t } = useTranslation(['dashboard', 'common']);
 
   // Chart preferences with localStorage persistence
   const { preferences, updatePreference } = useChartPreferences();
@@ -169,19 +169,19 @@ const DashboardPage = () => {
           }}
         >
           <Typography variant="subtitle1" sx={{ fontWeight: 600, mr: 'auto' }}>
-            Market Chart
+            {t('dashboard:chart.title')}
           </Typography>
 
           <ChartOverlayControls settings={overlays} onChange={setOverlays} />
 
           {/* Instrument */}
           <Tooltip
-            title={`Instrument: ${preferences.instrument.replace('_', '/')}`}
+            title={`${t('dashboard:chart.currencyPair')}: ${preferences.instrument.replace('_', '/')}`}
           >
             <IconButton
               size="small"
               onClick={(e) => setInstrumentAnchor(e.currentTarget)}
-              aria-label="Select instrument"
+              aria-label={t('common:accessibility.selectInstrument')}
             >
               <CurrencyExchangeIcon fontSize="small" />
             </IconButton>
@@ -213,11 +213,13 @@ const DashboardPage = () => {
           </Popover>
 
           {/* Granularity */}
-          <Tooltip title={`Granularity: ${preferences.granularity}`}>
+          <Tooltip
+            title={`${t('dashboard:chart.granularity')}: ${preferences.granularity}`}
+          >
             <IconButton
               size="small"
               onClick={(e) => setGranularityAnchor(e.currentTarget)}
-              aria-label="Select granularity"
+              aria-label={t('common:accessibility.selectGranularity')}
             >
               <BarChartIcon fontSize="small" />
             </IconButton>
@@ -257,7 +259,7 @@ const DashboardPage = () => {
             size="small"
             checked={autoRefreshEnabled}
             onChange={handleAutoRefreshToggle}
-            inputProps={{ 'aria-label': 'Auto-refresh' }}
+            inputProps={{ 'aria-label': t('common:accessibility.autoRefresh') }}
           />
 
           {/* Refresh interval */}
@@ -267,7 +269,7 @@ const DashboardPage = () => {
                 size="small"
                 onClick={(e) => setIntervalAnchor(e.currentTarget)}
                 disabled={!autoRefreshEnabled}
-                aria-label="Select refresh interval"
+                aria-label={t('common:accessibility.selectRefreshInterval')}
               >
                 <TimerIcon fontSize="small" />
               </IconButton>
@@ -320,7 +322,7 @@ const DashboardPage = () => {
               }}
             >
               <Typography variant="body1" color="text.secondary">
-                {t('chart.noOandaAccount')}
+                {t('dashboard:chart.noOandaAccount')}
               </Typography>
             </Box>
           ) : (

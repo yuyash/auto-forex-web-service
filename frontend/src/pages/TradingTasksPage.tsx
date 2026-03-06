@@ -27,6 +27,7 @@ import {
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   useTradingTasks,
   invalidateTradingTasksCache,
@@ -68,6 +69,7 @@ function a11yProps(index: number) {
 }
 
 export default function TradingTasksPage() {
+  const { t } = useTranslation(['trading', 'common']);
   const navigate = useNavigate();
   const location = useLocation();
   const [tabValue, setTabValue] = useState(0);
@@ -206,7 +208,7 @@ export default function TradingTasksPage() {
           }}
         >
           <Typography variant="h4" component="h1">
-            Trading Tasks
+            {t('trading:pages.title')}
           </Typography>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             <Button
@@ -215,37 +217,40 @@ export default function TradingTasksPage() {
               onClick={handleRefresh}
               disabled={isLoading}
             >
-              Refresh
+              {t('common:actions.refresh')}
             </Button>
             <Button
               variant="outlined"
               startIcon={<SettingsIcon />}
               onClick={() => navigate('/settings?tab=accounts')}
             >
-              Account Settings
+              {t('settings:accounts.title', 'Account Settings')}
             </Button>
             <Button
               variant="outlined"
               onClick={() => navigate('/configurations?from=trading-tasks')}
             >
-              Manage Configurations
+              {t(
+                'configuration:card.manageConfigurations',
+                'Manage Configurations'
+              )}
             </Button>
             <Button
               variant="contained"
               startIcon={<AddIcon />}
               onClick={handleCreateTask}
             >
-              New Task
+              {t('common:actions.newTask')}
             </Button>
           </Box>
         </Box>
 
         {/* Warning about one-task-per-account rule */}
         <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: 3 }}>
-          <AlertTitle>Important: One Task Per Account</AlertTitle>
-          Only one trading task can be running per account at a time. Starting a
-          new task on an account with an active task will stop the existing
-          task.
+          <AlertTitle>
+            {t('trading:warnings.oneTaskPerAccountTitle')}
+          </AlertTitle>
+          {t('trading:warnings.oneTaskPerAccountMessage')}
         </Alert>
 
         {/* Tabs */}
@@ -256,10 +261,10 @@ export default function TradingTasksPage() {
             aria-label="trading tasks tabs"
             sx={{ borderBottom: 1, borderColor: 'divider' }}
           >
-            <Tab label="All" {...a11yProps(0)} />
-            <Tab label="Running" {...a11yProps(1)} />
-            <Tab label="Paused" {...a11yProps(2)} />
-            <Tab label="Stopped" {...a11yProps(3)} />
+            <Tab label={t('trading:tabs.all')} {...a11yProps(0)} />
+            <Tab label={t('trading:tabs.running')} {...a11yProps(1)} />
+            <Tab label={t('trading:tabs.paused')} {...a11yProps(2)} />
+            <Tab label={t('trading:tabs.stopped')} {...a11yProps(3)} />
           </Tabs>
         </Paper>
 
@@ -269,7 +274,7 @@ export default function TradingTasksPage() {
             <Grid size={{ xs: 12, md: 4 }}>
               <TextField
                 fullWidth
-                placeholder="Search tasks..."
+                placeholder={t('trading:filters.searchTasks')}
                 value={searchQuery}
                 onChange={handleSearchChange}
                 InputProps={{
@@ -283,13 +288,15 @@ export default function TradingTasksPage() {
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
               <FormControl fullWidth>
-                <InputLabel>Configuration</InputLabel>
+                <InputLabel>{t('common:labels.configuration')}</InputLabel>
                 <Select
                   value={configFilter}
                   onChange={handleConfigFilterChange}
-                  label="Configuration"
+                  label={t('common:labels.configuration')}
                 >
-                  <MenuItem value="">All Configurations</MenuItem>
+                  <MenuItem value="">
+                    {t('trading:filters.allConfigurations')}
+                  </MenuItem>
                   {configurationsData?.results.map((config) => (
                     <MenuItem key={config.id} value={config.id}>
                       {config.name} (
@@ -302,17 +309,27 @@ export default function TradingTasksPage() {
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
               <FormControl fullWidth>
-                <InputLabel>Sort By</InputLabel>
+                <InputLabel>{t('trading:filters.sortBy')}</InputLabel>
                 <Select
                   value={sortBy}
                   onChange={handleSortChange}
-                  label="Sort By"
+                  label={t('trading:filters.sortBy')}
                 >
-                  <MenuItem value="-created_at">Newest First</MenuItem>
-                  <MenuItem value="created_at">Oldest First</MenuItem>
-                  <MenuItem value="name">Name (A-Z)</MenuItem>
-                  <MenuItem value="-name">Name (Z-A)</MenuItem>
-                  <MenuItem value="-updated_at">Recently Updated</MenuItem>
+                  <MenuItem value="-created_at">
+                    {t('trading:filters.newestFirst')}
+                  </MenuItem>
+                  <MenuItem value="created_at">
+                    {t('trading:filters.oldestFirst')}
+                  </MenuItem>
+                  <MenuItem value="name">
+                    {t('trading:filters.nameAZ')}
+                  </MenuItem>
+                  <MenuItem value="-name">
+                    {t('trading:filters.nameZA')}
+                  </MenuItem>
+                  <MenuItem value="-updated_at">
+                    {t('trading:filters.recentlyUpdated')}
+                  </MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -327,24 +344,22 @@ export default function TradingTasksPage() {
             </Box>
           ) : error ? (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-              <Typography color="error">
-                Error loading tasks: {error.message}
-              </Typography>
+              <Typography color="error">{error.message}</Typography>
             </Paper>
           ) : !data || data.results.length === 0 ? (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary" gutterBottom>
-                No trading tasks found
+                {t('trading:empty.noTasksFound')}
               </Typography>
               <Typography color="text.secondary" sx={{ mb: 2 }}>
-                Create your first trading task to start automated trading
+                {t('trading:empty.createFirstTask')}
               </Typography>
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}
                 onClick={handleCreateTask}
               >
-                Create Task
+                {t('common:actions.createTask')}
               </Button>
             </Paper>
           ) : (
@@ -377,14 +392,12 @@ export default function TradingTasksPage() {
             </Box>
           ) : error ? (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-              <Typography color="error">
-                Error loading tasks: {error.message}
-              </Typography>
+              <Typography color="error">{error.message}</Typography>
             </Paper>
           ) : !data || data.results.length === 0 ? (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary">
-                No running tasks
+                {t('trading:empty.noRunningTasks')}
               </Typography>
             </Paper>
           ) : (
@@ -417,14 +430,12 @@ export default function TradingTasksPage() {
             </Box>
           ) : error ? (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-              <Typography color="error">
-                Error loading tasks: {error.message}
-              </Typography>
+              <Typography color="error">{error.message}</Typography>
             </Paper>
           ) : !data || data.results.length === 0 ? (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary">
-                No paused tasks
+                {t('trading:empty.noPausedTasks')}
               </Typography>
             </Paper>
           ) : (
@@ -457,14 +468,12 @@ export default function TradingTasksPage() {
             </Box>
           ) : error ? (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-              <Typography color="error">
-                Error loading tasks: {error.message}
-              </Typography>
+              <Typography color="error">{error.message}</Typography>
             </Paper>
           ) : !data || data.results.length === 0 ? (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary">
-                No stopped tasks
+                {t('trading:empty.noStoppedTasks')}
               </Typography>
             </Paper>
           ) : (

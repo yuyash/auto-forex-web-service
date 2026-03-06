@@ -24,12 +24,14 @@ import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
+import { useTranslation } from 'react-i18next';
 
 interface ConfigurationCardProps {
   configuration: StrategyConfig;
 }
 
 const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
+  const { t } = useTranslation(['configuration', 'common']);
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -192,7 +194,7 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
             {configuration.is_in_use && (
               <Box sx={{ mt: 1 }}>
                 <Chip
-                  label="In Use"
+                  label={t('common:labels.inUse')}
                   color="success"
                   variant="filled"
                   sx={{ fontSize: '0.7rem' }}
@@ -203,7 +205,7 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
         </CardContent>
 
         <CardActions sx={{ px: 2, pb: 2, pt: 0 }}>
-          <Tooltip title="Edit Configuration">
+          <Tooltip title={t('configuration:card.editConfiguration')}>
             <IconButton
               color="primary"
               onClick={(e) => {
@@ -215,7 +217,7 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
               <EditIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Delete Configuration">
+          <Tooltip title={t('configuration:card.deleteConfiguration')}>
             <IconButton
               color="error"
               onClick={(e) => {
@@ -248,13 +250,13 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
           <ListItemIcon>
             <EditIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Edit</ListItemText>
+          <ListItemText>{t('common:actions.edit')}</ListItemText>
         </MenuItem>
         <MenuItem onClick={handleViewTasks}>
           <ListItemIcon>
             <FolderIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>View Tasks</ListItemText>
+          <ListItemText>{t('common:actions.viewTasks')}</ListItemText>
         </MenuItem>
         <MenuItem onClick={handleDelete} disabled={configuration.is_in_use}>
           <ListItemIcon>
@@ -263,7 +265,7 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
               color={configuration.is_in_use ? 'disabled' : 'error'}
             />
           </ListItemIcon>
-          <ListItemText>Delete</ListItemText>
+          <ListItemText>{t('common:actions.delete')}</ListItemText>
         </MenuItem>
       </Menu>
 

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Box, Button, Typography, Paper, Alert } from '@mui/material';
 import Grid from '@mui/material/Grid';
@@ -39,6 +40,7 @@ export default function TradingTaskUpdateForm({
   accountName,
   initialData,
 }: TradingTaskUpdateFormProps) {
+  const { t } = useTranslation(['trading', 'common']);
   const navigate = useNavigate();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const updateTask = useUpdateTradingTask();
@@ -114,25 +116,25 @@ export default function TradingTaskUpdateForm({
     <Box>
       <Paper sx={{ p: 3, mb: 3, bgcolor: 'grey.50' }}>
         <Typography variant="h6" gutterBottom>
-          Task Information (Read-only)
+          {t('trading:updateForm.taskInfoReadOnly')}
         </Typography>
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, md: 6 }}>
             <Typography variant="subtitle2" color="text.secondary">
-              Task Name
+              {t('trading:form.taskName')}
             </Typography>
             <Typography variant="body1">{taskName}</Typography>
           </Grid>
           <Grid size={{ xs: 12, md: 6 }}>
             <Typography variant="subtitle2" color="text.secondary">
-              OANDA Account
+              {t('common:labels.oandaAccount')}
             </Typography>
             <Typography variant="body1">{accountName}</Typography>
           </Grid>
           {taskDescription && (
             <Grid size={{ xs: 12 }}>
               <Typography variant="subtitle2" color="text.secondary">
-                Description
+                {t('common:labels.description')}
               </Typography>
               <Typography variant="body1">{taskDescription}</Typography>
             </Grid>
@@ -148,10 +150,10 @@ export default function TradingTaskUpdateForm({
         )}
 
         <Typography variant="h6" gutterBottom>
-          Configuration
+          {t('common:labels.configuration')}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Update the strategy configuration for this trading task
+          {t('trading:updateForm.updateStrategyConfig')}
         </Typography>
 
         <Grid container spacing={3}>
@@ -176,18 +178,19 @@ export default function TradingTaskUpdateForm({
             <Grid size={{ xs: 12 }}>
               <Alert severity="info">
                 <Typography variant="subtitle2" gutterBottom>
-                  Configuration Preview
+                  {t('trading:form.configurationPreview')}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Type:</strong>{' '}
+                  <strong>{t('trading:form.type')}:</strong>{' '}
                   {getStrategyDisplayName(
                     strategies,
                     selectedConfig.strategy_type
                   )}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Description:</strong>{' '}
-                  {selectedConfig.description || 'No description'}
+                  <strong>{t('common:labels.description')}:</strong>{' '}
+                  {selectedConfig.description ||
+                    t('trading:form.noDescription')}
                 </Typography>
               </Alert>
             </Grid>
@@ -196,7 +199,7 @@ export default function TradingTaskUpdateForm({
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
           <Button variant="outlined" onClick={() => navigate('/trading-tasks')}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
 
           <Button
@@ -204,7 +207,7 @@ export default function TradingTaskUpdateForm({
             variant="contained"
             disabled={updateTask.isLoading}
           >
-            Update Task
+            {t('common:actions.updateTask')}
           </Button>
         </Box>
       </form>

@@ -131,9 +131,7 @@ const AddAccountModal = ({
     } catch (err) {
       console.error('Error adding account:', err);
       setError(
-        err instanceof Error
-          ? err.message
-          : t('settings:messages.saveError', 'Failed to save account')
+        err instanceof Error ? err.message : t('settings:messages.saveError')
       );
     } finally {
       setSubmitting(false);
@@ -142,9 +140,7 @@ const AddAccountModal = ({
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        {t('settings:accounts.addAccount', 'Add Account')}
-      </DialogTitle>
+      <DialogTitle>{t('settings:accounts.addAccount')}</DialogTitle>
       <DialogContent>
         <Box sx={{ pt: 2 }}>
           {error && (
@@ -155,7 +151,7 @@ const AddAccountModal = ({
 
           <TextField
             fullWidth
-            label={t('settings:accounts.accountId', 'Account ID')}
+            label={t('settings:accounts.accountId')}
             value={formData.account_id}
             onChange={(e) =>
               setFormData({ ...formData, account_id: e.target.value })
@@ -169,7 +165,7 @@ const AddAccountModal = ({
 
           <TextField
             fullWidth
-            label={t('settings:accounts.apiToken', 'API Token')}
+            label={t('settings:accounts.apiToken')}
             type={showApiToken ? 'text' : 'password'}
             value={formData.api_token}
             onChange={(e) =>
@@ -189,8 +185,8 @@ const AddAccountModal = ({
                     disabled={submitting}
                     aria-label={
                       showApiToken
-                        ? t('common:hidePassword', 'Hide password')
-                        : t('common:showPassword', 'Show password')
+                        ? t('common:hidePassword')
+                        : t('common:showPassword')
                     }
                   >
                     {showApiToken ? <VisibilityOff /> : <Visibility />}
@@ -202,12 +198,12 @@ const AddAccountModal = ({
 
           <FormControl fullWidth margin="normal" disabled={submitting}>
             <InputLabel id="api-type-label">
-              {t('settings:accounts.apiType', 'API Type')}
+              {t('settings:accounts.apiType')}
             </InputLabel>
             <Select
               labelId="api-type-label"
               value={formData.api_type}
-              label={t('settings:accounts.apiType', 'API Type')}
+              label={t('settings:accounts.apiType')}
               onChange={(e) =>
                 setFormData({
                   ...formData,
@@ -216,18 +212,16 @@ const AddAccountModal = ({
               }
             >
               <MenuItem value="practice">
-                {t('settings:accounts.practice', 'Practice')}
+                {t('settings:accounts.practice')}
               </MenuItem>
-              <MenuItem value="live">
-                {t('settings:accounts.live', 'Live')}
-              </MenuItem>
+              <MenuItem value="live">{t('settings:accounts.live')}</MenuItem>
             </Select>
           </FormControl>
         </Box>
       </DialogContent>
       <DialogActions>
         <Button onClick={handleClose} disabled={submitting}>
-          {t('common:cancel', 'Cancel')}
+          {t('common:cancel')}
         </Button>
         <Button
           onClick={handleSubmit}
@@ -235,7 +229,7 @@ const AddAccountModal = ({
           color="primary"
           disabled={submitting}
         >
-          {submitting ? <CircularProgress size={24} /> : t('common:add', 'Add')}
+          {submitting ? <CircularProgress size={24} /> : t('common:add')}
         </Button>
       </DialogActions>
     </Dialog>

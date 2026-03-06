@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Menu,
   MenuItem,
@@ -41,6 +42,7 @@ export default function TradingTaskActions({
   onClose,
   onRefresh,
 }: TradingTaskActionsProps) {
+  const { t } = useTranslation(['trading', 'common']);
   const navigate = useNavigate();
   const { showError } = useToast();
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
@@ -81,7 +83,7 @@ export default function TradingTaskActions({
       task.status === TaskStatus.RUNNING ||
       task.status === TaskStatus.PAUSED
     ) {
-      showError('Cannot delete running or paused task. Stop it first.');
+      showError(t('trading:warnings.cannotDeleteRunning'));
       onClose();
       return;
     }
@@ -107,7 +109,7 @@ export default function TradingTaskActions({
         errorMessage.includes('paused') ||
         errorMessage.includes('409')
       ) {
-        showError('Cannot delete running or paused task. Stop it first.');
+        showError(t('trading:warnings.cannotDeleteRunning'));
       } else {
         showError(errorMessage);
       }
@@ -163,7 +165,7 @@ export default function TradingTaskActions({
             <ListItemIcon>
               <StopIcon fontSize="small" color="error" />
             </ListItemIcon>
-            <ListItemText>Stop</ListItemText>
+            <ListItemText>{t('common:actions.stop')}</ListItemText>
           </MenuItem>
         )}
 
@@ -173,14 +175,14 @@ export default function TradingTaskActions({
           <ListItemIcon>
             <CopyIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Copy</ListItemText>
+          <ListItemText>{t('common:actions.copy')}</ListItemText>
         </MenuItem>
 
         <MenuItem onClick={handleEdit} disabled={!canEdit}>
           <ListItemIcon>
             <EditIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Edit</ListItemText>
+          <ListItemText>{t('common:actions.edit')}</ListItemText>
         </MenuItem>
 
         <Divider />
@@ -192,7 +194,7 @@ export default function TradingTaskActions({
               color={canDelete ? 'error' : 'disabled'}
             />
           </ListItemIcon>
-          <ListItemText>Delete</ListItemText>
+          <ListItemText>{t('common:actions.delete')}</ListItemText>
         </MenuItem>
       </Menu>
 

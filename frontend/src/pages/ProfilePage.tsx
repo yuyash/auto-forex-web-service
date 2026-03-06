@@ -4,14 +4,14 @@ import { Breadcrumbs } from '../components/common';
 import { PreferencesForm } from '../components/settings';
 
 const ProfilePage = () => {
-  const { t } = useTranslation(['settings', 'common']);
+  const { t } = useTranslation('settings');
 
   return (
     <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
       <Breadcrumbs />
       <Box>
         <Typography variant="h4" gutterBottom>
-          {t('settings:profile.title', 'Profile')}
+          {t('profile.title')}
         </Typography>
 
         <Paper sx={{ p: 3, mt: 3 }}>

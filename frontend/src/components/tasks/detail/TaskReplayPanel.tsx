@@ -69,6 +69,7 @@ import {
   createSuppressedTickMarkFormatter,
   createTooltipTimeFormatter,
 } from '../../../utils/adaptiveTimeScalePlugin';
+import { getTimezoneAbbr } from '../../../utils/chartTimezone';
 import { useAuth } from '../../../contexts/AuthContext';
 import { SequencePositionLine } from '../../../utils/SequencePositionLine';
 import { useMetricsOverlay } from './MetricsOverlayChart';
@@ -2315,9 +2316,27 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           height: chartHeight,
           minHeight: MIN_CHART_HEIGHT,
           display: 'flex',
+          position: 'relative',
         }}
       >
         <Box ref={chartContainerRef} sx={{ width: '100%', flex: 1 }} />
+        {/* Timezone indicator (bottom-right) */}
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 8,
+            right: 8,
+            zIndex: 2,
+            fontSize: '11px',
+            fontFamily:
+              '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            color: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(51,65,85,0.5)',
+            pointerEvents: 'none',
+            userSelect: 'none',
+          }}
+        >
+          TZ: {getTimezoneAbbr(timezone)}
+        </Box>
       </Paper>
 
       {/* Draggable separator */}

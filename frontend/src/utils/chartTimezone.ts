@@ -86,3 +86,19 @@ export function formatTooltipDate(
   }
   return formatInTimeZone(date, 'UTC', 'yyyy-MM-dd HH:mm:ss') + ' UTC';
 }
+
+/**
+ * Get the short timezone abbreviation (e.g., "JST", "EST", "UTC")
+ * for an IANA timezone string.
+ *
+ * @param timezone - IANA timezone string (e.g., 'Asia/Tokyo', 'UTC')
+ * @returns Short abbreviation like "JST", "EST", "CET"
+ */
+export function getTimezoneAbbr(timezone: string): string {
+  if (!timezone || timezone === 'UTC') return 'UTC';
+  try {
+    return formatInTimeZone(new Date(), timezone, 'zzz');
+  } catch {
+    return timezone;
+  }
+}

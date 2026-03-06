@@ -1,15 +1,21 @@
 {
   "app": {
-    "name": "自動外国為替トレーダー",
+    "name": "Auto Forex Trader",
     "title": "外国為替取引"
   },
   "navigation": {
     "dashboard": "ダッシュボード",
+    "configurations": "設定構成",
+    "backtestTasks": "バックテスト",
+    "tradingTasks": "トレーディング",
+    "settings": "設定",
+    "backtest": "バックテスト",
+    "trading": "トレーディング",
+    "profile": "プロフィール",
+    "accounts": "アカウント",
     "orders": "注文",
     "positions": "ポジション",
     "strategy": "戦略",
-    "backtest": "バックテスト",
-    "settings": "設定",
     "admin": "管理者",
     "logout": "ログアウト"
   },
@@ -29,7 +35,11 @@
     "registrationDisabled": "登録は現在無効になっています",
     "loginDisabled": "ログインは現在無効になっています",
     "loginBlocked": "ログイン試行回数が多すぎます。しばらくしてから再度お試しください。",
-    "emailNotWhitelisted": "このメールアドレスはログインが許可されていません。管理者に連絡してください。"
+    "emailNotWhitelisted": "このメールアドレスはログインが許可されていません。管理者に連絡してください。",
+    "loginFailed": "ログインに失敗しました。もう一度お試しください。",
+    "loginFailedWithStatus": "ログインに失敗しました（{{status}}）。",
+    "loginFailedInvalidResponse": "ログインに失敗しました（無効なレスポンス）。もう一度お試しください。",
+    "registrationSuccessful": "登録が完了しました！ログインページにリダイレクトします..."
   },
   "actions": {
     "submit": "送信",
@@ -48,7 +58,25 @@
     "exportCSV": "CSVエクスポート",
     "refresh": "更新",
     "start": "開始",
-    "stop": "停止"
+    "stop": "停止",
+    "resume": "再開",
+    "pause": "一時停止",
+    "restart": "再起動",
+    "tryAgain": "再試行",
+    "retry": "リトライ",
+    "reload": "再読み込み",
+    "previous": "前へ",
+    "goToHome": "ホームへ",
+    "goToDashboard": "ダッシュボードへ",
+    "viewAll": "すべて表示",
+    "viewDetails": "詳細を表示",
+    "viewTasks": "タスクを表示",
+    "copy": "コピー",
+    "saving": "保存中...",
+    "deleting": "削除中...",
+    "newTask": "新規タスク",
+    "createTask": "タスクを作成",
+    "updateTask": "タスクを更新"
   },
   "status": {
     "active": "アクティブ",
@@ -61,7 +89,35 @@
     "offline": "オフライン",
     "connected": "接続済み",
     "disconnected": "切断済み",
-    "noOandaAccount": "アカウント未設定"
+    "noOandaAccount": "アカウント未設定",
+    "loading": "読み込み中...",
+    "updating": "更新中...",
+    "checking": "確認中...",
+    "versionMismatch": "バージョン不一致: フロントエンド v{{frontend}} / バックエンド v{{backend}}"
+  },
+  "labels": {
+    "name": "名前",
+    "description": "説明",
+    "instrument": "通貨ペア",
+    "pipSize": "Pipサイズ",
+    "status": "ステータス",
+    "configuration": "設定構成",
+    "strategyType": "戦略タイプ",
+    "strategyConfiguration": "戦略設定",
+    "oandaAccount": "OANDAアカウント",
+    "sellOnStop": "停止時に売却",
+    "dryRun": "ドライラン",
+    "yes": "はい",
+    "no": "いいえ",
+    "created": "作成日",
+    "inUse": "使用中",
+    "active": "アクティブ",
+    "inactive": "非アクティブ",
+    "default": "デフォルト",
+    "live": "本番",
+    "liveAccount": "本番アカウント",
+    "total": "合計",
+    "parameters": "パラメータ"
   },
   "messages": {
     "loading": "読み込み中...",
@@ -74,10 +130,44 @@
   "errors": {
     "fetchFailed": "データの読み込みに失敗しました",
     "deleteFailed": "削除に失敗しました",
-    "mustBePositive": "正の数である必要があります"
+    "mustBePositive": "正の数である必要があります",
+    "taskNotFound": "タスクが見つかりません",
+    "failedToLoadData": "データの読み込みに失敗しました。もう一度お試しください。",
+    "unexpectedError": "予期しないエラーが発生しました。もう一度お試しください。",
+    "cannotConnectToServer": "サーバーに接続できません。バックエンドが起動しているか確認してください。",
+    "tooManyRequests": "リクエストが多すぎます。しばらくしてから再度お試しください。",
+    "serverUnavailable": "サーバーが一時的に利用できません。しばらくしてから再度お試しください。",
+    "applicationError": "アプリケーションエラー",
+    "pageError": "ページエラー",
+    "componentError": "コンポーネントエラー"
   },
   "validation": {
-    "required": "この項目は必須です"
+    "required": "この項目は必須です",
+    "emailRequired": "メールアドレスは必須です",
+    "invalidEmailFormat": "メールアドレスの形式が無効です",
+    "passwordRequired": "パスワードは必須です",
+    "passwordMinLength": "パスワードは8文字以上である必要があります",
+    "passwordLowercase": "パスワードには小文字を1文字以上含める必要があります",
+    "passwordUppercase": "パスワードには大文字を1文字以上含める必要があります",
+    "passwordNumber": "パスワードには数字を1文字以上含める必要があります",
+    "usernameRequired": "ユーザー名は必須です",
+    "usernameMinLength": "ユーザー名は3文字以上である必要があります",
+    "confirmPasswordRequired": "パスワードを確認してください",
+    "passwordsDoNotMatch": "パスワードが一致しません",
+    "pleaseFixErrors": "以下のエラーを修正してください：",
+    "nameRequired": "名前は必須です",
+    "configurationRequired": "設定構成は必須です",
+    "accountRequired": "アカウントは必須です",
+    "startDateRequired": "開始日は必須です",
+    "endDateRequired": "終了日は必須です",
+    "instrumentRequired": "通貨ペアは必須です"
+  },
+  "passwordStrength": {
+    "weak": "弱い",
+    "medium": "普通",
+    "good": "良い",
+    "strong": "強い",
+    "label": "パスワード強度："
   },
   "time": {
     "today": "今日",
@@ -103,6 +193,34 @@
     "admin": "管理者",
     "adminSettings": "設定",
     "events": "イベント",
-    "users": "ユーザー管理"
+    "users": "ユーザー管理",
+    "configurations": "設定構成",
+    "trading": "トレーディング"
+  },
+  "accessibility": {
+    "skipToMainContent": "メインコンテンツへスキップ",
+    "skipToNavigation": "ナビゲーションへスキップ",
+    "openDrawer": "ドロワーを開く",
+    "accountOfCurrentUser": "現在のユーザーのアカウント",
+    "autoRefresh": "自動更新",
+    "selectInstrument": "通貨ペアを選択",
+    "selectGranularity": "時間枠を選択",
+    "selectRefreshInterval": "更新間隔を選択",
+    "taskProgress": "タスク進捗: {{progress}}%"
+  },
+  "notFound": {
+    "title": "404",
+    "heading": "ページが見つかりません",
+    "message": "お探しのページは存在しません。",
+    "goHome": "ホームへ"
+  },
+  "footer": {
+    "oandaApiReachable": "OANDA APIに接続可能",
+    "oandaApiUnavailable": "OANDA APIが利用不可",
+    "healthCheckFailed": "ヘルスチェック失敗",
+    "failedToCheckHealth": "OANDAヘルスチェックに失敗",
+    "checkingConnection": "接続を確認中...",
+    "never": "未確認",
+    "lastChecked": "最終確認："
   }
 }

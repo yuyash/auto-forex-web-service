@@ -9,6 +9,7 @@ import type { ReactNode } from 'react';
 import type { User, SystemSettings, AuthContextType } from '../types/auth';
 import { AUTH_LOGOUT_EVENT, type AuthLogoutDetail } from '../utils/authEvents';
 import { setAuthToken, clearAuthToken } from '../api';
+import i18n from '../i18n/config';
 
 // Persist context across HMR to prevent "useAuth must be used within AuthProvider" errors
 // during Vite hot module replacement
@@ -109,6 +110,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       localStorage.setItem('user', JSON.stringify(newUser));
       // Configure OpenAPI client with the new token
       setAuthToken(newToken);
+      // Sync i18n language with user preference (unless user already chose locally)
+      if (newUser.language && !localStorage.getItem('i18nextLng')) {
+        i18n.changeLanguage(newUser.language);
+      }
     },
     []
   );

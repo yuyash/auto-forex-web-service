@@ -8,6 +8,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Breadcrumbs } from '../components/common';
 import ConfigurationForm from '../components/configurations/ConfigurationForm';
 import { useConfiguration } from '../hooks/useConfigurations';
@@ -15,6 +16,7 @@ import { useConfigurationMutations } from '../hooks/useConfigurationMutations';
 import type { StrategyConfigCreateData } from '../types/configuration';
 
 const ConfigurationFormPage = () => {
+  const { t } = useTranslation(['configuration', 'common']);
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams<{ id: string }>();
@@ -115,8 +117,8 @@ const ConfigurationFormPage = () => {
                 {
                   label:
                     fromState.from === 'backtest-tasks'
-                      ? 'Backtest Tasks'
-                      : 'Trading Tasks',
+                      ? t('common:navigation.backtestTasks')
+                      : t('common:navigation.tradingTasks'),
                   path: `/${fromState.from}`,
                 },
                 ...(fromState.taskId && fromState.taskName
@@ -134,18 +136,20 @@ const ConfigurationFormPage = () => {
 
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" gutterBottom>
-          {isEditMode ? 'Edit Strategy Parameters' : 'Create New Configuration'}
+          {isEditMode
+            ? t('configuration:pages.editTitle')
+            : t('configuration:pages.createTitle')}
         </Typography>
         <Typography variant="body1" color="text.secondary">
           {isEditMode
-            ? 'Update the parameters for your strategy configuration'
-            : 'Create a reusable strategy configuration for backtesting and live trading'}
+            ? t('configuration:pages.editSubtitle')
+            : t('configuration:pages.createSubtitle')}
         </Typography>
       </Box>
 
       {isEditMode && !configuration && !isLoadingConfig && (
         <Alert severity="error" sx={{ mb: 3 }}>
-          Configuration not found
+          {t('common:errors.taskNotFound')}
         </Alert>
       )}
 

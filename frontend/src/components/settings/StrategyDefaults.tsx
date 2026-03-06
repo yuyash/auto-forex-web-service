@@ -77,7 +77,7 @@ const StrategyDefaults = () => {
       });
     } catch (error) {
       console.error('Error fetching settings:', error);
-      showError(t('common:errors.fetchFailed', 'Failed to load data'));
+      showError(t('common:errors.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -154,15 +154,13 @@ const StrategyDefaults = () => {
         throw new Error(errorData.message || 'Failed to save settings');
       }
 
-      showSuccess(
-        t('settings:messages.saveSuccess', 'Settings saved successfully')
-      );
+      showSuccess(t('settings:messages.saveSuccess'));
     } catch (error) {
       console.error('Error saving settings:', error);
       showError(
         error instanceof Error
           ? error.message
-          : t('settings:messages.saveError', 'Failed to save settings')
+          : t('settings:messages.saveError')
       );
     } finally {
       setSubmitting(false);
@@ -218,7 +216,7 @@ const StrategyDefaults = () => {
   return (
     <Box component="form" onSubmit={handleSubmit}>
       <Typography variant="h6" gutterBottom>
-        {t('settings:strategyDefaults.title', 'Strategy Defaults')}
+        {t('settings:strategyDefaults.title')}
       </Typography>
 
       <Box sx={{ mt: 3 }}>
@@ -321,11 +319,7 @@ const StrategyDefaults = () => {
             disabled={submitting}
             sx={{ minWidth: 120 }}
           >
-            {submitting ? (
-              <CircularProgress size={24} />
-            ) : (
-              t('common:save', 'Save')
-            )}
+            {submitting ? <CircularProgress size={24} /> : t('common:save')}
           </Button>
         </Box>
       </Box>

@@ -5,11 +5,17 @@
   },
   "navigation": {
     "dashboard": "Dashboard",
+    "configurations": "Configurations",
+    "backtestTasks": "Backtest Tasks",
+    "tradingTasks": "Trading Tasks",
+    "settings": "Settings",
+    "backtest": "Backtest",
+    "trading": "Trading",
+    "profile": "Profile",
+    "accounts": "Accounts",
     "orders": "Orders",
     "positions": "Positions",
     "strategy": "Strategy",
-    "backtest": "Backtest",
-    "settings": "Settings",
     "admin": "Admin Dashboard",
     "logout": "Logout"
   },
@@ -29,7 +35,11 @@
     "registrationDisabled": "Registration is currently disabled",
     "loginDisabled": "Login is currently disabled",
     "loginBlocked": "Too many failed login attempts. Please try again later.",
-    "emailNotWhitelisted": "This email address is not authorized to login. Please contact the administrator."
+    "emailNotWhitelisted": "This email address is not authorized to login. Please contact the administrator.",
+    "loginFailed": "Login failed. Please try again.",
+    "loginFailedWithStatus": "Login failed ({{status}}).",
+    "loginFailedInvalidResponse": "Login failed (invalid response). Please try again.",
+    "registrationSuccessful": "Registration successful! Redirecting to login..."
   },
   "actions": {
     "submit": "Submit",
@@ -48,7 +58,25 @@
     "exportCSV": "Export CSV",
     "refresh": "Refresh",
     "start": "Start",
-    "stop": "Stop"
+    "stop": "Stop",
+    "resume": "Resume",
+    "pause": "Pause",
+    "restart": "Restart",
+    "tryAgain": "Try Again",
+    "retry": "Retry",
+    "reload": "Reload",
+    "previous": "Previous",
+    "goToHome": "Go to Home",
+    "goToDashboard": "Go to Dashboard",
+    "viewAll": "View All",
+    "viewDetails": "View Details",
+    "viewTasks": "View Tasks",
+    "copy": "Copy",
+    "saving": "Saving...",
+    "deleting": "Deleting...",
+    "newTask": "New Task",
+    "createTask": "Create Task",
+    "updateTask": "Update Task"
   },
   "status": {
     "active": "Active",
@@ -61,7 +89,35 @@
     "offline": "Offline",
     "connected": "Connected",
     "disconnected": "Disconnected",
-    "noOandaAccount": "No Account"
+    "noOandaAccount": "No Account",
+    "loading": "Loading...",
+    "updating": "Updating...",
+    "checking": "Checking...",
+    "versionMismatch": "Version mismatch: Frontend v{{frontend}} / Backend v{{backend}}"
+  },
+  "labels": {
+    "name": "Name",
+    "description": "Description",
+    "instrument": "Instrument",
+    "pipSize": "Pip Size",
+    "status": "Status",
+    "configuration": "Configuration",
+    "strategyType": "Strategy Type",
+    "strategyConfiguration": "Strategy Configuration",
+    "oandaAccount": "OANDA Account",
+    "sellOnStop": "Sell on Stop",
+    "dryRun": "Dry Run",
+    "yes": "Yes",
+    "no": "No",
+    "created": "Created",
+    "inUse": "In Use",
+    "active": "Active",
+    "inactive": "Inactive",
+    "default": "Default",
+    "live": "LIVE",
+    "liveAccount": "LIVE ACCOUNT",
+    "total": "Total",
+    "parameters": "Parameters"
   },
   "messages": {
     "loading": "Loading...",
@@ -74,10 +130,44 @@
   "errors": {
     "fetchFailed": "Failed to load data",
     "deleteFailed": "Failed to delete",
-    "mustBePositive": "Must be a positive number"
+    "mustBePositive": "Must be a positive number",
+    "taskNotFound": "Task not found",
+    "failedToLoadData": "Failed to load data. Please try again.",
+    "unexpectedError": "An unexpected error occurred. Please try again.",
+    "cannotConnectToServer": "Cannot connect to server. Please check if the backend is running.",
+    "tooManyRequests": "Too many requests. Please wait a moment and try again.",
+    "serverUnavailable": "Server is temporarily unavailable. Please try again later.",
+    "applicationError": "Application Error",
+    "pageError": "Page Error",
+    "componentError": "Component Error"
   },
   "validation": {
-    "required": "This field is required"
+    "required": "This field is required",
+    "emailRequired": "Email is required",
+    "invalidEmailFormat": "Invalid email format",
+    "passwordRequired": "Password is required",
+    "passwordMinLength": "Password must be at least 8 characters",
+    "passwordLowercase": "Password must contain at least one lowercase letter",
+    "passwordUppercase": "Password must contain at least one uppercase letter",
+    "passwordNumber": "Password must contain at least one number",
+    "usernameRequired": "Username is required",
+    "usernameMinLength": "Username must be at least 3 characters",
+    "confirmPasswordRequired": "Please confirm your password",
+    "passwordsDoNotMatch": "Passwords do not match",
+    "pleaseFixErrors": "Please fix the following errors:",
+    "nameRequired": "Name is required",
+    "configurationRequired": "Configuration is required",
+    "accountRequired": "Account is required",
+    "startDateRequired": "Start date is required",
+    "endDateRequired": "End date is required",
+    "instrumentRequired": "Instrument is required"
+  },
+  "passwordStrength": {
+    "weak": "Weak",
+    "medium": "Medium",
+    "good": "Good",
+    "strong": "Strong",
+    "label": "Password Strength:"
   },
   "time": {
     "today": "Today",
@@ -103,6 +193,34 @@
     "admin": "Admin Dashboard",
     "adminSettings": "Settings",
     "events": "Events",
-    "users": "User Management"
+    "users": "User Management",
+    "configurations": "Configurations",
+    "trading": "Trading"
+  },
+  "accessibility": {
+    "skipToMainContent": "Skip to main content",
+    "skipToNavigation": "Skip to navigation",
+    "openDrawer": "open drawer",
+    "accountOfCurrentUser": "account of current user",
+    "autoRefresh": "Auto-refresh",
+    "selectInstrument": "Select instrument",
+    "selectGranularity": "Select granularity",
+    "selectRefreshInterval": "Select refresh interval",
+    "taskProgress": "Task progress: {{progress}}%"
+  },
+  "notFound": {
+    "title": "404",
+    "heading": "Page Not Found",
+    "message": "The page you are looking for does not exist.",
+    "goHome": "Go to Home"
+  },
+  "footer": {
+    "oandaApiReachable": "OANDA API is reachable",
+    "oandaApiUnavailable": "OANDA API is unavailable",
+    "healthCheckFailed": "Health check failed",
+    "failedToCheckHealth": "Failed to check OANDA health",
+    "checkingConnection": "Checking connection...",
+    "never": "Never",
+    "lastChecked": "Last checked:"
   }
 }

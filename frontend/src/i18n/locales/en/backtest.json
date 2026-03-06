@@ -1,13 +1,29 @@
 {
   "title": "Backtesting",
+  "pages": {
+    "title": "Backtest Tasks",
+    "createTitle": "Create Backtest Task",
+    "editTitle": "Edit Backtest Task"
+  },
   "tabs": {
     "configuration": "Configuration",
     "results": "Results",
-    "history": "History"
+    "history": "History",
+    "all": "All",
+    "running": "Running",
+    "completed": "Completed",
+    "failed": "Failed",
+    "overview": "Overview",
+    "trend": "Trend",
+    "positions": "Positions",
+    "trades": "Trades",
+    "orders": "Orders",
+    "events": "Events",
+    "logs": "Logs",
+    "replay": "Replay"
   },
   "config": {
     "title": "Backtest Configuration",
-    "placeholder": "Configuration panel will be implemented in task 21.2",
     "strategy": "Strategy",
     "instrument": "Instrument",
     "instrumentPlaceholder": "Select currency pair",
@@ -39,7 +55,6 @@
   },
   "progress": {
     "title": "Backtest Progress",
-    "placeholder": "Progress panel will be implemented in task 21.3",
     "noBacktest": "No backtest running. Configure and start a backtest to see progress.",
     "notFound": "Backtest not found",
     "status": "Status",
@@ -61,7 +76,6 @@
   },
   "results": {
     "title": "Backtest Results",
-    "placeholder": "Results panel will be implemented in task 21.4",
     "noResults": "No results available. Run a backtest to see results.",
     "noData": "No data available",
     "totalReturn": "Total Return",
@@ -79,7 +93,6 @@
   },
   "history": {
     "title": "Backtest History",
-    "placeholder": "History panel will be implemented in task 21.6",
     "date": "Date",
     "strategy": "Strategy",
     "instrument": "Instrument",
@@ -124,5 +137,98 @@
     "notSignificant": "Not Statistically Significant",
     "significanceExplanation": "A statistically significant result (p < 0.05) suggests that the difference in performance between the two strategies is unlikely to be due to chance alone.",
     "noSelection": "Select backtests above to compare their performance"
+  },
+  "card": {
+    "taskExecutionFailed": "Task execution failed"
+  },
+  "empty": {
+    "noTasksFound": "No backtest tasks found",
+    "createFirstTask": "Create your first backtest task to get started",
+    "noRunningTasks": "No running tasks",
+    "noCompletedTasks": "No completed tasks",
+    "noFailedTasks": "No failed tasks"
+  },
+  "detail": {
+    "taskInformation": "Task Information",
+    "backtestPeriod": "Backtest Period",
+    "startTime": "Start Time",
+    "endTime": "End Time",
+    "dataSource": "Data Source",
+    "initialBalance": "Initial Balance",
+    "commissionPerTrade": "Commission Per Trade",
+    "results": "Results",
+    "executionTimeline": "Execution Timeline",
+    "startedAt": "Started At",
+    "completedAt": "Completed At",
+    "realizedPnl": "Realized PnL",
+    "unrealizedPnl": "Unrealized PnL",
+    "currentBalance": "Current Balance",
+    "totalTradesCount": "Total Trades (count)",
+    "openPositions": "Open Positions",
+    "closedPositions": "Closed Positions",
+    "ticksProcessed": "Ticks Processed",
+    "completed": "completed"
+  },
+  "form": {
+    "selectConfiguration": "Select Configuration",
+    "chooseStrategyConfig": "Choose a strategy configuration for this backtest task",
+    "backtestParameters": "Backtest Parameters",
+    "configureParameters": "Configure the backtest time range, instrument, and initial settings",
+    "updateParameters": "Update the backtest time range, instrument, and initial settings",
+    "reviewAndSubmit": "Review & Submit",
+    "reviewBeforeSubmitting": "Review your backtest task configuration before submitting",
+    "taskName": "Task Name",
+    "commissionPerTrade": "Commission Per Trade",
+    "pipSizeOptional": "Pip Size (Optional)",
+    "pipSizeHelperText": "Leave empty to auto-fetch from OANDA account",
+    "pipSizeHelperTextLong": "Leave empty to auto-derive from instrument. Common values: 0.0001 (EUR_USD), 0.01 (USD_JPY)",
+    "instrumentPlaceholder": "e.g., EUR_USD, USD_JPY",
+    "instrumentHelperText": "Trading pair to backtest",
+    "closePositionsAtCompletion": "Close all positions at backtest completion",
+    "closePositionsDescription": "When enabled, all open positions will be automatically closed at the final market price when the backtest finishes.",
+    "dateRangeHelperText": "Backtesting requires historical data. Future dates are not allowed.",
+    "checkingTickDataRange": "Checking tick data range...",
+    "noTickDataFound": "No tick data found for {{instrument}} in the database.",
+    "dataRange": "{{instrument}} data range:",
+    "steps": {
+      "configuration": "Configuration",
+      "parameters": "Parameters",
+      "review": "Review"
+    }
+  },
+  "toast": {
+    "startedSuccessfully": "Backtest task started successfully",
+    "stoppedSuccessfully": "Backtest task stopped successfully",
+    "resumedSuccessfully": "Backtest task resumed successfully",
+    "restartedSuccessfully": "Backtest task restarted successfully",
+    "deletedSuccessfully": "Backtest task deleted successfully",
+    "cannotDeleteRunning": "Cannot delete running task. Stop it first."
+  },
+  "floorLog": {
+    "title": "Floor Strategy Execution Log",
+    "noEvents": "No floor strategy events available for this backtest.",
+    "description": "Detailed execution log showing initial positions, layer additions, retracements, and take profits.",
+    "totalPnl": "Total P&L:",
+    "columns": {
+      "event": "Event",
+      "time": "Time",
+      "layer": "Layer",
+      "action": "Action",
+      "retracementNumber": "Retracement #",
+      "units": "Units",
+      "price": "Price",
+      "realizedPnl": "Realized P&L",
+      "unrealizedPnl": "Unrealized P&L",
+      "details": "Details"
+    },
+    "eventTypes": {
+      "initialEntry": "Initial Entry",
+      "retracement": "Retracement",
+      "takeProfit": "Take Profit",
+      "addLayer": "Add Layer",
+      "removeLayer": "Remove Layer",
+      "volatilityLock": "Volatility Lock",
+      "marginProtection": "Margin Protection"
+    }
   }
 }

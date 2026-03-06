@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Box, LinearProgress, Typography } from '@mui/material';
 import { TaskStatus } from '../../types/common';
 
@@ -22,6 +23,7 @@ export interface TaskProgressProps {
  */
 export const TaskProgress: React.FC<TaskProgressProps> = React.memo(
   ({ status, progress, compact = false, showPercentage = true }) => {
+    const { t } = useTranslation('common');
     // Only show progress for running tasks (Requirement 3.1)
     const isRunning = status === TaskStatus.RUNNING;
 
@@ -81,7 +83,9 @@ export const TaskProgress: React.FC<TaskProgressProps> = React.memo(
           variant="determinate"
           value={clampedProgress}
           color={getProgressColor()}
-          aria-label={`Task progress: ${Math.round(clampedProgress)}%`}
+          aria-label={t('accessibility.taskProgress', {
+            progress: Math.round(clampedProgress),
+          })}
           sx={{
             height,
             borderRadius: 1,
