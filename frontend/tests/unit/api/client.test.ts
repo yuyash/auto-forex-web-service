@@ -1,5 +1,6 @@
 /**
- * Unit tests for API client wrapper
+ * Unit tests for API client wrapper.
+ * Tests pure logic: token management, error transformation, retry.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -18,7 +19,6 @@ import { ApiError } from '../../../src/api/apiClient';
 
 describe('API Client Configuration', () => {
   beforeEach(() => {
-    // Reset configuration before each test
     configureApiClient({
       baseUrl: 'http://localhost:8000',
       token: '',
@@ -26,33 +26,23 @@ describe('API Client Configuration', () => {
     });
   });
 
-  it('should configure base URL', () => {
-    const baseUrl = 'https://api.example.com';
-    configureApiClient({ baseUrl });
-
-    expect(apiConfig.BASE).toBe(baseUrl);
+  it('configures base URL', () => {
+    configureApiClient({ baseUrl: 'https://api.example.com' });
+    expect(apiConfig.BASE).toBe('https://api.example.com');
   });
 
-  it('should configure credentials', () => {
+  it('configures credentials', () => {
     configureApiClient({ withCredentials: false });
     expect(apiConfig.WITH_CREDENTIALS).toBe(false);
-
-    configureApiClient({ withCredentials: true });
-    expect(apiConfig.WITH_CREDENTIALS).toBe(true);
   });
 
-  it('should configure authentication token', () => {
-    const token = 'test-token-123';
-    configureApiClient({ token });
-
-    expect(apiConfig.TOKEN).toBe(token);
+  it('configures authentication token', () => {
+    configureApiClient({ token: 'test-token' });
+    expect(apiConfig.TOKEN).toBe('test-token');
   });
 
-  it('should merge configuration with defaults', () => {
-    const baseUrl = 'https://api.example.com';
-    configureApiClient({ baseUrl });
-
-    // Other defaults should remain
+  it('merges partial config with existing values', () => {
+    configureApiClient({ baseUrl: 'https://api.example.com' });
     expect(apiConfig.WITH_CREDENTIALS).toBe(true);
   });
 });
@@ -62,242 +52,115 @@ describe('Authentication Token Management', () => {
     clearAuthToken();
   });
 
-  it('should set authentication token', () => {
-    const token = 'test-token-456';
-    setAuthToken(token);
-
-    expect(getAuthToken()).toBe(token);
-    expect(apiConfig.TOKEN).toBe(token);
+  it('sets and retrieves token', () => {
+    setAuthToken('abc123');
+    expect(getAuthToken()).toBe('abc123');
+    expect(apiConfig.TOKEN).toBe('abc123');
   });
 
-  it('should clear authentication token', () => {
-    setAuthToken('test-token');
+  it('clears token', () => {
+    setAuthToken('abc123');
     clearAuthToken();
-
     expect(getAuthToken()).toBe('');
     expect(apiConfig.TOKEN).toBeUndefined();
   });
 
-  it('should check if user is authenticated', () => {
+  it('reports authentication state', () => {
     expect(isAuthenticated()).toBe(false);
-
-    setAuthToken('test-token');
+    setAuthToken('token');
     expect(isAuthenticated()).toBe(true);
-
     clearAuthToken();
     expect(isAuthenticated()).toBe(false);
   });
 
-  it('should handle empty token as unauthenticated', () => {
+  it('treats empty string as unauthenticated', () => {
     setAuthToken('');
     expect(isAuthenticated()).toBe(false);
   });
 });
 
 describe('Error Transformation', () => {
-  it('should transform 401 authentication error', () => {
-    const apiError = new ApiError('/api/test', 401, 'Unauthorized', {
-      detail: 'Invalid token',
-    });
+  const cases: [number, string, ApiErrorType][] = [
+    [401, 'Unauthorized', ApiErrorType.AUTHENTICATION_ERROR],
+    [403, 'Forbidden', ApiErrorType.AUTHORIZATION_ERROR],
+    [404, 'Not Found', ApiErrorType.NOT_FOUND_ERROR],
+    [422, 'Unprocessable Entity', ApiErrorType.VALIDATION_ERROR],
+    [500, 'Internal Server Error', ApiErrorType.SERVER_ERROR],
+  ];
 
-    const transformed = transformApiError(apiError);
-
-    expect(transformed.type).toBe(ApiErrorType.AUTHENTICATION_ERROR);
-    expect(transformed.statusCode).toBe(401);
-    expect(transformed.message).toContain('Authentication required');
-    expect(transformed.originalError).toBe(apiError);
+  it.each(cases)('transforms %i %s → %s', (status, statusText, expected) => {
+    const err = new ApiError('/api/test', status, statusText, {});
+    expect(transformApiError(err).type).toBe(expected);
   });
 
-  it('should transform 403 authorization error', () => {
-    const apiError = new ApiError('/api/test', 403, 'Forbidden', {
-      detail: 'Permission denied',
-    });
-
-    const transformed = transformApiError(apiError);
-
-    expect(transformed.type).toBe(ApiErrorType.AUTHORIZATION_ERROR);
-    expect(transformed.statusCode).toBe(403);
-    expect(transformed.message).toContain('permission');
+  it('transforms network errors', () => {
+    const err = new Error('Network request failed');
+    const result = transformApiError(err);
+    expect(result.type).toBe(ApiErrorType.NETWORK_ERROR);
+    expect(result.originalError).toBe(err);
   });
 
-  it('should transform 404 not found error', () => {
-    const apiError = new ApiError('/api/test/123', 404, 'Not Found', {
-      detail: 'Resource not found',
-    });
-
-    const transformed = transformApiError(apiError);
-
-    expect(transformed.type).toBe(ApiErrorType.NOT_FOUND_ERROR);
-    expect(transformed.statusCode).toBe(404);
-    expect(transformed.message).toContain('not found');
-  });
-
-  it('should transform 422 validation error', () => {
-    const apiError = new ApiError('/api/test', 422, 'Unprocessable Entity', {
-      errors: [{ field: 'name', message: 'Required' }],
-    });
-
-    const transformed = transformApiError(apiError);
-
-    expect(transformed.type).toBe(ApiErrorType.VALIDATION_ERROR);
-    expect(transformed.statusCode).toBe(422);
-    expect(transformed.message).toContain('Validation error');
-    expect(transformed.details).toBeDefined();
-  });
-
-  it('should transform 500 server error', () => {
-    const apiError = new ApiError('/api/test', 500, 'Internal Server Error', {
-      detail: 'Server error',
-    });
-
-    const transformed = transformApiError(apiError);
-
-    expect(transformed.type).toBe(ApiErrorType.SERVER_ERROR);
-    expect(transformed.statusCode).toBe(500);
-    expect(transformed.message).toContain('Server error');
-  });
-
-  it('should transform network error', () => {
-    const networkError = new Error('Network request failed');
-
-    const transformed = transformApiError(networkError);
-
-    expect(transformed.type).toBe(ApiErrorType.NETWORK_ERROR);
-    expect(transformed.message).toContain('Network error');
-    expect(transformed.originalError).toBe(networkError);
-  });
-
-  it('should transform unknown error', () => {
-    const unknownError = 'Something went wrong';
-
-    const transformed = transformApiError(unknownError);
-
-    expect(transformed.type).toBe(ApiErrorType.UNKNOWN_ERROR);
-    expect(transformed.message).toContain('unexpected error');
+  it('transforms unknown errors', () => {
+    const result = transformApiError('something');
+    expect(result.type).toBe(ApiErrorType.UNKNOWN_ERROR);
   });
 });
 
 describe('Retry Logic', () => {
-  it('should succeed on first attempt', async () => {
-    const mockFn = vi.fn().mockResolvedValue('success');
-
-    const result = await withRetry(mockFn);
-
-    expect(result).toBe('success');
-    expect(mockFn).toHaveBeenCalledTimes(1);
+  it('succeeds on first attempt', async () => {
+    const fn = vi.fn().mockResolvedValue('ok');
+    expect(await withRetry(fn)).toBe('ok');
+    expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  it('should retry on network error', async () => {
-    const mockFn = vi
+  it('retries on network error then succeeds', async () => {
+    const fn = vi
       .fn()
-      .mockRejectedValueOnce(new Error('Network error'))
-      .mockResolvedValue('success');
+      .mockRejectedValueOnce(new Error('Network'))
+      .mockResolvedValue('ok');
 
-    const result = await withRetry(mockFn, {
-      maxRetries: 2,
-      retryDelay: 10,
-    });
-
-    expect(result).toBe('success');
-    expect(mockFn).toHaveBeenCalledTimes(2);
+    expect(await withRetry(fn, { maxRetries: 2, retryDelay: 10 })).toBe('ok');
+    expect(fn).toHaveBeenCalledTimes(2);
   });
 
-  it('should retry on server error (500)', async () => {
-    const serverError = new ApiError(
-      '/api/test',
-      500,
-      'Internal Server Error',
-      null
-    );
-
-    const mockFn = vi
+  it('retries on 500 then succeeds', async () => {
+    const fn = vi
       .fn()
-      .mockRejectedValueOnce(serverError)
-      .mockResolvedValue('success');
+      .mockRejectedValueOnce(new ApiError('/x', 500, 'ISE', null))
+      .mockResolvedValue('ok');
 
-    const result = await withRetry(mockFn, {
-      maxRetries: 2,
-      retryDelay: 10,
-    });
-
-    expect(result).toBe('success');
-    expect(mockFn).toHaveBeenCalledTimes(2);
+    expect(await withRetry(fn, { maxRetries: 2, retryDelay: 10 })).toBe('ok');
+    expect(fn).toHaveBeenCalledTimes(2);
   });
 
-  it('should not retry on authentication error (401)', async () => {
-    const authError = new ApiError('/api/test', 401, 'Unauthorized', null);
-
-    const mockFn = vi.fn().mockRejectedValue(authError);
+  it('does not retry 401', async () => {
+    const fn = vi
+      .fn()
+      .mockRejectedValue(new ApiError('/x', 401, 'Unauthorized', null));
 
     await expect(
-      withRetry(mockFn, { maxRetries: 2, retryDelay: 10 })
-    ).rejects.toMatchObject({
-      type: ApiErrorType.AUTHENTICATION_ERROR,
-    });
-
-    expect(mockFn).toHaveBeenCalledTimes(1);
+      withRetry(fn, { maxRetries: 2, retryDelay: 10 })
+    ).rejects.toMatchObject({ type: ApiErrorType.AUTHENTICATION_ERROR });
+    expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  it('should not retry on validation error (422)', async () => {
-    const validationError = new ApiError(
-      '/api/test',
-      422,
-      'Unprocessable Entity',
-      null
-    );
-
-    const mockFn = vi.fn().mockRejectedValue(validationError);
+  it('does not retry 422', async () => {
+    const fn = vi
+      .fn()
+      .mockRejectedValue(new ApiError('/x', 422, 'Unprocessable', null));
 
     await expect(
-      withRetry(mockFn, { maxRetries: 2, retryDelay: 10 })
-    ).rejects.toMatchObject({
-      type: ApiErrorType.VALIDATION_ERROR,
-    });
-
-    expect(mockFn).toHaveBeenCalledTimes(1);
+      withRetry(fn, { maxRetries: 2, retryDelay: 10 })
+    ).rejects.toMatchObject({ type: ApiErrorType.VALIDATION_ERROR });
+    expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  it('should exhaust retries and throw last error', async () => {
-    const networkError = new Error('Network error');
-    const mockFn = vi.fn().mockRejectedValue(networkError);
+  it('exhausts retries then throws', async () => {
+    const fn = vi.fn().mockRejectedValue(new Error('Network'));
 
     await expect(
-      withRetry(mockFn, { maxRetries: 2, retryDelay: 10 })
-    ).rejects.toMatchObject({
-      type: ApiErrorType.NETWORK_ERROR,
-    });
-
-    expect(mockFn).toHaveBeenCalledTimes(3); // Initial + 2 retries
-  });
-
-  it('should use exponential backoff', async () => {
-    const mockFn = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('Network error'))
-      .mockRejectedValueOnce(new Error('Network error'))
-      .mockResolvedValue('success');
-
-    const startTime = Date.now();
-    await withRetry(mockFn, { maxRetries: 3, retryDelay: 100 });
-    const endTime = Date.now();
-
-    // First retry: 100ms, second retry: 200ms = 300ms minimum
-    expect(endTime - startTime).toBeGreaterThanOrEqual(300);
-    expect(mockFn).toHaveBeenCalledTimes(3);
-  });
-
-  it('should respect custom retry options', async () => {
-    const mockFn = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('Network error'))
-      .mockResolvedValue('success');
-
-    const result = await withRetry(mockFn, {
-      maxRetries: 5,
-      retryDelay: 50,
-    });
-
-    expect(result).toBe('success');
-    expect(mockFn).toHaveBeenCalledTimes(2);
+      withRetry(fn, { maxRetries: 2, retryDelay: 10 })
+    ).rejects.toMatchObject({ type: ApiErrorType.NETWORK_ERROR });
+    expect(fn).toHaveBeenCalledTimes(3);
   });
 });

@@ -6,20 +6,37 @@ type AuthFixtures = {
 
 export const test = base.extend<AuthFixtures>({
   authenticatedPage: async ({ page }, use) => {
-    // Navigate to login page
-    await page.goto('/login');
+    // Retry login up to 3 times to handle race conditions with
+    // systemSettings loading and parallel browser instances
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await page.goto('/login');
 
-    // Fill in login credentials (using test credentials)
-    await page.fill('input[name="username"]', 'testuser@example.com');
-    await page.fill('input[name="password"]', 'testpassword');
+      // Wait for the login form to be fully rendered
+      const emailInput = page.locator('input[name="email"]');
+      await emailInput.waitFor({ state: 'visible', timeout: 15000 });
 
-    // Click login button
-    await page.click('button[type="submit"]');
+      // Fill in login credentials
+      await emailInput.fill('testuser@example.com');
+      await page.locator('input[name="password"]').fill('testpassword');
 
-    // Wait for navigation to dashboard
-    await page.waitForURL('/dashboard', { timeout: 10000 });
+      // Click login button
+      await page.locator('button[type="submit"]').click();
 
-    // Use the authenticated page
+      // Wait for navigation to dashboard
+      try {
+        await page.waitForURL('**/dashboard', { timeout: 10000 });
+        break; // Success
+      } catch {
+        if (attempt === 2) {
+          throw new Error(
+            'Failed to login after 3 attempts. Current URL: ' + page.url()
+          );
+        }
+        // Wait before retrying
+        await page.waitForTimeout(1000);
+      }
+    }
+
     // eslint-disable-next-line react-hooks/rules-of-hooks
     await use(page);
   },

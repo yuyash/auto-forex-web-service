@@ -100,6 +100,18 @@ CSRF_COOKIE_SECURE = False  # type: ignore[assignment]
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 # =============================================================================
+# Rate Limiting — relaxed for E2E tests
+# =============================================================================
+
+REST_FRAMEWORK = {
+    **globals().get("REST_FRAMEWORK", {}),  # type: ignore[arg-type]
+    "DEFAULT_THROTTLE_RATES": {
+        "user": "6000/minute",
+        "anon": "6000/minute",
+    },
+}
+
+# =============================================================================
 # Logging — minimal
 # =============================================================================
 
