@@ -108,7 +108,7 @@ const PreferencesForm = () => {
       });
     } catch (error) {
       console.error('Error fetching settings:', error);
-      showError(t('common:errors.fetchFailed', 'Failed to load data'));
+      showError(t('common:errors.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -153,15 +153,13 @@ const PreferencesForm = () => {
         await i18n.changeLanguage(settings.language);
       }
 
-      showSuccess(
-        t('settings:messages.saveSuccess', 'Settings saved successfully')
-      );
+      showSuccess(t('settings:messages.saveSuccess'));
     } catch (error) {
       console.error('Error saving settings:', error);
       showError(
         error instanceof Error
           ? error.message
-          : t('settings:messages.saveError', 'Failed to save settings')
+          : t('settings:messages.saveError')
       );
     } finally {
       setSubmitting(false);
@@ -194,19 +192,19 @@ const PreferencesForm = () => {
   return (
     <Box component="form" onSubmit={handleSubmit}>
       <Typography variant="h6" gutterBottom>
-        {t('settings:preferences.title', 'User Preferences')}
+        {t('settings:preferences.title')}
       </Typography>
 
       <Box sx={{ mt: 3 }}>
         {/* Timezone Selector */}
         <FormControl fullWidth margin="normal">
           <InputLabel id="timezone-label">
-            {t('settings:preferences.timezone', 'Timezone')}
+            {t('settings:preferences.timezone')}
           </InputLabel>
           <Select
             labelId="timezone-label"
             value={settings.timezone}
-            label={t('settings:preferences.timezone', 'Timezone')}
+            label={t('settings:preferences.timezone')}
             onChange={(e) => handleTimezoneChange(e.target.value)}
           >
             {TIMEZONES.map((tz) => (
@@ -220,12 +218,12 @@ const PreferencesForm = () => {
         {/* Language Selector */}
         <FormControl fullWidth margin="normal">
           <InputLabel id="language-label">
-            {t('settings:preferences.language', 'Language')}
+            {t('settings:preferences.language')}
           </InputLabel>
           <Select
             labelId="language-label"
             value={settings.language}
-            label={t('settings:preferences.language', 'Language')}
+            label={t('settings:preferences.language')}
             onChange={(e) => handleLanguageChange(e.target.value)}
           >
             <MenuItem value="en">English</MenuItem>
@@ -236,7 +234,7 @@ const PreferencesForm = () => {
         {/* Notification Preferences */}
         <Box sx={{ mt: 3, mb: 2 }}>
           <Typography variant="subtitle1" gutterBottom>
-            {t('settings:preferences.notifications', 'Notifications')}
+            {t('settings:preferences.notifications')}
           </Typography>
 
           <FormControlLabel
@@ -271,11 +269,7 @@ const PreferencesForm = () => {
             disabled={submitting}
             sx={{ minWidth: 120 }}
           >
-            {submitting ? (
-              <CircularProgress size={24} />
-            ) : (
-              t('common:save', 'Save')
-            )}
+            {submitting ? <CircularProgress size={24} /> : t('common:save')}
           </Button>
         </Box>
       </Box>

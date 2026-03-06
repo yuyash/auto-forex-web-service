@@ -67,14 +67,14 @@ const LoginPage = () => {
 
     // Email validation
     if (!formData.email) {
-      newErrors.email = 'Email is required';
+      newErrors.email = t('validation.emailRequired');
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Invalid email format';
+      newErrors.email = t('validation.invalidEmailFormat');
     }
 
     // Password validation
     if (!formData.password) {
-      newErrors.password = 'Password is required';
+      newErrors.password = t('validation.passwordRequired');
     }
 
     setErrors(newErrors);
@@ -139,8 +139,8 @@ const LoginPage = () => {
           const statusText =
             `${response.status || ''} ${response.statusText || ''}`.trim();
           general = statusText
-            ? `Login failed (${statusText}).`
-            : 'Login failed. Please try again.';
+            ? t('auth.loginFailedWithStatus', { status: statusText })
+            : t('auth.loginFailed');
         }
 
         // Prefer localized/friendlier messages for known login failures.
@@ -175,10 +175,10 @@ const LoginPage = () => {
         setErrors({
           general:
             trimmed && !trimmed.includes('<')
-              ? `Login failed (${statusText || 'unexpected response'}): ${trimmed}`
+              ? `${t('auth.loginFailedInvalidResponse')}: ${trimmed}`
               : statusText
-                ? `Login failed (${statusText}).`
-                : 'Login failed. Please try again.',
+                ? t('auth.loginFailedWithStatus', { status: statusText })
+                : t('auth.loginFailed'),
         });
         return;
       }
@@ -188,7 +188,7 @@ const LoginPage = () => {
 
       if (!loginData.token || !loginData.user) {
         setErrors({
-          general: 'Login failed (invalid response shape). Please try again.',
+          general: t('auth.loginFailedInvalidResponse'),
         });
         return;
       }
@@ -200,7 +200,7 @@ const LoginPage = () => {
     } catch (error) {
       console.error('Login error:', error);
       setErrors({
-        general: 'An unexpected error occurred. Please try again.',
+        general: t('errors.unexpectedError'),
       });
     } finally {
       setIsLoading(false);

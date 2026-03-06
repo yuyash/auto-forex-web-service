@@ -18,6 +18,7 @@ import {
 import SearchIcon from '@mui/icons-material/Search';
 import AddIcon from '@mui/icons-material/Add';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useConfigurations } from '../hooks/useConfigurations';
 import { Breadcrumbs } from '../components/common';
 import ConfigurationCard from '../components/configurations/ConfigurationCard';
@@ -25,6 +26,7 @@ import type { SelectChangeEvent } from '@mui/material';
 import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
 
 const ConfigurationsPage = () => {
+  const { t } = useTranslation(['configuration', 'common']);
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [strategyTypeFilter, setStrategyTypeFilter] = useState<string>('all');
@@ -100,11 +102,10 @@ const ConfigurationsPage = () => {
       >
         <Box>
           <Typography variant="h4" gutterBottom>
-            Strategy Configurations
+            {t('configuration:pages.title')}
           </Typography>
           <Typography variant="body1" color="text.secondary">
-            Manage reusable strategy configurations for backtesting and live
-            trading
+            {t('configuration:pages.subtitle')}
           </Typography>
         </Box>
         <Button
@@ -113,7 +114,7 @@ const ConfigurationsPage = () => {
           startIcon={<AddIcon />}
           onClick={handleCreateNew}
         >
-          New Configuration
+          {t('configuration:card.newConfiguration')}
         </Button>
       </Box>
 
@@ -129,7 +130,7 @@ const ConfigurationsPage = () => {
         >
           <TextField
             fullWidth
-            placeholder="Search configurations..."
+            placeholder={t('configuration:filters.searchConfigurations')}
             value={search}
             onChange={handleSearchChange}
             InputProps={{
@@ -142,15 +143,17 @@ const ConfigurationsPage = () => {
           />
           <FormControl fullWidth>
             <InputLabel id="strategy-type-filter-label">
-              Strategy Type
+              {t('configuration:filters.strategyType')}
             </InputLabel>
             <Select
               labelId="strategy-type-filter-label"
               value={strategyTypeFilter}
-              label="Strategy Type"
+              label={t('configuration:filters.strategyType')}
               onChange={handleStrategyTypeChange}
             >
-              <MenuItem value="all">All Types</MenuItem>
+              <MenuItem value="all">
+                {t('configuration:filters.allTypes')}
+              </MenuItem>
               {strategyTypes.map((type) => (
                 <MenuItem key={type} value={type}>
                   {getStrategyDisplayName(strategies, type)}
@@ -169,24 +172,24 @@ const ConfigurationsPage = () => {
           action={
             !error.message.toLowerCase().includes('connection refused') && (
               <Button color="inherit" onClick={() => window.location.reload()}>
-                Reload
+                {t('common:actions.reload')}
               </Button>
             )
           }
         >
           <Typography variant="body2" gutterBottom>
-            <strong>Failed to load configurations</strong>
+            <strong>{t('common:errors.fetchFailed')}</strong>
           </Typography>
           <Typography variant="body2">
             {error.message.toLowerCase().includes('connection refused') ||
             error.message.toLowerCase().includes('failed to fetch')
-              ? 'Cannot connect to server. Please check if the backend is running.'
+              ? t('common:errors.cannotConnectToServer')
               : error.message.includes('429') ||
                   error.message.includes('Too Many Requests')
-                ? 'Too many requests. Please wait a moment and try again.'
+                ? t('common:errors.tooManyRequests')
                 : error.message.includes('502') ||
                     error.message.includes('Bad Gateway')
-                  ? 'Server is temporarily unavailable. Please try again later.'
+                  ? t('common:errors.serverUnavailable')
                   : error.message}
           </Typography>
         </Alert>
@@ -211,13 +214,13 @@ const ConfigurationsPage = () => {
         >
           <Typography variant="h6" color="text.secondary" gutterBottom>
             {search || strategyTypeFilter !== 'all'
-              ? 'No configurations found'
-              : 'No configurations yet'}
+              ? t('configuration:empty.noConfigurationsFound')
+              : t('configuration:empty.noConfigurationsYet')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
             {search || strategyTypeFilter !== 'all'
-              ? 'Try adjusting your search or filters'
-              : 'Create your first strategy configuration to get started'}
+              ? t('configuration:empty.tryAdjustingFilters')
+              : t('configuration:empty.createFirstConfig')}
           </Typography>
           {!search && strategyTypeFilter === 'all' && (
             <Button
@@ -226,7 +229,7 @@ const ConfigurationsPage = () => {
               startIcon={<AddIcon />}
               onClick={handleCreateNew}
             >
-              Create Configuration
+              {t('configuration:card.newConfiguration')}
             </Button>
           )}
         </Paper>
@@ -261,14 +264,14 @@ const ConfigurationsPage = () => {
                 onClick={handlePreviousPage}
                 disabled={!hasPreviousPage || isLoading}
               >
-                Previous
+                {t('common:actions.previous')}
               </Button>
               <Button
                 variant="outlined"
                 onClick={handleNextPage}
                 disabled={!hasNextPage || isLoading}
               >
-                Next
+                {t('common:actions.next')}
               </Button>
             </Box>
           )}

@@ -6,31 +6,33 @@ import {
   PlayCircleOutline as TradingIcon,
   AccountBalanceWallet as AccountIcon,
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 
 const QuickActionsWidget = () => {
+  const { t } = useTranslation('dashboard');
   const navigate = useNavigate();
 
   const actions = [
     {
-      label: 'Add Account',
+      label: t('quickActions.addAccount'),
       icon: <AccountIcon />,
       path: '/settings',
       color: 'info' as const,
     },
     {
-      label: 'New Configuration',
+      label: t('quickActions.newConfiguration'),
       icon: <ConfigIcon />,
       path: '/configurations/new',
       color: 'primary' as const,
     },
     {
-      label: 'New Backtest Task',
+      label: t('quickActions.newBacktestTask'),
       icon: <BacktestIcon />,
       path: '/backtest-tasks/new',
       color: 'secondary' as const,
     },
     {
-      label: 'New Trading Task',
+      label: t('quickActions.newTradingTask'),
       icon: <TradingIcon />,
       path: '/trading-tasks/new',
       color: 'success' as const,
@@ -40,7 +42,7 @@ const QuickActionsWidget = () => {
   return (
     <Paper elevation={2} sx={{ p: 3, height: '100%' }}>
       <Typography variant="h6" sx={{ mb: 2 }}>
-        Quick Actions
+        {t('widgets.quickActions')}
       </Typography>
 
       <Stack spacing={2}>

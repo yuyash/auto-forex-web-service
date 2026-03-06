@@ -1,11 +1,13 @@
 import { Container, Box, Typography, Paper } from '@mui/material';
 import { useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import BacktestTaskForm from '../components/backtest/BacktestTaskForm';
 import BacktestTaskUpdateForm from '../components/backtest/BacktestTaskUpdateForm';
 import { useBacktestTask } from '../hooks/useBacktestTasks';
 import { LoadingSpinner, Breadcrumbs } from '../components/common';
 
 export default function BacktestTaskFormPage() {
+  const { t } = useTranslation('backtest');
   const { id } = useParams<{ id: string }>();
   const taskId = id || undefined;
 
@@ -34,7 +36,7 @@ export default function BacktestTaskFormPage() {
         <Breadcrumbs />
 
         <Typography variant="h4" component="h1" gutterBottom>
-          {taskId ? 'Edit Backtest Task' : 'Create Backtest Task'}
+          {taskId ? t('pages.editTitle') : t('pages.createTitle')}
         </Typography>
 
         <Paper sx={{ p: 4, mt: 3 }}>

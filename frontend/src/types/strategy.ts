@@ -44,6 +44,12 @@ export interface ConfigProperty {
   };
   /** Logical group for UI section grouping */
   group?: string;
+  /** Localized titles: title_ja, title_en, etc. */
+  [localizedKey: `title_${string}`]: string | undefined;
+  /** Localized descriptions: description_ja, description_en, etc. */
+  [localizedKey2: `description_${string}`]: string | undefined;
+  /** Localized group names: group_ja, group_en, etc. */
+  [localizedKey3: `group_${string}`]: string | undefined;
   // Conditional visibility: show this field only when another field has specific values
   dependsOn?: DependsOnCondition;
   /**

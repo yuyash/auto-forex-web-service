@@ -110,8 +110,7 @@ const StrategySelector = ({
                         mb={1}
                       >
                         <Typography variant="h6" component="div">
-                          {strategy.config_schema?.display_name ||
-                            strategy.name}
+                          {t(`types.${strategy.id}`, strategy.name)}
                         </Typography>
                         {isSelected && (
                           <Chip label="Selected" color="primary" />
@@ -129,7 +128,7 @@ const StrategySelector = ({
                           minHeight: '3.6em',
                         }}
                       >
-                        {strategy.description}
+                        {t(`descriptions.${strategy.id}`, strategy.description)}
                       </Typography>
                       <Box mt={2}>
                         <Typography
@@ -151,11 +150,13 @@ const StrategySelector = ({
         {selectedStrategyData && (
           <Alert severity="info" sx={{ mt: 3 }}>
             <Typography variant="subtitle2" gutterBottom>
-              {selectedStrategyData.config_schema?.display_name ||
-                selectedStrategyData.name}
+              {t(`types.${selectedStrategyData.id}`, selectedStrategyData.name)}
             </Typography>
             <Typography variant="body2">
-              {selectedStrategyData.description}
+              {t(
+                `descriptions.${selectedStrategyData.id}`,
+                selectedStrategyData.description
+              )}
             </Typography>
           </Alert>
         )}
@@ -178,7 +179,7 @@ const StrategySelector = ({
             <MenuItem key={strategy.id} value={strategy.id}>
               <Box>
                 <Typography variant="body1">
-                  {strategy.config_schema?.display_name || strategy.name}
+                  {t(`types.${strategy.id}`, strategy.name)}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   {strategy.class_name}
@@ -192,11 +193,13 @@ const StrategySelector = ({
       {selectedStrategyData && (
         <Alert severity="info" sx={{ mt: 2 }}>
           <Typography variant="subtitle2" gutterBottom>
-            {selectedStrategyData.config_schema?.display_name ||
-              selectedStrategyData.name}
+            {t(`types.${selectedStrategyData.id}`, selectedStrategyData.name)}
           </Typography>
           <Typography variant="body2">
-            {selectedStrategyData.description}
+            {t(
+              `descriptions.${selectedStrategyData.id}`,
+              selectedStrategyData.description
+            )}
           </Typography>
         </Alert>
       )}

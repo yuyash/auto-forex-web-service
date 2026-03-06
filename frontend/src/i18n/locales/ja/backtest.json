@@ -1,13 +1,29 @@
 {
   "title": "バックテスト",
+  "pages": {
+    "title": "バックテストタスク",
+    "createTitle": "バックテストタスクを作成",
+    "editTitle": "バックテストタスクを編集"
+  },
   "tabs": {
     "configuration": "設定",
     "results": "結果",
-    "history": "履歴"
+    "history": "履歴",
+    "all": "すべて",
+    "running": "実行中",
+    "completed": "完了",
+    "failed": "失敗",
+    "overview": "概要",
+    "trend": "トレンド",
+    "positions": "ポジション",
+    "trades": "取引",
+    "orders": "注文",
+    "events": "イベント",
+    "logs": "ログ",
+    "replay": "リプレイ"
   },
   "config": {
     "title": "バックテスト設定",
-    "placeholder": "設定パネルはタスク21.2で実装されます",
     "strategy": "戦略",
     "instrument": "通貨ペア",
     "instrumentPlaceholder": "通貨ペアを選択",
@@ -39,7 +55,6 @@
   },
   "progress": {
     "title": "バックテスト進行状況",
-    "placeholder": "進行状況パネルはタスク21.3で実装されます",
     "noBacktest": "実行中のバックテストはありません。バックテストを設定して開始すると進行状況が表示されます。",
     "notFound": "バックテストが見つかりません",
     "status": "ステータス",
@@ -61,7 +76,6 @@
   },
   "results": {
     "title": "バックテスト結果",
-    "placeholder": "結果パネルはタスク21.4で実装されます",
     "noResults": "結果がありません。バックテストを実行して結果を表示してください。",
     "noData": "データがありません",
     "totalReturn": "総リターン",
@@ -79,7 +93,6 @@
   },
   "history": {
     "title": "バックテスト履歴",
-    "placeholder": "履歴パネルはタスク21.6で実装されます",
     "date": "日付",
     "strategy": "戦略",
     "instrument": "通貨ペア",
@@ -124,5 +137,98 @@
     "notSignificant": "統計的に有意ではない",
     "significanceExplanation": "統計的に有意な結果（p < 0.05）は、2つの戦略のパフォーマンスの差が偶然によるものではない可能性が高いことを示唆しています。",
     "noSelection": "上記からバックテストを選択してパフォーマンスを比較してください"
+  },
+  "card": {
+    "taskExecutionFailed": "タスク実行に失敗しました"
+  },
+  "empty": {
+    "noTasksFound": "バックテストタスクが見つかりません",
+    "createFirstTask": "最初のバックテストタスクを作成して始めましょう",
+    "noRunningTasks": "実行中のタスクはありません",
+    "noCompletedTasks": "完了したタスクはありません",
+    "noFailedTasks": "失敗したタスクはありません"
+  },
+  "detail": {
+    "taskInformation": "タスク情報",
+    "backtestPeriod": "バックテスト期間",
+    "startTime": "開始時間",
+    "endTime": "終了時間",
+    "dataSource": "データソース",
+    "initialBalance": "初期残高",
+    "commissionPerTrade": "取引手数料",
+    "results": "結果",
+    "executionTimeline": "実行タイムライン",
+    "startedAt": "開始日時",
+    "completedAt": "完了日時",
+    "realizedPnl": "実現損益",
+    "unrealizedPnl": "未実現損益",
+    "currentBalance": "現在残高",
+    "totalTradesCount": "総取引数",
+    "openPositions": "オープンポジション",
+    "closedPositions": "クローズドポジション",
+    "ticksProcessed": "処理ティック数",
+    "completed": "完了"
+  },
+  "form": {
+    "selectConfiguration": "設定構成を選択",
+    "chooseStrategyConfig": "このバックテストタスクの戦略設定を選択してください",
+    "backtestParameters": "バックテストパラメータ",
+    "configureParameters": "バックテストの期間、通貨ペア、初期設定を構成します",
+    "updateParameters": "バックテストの期間、通貨ペア、初期設定を更新します",
+    "reviewAndSubmit": "確認と送信",
+    "reviewBeforeSubmitting": "送信前にバックテストタスクの設定を確認してください",
+    "taskName": "タスク名",
+    "commissionPerTrade": "取引手数料",
+    "pipSizeOptional": "Pipサイズ（任意）",
+    "pipSizeHelperText": "空欄にするとOANDAアカウントから自動取得します",
+    "pipSizeHelperTextLong": "空欄にすると通貨ペアから自動導出します。一般的な値：0.0001（EUR_USD）、0.01（USD_JPY）",
+    "instrumentPlaceholder": "例：EUR_USD、USD_JPY",
+    "instrumentHelperText": "バックテストする通貨ペア",
+    "closePositionsAtCompletion": "バックテスト完了時にすべてのポジションを決済",
+    "closePositionsDescription": "有効にすると、バックテスト終了時にすべてのオープンポジションが最終市場価格で自動的に決済されます。",
+    "dateRangeHelperText": "バックテストには過去のデータが必要です。未来の日付は使用できません。",
+    "checkingTickDataRange": "ティックデータ範囲を確認中...",
+    "noTickDataFound": "データベースに{{instrument}}のティックデータが見つかりません。",
+    "dataRange": "{{instrument}}のデータ範囲：",
+    "steps": {
+      "configuration": "設定構成",
+      "parameters": "パラメータ",
+      "review": "確認"
+    }
+  },
+  "toast": {
+    "startedSuccessfully": "バックテストタスクが正常に開始されました",
+    "stoppedSuccessfully": "バックテストタスクが正常に停止されました",
+    "resumedSuccessfully": "バックテストタスクが正常に再開されました",
+    "restartedSuccessfully": "バックテストタスクが正常に再起動されました",
+    "deletedSuccessfully": "バックテストタスクが正常に削除されました",
+    "cannotDeleteRunning": "実行中のタスクは削除できません。先に停止してください。"
+  },
+  "floorLog": {
+    "title": "フロア戦略実行ログ",
+    "noEvents": "このバックテストのフロア戦略イベントはありません。",
+    "description": "初期ポジション、レイヤー追加、リトレースメント、利益確定の詳細な実行ログ。",
+    "totalPnl": "合計損益：",
+    "columns": {
+      "event": "イベント",
+      "time": "時間",
+      "layer": "レイヤー",
+      "action": "アクション",
+      "retracementNumber": "リトレースメント#",
+      "units": "数量",
+      "price": "価格",
+      "realizedPnl": "実現損益",
+      "unrealizedPnl": "未実現損益",
+      "details": "詳細"
+    },
+    "eventTypes": {
+      "initialEntry": "初期エントリー",
+      "retracement": "リトレースメント",
+      "takeProfit": "利益確定",
+      "addLayer": "レイヤー追加",
+      "removeLayer": "レイヤー削除",
+      "volatilityLock": "ボラティリティロック",
+      "marginProtection": "証拠金保護"
+    }
   }
 }

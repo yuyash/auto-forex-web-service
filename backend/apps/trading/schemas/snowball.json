@@ -6,55 +6,75 @@
     "base_units": {
       "type": "integer",
       "title": "Base Units",
+      "title_ja": "基本ユニット数",
       "description": "Base lot size in currency units (e.g. 1000 = 1 lot).",
+      "description_ja": "基本ロットサイズ（通貨単位）。例: 1000 = 1ロット。",
       "default": 1000,
       "minimum": 1,
-      "group": "Core Parameters"
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
     },
     "m_pips": {
       "type": "number",
       "title": "Trend Take-Profit (pips)",
+      "title_ja": "順行側利確幅（pips）",
       "description": "Profit target for the trend-side rotational take-profit.",
+      "description_ja": "順行側の回転利確の利益目標（pips）。",
       "default": 50,
       "minimum": 1,
-      "group": "Trend Take-Profit"
+      "group": "Trend Take-Profit",
+      "group_ja": "順行側利確"
     },
     "trend_lot_size": {
       "type": "integer",
       "title": "Trend Lot Size",
+      "title_ja": "順行側ロットサイズ",
       "description": "Lot count for each trend-side entry and re-entry. Multiplied by Base Units to get currency units.",
+      "description_ja": "順行側の各エントリーおよび再エントリーのロット数。基本ユニット数に乗算されます。",
       "default": 1,
       "minimum": 1,
-      "group": "Trend Take-Profit"
+      "group": "Trend Take-Profit",
+      "group_ja": "順行側利確"
     },
     "r_max": {
       "type": "integer",
       "title": "Max Steps (r_max)",
+      "title_ja": "最大段数（r_max）",
       "description": "Maximum number of counter-trend steps per cycle (including the initial entry).",
+      "description_ja": "1サイクルあたりの逆行側最大段数（初回建玉を含む）。",
       "default": 7,
       "minimum": 2,
-      "group": "Core Parameters"
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
     },
     "f_max": {
       "type": "integer",
       "title": "Max Cycle Retries (f_max)",
+      "title_ja": "最大サイクル再試行回数（f_max）",
       "description": "How many times the counter-trend cycle can restart after reaching r_max.",
+      "description_ja": "r_max到達後にサイクルを再開できる回数。",
       "default": 3,
       "minimum": 0,
-      "group": "Core Parameters"
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
     },
     "post_r_max_base_factor": {
       "type": "number",
       "title": "Post r_max Base Factor",
+      "title_ja": "r_max超過時ロット倍率",
       "description": "Multiplier applied to base_units when a new cycle starts after r_max.",
+      "description_ja": "r_max到達後の新サイクル開始時に基本ユニット数に適用される倍率。",
       "default": 1,
       "minimum": 0.1,
-      "group": "Core Parameters"
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
     },
     "interval_mode": {
       "type": "string",
       "title": "Interval Mode",
+      "title_ja": "間隔モード",
       "description": "How counter-trend add intervals are calculated. Manual mode allows per-step custom values.",
+      "description_ja": "逆行側の増し玉間隔の計算方法。手動モードでは段ごとにカスタム値を設定可能。",
       "enum": [
         "constant",
         "additive",
@@ -64,12 +84,15 @@
         "manual"
       ],
       "default": "constant",
-      "group": "Counter-Trend Interval"
+      "group": "Counter-Trend Interval",
+      "group_ja": "逆行側間隔"
     },
     "n_pips_head": {
       "type": "number",
       "title": "Interval Head (pips)",
+      "title_ja": "間隔初期値（pips）",
       "description": "Starting pip interval for counter-trend adds.",
+      "description_ja": "逆行側増し玉の開始pip間隔。",
       "default": 30,
       "minimum": 1,
       "dependsOn": {
@@ -82,12 +105,15 @@
           "divisive"
         ]
       },
-      "group": "Counter-Trend Interval"
+      "group": "Counter-Trend Interval",
+      "group_ja": "逆行側間隔"
     },
     "n_pips_tail": {
       "type": "number",
       "title": "Interval Tail (pips)",
+      "title_ja": "間隔終端値（pips）",
       "description": "Ending pip interval for counter-trend adds (after decay).",
+      "description_ja": "逆行側増し玉の終端pip間隔（減衰後）。",
       "default": 14,
       "minimum": 1,
       "dependsOn": {
@@ -100,12 +126,15 @@
           "divisive"
         ]
       },
-      "group": "Counter-Trend Interval"
+      "group": "Counter-Trend Interval",
+      "group_ja": "逆行側間隔"
     },
     "n_pips_flat_steps": {
       "type": "integer",
       "title": "Flat Steps",
+      "title_ja": "固定段数",
       "description": "Number of initial steps that use the head interval before decay begins.",
+      "description_ja": "減衰開始前に初期値間隔を使用する段数。",
       "default": 2,
       "minimum": 0,
       "dependsOn": {
@@ -118,12 +147,15 @@
           "divisive"
         ]
       },
-      "group": "Counter-Trend Interval"
+      "group": "Counter-Trend Interval",
+      "group_ja": "逆行側間隔"
     },
     "n_pips_gamma": {
       "type": "number",
       "title": "Interval Gamma",
+      "title_ja": "間隔ガンマ係数",
       "description": "Decay curve coefficient. >1 = slow start, <1 = fast start.",
+      "description_ja": "減衰カーブ係数。1超=緩やかな開始、1未満=急速な開始。",
       "default": 1.4,
       "minimum": 0.01,
       "dependsOn": {
@@ -136,33 +168,31 @@
           "divisive"
         ]
       },
-      "group": "Counter-Trend Interval"
+      "group": "Counter-Trend Interval",
+      "group_ja": "逆行側間隔"
     },
     "manual_intervals": {
       "type": "array",
       "title": "Manual Intervals (pips)",
+      "title_ja": "手動間隔（pips）",
       "description": "Per-step pip intervals when interval_mode is 'manual'. One value per add step (r_max − 1 entries).",
+      "description_ja": "手動モード時の段ごとのpip間隔。増し玉1回につき1つの値（r_max − 1個）。",
       "default": [],
-      "items": {
-        "type": "number",
-        "minimum": 1
-      },
-      "dependsOn": {
-        "field": "interval_mode",
-        "values": ["manual"]
-      },
+      "items": { "type": "number", "minimum": 1 },
+      "dependsOn": { "field": "interval_mode", "values": ["manual"] },
       "group": "Counter-Trend Interval",
-      "linkedCount": {
-        "field": "r_max",
-        "offset": -1
-      },
-      "itemLabel": "Step {index} interval (pips)"
+      "group_ja": "逆行側間隔",
+      "linkedCount": { "field": "r_max", "offset": -1 },
+      "itemLabel": "Step {index} interval (pips)",
+      "itemLabel_ja": "段{index} 間隔（pips）"
     },
 
     "counter_tp_mode": {
       "type": "string",
       "title": "Close Price Mode",
+      "title_ja": "決済価格モード",
       "description": "How the close price for each counter-trend step is calculated.",
+      "description_ja": "逆行側の各段の決済価格の計算方法。",
       "enum": [
         "fixed",
         "additive",
@@ -172,12 +202,15 @@
         "weighted_avg"
       ],
       "default": "fixed",
-      "group": "Counter-Trend Take-Profit"
+      "group": "Counter-Trend Take-Profit",
+      "group_ja": "逆行側決済"
     },
     "counter_tp_pips": {
       "type": "number",
       "title": "Take-Profit (pips)",
+      "title_ja": "利確幅（pips）",
       "description": "Fixed pip offset from entry price (fixed mode) or base value for progression modes.",
+      "description_ja": "建玉価格からの固定pipオフセット（固定モード）、または段階モードの基準値。",
       "default": 25,
       "minimum": 0.1,
       "dependsOn": {
@@ -190,156 +223,205 @@
           "divisive"
         ]
       },
-      "group": "Counter-Trend Take-Profit"
+      "group": "Counter-Trend Take-Profit",
+      "group_ja": "逆行側決済"
     },
     "counter_tp_step_amount": {
       "type": "number",
       "title": "Step Amount (pips)",
-      "description": "Pips added or subtracted per step. Step 1 = base, Step 2 = base ± amount, Step 3 = base ± 2×amount, etc.",
+      "title_ja": "段階増減量（pips）",
+      "description": "Pips added or subtracted per step.",
+      "description_ja": "段ごとに加算または減算されるpips。",
       "default": 2.5,
       "minimum": 0.1,
       "dependsOn": {
         "field": "counter_tp_mode",
         "values": ["additive", "subtractive"]
       },
-      "group": "Counter-Trend Take-Profit"
+      "group": "Counter-Trend Take-Profit",
+      "group_ja": "逆行側決済"
     },
     "counter_tp_multiplier": {
       "type": "number",
       "title": "Step Multiplier",
-      "description": "Multiplier per step. Step 1 = base, Step 2 = base × multiplier, Step 3 = base × multiplier², etc.",
+      "title_ja": "段階乗数",
+      "description": "Multiplier per step.",
+      "description_ja": "段ごとの乗数。",
       "default": 1.2,
       "minimum": 0.01,
       "dependsOn": {
         "field": "counter_tp_mode",
         "values": ["multiplicative", "divisive"]
       },
-      "group": "Counter-Trend Take-Profit"
+      "group": "Counter-Trend Take-Profit",
+      "group_ja": "逆行側決済"
     },
     "round_step_pips": {
       "type": "number",
       "title": "Round Step (pips)",
+      "title_ja": "丸め単位（pips）",
       "description": "Rounding unit for interval and TP calculations.",
+      "description_ja": "間隔およびTP計算の丸め単位。",
       "default": 0.1,
       "minimum": 0.1,
-      "group": "Counter-Trend Take-Profit"
+      "group": "Counter-Trend Take-Profit",
+      "group_ja": "逆行側決済"
     },
 
     "dynamic_tp_enabled": {
       "type": "boolean",
       "title": "Dynamic Take-Profit (ATR)",
+      "title_ja": "動的利確（ATR）",
       "description": "Automatically adjust trend take-profit based on ATR volatility.",
+      "description_ja": "ATRボラティリティに基づいて順行側利確を自動調整。",
       "default": false,
-      "group": "Dynamic Take-Profit (ATR)"
+      "group": "Dynamic Take-Profit (ATR)",
+      "group_ja": "動的利確（ATR）"
     },
     "atr_period": {
       "type": "integer",
       "title": "ATR Period",
+      "title_ja": "ATR期間",
       "description": "Number of candles for ATR calculation.",
+      "description_ja": "ATR計算に使用するローソク足の本数。",
       "default": 14,
       "minimum": 1,
       "dependsOn": { "field": "dynamic_tp_enabled", "values": [true] },
-      "group": "Dynamic Take-Profit (ATR)"
+      "group": "Dynamic Take-Profit (ATR)",
+      "group_ja": "動的利確（ATR）"
     },
     "atr_timeframe": {
       "type": "string",
       "title": "ATR Timeframe",
+      "title_ja": "ATR時間枠",
       "description": "Candle granularity for ATR calculation.",
+      "description_ja": "ATR計算のローソク足の時間枠。",
       "enum": ["M1", "M5", "M15", "M30", "H1", "H4"],
       "default": "M1",
       "dependsOn": { "field": "dynamic_tp_enabled", "values": [true] },
-      "group": "Dynamic Take-Profit (ATR)"
+      "group": "Dynamic Take-Profit (ATR)",
+      "group_ja": "動的利確（ATR）"
     },
     "atr_baseline_lookback": {
       "type": "integer",
       "title": "ATR Baseline Lookback",
+      "title_ja": "ATR基準値算出本数",
       "description": "Number of candles for baseline ATR calculation.",
+      "description_ja": "基準ATR計算に使用するローソク足の本数。",
       "default": 96,
       "minimum": 1,
       "dependsOn": { "field": "dynamic_tp_enabled", "values": [true] },
-      "group": "Dynamic Take-Profit (ATR)"
+      "group": "Dynamic Take-Profit (ATR)",
+      "group_ja": "動的利確（ATR）"
     },
     "m_pips_min": {
       "type": "number",
       "title": "Dynamic m_pips Min",
+      "title_ja": "動的m_pips下限",
       "description": "Lower bound for ATR-adjusted trend take-profit.",
+      "description_ja": "ATR調整後の順行側利確の下限値。",
       "default": 12,
       "minimum": 1,
       "dependsOn": { "field": "dynamic_tp_enabled", "values": [true] },
-      "group": "Dynamic Take-Profit (ATR)"
+      "group": "Dynamic Take-Profit (ATR)",
+      "group_ja": "動的利確（ATR）"
     },
     "m_pips_max": {
       "type": "number",
       "title": "Dynamic m_pips Max",
+      "title_ja": "動的m_pips上限",
       "description": "Upper bound for ATR-adjusted trend take-profit.",
+      "description_ja": "ATR調整後の順行側利確の上限値。",
       "default": 45,
       "minimum": 1,
       "dependsOn": { "field": "dynamic_tp_enabled", "values": [true] },
-      "group": "Dynamic Take-Profit (ATR)"
+      "group": "Dynamic Take-Profit (ATR)",
+      "group_ja": "動的利確（ATR）"
     },
 
     "margin_protection_enabled": {
       "type": "boolean",
       "title": "Margin Protection",
+      "title_ja": "証拠金保護",
       "description": "Enable multi-level margin protection (rebalance, shrink, lock, emergency stop).",
+      "description_ja": "多段階証拠金保護を有効化（リバランス、縮小、ロック、緊急停止）。",
       "default": true,
-      "group": "Margin Protection"
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
     },
     "m_th": {
       "type": "number",
       "title": "Margin Level 1 - Shrink (%)",
+      "title_ja": "証拠金レベル1 - 縮小（%）",
       "description": "Margin ratio threshold to enter shrink mode (stop new entries, partial close).",
+      "description_ja": "縮小モードに入る証拠金比率の閾値（新規エントリー停止、部分決済）。",
       "default": 70,
       "minimum": 1,
       "maximum": 99,
       "dependsOn": { "field": "margin_protection_enabled", "values": [true] },
-      "group": "Margin Protection"
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
     },
     "n_th": {
       "type": "number",
       "title": "Margin Level 2 - Lock (%)",
+      "title_ja": "証拠金レベル2 - ロック（%）",
       "description": "Margin ratio threshold to enter lock mode (add net-zero hedge).",
+      "description_ja": "ロックモードに入る証拠金比率の閾値（ネットゼロヘッジ追加）。",
       "default": 85,
       "minimum": 1,
       "maximum": 99,
       "dependsOn": { "field": "margin_protection_enabled", "values": [true] },
-      "group": "Margin Protection"
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
     },
     "spread_guard_pips": {
       "type": "number",
       "title": "Spread Guard (pips)",
+      "title_ja": "スプレッドガード（pips）",
       "description": "Maximum spread allowed for new entries and lock release.",
+      "description_ja": "新規エントリーおよびロック解除時に許容される最大スプレッド。",
       "default": 2.5,
       "minimum": 0,
       "dependsOn": { "field": "margin_protection_enabled", "values": [true] },
-      "group": "Margin Protection"
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
     },
     "cooldown_sec": {
       "type": "integer",
       "title": "Cooldown (seconds)",
+      "title_ja": "クールダウン（秒）",
       "description": "Waiting period after lock release before resuming normal trading.",
+      "description_ja": "ロック解除後、通常取引を再開するまでの待機時間。",
       "default": 300,
       "minimum": 0,
       "dependsOn": { "field": "margin_protection_enabled", "values": [true] },
-      "group": "Margin Protection"
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
     },
     "rebalance_start_ratio": {
       "type": "number",
       "title": "Rebalance Start (%)",
+      "title_ja": "リバランス開始（%）",
       "description": "Margin ratio at which BUY/SELL rebalancing begins.",
+      "description_ja": "BUY/SELLリバランスを開始する証拠金比率。",
       "default": 60,
       "minimum": 1,
       "dependsOn": { "field": "margin_protection_enabled", "values": [true] },
-      "group": "Margin Protection"
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
     },
     "rebalance_end_ratio": {
       "type": "number",
       "title": "Rebalance End (%)",
+      "title_ja": "リバランス終了（%）",
       "description": "Margin ratio target at which rebalancing stops.",
+      "description_ja": "リバランスを終了する証拠金比率の目標値。",
       "default": 50,
       "minimum": 1,
       "dependsOn": { "field": "margin_protection_enabled", "values": [true] },
-      "group": "Margin Protection"
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
     }
   },
   "required": ["base_units", "m_pips", "r_max"]

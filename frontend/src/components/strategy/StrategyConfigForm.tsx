@@ -70,7 +70,17 @@ const StrategyConfigForm = ({
   disabled = false,
   showValidation = false,
 }: StrategyConfigFormProps) => {
-  const { t } = useTranslation('strategy');
+  const { t, i18n } = useTranslation('strategy');
+
+  /** Resolve a localized schema field: e.g. title_ja → title fallback. */
+  const localized = (
+    prop: ConfigProperty,
+    field: 'title' | 'description' | 'group'
+  ): string | undefined => {
+    const langKey = `${field}_${i18n.language}` as keyof ConfigProperty;
+    return (prop[langKey] as string | undefined) ?? prop[field];
+  };
+
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>(
     {}
   );
@@ -340,8 +350,9 @@ const StrategyConfigForm = ({
     const value = config[fieldName] ?? fieldSchema.default ?? '';
     const error = jsonDraftErrors[fieldName] || validationErrors[fieldName];
     const isRequired = configSchema.required?.includes(fieldName);
-    const label = fieldSchema.title ?? formatFieldLabel(fieldName);
-    const labelNode = renderLabel(label, fieldSchema.description);
+    const label =
+      localized(fieldSchema, 'title') ?? formatFieldLabel(fieldName);
+    const labelNode = renderLabel(label, localized(fieldSchema, 'description'));
 
     // Enum field (dropdown)
     if (fieldSchema.enum) {
@@ -433,8 +444,10 @@ const StrategyConfigForm = ({
               </MenuItem>
             ))}
           </Select>
-          {(fieldSchema.description || error) && (
-            <FormHelperText>{error || fieldSchema.description}</FormHelperText>
+          {(localized(fieldSchema, 'description') || error) && (
+            <FormHelperText>
+              {error || localized(fieldSchema, 'description')}
+            </FormHelperText>
           )}
         </FormControl>
       );
@@ -455,7 +468,7 @@ const StrategyConfigForm = ({
           label={
             <Box>
               <Typography variant="body2">
-                {renderLabel(label, fieldSchema.description)}
+                {renderLabel(label, localized(fieldSchema, 'description'))}
                 {isRequired && (
                   <Typography component="span" color="error">
                     {' '}
@@ -485,7 +498,7 @@ const StrategyConfigForm = ({
                 : parseFloat(e.target.value);
             handleFieldChange(fieldName, isNaN(numValue) ? '' : numValue);
           }}
-          helperText={error || fieldSchema.description}
+          helperText={error || localized(fieldSchema, 'description')}
           error={!!error}
           required={isRequired}
           disabled={disabled}
@@ -508,12 +521,17 @@ const StrategyConfigForm = ({
         const stepCount = Math.max(0, countValue);
         const currentArray = Array.isArray(value) ? (value as number[]) : [];
         const itemMin = fieldSchema.items?.minimum;
-        const labelTpl = fieldSchema.itemLabel ?? `${label} {index}`;
+        const labelTpl =
+          ((fieldSchema as Record<string, unknown>)[
+            `itemLabel_${i18n.language}`
+          ] as string) ??
+          fieldSchema.itemLabel ??
+          `${label} {index}`;
 
         return (
           <Box key={fieldName}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              {renderLabel(label, fieldSchema.description)}
+              {renderLabel(label, localized(fieldSchema, 'description'))}
             </Typography>
             {stepCount === 0 ? (
               <Typography variant="caption" color="text.secondary">
@@ -610,7 +628,7 @@ const StrategyConfigForm = ({
             }}
             helperText={
               error ||
-              fieldSchema.description ||
+              localized(fieldSchema, 'description') ||
               'Enter a JSON array (example: [{"take_profit_pips": 25}])'
             }
             error={!!error}
@@ -650,7 +668,9 @@ const StrategyConfigForm = ({
             handleFieldChange(fieldName, parsedItems);
           }}
           helperText={
-            error || fieldSchema.description || 'Enter comma-separated values'
+            error ||
+            localized(fieldSchema, 'description') ||
+            'Enter comma-separated values'
           }
           error={!!error}
           required={isRequired}
@@ -704,7 +724,11 @@ const StrategyConfigForm = ({
               );
             }
           }}
-          helperText={error || fieldSchema.description || 'Enter a JSON object'}
+          helperText={
+            error ||
+            localized(fieldSchema, 'description') ||
+            'Enter a JSON object'
+          }
           error={!!error}
           required={isRequired}
           disabled={disabled}
@@ -728,7 +752,7 @@ const StrategyConfigForm = ({
         label={labelNode}
         value={stringValue}
         onChange={(e) => handleFieldChange(fieldName, e.target.value)}
-        helperText={error || fieldSchema.description}
+        helperText={error || localized(fieldSchema, 'description')}
         error={!!error}
         required={isRequired}
         disabled={disabled}
@@ -807,7 +831,7 @@ const StrategyConfigForm = ({
 
     Object.entries(configSchema.properties || {}).forEach(
       ([fieldName, fieldSchema]) => {
-        const groupName = fieldSchema.group || '';
+        const groupName = localized(fieldSchema, 'group') || '';
         if (!groupMap.has(groupName)) {
           groupMap.set(groupName, []);
           seenGroups.push(groupName);
@@ -821,7 +845,7 @@ const StrategyConfigForm = ({
     });
 
     return groups;
-  }, [configSchema.properties]);
+  }, [configSchema.properties, localized]);
 
   if (
     !configSchema.properties ||

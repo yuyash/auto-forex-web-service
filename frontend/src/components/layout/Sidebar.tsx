@@ -19,12 +19,13 @@ import {
   Assignment as BacktestTaskIcon,
   PlayCircleOutline as TradingTaskIcon,
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { DRAWER_WIDTH } from './constants';
 
 interface NavigationItem {
   path: string;
-  label: string;
+  labelKey: string;
   icon: React.ReactElement;
   adminOnly?: boolean;
   dividerAfter?: boolean;
@@ -33,28 +34,28 @@ interface NavigationItem {
 const navigationItems: NavigationItem[] = [
   {
     path: '/dashboard',
-    label: 'Dashboard',
+    labelKey: 'navigation.dashboard',
     icon: <DashboardIcon />,
   },
   {
     path: '/configurations',
-    label: 'Configurations',
+    labelKey: 'navigation.configurations',
     icon: <ConfigIcon />,
   },
   {
     path: '/backtest-tasks',
-    label: 'Backtest Tasks',
+    labelKey: 'navigation.backtestTasks',
     icon: <BacktestTaskIcon />,
   },
   {
     path: '/trading-tasks',
-    label: 'Trading Tasks',
+    labelKey: 'navigation.tradingTasks',
     icon: <TradingTaskIcon />,
     dividerAfter: true,
   },
   {
     path: '/settings',
-    label: 'Settings',
+    labelKey: 'navigation.settings',
     icon: <SettingsIcon />,
   },
 ];
@@ -71,6 +72,7 @@ const Sidebar = ({ id, mobileOpen = false, onMobileClose }: SidebarProps) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user } = useAuth();
+  const { t } = useTranslation('common');
 
   // Filter navigation items based on user role
   const filteredItems = navigationItems.filter(
@@ -121,7 +123,7 @@ const Sidebar = ({ id, mobileOpen = false, onMobileClose }: SidebarProps) => {
                 >
                   {item.icon}
                 </ListItemIcon>
-                <ListItemText primary={item.label} />
+                <ListItemText primary={t(item.labelKey)} />
               </ListItemButton>
             </ListItem>
             {item.dividerAfter && <Divider sx={{ my: 1 }} />}

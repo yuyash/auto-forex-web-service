@@ -25,6 +25,7 @@ import type {
   ConfigurationTask,
 } from '../../types/configuration';
 import { configurationsApi } from '../../services/api/configurations';
+import { useTranslation } from 'react-i18next';
 
 interface ConfigurationDeleteDialogProps {
   open: boolean;
@@ -37,6 +38,7 @@ const ConfigurationDeleteDialog = ({
   configuration,
   onClose,
 }: ConfigurationDeleteDialogProps) => {
+  const { t } = useTranslation(['configuration', 'common']);
   const [confirmed, setConfirmed] = useState(false);
   const [tasks, setTasks] = useState<ConfigurationTask[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
@@ -95,22 +97,23 @@ const ConfigurationDeleteDialog = ({
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <WarningIcon color="warning" />
-          Delete Configuration
+          {t('configuration:deleteDialog.title')}
         </Box>
       </DialogTitle>
 
       <DialogContent>
         <Typography variant="body1" gutterBottom>
-          Are you sure you want to delete the configuration "
-          {configuration.name}"?
+          {t('configuration:deleteDialog.confirmMessage')} "{configuration.name}
+          "?
         </Typography>
 
         {/* Warning if configuration is in use */}
         {configuration.is_in_use && (
           <Alert severity="warning" sx={{ mt: 2, mb: 2 }}>
             <Typography variant="body2" gutterBottom>
-              This configuration is currently being used by {tasks.length}{' '}
-              task(s).
+              {t('configuration:deleteDialog.inUseWarning', {
+                count: tasks.length,
+              })}
             </Typography>
           </Alert>
         )}
@@ -119,9 +122,9 @@ const ConfigurationDeleteDialog = ({
         {hasActiveTasks && (
           <Alert severity="error" sx={{ mt: 2, mb: 2 }}>
             <Typography variant="body2" gutterBottom>
-              <strong>Cannot delete:</strong> This configuration is being used
-              by {activeTasks.length} active task(s). Please stop or complete
-              these tasks first.
+              {t('configuration:deleteDialog.cannotDelete', {
+                count: activeTasks.length,
+              })}
             </Typography>
           </Alert>
         )}
@@ -137,7 +140,7 @@ const ConfigurationDeleteDialog = ({
         {!loadingTasks && tasks.length > 0 && (
           <Box sx={{ mt: 2 }}>
             <Typography variant="subtitle2" gutterBottom>
-              Tasks using this configuration:
+              {t('configuration:deleteDialog.tasksUsingConfig')}
             </Typography>
             <List dense sx={{ maxHeight: 200, overflow: 'auto' }}>
               {tasks.map((task) => (
@@ -192,8 +195,9 @@ const ConfigurationDeleteDialog = ({
               }
               label={
                 <Typography variant="body2">
-                  I understand that deleting this configuration will affect{' '}
-                  {tasks.length} task(s)
+                  {t('configuration:deleteDialog.confirmCheckbox', {
+                    count: tasks.length,
+                  })}
                 </Typography>
               }
             />
@@ -203,7 +207,7 @@ const ConfigurationDeleteDialog = ({
         {/* Simple confirmation for unused configurations */}
         {!configuration.is_in_use && (
           <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-            This action cannot be undone.
+            {t('configuration:deleteDialog.cannotBeUndone')}
           </Typography>
         )}
 
@@ -217,7 +221,7 @@ const ConfigurationDeleteDialog = ({
 
       <DialogActions>
         <Button onClick={onClose} disabled={isDeleting}>
-          Cancel
+          {t('common:actions.cancel')}
         </Button>
         <Button
           onClick={handleDelete}
@@ -230,7 +234,9 @@ const ConfigurationDeleteDialog = ({
           }
           startIcon={isDeleting ? <CircularProgress size={20} /> : null}
         >
-          {isDeleting ? 'Deleting...' : 'Delete'}
+          {isDeleting
+            ? t('common:actions.deleting')
+            : t('common:actions.delete')}
         </Button>
       </DialogActions>
     </Dialog>

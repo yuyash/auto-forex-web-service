@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   Stepper,
@@ -111,6 +112,7 @@ const ConfigurationForm = ({
   onCancel,
   isLoading = false,
 }: ConfigurationFormProps) => {
+  const { t } = useTranslation(['configuration', 'common', 'strategy']);
   const {
     strategies,
     isLoading: isStrategiesLoading,
@@ -364,8 +366,16 @@ const ConfigurationForm = ({
 
   // Different steps for create vs edit mode
   const steps = isEditMode
-    ? ['Parameters', 'Review']
-    : ['Basic Information', 'Strategy Type', 'Parameters', 'Review'];
+    ? [
+        t('configuration:form.steps.parameters'),
+        t('configuration:form.steps.review'),
+      ]
+    : [
+        t('configuration:form.steps.basicInformation'),
+        t('configuration:form.steps.strategyType'),
+        t('configuration:form.steps.parameters'),
+        t('configuration:form.steps.review'),
+      ];
 
   const formatParameterLabel = (key: string): string => {
     const schemaLabel = strategySchema?.properties?.[key]?.title;
@@ -385,7 +395,7 @@ const ConfigurationForm = ({
     }
 
     if (typeof value === 'boolean') {
-      return value ? 'Yes' : 'No';
+      return value ? t('common:labels.yes') : t('common:labels.no');
     }
 
     if (value === null || value === undefined || value === '') {
@@ -454,10 +464,10 @@ const ConfigurationForm = ({
         {!isEditMode && activeStep === 0 && (
           <Box>
             <Typography variant="h6" gutterBottom>
-              Basic Information
+              {t('configuration:form.basicInformation')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Provide a name and description for your strategy configuration
+              {t('configuration:form.basicInfoDescription')}
             </Typography>
             <Controller<ConfigurationFormData>
               name="name"
@@ -466,8 +476,10 @@ const ConfigurationForm = ({
                 <TextField
                   {...field}
                   fullWidth
-                  label="Configuration Name"
-                  placeholder="e.g., Conservative MA Crossover"
+                  label={t('configuration:form.configurationName')}
+                  placeholder={t(
+                    'configuration:form.configurationNamePlaceholder'
+                  )}
                   error={!!errors.name}
                   helperText={errors.name?.message}
                   sx={{ mb: 3 }}
@@ -481,8 +493,8 @@ const ConfigurationForm = ({
                 <TextField
                   {...field}
                   fullWidth
-                  label="Description (Optional)"
-                  placeholder="Describe the purpose of this configuration"
+                  label={t('configuration:form.descriptionOptional')}
+                  placeholder={t('configuration:form.descriptionPlaceholder')}
                   multiline
                   rows={3}
                   error={!!errors.description}
@@ -497,15 +509,15 @@ const ConfigurationForm = ({
         {!isEditMode && activeStep === 1 && (
           <Box>
             <Typography variant="h6" gutterBottom>
-              Select Strategy Type
+              {t('configuration:form.selectStrategyType')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Choose the trading strategy algorithm
+              {t('configuration:form.selectStrategyDescription')}
             </Typography>
 
             {strategiesError && (
               <Alert severity="error" sx={{ mb: 2 }}>
-                Failed to load strategies. Please try again.
+                {t('configuration:form.failedToLoadStrategies')}
               </Alert>
             )}
 
@@ -514,10 +526,12 @@ const ConfigurationForm = ({
               control={control}
               render={({ field }) => (
                 <FormControl fullWidth error={!!errors.strategy_type}>
-                  <InputLabel>Strategy Type</InputLabel>
+                  <InputLabel>
+                    {t('configuration:form.strategyTypeLabel')}
+                  </InputLabel>
                   <Select
                     {...field}
-                    label="Strategy Type"
+                    label={t('configuration:form.strategyTypeLabel')}
                     disabled={
                       !!initialData?.strategy_type || isStrategiesLoading
                     }
@@ -529,7 +543,7 @@ const ConfigurationForm = ({
                         >
                           <CircularProgress size={16} />
                           <Typography variant="body2">
-                            Loading strategies…
+                            {t('configuration:form.loadingStrategies')}
                           </Typography>
                         </Box>
                       </MenuItem>
@@ -538,14 +552,20 @@ const ConfigurationForm = ({
                         <MenuItem key={strategy.id} value={strategy.id}>
                           <Box>
                             <Typography variant="body1">
-                              {strategy.name}
+                              {t(
+                                `strategy:types.${strategy.id}`,
+                                strategy.name
+                              )}
                             </Typography>
                             {!!strategy.description && (
                               <Typography
                                 variant="caption"
                                 color="text.secondary"
                               >
-                                {strategy.description}
+                                {t(
+                                  `strategy:descriptions.${strategy.id}`,
+                                  strategy.description
+                                )}
                               </Typography>
                             )}
                           </Box>
@@ -564,7 +584,7 @@ const ConfigurationForm = ({
                       color="text.secondary"
                       sx={{ mt: 1, display: 'block' }}
                     >
-                      Strategy type cannot be changed after creation
+                      {t('configuration:form.strategyTypeCannotChange')}
                     </Typography>
                   )}
                 </FormControl>
@@ -574,10 +594,16 @@ const ConfigurationForm = ({
             {selectedStrategy && (
               <Alert severity="info" sx={{ mt: 3 }}>
                 <Typography variant="subtitle2" gutterBottom>
-                  {selectedStrategy.name}
+                  {t(
+                    `strategy:types.${selectedStrategy.id}`,
+                    selectedStrategy.name
+                  )}
                 </Typography>
                 <Typography variant="body2">
-                  {selectedStrategy.description}
+                  {t(
+                    `strategy:descriptions.${selectedStrategy.id}`,
+                    selectedStrategy.description
+                  )}
                 </Typography>
               </Alert>
             )}
@@ -589,10 +615,12 @@ const ConfigurationForm = ({
           (!isEditMode && activeStep === 2)) && (
           <Box>
             <Typography variant="h6" gutterBottom>
-              Configure Parameters
+              {t('configuration:form.configureParameters')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Set the parameters for your {selectedStrategy?.name || 'strategy'}
+              {t('configuration:form.configureParametersDescription', {
+                strategy: selectedStrategy?.name || '',
+              })}
             </Typography>
             {strategySchema ? (
               <StrategyConfigForm
@@ -626,8 +654,7 @@ const ConfigurationForm = ({
 
                 {Object.keys(parameters).length === 0 && (
                   <Alert severity="warning">
-                    No parameters available for this strategy type. Please
-                    select a strategy type first.
+                    {t('configuration:empty.noParametersAvailable')}
                   </Alert>
                 )}
               </>
@@ -640,10 +667,10 @@ const ConfigurationForm = ({
           (!isEditMode && activeStep === 3)) && (
           <Box>
             <Typography variant="h6" gutterBottom>
-              Review Configuration
+              {t('configuration:form.reviewConfiguration')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Review your configuration before saving
+              {t('configuration:form.reviewDescription')}
             </Typography>
 
             <Card variant="outlined" sx={{ mb: 2 }}>
@@ -725,7 +752,7 @@ const ConfigurationForm = ({
                 <Box sx={{ pl: 2 }}>
                   {reviewParameters.length === 0 ? (
                     <Typography variant="body2" color="text.secondary">
-                      No parameters configured.
+                      {t('configuration:empty.noParametersConfigured')}
                     </Typography>
                   ) : (
                     reviewParameters.map(([key, value]) => (
@@ -755,12 +782,12 @@ const ConfigurationForm = ({
         {/* Navigation Buttons */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
           <Button type="button" onClick={onCancel} disabled={isLoading}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Box sx={{ display: 'flex', gap: 2 }}>
             {activeStep > 0 && (
               <Button type="button" onClick={handleBack} disabled={isLoading}>
-                Back
+                {t('common:actions.back')}
               </Button>
             )}
             {activeStep < steps.length - 1 ? (
@@ -770,7 +797,7 @@ const ConfigurationForm = ({
                 onClick={handleNext}
                 disabled={isLoading}
               >
-                Next
+                {t('common:actions.next')}
               </Button>
             ) : (
               <Button
@@ -779,7 +806,9 @@ const ConfigurationForm = ({
                 disabled={isLoading}
                 startIcon={isLoading ? <CircularProgress size={20} /> : null}
               >
-                {isLoading ? 'Saving...' : 'Save Configuration'}
+                {isLoading
+                  ? t('common:actions.saving')
+                  : t('configuration:form.saveConfiguration')}
               </Button>
             )}
           </Box>

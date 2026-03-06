@@ -23,6 +23,7 @@ import {
   Replay as RestartIcon,
   Delete as DeleteIcon,
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import type { TaskStatus } from '../../types/common';
 import { TaskStatus as TaskStatusEnum } from '../../types/common';
 
@@ -102,6 +103,8 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   // STOPPED: Restart, Delete
   // COMPLETED: Restart, Delete
   // FAILED: Restart, Delete
+  const { t } = useTranslation('common');
+
   const canStart = status === TaskStatusEnum.CREATED;
 
   const canStop = [
@@ -198,7 +201,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       {onStart &&
         renderButton(
           <StartIcon />,
-          'Start',
+          t('actions.start'),
           () => handleAction(onStart),
           canStart,
           'success'
@@ -208,7 +211,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       {onResume &&
         renderButton(
           <ResumeIcon />,
-          'Resume',
+          t('actions.resume'),
           () => handleAction(onResume),
           resumeEnabled,
           'primary'
@@ -218,7 +221,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       {onPause &&
         renderButton(
           <PauseIcon />,
-          'Pause',
+          t('actions.pause'),
           () => handleAction(onPause),
           pauseEnabled,
           'warning'
@@ -228,7 +231,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       {onStop &&
         renderButton(
           <StopIcon />,
-          'Stop',
+          t('actions.stop'),
           () => handleAction(onStop),
           canStop,
           'error'
@@ -238,7 +241,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       {onRestart &&
         renderButton(
           <RestartIcon />,
-          'Restart',
+          t('actions.restart'),
           () => handleAction(onRestart),
           canRestart,
           'info'
@@ -248,7 +251,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
       {onDelete &&
         renderButton(
           <DeleteIcon />,
-          'Delete',
+          t('actions.delete'),
           () => handleAction(onDelete),
           canDelete,
           'error'

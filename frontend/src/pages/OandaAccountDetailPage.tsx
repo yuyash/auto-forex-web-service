@@ -105,7 +105,7 @@ export default function OandaAccountDetailPage() {
         setError(
           caughtError instanceof Error
             ? caughtError.message
-            : t('common:errors.fetchFailed', 'Failed to load data')
+            : t('common:errors.fetchFailed')
         );
       } finally {
         if (mounted) {
@@ -137,7 +137,7 @@ export default function OandaAccountDetailPage() {
         <Box>
           <Box mb={2}>
             <Button component={Link} to="/settings" variant="outlined">
-              {t('common:back', 'Back')}
+              {t('common:actions.back')}
             </Button>
           </Box>
           <Alert severity="error">{error}</Alert>
@@ -152,10 +152,10 @@ export default function OandaAccountDetailPage() {
         <Box>
           <Box mb={2}>
             <Button component={Link} to="/settings" variant="outlined">
-              {t('common:back', 'Back')}
+              {t('common:actions.back')}
             </Button>
           </Box>
-          <Alert severity="info">{t('common:noData', 'No data')}</Alert>
+          <Alert severity="info">{t('common:messages.noData')}</Alert>
         </Box>
       </Container>
     );
@@ -171,10 +171,10 @@ export default function OandaAccountDetailPage() {
           mb={2}
         >
           <Typography variant="h6">
-            {t('settings:accounts.accountDetails', 'Account Details')}
+            {t('settings:accounts.accountDetails')}
           </Typography>
           <Button component={Link} to="/settings" variant="outlined">
-            {t('common:back', 'Back')}
+            {t('common:actions.back')}
           </Button>
         </Box>
 
@@ -185,17 +185,17 @@ export default function OandaAccountDetailPage() {
             </Typography>
 
             <Typography variant="body2" color="text.secondary">
-              {t('settings:accounts.apiType', 'API Type')}: {account.api_type}
+              {t('settings:accounts.apiType')}: {account.api_type}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {t('settings:accounts.currency', 'Currency')}: {account.currency}
+              {t('settings:accounts.currency')}: {account.currency}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {t('settings:accounts.positionMode', 'Position Mode')}:
+              {t('settings:accounts.positionMode')}:
               {account.position_mode ?? '—'}
             </Typography>
             <Typography variant="body2" color="text.secondary" gutterBottom>
-              {t('settings:accounts.hedgingEnabled', 'Hedging Enabled')}:
+              {t('settings:accounts.hedgingEnabled')}:
               {typeof account.hedging_enabled === 'boolean'
                 ? String(account.hedging_enabled)
                 : '—'}
@@ -210,7 +210,7 @@ export default function OandaAccountDetailPage() {
             >
               <Box>
                 <Typography variant="body2" color="text.secondary">
-                  {t('settings:accounts.balance', 'Balance')}
+                  {t('settings:accounts.balance')}
                 </Typography>
                 <Typography variant="h6">
                   {formatBalance(account.balance, account.currency)}
@@ -218,7 +218,7 @@ export default function OandaAccountDetailPage() {
               </Box>
               <Box>
                 <Typography variant="body2" color="text.secondary">
-                  {t('settings:accounts.nav', 'NAV')}
+                  {t('settings:accounts.nav')}
                 </Typography>
                 <Typography variant="h6">
                   {formatBalance(account.nav ?? null, account.currency)}
@@ -226,7 +226,7 @@ export default function OandaAccountDetailPage() {
               </Box>
               <Box>
                 <Typography variant="body2" color="text.secondary">
-                  {t('settings:accounts.marginUsed', 'Margin Used')}
+                  {t('settings:accounts.marginUsed')}
                 </Typography>
                 <Typography variant="body1">
                   {formatBalance(account.margin_used, account.currency)}
@@ -234,7 +234,7 @@ export default function OandaAccountDetailPage() {
               </Box>
               <Box>
                 <Typography variant="body2" color="text.secondary">
-                  {t('settings:accounts.marginAvailable', 'Margin Available')}
+                  {t('settings:accounts.marginAvailable')}
                 </Typography>
                 <Typography variant="body1">
                   {formatBalance(account.margin_available, account.currency)}
@@ -242,7 +242,7 @@ export default function OandaAccountDetailPage() {
               </Box>
               <Box>
                 <Typography variant="body2" color="text.secondary">
-                  {t('settings:accounts.unrealizedPnL', 'Unrealized P&L')}
+                  {t('settings:accounts.unrealizedPnL')}
                 </Typography>
                 <Typography variant="body1">
                   {formatBalance(account.unrealized_pnl, account.currency)}
@@ -250,7 +250,7 @@ export default function OandaAccountDetailPage() {
               </Box>
               <Box>
                 <Typography variant="body2" color="text.secondary">
-                  {t('settings:accounts.openTrades', 'Open Trades')}
+                  {t('settings:accounts.openTrades')}
                 </Typography>
                 <Typography variant="body1">
                   {account.open_trade_count ?? '—'}
@@ -258,7 +258,7 @@ export default function OandaAccountDetailPage() {
               </Box>
               <Box>
                 <Typography variant="body2" color="text.secondary">
-                  {t('settings:accounts.openPositions', 'Open Positions')}
+                  {t('settings:accounts.openPositions')}
                 </Typography>
                 <Typography variant="body1">
                   {account.open_position_count ?? '—'}
@@ -266,7 +266,7 @@ export default function OandaAccountDetailPage() {
               </Box>
               <Box>
                 <Typography variant="body2" color="text.secondary">
-                  {t('settings:accounts.pendingOrders', 'Pending Orders')}
+                  {t('settings:accounts.pendingOrders')}
                 </Typography>
                 <Typography variant="body1">
                   {account.pending_order_count ?? '—'}
@@ -277,10 +277,7 @@ export default function OandaAccountDetailPage() {
             <Divider sx={{ my: 2 }} />
 
             <Typography variant="body2" color="text.secondary" gutterBottom>
-              {t(
-                'settings:accounts.oandaAccountFlags',
-                'OANDA Account Flags / Parameters'
-              )}
+              {t('settings:accounts.oandaAccountFlags')}
             </Typography>
             <Typography
               variant="body2"

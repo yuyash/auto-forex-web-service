@@ -1,7 +1,10 @@
 import { Container, Typography, Box, Button } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 const NotFoundPage = () => {
+  const { t } = useTranslation('common');
+
   return (
     <Container maxWidth="sm">
       <Box
@@ -14,13 +17,13 @@ const NotFoundPage = () => {
         }}
       >
         <Typography variant="h1" component="h1" gutterBottom>
-          404
+          {t('notFound.title')}
         </Typography>
         <Typography variant="h5" gutterBottom>
-          Page Not Found
+          {t('notFound.heading')}
         </Typography>
         <Typography variant="body1" color="text.secondary" paragraph>
-          The page you are looking for does not exist.
+          {t('notFound.message')}
         </Typography>
         <Button
           variant="contained"
@@ -28,7 +31,7 @@ const NotFoundPage = () => {
           to="/"
           sx={{ mt: 2 }}
         >
-          Go to Home
+          {t('notFound.goHome')}
         </Button>
       </Box>
     </Container>

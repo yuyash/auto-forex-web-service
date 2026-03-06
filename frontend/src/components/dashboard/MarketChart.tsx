@@ -512,7 +512,7 @@ export default function MarketChart({
     } finally {
       setIsLoading(false);
     }
-  }, [instrument, granularity, accountId, applyOverlays]);
+  }, [instrument, granularity, accountId, applyOverlays, t]);
 
   // Re-apply overlays when toggle changes
   useEffect(() => {

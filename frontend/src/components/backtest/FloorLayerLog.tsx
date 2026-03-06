@@ -7,6 +7,7 @@
  */
 
 import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   Paper,
@@ -49,7 +50,7 @@ interface FloorLayerLogProps {
   selectedTradeIndex?: number | null;
 }
 
-const getEventTypeDisplay = (eventType: string) => {
+const getEventTypeDisplay = (eventType: string, t: (key: string) => string) => {
   const displays: Record<
     string,
     {
@@ -57,13 +58,28 @@ const getEventTypeDisplay = (eventType: string) => {
       color: 'info' | 'default' | 'error' | 'success' | 'warning' | 'primary';
     }
   > = {
-    initial_entry: { label: 'Initial Entry', color: 'primary' },
-    retracement: { label: 'Retracement', color: 'info' },
-    take_profit: { label: 'Take Profit', color: 'success' },
-    add_layer: { label: 'Add Layer', color: 'warning' },
-    remove_layer: { label: 'Remove Layer', color: 'warning' },
-    volatility_lock: { label: 'Volatility Lock', color: 'error' },
-    margin_protection: { label: 'Margin Protection', color: 'error' },
+    initial_entry: {
+      label: t('floorLog.eventTypes.initialEntry'),
+      color: 'primary',
+    },
+    retracement: { label: t('floorLog.eventTypes.retracement'), color: 'info' },
+    take_profit: {
+      label: t('floorLog.eventTypes.takeProfit'),
+      color: 'success',
+    },
+    add_layer: { label: t('floorLog.eventTypes.addLayer'), color: 'warning' },
+    remove_layer: {
+      label: t('floorLog.eventTypes.removeLayer'),
+      color: 'warning',
+    },
+    volatility_lock: {
+      label: t('floorLog.eventTypes.volatilityLock'),
+      color: 'error',
+    },
+    margin_protection: {
+      label: t('floorLog.eventTypes.marginProtection'),
+      color: 'error',
+    },
   };
   return displays[eventType] || { label: eventType, color: 'default' as const };
 };
@@ -91,6 +107,7 @@ const parseNumber = (value: unknown): number | undefined => {
 };
 
 export function FloorLayerLog({ strategyEvents = [] }: FloorLayerLogProps) {
+  const { t } = useTranslation('backtest');
   const [sortField, setSortField] = useState<SortField>('timestamp');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [page, setPage] = useState(0);
@@ -246,10 +263,10 @@ export function FloorLayerLog({ strategyEvents = [] }: FloorLayerLogProps) {
     return (
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" sx={{ mb: 2 }}>
-          Floor Strategy Execution Log
+          {t('floorLog.title')}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          No floor strategy events available for this backtest.
+          {t('floorLog.noEvents')}
         </Typography>
       </Paper>
     );
@@ -265,7 +282,7 @@ export function FloorLayerLog({ strategyEvents = [] }: FloorLayerLogProps) {
           mb: 2,
         }}
       >
-        <Typography variant="h6">Floor Strategy Execution Log</Typography>
+        <Typography variant="h6">{t('floorLog.title')}</Typography>
         {shouldShowTotalPnL && (
           <Typography
             variant="body2"
@@ -274,13 +291,12 @@ export function FloorLayerLog({ strategyEvents = [] }: FloorLayerLogProps) {
               color: totalPnL >= 0 ? 'success.main' : 'error.main',
             }}
           >
-            Total P&L: {formatCurrency(totalPnL)}
+            {t('floorLog.totalPnl')} {formatCurrency(totalPnL)}
           </Typography>
         )}
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Detailed execution log showing initial positions, layer additions,
-        retracements, and take profits with buy/sell details.
+        {t('floorLog.description')}
       </Typography>
 
       <TablePagination
@@ -300,14 +316,14 @@ export function FloorLayerLog({ strategyEvents = [] }: FloorLayerLogProps) {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Event</TableCell>
+              <TableCell>{t('floorLog.columns.event')}</TableCell>
               <TableCell>
                 <TableSortLabel
                   active={sortField === 'timestamp'}
                   direction={sortField === 'timestamp' ? sortOrder : 'asc'}
                   onClick={() => handleSort('timestamp')}
                 >
-                  Time
+                  {t('floorLog.columns.time')}
                 </TableSortLabel>
               </TableCell>
               <TableCell align="center">
@@ -316,18 +332,20 @@ export function FloorLayerLog({ strategyEvents = [] }: FloorLayerLogProps) {
                   direction={sortField === 'layer' ? sortOrder : 'asc'}
                   onClick={() => handleSort('layer')}
                 >
-                  Layer
+                  {t('floorLog.columns.layer')}
                 </TableSortLabel>
               </TableCell>
-              <TableCell>Action</TableCell>
-              <TableCell align="right">Retracement #</TableCell>
+              <TableCell>{t('floorLog.columns.action')}</TableCell>
+              <TableCell align="right">
+                {t('floorLog.columns.retracementNumber')}
+              </TableCell>
               <TableCell align="right">
                 <TableSortLabel
                   active={sortField === 'units'}
                   direction={sortField === 'units' ? sortOrder : 'asc'}
                   onClick={() => handleSort('units')}
                 >
-                  Units
+                  {t('floorLog.columns.units')}
                 </TableSortLabel>
               </TableCell>
               <TableCell align="right">
@@ -336,7 +354,7 @@ export function FloorLayerLog({ strategyEvents = [] }: FloorLayerLogProps) {
                   direction={sortField === 'entry_price' ? sortOrder : 'asc'}
                   onClick={() => handleSort('entry_price')}
                 >
-                  Price
+                  {t('floorLog.columns.price')}
                 </TableSortLabel>
               </TableCell>
               <TableCell align="right">
@@ -345,16 +363,18 @@ export function FloorLayerLog({ strategyEvents = [] }: FloorLayerLogProps) {
                   direction={sortField === 'pnl' ? sortOrder : 'asc'}
                   onClick={() => handleSort('pnl')}
                 >
-                  Realized P&L
+                  {t('floorLog.columns.realizedPnl')}
                 </TableSortLabel>
               </TableCell>
-              <TableCell align="right">Unrealized P&L</TableCell>
-              <TableCell>Details</TableCell>
+              <TableCell align="right">
+                {t('floorLog.columns.unrealizedPnl')}
+              </TableCell>
+              <TableCell>{t('floorLog.columns.details')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {paginatedEvents.map((event) => {
-              const eventDisplay = getEventTypeDisplay(event.eventType);
+              const eventDisplay = getEventTypeDisplay(event.eventType, t);
               const isEntry = ['initial_entry', 'retracement'].includes(
                 event.eventType
               );
@@ -511,7 +531,7 @@ export function FloorLayerLog({ strategyEvents = [] }: FloorLayerLogProps) {
             })}
             <TableRow sx={{ bgcolor: 'grey.100' }}>
               <TableCell colSpan={7} sx={{ fontWeight: 'bold' }}>
-                Total
+                {t('floorLog.totalPnl')}
               </TableCell>
               <TableCell
                 align="right"

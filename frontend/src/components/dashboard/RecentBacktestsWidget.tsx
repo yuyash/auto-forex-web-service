@@ -16,8 +16,10 @@ import {
 import { useBacktestTasks } from '../../hooks/useBacktestTasks';
 import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskStatus } from '../../types/common';
+import { useTranslation } from 'react-i18next';
 
 const RecentBacktestsWidget = () => {
+  const { t } = useTranslation('dashboard');
   const navigate = useNavigate();
 
   // Fetch recent completed backtest tasks
@@ -40,12 +42,12 @@ const RecentBacktestsWidget = () => {
           mb: 2,
         }}
       >
-        <Typography variant="h6">Recent Backtests</Typography>
+        <Typography variant="h6">{t('widgets.recentBacktests')}</Typography>
         <Button
           endIcon={<ArrowIcon />}
           onClick={() => navigate('/backtest-tasks')}
         >
-          View All
+          {t('widgets.quickActions')}
         </Button>
       </Box>
 
@@ -55,7 +57,7 @@ const RecentBacktestsWidget = () => {
         </Box>
       ) : backtestTasks.length === 0 ? (
         <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-          No completed backtests yet
+          {t('widgets.noCompletedBacktestsYet')}
         </Typography>
       ) : (
         <Stack spacing={2}>

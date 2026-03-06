@@ -11,6 +11,7 @@ import {
   Typography,
 } from '@mui/material';
 import { Edit as EditIcon } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import { Breadcrumbs } from '../components/common';
 import { useConfiguration } from '../hooks/useConfigurations';
 import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
@@ -40,6 +41,7 @@ function formatValue(value: unknown): string {
 }
 
 export default function ConfigurationDetailPage() {
+  const { t } = useTranslation(['configuration', 'common']);
   const { id } = useParams<{ id: string }>();
   const configId = id || '';
   const navigate = useNavigate();
@@ -106,7 +108,7 @@ export default function ConfigurationDetailPage() {
     if (configSchema?.properties) {
       Object.entries(configSchema.properties).forEach(([key, prop]) => {
         if (!(key in params)) return;
-        const groupName = prop.group || 'Other Parameters';
+        const groupName = prop.group || t('configuration:form.otherParameters');
         if (!groupMap.has(groupName)) {
           groupMap.set(groupName, []);
           seenGroups.push(groupName);
@@ -118,7 +120,7 @@ export default function ConfigurationDetailPage() {
         });
       });
       // Add any params not in schema into "Other Parameters"
-      const otherGroup = 'Other Parameters';
+      const otherGroup = t('configuration:form.otherParameters');
       Object.keys(params).forEach((key) => {
         if (configSchema.properties[key]) return;
         if (!groupMap.has(otherGroup)) {
@@ -158,13 +160,13 @@ export default function ConfigurationDetailPage() {
 
       {!isLoading && error && (
         <Alert severity="error" sx={{ mb: 3 }}>
-          Failed to load configuration
+          {t('common:errors.fetchFailed')}
         </Alert>
       )}
 
       {!isLoading && !error && !configuration && (
         <Alert severity="error" sx={{ mb: 3 }}>
-          Configuration not found
+          {t('common:errors.taskNotFound')}
         </Alert>
       )}
 
@@ -185,7 +187,7 @@ export default function ConfigurationDetailPage() {
                 {configuration.name}
               </Typography>
               <Typography variant="body1" color="text.secondary">
-                Strategy configuration details
+                {t('configuration:pages.detailSubtitle')}
               </Typography>
             </Box>
 
@@ -196,7 +198,7 @@ export default function ConfigurationDetailPage() {
                 navigate(`/configurations/${configuration.id}/edit`)
               }
             >
-              Edit
+              {t('common:actions.edit')}
             </Button>
           </Box>
 
@@ -211,18 +213,22 @@ export default function ConfigurationDetailPage() {
                 variant="outlined"
               />
               <Chip
-                label={`Created ${formatDate(configuration.created_at)}`}
+                label={`${t('common:labels.created')} ${formatDate(configuration.created_at)}`}
                 variant="outlined"
               />
               {configuration.is_in_use && (
-                <Chip label="In Use" color="success" variant="filled" />
+                <Chip
+                  label={t('common:labels.inUse')}
+                  color="success"
+                  variant="filled"
+                />
               )}
             </Box>
 
             {configuration.description && (
               <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle2" gutterBottom>
-                  Description
+                  {t('common:labels.description')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   {configuration.description}
@@ -233,12 +239,12 @@ export default function ConfigurationDetailPage() {
             <Divider sx={{ my: 2 }} />
 
             <Typography variant="subtitle2" gutterBottom>
-              Parameters
+              {t('common:labels.parameters')}
             </Typography>
 
             {groupedParams.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
-                No parameters saved for this configuration.
+                {t('configuration:empty.noParametersSaved')}
               </Typography>
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
