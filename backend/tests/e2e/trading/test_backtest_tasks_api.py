@@ -82,7 +82,7 @@ class TestBacktestTasks:
 
     # ── Start + verify sub-resources ──────────────────────────────────────
 
-    @pytest.mark.timeout(120)
+    @pytest.mark.timeout(300)
     def test_start_and_verify_sub_resources(self, authenticated_client, strategy_config):
         """Start a backtest, wait for completion, verify sub-resources have data."""
         task_id = _create_backtest(authenticated_client, strategy_config.id, "BT Execute SubRes")

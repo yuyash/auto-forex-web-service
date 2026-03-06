@@ -297,7 +297,7 @@ def trigger_backtest_publisher(task: BacktestTask) -> None:
     # Check if market worker is available
     from celery import current_app
 
-    inspect = current_app.control.inspect()
+    inspect = current_app.control.inspect(timeout=3.0)
     active_queues = inspect.active_queues() or {}
 
     backtest_workers: list[str] = []
