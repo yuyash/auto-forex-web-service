@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { Box, CircularProgress, Typography } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import {
   CandlestickSeries,
   LineSeries,
@@ -22,6 +23,7 @@ import {
   createSuppressedTickMarkFormatter,
   createTooltipTimeFormatter,
 } from '../../utils/adaptiveTimeScalePlugin';
+import { getTimezoneAbbr } from '../../utils/chartTimezone';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '@mui/material/styles';
 import {
@@ -161,6 +163,7 @@ export default function MarketChart({
   refreshInterval = 60,
   overlays: overlaysProp,
 }: MarketChartProps) {
+  const { t } = useTranslation('dashboard');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -503,7 +506,9 @@ export default function MarketChart({
       }
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load market data');
+      setError(
+        e instanceof Error ? e.message : t('marketChart.failedToLoadMarketData')
+      );
     } finally {
       setIsLoading(false);
     }
@@ -774,6 +779,24 @@ export default function MarketChart({
         ref={containerRef}
         style={{ width: '100%', ...(fillHeight ? { height: '100%' } : {}) }}
       />
+
+      {/* Timezone indicator (bottom-right) */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 8,
+          right: 8,
+          zIndex: 2,
+          fontSize: '11px',
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          color: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(51,65,85,0.5)',
+          pointerEvents: 'none',
+          userSelect: 'none',
+        }}
+      >
+        TZ: {getTimezoneAbbr(timezone)}
+      </div>
     </Box>
   );
 }
