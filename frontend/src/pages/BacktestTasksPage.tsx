@@ -24,6 +24,7 @@ import {
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   useBacktestTasks,
   invalidateBacktestTasksCache,
@@ -62,6 +63,7 @@ function a11yProps(index: number) {
 }
 
 export default function BacktestTasksPage() {
+  const { t } = useTranslation(['backtest', 'common']);
   const navigate = useNavigate();
   const location = useLocation();
   const [tabValue, setTabValue] = useState(0);
@@ -183,7 +185,7 @@ export default function BacktestTasksPage() {
           }}
         >
           <Typography variant="h4" component="h1">
-            Backtest Tasks
+            {t('backtest:pages.title')}
           </Typography>
           <Box sx={{ display: 'flex', gap: 2 }}>
             <Button
@@ -192,20 +194,23 @@ export default function BacktestTasksPage() {
               onClick={handleRefresh}
               disabled={isLoading}
             >
-              Refresh
+              {t('common:actions.refresh')}
             </Button>
             <Button
               variant="outlined"
               onClick={() => navigate('/configurations?from=backtest-tasks')}
             >
-              Manage Configurations
+              {t(
+                'configuration:card.manageConfigurations',
+                'Manage Configurations'
+              )}
             </Button>
             <Button
               variant="contained"
               startIcon={<AddIcon />}
               onClick={handleCreateTask}
             >
-              New Task
+              {t('common:actions.newTask')}
             </Button>
           </Box>
         </Box>
@@ -218,10 +223,10 @@ export default function BacktestTasksPage() {
             aria-label="backtest tasks tabs"
             sx={{ borderBottom: 1, borderColor: 'divider' }}
           >
-            <Tab label="All" {...a11yProps(0)} />
-            <Tab label="Running" {...a11yProps(1)} />
-            <Tab label="Completed" {...a11yProps(2)} />
-            <Tab label="Failed" {...a11yProps(3)} />
+            <Tab label={t('backtest:tabs.all')} {...a11yProps(0)} />
+            <Tab label={t('backtest:tabs.running')} {...a11yProps(1)} />
+            <Tab label={t('backtest:tabs.completed')} {...a11yProps(2)} />
+            <Tab label={t('backtest:tabs.failed')} {...a11yProps(3)} />
           </Tabs>
         </Paper>
 
@@ -231,7 +236,10 @@ export default function BacktestTasksPage() {
             <Grid size={{ xs: 12, md: 6 }}>
               <TextField
                 fullWidth
-                placeholder="Search tasks..."
+                placeholder={t(
+                  'trading:filters.searchTasks',
+                  'Search tasks...'
+                )}
                 value={searchQuery}
                 onChange={handleSearchChange}
                 InputProps={{
@@ -245,17 +253,29 @@ export default function BacktestTasksPage() {
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
               <FormControl fullWidth>
-                <InputLabel>Sort By</InputLabel>
+                <InputLabel>
+                  {t('trading:filters.sortBy', 'Sort By')}
+                </InputLabel>
                 <Select
                   value={sortBy}
                   onChange={handleSortChange}
-                  label="Sort By"
+                  label={t('trading:filters.sortBy', 'Sort By')}
                 >
-                  <MenuItem value="-created_at">Newest First</MenuItem>
-                  <MenuItem value="created_at">Oldest First</MenuItem>
-                  <MenuItem value="name">Name (A-Z)</MenuItem>
-                  <MenuItem value="-name">Name (Z-A)</MenuItem>
-                  <MenuItem value="-updated_at">Recently Updated</MenuItem>
+                  <MenuItem value="-created_at">
+                    {t('trading:filters.newestFirst', 'Newest First')}
+                  </MenuItem>
+                  <MenuItem value="created_at">
+                    {t('trading:filters.oldestFirst', 'Oldest First')}
+                  </MenuItem>
+                  <MenuItem value="name">
+                    {t('trading:filters.nameAZ', 'Name (A-Z)')}
+                  </MenuItem>
+                  <MenuItem value="-name">
+                    {t('trading:filters.nameZA', 'Name (Z-A)')}
+                  </MenuItem>
+                  <MenuItem value="-updated_at">
+                    {t('trading:filters.recentlyUpdated', 'Recently Updated')}
+                  </MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -270,24 +290,22 @@ export default function BacktestTasksPage() {
             </Box>
           ) : error ? (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-              <Typography color="error">
-                Error loading tasks: {error.message}
-              </Typography>
+              <Typography color="error">{error.message}</Typography>
             </Paper>
           ) : !data || data.results.length === 0 ? (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary" gutterBottom>
-                No backtest tasks found
+                {t('backtest:empty.noTasksFound')}
               </Typography>
               <Typography color="text.secondary" sx={{ mb: 2 }}>
-                Create your first backtest task to get started
+                {t('backtest:empty.createFirstTask')}
               </Typography>
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}
                 onClick={handleCreateTask}
               >
-                Create Task
+                {t('common:actions.createTask')}
               </Button>
             </Paper>
           ) : (
@@ -320,14 +338,12 @@ export default function BacktestTasksPage() {
             </Box>
           ) : error ? (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-              <Typography color="error">
-                Error loading tasks: {error.message}
-              </Typography>
+              <Typography color="error">{error.message}</Typography>
             </Paper>
           ) : !data || data.results.length === 0 ? (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary">
-                No running tasks
+                {t('backtest:empty.noRunningTasks')}
               </Typography>
             </Paper>
           ) : (
@@ -360,14 +376,12 @@ export default function BacktestTasksPage() {
             </Box>
           ) : error ? (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-              <Typography color="error">
-                Error loading tasks: {error.message}
-              </Typography>
+              <Typography color="error">{error.message}</Typography>
             </Paper>
           ) : !data || data.results.length === 0 ? (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary">
-                No completed tasks
+                {t('backtest:empty.noCompletedTasks')}
               </Typography>
             </Paper>
           ) : (
@@ -400,14 +414,12 @@ export default function BacktestTasksPage() {
             </Box>
           ) : error ? (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
-              <Typography color="error">
-                Error loading tasks: {error.message}
-              </Typography>
+              <Typography color="error">{error.message}</Typography>
             </Paper>
           ) : !data || data.results.length === 0 ? (
             <Paper sx={{ p: 4, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary">
-                No failed tasks
+                {t('backtest:empty.noFailedTasks')}
               </Typography>
             </Paper>
           ) : (

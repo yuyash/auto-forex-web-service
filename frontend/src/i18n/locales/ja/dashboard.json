@@ -1,6 +1,6 @@
 {
   "title": "ダッシュボード",
-  "welcome": "自動外国為替トレーダーへようこそ",
+  "welcome": "Auto Forex Traderへようこそ",
   "chart": {
     "title": "価格チャート",
     "currencyPair": "通貨ペア",
@@ -60,5 +60,36 @@
     "running": "実行中",
     "stopped": "停止中",
     "paused": "一時停止中"
+  },
+  "widgets": {
+    "activeTasks": "アクティブタスク",
+    "recentBacktests": "最近のバックテスト",
+    "quickActions": "クイックアクション",
+    "noActiveTasksRunning": "実行中のアクティブタスクはありません",
+    "noCompletedBacktestsYet": "完了したバックテストはまだありません",
+    "tradingTask": "トレーディングタスク",
+    "backtestTask": "バックテストタスク"
+  },
+  "quickActions": {
+    "addAccount": "アカウントを追加",
+    "newConfiguration": "新規設定",
+    "newBacktestTask": "新規バックテスト",
+    "newTradingTask": "新規トレーディング"
+  },
+  "overlays": {
+    "indicators": "インジケーター",
+    "annotations": "アノテーション",
+    "chartOverlays": "チャートオーバーレイ",
+    "sma20": "SMA 20",
+    "sma50": "SMA 50",
+    "ema12": "EMA 12",
+    "ema26": "EMA 26",
+    "bollingerBands": "ボリンジャーバンド",
+    "volume": "出来高",
+    "supportResistance": "サポート / レジスタンス",
+    "signalMarkers": "シグナルマーカー"
+  },
+  "marketChart": {
+    "failedToLoadMarketData": "マーケットデータの読み込みに失敗しました"
   }
 }

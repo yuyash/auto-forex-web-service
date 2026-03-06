@@ -3,6 +3,7 @@
   "selectStrategy": "戦略を選択",
   "configuration": "設定",
   "performance": "パフォーマンス",
+  "noParameters": "この戦略には設定可能なパラメータがありません。",
   "control": {
     "start": "戦略を開始",
     "stop": "戦略を停止",
@@ -11,6 +12,7 @@
   },
   "types": {
     "floor": "フロア戦略",
+    "snowball": "スノーボール戦略",
     "trendFollowing": "トレンドフォロー",
     "maCrossover": "移動平均クロスオーバー",
     "breakout": "ブレイクアウト",
@@ -22,6 +24,10 @@
     "scalping": "スキャルピング",
     "swingTrading": "スイングトレード",
     "newsSpike": "ニュース/スパイク"
+  },
+  "descriptions": {
+    "floor": "レイヤーベースのリトレースメント戦略。利益確定と証拠金保護を設定可能。",
+    "snowball": "両建てヘッジ戦略：順行側の回転利確と、逆行側の段別決済によるナンピン平均化。"
   },
   "parameters": {
     "lotSize": "ロットサイズ",
@@ -57,5 +63,18 @@
     "stopSuccess": "戦略が正常に停止されました",
     "configSaved": "設定が保存されました",
     "invalidConfig": "無効な設定です"
+  },
+  "validation": {
+    "required": "この項目は必須です",
+    "invalidNumber": "有効な数値を入力してください",
+    "minimum": "{{min}}以上である必要があります",
+    "maximum": "{{max}}以下である必要があります",
+    "integer": "整数を入力してください",
+    "invalidArray": "すべての項目が有効である必要があります",
+    "invalidJson": "有効なJSONを入力してください",
+    "invalidObject": "JSONオブジェクトを入力してください",
+    "invalidOption": "無効なオプションが選択されています",
+    "formErrors": "以下のエラーを修正してから続行してください。",
+    "linkedCountZero": "段別の値を設定するには、先に関連フィールドを設定してください。"
   }
 }

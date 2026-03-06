@@ -321,7 +321,7 @@ class TaskService:
 
             from celery import current_app
 
-            inspect = current_app.control.inspect()
+            inspect = current_app.control.inspect(timeout=3.0)
             active_workers = inspect.active()
 
             if not active_workers:

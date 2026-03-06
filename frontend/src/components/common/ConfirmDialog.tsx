@@ -7,6 +7,7 @@ import {
   DialogActions,
   Button,
 } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -29,12 +30,14 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   open,
   title,
   message,
-  confirmText = 'Confirm',
-  cancelText = 'Cancel',
+  confirmText,
+  cancelText,
   onConfirm,
   onCancel,
   confirmColor = 'primary',
 }) => {
+  const { t } = useTranslation('common');
+
   return (
     <Dialog
       open={open}
@@ -50,7 +53,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       </DialogContent>
       <DialogActions>
         <Button onClick={onCancel} color="inherit">
-          {cancelText}
+          {cancelText ?? t('actions.cancel')}
         </Button>
         <Button
           onClick={onConfirm}
@@ -58,7 +61,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           variant="contained"
           autoFocus
         >
-          {confirmText}
+          {confirmText ?? t('actions.confirm')}
         </Button>
       </DialogActions>
     </Dialog>

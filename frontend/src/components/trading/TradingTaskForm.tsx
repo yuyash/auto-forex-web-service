@@ -25,6 +25,7 @@ import { useNavigate } from 'react-router-dom';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { useTranslation } from 'react-i18next';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
 import { type TradingTaskCreateData } from '../../types/tradingTask';
 import type { Account } from '../../types/strategy';
@@ -44,7 +45,11 @@ import {
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
 
-const steps = ['Account', 'Configuration', 'Review'];
+const steps = [
+  'trading:form.steps.account',
+  'trading:form.steps.configuration',
+  'trading:form.steps.review',
+];
 
 // Validation schema
 const tradingTaskSchema = z.object({
@@ -67,6 +72,7 @@ export default function TradingTaskForm({
   taskId,
   initialData,
 }: TradingTaskFormProps) {
+  const { t } = useTranslation(['trading', 'common']);
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(0);
   const [formData, setFormData] = useState<Partial<TradingTaskFormData>>(
@@ -246,10 +252,10 @@ export default function TradingTaskForm({
         return (
           <Box>
             <Typography variant="h6" gutterBottom>
-              Select Trading Account
+              {t('trading:form.selectTradingAccount')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Choose the OANDA account for live trading
+              {t('trading:form.chooseOandaAccount')}
             </Typography>
 
             <Grid container spacing={3}>
@@ -259,17 +265,17 @@ export default function TradingTaskForm({
                   control={control}
                   render={({ field }) => (
                     <FormControl fullWidth error={!!errors.account_id} required>
-                      <InputLabel>Account</InputLabel>
+                      <InputLabel>{t('trading:form.account')}</InputLabel>
                       <Select
                         {...field}
-                        label="Account"
+                        label={t('trading:form.account')}
                         value={field.value || ''}
                         onChange={(e) => {
                           field.onChange(String(e.target.value));
                         }}
                       >
                         <MenuItem value="">
-                          <em>Select an account</em>
+                          <em>{t('trading:form.selectAnAccount')}</em>
                         </MenuItem>
                         {accounts.map((account) => (
                           <MenuItem key={account.id} value={account.id}>
@@ -291,13 +297,14 @@ export default function TradingTaskForm({
                 <Grid size={{ xs: 12 }}>
                   <Alert severity="info">
                     <Typography variant="subtitle2" gutterBottom>
-                      Account Details
+                      {t('trading:form.accountDetails')}
                     </Typography>
                     <Typography variant="body2">
-                      <strong>Account ID:</strong> {selectedAccount.account_id}
+                      <strong>{t('trading:form.accountId')}:</strong>{' '}
+                      {selectedAccount.account_id}
                     </Typography>
                     <Typography variant="body2" component="div">
-                      <strong>Type:</strong>{' '}
+                      <strong>{t('trading:form.type')}:</strong>{' '}
                       <Chip
                         label={selectedAccount.api_type.toUpperCase()}
                         color={
@@ -308,11 +315,12 @@ export default function TradingTaskForm({
                       />
                     </Typography>
                     <Typography variant="body2">
-                      <strong>Balance:</strong> $
+                      <strong>{t('trading:form.balance')}:</strong> $
                       {parseFloat(selectedAccount.balance).toFixed(2)}
                     </Typography>
                     <Typography variant="body2">
-                      <strong>Currency:</strong> {selectedAccount.currency}
+                      <strong>{t('trading:form.currency')}:</strong>{' '}
+                      {selectedAccount.currency}
                     </Typography>
                   </Alert>
                 </Grid>
@@ -322,15 +330,14 @@ export default function TradingTaskForm({
                 <Grid size={{ xs: 12 }}>
                   <Alert severity="error" icon={<WarningIcon />}>
                     <Typography variant="subtitle2" gutterBottom>
-                      Active Task Detected
+                      {t('trading:form.activeTaskDetected')}
                     </Typography>
                     <Typography variant="body2">
-                      This account already has an active trading task:{' '}
+                      {t('trading:form.activeTaskWarning')}{' '}
                       <strong>{existingTasks.results[0].name}</strong>
                     </Typography>
                     <Typography variant="body2" sx={{ mt: 1 }}>
-                      Only one task can run per account at a time. Please stop
-                      the existing task before starting a new one.
+                      {t('trading:form.activeTaskInstruction')}
                     </Typography>
                   </Alert>
                 </Grid>
@@ -343,10 +350,10 @@ export default function TradingTaskForm({
         return (
           <Box>
             <Typography variant="h6" gutterBottom>
-              Select Configuration
+              {t('trading:form.selectConfiguration')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Choose a strategy configuration for this trading task
+              {t('trading:form.chooseStrategyConfig')}
             </Typography>
 
             <Grid container spacing={3}>
@@ -370,18 +377,19 @@ export default function TradingTaskForm({
                 <Grid size={{ xs: 12 }}>
                   <Alert severity="info">
                     <Typography variant="subtitle2" gutterBottom>
-                      Configuration Preview
+                      {t('trading:form.configurationPreview')}
                     </Typography>
                     <Typography variant="body2">
-                      <strong>Type:</strong>{' '}
+                      <strong>{t('trading:form.type')}:</strong>{' '}
                       {getStrategyDisplayName(
                         strategies,
                         selectedConfig.strategy_type
                       )}
                     </Typography>
                     <Typography variant="body2">
-                      <strong>Description:</strong>{' '}
-                      {selectedConfig.description || 'No description'}
+                      <strong>{t('common:labels.description')}:</strong>{' '}
+                      {selectedConfig.description ||
+                        t('trading:form.noDescription')}
                     </Typography>
                   </Alert>
                 </Grid>
@@ -395,7 +403,7 @@ export default function TradingTaskForm({
                     <TextField
                       {...field}
                       fullWidth
-                      label="Task Name"
+                      label={t('trading:form.taskName')}
                       required
                       error={!!errors.name}
                       helperText={errors.name?.message}
@@ -412,7 +420,7 @@ export default function TradingTaskForm({
                     <TextField
                       {...field}
                       fullWidth
-                      label="Description"
+                      label={t('common:labels.description')}
                       multiline
                       rows={3}
                       error={!!errors.description}
@@ -434,7 +442,7 @@ export default function TradingTaskForm({
                           onChange={field.onChange}
                         />
                       }
-                      label="Dry Run (Simulation Mode)"
+                      label={t('trading:form.dryRunMode')}
                     />
                   )}
                 />
@@ -443,9 +451,7 @@ export default function TradingTaskForm({
                   color="text.secondary"
                   sx={{ display: 'block', ml: 4 }}
                 >
-                  When enabled, orders are simulated locally and never sent to
-                  OANDA. Useful for testing strategies with real market data
-                  without risking actual funds.
+                  {t('trading:form.dryRunDescription')}
                 </Typography>
               </Grid>
             </Grid>
@@ -456,22 +462,22 @@ export default function TradingTaskForm({
         return (
           <Box>
             <Typography variant="h6" gutterBottom>
-              Review and Confirm
+              {t('trading:form.reviewAndConfirm')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-              Review your trading task configuration before creating
+              {t('trading:form.reviewBeforeCreating')}
             </Typography>
 
             <Grid container spacing={3}>
               <Grid size={{ xs: 12 }}>
                 <Paper sx={{ p: 3 }}>
                   <Typography variant="subtitle1" gutterBottom>
-                    Task Summary
+                    {t('trading:form.taskSummary')}
                   </Typography>
 
                   <Box sx={{ mt: 2 }}>
                     <Typography variant="body2" color="text.secondary">
-                      Task Name
+                      {t('trading:form.taskName')}
                     </Typography>
                     <Typography variant="body1" gutterBottom>
                       {watchedName}
@@ -481,7 +487,7 @@ export default function TradingTaskForm({
                   {watchedDescription && (
                     <Box sx={{ mt: 2 }}>
                       <Typography variant="body2" color="text.secondary">
-                        Description
+                        {t('common:labels.description')}
                       </Typography>
                       <Typography variant="body1" gutterBottom>
                         {watchedDescription}
@@ -491,7 +497,7 @@ export default function TradingTaskForm({
 
                   <Box sx={{ mt: 2 }}>
                     <Typography variant="body2" color="text.secondary">
-                      Account
+                      {t('trading:form.account')}
                     </Typography>
                     <Typography variant="body1" gutterBottom>
                       {selectedAccount ? (
@@ -500,16 +506,16 @@ export default function TradingTaskForm({
                           {selectedAccount.api_type})
                         </>
                       ) : selectedAccountId ? (
-                        'Loading account...'
+                        t('trading:form.loadingAccounts')
                       ) : (
-                        'No account selected'
+                        t('trading:form.noAccountsAvailable')
                       )}
                     </Typography>
                   </Box>
 
                   <Box sx={{ mt: 2 }}>
                     <Typography variant="body2" color="text.secondary">
-                      Configuration
+                      {t('common:labels.configuration')}
                     </Typography>
                     <Typography variant="body1" gutterBottom>
                       {selectedConfig ? (
@@ -522,7 +528,7 @@ export default function TradingTaskForm({
                           )
                         </>
                       ) : (
-                        'Loading...'
+                        t('common:status.loading')
                       )}
                     </Typography>
                   </Box>
@@ -533,11 +539,10 @@ export default function TradingTaskForm({
                 <Grid size={{ xs: 12 }}>
                   <Alert severity="warning">
                     <Typography variant="subtitle2" gutterBottom>
-                      Dry Run Mode Enabled
+                      {t('trading:form.dryRunModeEnabled')}
                     </Typography>
                     <Typography variant="body2">
-                      Orders will be simulated locally. No real orders will be
-                      placed on OANDA.
+                      {t('trading:form.dryRunWarning')}
                     </Typography>
                   </Alert>
                 </Grid>
@@ -548,25 +553,24 @@ export default function TradingTaskForm({
                   <Grid size={{ xs: 12 }}>
                     <Alert severity="error" icon={<WarningIcon />}>
                       <Typography variant="subtitle2" gutterBottom>
-                        <strong>LIVE TRADING RISK WARNING</strong>
+                        <strong>
+                          {t('trading:risk.liveRiskWarningTitle')}
+                        </strong>
                       </Typography>
                       <Typography variant="body2" gutterBottom>
-                        Live trading involves substantial risk of loss. You
-                        should carefully consider whether trading is appropriate
-                        for you in light of your experience, objectives,
-                        financial resources, and other relevant circumstances.
+                        {t('trading:risk.liveRiskWarningBody')}
                       </Typography>
                       <Typography variant="body2" gutterBottom>
-                        • Real money will be at risk
+                        • {t('trading:risk.realMoneyAtRisk')}
                       </Typography>
                       <Typography variant="body2" gutterBottom>
-                        • Past performance does not guarantee future results
+                        • {t('trading:risk.pastPerformance')}
                       </Typography>
                       <Typography variant="body2" gutterBottom>
-                        • Monitor your trading task closely
+                        • {t('trading:risk.monitorClosely')}
                       </Typography>
                       <Typography variant="body2">
-                        • You can stop the task at any time
+                        • {t('trading:risk.canStopAnytime')}
                       </Typography>
                     </Alert>
                   </Grid>
@@ -584,7 +588,7 @@ export default function TradingTaskForm({
                                 onChange={field.onChange}
                               />
                             }
-                            label="I understand and acknowledge the risks of live trading"
+                            label={t('trading:risk.acknowledgeRisks')}
                           />
                           {errors.risk_acknowledged && (
                             <FormHelperText>
@@ -602,12 +606,10 @@ export default function TradingTaskForm({
                 <Grid size={{ xs: 12 }}>
                   <Alert severity="info">
                     <Typography variant="subtitle2" gutterBottom>
-                      <strong>Practice Account</strong>
+                      <strong>{t('trading:risk.practiceAccountTitle')}</strong>
                     </Typography>
                     <Typography variant="body2">
-                      This is a practice account with virtual funds. No real
-                      money is at risk. Use this to test your strategies before
-                      deploying to a live account.
+                      {t('trading:risk.practiceAccountBody')}
                     </Typography>
                   </Alert>
                 </Grid>
@@ -626,7 +628,7 @@ export default function TradingTaskForm({
       <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
         {steps.map((label) => (
           <Step key={label}>
-            <StepLabel>{label}</StepLabel>
+            <StepLabel>{t(label)}</StepLabel>
           </Step>
         ))}
       </Stepper>
@@ -636,14 +638,14 @@ export default function TradingTaskForm({
 
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
           <Button onClick={() => navigate(-1)} sx={{ mr: 'auto' }}>
-            Cancel
+            {t('common:actions.cancel')}
           </Button>
           <Button
             disabled={activeStep === 0}
             onClick={handleBack}
             sx={{ mr: 1 }}
           >
-            Back
+            {t('common:actions.back')}
           </Button>
           {activeStep === steps.length - 1 ? (
             <Button
@@ -651,11 +653,13 @@ export default function TradingTaskForm({
               onClick={handleSubmit(onSubmit)}
               disabled={createTask.isLoading || updateTask.isLoading}
             >
-              {taskId ? 'Update Task' : 'Create Task'}
+              {taskId
+                ? t('common:actions.updateTask')
+                : t('common:actions.createTask')}
             </Button>
           ) : (
             <Button variant="contained" onClick={handleNext}>
-              Next
+              {t('common:actions.next')}
             </Button>
           )}
         </Box>

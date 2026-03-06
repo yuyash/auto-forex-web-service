@@ -14,6 +14,7 @@ import {
   Tooltip,
 } from '@mui/material';
 import TuneIcon from '@mui/icons-material/Tune';
+import { useTranslation } from 'react-i18next';
 import type { OverlaySettings } from './chartOverlaySettings';
 
 interface Props {
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export default function ChartOverlayControls({ settings, onChange }: Props) {
+  const { t } = useTranslation('dashboard');
   const [anchorEl, setAnchorEl] = useState<HTMLButtonElement | null>(null);
   const open = Boolean(anchorEl);
 
@@ -31,11 +33,11 @@ export default function ChartOverlayControls({ settings, onChange }: Props) {
 
   return (
     <>
-      <Tooltip title="Chart overlays">
+      <Tooltip title={t('overlays.chartOverlays')}>
         <IconButton
           size="small"
           onClick={(e) => setAnchorEl(e.currentTarget)}
-          aria-label="Toggle chart overlays"
+          aria-label={t('overlays.chartOverlays')}
         >
           <TuneIcon fontSize="small" />
         </IconButton>
@@ -65,7 +67,7 @@ export default function ChartOverlayControls({ settings, onChange }: Props) {
                   onChange={() => toggle('sma20')}
                 />
               }
-              label="SMA 20"
+              label={t('overlays.sma20')}
             />
             <FormControlLabel
               sx={{ m: 0, py: 0 }}
@@ -77,7 +79,7 @@ export default function ChartOverlayControls({ settings, onChange }: Props) {
                   onChange={() => toggle('sma50')}
                 />
               }
-              label="SMA 50"
+              label={t('overlays.sma50')}
             />
             <FormControlLabel
               sx={{ m: 0, py: 0 }}
@@ -89,7 +91,7 @@ export default function ChartOverlayControls({ settings, onChange }: Props) {
                   onChange={() => toggle('ema12')}
                 />
               }
-              label="EMA 12"
+              label={t('overlays.ema12')}
             />
             <FormControlLabel
               sx={{ m: 0, py: 0 }}
@@ -101,7 +103,7 @@ export default function ChartOverlayControls({ settings, onChange }: Props) {
                   onChange={() => toggle('ema26')}
                 />
               }
-              label="EMA 26"
+              label={t('overlays.ema26')}
             />
             <FormControlLabel
               sx={{ m: 0, py: 0 }}
@@ -113,7 +115,7 @@ export default function ChartOverlayControls({ settings, onChange }: Props) {
                   onChange={() => toggle('bollinger')}
                 />
               }
-              label="Bollinger Bands"
+              label={t('overlays.bollingerBands')}
             />
             <FormControlLabel
               sx={{ m: 0, py: 0 }}
@@ -125,7 +127,7 @@ export default function ChartOverlayControls({ settings, onChange }: Props) {
                   onChange={() => toggle('volume')}
                 />
               }
-              label="Volume"
+              label={t('overlays.volume')}
             />
           </FormGroup>
           <Divider sx={{ my: 0.5 }} />
@@ -146,7 +148,7 @@ export default function ChartOverlayControls({ settings, onChange }: Props) {
                   onChange={() => toggle('supportResistance')}
                 />
               }
-              label="Support / Resistance"
+              label={t('overlays.supportResistance')}
             />
             <FormControlLabel
               sx={{ m: 0, py: 0 }}
@@ -158,7 +160,7 @@ export default function ChartOverlayControls({ settings, onChange }: Props) {
                   onChange={() => toggle('markers')}
                 />
               }
-              label="Signal Markers"
+              label={t('overlays.signalMarkers')}
             />
           </FormGroup>
         </Box>

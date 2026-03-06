@@ -44,8 +44,28 @@ export interface ConfigProperty {
   };
   /** Logical group for UI section grouping */
   group?: string;
+  /** Localized titles: title_ja, title_en, etc. */
+  [localizedKey: `title_${string}`]: string | undefined;
+  /** Localized descriptions: description_ja, description_en, etc. */
+  [localizedKey2: `description_${string}`]: string | undefined;
+  /** Localized group names: group_ja, group_en, etc. */
+  [localizedKey3: `group_${string}`]: string | undefined;
   // Conditional visibility: show this field only when another field has specific values
   dependsOn?: DependsOnCondition;
+  /**
+   * For array fields: derive the required element count from another field.
+   * `field` is the config key to read, `offset` is added to that value.
+   * Example: { field: "r_max", offset: -1 } → array length = r_max − 1.
+   */
+  linkedCount?: {
+    field: string;
+    offset?: number;
+  };
+  /**
+   * Label template for each array element.
+   * `{index}` is replaced with the 1-based element index.
+   */
+  itemLabel?: string;
 }
 
 export interface StrategyConfig {

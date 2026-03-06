@@ -60,5 +60,36 @@
     "running": "Running",
     "stopped": "Stopped",
     "paused": "Paused"
+  },
+  "widgets": {
+    "activeTasks": "Active Tasks",
+    "recentBacktests": "Recent Backtests",
+    "quickActions": "Quick Actions",
+    "noActiveTasksRunning": "No active tasks running",
+    "noCompletedBacktestsYet": "No completed backtests yet",
+    "tradingTask": "Trading Task",
+    "backtestTask": "Backtest Task"
+  },
+  "quickActions": {
+    "addAccount": "Add Account",
+    "newConfiguration": "New Configuration",
+    "newBacktestTask": "New Backtest Task",
+    "newTradingTask": "New Trading Task"
+  },
+  "overlays": {
+    "indicators": "Indicators",
+    "annotations": "Annotations",
+    "chartOverlays": "Chart overlays",
+    "sma20": "SMA 20",
+    "sma50": "SMA 50",
+    "ema12": "EMA 12",
+    "ema26": "EMA 26",
+    "bollingerBands": "Bollinger Bands",
+    "volume": "Volume",
+    "supportResistance": "Support / Resistance",
+    "signalMarkers": "Signal Markers"
+  },
+  "marketChart": {
+    "failedToLoadMarketData": "Failed to load market data"
   }
 }

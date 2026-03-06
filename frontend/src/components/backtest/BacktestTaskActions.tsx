@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Menu,
   MenuItem,
@@ -36,6 +37,7 @@ export default function BacktestTaskActions({
   onClose,
   onRefresh,
 }: BacktestTaskActionsProps) {
+  const { t } = useTranslation(['backtest', 'common']);
   const navigate = useNavigate();
   const { showError } = useToast();
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
@@ -72,7 +74,7 @@ export default function BacktestTaskActions({
   const handleDeleteClick = () => {
     // Check if task is running before opening dialog
     if (task.status === TaskStatus.RUNNING) {
-      showError('Cannot delete running task. Stop it first.');
+      showError(t('backtest:toast.cannotDeleteRunning'));
       onClose();
       return;
     }
@@ -95,7 +97,7 @@ export default function BacktestTaskActions({
 
       // Check if error is about running task
       if (errorMessage.includes('running') || errorMessage.includes('409')) {
-        showError('Cannot delete running task. Stop it first.');
+        showError(t('backtest:toast.cannotDeleteRunning'));
       } else {
         showError(errorMessage);
       }
@@ -126,14 +128,14 @@ export default function BacktestTaskActions({
           <ListItemIcon>
             <CopyIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Copy</ListItemText>
+          <ListItemText>{t('common:actions.copy')}</ListItemText>
         </MenuItem>
 
         <MenuItem onClick={handleEdit} disabled={!canEdit}>
           <ListItemIcon>
             <EditIcon fontSize="small" />
           </ListItemIcon>
-          <ListItemText>Edit</ListItemText>
+          <ListItemText>{t('common:actions.edit')}</ListItemText>
         </MenuItem>
 
         <Divider />
@@ -145,7 +147,7 @@ export default function BacktestTaskActions({
               color={canDelete ? 'error' : 'disabled'}
             />
           </ListItemIcon>
-          <ListItemText>Delete</ListItemText>
+          <ListItemText>{t('common:actions.delete')}</ListItemText>
         </MenuItem>
       </Menu>
 

@@ -18,8 +18,10 @@ import { useBacktestTasks } from '../../hooks/useBacktestTasks';
 import { useTradingTasks } from '../../hooks/useTradingTasks';
 import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskStatus } from '../../types/common';
+import { useTranslation } from 'react-i18next';
 
 const ActiveTasksWidget = () => {
+  const { t } = useTranslation('dashboard');
   const navigate = useNavigate();
 
   // Fetch running backtest tasks
@@ -52,12 +54,14 @@ const ActiveTasksWidget = () => {
           mb: 2,
         }}
       >
-        <Typography variant="h6">Active Tasks ({totalActive})</Typography>
+        <Typography variant="h6">
+          {t('widgets.activeTasks')} ({totalActive})
+        </Typography>
         <Button
           endIcon={<ArrowIcon />}
           onClick={() => navigate('/backtest-tasks')}
         >
-          View All
+          {t('widgets.quickActions')}
         </Button>
       </Box>
 
@@ -67,7 +71,7 @@ const ActiveTasksWidget = () => {
         </Box>
       ) : totalActive === 0 ? (
         <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-          No active tasks running
+          {t('widgets.noActiveTasksRunning')}
         </Typography>
       ) : (
         <Stack spacing={2}>
@@ -100,7 +104,7 @@ const ActiveTasksWidget = () => {
                   <StatusBadge status={task.status} />
                 </Box>
                 <Typography variant="caption" color="text.secondary">
-                  Trading Task • {task.config_name || task.name}
+                  {t('widgets.tradingTask')} • {task.config_name || task.name}
                 </Typography>
               </CardContent>
             </Card>
@@ -135,7 +139,7 @@ const ActiveTasksWidget = () => {
                   <StatusBadge status={task.status} />
                 </Box>
                 <Typography variant="caption" color="text.secondary">
-                  Backtest Task • {task.config_name || task.name}
+                  {t('widgets.backtestTask')} • {task.config_name || task.name}
                 </Typography>
               </CardContent>
             </Card>

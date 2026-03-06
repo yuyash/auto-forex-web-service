@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   Button,
@@ -27,6 +28,7 @@ const ParametersForm = ({
   onCancel,
   isLoading = false,
 }: ParametersFormProps) => {
+  const { t } = useTranslation(['configuration', 'common']);
   const [parameters, setParameters] =
     useState<Record<string, unknown>>(initialParameters);
 
@@ -45,7 +47,7 @@ const ParametersForm = ({
         <CardContent>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
             <Typography variant="subtitle2" color="text.secondary">
-              Configuration:
+              {t('common:labels.configuration')}:
             </Typography>
             <Typography variant="body1" fontWeight={600}>
               {strategyName}
@@ -53,7 +55,7 @@ const ParametersForm = ({
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Typography variant="subtitle2" color="text.secondary">
-              Strategy Type:
+              {t('common:labels.strategyType')}:
             </Typography>
             <Chip
               label={strategyType
@@ -67,10 +69,10 @@ const ParametersForm = ({
       </Card>
 
       <Typography variant="h6" gutterBottom>
-        Strategy Parameters
+        {t('configuration:parametersForm.title')}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Update the parameters for your strategy configuration
+        {t('configuration:parametersForm.subtitle')}
       </Typography>
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -97,7 +99,7 @@ const ParametersForm = ({
 
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 4 }}>
         <Button onClick={onCancel} disabled={isLoading}>
-          Cancel
+          {t('common:actions.cancel')}
         </Button>
         <Button
           type="submit"
@@ -105,7 +107,9 @@ const ParametersForm = ({
           disabled={isLoading}
           startIcon={isLoading ? <CircularProgress size={20} /> : null}
         >
-          {isLoading ? 'Saving...' : 'Save Parameters'}
+          {isLoading
+            ? t('common:actions.saving')
+            : t('configuration:parametersForm.saveParameters')}
         </Button>
       </Box>
     </form>

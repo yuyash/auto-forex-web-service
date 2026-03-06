@@ -119,7 +119,7 @@ const AccountManagement = () => {
         }
       } catch (caughtError) {
         console.error('Error fetching accounts:', caughtError);
-        showError(t('common:errors.fetchFailed', 'Failed to load data'));
+        showError(t('common:errors.fetchFailed'));
       } finally {
         if (showLoading) {
           setLoading(false);
@@ -231,16 +231,14 @@ const AccountManagement = () => {
       }
 
       // Close immediately; refresh balances in the background.
-      showSuccess(
-        t('settings:messages.accountAdded', 'Account saved successfully')
-      );
+      showSuccess(t('settings:messages.accountAdded'));
       handleDialogClose();
       await fetchAccounts({ showLoading: false });
     } catch (error: unknown) {
       console.error('Error saving account:', error);
 
       // Extract validation details from TransformedApiError or ApiError
-      let message = t('settings:messages.saveError', 'Failed to save account');
+      let message = t('settings:messages.saveError');
       const err = error as Record<string, unknown>;
 
       if (err.details && typeof err.details === 'object') {
@@ -288,15 +286,13 @@ const AccountManagement = () => {
     try {
       await accountsApi.delete(accountToDelete.id);
 
-      showSuccess(
-        t('settings:messages.accountDeleted', 'Account deleted successfully')
-      );
+      showSuccess(t('settings:messages.accountDeleted'));
       setDeleteConfirmOpen(false);
       setAccountToDelete(null);
       await fetchAccounts({ showLoading: false });
     } catch (error) {
       console.error('Error deleting account:', error);
-      showError(t('common:errors.deleteFailed', 'Failed to delete'));
+      showError(t('common:errors.deleteFailed'));
     }
   };
 
@@ -356,16 +352,14 @@ const AccountManagement = () => {
         alignItems="center"
         mb={2}
       >
-        <Typography variant="h6">
-          {t('settings:accounts.title', 'OANDA Accounts')}
-        </Typography>
+        <Typography variant="h6">{t('settings:accounts.title')}</Typography>
         <Button
           variant="contained"
           color="primary"
           startIcon={<AddIcon />}
           onClick={handleAddClick}
         >
-          {t('settings:accounts.addAccount', 'Add Account')}
+          {t('settings:accounts.addAccount')}
         </Button>
       </Box>
 
@@ -418,8 +412,8 @@ const AccountManagement = () => {
                       <Chip
                         label={
                           account.api_type === 'practice'
-                            ? t('settings:accounts.practice', 'Practice')
-                            : t('settings:accounts.live', 'Live')
+                            ? t('settings:accounts.practice')
+                            : t('settings:accounts.live')
                         }
                         color={
                           account.api_type === 'practice'
@@ -431,7 +425,7 @@ const AccountManagement = () => {
 
                     <Box mb={1}>
                       <Typography variant="body2" color="text.secondary">
-                        {t('settings:accounts.balance', 'Balance')}
+                        {t('settings:accounts.balance')}
                       </Typography>
                       <Typography variant="h6">
                         {formatBalance(account.balance, account.currency)}
@@ -440,7 +434,7 @@ const AccountManagement = () => {
 
                     <Box mb={1}>
                       <Typography variant="body2" color="text.secondary">
-                        {t('settings:accounts.marginUsed', 'Margin Used')}
+                        {t('settings:accounts.marginUsed')}
                       </Typography>
                       <Typography variant="body1">
                         {formatBalance(account.margin_used, account.currency)}
@@ -464,7 +458,7 @@ const AccountManagement = () => {
 
                     <Box mb={1}>
                       <Typography variant="body2" color="text.secondary">
-                        {t('settings:accounts.unrealizedPnL', 'Unrealized P&L')}
+                        {t('settings:accounts.unrealizedPnL')}
                       </Typography>
                       <Typography
                         variant="body1"
@@ -486,7 +480,7 @@ const AccountManagement = () => {
 
                     <Box mb={1}>
                       <Typography variant="body2" color="text.secondary">
-                        {t('settings:accounts.currency', 'Currency')}
+                        {t('settings:accounts.currency')}
                       </Typography>
                       <Typography variant="body1">
                         {account.currency}
@@ -551,14 +545,14 @@ const AccountManagement = () => {
       >
         <DialogTitle>
           {editingAccount
-            ? t('settings:accounts.editAccount', 'Edit Account')
-            : t('settings:accounts.addAccount', 'Add Account')}
+            ? t('settings:accounts.editAccount')
+            : t('settings:accounts.addAccount')}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ pt: 2 }}>
             <TextField
               fullWidth
-              label={t('settings:accounts.accountId', 'Account ID')}
+              label={t('settings:accounts.accountId')}
               value={formData.account_id}
               onChange={(e) =>
                 setFormData({ ...formData, account_id: e.target.value })
@@ -571,7 +565,7 @@ const AccountManagement = () => {
 
             <TextField
               fullWidth
-              label={t('settings:accounts.apiToken', 'API Token')}
+              label={t('settings:accounts.apiToken')}
               type={showApiToken ? 'text' : 'password'}
               value={formData.api_token}
               onChange={(e) =>
@@ -600,12 +594,12 @@ const AccountManagement = () => {
 
             <FormControl fullWidth margin="normal">
               <InputLabel id="api-type-label">
-                {t('settings:accounts.apiType', 'API Type')}
+                {t('settings:accounts.apiType')}
               </InputLabel>
               <Select
                 labelId="api-type-label"
                 value={formData.api_type}
-                label={t('settings:accounts.apiType', 'API Type')}
+                label={t('settings:accounts.apiType')}
                 onChange={(e) =>
                   setFormData({
                     ...formData,
@@ -614,11 +608,9 @@ const AccountManagement = () => {
                 }
               >
                 <MenuItem value="practice">
-                  {t('settings:accounts.practice', 'Practice')}
+                  {t('settings:accounts.practice')}
                 </MenuItem>
-                <MenuItem value="live">
-                  {t('settings:accounts.live', 'Live')}
-                </MenuItem>
+                <MenuItem value="live">{t('settings:accounts.live')}</MenuItem>
               </Select>
             </FormControl>
 
@@ -655,7 +647,7 @@ const AccountManagement = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleDialogClose} disabled={submitting}>
-            {t('common:cancel', 'Cancel')}
+            {t('common:cancel')}
           </Button>
           <Button
             onClick={handleSubmit}
@@ -666,9 +658,9 @@ const AccountManagement = () => {
             {submitting ? (
               <CircularProgress size={24} />
             ) : editingAccount ? (
-              t('common:save', 'Save')
+              t('common:save')
             ) : (
-              t('common:add', 'Add')
+              t('common:add')
             )}
           </Button>
         </DialogActions>
@@ -677,13 +669,13 @@ const AccountManagement = () => {
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog
         open={deleteConfirmOpen}
-        title={t('settings:accounts.deleteAccount', 'Delete Account')}
+        title={t('settings:accounts.deleteAccount')}
         message={t(
           'settings:accounts.confirmDelete',
           'Are you sure you want to delete this account?'
         )}
-        confirmText={t('common:delete', 'Delete')}
-        cancelText={t('common:cancel', 'Cancel')}
+        confirmText={t('common:delete')}
+        cancelText={t('common:cancel')}
         confirmColor="error"
         onConfirm={handleDeleteConfirm}
         onCancel={() => {

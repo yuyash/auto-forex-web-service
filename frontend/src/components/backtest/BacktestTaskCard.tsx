@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   Card,
@@ -43,6 +44,7 @@ export default function BacktestTaskCard({
   task,
   onRefresh,
 }: BacktestTaskCardProps) {
+  const { t } = useTranslation(['backtest', 'common']);
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -116,7 +118,7 @@ export default function BacktestTaskCard({
     try {
       await backtestTasksApi.start(taskId);
       setOptimisticStatus(TaskStatus.RUNNING);
-      showSuccess('Backtest task started successfully');
+      showSuccess(t('backtest:toast.startedSuccessfully'));
       onRefresh?.();
     } catch (error) {
       console.error('Failed to start task:', error);
@@ -137,7 +139,7 @@ export default function BacktestTaskCard({
     try {
       await backtestTasksApi.stop(taskId);
       setOptimisticStatus(TaskStatus.STOPPED);
-      showSuccess('Backtest task stopped successfully');
+      showSuccess(t('backtest:toast.stoppedSuccessfully'));
       onRefresh?.();
     } catch (error) {
       console.error('Failed to stop task:', error);
@@ -155,7 +157,7 @@ export default function BacktestTaskCard({
     try {
       await backtestTasksApi.resume(taskId);
       setOptimisticStatus(TaskStatus.RUNNING);
-      showSuccess('Backtest task resumed successfully');
+      showSuccess(t('backtest:toast.resumedSuccessfully'));
       onRefresh?.();
     } catch (error) {
       console.error('Failed to resume task:', error);
@@ -176,7 +178,7 @@ export default function BacktestTaskCard({
     try {
       await backtestTasksApi.restart(taskId);
       setOptimisticStatus(TaskStatus.RUNNING);
-      showSuccess('Backtest task restarted successfully');
+      showSuccess(t('backtest:toast.restartedSuccessfully'));
       onRefresh?.();
     } catch (error) {
       console.error('Failed to restart task:', error);
@@ -201,7 +203,7 @@ export default function BacktestTaskCard({
     try {
       await api.delete(`/api/trading/tasks/backtest/${String(task.id)}/`);
       invalidateBacktestTasksCache();
-      showSuccess('Backtest task deleted successfully');
+      showSuccess(t('backtest:toast.deletedSuccessfully'));
       setDeleteDialogOpen(false);
       onRefresh?.();
     } catch (error) {
@@ -297,7 +299,7 @@ export default function BacktestTaskCard({
               flexShrink: 0,
             }}
           >
-            <Tooltip title="View Details">
+            <Tooltip title={t('common:actions.viewDetails')}>
               <IconButton color="primary" onClick={handleView}>
                 <ViewIcon />
               </IconButton>
@@ -342,7 +344,7 @@ export default function BacktestTaskCard({
               {currentTask.latest_execution.total_return && (
                 <Grid size={{ xs: 6, sm: 3 }}>
                   <StatCard
-                    title="Total Return"
+                    title={t('backtest:results.totalReturn')}
                     value={`${currentTask.latest_execution.total_return}%`}
                     color={
                       parseFloat(currentTask.latest_execution.total_return) >= 0
@@ -355,7 +357,7 @@ export default function BacktestTaskCard({
               {currentTask.latest_execution.win_rate && (
                 <Grid size={{ xs: 6, sm: 3 }}>
                   <StatCard
-                    title="Win Rate"
+                    title={t('backtest:results.winRate')}
                     value={`${currentTask.latest_execution.win_rate}%`}
                   />
                 </Grid>
@@ -363,7 +365,7 @@ export default function BacktestTaskCard({
               {currentTask.latest_execution.total_trades !== undefined && (
                 <Grid size={{ xs: 6, sm: 3 }}>
                   <StatCard
-                    title="Total Trades"
+                    title={t('backtest:results.totalTrades')}
                     value={currentTask.latest_execution.total_trades.toString()}
                   />
                 </Grid>
@@ -382,7 +384,7 @@ export default function BacktestTaskCard({
             }}
           >
             <Typography variant="body2" color="error.dark" fontWeight="bold">
-              Task execution failed
+              {t('backtest:card.taskExecutionFailed')}
             </Typography>
             {currentTask.latest_execution?.error_message && (
               <Typography variant="body2" color="error.dark" sx={{ mt: 1 }}>
@@ -405,11 +407,13 @@ export default function BacktestTaskCard({
           }}
         >
           <Typography variant="caption" color="text.secondary">
-            Created: {formatDateTime(currentTask.created_at)}
+            {t('common:labels.created')}:{' '}
+            {formatDateTime(currentTask.created_at)}
           </Typography>
           {displayStatus === TaskStatus.COMPLETED && (
             <Typography variant="caption" color="text.secondary">
-              Completed: {formatDateTime(currentTask.updated_at)}
+              {t('common:status.completed')}:{' '}
+              {formatDateTime(currentTask.updated_at)}
             </Typography>
           )}
         </Box>

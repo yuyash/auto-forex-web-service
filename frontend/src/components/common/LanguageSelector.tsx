@@ -11,6 +11,7 @@ import LanguageIcon from '@mui/icons-material/Language';
 import CheckIcon from '@mui/icons-material/Check';
 import { useTranslation } from 'react-i18next';
 import type { SxProps, Theme } from '@mui/material';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface LanguageSelectorProps {
   buttonSize?: 'small' | 'medium' | 'large';
@@ -22,6 +23,7 @@ const LanguageSelector = ({
   buttonSx,
 }: LanguageSelectorProps) => {
   const { i18n, t } = useTranslation('common');
+  const { token } = useAuth();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
 
@@ -36,6 +38,19 @@ const LanguageSelector = ({
   const handleLanguageChange = (language: string) => {
     i18n.changeLanguage(language);
     handleClose();
+    // Persist to backend user settings if authenticated
+    if (token) {
+      fetch('/api/accounts/settings/', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ language }),
+      }).catch(() => {
+        // Silently ignore — localStorage is the primary store
+      });
+    }
   };
 
   const languages = [

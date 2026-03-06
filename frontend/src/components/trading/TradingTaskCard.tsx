@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   Card,
@@ -52,6 +53,7 @@ export default function TradingTaskCard({
   const [isDeleting, setIsDeleting] = useState(false);
   const prevTaskRef = useRef<TradingTask>(task);
 
+  const { t } = useTranslation(['trading', 'common']);
   const { showError, showSuccess, showWarning, showInfo } = useToast();
 
   // Fetch strategies for display names
@@ -168,7 +170,7 @@ export default function TradingTaskCard({
     try {
       await api.post(`/api/trading/tasks/trading/${String(taskId)}/start/`, {});
       setOptimisticStatus(TaskStatus.RUNNING);
-      showSuccess('Trading task started successfully');
+      showSuccess(t('trading:toast.startedSuccessfully'));
       onRefresh?.();
     } catch (error) {
       console.error('Failed to start task:', error);
@@ -189,7 +191,7 @@ export default function TradingTaskCard({
     try {
       await api.post(`/api/trading/tasks/trading/${String(taskId)}/stop/`, {});
       setOptimisticStatus(TaskStatus.STOPPED);
-      showSuccess('Trading task stopped successfully');
+      showSuccess(t('trading:toast.stoppedSuccessfully'));
       onRefresh?.();
     } catch (error) {
       console.error('Failed to stop task:', error);
@@ -210,7 +212,7 @@ export default function TradingTaskCard({
         {}
       );
       setOptimisticStatus(TaskStatus.RUNNING);
-      showSuccess('Trading task resumed successfully');
+      showSuccess(t('trading:toast.resumedSuccessfully'));
       onRefresh?.();
     } catch (error) {
       console.error('Failed to resume task:', error);
@@ -234,7 +236,7 @@ export default function TradingTaskCard({
         {}
       );
       setOptimisticStatus(TaskStatus.RUNNING);
-      showSuccess('Trading task restarted successfully');
+      showSuccess(t('trading:toast.restartedSuccessfully'));
       onRefresh?.();
     } catch (error) {
       console.error('Failed to restart task:', error);
@@ -259,7 +261,7 @@ export default function TradingTaskCard({
     try {
       await api.delete(`/api/trading/tasks/trading/${String(task.id)}/`);
       invalidateTradingTasksCache();
-      showSuccess('Trading task deleted successfully');
+      showSuccess(t('trading:toast.deletedSuccessfully'));
       setDeleteDialogOpen(false);
       onRefresh?.();
     } catch (error) {
@@ -306,8 +308,7 @@ export default function TradingTaskCard({
           currentTask.account_type === 'live' && (
             <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: 2 }}>
               <Typography variant="caption">
-                <strong>Live Trading Active:</strong> Real money is at risk.
-                Monitor closely.
+                <strong>{t('trading:warnings.liveTrading')}</strong>
               </Typography>
             </Alert>
           )}
@@ -339,7 +340,7 @@ export default function TradingTaskCard({
               <StatusBadge status={displayStatus} />
               {currentTask.account_type === 'live' && (
                 <Chip
-                  label="LIVE ACCOUNT"
+                  label={t('common:labels.liveAccount')}
                   color="error"
                   sx={{ fontWeight: 'bold' }}
                 />
@@ -377,7 +378,7 @@ export default function TradingTaskCard({
               flexShrink: 0,
             }}
           >
-            <Tooltip title="View Details">
+            <Tooltip title={t('common:actions.viewDetails')}>
               <IconButton color="primary" onClick={handleView}>
                 <ViewIcon />
               </IconButton>

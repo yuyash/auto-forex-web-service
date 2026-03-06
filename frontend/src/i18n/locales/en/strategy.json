@@ -3,6 +3,7 @@
   "selectStrategy": "Select Strategy",
   "configuration": "Configuration",
   "performance": "Performance",
+  "noParameters": "This strategy has no configurable parameters.",
   "control": {
     "start": "Start Strategy",
     "stop": "Stop Strategy",
@@ -11,6 +12,7 @@
   },
   "types": {
     "floor": "Floor Strategy",
+    "snowball": "Snowball Strategy",
     "trendFollowing": "Trend Following",
     "maCrossover": "MA Crossover",
     "breakout": "Breakout",
@@ -22,6 +24,10 @@
     "scalping": "Scalping",
     "swingTrading": "Swing Trading",
     "newsSpike": "News/Spike"
+  },
+  "descriptions": {
+    "floor": "Layer-based retracement strategy with configurable take-profit and margin protection.",
+    "snowball": "Dual-basket hedging strategy: rotational profit-taking on the trend side and averaging-down with step-based partial closes on the counter side."
   },
   "parameters": {
     "lotSize": "Lot Size",
@@ -57,5 +63,18 @@
     "stopSuccess": "Strategy stopped successfully",
     "configSaved": "Configuration saved",
     "invalidConfig": "Invalid configuration"
+  },
+  "validation": {
+    "required": "This field is required",
+    "invalidNumber": "Must be a valid number",
+    "minimum": "Must be at least {{min}}",
+    "maximum": "Must be at most {{max}}",
+    "integer": "Must be a whole number",
+    "invalidArray": "All items must be valid",
+    "invalidJson": "Must be valid JSON",
+    "invalidObject": "Must be a JSON object",
+    "invalidOption": "Invalid option selected",
+    "formErrors": "Please fix the errors below before proceeding.",
+    "linkedCountZero": "Set the related field first to configure per-step values."
   }
 }
