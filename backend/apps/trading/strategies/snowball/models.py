@@ -77,13 +77,18 @@ class SnowballStrategyConfig:
     m_pips_max: Decimal
 
     # Margin protection
-    margin_protection_enabled: bool
-    m_th: Decimal
-    n_th: Decimal
-    spread_guard_pips: Decimal
-    cooldown_sec: int
+    rebalance_enabled: bool
     rebalance_start_ratio: Decimal
     rebalance_end_ratio: Decimal
+    shrink_enabled: bool
+    m_th: Decimal
+    lock_enabled: bool
+    n_th: Decimal
+    cooldown_sec: int
+
+    # Spread guard
+    spread_guard_enabled: bool
+    spread_guard_pips: Decimal
 
     pip_size: Decimal
 
@@ -109,7 +114,7 @@ class SnowballStrategyConfig:
             n_pips_gamma=_to_decimal(raw.get("n_pips_gamma", "1.4"), "1.4"),
             interval_mode=_to_str(raw.get("interval_mode"), "constant"),
             manual_intervals=manual_intervals,
-            counter_tp_mode=_to_str(raw.get("counter_tp_mode"), "fixed"),
+            counter_tp_mode=_to_str(raw.get("counter_tp_mode"), "weighted_avg"),
             counter_tp_pips=_to_decimal(raw.get("counter_tp_pips", "25"), "25"),
             counter_tp_step_amount=_to_decimal(raw.get("counter_tp_step_amount", "2.5"), "2.5"),
             counter_tp_multiplier=_to_decimal(raw.get("counter_tp_multiplier", "1.2"), "1.2"),
@@ -120,13 +125,16 @@ class SnowballStrategyConfig:
             atr_baseline_lookback=_to_int(raw.get("atr_baseline_lookback", 96), 96),
             m_pips_min=_to_decimal(raw.get("m_pips_min", "12"), "12"),
             m_pips_max=_to_decimal(raw.get("m_pips_max", "45"), "45"),
-            margin_protection_enabled=bool(raw.get("margin_protection_enabled", True)),
-            m_th=_to_decimal(raw.get("m_th", "70"), "70"),
-            n_th=_to_decimal(raw.get("n_th", "85"), "85"),
-            spread_guard_pips=_to_decimal(raw.get("spread_guard_pips", "2.5"), "2.5"),
-            cooldown_sec=_to_int(raw.get("cooldown_sec", 300), 300),
+            rebalance_enabled=bool(raw.get("rebalance_enabled", False)),
             rebalance_start_ratio=_to_decimal(raw.get("rebalance_start_ratio", "60"), "60"),
             rebalance_end_ratio=_to_decimal(raw.get("rebalance_end_ratio", "50"), "50"),
+            shrink_enabled=bool(raw.get("shrink_enabled", True)),
+            m_th=_to_decimal(raw.get("m_th", "70"), "70"),
+            lock_enabled=bool(raw.get("lock_enabled", True)),
+            n_th=_to_decimal(raw.get("n_th", "85"), "85"),
+            cooldown_sec=_to_int(raw.get("cooldown_sec", 300), 300),
+            spread_guard_enabled=bool(raw.get("spread_guard_enabled", False)),
+            spread_guard_pips=_to_decimal(raw.get("spread_guard_pips", "2.5"), "2.5"),
             pip_size=_to_decimal(raw.get("pip_size", "0.01"), "0.01"),
         )
 
@@ -156,20 +164,27 @@ class SnowballStrategyConfig:
             "atr_baseline_lookback": self.atr_baseline_lookback,
             "m_pips_min": str(self.m_pips_min),
             "m_pips_max": str(self.m_pips_max),
-            "margin_protection_enabled": self.margin_protection_enabled,
-            "m_th": str(self.m_th),
-            "n_th": str(self.n_th),
-            "spread_guard_pips": str(self.spread_guard_pips),
-            "cooldown_sec": self.cooldown_sec,
+            "rebalance_enabled": self.rebalance_enabled,
             "rebalance_start_ratio": str(self.rebalance_start_ratio),
             "rebalance_end_ratio": str(self.rebalance_end_ratio),
+            "shrink_enabled": self.shrink_enabled,
+            "m_th": str(self.m_th),
+            "lock_enabled": self.lock_enabled,
+            "n_th": str(self.n_th),
+            "cooldown_sec": self.cooldown_sec,
+            "spread_guard_enabled": self.spread_guard_enabled,
+            "spread_guard_pips": str(self.spread_guard_pips),
             "pip_size": str(self.pip_size),
         }
 
     def validate(self) -> None:
         """Raise ``ValueError`` on invalid parameter combinations."""
-        if not self.m_th < self.n_th < Decimal("100"):
+        if self.shrink_enabled and self.lock_enabled and not self.m_th < self.n_th < Decimal("100"):
             raise ValueError("Must satisfy m_th < n_th < 100")
+        if self.shrink_enabled and not Decimal("0") < self.m_th < Decimal("100"):
+            raise ValueError("m_th must be between 0 and 100")
+        if self.lock_enabled and not Decimal("0") < self.n_th < Decimal("100"):
+            raise ValueError("n_th must be between 0 and 100")
         if not self.m_pips_min <= self.m_pips <= self.m_pips_max:
             raise ValueError("Must satisfy m_pips_min <= m_pips <= m_pips_max")
         if not self.n_pips_head >= self.n_pips_tail > 0:
@@ -178,8 +193,15 @@ class SnowballStrategyConfig:
             raise ValueError("n_pips_flat_steps must be < r_max")
         if self.counter_tp_mode != "weighted_avg" and self.counter_tp_pips <= 0:
             raise ValueError("counter_tp_pips must be > 0")
-        if not self.rebalance_start_ratio > self.rebalance_end_ratio > 0:
+        if self.rebalance_enabled and not self.rebalance_start_ratio > self.rebalance_end_ratio > 0:
             raise ValueError("rebalance_start_ratio > rebalance_end_ratio > 0")
+        if self.interval_mode == "manual":
+            if len(self.manual_intervals) != self.r_max:
+                raise ValueError(
+                    f"manual_intervals must have exactly {self.r_max} entries for r_max={self.r_max}"
+                )
+            if any(v < 1 for v in self.manual_intervals):
+                raise ValueError("All manual_intervals values must be >= 1")
 
 
 # ---------------------------------------------------------------------------
