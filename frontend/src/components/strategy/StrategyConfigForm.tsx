@@ -161,9 +161,9 @@ const StrategyConfigForm = ({
         if (current.length !== targetLen) {
           if (!updatedConfig) updatedConfig = { ...config };
           const resized = [...current];
-          // Pad with default (last value or 0)
+          // Pad with 0 for new slots
           while (resized.length < targetLen) {
-            resized.push(resized.length > 0 ? resized[resized.length - 1] : 0);
+            resized.push(0);
           }
           // Trim excess
           updatedConfig[fieldName] = resized.slice(0, targetLen);
@@ -554,10 +554,9 @@ const StrategyConfigForm = ({
                       onChange={(e) => {
                         const parsed = parseFloat(e.target.value);
                         const next = [...currentArray];
-                        // Ensure array is long enough
-                        while (next.length <= i) next.push(0);
+                        // Ensure array is exactly stepCount long
+                        while (next.length < stepCount) next.push(0);
                         next[i] = isNaN(parsed) ? 0 : parsed;
-                        // Trim trailing zeros beyond stepCount
                         handleFieldChange(fieldName, next.slice(0, stepCount));
                       }}
                       disabled={disabled}

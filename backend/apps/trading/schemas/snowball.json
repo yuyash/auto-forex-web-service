@@ -40,8 +40,8 @@
       "type": "integer",
       "title": "Max Steps (r_max)",
       "title_ja": "最大段数（r_max）",
-      "description": "Maximum number of counter-trend steps per cycle (including the initial entry).",
-      "description_ja": "1サイクルあたりの逆行側最大段数（初回建玉を含む）。",
+      "description": "Maximum number of counter-trend add steps per cycle (excluding the initial entry).",
+      "description_ja": "1サイクルあたりの逆行側最大増し玉回数（初回建玉を含まない）。",
       "default": 7,
       "minimum": 2,
       "group": "Core Parameters",
@@ -118,13 +118,7 @@
       "minimum": 1,
       "dependsOn": {
         "field": "interval_mode",
-        "values": [
-          "constant",
-          "additive",
-          "subtractive",
-          "multiplicative",
-          "divisive"
-        ]
+        "values": ["additive", "subtractive", "multiplicative", "divisive"]
       },
       "group": "Counter-Trend Interval",
       "group_ja": "逆行側間隔"
@@ -139,13 +133,7 @@
       "minimum": 0,
       "dependsOn": {
         "field": "interval_mode",
-        "values": [
-          "constant",
-          "additive",
-          "subtractive",
-          "multiplicative",
-          "divisive"
-        ]
+        "values": ["additive", "subtractive", "multiplicative", "divisive"]
       },
       "group": "Counter-Trend Interval",
       "group_ja": "逆行側間隔"
@@ -160,13 +148,7 @@
       "minimum": 0.01,
       "dependsOn": {
         "field": "interval_mode",
-        "values": [
-          "constant",
-          "additive",
-          "subtractive",
-          "multiplicative",
-          "divisive"
-        ]
+        "values": ["additive", "subtractive", "multiplicative", "divisive"]
       },
       "group": "Counter-Trend Interval",
       "group_ja": "逆行側間隔"
@@ -175,14 +157,14 @@
       "type": "array",
       "title": "Manual Intervals (pips)",
       "title_ja": "手動間隔（pips）",
-      "description": "Per-step pip intervals when interval_mode is 'manual'. One value per add step (r_max − 1 entries).",
-      "description_ja": "手動モード時の段ごとのpip間隔。増し玉1回につき1つの値（r_max − 1個）。",
+      "description": "Per-step pip intervals when interval_mode is 'manual'. One value per add step (r_max entries).",
+      "description_ja": "手動モード時の段ごとのpip間隔。増し玉1回につき1つの値（r_max個）。",
       "default": [],
       "items": { "type": "number", "minimum": 1 },
       "dependsOn": { "field": "interval_mode", "values": ["manual"] },
       "group": "Counter-Trend Interval",
       "group_ja": "逆行側間隔",
-      "linkedCount": { "field": "r_max", "offset": -1 },
+      "linkedCount": { "field": "r_max", "offset": 0 },
       "itemLabel": "Step {index} interval (pips)",
       "itemLabel_ja": "段{index} 間隔（pips）"
     },
@@ -201,7 +183,7 @@
         "divisive",
         "weighted_avg"
       ],
-      "default": "fixed",
+      "default": "weighted_avg",
       "group": "Counter-Trend Take-Profit",
       "group_ja": "逆行側決済"
     },
@@ -264,8 +246,8 @@
       "description_ja": "間隔およびTP計算の丸め単位。",
       "default": 0.1,
       "minimum": 0.1,
-      "group": "Counter-Trend Take-Profit",
-      "group_ja": "逆行側決済"
+      "group": "Core",
+      "group_ja": "コアパラメータ"
     },
 
     "dynamic_tp_enabled": {
@@ -339,12 +321,46 @@
       "group_ja": "動的利確（ATR）"
     },
 
-    "margin_protection_enabled": {
+    "rebalance_enabled": {
       "type": "boolean",
-      "title": "Margin Protection",
-      "title_ja": "証拠金保護",
-      "description": "Enable multi-level margin protection (rebalance, shrink, lock, emergency stop).",
-      "description_ja": "多段階証拠金保護を有効化（リバランス、縮小、ロック、緊急停止）。",
+      "title": "Enable Rebalance",
+      "title_ja": "リバランス有効",
+      "description": "When enabled, BUY/SELL imbalance is reduced by closing oldest counter entries when margin ratio reaches the start threshold.",
+      "description_ja": "有効時、証拠金比率が開始閾値に達すると、古い逆行エントリーを決済してBUY/SELLの偏りを解消します。",
+      "default": false,
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+    "rebalance_start_ratio": {
+      "type": "number",
+      "title": "Rebalance Start (%)",
+      "title_ja": "リバランス開始（%）",
+      "description": "Margin ratio at which BUY/SELL rebalancing begins.",
+      "description_ja": "BUY/SELLリバランスを開始する証拠金比率。",
+      "default": 60,
+      "minimum": 1,
+      "dependsOn": { "field": "rebalance_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+    "rebalance_end_ratio": {
+      "type": "number",
+      "title": "Rebalance End (%)",
+      "title_ja": "リバランス終了（%）",
+      "description": "Margin ratio target at which rebalancing stops.",
+      "description_ja": "リバランスを終了する証拠金比率の目標値。",
+      "default": 50,
+      "minimum": 1,
+      "dependsOn": { "field": "rebalance_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+    "shrink_enabled": {
+      "type": "boolean",
+      "title": "Enable Shrink",
+      "title_ja": "縮小有効",
+      "description": "When enabled, the largest-loss counter entry is closed when margin ratio reaches the shrink threshold.",
+      "description_ja": "有効時、証拠金比率が縮小閾値に達すると、最大損失の逆行エントリーを決済します。",
       "default": true,
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
@@ -358,7 +374,17 @@
       "default": 70,
       "minimum": 1,
       "maximum": 99,
-      "dependsOn": { "field": "margin_protection_enabled", "values": [true] },
+      "dependsOn": { "field": "shrink_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+    "lock_enabled": {
+      "type": "boolean",
+      "title": "Enable Lock",
+      "title_ja": "ロック有効",
+      "description": "When enabled, a net-zero hedge is added when margin ratio reaches the lock threshold.",
+      "description_ja": "有効時、証拠金比率がロック閾値に達すると、ネットゼロヘッジを追加します。",
+      "default": true,
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
     },
@@ -371,19 +397,7 @@
       "default": 85,
       "minimum": 1,
       "maximum": 99,
-      "dependsOn": { "field": "margin_protection_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
-    },
-    "spread_guard_pips": {
-      "type": "number",
-      "title": "Spread Guard (pips)",
-      "title_ja": "スプレッドガード（pips）",
-      "description": "Maximum spread allowed for new entries and lock release.",
-      "description_ja": "新規エントリーおよびロック解除時に許容される最大スプレッド。",
-      "default": 2.5,
-      "minimum": 0,
-      "dependsOn": { "field": "margin_protection_enabled", "values": [true] },
+      "dependsOn": { "field": "lock_enabled", "values": [true] },
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
     },
@@ -395,33 +409,32 @@
       "description_ja": "ロック解除後、通常取引を再開するまでの待機時間。",
       "default": 300,
       "minimum": 0,
-      "dependsOn": { "field": "margin_protection_enabled", "values": [true] },
+      "dependsOn": { "field": "lock_enabled", "values": [true] },
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
     },
-    "rebalance_start_ratio": {
-      "type": "number",
-      "title": "Rebalance Start (%)",
-      "title_ja": "リバランス開始（%）",
-      "description": "Margin ratio at which BUY/SELL rebalancing begins.",
-      "description_ja": "BUY/SELLリバランスを開始する証拠金比率。",
-      "default": 60,
-      "minimum": 1,
-      "dependsOn": { "field": "margin_protection_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+
+    "spread_guard_enabled": {
+      "type": "boolean",
+      "title": "Enable Spread Guard",
+      "title_ja": "スプレッドガード有効",
+      "description": "When enabled, new entries are blocked while the spread exceeds the threshold.",
+      "description_ja": "有効時、スプレッドが閾値を超えている間は新規エントリーをブロックします。",
+      "default": false,
+      "group": "Spread Guard",
+      "group_ja": "スプレッドガード"
     },
-    "rebalance_end_ratio": {
+    "spread_guard_pips": {
       "type": "number",
-      "title": "Rebalance End (%)",
-      "title_ja": "リバランス終了（%）",
-      "description": "Margin ratio target at which rebalancing stops.",
-      "description_ja": "リバランスを終了する証拠金比率の目標値。",
-      "default": 50,
-      "minimum": 1,
-      "dependsOn": { "field": "margin_protection_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "title": "Spread Guard (pips)",
+      "title_ja": "スプレッドガード（pips）",
+      "description": "Maximum spread allowed for new entries and lock release.",
+      "description_ja": "新規エントリーおよびロック解除時に許容される最大スプレッド。",
+      "default": 2.5,
+      "minimum": 0,
+      "dependsOn": { "field": "spread_guard_enabled", "values": [true] },
+      "group": "Spread Guard",
+      "group_ja": "スプレッドガード"
     }
   },
   "required": ["base_units", "m_pips", "r_max"]

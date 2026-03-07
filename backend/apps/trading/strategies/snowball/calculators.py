@@ -39,6 +39,10 @@ def counter_interval_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
         return round_to_step(cfg.manual_intervals[idx], cfg.round_step_pips)
 
     head = cfg.n_pips_head
+
+    if cfg.interval_mode == "constant":
+        return round_to_step(head, cfg.round_step_pips)
+
     tail = cfg.n_pips_tail
     flat = cfg.n_pips_flat_steps
     gamma = cfg.n_pips_gamma
@@ -48,7 +52,7 @@ def counter_interval_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
 
     # Decay steps after flat region
     t = k - flat  # 1-based step into decay
-    r_decay = cfg.r_max - 1 - flat  # total decay steps
+    r_decay = cfg.r_max - flat  # total decay steps
     if r_decay <= 0:
         return round_to_step(tail, cfg.round_step_pips)
 

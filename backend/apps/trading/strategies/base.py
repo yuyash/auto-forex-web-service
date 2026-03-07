@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from apps.trading.dataclasses import EventExecutionResult, StrategyResult, Tick
-    from apps.trading.events.handler import EventHandler
-    from apps.trading.order import OrderService
     from apps.trading.enums import StrategyType as StrategyTypeEnum
+    from apps.trading.events.handler import EventHandler
     from apps.trading.models import StrategyConfiguration
     from apps.trading.models.state import ExecutionState
+    from apps.trading.order import OrderService
 
 
 class Strategy(ABC):
@@ -96,6 +96,14 @@ class Strategy(ABC):
         if isinstance(value, Decimal):
             integral = value.to_integral_value()
             return int(integral) if value == integral else float(value)
+        if isinstance(value, str):
+            # Convert numeric strings so they pass JSON Schema type: number
+            try:
+                d = Decimal(value)
+            except Exception:
+                return value
+            integral = d.to_integral_value()
+            return int(integral) if d == integral else float(d)
         if isinstance(value, dict):
             return {k: cls._to_schema_primitives(v) for k, v in value.items()}
         if isinstance(value, list):
