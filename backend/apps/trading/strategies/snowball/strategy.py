@@ -234,7 +234,7 @@ class SnowballStrategy(Strategy):
         ss.metrics["margin_ratio"] = str(ratio)
 
         if ratio >= Decimal("95"):
-            # Emergency stop — always active regardless of margin_protection_enabled
+            # Emergency stop — always active regardless of individual protection settings
             ss.protection_level = ProtectionLevel.EMERGENCY
             events.append(
                 GenericStrategyEvent(
@@ -252,11 +252,7 @@ class SnowballStrategy(Strategy):
             )
 
         # --- Lock mode ---
-        if (
-            cfg.margin_protection_enabled
-            and ratio >= cfg.n_th
-            and ss.protection_level != ProtectionLevel.LOCKED
-        ):
+        if cfg.lock_enabled and ratio >= cfg.n_th and ss.protection_level != ProtectionLevel.LOCKED:
             ss.protection_level = ProtectionLevel.LOCKED
             ss.lock_entered_at = tick.timestamp.isoformat()
             # Add net-zero hedge
@@ -311,8 +307,8 @@ class SnowballStrategy(Strategy):
 
         # --- While locked: check unlock ---
         if ss.protection_level == ProtectionLevel.LOCKED:
-            unlock_ok = (
-                ratio < cfg.m_th - Decimal("5") and self._spread_pips(tick) <= cfg.spread_guard_pips
+            unlock_ok = ratio < cfg.m_th - Decimal("5") and (
+                not cfg.spread_guard_enabled or self._spread_pips(tick) <= cfg.spread_guard_pips
             )
             if ss.cooldown_until:
                 from datetime import datetime
@@ -345,7 +341,7 @@ class SnowballStrategy(Strategy):
             return StrategyResult(state=state, events=events)
 
         # --- Shrink mode ---
-        if cfg.margin_protection_enabled and ratio >= cfg.m_th:
+        if cfg.shrink_enabled and ratio >= cfg.m_th:
             if ss.protection_level != ProtectionLevel.SHRINK:
                 ss.protection_level = ProtectionLevel.SHRINK
                 events.append(
@@ -374,7 +370,7 @@ class SnowballStrategy(Strategy):
             return StrategyResult(state=state, events=events)
 
         # Rebalance check
-        if cfg.margin_protection_enabled and ratio >= cfg.rebalance_start_ratio:
+        if cfg.rebalance_enabled and ratio >= cfg.rebalance_start_ratio:
             events.extend(self._rebalance(ss, tick))
             if ratio <= cfg.rebalance_end_ratio:
                 pass  # done
@@ -386,7 +382,7 @@ class SnowballStrategy(Strategy):
             ss.protection_level = ProtectionLevel.NORMAL
 
         # --- Spread guard ---
-        if self._spread_pips(tick) > cfg.spread_guard_pips:
+        if cfg.spread_guard_enabled and self._spread_pips(tick) > cfg.spread_guard_pips:
             state.strategy_state = ss.to_dict()
             return StrategyResult(state=state, events=events)
 
@@ -562,8 +558,8 @@ class SnowballStrategy(Strategy):
         if ss.freeze_count > cfg.f_max:
             return events
 
-        # Cannot add if already at r_max - 1 adds
-        if ss.add_count >= cfg.r_max - 1:
+        # Cannot add if already at r_max adds
+        if ss.add_count >= cfg.r_max:
             # Cycle reset
             ss.add_count = 0
             ss.freeze_count += 1
