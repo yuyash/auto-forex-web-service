@@ -540,10 +540,9 @@ class SnowballStrategy(Strategy):
                 for e in ss.counter_basket
                 if int(e.get("entry_id", 0)) != int(entry.get("entry_id", 0))
             ]
-            # After closing a step, decrement add_count so re-adds start from
-            # the closed step's price with lot=1.
-            if ss.add_count > 0:
-                ss.add_count -= 1
+            # After closing a step, reset add_count so the next adverse-move
+            # add restarts from step 1 (base lot size and initial interval).
+            ss.add_count = 0
 
             ss.metrics["counter_close_count"] = int(ss.metrics.get("counter_close_count", 0)) + 1
 
