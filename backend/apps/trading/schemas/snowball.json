@@ -314,7 +314,7 @@
       "title_ja": "動的m_pips上限",
       "description": "Upper bound for ATR-adjusted trend take-profit.",
       "description_ja": "ATR調整後の順行側利確の上限値。",
-      "default": 45,
+      "default": 80,
       "minimum": 1,
       "dependsOn": { "field": "dynamic_tp_enabled", "values": [true] },
       "group": "Dynamic Take-Profit (ATR)",

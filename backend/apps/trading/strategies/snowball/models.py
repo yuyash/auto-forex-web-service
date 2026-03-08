@@ -124,7 +124,7 @@ class SnowballStrategyConfig:
             atr_timeframe=_to_str(raw.get("atr_timeframe"), "M1").upper(),
             atr_baseline_lookback=_to_int(raw.get("atr_baseline_lookback", 96), 96),
             m_pips_min=_to_decimal(raw.get("m_pips_min", "12"), "12"),
-            m_pips_max=_to_decimal(raw.get("m_pips_max", "45"), "45"),
+            m_pips_max=_to_decimal(raw.get("m_pips_max", "80"), "80"),
             rebalance_enabled=bool(raw.get("rebalance_enabled", False)),
             rebalance_start_ratio=_to_decimal(raw.get("rebalance_start_ratio", "60"), "60"),
             rebalance_end_ratio=_to_decimal(raw.get("rebalance_end_ratio", "50"), "50"),
@@ -185,7 +185,7 @@ class SnowballStrategyConfig:
             raise ValueError("m_th must be between 0 and 100")
         if self.lock_enabled and not Decimal("0") < self.n_th < Decimal("100"):
             raise ValueError("n_th must be between 0 and 100")
-        if not self.m_pips_min <= self.m_pips <= self.m_pips_max:
+        if self.dynamic_tp_enabled and not self.m_pips_min <= self.m_pips <= self.m_pips_max:
             raise ValueError("Must satisfy m_pips_min <= m_pips <= m_pips_max")
         if not self.n_pips_head >= self.n_pips_tail > 0:
             raise ValueError("Must satisfy n_pips_head >= n_pips_tail > 0")
