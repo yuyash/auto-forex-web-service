@@ -2,7 +2,12 @@ import { useState } from 'react';
 import { Container, Typography, Box, Tabs, Tab, Paper } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Breadcrumbs } from '../components/common';
-import { AccountManagement } from '../components/settings';
+import {
+  AccountManagement,
+  GeneralSettings,
+  DisplaySettings,
+  DataSettings,
+} from '../components/settings';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -42,42 +47,62 @@ const SettingsPage = () => {
           {t('title')}
         </Typography>
 
-        {/* Tabs for different settings sections */}
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
           <Tabs
             value={tabValue}
             onChange={handleTabChange}
             aria-label="settings tabs"
+            variant="scrollable"
+            scrollButtons="auto"
           >
             <Tab
-              label={t('tabs.accounts')}
+              label={t('tabs.general')}
               id="settings-tab-0"
               aria-controls="settings-tabpanel-0"
             />
             <Tab
-              label={t('tabs.security')}
+              label={t('tabs.display')}
               id="settings-tab-1"
               aria-controls="settings-tabpanel-1"
+            />
+            <Tab
+              label={t('tabs.data')}
+              id="settings-tab-2"
+              aria-controls="settings-tabpanel-2"
+            />
+            <Tab
+              label={t('tabs.accounts')}
+              id="settings-tab-3"
+              aria-controls="settings-tabpanel-3"
             />
           </Tabs>
         </Box>
 
-        {/* Accounts Tab */}
+        {/* General Tab */}
         <TabPanel value={tabValue} index={0}>
           <Paper sx={{ p: 3 }}>
-            <AccountManagement />
+            <GeneralSettings />
           </Paper>
         </TabPanel>
 
-        {/* Security Tab */}
+        {/* Display Tab */}
         <TabPanel value={tabValue} index={1}>
           <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              {t('security.title')}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {t('security.placeholder')}
-            </Typography>
+            <DisplaySettings />
+          </Paper>
+        </TabPanel>
+
+        {/* Data Tab */}
+        <TabPanel value={tabValue} index={2}>
+          <Paper sx={{ p: 3 }}>
+            <DataSettings />
+          </Paper>
+        </TabPanel>
+
+        {/* Accounts Tab */}
+        <TabPanel value={tabValue} index={3}>
+          <Paper sx={{ p: 3 }}>
+            <AccountManagement />
           </Paper>
         </TabPanel>
       </Box>

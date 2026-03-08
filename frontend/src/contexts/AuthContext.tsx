@@ -10,6 +10,7 @@ import type { User, SystemSettings, AuthContextType } from '../types/auth';
 import { AUTH_LOGOUT_EVENT, type AuthLogoutDetail } from '../utils/authEvents';
 import { setAuthToken, clearAuthToken } from '../api';
 import i18n from '../i18n/config';
+import { useIdleTimeout } from '../hooks/useIdleTimeout';
 
 // Persist context across HMR to prevent "useAuth must be used within AuthProvider" errors
 // during Vite hot module replacement
@@ -220,6 +221,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       window.removeEventListener(AUTH_LOGOUT_EVENT, handleForcedLogout);
     };
   }, [logout]);
+
+  // Idle session timeout — read from app settings in localStorage
+  const sessionTimeoutMinutes = (() => {
+    try {
+      const raw = localStorage.getItem('app_settings');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (typeof parsed.sessionTimeoutMinutes === 'number') {
+          return parsed.sessionTimeoutMinutes;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return 30; // default 30 minutes
+  })();
+
+  useIdleTimeout(
+    token ? sessionTimeoutMinutes : 0,
+    useCallback(() => {
+      console.warn('Session timed out due to inactivity');
+      void logout();
+    }, [logout])
+  );
 
   const value = {
     user,

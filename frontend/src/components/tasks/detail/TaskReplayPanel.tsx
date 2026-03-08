@@ -72,6 +72,7 @@ import {
 import { getTimezoneAbbr } from '../../../utils/chartTimezone';
 import { useAuth } from '../../../contexts/AuthContext';
 import { SequencePositionLine } from '../../../utils/SequencePositionLine';
+import { getCandleColors } from '../../../utils/candleColors';
 import { useMetricsOverlay } from './MetricsOverlayChart';
 
 type CandlePoint = CandlestickData<Time>;
@@ -1581,13 +1582,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       },
     });
 
+    const { upColor, downColor } = getCandleColors();
     const series = chart.addSeries(CandlestickSeries, {
-      upColor: '#16a34a',
-      downColor: '#ef4444',
-      wickUpColor: '#16a34a',
-      wickDownColor: '#ef4444',
-      borderUpColor: '#16a34a',
-      borderDownColor: '#ef4444',
+      upColor,
+      downColor,
+      wickUpColor: upColor,
+      wickDownColor: downColor,
+      borderUpColor: upColor,
+      borderDownColor: downColor,
     });
     const markers = createSeriesMarkers(series, []);
 

@@ -1,10 +1,12 @@
 {
   "title": "Settings",
   "tabs": {
+    "general": "General",
     "accounts": "Accounts",
     "preferences": "Preferences",
     "strategyDefaults": "Strategy Defaults",
-    "security": "Security"
+    "display": "Display",
+    "data": "Data"
   },
   "accounts": {
     "title": "OANDA Accounts",
@@ -32,6 +34,7 @@
     "accountDetails": "Account Details",
     "setAsDefault": "Set as default account",
     "defaultAccountDescription": "The default account is used to collect market data and latest tick data. Only one account can be set as default at a time.",
+    "defaultAccountInfo": "The default account is used to fetch market data and collect tick data for analysis. The candle chart will use the default account to display price data. You can switch the default account at any time.",
     "leaveBlankToKeepToken": "Leave blank to keep existing token",
     "confirmDelete": "Are you sure you want to delete this account?"
   },
@@ -88,5 +91,31 @@
     "passwordChanged": "Password changed successfully",
     "invalidPassword": "Invalid password",
     "passwordMismatch": "Passwords do not match"
+  },
+  "display": {
+    "dateNumberFormat": "Date & Number Format",
+    "dateFormat": "Date Format",
+    "decimalSeparator": "Decimal Separator",
+    "thousandsSeparator": "Thousands Separator",
+    "space": "Space",
+    "none": "None",
+    "defaultInstrument": "Default Currency Pair",
+    "currencyPair": "Currency Pair",
+    "defaultGranularity": "Default Timeframe",
+    "chartAppearance": "Chart Appearance",
+    "candleUpColor": "Candle Up Color",
+    "candleDownColor": "Candle Down Color",
+    "info": "Display settings are saved locally and applied immediately. Default currency pair and timeframe are used when the dashboard chart preferences are reset."
+  },
+  "data": {
+    "sessionTimeout": "Session Timeout",
+    "timeoutDuration": "Timeout Duration",
+    "minutes": "minutes",
+    "seconds": "seconds",
+    "never": "Never (stay logged in)",
+    "sessionTimeoutInfo": "The session will automatically expire after the specified period of inactivity. Set to 'Never' to stay logged in until you manually log out.",
+    "dataRefresh": "Data Refresh",
+    "healthCheckInterval": "OANDA Health Check Interval",
+    "healthCheckInfo": "Controls how often the application checks the OANDA API connection status shown in the footer. Lower values provide faster detection but increase network traffic."
   }
 }

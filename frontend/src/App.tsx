@@ -22,7 +22,7 @@ import { QueryProvider } from './providers/QueryProvider';
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
-const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const ConfigurationsPage = lazy(() => import('./pages/ConfigurationsPage'));
 const ConfigurationFormPage = lazy(
@@ -144,7 +144,6 @@ function AppRoutes() {
         <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} />}>
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route
               path="/settings/accounts/:id"
