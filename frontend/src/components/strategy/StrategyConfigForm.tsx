@@ -161,9 +161,9 @@ const StrategyConfigForm = ({
         if (current.length !== targetLen) {
           if (!updatedConfig) updatedConfig = { ...config };
           const resized = [...current];
-          // Pad with 0 for new slots
+          // Pad with '' (empty) for new slots so inputs start blank
           while (resized.length < targetLen) {
-            resized.push(0);
+            resized.push('');
           }
           // Trim excess
           updatedConfig[fieldName] = resized.slice(0, targetLen);
@@ -273,6 +273,16 @@ const StrategyConfigForm = ({
             if (invalidItems.length > 0) {
               errors[fieldName] = t('validation.invalidArray', {
                 defaultValue: 'All items must be strings',
+              });
+            }
+          }
+          if (fieldSchema.items?.type === 'number') {
+            const hasEmpty = value.some(
+              (item) => item === '' || item === null || item === undefined
+            );
+            if (hasEmpty) {
+              errors[fieldName] = t('validation.allItemsRequired', {
+                defaultValue: 'All values must be filled in',
               });
             }
           }
@@ -519,7 +529,9 @@ const StrategyConfigForm = ({
         const offset = fieldSchema.linkedCount.offset ?? 0;
         const countValue = Number(config[countField] ?? 0) + offset;
         const stepCount = Math.max(0, countValue);
-        const currentArray = Array.isArray(value) ? (value as number[]) : [];
+        const currentArray = Array.isArray(value)
+          ? (value as (number | string)[])
+          : [];
         const itemMin = fieldSchema.items?.minimum;
         const labelTpl =
           ((fieldSchema as unknown as Record<string, unknown>)[
@@ -552,11 +564,17 @@ const StrategyConfigForm = ({
                       size="small"
                       value={stepValue}
                       onChange={(e) => {
-                        const parsed = parseFloat(e.target.value);
+                        const raw = e.target.value;
                         const next = [...currentArray];
                         // Ensure array is exactly stepCount long
-                        while (next.length < stepCount) next.push(0);
-                        next[i] = isNaN(parsed) ? 0 : parsed;
+                        while (next.length < stepCount) next.push('');
+                        // Allow empty string so user can fully clear the field
+                        if (raw === '') {
+                          next[i] = '';
+                        } else {
+                          const parsed = parseFloat(raw);
+                          next[i] = isNaN(parsed) ? '' : parsed;
+                        }
                         handleFieldChange(fieldName, next.slice(0, stepCount));
                       }}
                       disabled={disabled}
