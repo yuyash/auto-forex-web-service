@@ -79,6 +79,8 @@
     "dryRunDescription": "When enabled, orders are simulated locally and never sent to OANDA. Useful for testing strategies with real market data without risking actual funds.",
     "dryRunModeEnabled": "Dry Run Mode Enabled",
     "dryRunWarning": "Orders will be simulated locally. No real orders will be placed on OANDA.",
+    "hedgingEnabled": "Enable Hedging",
+    "hedgingDescription": "When enabled, the strategy can hold both long and short positions simultaneously. Requires a hedging-enabled OANDA account.",
     "activeTaskDetected": "Active Task Detected",
     "activeTaskWarning": "This account already has an active trading task:",
     "activeTaskInstruction": "Only one task can run per account at a time. Please stop the existing task before starting a new one.",

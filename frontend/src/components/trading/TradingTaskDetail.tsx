@@ -38,7 +38,7 @@ import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskLogsTable } from '../tasks/detail/TaskLogsTable';
 import { TaskPositionsTable } from '../tasks/detail/TaskPositionsTable';
 import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
-import { TaskReplayPanel } from '../tasks/detail/TaskReplayPanel';
+import { TaskTrendPanel } from '../tasks/detail/TaskTrendPanel';
 import { TaskOrdersTable } from '../tasks/detail/TaskOrdersTable';
 import { TaskStatus, TaskType } from '../../types/common';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
@@ -550,7 +550,7 @@ export const TradingTaskDetail: React.FC = () => {
 
         {/* Replay Tab */}
         <LazyTabPanel value={currentTabValue} index={3}>
-          <TaskReplayPanel
+          <TaskTrendPanel
             taskId={taskId}
             taskType={TaskType.TRADING}
             instrument={task.instrument}

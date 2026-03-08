@@ -186,6 +186,8 @@
     "instrumentHelperText": "バックテストする通貨ペア",
     "closePositionsAtCompletion": "バックテスト完了時にすべてのポジションを決済",
     "closePositionsDescription": "有効にすると、バックテスト終了時にすべてのオープンポジションが最終市場価格で自動的に決済されます。",
+    "hedgingEnabled": "両建てを有効にする",
+    "hedgingDescription": "有効にすると、バックテスト中にロングとショートのポジションを同時に保有できます。",
     "dateRangeHelperText": "バックテストには過去のデータが必要です。未来の日付は使用できません。",
     "checkingTickDataRange": "ティックデータ範囲を確認中...",
     "noTickDataFound": "データベースに{{instrument}}のティックデータが見つかりません。",

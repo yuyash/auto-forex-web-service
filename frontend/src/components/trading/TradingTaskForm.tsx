@@ -58,6 +58,7 @@ const tradingTaskSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   description: z.string().optional(),
   dry_run: z.boolean().optional(),
+  hedging_enabled: z.boolean().optional(),
   risk_acknowledged: z.boolean().optional(),
 });
 
@@ -96,6 +97,7 @@ export default function TradingTaskForm({
       name: initialData?.name || '',
       description: initialData?.description || '',
       dry_run: false,
+      hedging_enabled: true,
       risk_acknowledged: false,
     },
   });
@@ -233,6 +235,7 @@ export default function TradingTaskForm({
         name: completeData.name,
         description: completeData.description,
         dry_run: completeData.dry_run,
+        hedging_enabled: completeData.hedging_enabled,
       };
 
       if (taskId) {
@@ -452,6 +455,37 @@ export default function TradingTaskForm({
                   sx={{ display: 'block', ml: 4 }}
                 >
                   {t('trading:form.dryRunDescription')}
+                </Typography>
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <Controller
+                  name="hedging_enabled"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={field.value ?? true}
+                          onChange={field.onChange}
+                        />
+                      }
+                      label={t(
+                        'trading:form.hedgingEnabled',
+                        'Enable Hedging (simultaneous long/short positions)'
+                      )}
+                    />
+                  )}
+                />
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: 'block', ml: 4 }}
+                >
+                  {t(
+                    'trading:form.hedgingDescription',
+                    'When enabled, the strategy can hold both long and short positions simultaneously. Requires a hedging-enabled OANDA account.'
+                  )}
                 </Typography>
               </Grid>
             </Grid>

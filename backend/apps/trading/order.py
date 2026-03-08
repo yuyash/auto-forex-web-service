@@ -245,6 +245,8 @@ class OrderService:
                 tick_timestamp=tick_timestamp,
                 oanda_trade_id=position.oanda_trade_id,
                 position=position,
+                layer_index=position.layer_index,
+                retracement_count=position.retracement_count,
             )
 
             # Update position
@@ -417,6 +419,8 @@ class OrderService:
                 tick_timestamp=tick_timestamp,
                 oanda_trade_id=getattr(oanda_order, "trade_id", None),
                 position=position,
+                layer_index=layer_index,
+                retracement_count=retracement_count,
             )
 
             logger.info(
@@ -482,6 +486,8 @@ class OrderService:
         tick_timestamp: datetime | None = None,
         oanda_trade_id: str | None = None,
         position: Position | None = None,
+        layer_index: int | None = None,
+        retracement_count: int | None = None,
     ) -> Order:
         """Create order database record."""
         order = Order.objects.create(
@@ -502,6 +508,8 @@ class OrderService:
             stop_loss=stop_loss,
             is_dry_run=self.dry_run,
             position=position,
+            layer_index=layer_index,
+            retracement_count=retracement_count,
         )
         return order
 

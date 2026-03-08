@@ -173,3 +173,5 @@ class OrderSerializer(serializers.Serializer):
     )
     error_message = serializers.CharField(required=False, allow_null=True)
     is_dry_run = serializers.BooleanField()
+    layer_index = serializers.IntegerField(required=False, allow_null=True)
+    retracement_count = serializers.IntegerField(required=False, allow_null=True)

@@ -55,6 +55,7 @@ class SnowballStrategy(Strategy):
         config: SnowballStrategyConfig,
     ) -> None:
         super().__init__(instrument, pip_size, config)
+        self._hedging_enabled: bool = True  # default; overridden by task
         logger.info(
             "Initialised Snowball engine: instrument=%s, pip_size=%s",
             instrument,
@@ -101,14 +102,28 @@ class SnowballStrategy(Strategy):
         return (tick.ask - tick.bid) / self.pip_size
 
     def _margin_ratio(self, state: Any, ss: SnowballStrategyState) -> Decimal:
-        """Estimate margin ratio as required_margin / NAV × 100."""
+        """Estimate margin ratio as required_margin / NAV × 100.
+
+        OANDA uses net-position margining for hedged accounts: only the larger
+        side (long or short) requires margin.  We therefore compute the net
+        exposure rather than summing absolute units.
+        """
         nav = ss.account_nav
         if nav <= 0:
             return Decimal("0")
         all_entries = ss.trend_basket + ss.counter_basket
         if not all_entries:
             return Decimal("0")
-        total_units = sum(abs(int(e.get("units", 0))) for e in all_entries)
+        long_units = sum(
+            abs(int(e.get("units", 0))) for e in all_entries if e.get("direction") == "long"
+        )
+        short_units = sum(
+            abs(int(e.get("units", 0))) for e in all_entries if e.get("direction") == "short"
+        )
+        # OANDA charges margin on the larger leg only
+        total_units = max(long_units, short_units)
+        if total_units == 0:
+            return Decimal("0")
         mid = ss.last_mid or Decimal("0")
         if mid <= 0:
             return Decimal("0")
@@ -161,11 +176,12 @@ class SnowballStrategy(Strategy):
         event = OpenPositionEvent(
             event_type=EventType.OPEN_POSITION,
             timestamp=tick.timestamp,
-            layer_number=step,
+            layer_number=ss.freeze_count + 1,
             direction=direction,
             price=price,
             units=units,
             entry_id=eid,
+            retracement_count=ss.add_count,
             strategy_event_type=f"snowball_{basket}",
         )
         return event, entry.to_dict()
@@ -174,6 +190,7 @@ class SnowballStrategy(Strategy):
         self,
         tick: Any,
         entry: dict[str, Any],
+        ss: SnowballStrategyState,
     ) -> ClosePositionEvent:
         direction = str(entry.get("direction", "long"))
         entry_price = Decimal(str(entry.get("entry_price", "0")))
@@ -186,7 +203,7 @@ class SnowballStrategy(Strategy):
         return ClosePositionEvent(
             event_type=EventType.CLOSE_POSITION,
             timestamp=tick.timestamp,
-            layer_number=int(entry.get("step", 1)),
+            layer_number=ss.freeze_count + 1,
             direction=direction,
             entry_price=entry_price,
             exit_price=exit_price,
@@ -194,6 +211,7 @@ class SnowballStrategy(Strategy):
             pnl=pnl,
             entry_id=int(entry.get("entry_id", 0)),
             position_id=entry.get("position_id"),
+            retracement_count=ss.add_count,
         )
 
     # ------------------------------------------------------------------
@@ -223,6 +241,18 @@ class SnowballStrategy(Strategy):
         # Update NAV estimate from execution state
         if hasattr(state, "current_balance") and state.current_balance:
             ss.account_balance = Decimal(str(state.current_balance))
+        # NAV = balance + unrealized PnL from all open positions
+        unrealized = Decimal("0")
+        conv = quote_to_account_rate(self.instrument, tick.mid, self.account_currency)
+        for entry in ss.trend_basket + ss.counter_basket:
+            direction = str(entry.get("direction", "long"))
+            ep = Decimal(str(entry.get("entry_price", "0")))
+            units = abs(int(entry.get("units", 0)))
+            if direction == "long":
+                unrealized += (tick.bid - ep) * Decimal(str(units)) * conv
+            else:
+                unrealized += (ep - tick.ask) * Decimal(str(units)) * conv
+        ss.account_nav = ss.account_balance + unrealized
         if ss.account_nav <= 0:
             ss.account_nav = ss.account_balance
 
@@ -322,7 +352,7 @@ class SnowballStrategy(Strategy):
                     for basket in (ss.trend_basket, ss.counter_basket):
                         for e in list(basket):
                             if int(e.get("entry_id", 0)) == hid:
-                                events.append(self._make_close_event(tick, e))
+                                events.append(self._make_close_event(tick, e, ss))
                                 basket.remove(e)
                 ss.lock_hedge_ids = []
                 ss.lock_entered_at = None
@@ -357,7 +387,7 @@ class SnowballStrategy(Strategy):
                     ss.counter_basket,
                     key=lambda e: self._unrealised_loss(e, tick),
                 )
-                events.append(self._make_close_event(tick, worst))
+                events.append(self._make_close_event(tick, worst, ss))
                 ss.counter_basket = [
                     e
                     for e in ss.counter_basket
@@ -417,7 +447,7 @@ class SnowballStrategy(Strategy):
         return (tick.ask - ep) / self.pip_size
 
     def _initialise_baskets(self, ss: SnowballStrategyState, tick: Any) -> list[Any]:
-        """Open initial LONG + SHORT at current price."""
+        """Open initial LONG + SHORT at current price (or LONG only when hedging is disabled)."""
         cfg = self.config
         events: list[Any] = []
         trend_units = cfg.trend_lot_size * cfg.base_units
@@ -437,20 +467,21 @@ class SnowballStrategy(Strategy):
         ss.trend_basket.append(long_entry)
         events.append(long_evt)
 
-        # SHORT entry
-        short_price = tick.bid
-        short_close = short_price - cfg.m_pips * self.pip_size
-        short_evt, short_entry = self._make_open_event(
-            ss,
-            tick,
-            direction="short",
-            units=trend_units,
-            step=1,
-            close_price=short_close,
-            basket="trend",
-        )
-        ss.trend_basket.append(short_entry)
-        events.append(short_evt)
+        # SHORT entry — only when hedging is enabled
+        if self._hedging_enabled:
+            short_price = tick.bid
+            short_close = short_price - cfg.m_pips * self.pip_size
+            short_evt, short_entry = self._make_open_event(
+                ss,
+                tick,
+                direction="short",
+                units=trend_units,
+                step=1,
+                close_price=short_close,
+                basket="trend",
+            )
+            ss.trend_basket.append(short_entry)
+            events.append(short_evt)
 
         ss.initialised = True
         ss.cycle_base_units = cfg.base_units
@@ -477,7 +508,7 @@ class SnowballStrategy(Strategy):
                 continue
 
             # Close
-            events.append(self._make_close_event(tick, entry))
+            events.append(self._make_close_event(tick, entry, ss))
             ss.trend_basket = [
                 e
                 for e in ss.trend_basket
@@ -534,7 +565,7 @@ class SnowballStrategy(Strategy):
             if step != max_step:
                 continue
 
-            events.append(self._make_close_event(tick, entry))
+            events.append(self._make_close_event(tick, entry, ss))
             ss.counter_basket = [
                 e
                 for e in ss.counter_basket
@@ -729,7 +760,7 @@ class SnowballStrategy(Strategy):
             key=lambda e: int(e.get("step", 0)),
         )
         for entry in counter_sorted:
-            events.append(self._make_close_event(tick, entry))
+            events.append(self._make_close_event(tick, entry, ss))
             ss.counter_basket = [
                 e
                 for e in ss.counter_basket

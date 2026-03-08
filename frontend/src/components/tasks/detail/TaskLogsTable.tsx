@@ -5,6 +5,7 @@
  */
 
 import React, { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   Chip,
@@ -35,6 +36,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
   executionRunId,
   enableRealTimeUpdates = false,
 }) => {
+  const { t } = useTranslation('common');
   const [levelFilter, setLevelFilter] = useState<string>('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(100);
@@ -140,14 +142,14 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
   const columns: Column<TaskLog>[] = [
     {
       id: 'timestamp',
-      label: 'Timestamp',
+      label: t('tables.logs.timestamp'),
       width: 260,
       minWidth: 200,
       render: (row) => formatTimestamp(row.timestamp as string),
     },
     {
       id: 'level',
-      label: 'Level',
+      label: t('tables.logs.level'),
       width: 120,
       minWidth: 90,
       render: (row) => (
@@ -159,13 +161,13 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     },
     {
       id: 'component',
-      label: 'Component',
+      label: t('tables.logs.component'),
       width: 220,
       minWidth: 150,
     },
     {
       id: 'message',
-      label: 'Message',
+      label: t('tables.logs.message'),
       minWidth: 200,
     },
   ];
@@ -188,15 +190,15 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
           alignItems: 'center',
         }}
       >
-        <Typography variant="h6">Task Logs</Typography>
+        <Typography variant="h6">{t('tables.logs.title')}</Typography>
         <FormControl sx={{ minWidth: 150 }}>
-          <InputLabel>Level Filter</InputLabel>
+          <InputLabel>{t('tables.logs.levelFilter')}</InputLabel>
           <Select
             value={levelFilter}
-            label="Level Filter"
+            label={t('tables.logs.levelFilter')}
             onChange={(e) => handleLevelFilterChange(e.target.value)}
           >
-            <MenuItem value="">All Levels</MenuItem>
+            <MenuItem value="">{t('tables.logs.allLevels')}</MenuItem>
             <MenuItem value="DEBUG">Debug</MenuItem>
             <MenuItem value="INFO">Info</MenuItem>
             <MenuItem value="WARNING">Warning</MenuItem>
@@ -219,7 +221,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
         columns={columns}
         data={logs}
         isLoading={isLoading}
-        emptyMessage="No logs available"
+        emptyMessage={t('tables.logs.noLogs')}
         defaultRowsPerPage={rowsPerPage}
         rowsPerPageOptions={[rowsPerPage]}
         storageKey="task-logs"

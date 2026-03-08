@@ -186,6 +186,8 @@
     "instrumentHelperText": "Trading pair to backtest",
     "closePositionsAtCompletion": "Close all positions at backtest completion",
     "closePositionsDescription": "When enabled, all open positions will be automatically closed at the final market price when the backtest finishes.",
+    "hedgingEnabled": "Enable Hedging",
+    "hedgingDescription": "Allow simultaneous long and short positions during backtest.",
     "dateRangeHelperText": "Backtesting requires historical data. Future dates are not allowed.",
     "checkingTickDataRange": "Checking tick data range...",
     "noTickDataFound": "No tick data found for {{instrument}} in the database.",
