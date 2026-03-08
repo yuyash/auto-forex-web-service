@@ -121,7 +121,7 @@ class SnowballStrategyConfig:
             round_step_pips=_to_decimal(raw.get("round_step_pips", "0.1"), "0.1"),
             dynamic_tp_enabled=bool(raw.get("dynamic_tp_enabled", False)),
             atr_period=_to_int(raw.get("atr_period", 14), 14),
-            atr_timeframe=_to_str(raw.get("atr_timeframe"), "m1"),
+            atr_timeframe=_to_str(raw.get("atr_timeframe"), "M1").upper(),
             atr_baseline_lookback=_to_int(raw.get("atr_baseline_lookback", 96), 96),
             m_pips_min=_to_decimal(raw.get("m_pips_min", "12"), "12"),
             m_pips_max=_to_decimal(raw.get("m_pips_max", "45"), "45"),
