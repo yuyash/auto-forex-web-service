@@ -62,7 +62,7 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
     // Settings routes
     '/settings': [
       { label: t('breadcrumbs.home'), path: homePath },
-      { label: 'Settings' },
+      { label: t('breadcrumbs.settings') },
     ],
   };
 

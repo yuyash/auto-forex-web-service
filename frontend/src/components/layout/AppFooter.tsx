@@ -3,11 +3,11 @@ import { Box, Chip, Stack, Tooltip } from '@mui/material';
 import {
   Circle as CircleIcon,
   TrendingUp as TrendingUpIcon,
-  Schedule as ScheduleIcon,
   Info as InfoIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAppSettings } from '../../hooks/useAppSettings';
 
 interface StrategyStatus {
   isActive: boolean;
@@ -24,46 +24,12 @@ interface OandaHealthStatus {
 
 const AppFooter = () => {
   const { t } = useTranslation('common');
-  const { user, token } = useAuth();
-  const [currentTime, setCurrentTime] = useState<string>('');
+  const { token } = useAuth();
+  const { settings: appSettings } = useAppSettings();
   const [backendVersion, setBackendVersion] = useState<string>('');
   const [oandaHealth, setOandaHealth] = useState<OandaHealthStatus | null>(
     null
   );
-
-  // Update current time in user's timezone
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      const timezone = user?.timezone || 'UTC';
-
-      try {
-        const timeString = now.toLocaleTimeString('en-US', {
-          timeZone: timezone,
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false,
-        });
-        setCurrentTime(timeString);
-      } catch {
-        // Fallback to UTC if timezone is invalid
-        const timeString = now.toLocaleTimeString('en-US', {
-          timeZone: 'UTC',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false,
-        });
-        setCurrentTime(timeString);
-      }
-    };
-
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-
-    return () => clearInterval(interval);
-  }, [user?.timezone]);
 
   // Fetch backend version from health endpoint
   useEffect(() => {
@@ -234,7 +200,8 @@ const AppFooter = () => {
         const checkedAt =
           typeof checkedAtRaw === 'string' ? new Date(checkedAtRaw) : undefined;
         const isStale = checkedAt
-          ? Date.now() - checkedAt.getTime() > 30_000
+          ? Date.now() - checkedAt.getTime() >
+            appSettings.healthCheckIntervalSeconds * 1000
           : true;
 
         if (isStale) {
@@ -299,11 +266,14 @@ const AppFooter = () => {
     // Check immediately
     checkHealth();
 
-    // Check every 30 seconds
-    const interval = setInterval(checkHealth, 30000);
+    // Check every N seconds (configurable)
+    const interval = setInterval(
+      checkHealth,
+      appSettings.healthCheckIntervalSeconds * 1000
+    );
 
     return () => clearInterval(interval);
-  }, [token, t]);
+  }, [token, t, appSettings.healthCheckIntervalSeconds]);
 
   // Derive connection status from OANDA health
   const derivedConnectionStatus: OandaConnectionState =
@@ -424,13 +394,6 @@ const AppFooter = () => {
               : t('status.inactive')
           }
           color={derivedStrategyStatus.isActive ? 'primary' : 'default'}
-        />
-
-        {/* System Time */}
-        <Chip
-          icon={<ScheduleIcon />}
-          label={`${currentTime}`}
-          variant="outlined"
         />
       </Stack>
     </Box>
