@@ -1,10 +1,12 @@
 {
   "title": "設定",
   "tabs": {
+    "general": "一般",
     "accounts": "アカウント",
     "preferences": "環境設定",
     "strategyDefaults": "戦略デフォルト",
-    "security": "セキュリティ"
+    "display": "表示",
+    "data": "データ"
   },
   "accounts": {
     "title": "OANDAアカウント",
@@ -32,6 +34,7 @@
     "accountDetails": "アカウント詳細",
     "setAsDefault": "デフォルトアカウントに設定",
     "defaultAccountDescription": "デフォルトアカウントはマーケットデータと最新ティックデータの収集に使用されます。デフォルトに設定できるアカウントは1つだけです。",
+    "defaultAccountInfo": "デフォルトアカウントはマーケットデータの取得と分析用ティックデータの収集に使用されます。ローソク足チャートはデフォルトアカウントを使用して価格データを表示します。デフォルトアカウントはいつでも切り替えることができます。",
     "leaveBlankToKeepToken": "既存のトークンを保持する場合は空欄にしてください",
     "confirmDelete": "このアカウントを削除してもよろしいですか？"
   },
@@ -88,5 +91,31 @@
     "passwordChanged": "パスワードが正常に変更されました",
     "invalidPassword": "無効なパスワード",
     "passwordMismatch": "パスワードが一致しません"
+  },
+  "display": {
+    "dateNumberFormat": "日付・数値フォーマット",
+    "dateFormat": "日付フォーマット",
+    "decimalSeparator": "小数点の区切り文字",
+    "thousandsSeparator": "桁区切り文字",
+    "space": "スペース",
+    "none": "なし",
+    "defaultInstrument": "デフォルト通貨ペア",
+    "currencyPair": "通貨ペア",
+    "defaultGranularity": "デフォルト時間足",
+    "chartAppearance": "チャート表示設定",
+    "candleUpColor": "陽線の色",
+    "candleDownColor": "陰線の色",
+    "info": "表示設定はローカルに保存され、即座に適用されます。デフォルトの通貨ペアと時間足は、ダッシュボードのチャート設定がリセットされた際に使用されます。"
+  },
+  "data": {
+    "sessionTimeout": "セッションタイムアウト",
+    "timeoutDuration": "タイムアウト時間",
+    "minutes": "分",
+    "seconds": "秒",
+    "never": "なし（ログイン状態を維持）",
+    "sessionTimeoutInfo": "指定した非アクティブ期間が経過すると、セッションが自動的に期限切れになります。「なし」に設定すると、手動でログアウトするまでログイン状態が維持されます。",
+    "dataRefresh": "データ更新",
+    "healthCheckInterval": "OANDAヘルスチェック間隔",
+    "healthCheckInfo": "フッターに表示されるOANDA API接続状態の確認頻度を制御します。値を小さくすると検出が速くなりますが、ネットワークトラフィックが増加します。"
   }
 }

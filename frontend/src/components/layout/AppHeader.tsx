@@ -12,27 +12,19 @@ import {
   useTheme,
   useMediaQuery,
   Button,
-  Tooltip,
 } from '@mui/material';
 import {
   AccountCircle,
-  Person,
   Settings,
   Logout,
   Menu as MenuIcon,
   Tune as ConfigIcon,
   Assignment as BacktestTaskIcon,
   PlayCircleOutline as TradingTaskIcon,
-  AccountBalanceWallet,
-  DarkMode,
-  LightMode,
-  SettingsBrightness,
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
-import { useAccessibility } from '../../hooks/useAccessibility';
-import LanguageSelector from '../common/LanguageSelector';
 import Typography from '@mui/material/Typography';
 
 interface AppHeaderProps {
@@ -45,26 +37,6 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  const { darkMode, themeMode, setThemeMode } = useAccessibility();
-
-  const cycleThemeMode = () => {
-    const next =
-      themeMode === 'light'
-        ? 'dark'
-        : themeMode === 'dark'
-          ? 'system'
-          : 'light';
-    setThemeMode(next);
-  };
-
-  const themeModeIcon =
-    themeMode === 'light' ? (
-      <LightMode />
-    ) : themeMode === 'dark' ? (
-      <DarkMode />
-    ) : (
-      <SettingsBrightness />
-    );
   const [userMenuAnchorEl, setUserMenuAnchorEl] = useState<null | HTMLElement>(
     null
   );
@@ -75,16 +47,6 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
 
   const handleUserMenuClose = () => {
     setUserMenuAnchorEl(null);
-  };
-
-  const handleProfileClick = () => {
-    handleUserMenuClose();
-    navigate('/profile');
-  };
-
-  const handleAccountsClick = () => {
-    handleUserMenuClose();
-    navigate('/settings');
   };
 
   const handleSettingsClick = () => {
@@ -186,28 +148,6 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
             flexShrink: 0,
           }}
         >
-          {/* Theme mode toggle: light → dark → system */}
-          <Tooltip
-            title={`Theme: ${themeMode}${themeMode === 'system' ? (darkMode ? ' (dark)' : ' (light)') : ''}`}
-          >
-            <IconButton
-              color="inherit"
-              onClick={cycleThemeMode}
-              aria-label={`Theme mode: ${themeMode}. Click to change.`}
-              sx={{ p: { xs: 0.5, sm: 1 } }}
-            >
-              {themeModeIcon}
-            </IconButton>
-          </Tooltip>
-
-          {/* Language Selector */}
-          <LanguageSelector
-            buttonSize="small"
-            buttonSx={{ p: { xs: 0.5, sm: 1 } }}
-          />
-
-          {/* Notification Center (Admin only) */}
-
           {/* User Menu */}
           <IconButton
             edge="end"
@@ -251,18 +191,6 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
               </Typography>
             </MenuItem>
             <Divider />
-            <MenuItem onClick={handleProfileClick}>
-              <ListItemIcon>
-                <Person fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>{t('navigation.profile')}</ListItemText>
-            </MenuItem>
-            <MenuItem onClick={handleAccountsClick}>
-              <ListItemIcon>
-                <AccountBalanceWallet fontSize="small" />
-              </ListItemIcon>
-              <ListItemText>{t('navigation.accounts')}</ListItemText>
-            </MenuItem>
             <MenuItem onClick={handleSettingsClick}>
               <ListItemIcon>
                 <Settings fontSize="small" />

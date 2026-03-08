@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { Box, CircularProgress, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { getCandleColors } from '../../utils/candleColors';
 import {
   CandlestickSeries,
   LineSeries,
@@ -553,13 +554,14 @@ export default function MarketChart({
       },
     });
 
+    const { upColor, downColor } = getCandleColors();
     const series = chart.addSeries(CandlestickSeries, {
-      upColor: '#16a34a',
-      downColor: '#ef4444',
-      wickUpColor: '#16a34a',
-      wickDownColor: '#ef4444',
-      borderUpColor: '#16a34a',
-      borderDownColor: '#ef4444',
+      upColor,
+      downColor,
+      wickUpColor: upColor,
+      wickDownColor: downColor,
+      borderUpColor: upColor,
+      borderDownColor: downColor,
     });
 
     chartRef.current = chart;

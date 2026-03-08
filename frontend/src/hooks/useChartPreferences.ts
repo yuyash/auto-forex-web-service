@@ -8,40 +8,87 @@ interface ChartPreferences {
   refreshInterval: number; // in seconds
 }
 
-const DEFAULT_PREFERENCES: ChartPreferences = {
-  instrument: 'USD_JPY',
-  granularity: 'H1',
-  autoRefreshEnabled: true,
-  refreshInterval: 60,
-};
-
 const STORAGE_KEY = 'dashboard_chart_preferences';
+const DEFAULTS_SNAPSHOT_KEY = 'dashboard_chart_defaults_snapshot';
+
+interface DefaultsSnapshot {
+  instrument: string;
+  granularity: string;
+}
+
+function readAppDefaults(): DefaultsSnapshot {
+  try {
+    const raw = localStorage.getItem('app_settings');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        instrument: parsed.defaultInstrument || 'USD_JPY',
+        granularity: parsed.defaultGranularity || 'H1',
+      };
+    }
+  } catch {
+    // ignore
+  }
+  return { instrument: 'USD_JPY', granularity: 'H1' };
+}
+
+function readPreviousSnapshot(): DefaultsSnapshot | null {
+  try {
+    const raw = localStorage.getItem(DEFAULTS_SNAPSHOT_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+function saveSnapshot(snapshot: DefaultsSnapshot) {
+  localStorage.setItem(DEFAULTS_SNAPSHOT_KEY, JSON.stringify(snapshot));
+}
 
 /**
- * Hook to manage chart preferences with localStorage persistence
- * Automatically saves preferences when they change
+ * Hook to manage chart preferences with localStorage persistence.
+ *
+ * When the user changes defaultInstrument / defaultGranularity in app
+ * settings, those changes are detected on next mount and propagated into
+ * the chart preferences automatically.
  */
 export function useChartPreferences() {
   const [preferences, setPreferences] = useState<ChartPreferences>(() => {
-    // Load preferences from localStorage on mount
+    const currentDefaults = readAppDefaults();
+    const previousSnapshot = readPreviousSnapshot();
+
+    // Base preferences: stored or fallback
+    let base: ChartPreferences = {
+      instrument: currentDefaults.instrument,
+      granularity: currentDefaults.granularity as Granularity,
+      autoRefreshEnabled: true,
+      refreshInterval: 60,
+    };
+
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored);
-        console.log(
-          '[useChartPreferences] Loaded preferences from localStorage',
-          parsed
-        );
-        return { ...DEFAULT_PREFERENCES, ...parsed };
+        base = { ...base, ...JSON.parse(stored) };
       }
-    } catch (err) {
-      console.error('[useChartPreferences] Failed to load preferences', err);
+    } catch {
+      // ignore
     }
-    console.log(
-      '[useChartPreferences] Using default preferences',
-      DEFAULT_PREFERENCES
-    );
-    return DEFAULT_PREFERENCES;
+
+    // Detect if app-settings defaults changed since last snapshot
+    if (previousSnapshot) {
+      if (previousSnapshot.instrument !== currentDefaults.instrument) {
+        base.instrument = currentDefaults.instrument;
+      }
+      if (previousSnapshot.granularity !== currentDefaults.granularity) {
+        base.granularity = currentDefaults.granularity as Granularity;
+      }
+    }
+
+    // Persist the current snapshot for next comparison
+    saveSnapshot(currentDefaults);
+
+    return base;
   });
 
   // Save preferences to localStorage whenever they change
@@ -81,8 +128,14 @@ export function useChartPreferences() {
 
   // Reset to default preferences
   const resetPreferences = useCallback(() => {
-    console.log('[useChartPreferences] Resetting to default preferences');
-    setPreferences(DEFAULT_PREFERENCES);
+    const defaults = readAppDefaults();
+    setPreferences({
+      instrument: defaults.instrument,
+      granularity: defaults.granularity as Granularity,
+      autoRefreshEnabled: true,
+      refreshInterval: 60,
+    });
+    saveSnapshot(defaults);
   }, []);
 
   return {
