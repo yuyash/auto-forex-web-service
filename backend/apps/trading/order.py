@@ -103,6 +103,7 @@ class OrderService:
         override_price: Decimal | None = None,
         tick_timestamp: datetime | None = None,
         retracement_count: int | None = None,
+        planned_exit_price: Decimal | None = None,
     ) -> tuple[Position, Order]:
         """
         Open a new position with specified direction.
@@ -148,6 +149,7 @@ class OrderService:
             override_price=override_price,
             tick_timestamp=tick_timestamp,
             retracement_count=retracement_count,
+            planned_exit_price=planned_exit_price,
         )
 
     def close_position(
@@ -293,10 +295,16 @@ class OrderService:
                 )
                 realized_delta = realized_delta * close_units_decimal * conv
 
-                if position.direction == Direction.LONG:
-                    position.units = position.units - units
-                else:
-                    position.units = position.units + units
+                position.units = position.units - units
+
+                # If partial close reduced units to zero, treat as full close
+                if position.units == 0:
+                    exit_time_value = tick_timestamp or oanda_order.fill_time or timezone.now()
+                    position.close(
+                        exit_price=close_price,
+                        exit_time=exit_time_value,  # type: ignore[arg-type]
+                    )
+
                 position.save()
 
                 logger.info(
@@ -362,6 +370,7 @@ class OrderService:
         override_price: Decimal | None = None,
         tick_timestamp: datetime | None = None,
         retracement_count: int | None = None,
+        planned_exit_price: Decimal | None = None,
     ) -> tuple[Position, Order]:
         """
         Execute a market order and create/update position.
@@ -405,6 +414,7 @@ class OrderService:
                 merge_with_existing=merge_with_existing,
                 oanda_trade_id=getattr(oanda_order, "trade_id", None),
                 retracement_count=retracement_count,
+                planned_exit_price=planned_exit_price,
             )
 
             # Create order record linked to the position
@@ -525,6 +535,7 @@ class OrderService:
         merge_with_existing: bool = True,
         oanda_trade_id: str | None = None,
         retracement_count: int | None = None,
+        planned_exit_price: Decimal | None = None,
     ) -> Position:
         """Create new position or update existing one."""
         if merge_with_existing:
@@ -585,6 +596,7 @@ class OrderService:
             layer_index=layer_index,
             oanda_trade_id=oanda_trade_id,
             retracement_count=retracement_count,
+            planned_exit_price=planned_exit_price,
         )
 
         logger.debug(

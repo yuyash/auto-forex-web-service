@@ -255,6 +255,7 @@
       "openPrice": "Open Price",
       "closePrice": "Close Price",
       "pips": "Pips",
+      "plannedExitPrice": "Planned Exit Price",
       "realizedPnl": "Realized PnL",
       "unrealizedPnl": "Unrealized PnL",
       "totalRealizedPnl": "Total Realized PnL",
@@ -287,6 +288,7 @@
       "noLogs": "No logs available"
     },
     "trend": {
+      "executionId": "Execution ID",
       "realizedPnl": "Realized PnL",
       "unrealizedPnl": "Unrealized PnL",
       "totalTrades": "Total Trades (count)",

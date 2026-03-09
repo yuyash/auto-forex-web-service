@@ -498,6 +498,16 @@ export const TradingTaskDetail: React.FC = () => {
                     {t('trading:detail.executionTimeline')}
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {task.execution_run_id != null && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          {t('trading:detail.executionId')}
+                        </Typography>
+                        <Typography variant="body1">
+                          {task.execution_run_id}
+                        </Typography>
+                      </Box>
+                    )}
                     {task.started_at && (
                       <Box>
                         <Typography variant="caption" color="text.secondary">

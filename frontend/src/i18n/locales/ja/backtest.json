@@ -158,6 +158,7 @@
     "commissionPerTrade": "取引手数料",
     "results": "結果",
     "executionTimeline": "実行タイムライン",
+    "executionId": "実行ID",
     "startedAt": "開始日時",
     "completedAt": "完了日時",
     "realizedPnl": "実現損益",

@@ -114,7 +114,7 @@ export default function TradingTaskUpdateForm({
 
   return (
     <Box>
-      <Paper sx={{ p: 3, mb: 3, bgcolor: 'grey.50' }}>
+      <Paper sx={{ p: 3, mb: 3, bgcolor: 'action.hover' }}>
         <Typography variant="h6" gutterBottom>
           {t('trading:updateForm.taskInfoReadOnly')}
         </Typography>

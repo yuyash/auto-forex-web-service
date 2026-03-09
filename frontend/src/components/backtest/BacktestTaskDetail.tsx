@@ -125,17 +125,22 @@ export const BacktestTaskDetail: React.FC = () => {
     interval: 3000,
   });
 
-  // Refetch when status changes
+  // Update the displayed status from the lightweight status poller.
+  // We intentionally do NOT call refetch() on status transitions because
+  // the burst of concurrent API calls (task detail + positions + events +
+  // trades + summary + metrics) triggers 429 rate-limiting, which causes
+  // useBacktestTask to set error state → the component tree unmounts
+  // (including TaskTrendPanel) → on recovery the chart remounts and
+  // fitContent() scrolls to the last candle.
+  //
+  // The polledStatus is already used for the status badge and
+  // enableRealTimeUpdates, so the UI stays in sync without refetching.
   const prevStatusRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (polledStatus) {
-      // Refetch when status changes
-      if (polledStatus.status !== prevStatusRef.current) {
-        refetch();
-      }
       prevStatusRef.current = polledStatus.status;
     }
-  }, [polledStatus, refetch]);
+  }, [polledStatus]);
 
   // Derive tab value from URL parameter (use this for rendering)
   const currentTabValue =
@@ -275,7 +280,16 @@ export const BacktestTaskDetail: React.FC = () => {
               onStop={async (id) => {
                 const { backtestTasksApi } = await import('../../services/api');
                 await backtestTasksApi.stop(id);
-                refetch();
+                // Do NOT call refetch() here — the status poller will detect
+                // the STOPPING→STOPPED transition and trigger refetch
+                // automatically.  Calling refetch() immediately floods the
+                // backend with concurrent requests (task detail + positions +
+                // events + trades + summary + metrics) which triggers 429
+                // rate-limiting.  The 429 errors cause useBacktestTask to set
+                // error state, which unmounts the entire component tree
+                // (including TaskTrendPanel), destroying the chart.  When the
+                // next successful response arrives the tree remounts and
+                // fitContent() scrolls the chart to the last candle.
               }}
               onRestart={async (id) => {
                 const { backtestTasksApi } = await import('../../services/api');
@@ -601,6 +615,16 @@ export const BacktestTaskDetail: React.FC = () => {
                     {t('backtest:detail.executionTimeline')}
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {task.execution_run_id != null && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          {t('backtest:detail.executionId')}
+                        </Typography>
+                        <Typography variant="body1">
+                          {task.execution_run_id}
+                        </Typography>
+                      </Box>
+                    )}
                     {task.started_at && (
                       <Box>
                         <Typography variant="caption" color="text.secondary">

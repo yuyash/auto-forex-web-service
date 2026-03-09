@@ -47,6 +47,7 @@
     "taskInformation": "Task Information",
     "results": "Results",
     "executionTimeline": "Execution Timeline",
+    "executionId": "Execution ID",
     "startedAt": "Started At",
     "completedAt": "Completed At",
     "realizedPnl": "Realized PnL",

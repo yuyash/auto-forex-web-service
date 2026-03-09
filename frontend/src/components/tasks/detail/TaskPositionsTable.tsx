@@ -208,6 +208,17 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         r.exit_price ? `¥${parseFloat(r.exit_price).toFixed(3)}` : '-',
     },
     {
+      id: 'planned_exit_price',
+      label: t('tables.positions.plannedExitPrice'),
+      width: 130,
+      minWidth: 90,
+      align: 'right',
+      render: (r) =>
+        r.planned_exit_price
+          ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
+          : '-',
+    },
+    {
       id: 'pips',
       label: t('tables.positions.pips'),
       width: 90,
@@ -296,6 +307,17 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         r.entry_price ? `¥${parseFloat(r.entry_price).toFixed(3)}` : '-',
     },
     {
+      id: 'planned_exit_price',
+      label: t('tables.positions.plannedExitPrice'),
+      width: 130,
+      minWidth: 90,
+      align: 'right',
+      render: (r) =>
+        r.planned_exit_price
+          ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
+          : '-',
+    },
+    {
       id: 'pips',
       label: t('tables.positions.pips'),
       width: 90,
@@ -374,6 +396,94 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       });
     };
 
+  // --- Row formatters for copy ---
+  const closedRowFn =
+    (dir: 'long' | 'short') =>
+    (r: TaskPosition): string => {
+      const ep = r.entry_price ? parseFloat(r.entry_price) : null;
+      const xp = r.exit_price ? parseFloat(r.exit_price) : null;
+      const u = Math.abs(r.units ?? 0);
+      let pipsStr = '-';
+      let pnlStr = '-';
+      if (ep != null && xp != null && pipSize) {
+        const pips = (dir === 'long' ? xp - ep : ep - xp) / pipSize;
+        if (Number.isFinite(pips)) pipsStr = pips.toFixed(1);
+      }
+      if (ep != null && xp != null) {
+        const val = dir === 'long' ? (xp - ep) * u : (ep - xp) * u;
+        pnlStr = val.toFixed(2);
+      }
+      return [
+        r.entry_time ? formatTimestamp(r.entry_time) : '-',
+        r.exit_time ? formatTimestamp(r.exit_time) : '-',
+        r.instrument ?? '-',
+        String(Math.abs(r.units)),
+        r.layer_index != null ? String(r.layer_index) : '-',
+        ep != null ? `¥${ep.toFixed(3)}` : '-',
+        xp != null ? `¥${xp.toFixed(3)}` : '-',
+        r.planned_exit_price
+          ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
+          : '-',
+        pipsStr,
+        pnlStr,
+      ].join('\t');
+    };
+
+  const closedHeaders = [
+    'Open Time',
+    'Close Time',
+    'Instrument',
+    'Units',
+    'Layer',
+    'Open Price',
+    'Close Price',
+    'Planned Exit',
+    'Pips',
+    'Realized PnL',
+  ];
+
+  const openRowFn =
+    (dir: 'long' | 'short') =>
+    (r: TaskPosition): string => {
+      const ep = r.entry_price ? parseFloat(r.entry_price) : null;
+      let pipsStr = '-';
+      let pnlStr = '-';
+      if (currentPrice != null && ep != null && pipSize) {
+        const pips =
+          (dir === 'long' ? currentPrice - ep : ep - currentPrice) / pipSize;
+        if (Number.isFinite(pips)) pipsStr = pips.toFixed(1);
+      }
+      if (currentPrice != null && ep != null) {
+        const u = Math.abs(r.units ?? 0);
+        const val =
+          dir === 'long' ? (currentPrice - ep) * u : (ep - currentPrice) * u;
+        pnlStr = val.toFixed(2);
+      }
+      return [
+        r.entry_time ? formatTimestamp(r.entry_time) : '-',
+        r.instrument ?? '-',
+        String(Math.abs(r.units)),
+        r.layer_index != null ? String(r.layer_index) : '-',
+        ep != null ? `¥${ep.toFixed(3)}` : '-',
+        r.planned_exit_price
+          ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
+          : '-',
+        pipsStr,
+        pnlStr,
+      ].join('\t');
+    };
+
+  const openHeaders = [
+    'Open Time',
+    'Instrument',
+    'Units',
+    'Layer',
+    'Open Price',
+    'Planned Exit',
+    'Pips',
+    'Unrealized PnL',
+  ];
+
   // --- Render a pair of Long/Short tables ---
   const renderPair = (
     label: string,
@@ -397,7 +507,10 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     shortKey: string,
     columns: (dir: 'long' | 'short') => Column<TaskPosition>[],
     pnlLabel: string,
-    pnlValue: number
+    pnlValue: number,
+    copyHeaders: string[],
+    longCopyRowFn: (r: TaskPosition) => string,
+    shortCopyRowFn: (r: TaskPosition) => string
   ) => {
     const longIds = longData.map((r) => String(r.id));
     const shortIds = shortData.map((r) => String(r.id));
@@ -447,12 +560,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
               </Box>
               <TableSelectionToolbar
                 selectedCount={longSel.selectedRowIds.size}
-                onCopy={makeCopy(
-                  longData,
-                  longSel,
-                  ['Time', 'Units', 'Price'],
-                  (r) => [r.entry_time, r.units, r.entry_price].join('\t')
-                )}
+                onCopy={makeCopy(longData, longSel, copyHeaders, longCopyRowFn)}
                 onSelectAll={() => longSel.selectAllOnPage(longIds)}
                 onReset={longSel.resetSelection}
                 onReload={makeReload(longKey, longRefetch)}
@@ -515,8 +623,8 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
                 onCopy={makeCopy(
                   shortData,
                   shortSel,
-                  ['Time', 'Units', 'Price'],
-                  (r) => [r.entry_time, r.units, r.entry_price].join('\t')
+                  copyHeaders,
+                  shortCopyRowFn
                 )}
                 onSelectAll={() => shortSel.selectAllOnPage(shortIds)}
                 onReset={shortSel.resetSelection}
@@ -594,7 +702,10 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         'cs',
         closedCols,
         t('tables.positions.totalRealizedPnl'),
-        totalRealizedPnl
+        totalRealizedPnl,
+        closedHeaders,
+        closedRowFn('long'),
+        closedRowFn('short')
       )}
       {renderPair(
         t('tables.positions.openPositions'),
@@ -618,7 +729,10 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         'os',
         openCols,
         t('tables.positions.totalUnrealizedPnl'),
-        totalUnrealizedPnl
+        totalUnrealizedPnl,
+        openHeaders,
+        openRowFn('long'),
+        openRowFn('short')
       )}
     </Box>
   );

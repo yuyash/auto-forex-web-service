@@ -164,6 +164,9 @@ class SnowballStrategy(Strategy):
         """Create an OpenPositionEvent and the corresponding basket entry dict."""
         eid = self._next_id(ss)
         price = tick.ask if direction == "long" else tick.bid
+        is_trend = basket == "trend"
+        layer = 1 if is_trend else ss.freeze_count + 1
+        ret = 1 if is_trend else ss.add_count + 1
         entry = BasketEntry(
             entry_id=eid,
             step=step,
@@ -173,24 +176,31 @@ class SnowballStrategy(Strategy):
             units=units,
             opened_at=tick.timestamp.isoformat(),
         )
+        entry_dict = entry.to_dict()
+        # Persist layer/retracement so close events use the same values.
+        entry_dict["layer_number"] = layer
+        entry_dict["retracement_count"] = ret
         event = OpenPositionEvent(
             event_type=EventType.OPEN_POSITION,
             timestamp=tick.timestamp,
-            layer_number=ss.freeze_count + 1,
+            layer_number=layer,
             direction=direction,
             price=price,
             units=units,
             entry_id=eid,
-            retracement_count=ss.add_count,
+            retracement_count=ret,
             strategy_event_type=f"snowball_{basket}",
+            planned_exit_price=close_price,
         )
-        return event, entry.to_dict()
+        return event, entry_dict
 
     def _make_close_event(
         self,
         tick: Any,
         entry: dict[str, Any],
         ss: SnowballStrategyState,
+        *,
+        basket: str = "counter",
     ) -> ClosePositionEvent:
         direction = str(entry.get("direction", "long"))
         entry_price = Decimal(str(entry.get("entry_price", "0")))
@@ -200,10 +210,15 @@ class SnowballStrategy(Strategy):
         pnl = (exit_price - entry_price) * Decimal(str(units)) * conv
         if direction == "short":
             pnl = -pnl
+        # Use the layer/retracement stored at open time so close events
+        # are consistent with the corresponding open events.
+        is_trend = basket == "trend"
+        layer = entry.get("layer_number", 1 if is_trend else ss.freeze_count + 1)
+        ret = entry.get("retracement_count", 1 if is_trend else ss.add_count + 1)
         return ClosePositionEvent(
             event_type=EventType.CLOSE_POSITION,
             timestamp=tick.timestamp,
-            layer_number=ss.freeze_count + 1,
+            layer_number=layer,
             direction=direction,
             entry_price=entry_price,
             exit_price=exit_price,
@@ -211,7 +226,7 @@ class SnowballStrategy(Strategy):
             pnl=pnl,
             entry_id=int(entry.get("entry_id", 0)),
             position_id=entry.get("position_id"),
-            retracement_count=ss.add_count,
+            retracement_count=ret,
         )
 
     # ------------------------------------------------------------------
@@ -261,7 +276,7 @@ class SnowballStrategy(Strategy):
 
         # --- Protection level determination ---
         ratio = self._margin_ratio(state, ss)
-        ss.metrics["margin_ratio"] = str(ratio)
+        ss.metrics["margin_ratio"] = str(ratio / Decimal("100"))
 
         if ratio >= Decimal("95"):
             # Emergency stop — always active regardless of individual protection settings
@@ -311,6 +326,8 @@ class SnowballStrategy(Strategy):
                     "units": hedge_units,
                     "opened_at": tick.timestamp.isoformat(),
                     "is_hedge": True,
+                    "layer_number": ss.freeze_count + 1,
+                    "retracement_count": ss.add_count + 1,
                 }
                 ss.counter_basket.append(hedge_entry)
                 ss.lock_hedge_ids.append(eid)
@@ -508,7 +525,7 @@ class SnowballStrategy(Strategy):
                 continue
 
             # Close
-            events.append(self._make_close_event(tick, entry, ss))
+            events.append(self._make_close_event(tick, entry, ss, basket="trend"))
             ss.trend_basket = [
                 e
                 for e in ss.trend_basket
@@ -584,8 +601,8 @@ class SnowballStrategy(Strategy):
         cfg = self.config
         events: list[Any] = []
 
-        # Cannot add if f_max exceeded
-        if ss.freeze_count > cfg.f_max:
+        # Cannot add if f_max layers already used
+        if ss.freeze_count >= cfg.f_max:
             return events
 
         # Cannot add if already at r_max adds
@@ -594,17 +611,6 @@ class SnowballStrategy(Strategy):
             ss.add_count = 0
             ss.freeze_count += 1
             ss.cycle_base_units = int(Decimal(str(cfg.base_units)) * cfg.post_r_max_base_factor)
-            events.append(
-                GenericStrategyEvent(
-                    event_type=EventType.STRATEGY_SIGNAL,
-                    timestamp=tick.timestamp,
-                    data={
-                        "kind": "snowball_cycle_reset",
-                        "freeze_count": ss.freeze_count,
-                        "cycle_base_units": ss.cycle_base_units,
-                    },
-                )
-            )
             return events
 
         # Find the latest counter entry to measure distance from
@@ -624,19 +630,29 @@ class SnowballStrategy(Strategy):
                 return events
 
             direction = str(losing_trend.get("direction", "long"))
-            ep = Decimal(str(losing_trend.get("entry_price", "0")))
             interval = counter_interval_pips(1, cfg)
             adverse = self._unrealised_loss(losing_trend, tick)
             if adverse < interval:
                 return events
 
-            # First counter add
+            # First counter add — k=1 for interval/tp calculations.
             k = 1
             units = k * ss.cycle_base_units
             tp = counter_tp_pips(k, cfg)
             new_price = tick.ask if direction == "long" else tick.bid
             if cfg.counter_tp_mode == "weighted_avg":
-                close_price = ep  # weighted avg of single entry = entry price
+                # Include the same-direction trend entry (step 1) in the
+                # weighted average so the close target accounts for the
+                # full position cost basis.
+                total_u = units
+                total_cost = new_price * Decimal(str(units))
+                for te in ss.trend_basket:
+                    if str(te.get("direction", "")) == direction:
+                        te_units = abs(int(te.get("units", 0)))
+                        te_price = Decimal(str(te.get("entry_price", "0")))
+                        total_u += te_units
+                        total_cost += te_price * Decimal(str(te_units))
+                close_price = total_cost / Decimal(str(total_u)) if total_u > 0 else new_price
             else:
                 close_price = (
                     new_price + tp * self.pip_size
@@ -678,7 +694,9 @@ class SnowballStrategy(Strategy):
         units = k * ss.cycle_base_units
         tp = counter_tp_pips(k, cfg)
 
-        # Compute avg price including all counter entries + this new one
+        # Compute avg price including all counter entries + this new one,
+        # plus the same-direction trend entry (step 1) which is conceptually
+        # part of the position but lives in the trend basket.
         all_counter = counter_non_hedge
         total_u = sum(int(e.get("units", 0)) for e in all_counter) + units
         total_cost = sum(
@@ -687,6 +705,13 @@ class SnowballStrategy(Strategy):
         )
         new_price = tick.ask if direction == "long" else tick.bid
         total_cost += new_price * Decimal(str(units))
+        # Include same-direction trend entry in weighted average
+        for te in ss.trend_basket:
+            if str(te.get("direction", "")) == direction:
+                te_units = abs(int(te.get("units", 0)))
+                te_price = Decimal(str(te.get("entry_price", "0")))
+                total_u += te_units
+                total_cost += te_price * Decimal(str(te_units))
         avg = total_cost / Decimal(str(total_u)) if total_u > 0 else new_price
 
         if cfg.counter_tp_mode == "weighted_avg":
@@ -710,25 +735,23 @@ class SnowballStrategy(Strategy):
         ss.counter_basket.append(entry_dict)
         ss.add_count += 1
 
-        # Update close prices for all existing counter entries
-        for e in ss.counter_basket:
-            if e.get("is_hedge"):
-                continue
-            step_k = int(e.get("step", 1)) - 1  # 0-based for tp calc
-            if step_k < 1:
-                step_k = 1
-            step_tp = counter_tp_pips(step_k, cfg)
-            if cfg.counter_tp_mode == "weighted_avg":
-                # weighted_avg: close at the basket's weighted average price
-                base_price = avg
-            else:
-                # fixed/progression: close at entry price + tp offset
+        # Update close prices for existing counter entries (non-weighted_avg modes only).
+        # In weighted_avg mode each entry's close_price is the cumulative weighted
+        # average at the time it was added and must NOT be overwritten.
+        if cfg.counter_tp_mode != "weighted_avg":
+            for e in ss.counter_basket:
+                if e.get("is_hedge"):
+                    continue
+                step_k = int(e.get("step", 1)) - 1  # 0-based for tp calc
+                if step_k < 1:
+                    step_k = 1
+                step_tp = counter_tp_pips(step_k, cfg)
                 base_price = Decimal(str(e.get("entry_price", "0")))
-            e["close_price"] = str(
-                base_price + step_tp * self.pip_size
-                if direction == "long"
-                else base_price - step_tp * self.pip_size
-            )
+                e["close_price"] = str(
+                    base_price + step_tp * self.pip_size
+                    if direction == "long"
+                    else base_price - step_tp * self.pip_size
+                )
 
         events.append(evt)
         return events
@@ -802,8 +825,11 @@ class SnowballStrategy(Strategy):
         if not execution_result:
             return
 
-        eid = getattr(execution_result, "entry_id", None)
-        position_id = getattr(execution_result, "position_id", None)
+        binding = getattr(execution_result, "entry_binding", None)
+        if binding is None:
+            return
+        eid = getattr(binding, "entry_id", None)
+        position_id = getattr(binding, "position_id", None)
         if eid is None or position_id is None:
             return
 

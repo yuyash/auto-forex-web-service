@@ -252,9 +252,10 @@
       "instrument": "通貨ペア",
       "units": "数量",
       "layer": "段階",
-      "openPrice": "オープン価格",
-      "closePrice": "クローズ価格",
+      "openPrice": "注文価格",
+      "closePrice": "決済価格",
       "pips": "Pips",
+      "plannedExitPrice": "予定決済価格",
       "realizedPnl": "実現損益",
       "unrealizedPnl": "未実現損益",
       "totalRealizedPnl": "合計実現損益",
@@ -287,6 +288,7 @@
       "noLogs": "ログなし"
     },
     "trend": {
+      "executionId": "実行ID",
       "realizedPnl": "実現損益",
       "unrealizedPnl": "未実現損益",
       "totalTrades": "総取引数",

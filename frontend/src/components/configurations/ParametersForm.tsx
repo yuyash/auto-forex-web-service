@@ -43,7 +43,7 @@ const ParametersForm = ({
 
   return (
     <form onSubmit={handleSubmit}>
-      <Card variant="outlined" sx={{ mb: 3, bgcolor: 'grey.50' }}>
+      <Card variant="outlined" sx={{ mb: 3, bgcolor: 'action.hover' }}>
         <CardContent>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
             <Typography variant="subtitle2" color="text.secondary">

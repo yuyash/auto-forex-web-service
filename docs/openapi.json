@@ -6251,6 +6251,12 @@
                         "type": "integer",
                         "nullable": true
                     },
+                    "planned_exit_price": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "nullable": true
+                    },
                     "trade_ids": {
                         "type": "array",
                         "items": {

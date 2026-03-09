@@ -193,19 +193,6 @@ const toRfc3339Seconds = (value: string): string => {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
 };
 
-const TRADING_OPEN_EVENT_TYPES = new Set([
-  'open_position',
-  'initial_entry',
-  'retracement',
-]);
-const TRADING_CLOSE_EVENT_TYPES = new Set([
-  'close_position',
-  'take_profit',
-  'margin_protection',
-  'volatility_lock',
-  'volatility_hedge_neutralize',
-]);
-
 const toEventMarkerTime = (event: TaskEvent): UTCTimestamp | null => {
   const detailTimestamp =
     typeof event.details?.timestamp === 'string'
@@ -216,10 +203,44 @@ const toEventMarkerTime = (event: TaskEvent): UTCTimestamp | null => {
   );
 };
 
-const toEventDirection = (event: TaskEvent): 'long' | 'short' | null => {
-  const raw = String(event.details?.direction ?? '').toLowerCase();
-  if (raw === 'long' || raw === 'short') return raw;
-  return null;
+/**
+ * Snap a UTC-second timestamp to the nearest candle time using binary search.
+ * lightweight-charts requires marker times to match existing data points;
+ * without snapping, markers whose time falls between (or beyond) candles are
+ * silently pushed to the very last bar.
+ */
+const snapToCandleTime = (
+  timeSec: number,
+  candleTimes: number[]
+): UTCTimestamp | null => {
+  if (candleTimes.length === 0) return null;
+
+  let lo = 0;
+  let hi = candleTimes.length - 1;
+
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (candleTimes[mid] < timeSec) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+
+  // lo is the first candle >= timeSec.  Compare with the previous candle to
+  // pick whichever is closer.
+  const candidates = [lo - 1, lo].filter(
+    (i) => i >= 0 && i < candleTimes.length
+  );
+  let best = candidates[0]!;
+  for (const i of candidates) {
+    if (
+      Math.abs(candleTimes[i] - timeSec) < Math.abs(candleTimes[best] - timeSec)
+    ) {
+      best = i;
+    }
+  }
+  return candleTimes[best] as UTCTimestamp;
 };
 
 const recommendGranularity = (
@@ -432,15 +453,9 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     pageSize: 5000,
     enableRealTimeUpdates,
   });
-  const { events: tradingEvents } = useTaskEvents({
-    taskId,
-    taskType,
-    executionRunId,
-    source: 'trading',
-    page: 1,
-    pageSize: 5000,
-    enableRealTimeUpdates,
-  });
+  // Trading events are not fetched here because tradeMarkers (from the
+  // trades API) already display open/close with direction and lot size,
+  // making separate trading-event markers redundant.
   const { events: strategyEvents } = useTaskEvents({
     taskId,
     taskType,
@@ -453,26 +468,49 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
 
   // Auto-follow: track whether the chart should auto-scroll to the position line
   const [autoFollow, setAutoFollow] = useState(true);
-  // Timestamp-based guard: any visibleLogicalRangeChange that fires within
-  // this window (ms) after a programmatic scroll is treated as our own and
-  // will NOT disable auto-follow.  This is far more reliable than the old
-  // boolean flag + requestAnimationFrame approach because the chart library
-  // can fire the change callback with unpredictable async delays.
+  // Counter-based guard: every programmatic scroll increments this counter.
+  // The visibleLogicalRangeChange listener decrements it instead of disabling
+  // auto-follow.  This is more reliable than a time-based window because the
+  // chart library can fire the change callback with unpredictable async delays
+  // (especially when the browser tab is throttled or the machine is under load).
+  const programmaticScrollCountRef = useRef(0);
+  // Timestamp-based guard kept as a secondary safety net for callbacks that
+  // fire multiple times per single programmatic action (e.g. setData triggers
+  // both a range reset and a fitContent, each producing a callback).
   const programmaticScrollUntilRef = useRef(0);
-  const PROGRAMMATIC_SCROLL_GUARD_MS = 400;
+  const PROGRAMMATIC_SCROLL_GUARD_MS = 800;
   // Keep the old ref name around as a thin wrapper so every call-site still
-  // compiles – but now it just sets / reads the timestamp.
+  // compiles – but now it sets both the counter and the timestamp.
   // Wrapped in useMemo so the object identity is stable across renders,
   // which satisfies the react-hooks/exhaustive-deps rule.
   const programmaticScrollRef = useMemo(
     () => ({
       get current() {
-        return Date.now() < programmaticScrollUntilRef.current;
+        return (
+          programmaticScrollCountRef.current > 0 ||
+          Date.now() < programmaticScrollUntilRef.current
+        );
       },
       set current(v: boolean) {
-        programmaticScrollUntilRef.current = v
-          ? Date.now() + PROGRAMMATIC_SCROLL_GUARD_MS
-          : 0;
+        if (v) {
+          programmaticScrollCountRef.current += 1;
+          programmaticScrollUntilRef.current =
+            Date.now() + PROGRAMMATIC_SCROLL_GUARD_MS;
+        } else {
+          programmaticScrollCountRef.current = 0;
+          programmaticScrollUntilRef.current = 0;
+        }
+      },
+      /** Decrement the counter by one (called from the range-change listener). */
+      consume() {
+        if (programmaticScrollCountRef.current > 0) {
+          programmaticScrollCountRef.current -= 1;
+          return true;
+        }
+        if (Date.now() < programmaticScrollUntilRef.current) {
+          return true;
+        }
+        return false;
       },
     }),
     [PROGRAMMATIC_SCROLL_GUARD_MS]
@@ -868,8 +906,8 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   const [showOpenLongOnly, setShowOpenLongOnly] = useState(false);
   const [showOpenShortOnly, setShowOpenShortOnly] = useState(false);
 
-  const [posPage, setPosPage] = useState(0);
-  const [posRowsPerPage, setPosRowsPerPage] = useState(10);
+  const [, setPosPage] = useState(0);
+  const [, setPosRowsPerPage] = useState(10);
 
   // Separate pagination for Long / Short position tables in the Trend tab
   const [longPosPage, setLongPosPage] = useState(0);
@@ -1230,6 +1268,33 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   // the selected trade and scroll the row into view.
   const pendingScrollRef = useRef(false);
 
+  /** Navigate the correct Long or Short position table to the page
+   *  containing the given position, and schedule a scroll-into-view. */
+  const navigateToPosition = useCallback(
+    (pos: (typeof allPositions)[number]) => {
+      setSelectedPosId(pos.id);
+      pendingPosScrollRef.current = true;
+
+      if (pos.direction === 'long') {
+        const idx = sortedLongPositions.findIndex((p) => p.id === pos.id);
+        if (idx !== -1) {
+          setLongPosPage(Math.floor(idx / longPosRowsPerPage));
+        }
+      } else if (pos.direction === 'short') {
+        const idx = sortedShortPositions.findIndex((p) => p.id === pos.id);
+        if (idx !== -1) {
+          setShortPosPage(Math.floor(idx / shortPosRowsPerPage));
+        }
+      }
+    },
+    [
+      sortedLongPositions,
+      sortedShortPositions,
+      longPosRowsPerPage,
+      shortPosRowsPerPage,
+    ]
+  );
+
   useEffect(() => {
     if (!chartClickedRef.current || !selectedTradeId) return;
     chartClickedRef.current = false;
@@ -1246,13 +1311,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     if (trade) {
       const pos = findPositionForTrade(trade);
       if (pos) {
-        setSelectedPosId(pos.id);
-        const posIdx = allPositions.findIndex((p) => p.id === pos.id);
-        if (posIdx !== -1) {
-          const targetPosPage = Math.floor(posIdx / posRowsPerPage);
-          pendingPosScrollRef.current = true;
-          setPosPage(targetPosPage);
-        }
+        navigateToPosition(pos);
       } else {
         setSelectedPosId(null);
       }
@@ -1264,8 +1323,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     rowsPerPage,
     trades,
     findPositionForTrade,
-    allPositions,
-    posRowsPerPage,
+    navigateToPosition,
   ]);
 
   // After the table re-renders with the selected row on the correct page,
@@ -1293,7 +1351,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       });
     });
     return () => cancelAnimationFrame(raf);
-  }, [posPage, selectedPosId]);
+  }, [longPosPage, shortPosPage, selectedPosId]);
 
   const granularityOptions = useMemo(() => {
     if (granularities.length > 0) {
@@ -1335,6 +1393,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     chart: chartInstance,
     candleTimestamps: candleTimestampsMemo,
     currentTickTimestamp: enableRealTimeUpdates ? currentTick?.timestamp : null,
+    programmaticScrollRef,
   });
 
   // PnL summary from server-side aggregation (lightweight endpoint)
@@ -1785,7 +1844,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
 
     // Detect user-initiated scroll/zoom and disable auto-follow
     chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
-      if (programmaticScrollRef.current) return;
+      if (programmaticScrollRef.consume()) return;
       setAutoFollow(false);
     });
 
@@ -1823,12 +1882,24 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   // Track whether this is the first candle load (for initial fitContent)
   const hasInitialFit = useRef(false);
 
+  // Auto-follow: show ~500 candles worth of data with the position line centred.
+  const AUTO_FOLLOW_CANDLES = 500;
+
   // Update candle data, market gaps, and fit chart when data changes
   useEffect(() => {
     if (!seriesRef.current || !markersRef.current) return;
 
     // Guard setData so the resulting visible-range change doesn't disable auto-follow
     programmaticScrollRef.current = true;
+
+    // Save the current visible range before setData.  lightweight-charts
+    // resets the scroll position to the last bar on setData, which would
+    // cause the chart to jump when data is refreshed while the user has
+    // scrolled to a different position.
+    const savedLogicalRange = hasInitialFit.current
+      ? chartRef.current?.timeScale().getVisibleLogicalRange()
+      : null;
+
     try {
       seriesRef.current.setData(candles);
     } catch (e) {
@@ -1845,12 +1916,62 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     // Only fit content on the very first load — preserve user's zoom/pan on updates
     if (candles.length > 0 && !hasInitialFit.current) {
       programmaticScrollRef.current = true;
-      try {
-        chartRef.current?.timeScale().fitContent();
-      } catch (e) {
-        console.warn('Failed to fit chart content:', e);
+
+      // Determine the initial viewport:
+      // 1. If a sequence position line exists (currentTick), centre on it
+      // 2. Otherwise, show the start of the data (left edge)
+      const tickTs = currentTick?.timestamp
+        ? Math.floor(new Date(currentTick.timestamp).getTime() / 1000)
+        : null;
+
+      if (tickTs && Number.isFinite(tickTs) && seriesRef.current) {
+        // Centre on the current tick position
+        const data = seriesRef.current.data();
+        let logicalCenter = 0;
+        if (data.length > 0) {
+          let lo = 0;
+          let hi = data.length - 1;
+          while (lo < hi) {
+            const mid = (lo + hi) >>> 1;
+            const midSec =
+              typeof data[mid].time === 'number'
+                ? (data[mid].time as number)
+                : new Date(data[mid].time as string).getTime() / 1000;
+            if (midSec < tickTs) lo = mid + 1;
+            else hi = mid;
+          }
+          logicalCenter = lo;
+        }
+        const half = AUTO_FOLLOW_CANDLES / 2;
+        try {
+          chartRef.current?.timeScale().setVisibleLogicalRange({
+            from: logicalCenter - half,
+            to: logicalCenter + half,
+          });
+        } catch (e) {
+          console.warn('Failed to set initial visible range on tick:', e);
+        }
+      } else {
+        // No tick — show the start of the data
+        try {
+          chartRef.current?.timeScale().setVisibleLogicalRange({
+            from: 0,
+            to: AUTO_FOLLOW_CANDLES,
+          });
+        } catch (e) {
+          console.warn('Failed to set initial visible range at start:', e);
+        }
       }
+
       hasInitialFit.current = true;
+    } else if (savedLogicalRange) {
+      // Restore the visible range so the chart doesn't jump on data refresh.
+      programmaticScrollRef.current = true;
+      try {
+        chartRef.current?.timeScale().setVisibleLogicalRange(savedLogicalRange);
+      } catch (e) {
+        console.warn('Failed to restore visible range after setData:', e);
+      }
     }
 
     // After a granularity change, restore the previously visible time range
@@ -1871,12 +1992,8 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         );
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- currentTick is intentionally excluded: it is only read on the very first load (guarded by hasInitialFit) to decide the initial viewport position.  Including it would re-run setData on every tick update.
   }, [candles, programmaticScrollRef]);
-
-  // Auto-follow: show ~40 candles worth of data with the position line centred.
-  // The visible half-width adapts to the selected granularity so the zoom
-  // level always feels natural regardless of candle size.
-  const AUTO_FOLLOW_CANDLES = 500;
 
   // Update sequence position line when current tick changes
   useEffect(() => {
@@ -1958,6 +2075,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   ]);
 
   const eventMarkers = useMemo(() => {
+    const candleTimes = candles.map((c) => Number(c.time));
     const markers: Array<{
       time: Time;
       position: 'aboveBar' | 'belowBar';
@@ -1967,7 +2085,9 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     }> = [];
 
     for (const event of taskLifecycleEvents) {
-      const time = toEventMarkerTime(event);
+      const rawTime = toEventMarkerTime(event);
+      if (!rawTime) continue;
+      const time = snapToCandleTime(Number(rawTime), candleTimes);
       if (!time) continue;
       markers.push({
         time,
@@ -1978,36 +2098,14 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       });
     }
 
-    for (const event of tradingEvents) {
-      const time = toEventMarkerTime(event);
-      if (!time) continue;
-
-      const eventType = String(event.event_type || '').toLowerCase();
-      const direction = toEventDirection(event);
-      const isOpen = TRADING_OPEN_EVENT_TYPES.has(eventType);
-      const isClose = TRADING_CLOSE_EVENT_TYPES.has(eventType);
-
-      let color = '#111111';
-      if (isOpen && direction === 'long') color = '#16a34a';
-      else if (isOpen && direction === 'short') color = '#dc2626';
-      else if (isClose) color = '#6b7280';
-
-      markers.push({
-        time,
-        position: direction === 'short' ? 'aboveBar' : 'belowBar',
-        shape:
-          direction === 'short'
-            ? 'arrowDown'
-            : direction === 'long'
-              ? 'arrowUp'
-              : 'circle',
-        color,
-        text: event.event_type_display || event.event_type,
-      });
-    }
+    // Trading events (open/close) are intentionally excluded here because
+    // tradeMarkers already display the same information with direction and
+    // lot size.  Including both would create duplicate overlapping markers.
 
     for (const event of strategyEvents) {
-      const time = toEventMarkerTime(event);
+      const rawTime = toEventMarkerTime(event);
+      if (!rawTime) continue;
+      const time = snapToCandleTime(Number(rawTime), candleTimes);
       if (!time) continue;
       markers.push({
         time,
@@ -2019,7 +2117,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     }
 
     return markers.sort((a, b) => Number(a.time) - Number(b.time));
-  }, [taskLifecycleEvents, tradingEvents, strategyEvents]);
+  }, [taskLifecycleEvents, strategyEvents, candles]);
 
   // Update trade markers when trades or selection changes (without resetting the view)
   useEffect(() => {
@@ -2036,21 +2134,11 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         executionMethod === 'margin_protection' ||
         executionMethod === 'volatility_lock';
 
-      const openSide =
-        t.direction === 'long'
-          ? 'LONG'
-          : t.direction === 'short'
-            ? 'SHORT'
-            : '';
-      const closeSide =
-        t.direction === 'long'
-          ? 'SHORT'
-          : t.direction === 'short'
-            ? 'LONG'
-            : '';
-      const sideLabel = isClose ? closeSide : openSide;
-      const actionLabel = isClose ? 'CLOSE' : t.direction ? 'OPEN' : '';
-      const lotLabel = lots === null ? '' : ` ${Math.round(lots)}L`;
+      const lotLabel = lots === null ? '' : `${Math.round(lots)}L`;
+      // Open: "OPEN SHORT 1L", Close: "CLOSE 1L"
+      const text = isClose
+        ? `CLOSE ${lotLabel}`.trim()
+        : `OPEN ${t.direction === 'long' ? 'LONG' : t.direction === 'short' ? 'SHORT' : ''} ${lotLabel}`.trim();
 
       return {
         time: t.timeSec,
@@ -2069,13 +2157,16 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
             : t.direction === 'short'
               ? '#ef4444'
               : '#9ca3af',
-        text: `${actionLabel} ${sideLabel}${lotLabel}`.trim(),
+        text,
       };
     });
 
     try {
       programmaticScrollRef.current = true;
-      markersRef.current.setMarkers([...eventMarkers, ...tradeMarkers]);
+      const allMarkers = [...eventMarkers, ...tradeMarkers].sort(
+        (a, b) => Number(a.time) - Number(b.time)
+      );
+      markersRef.current.setMarkers(allMarkers);
     } catch (e) {
       console.warn('Failed to set trade markers:', e);
     }
@@ -2119,13 +2210,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     // Also highlight the related position
     const pos = findPositionForTrade(row);
     if (pos) {
-      setSelectedPosId(pos.id);
-      const posIdx = allPositions.findIndex((p) => p.id === pos.id);
-      if (posIdx !== -1) {
-        const targetPosPage = Math.floor(posIdx / posRowsPerPage);
-        pendingPosScrollRef.current = true;
-        setPosPage(targetPosPage);
-      }
+      navigateToPosition(pos);
     } else {
       setSelectedPosId(null);
     }
@@ -2349,6 +2434,21 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
             {replaySummary.openPositions} positions
           </Typography>
         </Box>
+
+        {executionRunId != null && (
+          <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              lineHeight={1.2}
+            >
+              {t('tables.trend.executionId')}
+            </Typography>
+            <Typography variant="body2" fontWeight="bold" lineHeight={1.4}>
+              {executionRunId}
+            </Typography>
+          </Box>
+        )}
 
         <Box sx={{ flex: 1 }} />
 
@@ -2877,6 +2977,10 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
               setPage(0);
               setPosRowsPerPage(newVal);
               setPosPage(0);
+              setLongPosRowsPerPage(newVal);
+              setLongPosPage(0);
+              setShortPosRowsPerPage(newVal);
+              setShortPosPage(0);
             }}
             rowsPerPageOptions={[10, 25, 50, 100]}
           />
@@ -3413,8 +3517,15 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
             onPageChange={(_e, newPage) => setLongPosPage(newPage)}
             rowsPerPage={longPosRowsPerPage}
             onRowsPerPageChange={(e) => {
-              setLongPosRowsPerPage(parseInt(e.target.value, 10));
+              const newVal = parseInt(e.target.value, 10);
+              setLongPosRowsPerPage(newVal);
               setLongPosPage(0);
+              setRowsPerPage(newVal);
+              setPage(0);
+              setPosRowsPerPage(newVal);
+              setPosPage(0);
+              setShortPosRowsPerPage(newVal);
+              setShortPosPage(0);
             }}
             rowsPerPageOptions={[10, 25, 50, 100]}
           />
@@ -3956,8 +4067,15 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
             onPageChange={(_e, newPage) => setShortPosPage(newPage)}
             rowsPerPage={shortPosRowsPerPage}
             onRowsPerPageChange={(e) => {
-              setShortPosRowsPerPage(parseInt(e.target.value, 10));
+              const newVal = parseInt(e.target.value, 10);
+              setShortPosRowsPerPage(newVal);
               setShortPosPage(0);
+              setRowsPerPage(newVal);
+              setPage(0);
+              setPosRowsPerPage(newVal);
+              setPosPage(0);
+              setLongPosRowsPerPage(newVal);
+              setLongPosPage(0);
             }}
             rowsPerPageOptions={[10, 25, 50, 100]}
           />
