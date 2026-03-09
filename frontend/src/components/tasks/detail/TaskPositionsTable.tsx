@@ -190,6 +190,15 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       render: (r) => (r.layer_index != null ? String(r.layer_index) : '-'),
     },
     {
+      id: 'retracement_count',
+      label: t('tables.positions.retracement'),
+      width: 70,
+      minWidth: 50,
+      align: 'right',
+      render: (r) =>
+        r.retracement_count != null ? String(r.retracement_count) : '-',
+    },
+    {
       id: 'entry_price',
       label: t('tables.positions.openPrice'),
       width: 110,
@@ -296,6 +305,15 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       minWidth: 50,
       align: 'right',
       render: (r) => (r.layer_index != null ? String(r.layer_index) : '-'),
+    },
+    {
+      id: 'retracement_count',
+      label: t('tables.positions.retracement'),
+      width: 70,
+      minWidth: 50,
+      align: 'right',
+      render: (r) =>
+        r.retracement_count != null ? String(r.retracement_count) : '-',
     },
     {
       id: 'entry_price',
@@ -419,6 +437,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         r.instrument ?? '-',
         String(Math.abs(r.units)),
         r.layer_index != null ? String(r.layer_index) : '-',
+        r.retracement_count != null ? String(r.retracement_count) : '-',
         ep != null ? `¥${ep.toFixed(3)}` : '-',
         xp != null ? `¥${xp.toFixed(3)}` : '-',
         r.planned_exit_price
@@ -435,6 +454,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     'Instrument',
     'Units',
     'Layer',
+    'Retracement',
     'Open Price',
     'Close Price',
     'Planned Exit',
@@ -464,6 +484,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         r.instrument ?? '-',
         String(Math.abs(r.units)),
         r.layer_index != null ? String(r.layer_index) : '-',
+        r.retracement_count != null ? String(r.retracement_count) : '-',
         ep != null ? `¥${ep.toFixed(3)}` : '-',
         r.planned_exit_price
           ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
@@ -478,6 +499,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     'Instrument',
     'Units',
     'Layer',
+    'Retracement',
     'Open Price',
     'Planned Exit',
     'Pips',

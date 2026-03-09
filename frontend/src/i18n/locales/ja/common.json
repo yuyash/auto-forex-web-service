@@ -252,6 +252,7 @@
       "instrument": "通貨ペア",
       "units": "数量",
       "layer": "段階",
+      "retracement": "増し玉",
       "openPrice": "注文価格",
       "closePrice": "決済価格",
       "pips": "Pips",
