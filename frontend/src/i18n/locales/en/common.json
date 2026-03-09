@@ -252,6 +252,7 @@
       "instrument": "Instrument",
       "units": "Units",
       "layer": "Layer",
+      "retracement": "Retracement",
       "openPrice": "Open Price",
       "closePrice": "Close Price",
       "pips": "Pips",

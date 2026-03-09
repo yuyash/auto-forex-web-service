@@ -183,27 +183,28 @@ class TestCounterBasketAdds:
         opens = _open_events(result)
         counter_opens = [o for o in opens if "counter" in (o.strategy_event_type or "")]
         assert len(counter_opens) == 1
+        # First counter add: lot_k=2 (trend=1), add_count=1
         assert state.strategy_state["add_count"] == 1
 
     def test_second_counter_add(self):
-        """Second adverse move adds step 2 with 2x base units."""
+        """Counter adds use lot_k=2,3,4... (trend entry is position 1)."""
         s = _strategy(n_pips_head="10", interval_mode="constant")
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
 
-        # First add
+        # First add — lot_k=2 (trend entry is position 1)
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
         assert state.strategy_state["add_count"] == 1
 
-        # Second add — 10 more pips from latest counter entry
+        # Second add — 10 more pips from latest counter entry, lot_k=3
         s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.79", "149.81"), state=state)
         assert state.strategy_state["add_count"] == 2
 
         counter = [e for e in state.strategy_state["counter_basket"] if not e.get("is_hedge")]
         assert len(counter) == 2
-        # k=1 → 1 * base_units = 1000, k=2 → 2 * base_units = 2000
-        assert int(counter[0]["units"]) == 1000
-        assert int(counter[-1]["units"]) == 2000
+        # lot_k=2 → 2000, lot_k=3 → 3000
+        assert int(counter[0]["units"]) == 2000
+        assert int(counter[-1]["units"]) == 3000
 
 
 # ==================================================================
@@ -214,7 +215,7 @@ class TestCounterBasketAdds:
 class TestCounterCloseResetsAddCount:
     def test_counter_tp_resets_add_count_to_zero(self):
         """After a counter entry is closed at TP, add_count resets to 0
-        so the next adverse add starts from step 1 (base lot, initial interval)."""
+        so the next adverse add restarts from lot_k=1."""
         s = _strategy(
             n_pips_head="10",
             interval_mode="constant",
@@ -232,7 +233,6 @@ class TestCounterCloseResetsAddCount:
         assert state.strategy_state["add_count"] == 3
 
         # Now price reverses — latest counter entry (long) has close_price set
-        # We need to find the close_price of the latest counter entry
         counter = [e for e in state.strategy_state["counter_basket"] if not e.get("is_hedge")]
         latest = max(counter, key=lambda e: int(e.get("step", 0)))
         close_price = Decimal(str(latest["close_price"]))
@@ -247,11 +247,11 @@ class TestCounterCloseResetsAddCount:
 
         closes = _close_events(result)
         assert len(closes) >= 1
-        # add_count should be reset to 0
+        # add_count resets to 0 after TP close
         assert state.strategy_state["add_count"] == 0
 
-    def test_next_add_after_reset_uses_step1_units(self):
-        """After add_count reset, the next counter add uses k=1 units."""
+    def test_next_add_after_close_restarts_from_lot1(self):
+        """After TP close resets add_count, the next add uses lot_k=1 (1000 units)."""
         s = _strategy(
             n_pips_head="10",
             interval_mode="constant",
@@ -261,7 +261,7 @@ class TestCounterCloseResetsAddCount:
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
 
-        # Build up to add_count=2
+        # Build up counter entries
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
         s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.79", "149.81"), state=state)
 
@@ -277,15 +277,13 @@ class TestCounterCloseResetsAddCount:
         )
         assert state.strategy_state["add_count"] == 0
 
-        # Now drop again — next add should be k=1 with 1000 units
-        # We need to find the latest remaining counter entry price
+        # Now drop again — next add should restart from lot_k=1, 1000 units
         remaining = [e for e in state.strategy_state["counter_basket"] if not e.get("is_hedge")]
         if remaining:
             latest_remaining = max(remaining, key=lambda e: int(e.get("step", 0)))
             ep = Decimal(str(latest_remaining["entry_price"]))
             drop_price = ep - Decimal("0.11")  # 11 pips below
         else:
-            # No counter entries remain — adverse from trend entry
             drop_price = Decimal("149.50")
 
         result = s.on_tick(
@@ -297,9 +295,9 @@ class TestCounterCloseResetsAddCount:
         opens = _open_events(result)
         counter_opens = [o for o in opens if "counter" in (o.strategy_event_type or "")]
         if counter_opens:
-            # k=1 → units = 1 * 1000 = 1000 (first counter add after reset)
+            # lot_k=1 → 1000 units, Ret=1 (fresh restart after TP close)
             assert counter_opens[0].units == 1000
-            assert state.strategy_state["add_count"] == 1
+            assert counter_opens[0].retracement_count == 1
 
 
 # ==================================================================
@@ -356,7 +354,7 @@ class TestReversalScenario:
         opens = _open_events(result)
         counter_opens = [o for o in opens if "counter" in (o.strategy_event_type or "")]
         if counter_opens:
-            assert counter_opens[0].units == 1000  # first counter add starts at k=1
+            assert counter_opens[0].units == 1000  # lot_k=1 (restart after TP close)
 
 
 # ==================================================================
