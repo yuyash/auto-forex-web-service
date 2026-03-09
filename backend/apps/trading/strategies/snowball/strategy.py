@@ -160,13 +160,17 @@ class SnowballStrategy(Strategy):
         step: int,
         close_price: Decimal,
         basket: str,
+        lot_k: int | None = None,
     ) -> tuple[OpenPositionEvent, dict[str, Any]]:
         """Create an OpenPositionEvent and the corresponding basket entry dict."""
         eid = self._next_id(ss)
         price = tick.ask if direction == "long" else tick.bid
         is_trend = basket == "trend"
         layer = 1 if is_trend else ss.freeze_count + 1
-        ret = 1 if is_trend else ss.add_count + 1
+        # For counter entries lot_k is the snowball position number
+        # (trend = 1, first counter add = 2, etc.).  After a TP close
+        # resets add_count the sequence restarts from 1.
+        ret = 1 if is_trend else (lot_k if lot_k is not None else ss.add_count + 1)
         entry = BasketEntry(
             entry_id=eid,
             step=step,
@@ -456,12 +460,16 @@ class SnowballStrategy(Strategy):
     # ------------------------------------------------------------------
 
     def _unrealised_loss(self, entry: dict[str, Any], tick: Any) -> Decimal:
-        """Return unrealised loss in pips (positive = losing)."""
+        """Return unrealised loss in pips (positive = losing).
+
+        Uses mid price to avoid spread-induced distortion when measuring
+        adverse distance for counter-trend add decisions.
+        """
         direction = str(entry.get("direction", "long"))
         ep = Decimal(str(entry.get("entry_price", "0")))
         if direction == "long":
-            return (ep - tick.bid) / self.pip_size
-        return (tick.ask - ep) / self.pip_size
+            return (ep - tick.mid) / self.pip_size
+        return (tick.mid - ep) / self.pip_size
 
     def _initialise_baskets(self, ss: SnowballStrategyState, tick: Any) -> list[Any]:
         """Open initial LONG + SHORT at current price (or LONG only when hedging is disabled)."""
@@ -589,7 +597,7 @@ class SnowballStrategy(Strategy):
                 if int(e.get("entry_id", 0)) != int(entry.get("entry_id", 0))
             ]
             # After closing a step, reset add_count so the next adverse-move
-            # add restarts from step 1 (base lot size and initial interval).
+            # add restarts from the base lot size (trend=1x, counter=2x).
             ss.add_count = 0
 
             ss.metrics["counter_close_count"] = int(ss.metrics.get("counter_close_count", 0)) + 1
@@ -630,15 +638,22 @@ class SnowballStrategy(Strategy):
                 return events
 
             direction = str(losing_trend.get("direction", "long"))
-            interval = counter_interval_pips(1, cfg)
+            # step_k: 1-based counter add number for interval/TP calculations
+            step_k = 1
+            interval = counter_interval_pips(step_k, cfg)
             adverse = self._unrealised_loss(losing_trend, tick)
             if adverse < interval:
                 return events
 
-            # First counter add — k=1 for interval/tp calculations.
-            k = 1
-            units = k * ss.cycle_base_units
-            tp = counter_tp_pips(k, cfg)
+            # lot_k: snowball position number.
+            # On the very first counter add (no prior closes), the trend
+            # entry counts as position 1 so lot_k = 2.
+            # After a TP-close reset (add_count back to 0) lot_k restarts
+            # at 1 so the sequence rebuilds from the base lot size.
+            prior_closes = int(ss.metrics.get("counter_close_count", 0))
+            lot_k = (ss.add_count + 2) if prior_closes == 0 else (ss.add_count + 1)
+            units = lot_k * ss.cycle_base_units
+            tp = counter_tp_pips(step_k, cfg)
             new_price = tick.ask if direction == "long" else tick.bid
             if cfg.counter_tp_mode == "weighted_avg":
                 # Include the same-direction trend entry (step 1) in the
@@ -664,9 +679,10 @@ class SnowballStrategy(Strategy):
                 tick,
                 direction=direction,
                 units=units,
-                step=k + 1,  # step 1 is the initial trend entry
+                step=step_k + 1,  # step 1 is the initial trend entry
                 close_price=close_price,
                 basket="counter",
+                lot_k=lot_k,
             )
             ss.counter_basket.append(entry_dict)
             ss.add_count = 1
@@ -678,21 +694,24 @@ class SnowballStrategy(Strategy):
         direction = str(latest.get("direction", "long"))
         latest_price = Decimal(str(latest.get("entry_price", "0")))
 
-        # Adverse distance from latest entry
+        # Adverse distance from latest entry (use mid to avoid spread distortion)
         if direction == "long":
-            adverse = (latest_price - tick.bid) / self.pip_size
+            adverse = (latest_price - tick.mid) / self.pip_size
         else:
-            adverse = (tick.ask - latest_price) / self.pip_size
+            adverse = (tick.mid - latest_price) / self.pip_size
 
-        k = ss.add_count + 1  # next add number (1-based)
-        interval = counter_interval_pips(k, cfg)
+        # step_k: 1-based counter add number for interval/TP calculations
+        step_k = ss.add_count + 1
+        interval = counter_interval_pips(step_k, cfg)
 
         if adverse < interval:
             return events
 
-        # Add new step
-        units = k * ss.cycle_base_units
-        tp = counter_tp_pips(k, cfg)
+        # lot_k: same logic as first-add path.
+        prior_closes = int(ss.metrics.get("counter_close_count", 0))
+        lot_k = (ss.add_count + 2) if prior_closes == 0 else (ss.add_count + 1)
+        units = lot_k * ss.cycle_base_units
+        tp = counter_tp_pips(step_k, cfg)
 
         # Compute avg price including all counter entries + this new one,
         # plus the same-direction trend entry (step 1) which is conceptually
@@ -731,6 +750,7 @@ class SnowballStrategy(Strategy):
             step=int(latest.get("step", 1)) + 1,
             close_price=close_price,
             basket="counter",
+            lot_k=lot_k,
         )
         ss.counter_basket.append(entry_dict)
         ss.add_count += 1
