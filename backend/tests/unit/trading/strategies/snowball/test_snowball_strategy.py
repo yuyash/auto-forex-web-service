@@ -201,7 +201,8 @@ class TestCounterBasketAdds:
 
         counter = [e for e in state.strategy_state["counter_basket"] if not e.get("is_hedge")]
         assert len(counter) == 2
-        # k=2 → units = 2 * base_units = 2000
+        # k=1 → 1 * base_units = 1000, k=2 → 2 * base_units = 2000
+        assert int(counter[0]["units"]) == 1000
         assert int(counter[-1]["units"]) == 2000
 
 
@@ -296,7 +297,7 @@ class TestCounterCloseResetsAddCount:
         opens = _open_events(result)
         counter_opens = [o for o in opens if "counter" in (o.strategy_event_type or "")]
         if counter_opens:
-            # k=1 → units = 1 * 1000 = 1000
+            # k=1 → units = 1 * 1000 = 1000 (first counter add after reset)
             assert counter_opens[0].units == 1000
             assert state.strategy_state["add_count"] == 1
 
@@ -355,7 +356,7 @@ class TestReversalScenario:
         opens = _open_events(result)
         counter_opens = [o for o in opens if "counter" in (o.strategy_event_type or "")]
         if counter_opens:
-            assert counter_opens[0].units == 1000  # step 1
+            assert counter_opens[0].units == 1000  # first counter add starts at k=1
 
 
 # ==================================================================
@@ -394,7 +395,7 @@ class TestRMaxCycleReset:
             state=state,
         )
         signals = _signal_events(result, "snowball_cycle_reset")
-        assert len(signals) == 1
+        assert len(signals) == 0
         assert state.strategy_state["add_count"] == 0
         assert state.strategy_state["freeze_count"] == 1
 
@@ -406,7 +407,7 @@ class TestRMaxCycleReset:
 
 class TestFMaxExhaustion:
     def test_no_adds_after_f_max_exceeded(self):
-        """Once freeze_count > f_max, no more counter adds."""
+        """Once freeze_count >= f_max, no more counter adds."""
         s = _strategy(r_max=2, f_max=1, n_pips_head="5", interval_mode="constant")
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)

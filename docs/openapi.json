@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.8.0",
+        "version": "1.8.2",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -4269,6 +4269,10 @@
                         "type": "string",
                         "description": "Trading instrument (e.g., EUR_USD, USD_JPY)",
                         "maxLength": 20
+                    },
+                    "hedging_enabled": {
+                        "type": "boolean",
+                        "description": "Allow simultaneous long and short positions (hedging) during backtest."
                     }
                 },
                 "required": [
@@ -4342,6 +4346,10 @@
                         "minLength": 1,
                         "description": "Trading instrument (e.g., EUR_USD, USD_JPY)",
                         "maxLength": 20
+                    },
+                    "hedging_enabled": {
+                        "type": "boolean",
+                        "description": "Allow simultaneous long and short positions (hedging) during backtest."
                     }
                 },
                 "required": [
@@ -5782,6 +5790,14 @@
                     },
                     "is_dry_run": {
                         "type": "boolean"
+                    },
+                    "layer_index": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "retracement_count": {
+                        "type": "integer",
+                        "nullable": true
                     }
                 },
                 "required": [
@@ -6111,6 +6127,10 @@
                         "minLength": 1,
                         "description": "Trading instrument (e.g., EUR_USD, USD_JPY)",
                         "maxLength": 20
+                    },
+                    "hedging_enabled": {
+                        "type": "boolean",
+                        "description": "Allow simultaneous long and short positions (hedging) during backtest."
                     }
                 }
             },
@@ -6156,6 +6176,10 @@
                     "dry_run": {
                         "type": "boolean",
                         "description": "Simulate order execution without placing real orders on OANDA"
+                    },
+                    "hedging_enabled": {
+                        "type": "boolean",
+                        "description": "Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account."
                     }
                 }
             },
@@ -6225,6 +6249,12 @@
                     },
                     "retracement_count": {
                         "type": "integer",
+                        "nullable": true
+                    },
+                    "planned_exit_price": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
                         "nullable": true
                     },
                     "trade_ids": {
@@ -7871,6 +7901,10 @@
                     "dry_run": {
                         "type": "boolean",
                         "description": "Simulate order execution without placing real orders on OANDA"
+                    },
+                    "hedging_enabled": {
+                        "type": "boolean",
+                        "description": "Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account."
                     }
                 }
             },
@@ -7903,6 +7937,10 @@
                     "dry_run": {
                         "type": "boolean",
                         "description": "Simulate order execution without placing real orders on OANDA"
+                    },
+                    "hedging_enabled": {
+                        "type": "boolean",
+                        "description": "Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account."
                     }
                 }
             },

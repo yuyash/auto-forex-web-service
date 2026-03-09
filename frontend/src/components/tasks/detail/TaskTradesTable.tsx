@@ -7,6 +7,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Box, Chip, Typography, Alert, TablePagination } from '@mui/material';
 import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
@@ -28,6 +29,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
   executionRunId,
   enableRealTimeUpdates = false,
 }) => {
+  const { t } = useTranslation('common');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(50);
   const [isReloading, setIsReloading] = useState(false);
@@ -105,20 +107,20 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
   const columns: Column<TaskTrade>[] = [
     {
       id: 'timestamp',
-      label: 'Timestamp',
+      label: t('tables.trades.timestamp'),
       width: 180,
       minWidth: 140,
       render: (row) => (row.timestamp ? formatTimestamp(row.timestamp) : '-'),
     },
     {
       id: 'instrument',
-      label: 'Instrument',
+      label: t('tables.trades.instrument'),
       width: 110,
       minWidth: 80,
     },
     {
       id: 'execution_method',
-      label: 'Type',
+      label: t('tables.trades.type'),
       width: 140,
       minWidth: 100,
       render: (row) => {
@@ -129,7 +131,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     },
     {
       id: 'direction',
-      label: 'Direction',
+      label: t('tables.trades.direction'),
       width: 90,
       minWidth: 70,
       render: (row) => {
@@ -145,14 +147,14 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     },
     {
       id: 'units',
-      label: 'Units',
+      label: t('tables.trades.units'),
       width: 90,
       minWidth: 70,
       align: 'right',
     },
     {
       id: 'price',
-      label: 'Price',
+      label: t('tables.trades.price'),
       width: 110,
       minWidth: 80,
       align: 'right',
@@ -161,7 +163,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     },
     {
       id: 'layer_index',
-      label: 'Layer',
+      label: t('tables.trades.layer'),
       width: 70,
       minWidth: 50,
       align: 'right',
@@ -170,7 +172,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     },
     {
       id: 'retracement_count',
-      label: 'Retracement',
+      label: t('tables.trades.retracement'),
       width: 100,
       minWidth: 70,
       align: 'right',
@@ -197,7 +199,9 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
           alignItems: 'center',
         }}
       >
-        <Typography variant="h6">Trades ({totalCount})</Typography>
+        <Typography variant="h6">
+          {t('tables.trades.title')} ({totalCount})
+        </Typography>
         <TableSelectionToolbar
           selectedCount={selection.selectedRowIds.size}
           onCopy={handleCopy}
@@ -212,7 +216,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
         columns={columns}
         data={trades}
         isLoading={isLoading}
-        emptyMessage="No trades recorded"
+        emptyMessage={t('tables.trades.noTrades')}
         defaultRowsPerPage={rowsPerPage}
         rowsPerPageOptions={[rowsPerPage]}
         tableMaxHeight="none"

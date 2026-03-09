@@ -1,7 +1,7 @@
 /**
  * Utility to fetch all trade pages from the paginated trades API.
  *
- * Used by TaskReplayPanel where the full trade set is needed for chart markers.
+ * Used by TaskTrendPanel where the full trade set is needed for chart markers.
  * Supports incremental fetching via the `since` parameter so that polling
  * cycles only retrieve new/updated records.
  *

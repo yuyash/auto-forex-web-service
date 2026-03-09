@@ -38,7 +38,7 @@ import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskLogsTable } from '../tasks/detail/TaskLogsTable';
 import { TaskPositionsTable } from '../tasks/detail/TaskPositionsTable';
 import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
-import { TaskReplayPanel } from '../tasks/detail/TaskReplayPanel';
+import { TaskTrendPanel } from '../tasks/detail/TaskTrendPanel';
 import { TaskOrdersTable } from '../tasks/detail/TaskOrdersTable';
 import { TaskStatus, TaskType } from '../../types/common';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
@@ -498,6 +498,16 @@ export const TradingTaskDetail: React.FC = () => {
                     {t('trading:detail.executionTimeline')}
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {task.execution_run_id != null && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          {t('trading:detail.executionId')}
+                        </Typography>
+                        <Typography variant="body1">
+                          {task.execution_run_id}
+                        </Typography>
+                      </Box>
+                    )}
                     {task.started_at && (
                       <Box>
                         <Typography variant="caption" color="text.secondary">
@@ -550,7 +560,7 @@ export const TradingTaskDetail: React.FC = () => {
 
         {/* Replay Tab */}
         <LazyTabPanel value={currentTabValue} index={3}>
-          <TaskReplayPanel
+          <TaskTrendPanel
             taskId={taskId}
             taskType={TaskType.TRADING}
             instrument={task.instrument}

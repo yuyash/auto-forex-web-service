@@ -104,8 +104,8 @@ vi.mock('../../../src/components/tasks/detail/TaskLogsTable', () => ({
 vi.mock('../../../src/components/tasks/detail/TaskPositionsTable', () => ({
   TaskPositionsTable: () => <div data-testid="positions-table">Positions</div>,
 }));
-vi.mock('../../../src/components/tasks/detail/TaskReplayPanel', () => ({
-  TaskReplayPanel: () => <div data-testid="replay-panel">Replay</div>,
+vi.mock('../../../src/components/tasks/detail/TaskTrendPanel', () => ({
+  TaskTrendPanel: () => <div data-testid="trend-panel">Trend</div>,
 }));
 vi.mock('../../../src/components/tasks/TaskProgress', () => ({
   TaskProgress: () => <div>Progress</div>,
@@ -197,7 +197,7 @@ describe('BacktestTaskDetail', () => {
 
     await user.click(screen.getByText('Trend'));
     await waitFor(() => {
-      expect(screen.getByTestId('replay-panel')).toBeInTheDocument();
+      expect(screen.getByTestId('trend-panel')).toBeInTheDocument();
     });
   });
 

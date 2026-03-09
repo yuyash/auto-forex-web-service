@@ -17,6 +17,7 @@ export interface TradingTask {
   status: TaskStatus;
   sell_on_stop: boolean;
   dry_run: boolean;
+  hedging_enabled: boolean;
   latest_execution?: ExecutionSummary;
   // State management fields
   has_strategy_state: boolean;
@@ -39,6 +40,7 @@ export interface TradingTaskCreateData {
   description?: string;
   sell_on_stop?: boolean;
   dry_run?: boolean;
+  hedging_enabled?: boolean;
 }
 
 export interface TradingTaskUpdateData {
@@ -48,6 +50,7 @@ export interface TradingTaskUpdateData {
   account_id?: string;
   sell_on_stop?: boolean;
   dry_run?: boolean;
+  hedging_enabled?: boolean;
 }
 
 export interface TradingTaskListParams {

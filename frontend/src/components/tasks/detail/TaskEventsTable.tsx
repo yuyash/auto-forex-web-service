@@ -5,6 +5,7 @@
  */
 
 import React, { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   Chip,
@@ -39,6 +40,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
   executionRunId,
   enableRealTimeUpdates = false,
 }) => {
+  const { t } = useTranslation('common');
   const [severityFilter, setSeverityFilter] = useState<string>('');
   const [sourceFilter, setSourceFilter] = useState<TaskEventSource>('trading');
   const [page, setPage] = useState(0);
@@ -142,21 +144,21 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
   const columns: Column<TaskEvent>[] = [
     {
       id: 'created_at',
-      label: 'Timestamp',
+      label: t('tables.events.timestamp'),
       width: 240,
       minWidth: 200,
       render: (row) => formatTimestamp(row.created_at as string),
     },
     {
       id: 'event_type',
-      label: 'Event Type',
+      label: t('tables.events.eventType'),
       width: 140,
       minWidth: 100,
       render: (row) => row.event_type_display ?? row.event_type,
     },
     {
       id: 'severity',
-      label: 'Severity',
+      label: t('tables.events.severity'),
       width: 100,
       minWidth: 80,
       render: (row) => (
@@ -168,7 +170,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
     },
     {
       id: 'description',
-      label: 'Description',
+      label: t('tables.events.description'),
       minWidth: 200,
     },
   ];
@@ -191,29 +193,33 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
           alignItems: 'center',
         }}
       >
-        <Typography variant="h6">Task Events</Typography>
+        <Typography variant="h6">{t('tables.events.title')}</Typography>
         <FormControl sx={{ minWidth: 170 }}>
-          <InputLabel>Category</InputLabel>
+          <InputLabel>{t('tables.events.category')}</InputLabel>
           <Select
             value={sourceFilter}
-            label="Category"
+            label={t('tables.events.category')}
             onChange={(e) =>
               handleSourceChange(e.target.value as TaskEventSource)
             }
           >
-            <MenuItem value="task">Task Events</MenuItem>
-            <MenuItem value="trading">Trading Events</MenuItem>
-            <MenuItem value="strategy">Strategy Events</MenuItem>
+            <MenuItem value="task">{t('tables.events.taskEvents')}</MenuItem>
+            <MenuItem value="trading">
+              {t('tables.events.tradingEvents')}
+            </MenuItem>
+            <MenuItem value="strategy">
+              {t('tables.events.strategyEvents')}
+            </MenuItem>
           </Select>
         </FormControl>
         <FormControl sx={{ minWidth: 150 }}>
-          <InputLabel>Severity Filter</InputLabel>
+          <InputLabel>{t('tables.events.severityFilter')}</InputLabel>
           <Select
             value={severityFilter}
-            label="Severity Filter"
+            label={t('tables.events.severityFilter')}
             onChange={(e) => handleSeverityChange(e.target.value)}
           >
-            <MenuItem value="">All Severities</MenuItem>
+            <MenuItem value="">{t('tables.events.allSeverities')}</MenuItem>
             <MenuItem value="info">Info</MenuItem>
             <MenuItem value="warning">Warning</MenuItem>
             <MenuItem value="error">Error</MenuItem>
@@ -235,7 +241,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
         columns={columns}
         data={events}
         isLoading={isLoading}
-        emptyMessage="No events available"
+        emptyMessage={t('tables.events.noEvents')}
         defaultRowsPerPage={rowsPerPage}
         rowsPerPageOptions={[rowsPerPage]}
         storageKey="task-events"

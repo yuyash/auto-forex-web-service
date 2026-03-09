@@ -19,6 +19,7 @@ export interface BacktestTask {
   instrument: string;
   status: TaskStatus;
   sell_at_completion: boolean;
+  hedging_enabled: boolean;
   latest_execution?: ExecutionSummary;
   execution_run_id?: number;
   started_at?: string;
@@ -40,6 +41,7 @@ export interface BacktestTaskCreateData {
   pip_size?: number | string;
   instrument: string;
   sell_at_completion?: boolean;
+  hedging_enabled?: boolean;
 }
 
 // Form data type - matches the validation schema (after transformation)
@@ -55,6 +57,7 @@ export interface BacktestTaskFormData {
   pip_size?: number;
   instrument: string;
   sell_at_completion?: boolean;
+  hedging_enabled?: boolean;
 }
 
 export interface BacktestTaskUpdateData {
@@ -69,6 +72,7 @@ export interface BacktestTaskUpdateData {
   pip_size?: number | string;
   instrument?: string;
   sell_at_completion?: boolean;
+  hedging_enabled?: boolean;
 }
 
 export interface BacktestTaskListParams {

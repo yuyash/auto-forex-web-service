@@ -43,6 +43,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "description",
             "sell_on_stop",
             "dry_run",
+            "hedging_enabled",
             "pip_size",
             "status",
             # State management fields
@@ -116,6 +117,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "description",
             "sell_on_stop",
             "dry_run",
+            "hedging_enabled",
             "pip_size",
             "status",
             "created_at",
@@ -160,12 +162,14 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             "description",
             "sell_on_stop",
             "dry_run",
+            "hedging_enabled",
         ]
         extra_kwargs = {
             "name": {"required": False},
             "description": {"required": False},
             "sell_on_stop": {"required": False},
             "dry_run": {"required": False},
+            "hedging_enabled": {"required": False},
         }
 
     def validate_config_id(self, value: StrategyConfiguration) -> StrategyConfiguration:
@@ -192,6 +196,36 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"config_id": "This field is required."})
             if "oanda_account" not in attrs:
                 raise serializers.ValidationError({"account_id": "This field is required."})
+
+        # Validate hedging: if hedging_enabled, check account supports hedging
+        hedging_enabled = attrs.get("hedging_enabled", True)
+        oanda_account = attrs.get("oanda_account") or (
+            self.instance.oanda_account if self.instance else None
+        )
+        if hedging_enabled and oanda_account:
+            try:
+                from apps.market.services.oanda import OandaService
+
+                client = OandaService(oanda_account)
+                account_resource = client.get_account_resource()
+                account_hedging = bool(account_resource.get("hedgingEnabled", False))
+                if not account_hedging:
+                    raise serializers.ValidationError(
+                        {
+                            "hedging_enabled": (
+                                "This OANDA account does not support hedging. "
+                                "Disable hedging or use a hedging-enabled account."
+                            )
+                        }
+                    )
+            except serializers.ValidationError:
+                raise
+            except Exception as e:
+                logger.warning(
+                    "Failed to check hedging support for account %s: %s",
+                    oanda_account.account_id,
+                    e,
+                )
 
         # Validate configuration parameters
         config = attrs.get("config")

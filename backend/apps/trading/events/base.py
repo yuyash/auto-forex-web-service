@@ -146,6 +146,7 @@ class InitialEntryEvent(StrategyEvent):
     entry_time: datetime | None = None
     retracement_count: int = 1
     entry_id: int | None = None  # Strategy-internal entry ID for position tracking
+    planned_exit_price: Decimal | None = None
 
     def __post_init__(self):
         if not self.event_type:
@@ -198,6 +199,8 @@ class InitialEntryEvent(StrategyEvent):
             result["entry_id"] = self.entry_id
         if self.entry_time:
             result["entry_time"] = self.entry_time.isoformat()
+        if self.planned_exit_price is not None:
+            result["planned_exit_price"] = str(self.planned_exit_price)
         return result
 
     @classmethod
@@ -229,6 +232,9 @@ class InitialEntryEvent(StrategyEvent):
                 except (ValueError, TypeError):
                     pass
 
+        planned_exit_raw = event_dict.get("planned_exit_price")
+        planned_exit_price = D(str(planned_exit_raw)) if planned_exit_raw else None
+
         return cls(
             event_type=EventType.INITIAL_ENTRY,
             timestamp=timestamp,
@@ -239,6 +245,7 @@ class InitialEntryEvent(StrategyEvent):
             entry_time=entry_time,
             retracement_count=int(event_dict.get("retracement_count", 1)),
             entry_id=event_dict.get("entry_id"),
+            planned_exit_price=planned_exit_price,
         )
 
 
@@ -275,6 +282,7 @@ class RetracementEvent(StrategyEvent):
     entry_time: datetime | None = None
     retracement_count: int = 1
     entry_id: int | None = None  # Strategy-internal entry ID for position tracking
+    planned_exit_price: Decimal | None = None
 
     def __post_init__(self):
         if not self.event_type:
@@ -328,6 +336,8 @@ class RetracementEvent(StrategyEvent):
             result["entry_id"] = self.entry_id
         if self.entry_time:
             result["entry_time"] = self.entry_time.isoformat()
+        if self.planned_exit_price is not None:
+            result["planned_exit_price"] = str(self.planned_exit_price)
         return result
 
     @classmethod
@@ -359,6 +369,9 @@ class RetracementEvent(StrategyEvent):
                 except (ValueError, TypeError):
                     pass
 
+        planned_exit_raw = event_dict.get("planned_exit_price")
+        planned_exit_price = D(str(planned_exit_raw)) if planned_exit_raw else None
+
         return cls(
             event_type=EventType.RETRACEMENT,
             timestamp=timestamp,
@@ -369,6 +382,7 @@ class RetracementEvent(StrategyEvent):
             entry_time=entry_time,
             retracement_count=int(event_dict.get("retracement_count", 1)),
             entry_id=event_dict.get("entry_id"),
+            planned_exit_price=planned_exit_price,
         )
 
 
@@ -562,6 +576,7 @@ class OpenPositionEvent(StrategyEvent):
     retracement_count: int = 1
     entry_id: int | None = None
     strategy_event_type: str = ""
+    planned_exit_price: Decimal | None = None
 
     def __post_init__(self):
         if not self.event_type:
@@ -605,6 +620,8 @@ class OpenPositionEvent(StrategyEvent):
             result["strategy_event_type"] = self.strategy_event_type
         if self.entry_time:
             result["entry_time"] = self.entry_time.isoformat()
+        if self.planned_exit_price is not None:
+            result["planned_exit_price"] = str(self.planned_exit_price)
         return result
 
     @classmethod
@@ -636,6 +653,9 @@ class OpenPositionEvent(StrategyEvent):
                 except (ValueError, TypeError):
                     pass
 
+        planned_exit_raw = event_dict.get("planned_exit_price")
+        planned_exit_price = D(str(planned_exit_raw)) if planned_exit_raw else None
+
         return cls(
             event_type=EventType.OPEN_POSITION,
             timestamp=timestamp,
@@ -647,6 +667,7 @@ class OpenPositionEvent(StrategyEvent):
             retracement_count=int(event_dict.get("retracement_count", 1)),
             entry_id=event_dict.get("entry_id"),
             strategy_event_type=str(event_dict.get("strategy_event_type", "")),
+            planned_exit_price=planned_exit_price,
         )
 
 

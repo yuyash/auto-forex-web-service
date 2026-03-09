@@ -37,6 +37,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import ZoomOutMapIcon from '@mui/icons-material/ZoomOutMap';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import { useTheme } from '@mui/material/styles';
+import { useTranslation } from 'react-i18next';
 import {
   CandlestickSeries,
   createChart,
@@ -116,7 +117,7 @@ type ReplayTrade = {
   position_id?: string | null;
 };
 
-interface TaskReplayPanelProps {
+interface TaskTrendPanelProps {
   taskId: string | number;
   taskType: TaskType;
   instrument: string;
@@ -192,19 +193,6 @@ const toRfc3339Seconds = (value: string): string => {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
 };
 
-const TRADING_OPEN_EVENT_TYPES = new Set([
-  'open_position',
-  'initial_entry',
-  'retracement',
-]);
-const TRADING_CLOSE_EVENT_TYPES = new Set([
-  'close_position',
-  'take_profit',
-  'margin_protection',
-  'volatility_lock',
-  'volatility_hedge_neutralize',
-]);
-
 const toEventMarkerTime = (event: TaskEvent): UTCTimestamp | null => {
   const detailTimestamp =
     typeof event.details?.timestamp === 'string'
@@ -215,10 +203,44 @@ const toEventMarkerTime = (event: TaskEvent): UTCTimestamp | null => {
   );
 };
 
-const toEventDirection = (event: TaskEvent): 'long' | 'short' | null => {
-  const raw = String(event.details?.direction ?? '').toLowerCase();
-  if (raw === 'long' || raw === 'short') return raw;
-  return null;
+/**
+ * Snap a UTC-second timestamp to the nearest candle time using binary search.
+ * lightweight-charts requires marker times to match existing data points;
+ * without snapping, markers whose time falls between (or beyond) candles are
+ * silently pushed to the very last bar.
+ */
+const snapToCandleTime = (
+  timeSec: number,
+  candleTimes: number[]
+): UTCTimestamp | null => {
+  if (candleTimes.length === 0) return null;
+
+  let lo = 0;
+  let hi = candleTimes.length - 1;
+
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (candleTimes[mid] < timeSec) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+
+  // lo is the first candle >= timeSec.  Compare with the previous candle to
+  // pick whichever is closer.
+  const candidates = [lo - 1, lo].filter(
+    (i) => i >= 0 && i < candleTimes.length
+  );
+  let best = candidates[0]!;
+  for (const i of candidates) {
+    if (
+      Math.abs(candleTimes[i] - timeSec) < Math.abs(candleTimes[best] - timeSec)
+    ) {
+      best = i;
+    }
+  }
+  return candleTimes[best] as UTCTimestamp;
 };
 
 const recommendGranularity = (
@@ -366,7 +388,7 @@ const computePosPips = (
   return 0;
 };
 
-export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
+export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   taskId,
   taskType,
   instrument,
@@ -388,6 +410,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const sequenceLineRef = useRef<SequencePositionLine | null>(null);
   const tradesRef = useRef<ReplayTrade[]>([]);
   const { user } = useAuth();
+  const { t } = useTranslation('common');
   const muiTheme = useTheme();
   const isDark = muiTheme.palette.mode === 'dark';
   const timezone = user?.timezone || 'UTC';
@@ -430,15 +453,9 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     pageSize: 5000,
     enableRealTimeUpdates,
   });
-  const { events: tradingEvents } = useTaskEvents({
-    taskId,
-    taskType,
-    executionRunId,
-    source: 'trading',
-    page: 1,
-    pageSize: 5000,
-    enableRealTimeUpdates,
-  });
+  // Trading events are not fetched here because tradeMarkers (from the
+  // trades API) already display open/close with direction and lot size,
+  // making separate trading-event markers redundant.
   const { events: strategyEvents } = useTaskEvents({
     taskId,
     taskType,
@@ -451,26 +468,49 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
   // Auto-follow: track whether the chart should auto-scroll to the position line
   const [autoFollow, setAutoFollow] = useState(true);
-  // Timestamp-based guard: any visibleLogicalRangeChange that fires within
-  // this window (ms) after a programmatic scroll is treated as our own and
-  // will NOT disable auto-follow.  This is far more reliable than the old
-  // boolean flag + requestAnimationFrame approach because the chart library
-  // can fire the change callback with unpredictable async delays.
+  // Counter-based guard: every programmatic scroll increments this counter.
+  // The visibleLogicalRangeChange listener decrements it instead of disabling
+  // auto-follow.  This is more reliable than a time-based window because the
+  // chart library can fire the change callback with unpredictable async delays
+  // (especially when the browser tab is throttled or the machine is under load).
+  const programmaticScrollCountRef = useRef(0);
+  // Timestamp-based guard kept as a secondary safety net for callbacks that
+  // fire multiple times per single programmatic action (e.g. setData triggers
+  // both a range reset and a fitContent, each producing a callback).
   const programmaticScrollUntilRef = useRef(0);
-  const PROGRAMMATIC_SCROLL_GUARD_MS = 400;
+  const PROGRAMMATIC_SCROLL_GUARD_MS = 800;
   // Keep the old ref name around as a thin wrapper so every call-site still
-  // compiles – but now it just sets / reads the timestamp.
+  // compiles – but now it sets both the counter and the timestamp.
   // Wrapped in useMemo so the object identity is stable across renders,
   // which satisfies the react-hooks/exhaustive-deps rule.
   const programmaticScrollRef = useMemo(
     () => ({
       get current() {
-        return Date.now() < programmaticScrollUntilRef.current;
+        return (
+          programmaticScrollCountRef.current > 0 ||
+          Date.now() < programmaticScrollUntilRef.current
+        );
       },
       set current(v: boolean) {
-        programmaticScrollUntilRef.current = v
-          ? Date.now() + PROGRAMMATIC_SCROLL_GUARD_MS
-          : 0;
+        if (v) {
+          programmaticScrollCountRef.current += 1;
+          programmaticScrollUntilRef.current =
+            Date.now() + PROGRAMMATIC_SCROLL_GUARD_MS;
+        } else {
+          programmaticScrollCountRef.current = 0;
+          programmaticScrollUntilRef.current = 0;
+        }
+      },
+      /** Decrement the counter by one (called from the range-change listener). */
+      consume() {
+        if (programmaticScrollCountRef.current > 0) {
+          programmaticScrollCountRef.current -= 1;
+          return true;
+        }
+        if (Date.now() < programmaticScrollUntilRef.current) {
+          return true;
+        }
+        return false;
       },
     }),
     [PROGRAMMATIC_SCROLL_GUARD_MS]
@@ -564,13 +604,13 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
   // Column resize state
   const defaultReplayWidths: Record<string, number> = {
-    timestamp: 150,
-    direction: 55,
-    layer_index: 50,
-    retracement_count: 35,
-    units: 65,
-    price: 85,
-    execution_method: 95,
+    timestamp: 160,
+    direction: 70,
+    layer_index: 60,
+    retracement_count: 60,
+    units: 70,
+    price: 90,
+    execution_method: 110,
   };
   const [replayColWidths, setReplayColWidths] = useState(defaultReplayWidths);
   const replayResizeRef = useRef<{
@@ -630,47 +670,55 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     [handleColResizeStart]
   );
 
-  // ── Positions column resize ──
-  const defaultPosWidths: Record<string, number> = {
-    entry_time: 130,
-    exit_time: 130,
-    _status: 65,
-    direction: 65,
-    layer_index: 50,
-    retracement_count: 50,
-    units: 65,
-    entry_price: 85,
-    exit_price: 85,
-    _pips: 75,
-    _pnl: 90,
+  // ── Long/Short position column resize ──
+  const defaultLSPosWidths: Record<string, number> = {
+    entry_time: 160,
+    exit_time: 150,
+    _status: 70,
+    layer_index: 60,
+    retracement_count: 65,
+    units: 70,
+    entry_price: 100,
+    exit_price: 100,
+    _pips: 80,
+    _pnl: 140,
   };
-  const [posColWidths, setPosColWidths] = useState(defaultPosWidths);
-  const posResizeRef = useRef<{
+  const [longPosColWidths, setLongPosColWidths] = useState(defaultLSPosWidths);
+  const [shortPosColWidths, setShortPosColWidths] =
+    useState(defaultLSPosWidths);
+  const lsPosResizeRef = useRef<{
     col: string;
     startX: number;
     startW: number;
+    setter: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   } | null>(null);
 
-  const handlePosColResizeStart = useCallback(
-    (e: React.MouseEvent, col: string) => {
+  const handleLSPosColResizeStart = useCallback(
+    (
+      e: React.MouseEvent,
+      col: string,
+      widths: Record<string, number>,
+      setter: React.Dispatch<React.SetStateAction<Record<string, number>>>
+    ) => {
       e.preventDefault();
       e.stopPropagation();
-      posResizeRef.current = {
+      lsPosResizeRef.current = {
         col,
         startX: e.clientX,
-        startW: posColWidths[col] ?? 100,
+        startW: widths[col] ?? 100,
+        setter,
       };
       const onMove = (ev: MouseEvent) => {
-        if (!posResizeRef.current) return;
-        const diff = ev.clientX - posResizeRef.current.startX;
-        const w = Math.max(40, posResizeRef.current.startW + diff);
-        setPosColWidths((prev) => ({
+        if (!lsPosResizeRef.current) return;
+        const diff = ev.clientX - lsPosResizeRef.current.startX;
+        const w = Math.max(40, lsPosResizeRef.current.startW + diff);
+        lsPosResizeRef.current.setter((prev) => ({
           ...prev,
-          [posResizeRef.current!.col]: w,
+          [lsPosResizeRef.current!.col]: w,
         }));
       };
       const onUp = () => {
-        posResizeRef.current = null;
+        lsPosResizeRef.current = null;
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
         document.body.style.cursor = '';
@@ -681,13 +729,17 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
     },
-    [posColWidths]
+    []
   );
 
-  const posResizeHandle = useCallback(
-    (col: string) => (
+  const makeLSResizeHandle = useCallback(
+    (
+      col: string,
+      widths: Record<string, number>,
+      setter: React.Dispatch<React.SetStateAction<Record<string, number>>>
+    ) => (
       <Box
-        onMouseDown={(e) => handlePosColResizeStart(e, col)}
+        onMouseDown={(e) => handleLSPosColResizeStart(e, col, widths, setter)}
         sx={{
           position: 'absolute',
           right: 0,
@@ -699,7 +751,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         }}
       />
     ),
-    [handlePosColResizeStart]
+    [handleLSPosColResizeStart]
   );
 
   const handleSort = (column: SortableKey) => {
@@ -841,16 +893,32 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       );
   }, [pnlOpenPositions, pnlClosedPositions]);
 
-  const [showOpenPosOnly, setShowOpenPosOnly] = useState(false);
+  // Filtered positions by direction for the split Long/Short tables
+  const longPositions = useMemo(
+    () => allPositions.filter((p) => p.direction === 'long'),
+    [allPositions]
+  );
+  const shortPositions = useMemo(
+    () => allPositions.filter((p) => p.direction === 'short'),
+    [allPositions]
+  );
 
-  const [posPage, setPosPage] = useState(0);
-  const [posRowsPerPage, setPosRowsPerPage] = useState(10);
+  const [showOpenLongOnly, setShowOpenLongOnly] = useState(false);
+  const [showOpenShortOnly, setShowOpenShortOnly] = useState(false);
 
-  type PosSortableKey =
+  const [, setPosPage] = useState(0);
+  const [, setPosRowsPerPage] = useState(10);
+
+  // Separate pagination for Long / Short position tables in the Trend tab
+  const [longPosPage, setLongPosPage] = useState(0);
+  const [shortPosPage, setShortPosPage] = useState(0);
+  const [longPosRowsPerPage, setLongPosRowsPerPage] = useState(10);
+  const [shortPosRowsPerPage, setShortPosRowsPerPage] = useState(10);
+
+  type LSPosSortableKey =
     | 'entry_time'
     | 'exit_time'
     | '_status'
-    | 'direction'
     | 'layer_index'
     | 'retracement_count'
     | 'units'
@@ -858,98 +926,144 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     | 'exit_price'
     | '_pips'
     | '_pnl';
-  const [posOrderBy, setPosOrderBy] = useState<PosSortableKey>('entry_time');
-  const [posOrder, setPosOrder] = useState<'asc' | 'desc'>('desc');
+  const [longPosOrderBy, setLongPosOrderBy] =
+    useState<LSPosSortableKey>('entry_time');
+  const [longPosOrder, setLongPosOrder] = useState<'asc' | 'desc'>('desc');
+  const [shortPosOrderBy, setShortPosOrderBy] =
+    useState<LSPosSortableKey>('entry_time');
+  const [shortPosOrder, setShortPosOrder] = useState<'asc' | 'desc'>('desc');
 
-  const handlePosSort = useCallback((column: PosSortableKey) => {
-    setPosOrderBy((prev) => {
+  const handleLongPosSort = useCallback((column: LSPosSortableKey) => {
+    setLongPosOrderBy((prev) => {
       if (prev === column) {
-        setPosOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
+        setLongPosOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
         return prev;
       }
-      setPosOrder(
+      setLongPosOrder(
         column === 'entry_time' || column === 'exit_time' ? 'desc' : 'asc'
       );
       return column;
     });
-    setPosPage(0);
+    setLongPosPage(0);
   }, []);
 
-  const sortedPositions = useMemo(() => {
-    const base = showOpenPosOnly
-      ? allPositions.filter((p) => p._status === 'open')
-      : allPositions;
-    return [...base].sort((a, b) => {
-      let cmp = 0;
-      switch (posOrderBy) {
-        case 'entry_time':
-          cmp =
-            new Date(a.entry_time).getTime() - new Date(b.entry_time).getTime();
-          break;
-        case 'exit_time': {
-          const aT = a.exit_time ? new Date(a.exit_time).getTime() : 0;
-          const bT = b.exit_time ? new Date(b.exit_time).getTime() : 0;
-          cmp = aT - bT;
-          break;
-        }
-        case '_status':
-          cmp = a._status.localeCompare(b._status);
-          break;
-        case 'direction':
-          cmp = a.direction.localeCompare(b.direction);
-          break;
-        case 'layer_index':
-          cmp = (a.layer_index ?? -1) - (b.layer_index ?? -1);
-          break;
-        case 'retracement_count':
-          cmp = (a.retracement_count ?? -1) - (b.retracement_count ?? -1);
-          break;
-        case 'units':
-          cmp = Math.abs(a.units ?? 0) - Math.abs(b.units ?? 0);
-          break;
-        case 'entry_price':
-          cmp =
-            parseFloat(a.entry_price || '0') - parseFloat(b.entry_price || '0');
-          break;
-        case 'exit_price':
-          cmp =
-            parseFloat(a.exit_price || '0') - parseFloat(b.exit_price || '0');
-          break;
-        case '_pips': {
-          const pipsA = computePosPips(a, currentPrice, pipSize);
-          const pipsB = computePosPips(b, currentPrice, pipSize);
-          cmp = pipsA - pipsB;
-          break;
-        }
-        case '_pnl': {
-          const pnlA = computePosPnl(a, currentPrice);
-          const pnlB = computePosPnl(b, currentPrice);
-          cmp = pnlA - pnlB;
-          break;
-        }
+  const handleShortPosSort = useCallback((column: LSPosSortableKey) => {
+    setShortPosOrderBy((prev) => {
+      if (prev === column) {
+        setShortPosOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
+        return prev;
       }
-      return posOrder === 'asc' ? cmp : -cmp;
+      setShortPosOrder(
+        column === 'entry_time' || column === 'exit_time' ? 'desc' : 'asc'
+      );
+      return column;
     });
-  }, [
-    allPositions,
-    showOpenPosOnly,
-    posOrderBy,
-    posOrder,
-    currentPrice,
-    pipSize,
-  ]);
+    setShortPosPage(0);
+  }, []);
 
-  const paginatedPositions = useMemo(
-    () =>
-      sortedPositions.slice(
-        posPage * posRowsPerPage,
-        posPage * posRowsPerPage + posRowsPerPage
-      ),
-    [sortedPositions, posPage, posRowsPerPage]
+  // Sorted & paginated long/short positions for the split tables
+  const sortLSPositions = useCallback(
+    (
+      positions: (TaskPosition & { _status: 'open' | 'closed' })[],
+      sortBy: LSPosSortableKey,
+      sortOrder: 'asc' | 'desc'
+    ) => {
+      return [...positions].sort((a, b) => {
+        let cmp = 0;
+        switch (sortBy) {
+          case 'entry_time':
+            cmp =
+              new Date(a.entry_time).getTime() -
+              new Date(b.entry_time).getTime();
+            break;
+          case 'exit_time': {
+            const aT = a.exit_time ? new Date(a.exit_time).getTime() : 0;
+            const bT = b.exit_time ? new Date(b.exit_time).getTime() : 0;
+            cmp = aT - bT;
+            break;
+          }
+          case '_status':
+            cmp = a._status.localeCompare(b._status);
+            break;
+          case 'layer_index':
+            cmp = (a.layer_index ?? -1) - (b.layer_index ?? -1);
+            break;
+          case 'retracement_count':
+            cmp = (a.retracement_count ?? -1) - (b.retracement_count ?? -1);
+            break;
+          case 'units':
+            cmp = Math.abs(a.units ?? 0) - Math.abs(b.units ?? 0);
+            break;
+          case 'entry_price':
+            cmp =
+              parseFloat(a.entry_price || '0') -
+              parseFloat(b.entry_price || '0');
+            break;
+          case 'exit_price':
+            cmp =
+              parseFloat(a.exit_price || '0') - parseFloat(b.exit_price || '0');
+            break;
+          case '_pips': {
+            const pipsA = computePosPips(a, currentPrice, pipSize);
+            const pipsB = computePosPips(b, currentPrice, pipSize);
+            cmp = pipsA - pipsB;
+            break;
+          }
+          case '_pnl': {
+            const pnlA = computePosPnl(a, currentPrice);
+            const pnlB = computePosPnl(b, currentPrice);
+            cmp = pnlA - pnlB;
+            break;
+          }
+        }
+        return sortOrder === 'asc' ? cmp : -cmp;
+      });
+    },
+    [currentPrice, pipSize]
   );
 
-  // Position row selection
-  const [selectedPosIds, setSelectedPosIds] = useState<Set<string>>(new Set());
+  const sortedLongPositions = useMemo(() => {
+    const base = showOpenLongOnly
+      ? longPositions.filter((p) => p._status === 'open')
+      : longPositions;
+    return sortLSPositions(base, longPosOrderBy, longPosOrder);
+  }, [
+    longPositions,
+    showOpenLongOnly,
+    longPosOrderBy,
+    longPosOrder,
+    sortLSPositions,
+  ]);
+
+  const sortedShortPositions = useMemo(() => {
+    const base = showOpenShortOnly
+      ? shortPositions.filter((p) => p._status === 'open')
+      : shortPositions;
+    return sortLSPositions(base, shortPosOrderBy, shortPosOrder);
+  }, [
+    shortPositions,
+    showOpenShortOnly,
+    shortPosOrderBy,
+    shortPosOrder,
+    sortLSPositions,
+  ]);
+
+  const paginatedLongPositions = useMemo(
+    () =>
+      sortedLongPositions.slice(
+        longPosPage * longPosRowsPerPage,
+        longPosPage * longPosRowsPerPage + longPosRowsPerPage
+      ),
+    [sortedLongPositions, longPosPage, longPosRowsPerPage]
+  );
+  const paginatedShortPositions = useMemo(
+    () =>
+      sortedShortPositions.slice(
+        shortPosPage * shortPosRowsPerPage,
+        shortPosPage * shortPosRowsPerPage + shortPosRowsPerPage
+      ),
+    [sortedShortPositions, shortPosPage, shortPosRowsPerPage]
+  );
 
   // Single-position highlight (like selectedTradeId for trades)
   const [selectedPosId, setSelectedPosId] = useState<string | null>(null);
@@ -960,12 +1074,17 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   const selectedPosRowRef = useRef<HTMLTableRowElement | null>(null);
   const pendingPosScrollRef = useRef(false);
 
-  const isAllPosPageSelected =
-    paginatedPositions.length > 0 &&
-    paginatedPositions.every((r) => selectedPosIds.has(r.id));
+  // ── Long position row selection ──
+  const [selectedLongPosIds, setSelectedLongPosIds] = useState<Set<string>>(
+    new Set()
+  );
 
-  const togglePosSelection = useCallback((id: string) => {
-    setSelectedPosIds((prev) => {
+  const isAllLongPosPageSelected =
+    paginatedLongPositions.length > 0 &&
+    paginatedLongPositions.every((r) => selectedLongPosIds.has(r.id));
+
+  const toggleLongPosSelection = useCallback((id: string) => {
+    setSelectedLongPosIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -973,24 +1092,23 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     });
   }, []);
 
-  const selectAllPosOnPage = useCallback(() => {
-    setSelectedPosIds((prev) => {
+  const selectAllLongPosOnPage = useCallback(() => {
+    setSelectedLongPosIds((prev) => {
       const next = new Set(prev);
-      for (const row of paginatedPositions) next.add(row.id);
+      for (const row of paginatedLongPositions) next.add(row.id);
       return next;
     });
-  }, [paginatedPositions]);
+  }, [paginatedLongPositions]);
 
-  const resetPosSelection = useCallback(() => {
-    setSelectedPosIds(new Set());
+  const resetLongPosSelection = useCallback(() => {
+    setSelectedLongPosIds(new Set());
   }, []);
 
-  const copySelectedPositions = useCallback(() => {
+  const copySelectedLongPositions = useCallback(() => {
     const header = [
       'Open Time',
       'Close Time',
       'Status',
-      'Dir',
       'Layer',
       'Retrace',
       'Units',
@@ -999,26 +1117,18 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       'Pips',
       'PnL',
     ].join('\t');
-    const rows = allPositions
-      .filter((r) => selectedPosIds.has(r.id))
+    const rows = sortedLongPositions
+      .filter((r) => selectedLongPosIds.has(r.id))
       .map((pos) => {
         const isOpen = pos._status === 'open';
         const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
         const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
         const units = Math.abs(pos.units ?? 0);
-        const dir = String(pos.direction).toLowerCase();
         let pnl: number | null = null;
-        if (isOpen && currentPrice != null && entryP != null) {
-          pnl =
-            dir === 'long'
-              ? (currentPrice - entryP) * units
-              : (entryP - currentPrice) * units;
-        } else if (!isOpen && exitP != null && entryP != null) {
-          pnl =
-            dir === 'long'
-              ? (exitP - entryP) * units
-              : (entryP - exitP) * units;
-        }
+        if (isOpen && currentPrice != null && entryP != null)
+          pnl = (currentPrice - entryP) * units;
+        else if (!isOpen && exitP != null && entryP != null)
+          pnl = (exitP - entryP) * units;
         const pips = computePosPips(pos, currentPrice, pipSize);
         const hasPrice = isOpen
           ? currentPrice != null && entryP != null
@@ -1027,7 +1137,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           pos.entry_time ? new Date(pos.entry_time).toLocaleString() : '-',
           pos.exit_time ? new Date(pos.exit_time).toLocaleString() : '-',
           isOpen ? 'Open' : 'Closed',
-          dir.toUpperCase(),
           pos.layer_index ?? '-',
           pos.retracement_count ?? '-',
           pos.units,
@@ -1038,7 +1147,82 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         ].join('\t');
       });
     navigator.clipboard.writeText([header, ...rows].join('\n'));
-  }, [selectedPosIds, allPositions, currentPrice, pipSize]);
+  }, [selectedLongPosIds, sortedLongPositions, currentPrice, pipSize]);
+
+  // ── Short position row selection ──
+  const [selectedShortPosIds, setSelectedShortPosIds] = useState<Set<string>>(
+    new Set()
+  );
+
+  const isAllShortPosPageSelected =
+    paginatedShortPositions.length > 0 &&
+    paginatedShortPositions.every((r) => selectedShortPosIds.has(r.id));
+
+  const toggleShortPosSelection = useCallback((id: string) => {
+    setSelectedShortPosIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const selectAllShortPosOnPage = useCallback(() => {
+    setSelectedShortPosIds((prev) => {
+      const next = new Set(prev);
+      for (const row of paginatedShortPositions) next.add(row.id);
+      return next;
+    });
+  }, [paginatedShortPositions]);
+
+  const resetShortPosSelection = useCallback(() => {
+    setSelectedShortPosIds(new Set());
+  }, []);
+
+  const copySelectedShortPositions = useCallback(() => {
+    const header = [
+      'Open Time',
+      'Close Time',
+      'Status',
+      'Layer',
+      'Retrace',
+      'Units',
+      'Entry',
+      'Exit',
+      'Pips',
+      'PnL',
+    ].join('\t');
+    const rows = sortedShortPositions
+      .filter((r) => selectedShortPosIds.has(r.id))
+      .map((pos) => {
+        const isOpen = pos._status === 'open';
+        const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
+        const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
+        const units = Math.abs(pos.units ?? 0);
+        let pnl: number | null = null;
+        if (isOpen && currentPrice != null && entryP != null)
+          pnl = (entryP - currentPrice) * units;
+        else if (!isOpen && exitP != null && entryP != null)
+          pnl = (entryP - exitP) * units;
+        const pips = computePosPips(pos, currentPrice, pipSize);
+        const hasPrice = isOpen
+          ? currentPrice != null && entryP != null
+          : exitP != null && entryP != null;
+        return [
+          pos.entry_time ? new Date(pos.entry_time).toLocaleString() : '-',
+          pos.exit_time ? new Date(pos.exit_time).toLocaleString() : '-',
+          isOpen ? 'Open' : 'Closed',
+          pos.layer_index ?? '-',
+          pos.retracement_count ?? '-',
+          pos.units,
+          entryP != null ? `¥${entryP.toFixed(3)}` : '-',
+          exitP != null ? `¥${exitP.toFixed(3)}` : '-',
+          pipSize && hasPrice ? pips.toFixed(1) : '-',
+          pnl != null ? pnl.toFixed(2) : '-',
+        ].join('\t');
+      });
+    navigator.clipboard.writeText([header, ...rows].join('\n'));
+  }, [selectedShortPosIds, sortedShortPositions, currentPrice, pipSize]);
 
   // --- Cross-linking helpers: trade ↔ position (using backend IDs) ---
   const positionById = useMemo(() => {
@@ -1084,6 +1268,33 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   // the selected trade and scroll the row into view.
   const pendingScrollRef = useRef(false);
 
+  /** Navigate the correct Long or Short position table to the page
+   *  containing the given position, and schedule a scroll-into-view. */
+  const navigateToPosition = useCallback(
+    (pos: (typeof allPositions)[number]) => {
+      setSelectedPosId(pos.id);
+      pendingPosScrollRef.current = true;
+
+      if (pos.direction === 'long') {
+        const idx = sortedLongPositions.findIndex((p) => p.id === pos.id);
+        if (idx !== -1) {
+          setLongPosPage(Math.floor(idx / longPosRowsPerPage));
+        }
+      } else if (pos.direction === 'short') {
+        const idx = sortedShortPositions.findIndex((p) => p.id === pos.id);
+        if (idx !== -1) {
+          setShortPosPage(Math.floor(idx / shortPosRowsPerPage));
+        }
+      }
+    },
+    [
+      sortedLongPositions,
+      sortedShortPositions,
+      longPosRowsPerPage,
+      shortPosRowsPerPage,
+    ]
+  );
+
   useEffect(() => {
     if (!chartClickedRef.current || !selectedTradeId) return;
     chartClickedRef.current = false;
@@ -1100,13 +1311,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     if (trade) {
       const pos = findPositionForTrade(trade);
       if (pos) {
-        setSelectedPosId(pos.id);
-        const posIdx = sortedPositions.findIndex((p) => p.id === pos.id);
-        if (posIdx !== -1) {
-          const targetPosPage = Math.floor(posIdx / posRowsPerPage);
-          pendingPosScrollRef.current = true;
-          setPosPage(targetPosPage);
-        }
+        navigateToPosition(pos);
       } else {
         setSelectedPosId(null);
       }
@@ -1118,8 +1323,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     rowsPerPage,
     trades,
     findPositionForTrade,
-    sortedPositions,
-    posRowsPerPage,
+    navigateToPosition,
   ]);
 
   // After the table re-renders with the selected row on the correct page,
@@ -1147,7 +1351,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       });
     });
     return () => cancelAnimationFrame(raf);
-  }, [posPage, selectedPosId]);
+  }, [longPosPage, shortPosPage, selectedPosId]);
 
   const granularityOptions = useMemo(() => {
     if (granularities.length > 0) {
@@ -1189,6 +1393,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     chart: chartInstance,
     candleTimestamps: candleTimestampsMemo,
     currentTickTimestamp: enableRealTimeUpdates ? currentTick?.timestamp : null,
+    programmaticScrollRef,
   });
 
   // PnL summary from server-side aggregation (lightweight endpoint)
@@ -1639,7 +1844,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
     // Detect user-initiated scroll/zoom and disable auto-follow
     chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
-      if (programmaticScrollRef.current) return;
+      if (programmaticScrollRef.consume()) return;
       setAutoFollow(false);
     });
 
@@ -1677,12 +1882,24 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   // Track whether this is the first candle load (for initial fitContent)
   const hasInitialFit = useRef(false);
 
+  // Auto-follow: show ~500 candles worth of data with the position line centred.
+  const AUTO_FOLLOW_CANDLES = 500;
+
   // Update candle data, market gaps, and fit chart when data changes
   useEffect(() => {
     if (!seriesRef.current || !markersRef.current) return;
 
     // Guard setData so the resulting visible-range change doesn't disable auto-follow
     programmaticScrollRef.current = true;
+
+    // Save the current visible range before setData.  lightweight-charts
+    // resets the scroll position to the last bar on setData, which would
+    // cause the chart to jump when data is refreshed while the user has
+    // scrolled to a different position.
+    const savedLogicalRange = hasInitialFit.current
+      ? chartRef.current?.timeScale().getVisibleLogicalRange()
+      : null;
+
     try {
       seriesRef.current.setData(candles);
     } catch (e) {
@@ -1699,12 +1916,62 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     // Only fit content on the very first load — preserve user's zoom/pan on updates
     if (candles.length > 0 && !hasInitialFit.current) {
       programmaticScrollRef.current = true;
-      try {
-        chartRef.current?.timeScale().fitContent();
-      } catch (e) {
-        console.warn('Failed to fit chart content:', e);
+
+      // Determine the initial viewport:
+      // 1. If a sequence position line exists (currentTick), centre on it
+      // 2. Otherwise, show the start of the data (left edge)
+      const tickTs = currentTick?.timestamp
+        ? Math.floor(new Date(currentTick.timestamp).getTime() / 1000)
+        : null;
+
+      if (tickTs && Number.isFinite(tickTs) && seriesRef.current) {
+        // Centre on the current tick position
+        const data = seriesRef.current.data();
+        let logicalCenter = 0;
+        if (data.length > 0) {
+          let lo = 0;
+          let hi = data.length - 1;
+          while (lo < hi) {
+            const mid = (lo + hi) >>> 1;
+            const midSec =
+              typeof data[mid].time === 'number'
+                ? (data[mid].time as number)
+                : new Date(data[mid].time as string).getTime() / 1000;
+            if (midSec < tickTs) lo = mid + 1;
+            else hi = mid;
+          }
+          logicalCenter = lo;
+        }
+        const half = AUTO_FOLLOW_CANDLES / 2;
+        try {
+          chartRef.current?.timeScale().setVisibleLogicalRange({
+            from: logicalCenter - half,
+            to: logicalCenter + half,
+          });
+        } catch (e) {
+          console.warn('Failed to set initial visible range on tick:', e);
+        }
+      } else {
+        // No tick — show the start of the data
+        try {
+          chartRef.current?.timeScale().setVisibleLogicalRange({
+            from: 0,
+            to: AUTO_FOLLOW_CANDLES,
+          });
+        } catch (e) {
+          console.warn('Failed to set initial visible range at start:', e);
+        }
       }
+
       hasInitialFit.current = true;
+    } else if (savedLogicalRange) {
+      // Restore the visible range so the chart doesn't jump on data refresh.
+      programmaticScrollRef.current = true;
+      try {
+        chartRef.current?.timeScale().setVisibleLogicalRange(savedLogicalRange);
+      } catch (e) {
+        console.warn('Failed to restore visible range after setData:', e);
+      }
     }
 
     // After a granularity change, restore the previously visible time range
@@ -1725,12 +1992,8 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         );
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- currentTick is intentionally excluded: it is only read on the very first load (guarded by hasInitialFit) to decide the initial viewport position.  Including it would re-run setData on every tick update.
   }, [candles, programmaticScrollRef]);
-
-  // Auto-follow: show ~40 candles worth of data with the position line centred.
-  // The visible half-width adapts to the selected granularity so the zoom
-  // level always feels natural regardless of candle size.
-  const AUTO_FOLLOW_CANDLES = 500;
 
   // Update sequence position line when current tick changes
   useEffect(() => {
@@ -1812,6 +2075,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   ]);
 
   const eventMarkers = useMemo(() => {
+    const candleTimes = candles.map((c) => Number(c.time));
     const markers: Array<{
       time: Time;
       position: 'aboveBar' | 'belowBar';
@@ -1821,7 +2085,9 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     }> = [];
 
     for (const event of taskLifecycleEvents) {
-      const time = toEventMarkerTime(event);
+      const rawTime = toEventMarkerTime(event);
+      if (!rawTime) continue;
+      const time = snapToCandleTime(Number(rawTime), candleTimes);
       if (!time) continue;
       markers.push({
         time,
@@ -1832,36 +2098,14 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       });
     }
 
-    for (const event of tradingEvents) {
-      const time = toEventMarkerTime(event);
-      if (!time) continue;
-
-      const eventType = String(event.event_type || '').toLowerCase();
-      const direction = toEventDirection(event);
-      const isOpen = TRADING_OPEN_EVENT_TYPES.has(eventType);
-      const isClose = TRADING_CLOSE_EVENT_TYPES.has(eventType);
-
-      let color = '#111111';
-      if (isOpen && direction === 'long') color = '#16a34a';
-      else if (isOpen && direction === 'short') color = '#dc2626';
-      else if (isClose) color = '#6b7280';
-
-      markers.push({
-        time,
-        position: direction === 'short' ? 'aboveBar' : 'belowBar',
-        shape:
-          direction === 'short'
-            ? 'arrowDown'
-            : direction === 'long'
-              ? 'arrowUp'
-              : 'circle',
-        color,
-        text: event.event_type_display || event.event_type,
-      });
-    }
+    // Trading events (open/close) are intentionally excluded here because
+    // tradeMarkers already display the same information with direction and
+    // lot size.  Including both would create duplicate overlapping markers.
 
     for (const event of strategyEvents) {
-      const time = toEventMarkerTime(event);
+      const rawTime = toEventMarkerTime(event);
+      if (!rawTime) continue;
+      const time = snapToCandleTime(Number(rawTime), candleTimes);
       if (!time) continue;
       markers.push({
         time,
@@ -1873,7 +2117,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     }
 
     return markers.sort((a, b) => Number(a.time) - Number(b.time));
-  }, [taskLifecycleEvents, tradingEvents, strategyEvents]);
+  }, [taskLifecycleEvents, strategyEvents, candles]);
 
   // Update trade markers when trades or selection changes (without resetting the view)
   useEffect(() => {
@@ -1890,21 +2134,11 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
         executionMethod === 'margin_protection' ||
         executionMethod === 'volatility_lock';
 
-      const openSide =
-        t.direction === 'long'
-          ? 'LONG'
-          : t.direction === 'short'
-            ? 'SHORT'
-            : '';
-      const closeSide =
-        t.direction === 'long'
-          ? 'SHORT'
-          : t.direction === 'short'
-            ? 'LONG'
-            : '';
-      const sideLabel = isClose ? closeSide : openSide;
-      const actionLabel = isClose ? 'CLOSE' : t.direction ? 'OPEN' : '';
-      const lotLabel = lots === null ? '' : ` ${Math.round(lots)}L`;
+      const lotLabel = lots === null ? '' : `${Math.round(lots)}L`;
+      // Open: "OPEN SHORT 1L", Close: "CLOSE 1L"
+      const text = isClose
+        ? `CLOSE ${lotLabel}`.trim()
+        : `OPEN ${t.direction === 'long' ? 'LONG' : t.direction === 'short' ? 'SHORT' : ''} ${lotLabel}`.trim();
 
       return {
         time: t.timeSec,
@@ -1923,13 +2157,16 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             : t.direction === 'short'
               ? '#ef4444'
               : '#9ca3af',
-        text: `${actionLabel} ${sideLabel}${lotLabel}`.trim(),
+        text,
       };
     });
 
     try {
       programmaticScrollRef.current = true;
-      markersRef.current.setMarkers([...eventMarkers, ...tradeMarkers]);
+      const allMarkers = [...eventMarkers, ...tradeMarkers].sort(
+        (a, b) => Number(a.time) - Number(b.time)
+      );
+      markersRef.current.setMarkers(allMarkers);
     } catch (e) {
       console.warn('Failed to set trade markers:', e);
     }
@@ -1973,13 +2210,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
     // Also highlight the related position
     const pos = findPositionForTrade(row);
     if (pos) {
-      setSelectedPosId(pos.id);
-      const posIdx = sortedPositions.findIndex((p) => p.id === pos.id);
-      if (posIdx !== -1) {
-        const targetPosPage = Math.floor(posIdx / posRowsPerPage);
-        pendingPosScrollRef.current = true;
-        setPosPage(targetPosPage);
-      }
+      navigateToPosition(pos);
     } else {
       setSelectedPosId(null);
     }
@@ -2154,7 +2385,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
       >
         <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
           <Typography variant="caption" color="text.secondary" lineHeight={1.2}>
-            Realized PnL ({pnlCurrency})
+            {t('tables.trend.realizedPnl')} ({pnlCurrency})
           </Typography>
           <Typography
             variant="body2"
@@ -2171,7 +2402,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
         <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
           <Typography variant="caption" color="text.secondary" lineHeight={1.2}>
-            Unrealized PnL ({pnlCurrency})
+            {t('tables.trend.unrealizedPnl')} ({pnlCurrency})
           </Typography>
           <Typography
             variant="body2"
@@ -2188,7 +2419,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
         <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
           <Typography variant="caption" color="text.secondary" lineHeight={1.2}>
-            Total Trades (count)
+            {t('tables.trend.totalTrades')}
           </Typography>
           <Typography variant="body2" fontWeight="bold" lineHeight={1.4}>
             {replaySummary.totalTrades} trades
@@ -2197,12 +2428,27 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
 
         <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
           <Typography variant="caption" color="text.secondary" lineHeight={1.2}>
-            Open Positions (count)
+            {t('tables.trend.openPositions')}
           </Typography>
           <Typography variant="body2" fontWeight="bold" lineHeight={1.4}>
             {replaySummary.openPositions} positions
           </Typography>
         </Box>
+
+        {executionRunId != null && (
+          <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              lineHeight={1.2}
+            >
+              {t('tables.trend.executionId')}
+            </Typography>
+            <Typography variant="body2" fontWeight="bold" lineHeight={1.4}>
+              {executionRunId}
+            </Typography>
+          </Box>
+        )}
 
         <Box sx={{ flex: 1 }} />
 
@@ -2224,12 +2470,12 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             id="replay-polling-interval-label"
             sx={{ fontSize: '0.75rem' }}
           >
-            Polling
+            {t('tables.trend.polling')}
           </InputLabel>
           <Select
             labelId="replay-polling-interval-label"
             value={pollingIntervalMs}
-            label="Polling"
+            label={t('tables.trend.polling')}
             onChange={(e) => setPollingIntervalMs(Number(e.target.value))}
             sx={{ fontSize: '0.75rem' }}
           >
@@ -2252,12 +2498,12 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
             id="replay-granularity-label"
             sx={{ fontSize: '0.75rem' }}
           >
-            Granularity
+            {t('tables.trend.granularity')}
           </InputLabel>
           <Select
             labelId="replay-granularity-label"
             value={granularity}
-            label="Granularity"
+            label={t('tables.trend.granularity')}
             onChange={handleGranularityChange}
             sx={{ fontSize: '0.75rem' }}
           >
@@ -2293,7 +2539,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
               height: 32,
             }}
           >
-            Follow
+            {t('tables.trend.follow')}
           </Button>
         )}
 
@@ -2390,7 +2636,9 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
               minHeight: 36,
             }}
           >
-            <Typography variant="subtitle1">Trades</Typography>
+            <Typography variant="subtitle1">
+              {t('tables.trend.trades')}
+            </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
               ({sortedTrades.length})
             </Typography>
@@ -2437,7 +2685,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           </Box>
 
           <TableContainer component={Paper} variant="outlined">
-            <Table stickyHeader sx={{ tableLayout: 'fixed', minWidth: 580 }}>
+            <Table stickyHeader sx={{ tableLayout: 'fixed', minWidth: 680 }}>
               <TableHead>
                 <TableRow>
                   <TableCell padding="checkbox" sx={{ width: 42 }}>
@@ -2466,6 +2714,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     sx={{
                       position: 'relative',
                       width: replayColWidths.timestamp,
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     <TableSortLabel
@@ -2473,7 +2722,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                       direction={orderBy === 'timestamp' ? order : 'asc'}
                       onClick={() => handleSort('timestamp')}
                     >
-                      Time
+                      {t('tables.trend.time')}
                     </TableSortLabel>
                     {resizeHandle('timestamp')}
                   </TableCell>
@@ -2482,6 +2731,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     sx={{
                       position: 'relative',
                       width: replayColWidths.direction,
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     <TableSortLabel
@@ -2489,7 +2739,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                       direction={orderBy === 'direction' ? order : 'asc'}
                       onClick={() => handleSort('direction')}
                     >
-                      Direction
+                      {t('tables.trend.direction')}
                     </TableSortLabel>
                     {resizeHandle('direction')}
                   </TableCell>
@@ -2498,6 +2748,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     sx={{
                       position: 'relative',
                       width: replayColWidths.layer_index,
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     <TableSortLabel
@@ -2505,7 +2756,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                       direction={orderBy === 'layer_index' ? order : 'asc'}
                       onClick={() => handleSort('layer_index')}
                     >
-                      Layer
+                      {t('tables.trend.layer')}
                     </TableSortLabel>
                     {resizeHandle('layer_index')}
                   </TableCell>
@@ -2517,6 +2768,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     sx={{
                       position: 'relative',
                       width: replayColWidths.retracement_count,
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     <TableSortLabel
@@ -2526,35 +2778,43 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                       }
                       onClick={() => handleSort('retracement_count')}
                     >
-                      Ret
+                      {t('tables.trend.ret')}
                     </TableSortLabel>
                     {resizeHandle('retracement_count')}
                   </TableCell>
                   <TableCell
                     align="right"
                     sortDirection={orderBy === 'units' ? order : false}
-                    sx={{ position: 'relative', width: replayColWidths.units }}
+                    sx={{
+                      position: 'relative',
+                      width: replayColWidths.units,
+                      whiteSpace: 'nowrap',
+                    }}
                   >
                     <TableSortLabel
                       active={orderBy === 'units'}
                       direction={orderBy === 'units' ? order : 'asc'}
                       onClick={() => handleSort('units')}
                     >
-                      Units
+                      {t('tables.trend.units')}
                     </TableSortLabel>
                     {resizeHandle('units')}
                   </TableCell>
                   <TableCell
                     align="right"
                     sortDirection={orderBy === 'price' ? order : false}
-                    sx={{ position: 'relative', width: replayColWidths.price }}
+                    sx={{
+                      position: 'relative',
+                      width: replayColWidths.price,
+                      whiteSpace: 'nowrap',
+                    }}
                   >
                     <TableSortLabel
                       active={orderBy === 'price'}
                       direction={orderBy === 'price' ? order : 'asc'}
                       onClick={() => handleSort('price')}
                     >
-                      Price
+                      {t('tables.trend.price')}
                     </TableSortLabel>
                     {resizeHandle('price')}
                   </TableCell>
@@ -2565,6 +2825,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     sx={{
                       position: 'relative',
                       width: replayColWidths.execution_method,
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     <TableSortLabel
@@ -2572,7 +2833,7 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                       direction={orderBy === 'execution_method' ? order : 'asc'}
                       onClick={() => handleSort('execution_method')}
                     >
-                      Event
+                      {t('tables.trend.event')}
                     </TableSortLabel>
                     {resizeHandle('execution_method')}
                   </TableCell>
@@ -2716,12 +2977,16 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
               setPage(0);
               setPosRowsPerPage(newVal);
               setPosPage(0);
+              setLongPosRowsPerPage(newVal);
+              setLongPosPage(0);
+              setShortPosRowsPerPage(newVal);
+              setShortPosPage(0);
             }}
             rowsPerPageOptions={[10, 25, 50, 100]}
           />
         </Box>
 
-        {/* Right column: Positions */}
+        {/* Long Positions */}
         <Box
           sx={{
             flex: 1,
@@ -2738,26 +3003,59 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
               minHeight: 36,
             }}
           >
-            <Typography variant="subtitle1">Positions</Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-              ({allPositions.length})
+            <Typography variant="subtitle1">
+              {t('tables.trend.longPositions')}
             </Typography>
-            {selectedPosIds.size > 0 && (
+            <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+              ({longPositions.length})
+            </Typography>
+            {selectedLongPosIds.size > 0 && (
               <Typography
                 variant="caption"
                 color="text.secondary"
                 sx={{ ml: 0.5 }}
               >
-                — {selectedPosIds.size} selected
+                — {selectedLongPosIds.size} selected
               </Typography>
             )}
+            <Box sx={{ flex: 1 }} />
+            <Tooltip title="Copy selected rows">
+              <span>
+                <IconButton
+                  onClick={copySelectedLongPositions}
+                  disabled={selectedLongPosIds.size === 0}
+                >
+                  <ContentCopyIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Select all on page">
+              <IconButton onClick={selectAllLongPosOnPage}>
+                <SelectAllIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Reset selection">
+              <span>
+                <IconButton
+                  onClick={resetLongPosSelection}
+                  disabled={selectedLongPosIds.size === 0}
+                >
+                  <DeselectIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Reload data">
+              <IconButton onClick={fetchReplayData} disabled={isRefreshing}>
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
             <Tooltip title="Show open positions only">
               <ToggleButton
                 value="openOnly"
-                selected={showOpenPosOnly}
+                selected={showOpenLongOnly}
                 onChange={() => {
-                  setShowOpenPosOnly((prev) => !prev);
-                  setPosPage(0);
+                  setShowOpenLongOnly((prev) => !prev);
+                  setLongPosPage(0);
                 }}
                 sx={{
                   ml: 1,
@@ -2769,272 +3067,300 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                   lineHeight: 1,
                 }}
               >
-                Open Only
+                {t('tables.trend.openOnly')}
               </ToggleButton>
             </Tooltip>
-            <Box sx={{ flex: 1 }} />
-            <Tooltip title="Copy selected positions">
-              <span>
-                <IconButton
-                  onClick={copySelectedPositions}
-                  disabled={selectedPosIds.size === 0}
-                >
-                  <ContentCopyIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Select all on page">
-              <IconButton onClick={selectAllPosOnPage}>
-                <SelectAllIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Reset selection">
-              <span>
-                <IconButton
-                  onClick={resetPosSelection}
-                  disabled={selectedPosIds.size === 0}
-                >
-                  <DeselectIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Reload data">
-              <IconButton onClick={fetchReplayData} disabled={isRefreshing}>
-                <RefreshIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
           </Box>
-
           <TableContainer component={Paper} variant="outlined">
-            <Table stickyHeader sx={{ tableLayout: 'fixed', minWidth: 940 }}>
+            <Table stickyHeader sx={{ tableLayout: 'fixed', minWidth: 1000 }}>
               <TableHead>
                 <TableRow>
                   <TableCell padding="checkbox" sx={{ width: 42 }}>
                     <Checkbox
-                      checked={isAllPosPageSelected}
+                      checked={isAllLongPosPageSelected}
                       indeterminate={
-                        !isAllPosPageSelected &&
-                        paginatedPositions.some((r) => selectedPosIds.has(r.id))
+                        !isAllLongPosPageSelected &&
+                        paginatedLongPositions.some((r) =>
+                          selectedLongPosIds.has(r.id)
+                        )
                       }
                       onChange={() => {
-                        if (isAllPosPageSelected) {
-                          setSelectedPosIds((prev) => {
+                        if (isAllLongPosPageSelected) {
+                          setSelectedLongPosIds((prev) => {
                             const next = new Set(prev);
-                            for (const row of paginatedPositions)
+                            for (const row of paginatedLongPositions)
                               next.delete(row.id);
                             return next;
                           });
                         } else {
-                          selectAllPosOnPage();
+                          selectAllLongPosOnPage();
                         }
                       }}
                     />
                   </TableCell>
                   <TableCell
-                    sx={{
-                      position: 'relative',
-                      width: posColWidths.entry_time,
-                    }}
                     sortDirection={
-                      posOrderBy === 'entry_time' ? posOrder : false
+                      longPosOrderBy === 'entry_time' ? longPosOrder : false
                     }
-                  >
-                    <TableSortLabel
-                      active={posOrderBy === 'entry_time'}
-                      direction={posOrderBy === 'entry_time' ? posOrder : 'asc'}
-                      onClick={() => handlePosSort('entry_time')}
-                    >
-                      Open Time
-                    </TableSortLabel>
-                    {posResizeHandle('entry_time')}
-                  </TableCell>
-                  <TableCell
                     sx={{
                       position: 'relative',
-                      width: posColWidths.exit_time,
+                      width: longPosColWidths.entry_time,
+                      whiteSpace: 'nowrap',
                     }}
-                    sortDirection={
-                      posOrderBy === 'exit_time' ? posOrder : false
-                    }
                   >
                     <TableSortLabel
-                      active={posOrderBy === 'exit_time'}
-                      direction={posOrderBy === 'exit_time' ? posOrder : 'asc'}
-                      onClick={() => handlePosSort('exit_time')}
-                    >
-                      Close Time
-                    </TableSortLabel>
-                    {posResizeHandle('exit_time')}
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      position: 'relative',
-                      width: posColWidths._status,
-                    }}
-                    sortDirection={posOrderBy === '_status' ? posOrder : false}
-                  >
-                    <TableSortLabel
-                      active={posOrderBy === '_status'}
-                      direction={posOrderBy === '_status' ? posOrder : 'asc'}
-                      onClick={() => handlePosSort('_status')}
-                    >
-                      Status
-                    </TableSortLabel>
-                    {posResizeHandle('_status')}
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      position: 'relative',
-                      width: posColWidths.direction,
-                    }}
-                    sortDirection={
-                      posOrderBy === 'direction' ? posOrder : false
-                    }
-                  >
-                    <TableSortLabel
-                      active={posOrderBy === 'direction'}
-                      direction={posOrderBy === 'direction' ? posOrder : 'asc'}
-                      onClick={() => handlePosSort('direction')}
-                    >
-                      Dir
-                    </TableSortLabel>
-                    {posResizeHandle('direction')}
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      position: 'relative',
-                      width: posColWidths.layer_index,
-                    }}
-                    sortDirection={
-                      posOrderBy === 'layer_index' ? posOrder : false
-                    }
-                  >
-                    <TableSortLabel
-                      active={posOrderBy === 'layer_index'}
+                      active={longPosOrderBy === 'entry_time'}
                       direction={
-                        posOrderBy === 'layer_index' ? posOrder : 'asc'
+                        longPosOrderBy === 'entry_time' ? longPosOrder : 'asc'
                       }
-                      onClick={() => handlePosSort('layer_index')}
+                      onClick={() => handleLongPosSort('entry_time')}
                     >
-                      Layer
+                      {t('tables.trend.openTime')}
                     </TableSortLabel>
-                    {posResizeHandle('layer_index')}
+                    {makeLSResizeHandle(
+                      'entry_time',
+                      longPosColWidths,
+                      setLongPosColWidths
+                    )}
                   </TableCell>
                   <TableCell
+                    sortDirection={
+                      longPosOrderBy === 'exit_time' ? longPosOrder : false
+                    }
                     sx={{
                       position: 'relative',
-                      width: posColWidths.retracement_count,
+                      width: longPosColWidths.exit_time,
+                      whiteSpace: 'nowrap',
                     }}
-                    sortDirection={
-                      posOrderBy === 'retracement_count' ? posOrder : false
-                    }
                   >
                     <TableSortLabel
-                      active={posOrderBy === 'retracement_count'}
+                      active={longPosOrderBy === 'exit_time'}
                       direction={
-                        posOrderBy === 'retracement_count' ? posOrder : 'asc'
+                        longPosOrderBy === 'exit_time' ? longPosOrder : 'asc'
                       }
-                      onClick={() => handlePosSort('retracement_count')}
+                      onClick={() => handleLongPosSort('exit_time')}
                     >
-                      Retrace
+                      {t('tables.trend.closeTime')}
                     </TableSortLabel>
-                    {posResizeHandle('retracement_count')}
+                    {makeLSResizeHandle(
+                      'exit_time',
+                      longPosColWidths,
+                      setLongPosColWidths
+                    )}
                   </TableCell>
                   <TableCell
-                    align="right"
-                    sx={{
-                      position: 'relative',
-                      width: posColWidths.units,
-                    }}
-                    sortDirection={posOrderBy === 'units' ? posOrder : false}
-                  >
-                    <TableSortLabel
-                      active={posOrderBy === 'units'}
-                      direction={posOrderBy === 'units' ? posOrder : 'asc'}
-                      onClick={() => handlePosSort('units')}
-                    >
-                      Units
-                    </TableSortLabel>
-                    {posResizeHandle('units')}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{
-                      position: 'relative',
-                      width: posColWidths.entry_price,
-                    }}
                     sortDirection={
-                      posOrderBy === 'entry_price' ? posOrder : false
+                      longPosOrderBy === '_status' ? longPosOrder : false
                     }
+                    sx={{
+                      position: 'relative',
+                      width: longPosColWidths._status,
+                      whiteSpace: 'nowrap',
+                    }}
                   >
                     <TableSortLabel
-                      active={posOrderBy === 'entry_price'}
+                      active={longPosOrderBy === '_status'}
                       direction={
-                        posOrderBy === 'entry_price' ? posOrder : 'asc'
+                        longPosOrderBy === '_status' ? longPosOrder : 'asc'
                       }
-                      onClick={() => handlePosSort('entry_price')}
+                      onClick={() => handleLongPosSort('_status')}
                     >
-                      Entry
+                      {t('tables.trend.status')}
                     </TableSortLabel>
-                    {posResizeHandle('entry_price')}
+                    {makeLSResizeHandle(
+                      '_status',
+                      longPosColWidths,
+                      setLongPosColWidths
+                    )}
                   </TableCell>
                   <TableCell
-                    align="right"
-                    sx={{
-                      position: 'relative',
-                      width: posColWidths.exit_price,
-                    }}
                     sortDirection={
-                      posOrderBy === 'exit_price' ? posOrder : false
+                      longPosOrderBy === 'layer_index' ? longPosOrder : false
                     }
+                    sx={{
+                      position: 'relative',
+                      width: longPosColWidths.layer_index,
+                      whiteSpace: 'nowrap',
+                    }}
                   >
                     <TableSortLabel
-                      active={posOrderBy === 'exit_price'}
-                      direction={posOrderBy === 'exit_price' ? posOrder : 'asc'}
-                      onClick={() => handlePosSort('exit_price')}
+                      active={longPosOrderBy === 'layer_index'}
+                      direction={
+                        longPosOrderBy === 'layer_index' ? longPosOrder : 'asc'
+                      }
+                      onClick={() => handleLongPosSort('layer_index')}
                     >
-                      Exit
+                      {t('tables.trend.layer')}
                     </TableSortLabel>
-                    {posResizeHandle('exit_price')}
+                    {makeLSResizeHandle(
+                      'layer_index',
+                      longPosColWidths,
+                      setLongPosColWidths
+                    )}
+                  </TableCell>
+                  <TableCell
+                    sortDirection={
+                      longPosOrderBy === 'retracement_count'
+                        ? longPosOrder
+                        : false
+                    }
+                    sx={{
+                      position: 'relative',
+                      width: longPosColWidths.retracement_count,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <TableSortLabel
+                      active={longPosOrderBy === 'retracement_count'}
+                      direction={
+                        longPosOrderBy === 'retracement_count'
+                          ? longPosOrder
+                          : 'asc'
+                      }
+                      onClick={() => handleLongPosSort('retracement_count')}
+                    >
+                      {t('tables.trend.retrace')}
+                    </TableSortLabel>
+                    {makeLSResizeHandle(
+                      'retracement_count',
+                      longPosColWidths,
+                      setLongPosColWidths
+                    )}
                   </TableCell>
                   <TableCell
                     align="right"
+                    sortDirection={
+                      longPosOrderBy === 'units' ? longPosOrder : false
+                    }
                     sx={{
                       position: 'relative',
-                      width: posColWidths._pips,
+                      width: longPosColWidths.units,
+                      whiteSpace: 'nowrap',
                     }}
-                    sortDirection={posOrderBy === '_pips' ? posOrder : false}
                   >
                     <TableSortLabel
-                      active={posOrderBy === '_pips'}
-                      direction={posOrderBy === '_pips' ? posOrder : 'asc'}
-                      onClick={() => handlePosSort('_pips')}
+                      active={longPosOrderBy === 'units'}
+                      direction={
+                        longPosOrderBy === 'units' ? longPosOrder : 'asc'
+                      }
+                      onClick={() => handleLongPosSort('units')}
                     >
-                      Pips
+                      {t('tables.trend.units')}
                     </TableSortLabel>
-                    {posResizeHandle('_pips')}
+                    {makeLSResizeHandle(
+                      'units',
+                      longPosColWidths,
+                      setLongPosColWidths
+                    )}
                   </TableCell>
                   <TableCell
                     align="right"
+                    sortDirection={
+                      longPosOrderBy === 'entry_price' ? longPosOrder : false
+                    }
                     sx={{
                       position: 'relative',
-                      width: posColWidths._pnl,
+                      width: longPosColWidths.entry_price,
+                      whiteSpace: 'nowrap',
                     }}
-                    sortDirection={posOrderBy === '_pnl' ? posOrder : false}
                   >
                     <TableSortLabel
-                      active={posOrderBy === '_pnl'}
-                      direction={posOrderBy === '_pnl' ? posOrder : 'asc'}
-                      onClick={() => handlePosSort('_pnl')}
+                      active={longPosOrderBy === 'entry_price'}
+                      direction={
+                        longPosOrderBy === 'entry_price' ? longPosOrder : 'asc'
+                      }
+                      onClick={() => handleLongPosSort('entry_price')}
                     >
-                      PnL
+                      {t('tables.trend.entry')}
                     </TableSortLabel>
-                    {posResizeHandle('_pnl')}
+                    {makeLSResizeHandle(
+                      'entry_price',
+                      longPosColWidths,
+                      setLongPosColWidths
+                    )}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sortDirection={
+                      longPosOrderBy === 'exit_price' ? longPosOrder : false
+                    }
+                    sx={{
+                      position: 'relative',
+                      width: longPosColWidths.exit_price,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <TableSortLabel
+                      active={longPosOrderBy === 'exit_price'}
+                      direction={
+                        longPosOrderBy === 'exit_price' ? longPosOrder : 'asc'
+                      }
+                      onClick={() => handleLongPosSort('exit_price')}
+                    >
+                      {t('tables.trend.exit')}
+                    </TableSortLabel>
+                    {makeLSResizeHandle(
+                      'exit_price',
+                      longPosColWidths,
+                      setLongPosColWidths
+                    )}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sortDirection={
+                      longPosOrderBy === '_pips' ? longPosOrder : false
+                    }
+                    sx={{
+                      position: 'relative',
+                      width: longPosColWidths._pips,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <TableSortLabel
+                      active={longPosOrderBy === '_pips'}
+                      direction={
+                        longPosOrderBy === '_pips' ? longPosOrder : 'asc'
+                      }
+                      onClick={() => handleLongPosSort('_pips')}
+                    >
+                      {t('tables.trend.pips')}
+                    </TableSortLabel>
+                    {makeLSResizeHandle(
+                      '_pips',
+                      longPosColWidths,
+                      setLongPosColWidths
+                    )}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sortDirection={
+                      longPosOrderBy === '_pnl' ? longPosOrder : false
+                    }
+                    sx={{
+                      position: 'relative',
+                      width: longPosColWidths._pnl,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <TableSortLabel
+                      active={longPosOrderBy === '_pnl'}
+                      direction={
+                        longPosOrderBy === '_pnl' ? longPosOrder : 'asc'
+                      }
+                      onClick={() => handleLongPosSort('_pnl')}
+                    >
+                      {t('tables.trend.pnl')}
+                    </TableSortLabel>
+                    {makeLSResizeHandle(
+                      '_pnl',
+                      longPosColWidths,
+                      setLongPosColWidths
+                    )}
                   </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {paginatedPositions.map((pos) => {
+                {paginatedLongPositions.map((pos) => {
                   const isOpen = pos._status === 'open';
                   const entryP = pos.entry_price
                     ? parseFloat(pos.entry_price)
@@ -3043,20 +3369,13 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     ? parseFloat(pos.exit_price)
                     : null;
                   const units = Math.abs(pos.units ?? 0);
-                  const dir = String(pos.direction).toLowerCase();
                   let pnl: number | null = null;
-                  if (isOpen && currentPrice != null && entryP != null) {
-                    pnl =
-                      dir === 'long'
-                        ? (currentPrice - entryP) * units
-                        : (entryP - currentPrice) * units;
-                  } else if (!isOpen && exitP != null && entryP != null) {
-                    pnl =
-                      dir === 'long'
-                        ? (exitP - entryP) * units
-                        : (entryP - exitP) * units;
-                  }
+                  if (isOpen && currentPrice != null && entryP != null)
+                    pnl = (currentPrice - entryP) * units;
+                  else if (!isOpen && exitP != null && entryP != null)
+                    pnl = (exitP - entryP) * units;
                   const posSelected = pos.id === selectedPosId;
+                  const longChecked = selectedLongPosIds.has(pos.id);
                   return (
                     <TableRow
                       key={pos.id}
@@ -3080,9 +3399,9 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                     >
                       <TableCell padding="checkbox">
                         <Checkbox
-                          checked={selectedPosIds.has(pos.id)}
+                          checked={longChecked}
                           onClick={(e) => e.stopPropagation()}
-                          onChange={() => togglePosSelection(pos.id)}
+                          onChange={() => toggleLongPosSelection(pos.id)}
                         />
                       </TableCell>
                       <TableCell
@@ -3114,16 +3433,6 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                           variant="outlined"
                           sx={{ height: 20, fontSize: '0.7rem' }}
                         />
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          color: dir === 'long' ? 'success.main' : 'error.main',
-                        }}
-                      >
-                        {dir.toUpperCase()}
                       </TableCell>
                       <TableCell>{pos.layer_index ?? '-'}</TableCell>
                       <TableCell>{pos.retracement_count ?? '-'}</TableCell>
@@ -3176,20 +3485,19 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
                         }}
                       >
                         {pnl != null
-                          ? `${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}`
+                          ? `${pnl >= 0 ? '+' : ''}¥${pnl.toFixed(2)}`
                           : '-'}
                       </TableCell>
                     </TableRow>
                   );
                 })}
-                {/* Fill empty rows to keep table height stable */}
-                {paginatedPositions.length < posRowsPerPage &&
+                {paginatedLongPositions.length < longPosRowsPerPage &&
                   Array.from({
-                    length: posRowsPerPage - paginatedPositions.length,
+                    length: longPosRowsPerPage - paginatedLongPositions.length,
                   }).map((_, i) => (
-                    <TableRow key={`pos-empty-${i}`} sx={{ height: 37 }}>
+                    <TableRow key={`lpos-empty-${i}`} sx={{ height: 37 }}>
                       <TableCell
-                        colSpan={12}
+                        colSpan={11}
                         sx={{
                           backgroundColor: 'action.hover',
                           borderBottom: '1px solid',
@@ -3204,16 +3512,570 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
           </TableContainer>
           <TablePagination
             component="div"
-            count={sortedPositions.length}
-            page={posPage}
-            onPageChange={(_e, newPage) => setPosPage(newPage)}
-            rowsPerPage={posRowsPerPage}
+            count={sortedLongPositions.length}
+            page={longPosPage}
+            onPageChange={(_e, newPage) => setLongPosPage(newPage)}
+            rowsPerPage={longPosRowsPerPage}
             onRowsPerPageChange={(e) => {
               const newVal = parseInt(e.target.value, 10);
-              setPosRowsPerPage(newVal);
-              setPosPage(0);
+              setLongPosRowsPerPage(newVal);
+              setLongPosPage(0);
               setRowsPerPage(newVal);
               setPage(0);
+              setPosRowsPerPage(newVal);
+              setPosPage(0);
+              setShortPosRowsPerPage(newVal);
+              setShortPosPage(0);
+            }}
+            rowsPerPageOptions={[10, 25, 50, 100]}
+          />
+        </Box>
+
+        {/* Short Positions */}
+        <Box
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              height: 36,
+              minHeight: 36,
+            }}
+          >
+            <Typography variant="subtitle1">
+              {t('tables.trend.shortPositions')}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+              ({shortPositions.length})
+            </Typography>
+            {selectedShortPosIds.size > 0 && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ ml: 0.5 }}
+              >
+                — {selectedShortPosIds.size} selected
+              </Typography>
+            )}
+            <Box sx={{ flex: 1 }} />
+            <Tooltip title="Copy selected rows">
+              <span>
+                <IconButton
+                  onClick={copySelectedShortPositions}
+                  disabled={selectedShortPosIds.size === 0}
+                >
+                  <ContentCopyIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Select all on page">
+              <IconButton onClick={selectAllShortPosOnPage}>
+                <SelectAllIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Reset selection">
+              <span>
+                <IconButton
+                  onClick={resetShortPosSelection}
+                  disabled={selectedShortPosIds.size === 0}
+                >
+                  <DeselectIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Reload data">
+              <IconButton onClick={fetchReplayData} disabled={isRefreshing}>
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Show open positions only">
+              <ToggleButton
+                value="openOnly"
+                selected={showOpenShortOnly}
+                onChange={() => {
+                  setShowOpenShortOnly((prev) => !prev);
+                  setShortPosPage(0);
+                }}
+                sx={{
+                  ml: 1,
+                  px: 1,
+                  py: 0,
+                  height: 24,
+                  fontSize: '0.7rem',
+                  textTransform: 'none',
+                  lineHeight: 1,
+                }}
+              >
+                {t('tables.trend.openOnly')}
+              </ToggleButton>
+            </Tooltip>
+          </Box>
+          <TableContainer component={Paper} variant="outlined">
+            <Table stickyHeader sx={{ tableLayout: 'fixed', minWidth: 1000 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell padding="checkbox" sx={{ width: 42 }}>
+                    <Checkbox
+                      checked={isAllShortPosPageSelected}
+                      indeterminate={
+                        !isAllShortPosPageSelected &&
+                        paginatedShortPositions.some((r) =>
+                          selectedShortPosIds.has(r.id)
+                        )
+                      }
+                      onChange={() => {
+                        if (isAllShortPosPageSelected) {
+                          setSelectedShortPosIds((prev) => {
+                            const next = new Set(prev);
+                            for (const row of paginatedShortPositions)
+                              next.delete(row.id);
+                            return next;
+                          });
+                        } else {
+                          selectAllShortPosOnPage();
+                        }
+                      }}
+                    />
+                  </TableCell>
+                  <TableCell
+                    sortDirection={
+                      shortPosOrderBy === 'entry_time' ? shortPosOrder : false
+                    }
+                    sx={{
+                      position: 'relative',
+                      width: shortPosColWidths.entry_time,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <TableSortLabel
+                      active={shortPosOrderBy === 'entry_time'}
+                      direction={
+                        shortPosOrderBy === 'entry_time' ? shortPosOrder : 'asc'
+                      }
+                      onClick={() => handleShortPosSort('entry_time')}
+                    >
+                      {t('tables.trend.openTime')}
+                    </TableSortLabel>
+                    {makeLSResizeHandle(
+                      'entry_time',
+                      shortPosColWidths,
+                      setShortPosColWidths
+                    )}
+                  </TableCell>
+                  <TableCell
+                    sortDirection={
+                      shortPosOrderBy === 'exit_time' ? shortPosOrder : false
+                    }
+                    sx={{
+                      position: 'relative',
+                      width: shortPosColWidths.exit_time,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <TableSortLabel
+                      active={shortPosOrderBy === 'exit_time'}
+                      direction={
+                        shortPosOrderBy === 'exit_time' ? shortPosOrder : 'asc'
+                      }
+                      onClick={() => handleShortPosSort('exit_time')}
+                    >
+                      {t('tables.trend.closeTime')}
+                    </TableSortLabel>
+                    {makeLSResizeHandle(
+                      'exit_time',
+                      shortPosColWidths,
+                      setShortPosColWidths
+                    )}
+                  </TableCell>
+                  <TableCell
+                    sortDirection={
+                      shortPosOrderBy === '_status' ? shortPosOrder : false
+                    }
+                    sx={{
+                      position: 'relative',
+                      width: shortPosColWidths._status,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <TableSortLabel
+                      active={shortPosOrderBy === '_status'}
+                      direction={
+                        shortPosOrderBy === '_status' ? shortPosOrder : 'asc'
+                      }
+                      onClick={() => handleShortPosSort('_status')}
+                    >
+                      {t('tables.trend.status')}
+                    </TableSortLabel>
+                    {makeLSResizeHandle(
+                      '_status',
+                      shortPosColWidths,
+                      setShortPosColWidths
+                    )}
+                  </TableCell>
+                  <TableCell
+                    sortDirection={
+                      shortPosOrderBy === 'layer_index' ? shortPosOrder : false
+                    }
+                    sx={{
+                      position: 'relative',
+                      width: shortPosColWidths.layer_index,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <TableSortLabel
+                      active={shortPosOrderBy === 'layer_index'}
+                      direction={
+                        shortPosOrderBy === 'layer_index'
+                          ? shortPosOrder
+                          : 'asc'
+                      }
+                      onClick={() => handleShortPosSort('layer_index')}
+                    >
+                      {t('tables.trend.layer')}
+                    </TableSortLabel>
+                    {makeLSResizeHandle(
+                      'layer_index',
+                      shortPosColWidths,
+                      setShortPosColWidths
+                    )}
+                  </TableCell>
+                  <TableCell
+                    sortDirection={
+                      shortPosOrderBy === 'retracement_count'
+                        ? shortPosOrder
+                        : false
+                    }
+                    sx={{
+                      position: 'relative',
+                      width: shortPosColWidths.retracement_count,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <TableSortLabel
+                      active={shortPosOrderBy === 'retracement_count'}
+                      direction={
+                        shortPosOrderBy === 'retracement_count'
+                          ? shortPosOrder
+                          : 'asc'
+                      }
+                      onClick={() => handleShortPosSort('retracement_count')}
+                    >
+                      {t('tables.trend.retrace')}
+                    </TableSortLabel>
+                    {makeLSResizeHandle(
+                      'retracement_count',
+                      shortPosColWidths,
+                      setShortPosColWidths
+                    )}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sortDirection={
+                      shortPosOrderBy === 'units' ? shortPosOrder : false
+                    }
+                    sx={{
+                      position: 'relative',
+                      width: shortPosColWidths.units,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <TableSortLabel
+                      active={shortPosOrderBy === 'units'}
+                      direction={
+                        shortPosOrderBy === 'units' ? shortPosOrder : 'asc'
+                      }
+                      onClick={() => handleShortPosSort('units')}
+                    >
+                      {t('tables.trend.units')}
+                    </TableSortLabel>
+                    {makeLSResizeHandle(
+                      'units',
+                      shortPosColWidths,
+                      setShortPosColWidths
+                    )}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sortDirection={
+                      shortPosOrderBy === 'entry_price' ? shortPosOrder : false
+                    }
+                    sx={{
+                      position: 'relative',
+                      width: shortPosColWidths.entry_price,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <TableSortLabel
+                      active={shortPosOrderBy === 'entry_price'}
+                      direction={
+                        shortPosOrderBy === 'entry_price'
+                          ? shortPosOrder
+                          : 'asc'
+                      }
+                      onClick={() => handleShortPosSort('entry_price')}
+                    >
+                      {t('tables.trend.entry')}
+                    </TableSortLabel>
+                    {makeLSResizeHandle(
+                      'entry_price',
+                      shortPosColWidths,
+                      setShortPosColWidths
+                    )}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sortDirection={
+                      shortPosOrderBy === 'exit_price' ? shortPosOrder : false
+                    }
+                    sx={{
+                      position: 'relative',
+                      width: shortPosColWidths.exit_price,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <TableSortLabel
+                      active={shortPosOrderBy === 'exit_price'}
+                      direction={
+                        shortPosOrderBy === 'exit_price' ? shortPosOrder : 'asc'
+                      }
+                      onClick={() => handleShortPosSort('exit_price')}
+                    >
+                      {t('tables.trend.exit')}
+                    </TableSortLabel>
+                    {makeLSResizeHandle(
+                      'exit_price',
+                      shortPosColWidths,
+                      setShortPosColWidths
+                    )}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sortDirection={
+                      shortPosOrderBy === '_pips' ? shortPosOrder : false
+                    }
+                    sx={{
+                      position: 'relative',
+                      width: shortPosColWidths._pips,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <TableSortLabel
+                      active={shortPosOrderBy === '_pips'}
+                      direction={
+                        shortPosOrderBy === '_pips' ? shortPosOrder : 'asc'
+                      }
+                      onClick={() => handleShortPosSort('_pips')}
+                    >
+                      {t('tables.trend.pips')}
+                    </TableSortLabel>
+                    {makeLSResizeHandle(
+                      '_pips',
+                      shortPosColWidths,
+                      setShortPosColWidths
+                    )}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sortDirection={
+                      shortPosOrderBy === '_pnl' ? shortPosOrder : false
+                    }
+                    sx={{
+                      position: 'relative',
+                      width: shortPosColWidths._pnl,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <TableSortLabel
+                      active={shortPosOrderBy === '_pnl'}
+                      direction={
+                        shortPosOrderBy === '_pnl' ? shortPosOrder : 'asc'
+                      }
+                      onClick={() => handleShortPosSort('_pnl')}
+                    >
+                      {t('tables.trend.pnl')}
+                    </TableSortLabel>
+                    {makeLSResizeHandle(
+                      '_pnl',
+                      shortPosColWidths,
+                      setShortPosColWidths
+                    )}
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {paginatedShortPositions.map((pos) => {
+                  const isOpen = pos._status === 'open';
+                  const entryP = pos.entry_price
+                    ? parseFloat(pos.entry_price)
+                    : null;
+                  const exitP = pos.exit_price
+                    ? parseFloat(pos.exit_price)
+                    : null;
+                  const units = Math.abs(pos.units ?? 0);
+                  let pnl: number | null = null;
+                  if (isOpen && currentPrice != null && entryP != null)
+                    pnl = (entryP - currentPrice) * units;
+                  else if (!isOpen && exitP != null && entryP != null)
+                    pnl = (entryP - exitP) * units;
+                  const posSelected = pos.id === selectedPosId;
+                  const shortChecked = selectedShortPosIds.has(pos.id);
+                  return (
+                    <TableRow
+                      key={pos.id}
+                      ref={posSelected ? selectedPosRowRef : undefined}
+                      hover
+                      onClick={() => onPosRowSelect(pos)}
+                      selected={posSelected}
+                      sx={{
+                        cursor: 'pointer',
+                        height: 37,
+                        ...(posSelected && {
+                          backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                          '&.Mui-selected': {
+                            backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                          },
+                          '&.Mui-selected:hover': {
+                            backgroundColor: 'rgba(245, 158, 11, 0.25)',
+                          },
+                        }),
+                      }}
+                    >
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={shortChecked}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => toggleShortPosSelection(pos.id)}
+                        />
+                      </TableCell>
+                      <TableCell
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {pos.entry_time
+                          ? new Date(pos.entry_time).toLocaleString()
+                          : '-'}
+                      </TableCell>
+                      <TableCell
+                        sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {pos.exit_time
+                          ? new Date(pos.exit_time).toLocaleString()
+                          : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={isOpen ? 'Open' : 'Closed'}
+                          color={isOpen ? 'success' : 'default'}
+                          variant="outlined"
+                          sx={{ height: 20, fontSize: '0.7rem' }}
+                        />
+                      </TableCell>
+                      <TableCell>{pos.layer_index ?? '-'}</TableCell>
+                      <TableCell>{pos.retracement_count ?? '-'}</TableCell>
+                      <TableCell align="right">{pos.units}</TableCell>
+                      <TableCell align="right">
+                        {entryP != null ? `¥${entryP.toFixed(3)}` : '-'}
+                      </TableCell>
+                      <TableCell align="right">
+                        {exitP != null ? `¥${exitP.toFixed(3)}` : '-'}
+                      </TableCell>
+                      <TableCell
+                        align="right"
+                        sx={{
+                          color: (() => {
+                            const pips = computePosPips(
+                              pos,
+                              currentPrice,
+                              pipSize
+                            );
+                            if (!pipSize) return 'text.secondary';
+                            return pips >= 0 ? 'success.main' : 'error.main';
+                          })(),
+                          fontWeight: 'bold',
+                        }}
+                      >
+                        {(() => {
+                          if (!pipSize) return '-';
+                          const hasPrice = isOpen
+                            ? currentPrice != null && entryP != null
+                            : exitP != null && entryP != null;
+                          if (!hasPrice) return '-';
+                          const pips = computePosPips(
+                            pos,
+                            currentPrice,
+                            pipSize
+                          );
+                          return `${pips >= 0 ? '+' : ''}${pips.toFixed(1)}`;
+                        })()}
+                      </TableCell>
+                      <TableCell
+                        align="right"
+                        sx={{
+                          color:
+                            pnl != null
+                              ? pnl >= 0
+                                ? 'success.main'
+                                : 'error.main'
+                              : 'text.secondary',
+                          fontWeight: 'bold',
+                        }}
+                      >
+                        {pnl != null
+                          ? `${pnl >= 0 ? '+' : ''}¥${pnl.toFixed(2)}`
+                          : '-'}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {paginatedShortPositions.length < shortPosRowsPerPage &&
+                  Array.from({
+                    length:
+                      shortPosRowsPerPage - paginatedShortPositions.length,
+                  }).map((_, i) => (
+                    <TableRow key={`spos-empty-${i}`} sx={{ height: 37 }}>
+                      <TableCell
+                        colSpan={11}
+                        sx={{
+                          backgroundColor: 'action.hover',
+                          borderBottom: '1px solid',
+                          borderColor: 'divider',
+                          py: 0,
+                        }}
+                      />
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+          <TablePagination
+            component="div"
+            count={sortedShortPositions.length}
+            page={shortPosPage}
+            onPageChange={(_e, newPage) => setShortPosPage(newPage)}
+            rowsPerPage={shortPosRowsPerPage}
+            onRowsPerPageChange={(e) => {
+              const newVal = parseInt(e.target.value, 10);
+              setShortPosRowsPerPage(newVal);
+              setShortPosPage(0);
+              setRowsPerPage(newVal);
+              setPage(0);
+              setPosRowsPerPage(newVal);
+              setPosPage(0);
+              setLongPosRowsPerPage(newVal);
+              setLongPosPage(0);
             }}
             rowsPerPageOptions={[10, 25, 50, 100]}
           />
@@ -3223,4 +4085,4 @@ export const TaskReplayPanel: React.FC<TaskReplayPanelProps> = ({
   );
 };
 
-export default TaskReplayPanel;
+export default TaskTrendPanel;
