@@ -151,6 +151,16 @@ class Order(models.Model):
         related_name="orders",
         help_text="Position this order belongs to",
     )
+    layer_index = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Layer index (cycle number for Snowball, layer number for Floor)",
+    )
+    retracement_count = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Retracement count (add count for Snowball, retracement count for Floor)",
+    )
     is_dry_run = models.BooleanField(
         default=False,
         db_index=True,

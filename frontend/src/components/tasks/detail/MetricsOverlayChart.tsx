@@ -29,6 +29,8 @@ export interface UseMetricsOverlayOptions {
   candleTimestamps?: number[];
   /** Current tick timestamp (ISO string) — used to extend metric drawing up to the position line */
   currentTickTimestamp?: string | null;
+  /** Guard ref to prevent metric data updates from disabling auto-follow on the parent chart */
+  programmaticScrollRef?: { current: boolean };
 }
 
 function resampleSnapshots(
@@ -103,6 +105,7 @@ export function useMetricsOverlay({
   chart,
   candleTimestamps,
   currentTickTimestamp,
+  programmaticScrollRef,
 }: UseMetricsOverlayOptions) {
   const seriesRef = useRef<ReturnType<typeof attachSeries> | null>(null);
   const attachedToChart = useRef<IChartApi | null>(null);
@@ -236,6 +239,19 @@ export function useMetricsOverlay({
     }
 
     try {
+      // Save the current visible range before calling setData so we can
+      // restore it afterwards.  lightweight-charts resets the scroll
+      // position to the last bar on setData, which causes the chart to
+      // jump when a running task is stopped (enableRealTimeUpdates flips
+      // to false, tickSec becomes null, and this effect re-runs).
+      const savedRange = chart?.timeScale().getVisibleLogicalRange();
+
+      // Guard all setData calls so the resulting visible-range changes
+      // don't disable auto-follow on the parent chart.
+      if (programmaticScrollRef) {
+        programmaticScrollRef.current = true;
+      }
+
       s.mr.setData(
         extended
           .filter((p) => p.mr !== null)
@@ -254,10 +270,18 @@ export function useMetricsOverlay({
           .filter((p) => p.vt !== null && (p.vt as number) > 0)
           .map((p) => ({ time: p.t as UTCTimestamp, value: p.vt as number }))
       );
+
+      // Restore the visible range so the chart doesn't jump.
+      if (savedRange) {
+        if (programmaticScrollRef) {
+          programmaticScrollRef.current = true;
+        }
+        chart?.timeScale().setVisibleLogicalRange(savedRange);
+      }
     } catch {
       // Chart disposed mid-update — ignore
     }
-  }, [snapshots, candleTimestamps, chart, tickSec]);
+  }, [snapshots, candleTimestamps, chart, tickSec, programmaticScrollRef]);
 
   return { hasData: snapshots.length > 0 };
 }

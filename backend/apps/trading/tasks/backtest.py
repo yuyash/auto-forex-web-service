@@ -192,6 +192,7 @@ def execute_backtest(task: BacktestTask) -> None:
         pip_size=resolved_pip_size,
         strategy_config=task.config,
         account_currency=task.account_currency or "USD",
+        hedging_enabled=task.hedging_enabled,
     )
 
     # Persist pip_size back to task if it was null

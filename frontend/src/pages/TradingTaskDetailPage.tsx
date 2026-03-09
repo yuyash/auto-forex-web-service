@@ -34,7 +34,7 @@ import { StatusBadge } from '../components/tasks/display/StatusBadge';
 import { TaskLogsTable } from '../components/tasks/detail/TaskLogsTable';
 import { TaskPositionsTable } from '../components/tasks/detail/TaskPositionsTable';
 import { TaskTradesTable } from '../components/tasks/detail/TaskTradesTable';
-import { TaskReplayPanel } from '../components/tasks/detail/TaskReplayPanel';
+import { TaskTrendPanel } from '../components/tasks/detail/TaskTrendPanel';
 import { TaskOrdersTable } from '../components/tasks/detail/TaskOrdersTable';
 import { useTaskSummary } from '../hooks/useTaskSummary';
 import { TaskStatus, TaskType } from '../types/common';
@@ -600,7 +600,7 @@ export default function TradingTaskDetailPage() {
 
         {/* Trend Tab */}
         <LazyTabPanel value={currentTabValue} index={1}>
-          <TaskReplayPanel
+          <TaskTrendPanel
             taskId={taskId}
             taskType={TaskType.TRADING}
             instrument={task.instrument}

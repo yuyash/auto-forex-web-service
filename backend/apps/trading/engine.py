@@ -36,6 +36,7 @@ class TradingEngine:
         pip_size: Decimal,
         strategy_config: StrategyConfiguration,
         account_currency: str = "",
+        hedging_enabled: bool = True,
     ) -> None:
         """Initialize trading engine.
 
@@ -44,15 +45,21 @@ class TradingEngine:
             pip_size: Pip size for instrument
             strategy_config: Strategy configuration
             account_currency: Account base currency (e.g., "JPY", "USD")
+            hedging_enabled: Whether hedging (simultaneous long/short) is allowed
         """
         self.instrument = instrument
         self.pip_size = pip_size
         self.strategy_config = strategy_config
         self.account_currency = account_currency
+        self.hedging_enabled = hedging_enabled
 
         # Create strategy based on type
         self.strategy = self._create_strategy()
         self.strategy.account_currency = account_currency
+
+        # Pass hedging flag to strategy if it supports it
+        if hasattr(self.strategy, "_hedging_enabled"):
+            self.strategy._hedging_enabled = hedging_enabled  # type: ignore[assignment]
 
         logger.info(
             "Initialized TradingEngine: instrument=%s, pip_size=%s, strategy=%s",

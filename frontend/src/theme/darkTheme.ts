@@ -235,6 +235,34 @@ const components = {
       },
     },
   },
+  MuiAlert: {
+    styleOverrides: {
+      standardInfo: {
+        color: palette.text.primary,
+        '& .MuiAlert-icon': {
+          color: palette.info.main,
+        },
+      },
+      standardWarning: {
+        color: palette.text.primary,
+        '& .MuiAlert-icon': {
+          color: palette.warning.main,
+        },
+      },
+      standardError: {
+        color: palette.text.primary,
+        '& .MuiAlert-icon': {
+          color: palette.error.main,
+        },
+      },
+      standardSuccess: {
+        color: palette.text.primary,
+        '& .MuiAlert-icon': {
+          color: palette.success.main,
+        },
+      },
+    },
+  },
 };
 
 const themeOptions: ThemeOptions = {

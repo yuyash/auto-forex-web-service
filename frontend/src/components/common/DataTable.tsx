@@ -69,8 +69,6 @@ interface DataTableProps<T> {
   defaultOrder?: Order;
   /** Fill remaining rows with empty placeholder rows to keep table height stable */
   fillEmptyRows?: boolean;
-  /** Row height for filler rows (should match data row height) */
-  fillerRowHeight?: number;
 }
 
 type Order = 'asc' | 'desc';
@@ -109,7 +107,6 @@ function DataTable<T extends object>({
   defaultOrderBy,
   defaultOrder,
   fillEmptyRows = false,
-  fillerRowHeight = 37,
 }: DataTableProps<T>): React.ReactElement {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(defaultRowsPerPage);
@@ -516,16 +513,34 @@ function DataTable<T extends object>({
               Array.from({
                 length: rowsPerPage - paginatedData.length,
               }).map((_, i) => (
-                <TableRow key={`filler-${i}`} sx={{ height: fillerRowHeight }}>
-                  <TableCell
-                    colSpan={columns.length + (selectable ? 1 : 0)}
-                    sx={{
-                      backgroundColor: 'action.hover',
-                      borderBottom: '1px solid',
-                      borderColor: 'divider',
-                      py: 0,
-                    }}
-                  />
+                <TableRow key={`filler-${i}`}>
+                  {selectable && (
+                    <TableCell
+                      padding="none"
+                      sx={{
+                        textAlign: 'center',
+                        backgroundColor: 'action.hover',
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                      }}
+                    >
+                      <Checkbox disabled sx={{ visibility: 'hidden' }} />
+                    </TableCell>
+                  )}
+                  {columns.map((column) => (
+                    <TableCell
+                      key={String(column.id)}
+                      align={column.align || 'left'}
+                      style={getColumnStyle(column)}
+                      sx={{
+                        backgroundColor: 'action.hover',
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                      }}
+                    >
+                      &nbsp;
+                    </TableCell>
+                  ))}
                 </TableRow>
               ))}
           </TableBody>

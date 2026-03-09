@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Box, Chip, Typography, Alert, TablePagination } from '@mui/material';
 import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
@@ -25,6 +26,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
   executionRunId,
   enableRealTimeUpdates = false,
 }) => {
+  const { t } = useTranslation('common');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(50);
   const [isReloading, setIsReloading] = useState(false);
@@ -119,7 +121,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
   const columns: Column<TaskOrder>[] = [
     {
       id: 'submitted_at',
-      label: 'Timestamp',
+      label: t('tables.orders.timestamp'),
       width: 180,
       minWidth: 140,
       render: (row) =>
@@ -127,13 +129,13 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     },
     {
       id: 'instrument',
-      label: 'Instrument',
+      label: t('tables.orders.instrument'),
       width: 110,
       minWidth: 80,
     },
     {
       id: 'order_type',
-      label: 'Type',
+      label: t('tables.orders.type'),
       width: 90,
       minWidth: 70,
       render: (row) => (
@@ -142,7 +144,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     },
     {
       id: 'direction',
-      label: 'Direction',
+      label: t('tables.orders.direction'),
       width: 90,
       minWidth: 70,
       render: (row) => {
@@ -169,7 +171,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     },
     {
       id: 'units',
-      label: 'Units',
+      label: t('tables.orders.units'),
       width: 90,
       minWidth: 70,
       align: 'right',
@@ -177,7 +179,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     },
     {
       id: 'status',
-      label: 'Status',
+      label: t('tables.orders.status'),
       width: 100,
       minWidth: 80,
       render: (row) => (
@@ -189,7 +191,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     },
     {
       id: 'requested_price',
-      label: 'Requested Price',
+      label: t('tables.orders.requestedPrice'),
       width: 130,
       minWidth: 100,
       align: 'right',
@@ -198,7 +200,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     },
     {
       id: 'fill_price',
-      label: 'Fill Price',
+      label: t('tables.orders.fillPrice'),
       width: 110,
       minWidth: 90,
       align: 'right',
@@ -207,14 +209,14 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     },
     {
       id: 'filled_at',
-      label: 'Filled At',
+      label: t('tables.orders.filledAt'),
       width: 180,
       minWidth: 140,
       render: (row) => (row.filled_at ? formatTimestamp(row.filled_at) : '-'),
     },
     {
       id: 'stop_loss',
-      label: 'Stop Loss',
+      label: t('tables.orders.stopLoss'),
       width: 110,
       minWidth: 90,
       align: 'right',
@@ -223,7 +225,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     },
     {
       id: 'error_message',
-      label: 'Error',
+      label: t('tables.orders.error'),
       width: 200,
       minWidth: 120,
       render: (row) =>
@@ -260,7 +262,9 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
           alignItems: 'center',
         }}
       >
-        <Typography variant="h6">Orders ({totalCount})</Typography>
+        <Typography variant="h6">
+          {t('tables.orders.title')} ({totalCount})
+        </Typography>
         <TableSelectionToolbar
           selectedCount={selection.selectedRowIds.size}
           onCopy={handleCopy}
@@ -275,7 +279,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
         columns={columns}
         data={orders}
         isLoading={isLoading}
-        emptyMessage="No orders"
+        emptyMessage={t('tables.orders.noOrders')}
         defaultRowsPerPage={rowsPerPage}
         rowsPerPageOptions={[rowsPerPage]}
         tableMaxHeight="none"

@@ -56,6 +56,7 @@ export const backtestTaskSchema = z
       .min(1, 'Instrument is required')
       .max(20, 'Instrument must be less than 20 characters'),
     sell_at_completion: z.boolean().optional().default(false),
+    hedging_enabled: z.boolean().optional().default(true),
   })
   .refine((data) => data.start_time < data.end_time, {
     message: 'Start date must be before end date',
@@ -160,6 +161,7 @@ export type BacktestTaskSchemaOutput = {
   pip_size?: number;
   instrument: string;
   sell_at_completion?: boolean;
+  hedging_enabled?: boolean;
 };
 export type TradingTaskFormData = z.infer<typeof tradingTaskSchema>;
 export type CopyTaskFormData = z.infer<typeof copyTaskSchema>;

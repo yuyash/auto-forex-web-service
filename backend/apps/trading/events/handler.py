@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from collections import defaultdict
+from collections.abc import Callable
 from decimal import Decimal
 from logging import Logger, getLogger
 
@@ -151,18 +151,26 @@ class EventHandler:
             )
 
         layer_number = event.layer_number
+        direction = Direction(event.direction)
         self._rehydrate_layer_positions(layer_number)
         stack = self.layer_position_ids.get(layer_number, [])
 
-        # Oldest first (entry-time order)
-        while stack:
-            candidate_id = stack[0]
+        # Oldest first (entry-time order), filtered by direction
+        stale_ids: list[str] = []
+        result: Position | None = None
+        for candidate_id in stack:
             candidate = self._get_open_position_by_id(candidate_id)
-            if candidate:
-                return candidate
-            stack.pop(0)
+            if not candidate:
+                stale_ids.append(candidate_id)
+                continue
+            if candidate.direction == direction.value:
+                result = candidate
+                break
+        for sid in stale_ids:
+            stack.remove(sid)
+        if result:
+            return result
 
-        direction = Direction(event.direction)
         fallback = (
             Position.objects.filter(
                 task_type=self.order_service.task_type,
@@ -361,6 +369,7 @@ class EventHandler:
             override_price=event.price if event.price else None,
             tick_timestamp=event.timestamp,
             retracement_count=event.retracement_count,
+            planned_exit_price=event.planned_exit_price,
         )
 
         self._cache_position(event.layer_number, position)

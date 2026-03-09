@@ -83,6 +83,7 @@ interface ReviewContentProps {
     pip_size?: number;
     instrument: string;
     sell_at_completion?: boolean;
+    hedging_enabled?: boolean;
   };
 }
 
@@ -197,6 +198,17 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
           {sell_at_completion ? t('common:labels.yes') : t('common:labels.no')}
         </Typography>
       </Grid>
+
+      <Grid size={{ xs: 12 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          {t('backtest:form.hedgingEnabled')}
+        </Typography>
+        <Typography variant="body1">
+          {formValues.hedging_enabled !== false
+            ? t('common:labels.yes')
+            : t('common:labels.no')}
+        </Typography>
+      </Grid>
     </Grid>
   );
 }
@@ -233,6 +245,7 @@ export default function BacktestTaskForm({
       pip_size: 0.01,
       instrument: 'USD_JPY',
       sell_at_completion: false,
+      hedging_enabled: true,
     };
 
     return {
@@ -430,6 +443,7 @@ export default function BacktestTaskForm({
       ...(completeData.pip_size != null && { pip_size: completeData.pip_size }),
       instrument: completeData.instrument,
       sell_at_completion: completeData.sell_at_completion,
+      hedging_enabled: completeData.hedging_enabled,
     };
 
     try {
@@ -747,6 +761,37 @@ export default function BacktestTaskForm({
                   )}
                 />
               </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <Controller
+                  name="hedging_enabled"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={field.value ?? true}
+                          onChange={(e) => field.onChange(e.target.checked)}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body1">
+                            {t('backtest:form.hedgingEnabled')}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mt: 0.5 }}
+                          >
+                            {t('backtest:form.hedgingDescription')}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  )}
+                />
+              </Grid>
             </Grid>
           </Box>
         );
@@ -765,6 +810,7 @@ export default function BacktestTaskForm({
           pip_size: formData.pip_size as number | undefined,
           instrument: formData.instrument as string,
           sell_at_completion: formData.sell_at_completion as boolean,
+          hedging_enabled: formData.hedging_enabled as boolean | undefined,
         };
 
         // Field name mapping for user-friendly error messages

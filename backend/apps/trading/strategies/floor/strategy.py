@@ -219,6 +219,15 @@ class FloorStrategy(Strategy):
         entry_id = floor_state.next_entry_id
         floor_state.next_entry_id += 1
 
+        # Calculate planned exit price from entry price and take-profit pips
+        if take_profit_pips and take_profit_pips > 0:
+            if direction == "long":
+                planned_exit_price = entry_price + take_profit_pips * self.pip_size
+            else:
+                planned_exit_price = entry_price - take_profit_pips * self.pip_size
+        else:
+            planned_exit_price = None
+
         floor_state.floor_directions[floor_index] = direction
         floor_state.open_entries.append(
             {
@@ -244,6 +253,7 @@ class FloorStrategy(Strategy):
                 entry_time=tick.timestamp,
                 retracement_count=1,
                 entry_id=entry_id,
+                planned_exit_price=planned_exit_price,
             )
 
         retracement_count = floor_state.floor_retracement_counts.get(floor_index, 0)
@@ -257,6 +267,7 @@ class FloorStrategy(Strategy):
             entry_time=tick.timestamp,
             retracement_count=retracement_count,
             entry_id=entry_id,
+            planned_exit_price=planned_exit_price,
         )
 
     @staticmethod

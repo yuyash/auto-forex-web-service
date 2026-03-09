@@ -144,6 +144,10 @@ class TradingTask(UUIDModel):
         default=Decimal("0.01"),
         help_text="Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account.",
     )
+    hedging_enabled = models.BooleanField(
+        default=True,
+        help_text="Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account.",
+    )
     strategy_state = models.JSONField(
         default=dict,
         blank=True,

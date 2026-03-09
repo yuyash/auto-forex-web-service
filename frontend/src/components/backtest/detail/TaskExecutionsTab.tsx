@@ -114,7 +114,7 @@ export function TaskExecutionsTab({
     <Box sx={{ px: 3 }}>
       {/* Backtest Period */}
       {task && (
-        <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
+        <Paper sx={{ p: 2, mb: 3, bgcolor: 'action.hover' }}>
           <Typography variant="subtitle2" color="text.secondary" gutterBottom>
             Backtest Period
           </Typography>

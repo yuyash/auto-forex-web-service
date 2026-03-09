@@ -100,6 +100,13 @@ class Position(models.Model):
         default=Decimal("0"),
         help_text="Unrealized PnL based on the latest tick price. Updated each tick batch.",
     )
+    planned_exit_price = models.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        null=True,
+        blank=True,
+        help_text="Planned exit price calculated at order time (e.g. take-profit target)",
+    )
     oanda_trade_id = models.CharField(
         max_length=64,
         null=True,
@@ -134,6 +141,27 @@ class Position(models.Model):
     def __str__(self) -> str:
         status = "OPEN" if self.is_open else "CLOSED"
         return f"{status} {self.direction} {self.units} {self.instrument} @ {self.entry_price}"
+
+    def save(self, *args, **kwargs) -> None:
+        """Override save to enforce planned_exit_price immutability.
+
+        Once planned_exit_price is set and persisted, it cannot be changed.
+        """
+        if self.pk:
+            update_fields = kwargs.get("update_fields")
+            if update_fields is None or "planned_exit_price" in update_fields:
+                try:
+                    existing = (
+                        Position.objects.filter(pk=self.pk)
+                        .values_list("planned_exit_price", flat=True)
+                        .first()
+                    )
+                except Position.DoesNotExist:
+                    existing = None
+                if existing is not None and self.planned_exit_price != existing:
+                    # Silently preserve the original value
+                    self.planned_exit_price = existing
+        super().save(*args, **kwargs)
 
     def close(self, exit_price: Decimal, exit_time: models.DateTimeField) -> None:
         """
