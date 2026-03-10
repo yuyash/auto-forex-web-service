@@ -170,7 +170,12 @@ export const useTaskPositions = ({
               for (const p of incoming) {
                 map.set(p.id, p);
               }
-              return Array.from(map.values());
+              const merged = Array.from(map.values());
+              // Cap to pageSize so the table never shows more rows than
+              // the current page should contain.
+              return merged.length > pageSize
+                ? merged.slice(0, pageSize)
+                : merged;
             });
           }
           // Always update totalCount from server (it reflects the full count).
