@@ -2132,31 +2132,36 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       const isClose =
         executionMethod === 'take_profit' ||
         executionMethod === 'margin_protection' ||
-        executionMethod === 'volatility_lock';
+        executionMethod === 'volatility_lock' ||
+        executionMethod === 'close_position' ||
+        executionMethod === 'volatility_hedge_neutralize';
+
+      // Resolve direction: use explicit field first, then infer from units sign
+      const direction: 'long' | 'short' =
+        t.direction === 'long' || t.direction === 'short'
+          ? t.direction
+          : Number.isFinite(units) && units < 0
+            ? 'short'
+            : 'long';
 
       const lotLabel = lots === null ? '' : `${Math.round(lots)}L`;
-      // Open: "OPEN SHORT 1L", Close: "CLOSE 1L"
+      // Open: "OPEN LONG 1L" / "OPEN SHORT 1L", Close: "CLOSE LONG 1L" / "CLOSE SHORT 1L"
+      const dirLabel = direction === 'long' ? 'LONG' : 'SHORT';
       const text = isClose
-        ? `CLOSE ${lotLabel}`.trim()
-        : `OPEN ${t.direction === 'long' ? 'LONG' : t.direction === 'short' ? 'SHORT' : ''} ${lotLabel}`.trim();
+        ? `CLOSE ${dirLabel} ${lotLabel}`.trim()
+        : `OPEN ${dirLabel} ${lotLabel}`.trim();
 
       return {
         time: t.timeSec,
         position:
-          t.direction === 'short'
-            ? ('aboveBar' as const)
-            : ('belowBar' as const),
+          direction === 'short' ? ('aboveBar' as const) : ('belowBar' as const),
         shape:
-          t.direction === 'short'
-            ? ('arrowDown' as const)
-            : ('arrowUp' as const),
+          direction === 'short' ? ('arrowDown' as const) : ('arrowUp' as const),
         color: selected
           ? '#f59e0b'
-          : t.direction === 'long'
+          : direction === 'long'
             ? '#16a34a'
-            : t.direction === 'short'
-              ? '#ef4444'
-              : '#9ca3af',
+            : '#ef4444',
         text,
       };
     });
