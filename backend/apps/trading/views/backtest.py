@@ -207,7 +207,7 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
             task = self.task_service.start_task(task)
             serializer = self.get_serializer(task)
             logger.info(
-                f"[API:START] SUCCESS - task_id={task.pk}, celery_task_id={task.celery_task_id}, "
+                f"[API:START] SUCCESS - task_id={task.pk}, execution_id={task.execution_id}, "
                 f"new_status={task.status}"
             )
             return Response({"results": serializer.data})
@@ -249,7 +249,7 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
 
         logger.info(
             f"[API:STOP] Request received - task_id={task.pk}, user_id={request.user.pk}, "
-            f"current_status={task.status}, celery_task_id={task.celery_task_id}"
+            f"current_status={task.status}, execution_id={task.execution_id}"
         )
 
         try:
@@ -348,7 +348,7 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
 
         logger.info(
             f"[API:RESTART] Request received - task_id={task.pk}, user_id={request.user.pk}, "
-            f"current_status={task.status}, celery_task_id={task.celery_task_id}"
+            f"current_status={task.status}, execution_id={task.execution_id}"
         )
 
         try:
@@ -358,7 +358,7 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
             serializer = self.get_serializer(task)
             logger.info(
                 f"[API:RESTART] SUCCESS - task_id={task.pk}, new_status={task.status}, "
-                f"new_celery_task_id={task.celery_task_id}"
+                f"new_execution_id={task.execution_id}"
             )
             return Response({"results": serializer.data})
 
@@ -421,7 +421,7 @@ class BacktestTaskViewSet(TaskSubResourceMixin, ModelViewSet):
             task = self.task_service.resume_task(task.pk)
             serializer = self.get_serializer(task)
             logger.info(
-                f"[API:RESUME] SUCCESS - task_id={task.pk}, new_celery_task_id={task.celery_task_id}"
+                f"[API:RESUME] SUCCESS - task_id={task.pk}, new_execution_id={task.execution_id}"
             )
             return Response({"results": serializer.data})
 

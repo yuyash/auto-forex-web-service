@@ -102,4 +102,4 @@ class TestTaskLoggingSession:
         assert result is False
 
     def test_default_logger_names(self):
-        assert DEFAULT_TASK_LOGGER_NAMES == ("apps.trading",)
+        assert DEFAULT_TASK_LOGGER_NAMES == ("apps.trading", "position.lifecycle")

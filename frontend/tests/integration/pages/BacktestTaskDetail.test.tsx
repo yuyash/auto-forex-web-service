@@ -68,7 +68,13 @@ vi.mock('../../../src/hooks/useTaskSummary', () => ({
       timestamp: null,
       pnl: { realized: 0, unrealized: 0 },
       counts: { totalTrades: 0, openPositions: 0, closedPositions: 0 },
-      execution: { currentBalance: null, ticksProcessed: 0 },
+      execution: {
+        currentBalance: null,
+        ticksProcessed: 0,
+        accountCurrency: null,
+        currentBalanceDisplay: null,
+        displayCurrency: null,
+      },
       tick: { timestamp: null, bid: null, ask: null, mid: null },
       task: {
         status: '',

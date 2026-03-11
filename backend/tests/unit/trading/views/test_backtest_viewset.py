@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pytest
 from rest_framework import status as http_status
@@ -15,12 +16,12 @@ from apps.trading.views.backtest import BacktestTaskViewSet
 factory = APIRequestFactory()
 
 
-def _make_task(pk=1, task_status=TaskStatus.CREATED, celery_task_id="celery-1", name="bt-1"):
+def _make_task(pk=1, task_status=TaskStatus.CREATED, execution_id=None, name="bt-1"):
     task = MagicMock()
     task.pk = pk
     task.id = pk
     task.status = task_status
-    task.celery_task_id = celery_task_id
+    task.execution_id = execution_id or uuid4()
     task.name = name
     task.instrument = "EUR_USD"
     task.start_time = None

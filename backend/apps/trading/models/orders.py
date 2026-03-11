@@ -51,15 +51,11 @@ class Order(models.Model):
         db_index=True,
         help_text="UUID of the task this order belongs to",
     )
-    execution_run_id = models.PositiveIntegerField(
-        default=0,
+    execution_id = models.UUIDField(
+        null=True,
+        blank=True,
         db_index=True,
-        help_text="Execution run identifier for run-scoped order queries",
-    )
-    celery_task_id = models.CharField(
-        max_length=255,
-        db_index=True,
-        help_text="Celery task ID for tracking which execution run created this order",
+        help_text="Execution run UUID (shared with Celery task_id)",
     )
     broker_order_id = models.CharField(
         max_length=255,
@@ -90,7 +86,7 @@ class Order(models.Model):
         choices=Direction.choices,
         null=True,
         blank=True,
-        help_text="Order direction (LONG/SHORT). Null for trade-close orders (e.g. take profit).",
+        help_text="Order direction (LONG/SHORT). Matches the original position direction for close orders.",
     )
     units = models.IntegerField(
         help_text="Number of units to trade (positive for long, negative for short)",
@@ -183,7 +179,7 @@ class Order(models.Model):
         ordering = ["-submitted_at"]
         indexes = [
             models.Index(fields=["task_type", "task_id", "-submitted_at"]),
-            models.Index(fields=["task_type", "task_id", "execution_run_id", "-submitted_at"]),
+            models.Index(fields=["task_type", "task_id", "execution_id", "-submitted_at"]),
             models.Index(fields=["task_type", "task_id", "instrument", "status"]),
             models.Index(fields=["status", "-submitted_at"]),
             models.Index(fields=["broker_order_id"]),

@@ -35,15 +35,11 @@ class Position(models.Model):
         db_index=True,
         help_text="UUID of the task this position belongs to",
     )
-    execution_run_id = models.PositiveIntegerField(
-        default=0,
+    execution_id = models.UUIDField(
+        null=True,
+        blank=True,
         db_index=True,
-        help_text="Execution run identifier for run-scoped position queries",
-    )
-    celery_task_id = models.CharField(
-        max_length=255,
-        db_index=True,
-        help_text="Celery task ID for tracking which execution run created this position",
+        help_text="Execution run UUID (shared with Celery task_id)",
     )
     instrument = models.CharField(
         max_length=32,
@@ -131,8 +127,7 @@ class Position(models.Model):
         ordering = ["-entry_time"]
         indexes = [
             models.Index(fields=["task_type", "task_id", "-entry_time"]),
-            models.Index(fields=["task_type", "task_id", "execution_run_id", "-entry_time"]),
-            models.Index(fields=["task_type", "task_id", "celery_task_id", "-entry_time"]),
+            models.Index(fields=["task_type", "task_id", "execution_id", "-entry_time"]),
             models.Index(fields=["task_type", "task_id", "instrument", "is_open"]),
             models.Index(fields=["is_open", "-entry_time"]),
             models.Index(fields=["instrument", "is_open"]),

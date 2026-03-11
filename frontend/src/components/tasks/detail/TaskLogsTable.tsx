@@ -10,17 +10,23 @@ import {
   Box,
   Chip,
   FormControl,
+  IconButton,
   InputLabel,
   MenuItem,
   Select,
+  Tooltip,
   Typography,
   Alert,
   TablePagination,
+  TextField,
+  type SelectChangeEvent,
 } from '@mui/material';
+import FilterListOffIcon from '@mui/icons-material/FilterListOff';
 import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
 import { useTaskLogs, type TaskLog } from '../../../hooks/useTaskLogs';
+import { useTaskLogComponents } from '../../../hooks/useTaskLogComponents';
 import { TaskType } from '../../../types/common';
 
 interface TaskLogsTableProps {
@@ -37,16 +43,30 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
   enableRealTimeUpdates = false,
 }) => {
   const { t } = useTranslation('common');
-  const [levelFilter, setLevelFilter] = useState<string>('');
+  const [levelFilter, setLevelFilter] = useState<string[]>([]);
+  const [componentFilter, setComponentFilter] = useState<string[]>([]);
+  const [timestampFrom, setTimestampFrom] = useState<string>('');
+  const [timestampTo, setTimestampTo] = useState<string>('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(100);
   const [isReloading, setIsReloading] = useState(false);
+
+  const { components: availableComponents } = useTaskLogComponents({
+    taskId,
+    taskType,
+    executionRunId,
+  });
 
   const { logs, totalCount, isLoading, error, refetch } = useTaskLogs({
     taskId,
     taskType,
     executionRunId,
-    level: levelFilter || undefined,
+    level: levelFilter.length > 0 ? levelFilter : undefined,
+    component: componentFilter.length > 0 ? componentFilter : undefined,
+    timestampFrom: timestampFrom
+      ? new Date(timestampFrom).toISOString()
+      : undefined,
+    timestampTo: timestampTo ? new Date(timestampTo).toISOString() : undefined,
     page: page + 1,
     pageSize: rowsPerPage,
     enableRealTimeUpdates,
@@ -89,8 +109,17 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     );
   }, [logs, selection]);
 
-  const handleLevelFilterChange = (value: string) => {
-    setLevelFilter(value);
+  const handleLevelFilterChange = (event: SelectChangeEvent<string[]>) => {
+    const value = event.target.value;
+    setLevelFilter(typeof value === 'string' ? value.split(',') : value);
+    setPage(0);
+  };
+
+  const handleComponentFilterChange = (
+    _event: React.SyntheticEvent,
+    value: string[]
+  ) => {
+    setComponentFilter(value);
     setPage(0);
   };
 
@@ -188,17 +217,30 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
           display: 'flex',
           gap: 2,
           alignItems: 'center',
+          flexWrap: 'wrap',
         }}
       >
         <Typography variant="h6">{t('tables.logs.title')}</Typography>
-        <FormControl sx={{ minWidth: 150 }}>
+        <FormControl sx={{ minWidth: 200 }} size="small">
           <InputLabel>{t('tables.logs.levelFilter')}</InputLabel>
           <Select
+            multiple
             value={levelFilter}
             label={t('tables.logs.levelFilter')}
-            onChange={(e) => handleLevelFilterChange(e.target.value)}
+            onChange={handleLevelFilterChange}
+            renderValue={(selected) => (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {selected.map((v) => (
+                  <Chip
+                    key={v}
+                    label={v}
+                    size="small"
+                    color={getLevelColor(v)}
+                  />
+                ))}
+              </Box>
+            )}
           >
-            <MenuItem value="">{t('tables.logs.allLevels')}</MenuItem>
             <MenuItem value="DEBUG">Debug</MenuItem>
             <MenuItem value="INFO">Info</MenuItem>
             <MenuItem value="WARNING">Warning</MenuItem>
@@ -206,6 +248,72 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
             <MenuItem value="CRITICAL">Critical</MenuItem>
           </Select>
         </FormControl>
+        <FormControl sx={{ minWidth: 350 }} size="small">
+          <InputLabel>{t('tables.logs.componentFilter')}</InputLabel>
+          <Select<string[]>
+            multiple
+            value={componentFilter}
+            label={t('tables.logs.componentFilter')}
+            onChange={(e: SelectChangeEvent<string[]>) => {
+              const value = e.target.value;
+              handleComponentFilterChange(
+                e as unknown as React.SyntheticEvent,
+                typeof value === 'string' ? value.split(',') : value
+              );
+            }}
+            renderValue={(selected: string[]) => (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                {selected.map((v: string) => (
+                  <Chip key={v} label={v} size="small" />
+                ))}
+              </Box>
+            )}
+          >
+            {availableComponents.map((comp) => (
+              <MenuItem key={comp} value={comp}>
+                {comp}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <TextField
+          label={t('tables.logs.timestampFrom')}
+          type="datetime-local"
+          size="small"
+          value={timestampFrom}
+          onChange={(e) => {
+            setTimestampFrom(e.target.value);
+            setPage(0);
+          }}
+          slotProps={{ inputLabel: { shrink: true } }}
+          sx={{ minWidth: 200 }}
+        />
+        <TextField
+          label={t('tables.logs.timestampTo')}
+          type="datetime-local"
+          size="small"
+          value={timestampTo}
+          onChange={(e) => {
+            setTimestampTo(e.target.value);
+            setPage(0);
+          }}
+          slotProps={{ inputLabel: { shrink: true } }}
+          sx={{ minWidth: 200 }}
+        />
+        <Tooltip title={t('tables.logs.resetFilters')}>
+          <IconButton
+            size="small"
+            onClick={() => {
+              setLevelFilter([]);
+              setComponentFilter([]);
+              setTimestampFrom('');
+              setTimestampTo('');
+              setPage(0);
+            }}
+          >
+            <FilterListOffIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
         <Box sx={{ flex: 1 }} />
         <TableSelectionToolbar
           selectedCount={selection.selectedRowIds.size}

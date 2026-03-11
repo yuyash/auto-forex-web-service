@@ -38,6 +38,9 @@ export interface CountsInfo {
 export interface ExecutionInfo {
   currentBalance: number | null;
   ticksProcessed: number;
+  accountCurrency: string | null;
+  currentBalanceDisplay: number | null;
+  displayCurrency: string | null;
 }
 
 export interface TaskInfo {
@@ -73,7 +76,13 @@ const INITIAL_SUMMARY: TaskSummary = {
   timestamp: null,
   pnl: { realized: 0, unrealized: 0 },
   counts: { totalTrades: 0, openPositions: 0, closedPositions: 0 },
-  execution: { currentBalance: null, ticksProcessed: 0 },
+  execution: {
+    currentBalance: null,
+    ticksProcessed: 0,
+    accountCurrency: null,
+    currentBalanceDisplay: null,
+    displayCurrency: null,
+  },
   tick: { timestamp: null, bid: null, ask: null, mid: null },
   task: {
     status: '',
@@ -150,6 +159,12 @@ export function useTaskSummary(
               ? parseFloat(d.execution.current_balance)
               : null,
           ticksProcessed: d.execution?.ticks_processed ?? 0,
+          accountCurrency: d.execution?.account_currency ?? null,
+          currentBalanceDisplay:
+            d.execution?.current_balance_display != null
+              ? parseFloat(d.execution.current_balance_display)
+              : null,
+          displayCurrency: d.execution?.display_currency ?? null,
         },
         tick: {
           timestamp: d.tick?.timestamp ?? null,

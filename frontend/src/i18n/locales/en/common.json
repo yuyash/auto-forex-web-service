@@ -217,6 +217,7 @@
   "tables": {
     "trades": {
       "title": "Trades",
+      "tradeId": "Trade ID",
       "timestamp": "Timestamp",
       "instrument": "Instrument",
       "type": "Type",
@@ -225,10 +226,12 @@
       "price": "Price",
       "layer": "Layer",
       "retracement": "Retracement",
-      "noTrades": "No trades recorded"
+      "noTrades": "No trades recorded",
+      "description": "Description"
     },
     "orders": {
       "title": "Orders",
+      "orderId": "Order ID",
       "timestamp": "Timestamp",
       "instrument": "Instrument",
       "type": "Type",
@@ -247,6 +250,7 @@
       "openPositions": "Open Positions",
       "longPositions": "Long Positions",
       "shortPositions": "Short Positions",
+      "positionId": "Position ID",
       "openTimestamp": "Open Timestamp",
       "closeTimestamp": "Close Timestamp",
       "instrument": "Instrument",
@@ -262,7 +266,16 @@
       "totalRealizedPnl": "Total Realized PnL",
       "totalUnrealizedPnl": "Total Unrealized PnL",
       "noLongPositions": "No long positions",
-      "noShortPositions": "No short positions"
+      "noShortPositions": "No short positions",
+      "lifecycle": {
+        "title": "Position Lifecycle",
+        "viewLifecycle": "View position lifecycle",
+        "searchLabel": "Position ID",
+        "searchPlaceholder": "Enter position ID or prefix (e.g. first 8 chars)",
+        "enterPositionId": "Enter a position ID to view its lifecycle.",
+        "noLogs": "No lifecycle logs found for this position.",
+        "close": "Close"
+      }
     },
     "events": {
       "title": "Task Events",
@@ -276,7 +289,9 @@
       "taskEvents": "Task Events",
       "tradingEvents": "Trading Events",
       "strategyEvents": "Strategy Events",
-      "noEvents": "No events available"
+      "noEvents": "No events available",
+      "detailTitle": "Event Detail",
+      "copyJson": "Copy JSON"
     },
     "logs": {
       "title": "Task Logs",
@@ -286,7 +301,11 @@
       "message": "Message",
       "levelFilter": "Level Filter",
       "allLevels": "All Levels",
-      "noLogs": "No logs available"
+      "componentFilter": "Logger Filter",
+      "timestampFrom": "From",
+      "timestampTo": "To",
+      "noLogs": "No logs available",
+      "resetFilters": "Reset Filters"
     },
     "trend": {
       "executionId": "Execution ID",

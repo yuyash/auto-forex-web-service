@@ -141,7 +141,8 @@ class TestHandleExceptionTrading:
         from apps.trading.tasks.trading import handle_exception
 
         task_id = uuid4()
-        task = MagicMock(pk=task_id, celery_task_id="c-123")
+        execution_id = uuid4()
+        task = MagicMock(pk=task_id, execution_id=execution_id)
 
         with patch("apps.trading.models.celery.CeleryTaskStatus") as mock_cs:
             mock_cs.Status.FAILED = "failed"
@@ -156,7 +157,7 @@ class TestHandleExceptionTrading:
     def test_error_message_stored(self, mock_tz, mock_log):
         from apps.trading.tasks.trading import handle_exception
 
-        task = MagicMock(pk=uuid4(), celery_task_id="c-456")
+        task = MagicMock(pk=uuid4(), execution_id=uuid4())
 
         with patch("apps.trading.models.celery.CeleryTaskStatus") as mock_cs:
             mock_cs.Status.FAILED = "failed"
@@ -258,11 +259,14 @@ class TestStopTradingTask:
         from apps.trading.tasks.trading import stop_trading_task
 
         task_id = uuid4()
-        task = MagicMock(pk=task_id, status=TaskStatus.STOPPING, celery_task_id="c-000")
+        execution_id = uuid4()
+        task = MagicMock(pk=task_id, status=TaskStatus.STOPPING, execution_id=execution_id)
         mock_model.objects.get.return_value = task
         mock_model.DoesNotExist = _DoesNotExist
         mock_celery.Status.STOPPED = "stopped"
 
         stop_trading_task.__wrapped__(task_id, "immediate")
 
-        mock_app.control.revoke.assert_called_once_with("c-000", terminate=True, signal="SIGKILL")
+        mock_app.control.revoke.assert_called_once_with(
+            str(execution_id), terminate=True, signal="SIGKILL"
+        )

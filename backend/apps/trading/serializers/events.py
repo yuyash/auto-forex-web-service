@@ -35,7 +35,7 @@ class TradingEventSerializer(serializers.ModelSerializer):
             "instrument",
             "task_type",
             "task_id",
-            "execution_run_id",
+            "execution_id",
             "details",
             "created_at",
         ]
@@ -75,7 +75,7 @@ class StrategyEventSerializer(serializers.ModelSerializer):
             "instrument",
             "task_type",
             "task_id",
-            "execution_run_id",
+            "execution_id",
             "details",
             "created_at",
         ]
@@ -102,6 +102,7 @@ class TradeSerializer(serializers.Serializer):
     )
     layer_index = serializers.IntegerField(required=False, allow_null=True)
     retracement_count = serializers.IntegerField(required=False, allow_null=True)
+    description = serializers.CharField(required=False, allow_blank=True, default="")
     timestamp = serializers.DateTimeField()
     position_id = serializers.UUIDField(required=False, allow_null=True)
     updated_at = serializers.DateTimeField(required=False, allow_null=True)

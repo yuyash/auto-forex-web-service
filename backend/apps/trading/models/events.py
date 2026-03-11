@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from django.db import models
 
@@ -39,17 +40,11 @@ class TradingEvent(models.Model):
 
     task_type = models.CharField(max_length=32, blank=True, default="", db_index=True)
     task_id = models.UUIDField(null=True, blank=True, db_index=True)
-    execution_run_id = models.PositiveIntegerField(
-        default=0,
-        db_index=True,
-        help_text="Execution run identifier for run-scoped event queries",
-    )
-    celery_task_id = models.CharField(
-        max_length=255,
+    execution_id = models.UUIDField(
         null=True,
         blank=True,
         db_index=True,
-        help_text="Celery task ID for tracking specific execution",
+        help_text="Execution run UUID (shared with Celery task_id)",
     )
 
     details = models.JSONField(default=dict, blank=True)
@@ -78,8 +73,7 @@ class TradingEvent(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["task_type", "task_id", "-created_at"]),
-            models.Index(fields=["task_type", "task_id", "execution_run_id", "-created_at"]),
-            models.Index(fields=["task_type", "task_id", "celery_task_id", "-created_at"]),
+            models.Index(fields=["task_type", "task_id", "execution_id", "-created_at"]),
             models.Index(fields=["event_type", "-created_at"]),
         ]
 
@@ -92,15 +86,14 @@ class TradingEvent(models.Model):
         *,
         event: "StrategyEvent",
         context: "EventContext",
-        celery_task_id: str | None = None,
-        execution_run_id: int = 0,
+        execution_id: UUID | str | None = None,
     ) -> "TradingEvent":
         """Create a TradingEvent instance from a StrategyEvent.
 
         Args:
             event: Strategy event to convert
             context: Event context with user, account, instrument, task info
-            celery_task_id: Optional Celery task ID
+            execution_id: Execution run UUID
 
         Returns:
             TradingEvent: New TradingEvent instance (not saved to database)
@@ -108,8 +101,7 @@ class TradingEvent(models.Model):
         return cls(
             task_type=context.task_type.value,
             task_id=context.task_id,
-            execution_run_id=execution_run_id,
-            celery_task_id=celery_task_id,
+            execution_id=execution_id,
             event_type=event.event_type,
             severity="info",
             description=str(event.to_dict()),
@@ -149,17 +141,11 @@ class StrategyEventRecord(models.Model):
 
     task_type = models.CharField(max_length=32, blank=True, default="", db_index=True)
     task_id = models.UUIDField(null=True, blank=True, db_index=True)
-    execution_run_id = models.PositiveIntegerField(
-        default=0,
-        db_index=True,
-        help_text="Execution run identifier for run-scoped event queries",
-    )
-    celery_task_id = models.CharField(
-        max_length=255,
+    execution_id = models.UUIDField(
         null=True,
         blank=True,
         db_index=True,
-        help_text="Celery task ID for tracking specific execution",
+        help_text="Execution run UUID (shared with Celery task_id)",
     )
 
     details = models.JSONField(default=dict, blank=True)
@@ -172,7 +158,7 @@ class StrategyEventRecord(models.Model):
         ordering = ["-created_at"]
         indexes = [
             models.Index(fields=["task_type", "task_id", "-created_at"]),
-            models.Index(fields=["task_type", "task_id", "execution_run_id", "-created_at"]),
+            models.Index(fields=["task_type", "task_id", "execution_id", "-created_at"]),
             models.Index(fields=["event_type", "-created_at"]),
         ]
 
@@ -185,15 +171,13 @@ class StrategyEventRecord(models.Model):
         *,
         event: "StrategyEvent",
         context: "EventContext",
-        celery_task_id: str | None = None,
-        execution_run_id: int = 0,
+        execution_id: UUID | str | None = None,
     ) -> "StrategyEventRecord":
         """Create a StrategyEventRecord from a StrategyEvent."""
         return cls(
             task_type=context.task_type.value,
             task_id=context.task_id,
-            execution_run_id=execution_run_id,
-            celery_task_id=celery_task_id,
+            execution_id=execution_id,
             event_type=event.event_type,
             severity="info",
             description=str(event.to_dict()),

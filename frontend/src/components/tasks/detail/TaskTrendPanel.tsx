@@ -2145,8 +2145,8 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
             : 'long';
 
       const lotLabel = lots === null ? '' : `${Math.round(lots)}L`;
-      // Open: "OPEN LONG 1L" / "OPEN SHORT 1L", Close: "CLOSE LONG 1L" / "CLOSE SHORT 1L"
-      const dirLabel = direction === 'long' ? 'LONG' : 'SHORT';
+      const dirLabel = direction.toUpperCase();
+      // Open: "OPEN LONG 1L" / "OPEN SHORT 1L", Close: "CLOSE LONG 1L" / "CLOSE SHORT 1L" (grey)
       const text = isClose
         ? `CLOSE ${dirLabel} ${lotLabel}`.trim()
         : `OPEN ${dirLabel} ${lotLabel}`.trim();
@@ -2159,9 +2159,11 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           direction === 'short' ? ('arrowDown' as const) : ('arrowUp' as const),
         color: selected
           ? '#f59e0b'
-          : direction === 'long'
-            ? '#16a34a'
-            : '#ef4444',
+          : isClose
+            ? '#9ca3af'
+            : direction === 'long'
+              ? '#16a34a'
+              : '#ef4444',
         text,
       };
     });
