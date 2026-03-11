@@ -118,18 +118,12 @@ class BacktestTask(UUIDModel):
         help_text="Current task status",
     )
 
-    # Celery Integration
-    celery_task_id = models.CharField(
-        max_length=255,
+    # Execution tracking – a single UUID that doubles as the Celery task_id.
+    execution_id = models.UUIDField(
         null=True,
         blank=True,
         db_index=True,
-        help_text="Celery task ID for tracking execution",
-    )
-    execution_run_id = models.PositiveIntegerField(
-        default=0,
-        db_index=True,
-        help_text="Monotonic execution run identifier incremented on every start/restart/resume",
+        help_text="UUID identifying the current execution run (also used as Celery task_id)",
     )
 
     # Execution State
@@ -163,7 +157,7 @@ class BacktestTask(UUIDModel):
         indexes = [
             models.Index(fields=["user", "status"]),
             models.Index(fields=["user", "config"]),
-            models.Index(fields=["celery_task_id"]),
+            models.Index(fields=["execution_id"]),
             models.Index(fields=["status", "created_at"]),
         ]
         constraints = [
@@ -235,9 +229,9 @@ class BacktestTask(UUIDModel):
             )
 
         # If task is stuck in STOPPING, revoke Celery task and clean up
-        if self.status == TaskStatus.STOPPING and self.celery_task_id:
+        if self.status == TaskStatus.STOPPING and self.execution_id:
             from celery import current_app
 
-            current_app.control.revoke(self.celery_task_id, terminate=True, signal="SIGKILL")
+            current_app.control.revoke(str(self.execution_id), terminate=True, signal="SIGKILL")
 
         return super().delete(*args, **kwargs)

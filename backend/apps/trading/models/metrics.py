@@ -24,11 +24,11 @@ class Metrics(models.Model):
     )
     task_type = models.CharField(max_length=32, db_index=True)
     task_id = models.UUIDField(db_index=True)
-    celery_task_id = models.CharField(max_length=255, null=True, blank=True, db_index=True)
-    execution_run_id = models.PositiveIntegerField(
-        default=0,
+    execution_id = models.UUIDField(
+        null=True,
+        blank=True,
         db_index=True,
-        help_text="Execution run identifier to isolate metrics per run",
+        help_text="Execution run UUID (shared with Celery task_id)",
     )
     timestamp = models.DateTimeField()
 
@@ -74,12 +74,11 @@ class Metrics(models.Model):
         db_table = "metrics"
         ordering = ["timestamp"]
         indexes = [
-            models.Index(fields=["task_type", "task_id", "execution_run_id", "timestamp"]),
-            models.Index(fields=["task_type", "task_id", "celery_task_id"]),
+            models.Index(fields=["task_type", "task_id", "execution_id", "timestamp"]),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["task_type", "task_id", "execution_run_id", "timestamp"],
+                fields=["task_type", "task_id", "execution_id", "timestamp"],
                 name="unique_metric_timestamp_per_run",
             ),
         ]

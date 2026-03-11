@@ -25,7 +25,7 @@ from apps.trading.events.handler import EventHandler
 
 def _make_order_service(task_type=TaskType.TRADING):
     svc = MagicMock()
-    svc.task = SimpleNamespace(id=uuid4(), celery_task_id="celery-id-1")
+    svc.task = SimpleNamespace(id=uuid4(), execution_id=uuid4())
     svc.task_type = task_type
     return svc
 
@@ -41,6 +41,8 @@ def _make_position(units=1000, layer_index=1, is_open=True, direction="long"):
         entry_price=Decimal("1.10000"),
         entry_time=None,
         exit_price=None,
+        exit_time=None,
+        planned_exit_price=None,
         oanda_trade_id="oanda-123",
     )
 

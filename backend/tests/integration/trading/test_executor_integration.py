@@ -8,11 +8,12 @@ External services (Redis, Celery) are mocked.
 from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
-from apps.trading.enums import TaskType
 from apps.trading.dataclasses import EventExecutionResult
+from apps.trading.enums import TaskType
 from apps.trading.models import (
     BacktestTask,
     ExecutionState,
@@ -34,7 +35,7 @@ def _make_executor(task: BacktestTask | None = None) -> TaskExecutor:
     """Create a TaskExecutor with mocked external dependencies."""
     if task is None:
         task = BacktestTaskFactory(status="running")
-    task.celery_task_id = "celery-exec-test-123"
+    task.execution_id = task.execution_id or uuid4()
     task.save()
 
     engine = MagicMock()
@@ -69,7 +70,7 @@ class TestHandleEvents:
         state = ExecutionState.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=executor.task.pk,
-            celery_task_id=executor.task.celery_task_id,
+            execution_id=executor.task.execution_id,
             strategy_state={},
             current_balance=Decimal("10000"),
             ticks_processed=0,
@@ -79,7 +80,7 @@ class TestHandleEvents:
         event = TradingEvent.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=executor.task.pk,
-            celery_task_id=executor.task.celery_task_id,
+            execution_id=executor.task.execution_id,
             event_type="initial_entry",
             severity="info",
             description="Test entry event",
@@ -111,7 +112,7 @@ class TestHandleEvents:
         state = ExecutionState.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=executor.task.pk,
-            celery_task_id=executor.task.celery_task_id,
+            execution_id=executor.task.execution_id,
             strategy_state={},
             current_balance=Decimal("10000"),
             ticks_processed=0,
@@ -120,7 +121,7 @@ class TestHandleEvents:
         event = TradingEvent.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=executor.task.pk,
-            celery_task_id=executor.task.celery_task_id,
+            execution_id=executor.task.execution_id,
             event_type="take_profit",
             severity="info",
             description="Take profit",
@@ -162,7 +163,7 @@ class TestLoadState:
         existing = ExecutionState.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=executor.task.pk,
-            celery_task_id=executor.task.celery_task_id,
+            execution_id=executor.task.execution_id,
             strategy_state={"layers": [1, 2]},
             current_balance=Decimal("12345.67"),
             ticks_processed=500,
@@ -185,7 +186,7 @@ class TestSaveState:
         state = ExecutionState.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=executor.task.pk,
-            celery_task_id=executor.task.celery_task_id,
+            execution_id=executor.task.execution_id,
             strategy_state={},
             current_balance=Decimal("10000"),
             ticks_processed=0,
@@ -239,7 +240,7 @@ class TestFlushMetrics:
         state = ExecutionState.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=executor.task.pk,
-            celery_task_id=executor.task.celery_task_id,
+            execution_id=executor.task.execution_id,
             strategy_state={},
             current_balance=Decimal("10000"),
             ticks_processed=0,
@@ -283,6 +284,8 @@ class TestBacktestExecutorInit:
     @patch("apps.trading.tasks.executor.StateManager")
     def test_creates_all_components(self, mock_state_manager_cls):
         task = BacktestTaskFactory(status="running")
+        task.execution_id = uuid4()
+        task.save()
         engine = MagicMock()
         data_source = MagicMock()
 
@@ -309,6 +312,8 @@ class TestTradingExecutorInit:
         account = OandaAccountFactory(user=user)
         config = StrategyConfigurationFactory(user=user)
         task = TradingTaskFactory(user=user, oanda_account=account, config=config)
+        task.execution_id = uuid4()
+        task.save()
         engine = MagicMock()
         data_source = MagicMock()
 

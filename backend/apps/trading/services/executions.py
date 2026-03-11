@@ -22,7 +22,7 @@ class TaskExecutionRow:
     id: str
     task_type: str
     task_id: str
-    execution_number: int
+    execution_number: str
     status: str
     progress: int
     started_at: str | None
@@ -46,7 +46,7 @@ def list_task_executions(
     )
     prefix = f"{task_id}:"
 
-    by_run_id: dict[int, dict[str, Any]] = {}
+    by_run_id: dict[str, dict[str, Any]] = {}
 
     for row in (
         CeleryTaskStatus.objects.filter(task_name=task_name, instance_key__startswith=prefix)
@@ -72,8 +72,8 @@ def list_task_executions(
             "error_traceback": None,
         }
 
-    current_run_id = int(getattr(task, "execution_run_id", 0) or 0)
-    if current_run_id > 0:
+    current_run_id = str(getattr(task, "execution_id", None) or "")
+    if current_run_id:
         current = by_run_id.get(current_run_id, {})
         current.update(
             {
@@ -101,7 +101,7 @@ def list_task_executions(
             status=str(meta.get("status") or TaskStatus.CREATED),
         )
         row: dict[str, Any] = TaskExecutionRow(
-            id=str(run_id),
+            id=run_id,
             task_type=task_type,
             task_id=task_id,
             execution_number=run_id,
@@ -129,17 +129,17 @@ def list_task_executions(
 
 
 def _compute_execution_metrics(
-    *, task, task_type: str, task_id: str, run_id: int
+    *, task, task_type: str, task_id: str, run_id: str
 ) -> dict[str, Any]:
     summary = compute_task_summary(
         task_type=task_type,
         task_id=task_id,
-        execution_run_id=run_id,
+        execution_id=run_id,
     )
     closed_qs = Position.objects.filter(
         task_type=task_type,
         task_id=task_id,
-        execution_run_id=run_id,
+        execution_id=run_id,
         is_open=False,
     ).exclude(exit_price__isnull=True)
 
@@ -175,7 +175,7 @@ def _compute_execution_metrics(
     winning_trades = int(wins_losses["winning_trades"] or 0)
     losing_trades = int(wins_losses["losing_trades"] or 0)
     total_trades = int(
-        Trade.objects.filter(task_type=task_type, task_id=task_id, execution_run_id=run_id).count()
+        Trade.objects.filter(task_type=task_type, task_id=task_id, execution_id=run_id).count()
     )
     decisions = winning_trades + losing_trades
     win_rate = (
@@ -216,13 +216,13 @@ def _compute_total_return(*, task, task_type: str, total_pnl: Decimal) -> Decima
         return None
 
 
-def _compute_progress(*, task, task_type: str, run_id: int, status: str) -> int:
-    current_run_id = int(getattr(task, "execution_run_id", 0) or 0)
+def _compute_progress(*, task, task_type: str, run_id: str, status: str) -> int:
+    current_run_id = str(getattr(task, "execution_id", None) or "")
     if run_id == current_run_id:
         summary = compute_task_summary(
             task_type=task_type,
             task_id=str(task.pk),
-            execution_run_id=run_id,
+            execution_id=run_id,
         )
         return int(summary.task.progress)
     if status == TaskStatus.COMPLETED:
@@ -236,13 +236,11 @@ def _compute_duration_seconds(started_at, completed_at) -> float | None:
     return max((completed_at - started_at).total_seconds(), 0.0)
 
 
-def _parse_run_id(*, task_id: str, instance_key: str) -> int | None:
+def _parse_run_id(*, task_id: str, instance_key: str) -> str | None:
     if not instance_key.startswith(f"{task_id}:"):
         return None
-    try:
-        return int(instance_key.rsplit(":", 1)[1])
-    except (TypeError, ValueError):
-        return None
+    suffix = instance_key.rsplit(":", 1)[1]
+    return suffix if suffix else None
 
 
 def _map_celery_status(status: str) -> str:

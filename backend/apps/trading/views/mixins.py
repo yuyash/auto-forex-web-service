@@ -37,16 +37,17 @@ def _parse_since(request: Request):
     return None
 
 
-def _parse_execution_run_id(request: Request) -> int | None:
-    """Return execution_run_id from query param when valid."""
-    raw = request.query_params.get("execution_run_id")
+def _parse_execution_id(request: Request):
+    """Return execution_id (UUID) from query param when valid."""
+    raw = request.query_params.get("execution_id")
     if raw is None:
         return None
     try:
-        value = int(raw)
+        from uuid import UUID
+
+        return UUID(raw)
     except (TypeError, ValueError):
         return None
-    return value if value >= 0 else None
 
 
 class TaskSubResourceMixin:
@@ -58,7 +59,7 @@ class TaskSubResourceMixin:
         tags=["Trading"],
         parameters=[
             OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
-            OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
+            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
             OpenApiParameter("max_points", int, description="Maximum number of points to return"),
         ],
         responses={
@@ -89,9 +90,9 @@ class TaskSubResourceMixin:
         from apps.trading.models.metrics import Metrics
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_run_id = _parse_execution_run_id(request)
-        if execution_run_id is None:
-            execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
+        execution_id = _parse_execution_id(request)
+        if execution_id is None:
+            execution_id = task.execution_id
 
         max_points_raw = request.query_params.get("max_points")
         max_points = 10_000  # sensible default
@@ -104,7 +105,7 @@ class TaskSubResourceMixin:
         queryset = Metrics.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
-            execution_run_id=execution_run_id,
+            execution_id=execution_id,
         ).order_by("timestamp")
 
         since = _parse_since(request)
@@ -132,7 +133,7 @@ class TaskSubResourceMixin:
             stride = total_count // max_points
 
             # Build the filtered WHERE clause
-            params: list = [self.task_type_label, str(task.pk), execution_run_id]
+            params: list = [self.task_type_label, str(task.pk), str(execution_id)]
 
             sql = (
                 "SELECT timestamp, margin_ratio, current_atr, baseline_atr, volatility_threshold "  # nosec B608
@@ -140,7 +141,7 @@ class TaskSubResourceMixin:
                 "  SELECT timestamp, margin_ratio, current_atr, baseline_atr, volatility_threshold, "
                 "         ROW_NUMBER() OVER (ORDER BY timestamp) AS rn "
                 "  FROM metrics "
-                "  WHERE task_type = %s AND task_id = %s AND execution_run_id = %s" + ") sub "
+                "  WHERE task_type = %s AND task_id = %s AND execution_id = %s" + ") sub "
                 "WHERE rn %% %s = 1 "
                 "ORDER BY timestamp"
             )
@@ -166,8 +167,25 @@ class TaskSubResourceMixin:
         tags=["Trading"],
         parameters=[
             OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
-            OpenApiParameter("level", str, description="Log level filter"),
-            OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
+            OpenApiParameter(
+                "level", str, description="Log level filter (comma-separated for multiple)"
+            ),
+            OpenApiParameter(
+                "component",
+                str,
+                description="Logger/component name filter (comma-separated for multiple)",
+            ),
+            OpenApiParameter(
+                "timestamp_from",
+                str,
+                description="Filter logs from this RFC3339 timestamp (inclusive)",
+            ),
+            OpenApiParameter(
+                "timestamp_to",
+                str,
+                description="Filter logs until this RFC3339 timestamp (inclusive)",
+            ),
+            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
             OpenApiParameter("page", int),
             OpenApiParameter("page_size", int),
         ],
@@ -187,18 +205,43 @@ class TaskSubResourceMixin:
     @action(detail=True, methods=["get"])
     def logs(self, request: Request, pk: int | None = None) -> Response:
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_run_id = _parse_execution_run_id(request)
-        if execution_run_id is None:
-            execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
+        execution_id = _parse_execution_id(request)
+        if execution_id is None:
+            execution_id = task.execution_id
         level_param = request.query_params.get("level")
-        level = LogLevel[level_param.upper()] if level_param else None
+        level_values = (
+            [v.strip().upper() for v in level_param.split(",") if v.strip()] if level_param else []
+        )
+        component_param = request.query_params.get("component")
+        component_values = (
+            [v.strip() for v in component_param.split(",") if v.strip()] if component_param else []
+        )
+        position_id_param = request.query_params.get("position_id")
+        timestamp_from = request.query_params.get("timestamp_from")
+        timestamp_to = request.query_params.get("timestamp_to")
         queryset = TaskLog.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
-            execution_run_id=execution_run_id,
+            execution_id=execution_id,
         )
-        if level:
-            queryset = queryset.filter(level=level)
+        if level_values:
+            resolved = [LogLevel[v] for v in level_values if v in LogLevel.__members__]
+            if resolved:
+                queryset = queryset.filter(level__in=resolved)
+        if component_values:
+            queryset = queryset.filter(component__in=component_values)
+        if position_id_param:
+            # Support prefix match for truncated UUIDs (e.g. first 8 chars).
+            # Extract the nested JSON text value: details->'context'->>'position_id'
+            from django.db.models.fields.json import KeyTextTransform
+
+            queryset = queryset.annotate(
+                _pos_id=KeyTextTransform("position_id", KeyTextTransform("context", "details"))
+            ).filter(_pos_id__startswith=position_id_param)
+        if timestamp_from:
+            queryset = queryset.filter(timestamp__gte=timestamp_from)
+        if timestamp_to:
+            queryset = queryset.filter(timestamp__lte=timestamp_to)
 
         since = _parse_since(request)
         if since:
@@ -213,11 +256,43 @@ class TaskSubResourceMixin:
     @extend_schema(
         tags=["Trading"],
         parameters=[
+            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
+        ],
+        responses={
+            200: inline_serializer(
+                "TaskLogComponentsResponse",
+                fields={"components": serializers.ListField(child=serializers.CharField())},
+            )
+        },
+        description="Return distinct logger/component names for a task's logs.",
+    )
+    @action(detail=True, methods=["get"], url_path="log-components")
+    def log_components(self, request: Request, pk: int | None = None) -> Response:
+        """Return distinct component names for the task's logs."""
+        task = self.get_object()  # type: ignore[attr-defined]
+        execution_id = _parse_execution_id(request)
+        if execution_id is None:
+            execution_id = task.execution_id
+        components = list(
+            TaskLog.objects.filter(
+                task_type=self.task_type_label,
+                task_id=task.pk,
+                execution_id=execution_id,
+            )
+            .values_list("component", flat=True)
+            .distinct()
+            .order_by("component")
+        )
+        return Response({"components": components})
+
+    @extend_schema(
+        tags=["Trading"],
+        parameters=[
             OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
             OpenApiParameter("event_type", str, description="Event type filter"),
             OpenApiParameter("severity", str, description="Severity filter"),
             OpenApiParameter("scope", str, description="Event scope: all|trading|task"),
-            OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
+            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
             OpenApiParameter("page", int),
             OpenApiParameter("page_size", int),
         ],
@@ -239,16 +314,16 @@ class TaskSubResourceMixin:
         from apps.trading.models import TradingEvent
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_run_id = _parse_execution_run_id(request)
-        if execution_run_id is None:
-            execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
+        execution_id = _parse_execution_id(request)
+        if execution_id is None:
+            execution_id = task.execution_id
         event_type = request.query_params.get("event_type")
         severity = request.query_params.get("severity")
         scope = (request.query_params.get("scope") or "all").strip().lower()
         queryset = TradingEvent.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
-            execution_run_id=execution_run_id,
+            execution_id=execution_id,
         ).order_by("-created_at")
         if event_type:
             queryset = queryset.filter(event_type=event_type)
@@ -280,7 +355,7 @@ class TaskSubResourceMixin:
             OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
             OpenApiParameter("event_type", str, description="Event type filter"),
             OpenApiParameter("severity", str, description="Severity filter"),
-            OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
+            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
             OpenApiParameter("page", int),
             OpenApiParameter("page_size", int),
         ],
@@ -302,15 +377,15 @@ class TaskSubResourceMixin:
         from apps.trading.models import StrategyEventRecord
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_run_id = _parse_execution_run_id(request)
-        if execution_run_id is None:
-            execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
+        execution_id = _parse_execution_id(request)
+        if execution_id is None:
+            execution_id = task.execution_id
         event_type = request.query_params.get("event_type")
         severity = request.query_params.get("severity")
         queryset = StrategyEventRecord.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
-            execution_run_id=execution_run_id,
+            execution_id=execution_id,
         ).order_by("-created_at")
         if event_type:
             queryset = queryset.filter(event_type=event_type)
@@ -333,7 +408,7 @@ class TaskSubResourceMixin:
             OpenApiParameter(
                 "direction", str, description="Direction filter (buy/sell/long/short)"
             ),
-            OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
+            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
             OpenApiParameter("page", int),
             OpenApiParameter("page_size", int),
         ],
@@ -355,14 +430,14 @@ class TaskSubResourceMixin:
         from apps.trading.models.trades import Trade
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_run_id = _parse_execution_run_id(request)
-        if execution_run_id is None:
-            execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
+        execution_id = _parse_execution_id(request)
+        if execution_id is None:
+            execution_id = task.execution_id
         direction = (request.query_params.get("direction") or "").lower()
         queryset = Trade.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
-            execution_run_id=execution_run_id,
+            execution_id=execution_id,
         ).order_by("timestamp")
         if direction:
             if direction == "buy":
@@ -385,6 +460,7 @@ class TaskSubResourceMixin:
             "execution_method",
             "layer_index",
             "retracement_count",
+            "description",
             "timestamp",
             "position_id",
             "updated_at",
@@ -413,7 +489,7 @@ class TaskSubResourceMixin:
                 "position_status", str, description="Position status filter (open/closed)"
             ),
             OpenApiParameter("direction", str, description="Direction filter"),
-            OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
+            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
             OpenApiParameter("page", int),
             OpenApiParameter("page_size", int),
         ],
@@ -435,14 +511,14 @@ class TaskSubResourceMixin:
         from apps.trading.models.positions import Position
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_run_id = _parse_execution_run_id(request)
-        if execution_run_id is None:
-            execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
+        execution_id = _parse_execution_id(request)
+        if execution_id is None:
+            execution_id = task.execution_id
         queryset = (
             Position.objects.filter(
                 task_type=self.task_type_label,
                 task_id=task.pk,
-                execution_run_id=execution_run_id,
+                execution_id=execution_id,
             )
             .prefetch_related("trades")
             .order_by("-entry_time")
@@ -477,7 +553,7 @@ class TaskSubResourceMixin:
             OpenApiParameter("status", str, description="Order status filter"),
             OpenApiParameter("order_type", str, description="Order type filter"),
             OpenApiParameter("direction", str, description="Direction filter"),
-            OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
+            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
             OpenApiParameter("page", int),
             OpenApiParameter("page_size", int),
         ],
@@ -499,13 +575,13 @@ class TaskSubResourceMixin:
         from apps.trading.models.orders import Order
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_run_id = _parse_execution_run_id(request)
-        if execution_run_id is None:
-            execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
+        execution_id = _parse_execution_id(request)
+        if execution_id is None:
+            execution_id = task.execution_id
         queryset = Order.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
-            execution_run_id=execution_run_id,
+            execution_id=execution_id,
         ).order_by("-submitted_at")
 
         status_param = (request.query_params.get("status") or "").lower()
@@ -532,7 +608,7 @@ class TaskSubResourceMixin:
     @extend_schema(
         tags=["Trading"],
         parameters=[
-            OpenApiParameter("execution_run_id", int, description="Filter by execution run ID"),
+            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
         ],
         responses={200: TaskSummarySerializer},
         description=(
@@ -548,14 +624,14 @@ class TaskSubResourceMixin:
         from apps.trading.services.summary import compute_task_summary
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_run_id = _parse_execution_run_id(request)
-        if execution_run_id is None:
-            execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
+        execution_id = _parse_execution_id(request)
+        if execution_id is None:
+            execution_id = task.execution_id
 
         result = compute_task_summary(
             task_type=self.task_type_label,
             task_id=str(task.pk),
-            execution_run_id=execution_run_id,
+            execution_id=execution_id,
         )
 
         serializer = TaskSummarySerializer(asdict(result))

@@ -26,7 +26,12 @@ interface UseTaskLogsOptions {
   taskType: TaskType;
   /** Filter by execution run ID. When omitted, uses the latest execution run. */
   executionRunId?: number;
-  level?: string;
+  level?: string[];
+  component?: string[];
+  /** Filter logs by position ID (supports prefix match for truncated UUIDs). */
+  positionId?: string;
+  timestampFrom?: string;
+  timestampTo?: string;
   page?: number;
   pageSize?: number;
   enableRealTimeUpdates?: boolean;
@@ -67,6 +72,10 @@ export const useTaskLogs = ({
   taskType,
   executionRunId,
   level,
+  component,
+  positionId,
+  timestampFrom,
+  timestampTo,
   page = 1,
   pageSize = 100,
   enableRealTimeUpdates = false,
@@ -83,7 +92,7 @@ export const useTaskLogs = ({
   const sinceRef = useRef<string | null>(null);
   const hasInitialFetchRef = useRef(false);
 
-  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${level}-${page}-${pageSize}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${(level || []).join(',')}-${(component || []).join(',')}-${positionId ?? ''}-${timestampFrom ?? ''}-${timestampTo ?? ''}-${page}-${pageSize}`;
   const prevParamsKeyRef = useRef(paramsKey);
   if (paramsKey !== prevParamsKeyRef.current) {
     prevParamsKeyRef.current = paramsKey;
@@ -116,7 +125,12 @@ export const useTaskLogs = ({
         if (executionRunId != null) {
           params.execution_run_id = String(executionRunId);
         }
-        if (level) params.level = level;
+        if (level && level.length > 0) params.level = level.join(',');
+        if (component && component.length > 0)
+          params.component = component.join(',');
+        if (positionId) params.position_id = positionId;
+        if (timestampFrom) params.timestamp_from = timestampFrom;
+        if (timestampTo) params.timestamp_to = timestampTo;
         const effectiveSince = incremental ? sinceRef.current : null;
         if (effectiveSince) params.since = effectiveSince;
 
@@ -174,7 +188,18 @@ export const useTaskLogs = ({
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [taskId, taskType, executionRunId, level, page, pageSize]
+    [
+      taskId,
+      taskType,
+      executionRunId,
+      level,
+      component,
+      positionId,
+      timestampFrom,
+      timestampTo,
+      page,
+      pageSize,
+    ]
   );
 
   useEffect(() => {

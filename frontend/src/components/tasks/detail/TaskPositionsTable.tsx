@@ -18,7 +18,10 @@ import {
   TablePagination,
   useMediaQuery,
   useTheme,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
+import { History as HistoryIcon } from '@mui/icons-material';
 import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
@@ -28,6 +31,7 @@ import {
 } from '../../../hooks/useTaskPositions';
 import { useTaskSummary } from '../../../hooks/useTaskSummary';
 import { TaskType } from '../../../types/common';
+import { PositionLifecycleDialog } from './PositionLifecycleDialog';
 
 interface TaskPositionsTableProps {
   taskId: string | number;
@@ -141,6 +145,15 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
 
   const getRowId = useCallback((row: TaskPosition) => String(row.id), []);
 
+  // --- Lifecycle dialog state ---
+  const [lifecycleOpen, setLifecycleOpen] = useState(false);
+  const [lifecyclePositionId, setLifecyclePositionId] = useState<string>('');
+
+  const handleOpenLifecycle = useCallback((positionId: string) => {
+    setLifecyclePositionId(positionId);
+    setLifecycleOpen(true);
+  }, []);
+
   const formatTimestamp = (ts: string): string =>
     new Date(ts).toLocaleString('en-US', {
       year: 'numeric',
@@ -153,6 +166,35 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
 
   // --- Column builders ---
   const closedCols = (dir: 'long' | 'short'): Column<TaskPosition>[] => [
+    {
+      id: 'id',
+      label: t('tables.positions.positionId'),
+      width: 150,
+      minWidth: 110,
+      render: (r) =>
+        r.id ? (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="body2" fontFamily="monospace">
+              {String(r.id).slice(0, 8)}
+            </Typography>
+            <Tooltip title={t('tables.positions.lifecycle.viewLifecycle')}>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenLifecycle(String(r.id).slice(0, 8));
+                }}
+                aria-label={t('tables.positions.lifecycle.viewLifecycle')}
+                sx={{ p: 0.25 }}
+              >
+                <HistoryIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        ) : (
+          '-'
+        ),
+    },
     {
       id: 'entry_time',
       label: t('tables.positions.openTimestamp'),
@@ -277,6 +319,35 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   ];
 
   const openCols = (dir: 'long' | 'short'): Column<TaskPosition>[] => [
+    {
+      id: 'id',
+      label: t('tables.positions.positionId'),
+      width: 150,
+      minWidth: 110,
+      render: (r) =>
+        r.id ? (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="body2" fontFamily="monospace">
+              {String(r.id).slice(0, 8)}
+            </Typography>
+            <Tooltip title={t('tables.positions.lifecycle.viewLifecycle')}>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenLifecycle(String(r.id).slice(0, 8));
+                }}
+                aria-label={t('tables.positions.lifecycle.viewLifecycle')}
+                sx={{ p: 0.25 }}
+              >
+                <HistoryIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        ) : (
+          '-'
+        ),
+    },
     {
       id: 'entry_time',
       label: t('tables.positions.openTimestamp'),
@@ -756,6 +827,14 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         openRowFn('long'),
         openRowFn('short')
       )}
+      <PositionLifecycleDialog
+        open={lifecycleOpen}
+        onClose={() => setLifecycleOpen(false)}
+        taskId={String(taskId)}
+        taskType={taskType}
+        executionRunId={executionRunId}
+        initialPositionId={lifecyclePositionId}
+      />
     </Box>
   );
 };

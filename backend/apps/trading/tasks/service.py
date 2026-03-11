@@ -85,8 +85,7 @@ class TaskService:
                 instrument=getattr(task, "instrument", None),
                 task_type=resolved_task_type,
                 task_id=task.pk,
-                execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
-                celery_task_id=getattr(task, "celery_task_id", None),
+                execution_id=getattr(task, "execution_id", None),
                 details=details,
             )
         except Exception as exc:  # pragma: no cover - defensive logging path
@@ -139,7 +138,6 @@ class TaskService:
             f"end_time={getattr(task, 'end_time', 'N/A')}"
         )
 
-        previous_run_id = int(getattr(task, "execution_run_id", 0) or 0)
         is_backtest_task = isinstance(task, BacktestTask) or hasattr(task, "start_time")
         model_class = BacktestTask if is_backtest_task else TradingTask
 
@@ -198,23 +196,18 @@ class TaskService:
                         )
                         raise ValueError(f"Task configuration is invalid: {error_message}")
 
-                    previous_run_id = int(getattr(locked_task, "execution_run_id", 0) or 0)
-                    next_run_id = previous_run_id + 1
-                    celery_task_id = str(uuid4())
+                    new_execution_id = uuid4()
                     logger.info(
-                        "[SERVICE:START] Generated Celery task ID - task_id=%s, celery_task_id=%s, execution_run_id=%s",
+                        "[SERVICE:START] Generated execution ID - task_id=%s, execution_id=%s",
                         locked_task.pk,
-                        celery_task_id,
-                        next_run_id,
+                        new_execution_id,
                     )
 
-                    locked_task.celery_task_id = celery_task_id
-                    locked_task.execution_run_id = next_run_id
+                    locked_task.execution_id = new_execution_id
                     locked_task.status = TaskStatus.STARTING
                     locked_task.save(
                         update_fields=[
-                            "celery_task_id",
-                            "execution_run_id",
+                            "execution_id",
                             "status",
                             "updated_at",
                         ]
@@ -267,15 +260,12 @@ class TaskService:
                 if not is_valid:
                     raise ValueError(f"Task configuration is invalid: {error_message}")
 
-                previous_run_id = int(getattr(task, "execution_run_id", 0) or 0)
-                task.execution_run_id = previous_run_id + 1
-                task.celery_task_id = str(uuid4())
+                task.execution_id = uuid4()
                 task.status = TaskStatus.STARTING
                 try:
                     task.save(
                         update_fields=[
-                            "celery_task_id",
-                            "execution_run_id",
+                            "execution_id",
                             "status",
                             "updated_at",
                         ]
@@ -291,25 +281,25 @@ class TaskService:
                 task_type = "trading"
 
             logger.info(
-                "[SERVICE:START] Task type determined - task_id=%s, type=%s, execution_run_id=%s",
+                "[SERVICE:START] Task type determined - task_id=%s, type=%s, execution_id=%s",
                 task.pk,
                 task_type,
-                task.execution_run_id,
+                task.execution_id,
             )
             logger.info(
-                "[SERVICE:START] Submitting to Celery - task_id=%s, celery_task_id=%s",
+                "[SERVICE:START] Submitting to Celery - task_id=%s, execution_id=%s",
                 task.pk,
-                task.celery_task_id,
+                task.execution_id,
             )
-            result = celery_task.apply_async(
+            celery_task.apply_async(
                 args=[task.pk],
-                task_id=task.celery_task_id,
+                task_id=str(task.execution_id),
             )
 
             logger.info(
-                "[SERVICE:START] Task submitted to Celery - task_id=%s, celery_task_id=%s, new_status=%s",
+                "[SERVICE:START] Task submitted to Celery - task_id=%s, execution_id=%s, new_status=%s",
                 task.pk,
-                task.celery_task_id,
+                task.execution_id,
                 task.status,
             )
             self._emit_task_lifecycle_event(
@@ -326,9 +316,9 @@ class TaskService:
 
             if not active_workers:
                 logger.warning(
-                    "[SERVICE:START] NO_WORKERS - No active Celery workers detected. task_id=%s, celery_task_id=%s",
+                    "[SERVICE:START] NO_WORKERS - No active Celery workers detected. task_id=%s, execution_id=%s",
                     task.pk,
-                    result.id,
+                    task.execution_id,
                 )
             else:
                 logger.info(
@@ -343,38 +333,36 @@ class TaskService:
             raise
         except Exception as e:
             logger.error(
-                "[SERVICE:START] CELERY_SUBMISSION_FAILED - task_id=%s, celery_task_id=%s, error=%s",
+                "[SERVICE:START] CELERY_SUBMISSION_FAILED - task_id=%s, execution_id=%s, error=%s",
                 task.pk,
-                getattr(task, "celery_task_id", None),
+                getattr(task, "execution_id", None),
                 str(e),
                 exc_info=True,
             )
             if type(task) in (BacktestTask, TradingTask):
                 model_class.objects.filter(pk=task.pk).update(
                     status=TaskStatus.CREATED,
-                    celery_task_id=None,
-                    execution_run_id=previous_run_id,
+                    execution_id=None,
                 )
                 task.refresh_from_db()
             else:
                 task.status = TaskStatus.CREATED
-                task.celery_task_id = None
-                task.execution_run_id = previous_run_id
+                task.execution_id = None
                 try:
-                    task.save(update_fields=["status", "celery_task_id", "execution_run_id"])
+                    task.save(update_fields=["status", "execution_id"])
                 except TypeError:
                     task.save()
             raise RuntimeError(f"Failed to submit task to Celery: {str(e)}") from e
 
     def recover_trading_task(self, task: TradingTask) -> TradingTask:
-        """Requeue an orphaned trading task without changing execution_run_id.
+        """Requeue an orphaned trading task with a new execution_id.
 
         Unlike ``start_task``, this method preserves the current run so the
         executor can load persisted state and resume execution from the same run.
         """
 
         previous_status = task.status
-        previous_celery_task_id = task.celery_task_id
+        previous_execution_id = task.execution_id
 
         with transaction.atomic():
             locked_task = TradingTask.objects.select_for_update().get(pk=task.pk)
@@ -386,14 +374,14 @@ class TaskService:
                 )
 
             locked_task.status = TaskStatus.STARTING
-            locked_task.celery_task_id = str(uuid4())
+            locked_task.execution_id = uuid4()
             locked_task.completed_at = None
             locked_task.error_message = None
             locked_task.error_traceback = None
             locked_task.save(
                 update_fields=[
                     "status",
-                    "celery_task_id",
+                    "execution_id",
                     "completed_at",
                     "error_message",
                     "error_traceback",
@@ -405,7 +393,7 @@ class TaskService:
         try:
             run_trading_task.apply_async(
                 args=[task.pk],
-                task_id=task.celery_task_id,
+                task_id=str(task.execution_id),
             )
             return task
         except Exception as exc:
@@ -416,7 +404,7 @@ class TaskService:
             task.refresh_from_db()
             raise RuntimeError(
                 "Failed to requeue orphaned trading task "
-                f"(prev_status={previous_status}, prev_celery_task_id={previous_celery_task_id})"
+                f"(prev_status={previous_status}, prev_execution_id={previous_execution_id})"
             ) from exc
 
     def stop_task(self, task_id: UUID, mode: str = "graceful") -> bool:
@@ -464,7 +452,7 @@ class TaskService:
 
             logger.info(
                 f"[SERVICE:STOP] Current task state - task_id={task_id}, status={task.status}, "
-                f"celery_task_id={task.celery_task_id}"
+                f"execution_id={task.execution_id}"
             )
 
             # Allow stopping from ANY state - user control is paramount
@@ -501,7 +489,7 @@ class TaskService:
                 redis_client = redis.Redis.from_url(
                     settings.MARKET_REDIS_URL, decode_responses=True
                 )
-                redis_instance_key = f"{task_id}:{int(getattr(task, 'execution_run_id', 0) or 0)}"
+                redis_instance_key = f"{task_id}:{task.execution_id}"
                 redis_key = f"task:coord:{task_name}:{redis_instance_key}"
                 redis_client.hset(redis_key, "status", "stopping")
                 redis_client.expire(redis_key, 3600)
@@ -515,16 +503,16 @@ class TaskService:
                 )
 
             # IMMEDIATE mode force-revokes running Celery task.
-            if stop_mode == StopMode.IMMEDIATE and task.celery_task_id:
+            if stop_mode == StopMode.IMMEDIATE and task.execution_id:
                 try:
                     logger.info(
                         f"[SERVICE:STOP] Immediate revoke Celery task - task_id={task_id}, "
-                        f"celery_task_id={task.celery_task_id}"
+                        f"execution_id={task.execution_id}"
                     )
                     from celery import current_app
 
                     current_app.control.revoke(
-                        task.celery_task_id, terminate=True, signal="SIGKILL"
+                        str(task.execution_id), terminate=True, signal="SIGKILL"
                     )
                     logger.info(f"[SERVICE:STOP] Celery task revoked - task_id={task_id}")
                 except Exception as e:
@@ -681,7 +669,7 @@ class TaskService:
                 return False
 
             # Revoke Celery task if it exists
-            result = self.get_celery_result(task.celery_task_id)
+            result = self.get_celery_result(str(task.execution_id) if task.execution_id else None)
             if result:
                 result.revoke(terminate=True)
 
@@ -752,7 +740,7 @@ class TaskService:
 
             logger.info(
                 f"[SERVICE:RESTART] Current task state - task_id={task_id}, status={task.status}, "
-                f"celery_task_id={task.celery_task_id}, started_at={task.started_at}, "
+                f"execution_id={task.execution_id}, started_at={task.started_at}, "
                 f"completed_at={task.completed_at}"
             )
 
@@ -779,16 +767,16 @@ class TaskService:
                     )
 
             # Force revoke any Celery task
-            if task.celery_task_id:
+            if task.execution_id:
                 try:
                     logger.info(
                         f"[SERVICE:RESTART] Force revoking Celery task - task_id={task_id}, "
-                        f"celery_task_id={task.celery_task_id}"
+                        f"execution_id={task.execution_id}"
                     )
                     from celery import current_app
 
                     current_app.control.revoke(
-                        task.celery_task_id, terminate=True, signal="SIGKILL"
+                        str(task.execution_id), terminate=True, signal="SIGKILL"
                     )
                 except Exception as e:
                     logger.warning(
@@ -844,7 +832,7 @@ class TaskService:
             logger.info(f"[SERVICE:RESTART] Clearing execution data - task_id={task_id}")
             model_class = type(task)
             rows = model_class.objects.filter(pk=task.pk).update(
-                celery_task_id=None,
+                execution_id=None,
                 status=TaskStatus.CREATED,
                 started_at=None,
                 completed_at=None,
@@ -894,7 +882,7 @@ class TaskService:
         """Resume a paused task, preserving execution context.
 
         Preserves existing execution data (started_at, logs, metrics) but clears
-        celery_task_id. Resets status to CREATED, then resubmits.
+        execution_id. Resets status to CREATED, then resubmits.
 
         Args:
             task_id: UUID of the task to resume
@@ -933,8 +921,8 @@ class TaskService:
                 )
 
             # Check for status mismatch: task is PAUSED in DB but Celery task is still running
-            if task.celery_task_id:
-                result = self.get_celery_result(task.celery_task_id)
+            if task.execution_id:
+                result = self.get_celery_result(str(task.execution_id))
                 if result:
                     celery_state = result.state
                     # Check if Celery task is in an active state
@@ -945,7 +933,7 @@ class TaskService:
                                 "task_id": str(task_id),
                                 "db_status": task.status,
                                 "celery_state": celery_state,
-                                "celery_task_id": task.celery_task_id,
+                                "execution_id": str(task.execution_id),
                             },
                         )
                         raise ValueError(
@@ -954,10 +942,10 @@ class TaskService:
                             "Please wait for the task to fully stop before resuming."
                         )
 
-            # Keep existing execution data, just clear celery_task_id and reset status
-            task.celery_task_id = None
+            # Keep existing execution data, just clear execution_id and reset status
+            task.execution_id = None
             task.status = TaskStatus.CREATED
-            task.save(update_fields=["celery_task_id", "status", "updated_at"])
+            task.save(update_fields=["execution_id", "status", "updated_at"])
             self._emit_task_lifecycle_event(
                 task=task,
                 task_type=task_type,

@@ -6,10 +6,11 @@ for integration tests. Factories use Faker to generate random but realistic
 data values.
 """
 
-import factory
 from datetime import UTC
-from django.utils import timezone
+
+import factory
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from factory.django import DjangoModelFactory
 from faker import Faker
 
@@ -153,7 +154,6 @@ class BacktestTaskFactory(DjangoModelFactory):
     )
     status = "created"
     data_source = "postgresql"
-    celery_task_id = factory.Faker("uuid4")
 
 
 class TradingTaskFactory(DjangoModelFactory):
@@ -168,7 +168,6 @@ class TradingTaskFactory(DjangoModelFactory):
     name = factory.Faker("catch_phrase")
     instrument = "USD_JPY"
     status = "created"
-    celery_task_id = factory.Faker("uuid4")
 
 
 class UserNotificationFactory(DjangoModelFactory):

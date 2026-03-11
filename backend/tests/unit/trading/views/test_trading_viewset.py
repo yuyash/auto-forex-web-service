@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
+from uuid import uuid4
 
 from rest_framework import status as http_status
 from rest_framework.request import Request
@@ -20,7 +21,7 @@ def _make_task(pk=1, task_status=TaskStatus.CREATED, name="trade-1"):
     task.id = pk
     task.status = task_status
     task.name = name
-    task.celery_task_id = "celery-1"
+    task.execution_id = uuid4()
     task.oanda_account = MagicMock()
     task.oanda_account_id = 10
     return task

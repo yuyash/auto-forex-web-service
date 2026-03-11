@@ -16,20 +16,18 @@ if TYPE_CHECKING:
 class EventContext:
     """Context information for event emission.
 
-    This dataclass provides the necessary context for emitting events
-    during task execution. It identifies the user, account,
-    and instrument involved.
-
     Attributes:
         user: User instance
         account: OandaAccounts instance (optional, None for backtests)
         instrument: Trading instrument (e.g., "USD_JPY")
         task_id: UUID of the task
-        task_type: Type of task (BACKTEST or TRADING)"""
+        execution_id: UUID of the current execution run
+        task_type: Type of task (BACKTEST or TRADING)
+    """
 
-    user: "User"  # Forward reference to avoid circular import
-    account: "OandaAccounts | None"  # Forward reference to avoid circular import
+    user: "User"
+    account: "OandaAccounts | None"
     instrument: str
     task_id: UUID
-    execution_run_id: int
-    task_type: "TaskType"  # Forward reference to avoid circular import
+    execution_id: UUID | None
+    task_type: "TaskType"
