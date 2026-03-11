@@ -32,6 +32,11 @@ class ExecutionInfoSerializer(serializers.Serializer):
 
     current_balance = serializers.DecimalField(max_digits=20, decimal_places=10, allow_null=True)
     ticks_processed = serializers.IntegerField()
+    account_currency = serializers.CharField(allow_null=True)
+    current_balance_display = serializers.DecimalField(
+        max_digits=20, decimal_places=2, allow_null=True
+    )
+    display_currency = serializers.CharField(allow_null=True)
 
 
 class TaskInfoSerializer(serializers.Serializer):

@@ -21,6 +21,7 @@ from apps.trading.models import Order, Position, Trade, TradingEvent
 from apps.trading.order import OrderService, OrderServiceError
 
 logger: Logger = getLogger(name=__name__)
+lifecycle_logger: Logger = getLogger(name="position.lifecycle")
 
 
 EventDispatchFn = Callable[[StrategyEvent], EventExecutionResult]
@@ -88,8 +89,8 @@ class EventHandler:
         return self.order_service.task.id
 
     @property
-    def _execution_run_id(self) -> int:
-        return int(getattr(self.order_service, "execution_run_id", 0) or 0)
+    def _execution_id(self):
+        return self.order_service.execution_id
 
     def _cache_position(self, layer_number: int, position: Position) -> None:
         pos_id = str(position.id)
@@ -107,7 +108,7 @@ class EventHandler:
                 id=position_id,
                 task_type=self.order_service.task_type,
                 task_id=self._task_pk,
-                execution_run_id=self._execution_run_id,
+                execution_id=self._execution_id,
                 is_open=True,
             )
             .order_by("-entry_time")
@@ -124,7 +125,7 @@ class EventHandler:
             Position.objects.filter(
                 task_type=self.order_service.task_type,
                 task_id=self._task_pk,
-                execution_run_id=self._execution_run_id,
+                execution_id=self._execution_id,
                 instrument=self.instrument,
                 is_open=True,
                 layer_index=layer_number,
@@ -175,7 +176,7 @@ class EventHandler:
             Position.objects.filter(
                 task_type=self.order_service.task_type,
                 task_id=self._task_pk,
-                execution_run_id=self._execution_run_id,
+                execution_id=self._execution_id,
                 instrument=self.instrument,
                 direction=direction,
                 is_open=True,
@@ -211,7 +212,7 @@ class EventHandler:
             Position.objects.filter(
                 task_type=self.order_service.task_type,
                 task_id=self._task_pk,
-                execution_run_id=self._execution_run_id,
+                execution_id=self._execution_id,
                 instrument=self.instrument,
                 is_open=True,
             ).order_by("layer_index", "entry_time", "created_at")
@@ -234,12 +235,12 @@ class EventHandler:
         oanda_trade_id: str | None = None,
         position: Position | None = None,
         order: Order | None = None,
+        description: str = "",
     ) -> None:
         Trade.objects.create(
             task_type=self.order_service.task_type.value,
             task_id=self._task_pk,
-            execution_run_id=self._execution_run_id,
-            celery_task_id=self.order_service.task.celery_task_id,
+            execution_id=self._execution_id,
             timestamp=timestamp,
             direction=direction.value if direction else None,
             units=units,
@@ -251,6 +252,7 @@ class EventHandler:
             oanda_trade_id=oanda_trade_id,
             position=position,
             order=order,
+            description=description,
         )
 
     def handle_event(self, trading_event: TradingEvent) -> EventExecutionResult:
@@ -385,6 +387,7 @@ class EventHandler:
             oanda_trade_id=position.oanda_trade_id,
             position=position,
             order=order,
+            description=getattr(event, "description", ""),
         )
 
         logger.info(
@@ -394,6 +397,33 @@ class EventHandler:
             event.units,
             event.retracement_count,
             position.id,
+        )
+
+        lifecycle_logger.info(
+            "POSITION_OPENED: %s %s %s units @ %s (layer=%s, retracement=%s, planned_exit=%s)",
+            direction.value,
+            position.instrument,
+            event.units,
+            position.entry_price,
+            event.layer_number,
+            event.retracement_count,
+            position.planned_exit_price,
+            extra={
+                "position_id": str(position.id),
+                "lifecycle_event": "OPENED",
+                "direction": direction.value,
+                "instrument": position.instrument,
+                "units": event.units,
+                "entry_price": str(position.entry_price),
+                "entry_time": str(event.timestamp),
+                "layer_index": event.layer_number,
+                "retracement_count": event.retracement_count,
+                "planned_exit_price": str(position.planned_exit_price)
+                if position.planned_exit_price
+                else None,
+                "oanda_trade_id": position.oanda_trade_id,
+                "order_id": str(order.id),
+            },
         )
 
         return position
@@ -457,7 +487,7 @@ class EventHandler:
             realized_delta_total += realized_delta
 
             self._record_trade(
-                direction=None,
+                direction=Direction(position.direction),
                 units=closed_units,
                 instrument=position.instrument,
                 price=Decimal(str(closed_position.exit_price or position.entry_price)),
@@ -468,6 +498,7 @@ class EventHandler:
                 oanda_trade_id=position.oanda_trade_id,
                 position=position,
                 order=close_order,
+                description=getattr(event, "description", ""),
             )
 
             self._prune_closed_position(event.layer_number, closed_position)
@@ -479,6 +510,33 @@ class EventHandler:
                     realized_delta,
                     closed_position.id,
                 )
+                lifecycle_logger.info(
+                    "POSITION_CLOSED: %s %s (full close) exit @ %s, pnl=%s (layer=%s)",
+                    closed_position.direction,
+                    closed_position.instrument,
+                    closed_position.exit_price,
+                    realized_delta,
+                    event.layer_number,
+                    extra={
+                        "position_id": str(closed_position.id),
+                        "lifecycle_event": "CLOSED",
+                        "close_type": "full",
+                        "direction": closed_position.direction,
+                        "instrument": closed_position.instrument,
+                        "units_closed": closed_units,
+                        "entry_price": str(closed_position.entry_price),
+                        "exit_price": str(closed_position.exit_price),
+                        "entry_time": str(closed_position.entry_time),
+                        "exit_time": str(closed_position.exit_time),
+                        "realized_pnl": str(realized_delta),
+                        "layer_index": event.layer_number,
+                        "retracement_count": event.retracement_count,
+                        "close_reason": str(event.event_type.value),
+                        "description": getattr(event, "description", ""),
+                        "oanda_trade_id": closed_position.oanda_trade_id,
+                        "order_id": str(close_order.id) if close_order else None,
+                    },
+                )
             else:
                 logger.info(
                     "Close position executed (partial close): layer=%s, units_closed=%s, remaining=%s, position_id=%s",
@@ -486,6 +544,33 @@ class EventHandler:
                     units_to_close,
                     abs(closed_position.units),
                     closed_position.id,
+                )
+                lifecycle_logger.info(
+                    "POSITION_PARTIAL_CLOSE: %s %s, %s units closed, %s remaining (layer=%s, pnl=%s)",
+                    closed_position.direction,
+                    closed_position.instrument,
+                    units_to_close,
+                    abs(closed_position.units),
+                    event.layer_number,
+                    realized_delta,
+                    extra={
+                        "position_id": str(closed_position.id),
+                        "lifecycle_event": "PARTIAL_CLOSE",
+                        "close_type": "partial",
+                        "direction": closed_position.direction,
+                        "instrument": closed_position.instrument,
+                        "units_closed": units_to_close,
+                        "units_remaining": abs(closed_position.units),
+                        "entry_price": str(closed_position.entry_price),
+                        "exit_price": str(closed_position.exit_price or override_price),
+                        "realized_pnl": str(realized_delta),
+                        "layer_index": event.layer_number,
+                        "retracement_count": event.retracement_count,
+                        "close_reason": str(event.event_type.value),
+                        "description": getattr(event, "description", ""),
+                        "oanda_trade_id": closed_position.oanda_trade_id,
+                        "order_id": str(close_order.id) if close_order else None,
+                    },
                 )
 
             # If no specific amount was requested, we only close one position
@@ -531,7 +616,7 @@ class EventHandler:
                 self._prune_closed_position(position.layer_index or 0, closed)
                 realized_delta_total += realized_delta
                 self._record_trade(
-                    direction=None,
+                    direction=Direction(position.direction),
                     units=abs(position.units),
                     instrument=position.instrument,
                     price=Decimal(str(closed.exit_price or position.entry_price)),
@@ -541,12 +626,39 @@ class EventHandler:
                     oanda_trade_id=position.oanda_trade_id,
                     position=position,
                     order=close_order,
+                    description=f"Volatility lock: close all positions ({event.reason})",
                 )
                 logger.info(
                     "Closed position due to volatility: layer=%s, position_id=%s, pnl=%s",
                     position.layer_index,
                     closed.id,
                     realized_delta,
+                )
+                lifecycle_logger.info(
+                    "POSITION_CLOSED: %s %s (volatility lock) exit @ %s, pnl=%s (reason=%s)",
+                    position.direction,
+                    position.instrument,
+                    closed.exit_price,
+                    realized_delta,
+                    event.reason,
+                    extra={
+                        "position_id": str(closed.id),
+                        "lifecycle_event": "CLOSED",
+                        "close_type": "full",
+                        "direction": position.direction,
+                        "instrument": position.instrument,
+                        "units_closed": abs(position.units),
+                        "entry_price": str(position.entry_price),
+                        "exit_price": str(closed.exit_price),
+                        "entry_time": str(position.entry_time),
+                        "exit_time": str(closed.exit_time),
+                        "realized_pnl": str(realized_delta),
+                        "layer_index": position.layer_index,
+                        "close_reason": "volatility_lock",
+                        "description": f"Volatility lock: {event.reason}",
+                        "oanda_trade_id": position.oanda_trade_id,
+                        "order_id": str(close_order.id) if close_order else None,
+                    },
                 )
             except OrderServiceError as e:
                 logger.error(
@@ -608,6 +720,28 @@ class EventHandler:
                     units,
                     hedged.id,
                     instr.get("source_entry_id"),
+                )
+                lifecycle_logger.info(
+                    "POSITION_OPENED: %s %s %s units @ %s (hedge neutralize, layer=%s)",
+                    direction_str,
+                    self.instrument,
+                    units,
+                    hedged.entry_price,
+                    layer_index,
+                    extra={
+                        "position_id": str(hedged.id),
+                        "lifecycle_event": "OPENED",
+                        "direction": direction_str,
+                        "instrument": self.instrument,
+                        "units": units,
+                        "entry_price": str(hedged.entry_price),
+                        "entry_time": str(event.timestamp),
+                        "layer_index": layer_index,
+                        "open_reason": "volatility_hedge_neutralize",
+                        "description": f"Hedge neutralize: {event.reason}",
+                        "oanda_trade_id": hedged.oanda_trade_id,
+                        "order_id": str(_order.id),
+                    },
                 )
             except OrderServiceError as e:
                 logger.error(
@@ -674,7 +808,7 @@ class EventHandler:
                 self._prune_closed_position(position.layer_index or 0, closed)
                 realized_delta_total += realized_delta
                 self._record_trade(
-                    direction=None,
+                    direction=Direction(position.direction),
                     units=units_to_close or abs(position.units),
                     instrument=position.instrument,
                     price=Decimal(str(closed.exit_price or position.entry_price)),
@@ -684,6 +818,7 @@ class EventHandler:
                     oanda_trade_id=position.oanda_trade_id,
                     position=position,
                     order=close_order,
+                    description=f"Margin protection: forced close ({event.reason})",
                 )
                 touched_positions += 1
                 if remaining_units is not None:
@@ -696,6 +831,32 @@ class EventHandler:
                     units_to_close,
                     remaining_units,
                     realized_delta,
+                )
+                lifecycle_logger.info(
+                    "POSITION_CLOSED: %s %s (margin protection) exit @ %s, pnl=%s (reason=%s)",
+                    position.direction,
+                    position.instrument,
+                    closed.exit_price,
+                    realized_delta,
+                    event.reason,
+                    extra={
+                        "position_id": str(closed.id),
+                        "lifecycle_event": "CLOSED",
+                        "close_type": "full" if not closed.is_open else "partial",
+                        "direction": position.direction,
+                        "instrument": position.instrument,
+                        "units_closed": units_to_close or abs(position.units),
+                        "entry_price": str(position.entry_price),
+                        "exit_price": str(closed.exit_price),
+                        "entry_time": str(position.entry_time),
+                        "exit_time": str(closed.exit_time) if closed.exit_time else None,
+                        "realized_pnl": str(realized_delta),
+                        "layer_index": position.layer_index,
+                        "close_reason": "margin_protection",
+                        "description": f"Margin protection: {event.reason}",
+                        "oanda_trade_id": position.oanda_trade_id,
+                        "order_id": str(close_order.id) if close_order else None,
+                    },
                 )
             except OrderServiceError as e:
                 logger.error(

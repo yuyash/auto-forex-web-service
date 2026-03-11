@@ -194,6 +194,48 @@ export const TradingTaskDetail: React.FC = () => {
               </Typography>
             )}
 
+            {/* Current Price */}
+            {s.tick.mid != null && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  mt: 1,
+                  pl: '8px',
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  component="span"
+                >
+                  {task.instrument}:
+                </Typography>
+                <Typography
+                  variant="body2"
+                  component="span"
+                  sx={{ fontWeight: 600, fontFamily: 'monospace' }}
+                >
+                  {s.tick.mid.toFixed(
+                    task.pip_size
+                      ? String(task.pip_size).split('.')[1]?.length || 5
+                      : 5
+                  )}
+                </Typography>
+                {s.tick.bid != null && s.tick.ask != null && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    component="span"
+                    sx={{ fontFamily: 'monospace' }}
+                  >
+                    (B: {s.tick.bid.toFixed(5)} / A: {s.tick.ask.toFixed(5)})
+                  </Typography>
+                )}
+              </Box>
+            )}
+
             {/* Progress Percentage */}
             {task.status === TaskStatus.RUNNING && (
               <Typography

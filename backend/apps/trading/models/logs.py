@@ -34,17 +34,11 @@ class TaskLog(models.Model):
         db_index=True,
         help_text="UUID of the task this log entry belongs to",
     )
-    execution_run_id = models.PositiveIntegerField(
-        default=0,
-        db_index=True,
-        help_text="Execution run identifier for run-scoped log queries",
-    )
-    celery_task_id = models.CharField(
-        max_length=255,
+    execution_id = models.UUIDField(
         null=True,
         blank=True,
         db_index=True,
-        help_text="Celery task ID for this execution",
+        help_text="Execution run UUID (shared with Celery task_id)",
     )
     timestamp = models.DateTimeField(
         auto_now_add=True,
@@ -80,10 +74,9 @@ class TaskLog(models.Model):
         ordering = ["timestamp"]
         indexes = [
             models.Index(fields=["task_type", "task_id", "timestamp"]),
-            models.Index(fields=["task_type", "task_id", "execution_run_id", "timestamp"]),
+            models.Index(fields=["task_type", "task_id", "execution_id", "timestamp"]),
             models.Index(fields=["task_type", "task_id", "level"]),
             models.Index(fields=["task_type", "task_id", "component"]),
-            models.Index(fields=["celery_task_id"]),
         ]
 
     def __str__(self) -> str:

@@ -120,33 +120,44 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
 
   const columns: Column<TaskOrder>[] = [
     {
+      id: 'id',
+      label: t('tables.orders.orderId'),
+      width: 120,
+      minWidth: 80,
+      render: (row) => (row.id ? String(row.id).slice(0, 8) : '-'),
+    },
+    {
       id: 'submitted_at',
       label: t('tables.orders.timestamp'),
-      width: 180,
-      minWidth: 140,
+      width: 220,
+      minWidth: 220,
       render: (row) =>
         row.submitted_at ? formatTimestamp(row.submitted_at) : '-',
     },
     {
       id: 'instrument',
       label: t('tables.orders.instrument'),
-      width: 110,
-      minWidth: 80,
+      width: 100,
+      minWidth: 85,
     },
     {
       id: 'order_type',
       label: t('tables.orders.type'),
-      width: 90,
-      minWidth: 70,
+      width: 128,
+      minWidth: 128,
       render: (row) => (
-        <Chip label={row.order_type.toUpperCase()} variant="outlined" />
+        <Chip
+          label={row.order_type.toUpperCase()}
+          variant="outlined"
+          size="small"
+        />
       ),
     },
     {
       id: 'direction',
       label: t('tables.orders.direction'),
-      width: 90,
-      minWidth: 70,
+      width: 120,
+      minWidth: 120,
       render: (row) => {
         if (!row.direction)
           return (
@@ -165,6 +176,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
                   : row.direction.toUpperCase()
             }
             color={dir === 'long' ? 'success' : 'error'}
+            size="small"
           />
         );
       },
@@ -172,28 +184,29 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     {
       id: 'units',
       label: t('tables.orders.units'),
-      width: 90,
-      minWidth: 70,
+      width: 70,
+      minWidth: 55,
       align: 'right',
       render: (row) => String(Math.abs(row.units)),
     },
     {
       id: 'status',
       label: t('tables.orders.status'),
-      width: 100,
-      minWidth: 80,
+      width: 120,
+      minWidth: 120,
       render: (row) => (
         <Chip
           label={row.status.toUpperCase()}
           color={statusColor(row.status)}
+          size="small"
         />
       ),
     },
     {
       id: 'requested_price',
       label: t('tables.orders.requestedPrice'),
-      width: 130,
-      minWidth: 100,
+      width: 120,
+      minWidth: 120,
       align: 'right',
       render: (row) =>
         row.requested_price ? parseFloat(row.requested_price).toFixed(5) : '-',
@@ -201,8 +214,8 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     {
       id: 'fill_price',
       label: t('tables.orders.fillPrice'),
-      width: 110,
-      minWidth: 90,
+      width: 120,
+      minWidth: 120,
       align: 'right',
       render: (row) =>
         row.fill_price ? parseFloat(row.fill_price).toFixed(5) : '-',
@@ -210,15 +223,15 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     {
       id: 'filled_at',
       label: t('tables.orders.filledAt'),
-      width: 180,
-      minWidth: 140,
+      width: 220,
+      minWidth: 220,
       render: (row) => (row.filled_at ? formatTimestamp(row.filled_at) : '-'),
     },
     {
       id: 'stop_loss',
       label: t('tables.orders.stopLoss'),
-      width: 110,
-      minWidth: 90,
+      width: 95,
+      minWidth: 80,
       align: 'right',
       render: (row) =>
         row.stop_loss ? parseFloat(row.stop_loss).toFixed(5) : '-',
@@ -226,15 +239,14 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     {
       id: 'error_message',
       label: t('tables.orders.error'),
-      width: 200,
-      minWidth: 120,
+      minWidth: 200,
       render: (row) =>
         row.error_message ? (
           <Typography
             variant="body2"
             color="error.main"
-            noWrap
             title={row.error_message}
+            sx={{ whiteSpace: 'normal', wordBreak: 'break-word' }}
           >
             {row.error_message}
           </Typography>

@@ -18,10 +18,10 @@ class TaskExecutionMetricsSerializer(serializers.Serializer):
 class TaskExecutionSerializer(serializers.Serializer):
     """Serializer for task execution history rows."""
 
-    id = serializers.CharField(help_text="Execution identifier (execution_run_id as string).")
+    id = serializers.CharField(help_text="Execution identifier (UUID).")
     task_type = serializers.CharField()
     task_id = serializers.UUIDField()
-    execution_number = serializers.IntegerField(help_text="Execution run ID.")
+    execution_number = serializers.CharField(help_text="Execution ID (UUID).")
     status = serializers.CharField()
     progress = serializers.IntegerField()
     started_at = serializers.DateTimeField(allow_null=True)

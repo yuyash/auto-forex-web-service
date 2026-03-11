@@ -91,8 +91,7 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
         TaskLog.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
-            execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
-            celery_task_id=self.request.id,
+            execution_id=task.execution_id,
             level=LogLevel.INFO,
             component=__name__,
             message="Backtest task execution started",
@@ -143,8 +142,7 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
         TaskLog.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
-            execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
-            celery_task_id=task.celery_task_id,
+            execution_id=task.execution_id,
             level=LogLevel.INFO,
             component=__name__,
             message="Backtest task completed successfully",
@@ -258,7 +256,7 @@ def handle_exception(task_id: UUID, task: BacktestTask | None, error: Exception)
 
         CeleryTaskStatus.objects.filter(
             task_name="trading.tasks.run_backtest_task",
-            instance_key=f"{task_id}:{int(getattr(task, 'execution_run_id', 0) or 0)}",
+            instance_key=f"{task_id}:{task.execution_id}",
         ).update(
             status=CeleryTaskStatus.Status.FAILED,
             status_message=f"Task failed: {type(error).__name__}: {error_message}",
@@ -270,8 +268,7 @@ def handle_exception(task_id: UUID, task: BacktestTask | None, error: Exception)
         TaskLog.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
-            execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
-            celery_task_id=task.celery_task_id,
+            execution_id=task.execution_id,
             level=LogLevel.ERROR,
             component=__name__,
             message=f"Backtest task execution failed: {type(error).__name__}: {error_message}",
@@ -440,12 +437,12 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
                 )
 
             # Force termination - Revoke the main Celery task
-            if task.celery_task_id:
+            if task.execution_id:
                 logger.info(
                     f"[STOP:BACKTEST] Force revoking main Celery task - task_id={task_id}, "
-                    f"celery_task_id={task.celery_task_id}"
+                    f"execution_id={task.execution_id}"
                 )
-                current_app.control.revoke(task.celery_task_id, terminate=True, signal="SIGKILL")
+                current_app.control.revoke(str(task.execution_id), terminate=True, signal="SIGKILL")
                 logger.info(f"[STOP:BACKTEST] Main Celery task force revoked - task_id={task_id}")
 
             # Update task status to STOPPED (without completed_at since it didn't complete)
@@ -462,7 +459,7 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
             from apps.trading.models import CeleryTaskStatus
 
             task_name = "trading.tasks.run_backtest_task"
-            instance_key = f"{task_id}:{int(getattr(task, 'execution_run_id', 0) or 0)}"
+            instance_key = f"{task_id}:{task.execution_id}"
             CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=instance_key).update(
                 status=CeleryTaskStatus.Status.STOPPED,
                 stopped_at=dj_timezone.now(),

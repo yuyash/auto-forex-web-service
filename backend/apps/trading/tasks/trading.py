@@ -79,8 +79,7 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
         TaskLog.objects.create(
             task_type=TaskType.TRADING,
             task_id=task.pk,
-            execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
-            celery_task_id=self.request.id,
+            execution_id=task.execution_id,
             level=LogLevel.INFO,
             component=__name__,
             message="Trading task execution started",
@@ -118,8 +117,7 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
         TaskLog.objects.create(
             task_type=TaskType.TRADING,
             task_id=task.pk,
-            execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
-            celery_task_id=task.celery_task_id,
+            execution_id=task.execution_id,
             level=LogLevel.INFO,
             component=__name__,
             message="Trading task stopped successfully",
@@ -208,7 +206,7 @@ def handle_exception(task_id: UUID, task: TradingTask | None, error: Exception) 
 
         CeleryTaskStatus.objects.filter(
             task_name="trading.tasks.run_trading_task",
-            instance_key=f"{task_id}:{int(getattr(task, 'execution_run_id', 0) or 0)}",
+            instance_key=f"{task_id}:{task.execution_id}",
         ).update(
             status=CeleryTaskStatus.Status.FAILED,
             status_message=f"Task failed: {type(error).__name__}: {error_message}",
@@ -220,8 +218,7 @@ def handle_exception(task_id: UUID, task: TradingTask | None, error: Exception) 
         TaskLog.objects.create(
             task_type=TaskType.TRADING,
             task_id=task.pk,
-            execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
-            celery_task_id=task.celery_task_id,
+            execution_id=task.execution_id,
             level=LogLevel.ERROR,
             component=__name__,
             message=f"Trading task execution failed: {type(error).__name__}: {error_message}",
@@ -248,16 +245,15 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
         if task.status == TaskStatus.STOPPING:
             logger.info(f"Current: STOPPING, proceeding with stop - task_id={task_id}")
             # Only IMMEDIATE mode force-revokes worker process.
-            if stop_mode == StopMode.IMMEDIATE and task.celery_task_id:
+            if stop_mode == StopMode.IMMEDIATE and task.execution_id:
                 from celery import current_app
 
                 logger.info(
-                    f"Revoking Celery task - task_id={task_id}, "
-                    f"celery_task_id={task.celery_task_id}"
+                    f"Revoking Celery task - task_id={task_id}, execution_id={task.execution_id}"
                 )
-                current_app.control.revoke(task.celery_task_id, terminate=True, signal="SIGKILL")
+                current_app.control.revoke(str(task.execution_id), terminate=True, signal="SIGKILL")
                 logger.info(
-                    f"Celery task revoked - task_id={task_id}, celery_task_id={task.celery_task_id}"
+                    f"Celery task revoked - task_id={task_id}, execution_id={task.execution_id}"
                 )
 
             if stop_mode == StopMode.GRACEFUL_CLOSE or getattr(task, "sell_on_stop", False) is True:
@@ -271,7 +267,7 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
 
             # Update CeleryTaskStatus
             task_name = "trading.tasks.run_trading_task"
-            instance_key = f"{task_id}:{int(getattr(task, 'execution_run_id', 0) or 0)}"
+            instance_key = f"{task_id}:{task.execution_id}"
             CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=instance_key).update(
                 status=CeleryTaskStatus.Status.STOPPED,
                 stopped_at=dj_timezone.now(),

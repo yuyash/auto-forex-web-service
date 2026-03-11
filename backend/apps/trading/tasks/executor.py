@@ -202,13 +202,12 @@ class TaskExecutor:
     def _load_state_with_metadata(self) -> tuple[ExecutionState, bool]:
         """Load state and indicate whether this execution is a resume."""
         self.task.refresh_from_db()
-        execution_run_id = int(getattr(self.task, "execution_run_id", 0) or 0)
 
         try:
             state = ExecutionState.objects.get(
                 task_type=self.task_type.value,
                 task_id=self.task.pk,
-                execution_run_id=execution_run_id,
+                execution_id=self.task.execution_id,
             )
             return state, True
         except ExecutionState.DoesNotExist:
@@ -221,8 +220,7 @@ class TaskExecutor:
         state = ExecutionState.objects.create(
             task_type=self.task_type.value,
             task_id=self.task.pk,
-            execution_run_id=execution_run_id,
-            celery_task_id=self.task.celery_task_id or "",
+            execution_id=self.task.execution_id,
             strategy_state={},
             current_balance=self.initial_balance,
             ticks_processed=0,
@@ -262,8 +260,7 @@ class TaskExecutor:
             Metrics(
                 task_type=self.task_type.value,
                 task_id=self.task.pk,
-                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
-                celery_task_id=self.task.celery_task_id,
+                execution_id=self.task.execution_id,
                 timestamp=m["timestamp"],
                 # Legacy Floor fields (populated from metrics dict for backward compat)
                 margin_ratio=m.get("margin_ratio"),
@@ -302,7 +299,6 @@ class TaskExecutor:
 
         from apps.trading.models import StrategyEventRecord, TradingEvent
 
-        execution_run_id = int(getattr(self.task, "execution_run_id", 0) or 0)
         trading_records: List[TradingEvent] = []
         strategy_records: list[StrategyEventRecord] = []
 
@@ -327,8 +323,7 @@ class TaskExecutor:
                             instrument=self.event_context.instrument,
                             task_type=self.event_context.task_type.value,
                             task_id=self.event_context.task_id,
-                            execution_run_id=execution_run_id,
-                            celery_task_id=self.task.celery_task_id,
+                            execution_id=self.task.execution_id,
                             details=details,
                         )
                     )
@@ -337,8 +332,7 @@ class TaskExecutor:
                         TradingEvent.from_event(
                             event=event,
                             context=self.event_context,
-                            celery_task_id=self.task.celery_task_id,
-                            execution_run_id=execution_run_id,
+                            execution_id=self.task.execution_id,
                         )
                     )
 
@@ -347,8 +341,7 @@ class TaskExecutor:
                     TradingEvent.from_event(
                         event=event,
                         context=self.event_context,
-                        celery_task_id=self.task.celery_task_id,
-                        execution_run_id=execution_run_id,
+                        execution_id=self.task.execution_id,
                     )
                 )
             elif event_scope == EventScope.STRATEGY.value:
@@ -356,8 +349,7 @@ class TaskExecutor:
                     StrategyEventRecord.from_event(
                         event=event,
                         context=self.event_context,
-                        celery_task_id=self.task.celery_task_id,
-                        execution_run_id=execution_run_id,
+                        execution_id=self.task.execution_id,
                     )
                 )
 
@@ -404,8 +396,8 @@ class TaskExecutor:
         """Initialize coordinator/state and run strategy start hook."""
         logger.info("Starting task execution")
         self.state_manager.start(
-            celery_task_id=self.task.celery_task_id,
-            meta={"execution_run_id": int(getattr(self.task, "execution_run_id", 0) or 0)},
+            celery_task_id=str(self.task.execution_id) if self.task.execution_id else None,
+            meta={"execution_id": str(self.task.execution_id) if self.task.execution_id else None},
         )
 
         state, resumed = self._load_state_with_metadata()
@@ -544,7 +536,7 @@ class TaskExecutor:
             TradingEvent.objects.filter(
                 task_type=self.task_type.value,
                 task_id=self.task.pk,
-                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
+                execution_id=self.task.execution_id,
                 is_processed=False,
             ).order_by("created_at", "id")
         )
@@ -603,7 +595,7 @@ class TaskExecutor:
                     id=position_id,
                     task_type=self.task_type.value,
                     task_id=self.task.pk,
-                    execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
+                    execution_id=self.task.execution_id,
                     is_open=True,
                 ).exists()
                 return bool(exists)
@@ -617,7 +609,7 @@ class TaskExecutor:
                 id=position_id,
                 task_type=self.task_type.value,
                 task_id=self.task.pk,
-                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
+                execution_id=self.task.execution_id,
                 is_open=True,
             ).exists()
 
@@ -625,7 +617,7 @@ class TaskExecutor:
             return not Position.objects.filter(
                 task_type=self.task_type.value,
                 task_id=self.task.pk,
-                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
+                execution_id=self.task.execution_id,
                 instrument=self.instrument,
                 is_open=True,
             ).exists()
@@ -697,8 +689,7 @@ class TaskExecutor:
             task_type=self.task_type.value,
             task_id=str(self.task.pk),
             current_price=Decimal(str(state.last_tick_price)),
-            execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
-            celery_task_id=getattr(self.task, "celery_task_id", None),
+            execution_id=self.task.execution_id,
         )
 
     def _emit_batch_telemetry(self, loop: ExecutionLoopState) -> None:
@@ -786,7 +777,7 @@ class BacktestExecutor(TaskExecutor):
             account=None,  # No account for backtests
             instrument=task.instrument,
             task_id=task.pk,
-            execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
+            execution_id=task.execution_id,
             task_type=TaskType.BACKTEST,
         )
 
@@ -801,7 +792,7 @@ class BacktestExecutor(TaskExecutor):
         # Create state manager
         state_manager = StateManager(
             task_name="trading.tasks.run_backtest_task",
-            instance_key=f"{task.pk}:{int(getattr(task, 'execution_run_id', 0) or 0)}",
+            instance_key=f"{task.pk}:{task.execution_id}",
             task_id=str(task.pk),
         )
 
@@ -834,15 +825,14 @@ class TradingExecutor(TaskExecutor):
         reconciler = TradingResumeReconciler(
             task=trading_task,
             state=state,
-            celery_task_id=trading_task.celery_task_id or "",
         )
         report = reconciler.reconcile()
         logger.info(
-            "Trading resume reconciliation complete - task_id=%s, run=%s, "
+            "Trading resume reconciliation complete - task_id=%s, execution_id=%s, "
             "account=%s, closed_local=%d, created_local=%d, updated_local=%d, "
             "removed_entries=%d, synthesized_entries=%d, relinked_entries=%d",
             self.task.pk,
-            int(getattr(self.task, "execution_run_id", 0) or 0),
+            self.task.execution_id,
             report.updated_account_snapshot,
             report.closed_local_positions,
             report.created_local_positions,
@@ -875,7 +865,7 @@ class TradingExecutor(TaskExecutor):
             account=task.oanda_account,
             instrument=task.instrument,
             task_id=task.pk,
-            execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
+            execution_id=task.execution_id,
             task_type=TaskType.TRADING,
         )
 
@@ -889,7 +879,7 @@ class TradingExecutor(TaskExecutor):
         # Create state manager
         state_manager = StateManager(
             task_name="trading.tasks.run_trading_task",
-            instance_key=f"{task.pk}:{int(getattr(task, 'execution_run_id', 0) or 0)}",
+            instance_key=f"{task.pk}:{task.execution_id}",
             task_id=str(task.pk),
         )
 

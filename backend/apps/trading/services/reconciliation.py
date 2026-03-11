@@ -56,12 +56,10 @@ class TradingResumeReconciler:
         *,
         task: TradingTask,
         state: ExecutionState,
-        celery_task_id: str,
     ) -> None:
         self.task = task
         self.state = state
-        self.celery_task_id = celery_task_id
-        self.execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
+        self.execution_id = task.execution_id
         self.oanda_service = OandaService(account=task.oanda_account, dry_run=False)
 
     def reconcile(self) -> ReconciliationReport:
@@ -107,7 +105,7 @@ class TradingResumeReconciler:
             Position.objects.filter(
                 task_type=TaskType.TRADING,
                 task_id=self.task.pk,
-                execution_run_id=self.execution_run_id,
+                execution_id=self.execution_id,
                 instrument=self.task.instrument,
                 is_open=True,
             ).order_by("entry_time", "created_at")
@@ -176,8 +174,7 @@ class TradingResumeReconciler:
             Position.objects.create(
                 task_type=TaskType.TRADING,
                 task_id=self.task.pk,
-                execution_run_id=self.execution_run_id,
-                celery_task_id=self.celery_task_id,
+                execution_id=self.execution_id,
                 instrument=broker_trade.instrument,
                 direction=direction,
                 units=signed_units,
@@ -193,7 +190,7 @@ class TradingResumeReconciler:
             Position.objects.filter(
                 task_type=TaskType.TRADING,
                 task_id=self.task.pk,
-                execution_run_id=self.execution_run_id,
+                execution_id=self.execution_id,
                 instrument=self.task.instrument,
                 is_open=True,
             ).order_by("entry_time", "created_at")

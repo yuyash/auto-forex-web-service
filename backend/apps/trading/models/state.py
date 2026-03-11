@@ -38,15 +38,11 @@ class ExecutionState(UUIDModel):
         db_index=True,
         help_text="UUID of the associated task",
     )
-    celery_task_id = models.CharField(
-        max_length=255,
+    execution_id = models.UUIDField(
+        null=True,
+        blank=True,
         db_index=True,
-        help_text="Celery task ID for tracking execution",
-    )
-    execution_run_id = models.PositiveIntegerField(
-        default=0,
-        db_index=True,
-        help_text="Execution run identifier to isolate state per run",
+        help_text="Execution run UUID (shared with Celery task_id)",
     )
 
     # Execution state fields
@@ -96,19 +92,17 @@ class ExecutionState(UUIDModel):
         verbose_name = "Execution State"
         verbose_name_plural = "Execution States"
         indexes = [
-            models.Index(fields=["task_type", "task_id", "execution_run_id"]),
-            models.Index(fields=["task_type", "task_id", "celery_task_id"]),
-            models.Index(fields=["celery_task_id"]),
+            models.Index(fields=["task_type", "task_id", "execution_id"]),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["task_type", "task_id", "execution_run_id"],
+                fields=["task_type", "task_id", "execution_id"],
                 name="unique_task_run_execution_state",
             )
         ]
 
     def __str__(self) -> str:
         return (
-            f"ExecutionState({self.task_type}:{self.task_id}:run={self.execution_run_id}, "
+            f"ExecutionState({self.task_type}:{self.task_id}:exec={self.execution_id}, "
             f"ticks={self.ticks_processed})"
         )

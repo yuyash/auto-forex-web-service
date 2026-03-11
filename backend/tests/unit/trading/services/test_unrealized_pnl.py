@@ -31,11 +31,11 @@ class TestUpdateUnrealizedPnl:
             task_type="backtest",
             task_id="def-456",
             current_price=Decimal("1.00"),
-            celery_task_id="celery-xyz",
+            execution_id="celery-xyz",
         )
 
         filter_kwargs = mock_pos.objects.filter.call_args[1]
-        assert filter_kwargs["celery_task_id"] == "celery-xyz"
+        assert filter_kwargs["execution_id"] == "celery-xyz"
 
     @patch("apps.trading.services.unrealized_pnl.Position")
     def test_filters_include_execution_run_id(self, mock_pos):
@@ -46,11 +46,11 @@ class TestUpdateUnrealizedPnl:
             task_type="trading",
             task_id="ghi-789",
             current_price=Decimal("1.00"),
-            execution_run_id=5,
+            execution_id=5,
         )
 
         filter_kwargs = mock_pos.objects.filter.call_args[1]
-        assert filter_kwargs["execution_run_id"] == 5
+        assert filter_kwargs["execution_id"] == 5
 
     @patch("apps.trading.services.unrealized_pnl.Position")
     def test_no_optional_filters(self, mock_pos):
@@ -64,5 +64,4 @@ class TestUpdateUnrealizedPnl:
         )
 
         filter_kwargs = mock_pos.objects.filter.call_args[1]
-        assert "celery_task_id" not in filter_kwargs
-        assert "execution_run_id" not in filter_kwargs
+        assert "execution_id" not in filter_kwargs

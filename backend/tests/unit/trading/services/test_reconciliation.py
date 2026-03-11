@@ -77,14 +77,13 @@ def _make_position(**overrides: Any) -> MagicMock:
 def _make_reconciler(
     task: Any = None,
     state: Any = None,
-    celery_task_id: str = "celery-123",
 ) -> TradingResumeReconciler:
     if task is None:
         task = MagicMock()
         task.pk = uuid4()
         task.instrument = "EUR_USD"
         task.oanda_account = MagicMock()
-        task.execution_run_id = 1
+        task.execution_id = uuid4()
         config = MagicMock()
         config.strategy_type = "momentum"
         config.config_dict = {}
@@ -99,8 +98,7 @@ def _make_reconciler(
         reconciler = TradingResumeReconciler.__new__(TradingResumeReconciler)
         reconciler.task = task
         reconciler.state = state
-        reconciler.celery_task_id = celery_task_id
-        reconciler.execution_run_id = int(getattr(task, "execution_run_id", 0) or 0)
+        reconciler.execution_id = getattr(task, "execution_id", None)
         reconciler.oanda_service = MagicMock()
     return reconciler
 

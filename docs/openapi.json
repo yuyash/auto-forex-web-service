@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.9.0",
+        "version": "1.9.2",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -1965,11 +1965,11 @@
                     },
                     {
                         "in": "query",
-                        "name": "execution_run_id",
+                        "name": "execution_id",
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         },
-                        "description": "Filter by execution run ID"
+                        "description": "Filter by execution ID (UUID)"
                     },
                     {
                         "in": "path",
@@ -2102,6 +2102,52 @@
                 }
             }
         },
+        "/api/trading/tasks/backtest/{id}/log-components/": {
+            "get": {
+                "operationId": "trading_tasks_backtest_log_components_retrieve",
+                "description": "Return distinct logger/component names for a task's logs.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by execution ID (UUID)"
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskLogComponentsResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/backtest/{id}/logs/": {
             "get": {
                 "operationId": "trading_tasks_backtest_logs_retrieve",
@@ -2109,11 +2155,19 @@
                 "parameters": [
                     {
                         "in": "query",
-                        "name": "execution_run_id",
+                        "name": "component",
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         },
-                        "description": "Filter by execution run ID"
+                        "description": "Logger/component name filter (comma-separated for multiple)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by execution ID (UUID)"
                     },
                     {
                         "in": "path",
@@ -2131,7 +2185,7 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Log level filter"
+                        "description": "Log level filter (comma-separated for multiple)"
                     },
                     {
                         "in": "query",
@@ -2154,6 +2208,22 @@
                             "type": "string"
                         },
                         "description": "RFC3339 timestamp for incremental fetch"
+                    },
+                    {
+                        "in": "query",
+                        "name": "timestamp_from",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter logs from this RFC3339 timestamp (inclusive)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "timestamp_to",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter logs until this RFC3339 timestamp (inclusive)"
                     }
                 ],
                 "tags": [
@@ -2185,11 +2255,11 @@
                 "parameters": [
                     {
                         "in": "query",
-                        "name": "execution_run_id",
+                        "name": "execution_id",
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         },
-                        "description": "Filter by execution run ID"
+                        "description": "Filter by execution ID (UUID)"
                     },
                     {
                         "in": "path",
@@ -2255,11 +2325,11 @@
                     },
                     {
                         "in": "query",
-                        "name": "execution_run_id",
+                        "name": "execution_id",
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         },
-                        "description": "Filter by execution run ID"
+                        "description": "Filter by execution ID (UUID)"
                     },
                     {
                         "in": "path",
@@ -2395,11 +2465,11 @@
                     },
                     {
                         "in": "query",
-                        "name": "execution_run_id",
+                        "name": "execution_id",
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         },
-                        "description": "Filter by execution run ID"
+                        "description": "Filter by execution ID (UUID)"
                     },
                     {
                         "in": "path",
@@ -2671,11 +2741,11 @@
                     },
                     {
                         "in": "query",
-                        "name": "execution_run_id",
+                        "name": "execution_id",
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         },
-                        "description": "Filter by execution run ID"
+                        "description": "Filter by execution ID (UUID)"
                     },
                     {
                         "in": "path",
@@ -2747,11 +2817,11 @@
                 "parameters": [
                     {
                         "in": "query",
-                        "name": "execution_run_id",
+                        "name": "execution_id",
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         },
-                        "description": "Filter by execution run ID"
+                        "description": "Filter by execution ID (UUID)"
                     },
                     {
                         "in": "path",
@@ -2801,11 +2871,11 @@
                     },
                     {
                         "in": "query",
-                        "name": "execution_run_id",
+                        "name": "execution_id",
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         },
-                        "description": "Filter by execution run ID"
+                        "description": "Filter by execution ID (UUID)"
                     },
                     {
                         "in": "path",
@@ -3122,11 +3192,11 @@
                     },
                     {
                         "in": "query",
-                        "name": "execution_run_id",
+                        "name": "execution_id",
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         },
-                        "description": "Filter by execution run ID"
+                        "description": "Filter by execution ID (UUID)"
                     },
                     {
                         "in": "path",
@@ -3259,6 +3329,52 @@
                 }
             }
         },
+        "/api/trading/tasks/trading/{id}/log-components/": {
+            "get": {
+                "operationId": "trading_tasks_trading_log_components_retrieve",
+                "description": "Return distinct logger/component names for a task's logs.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by execution ID (UUID)"
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskLogComponentsResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/trading/{id}/logs/": {
             "get": {
                 "operationId": "trading_tasks_trading_logs_retrieve",
@@ -3266,11 +3382,19 @@
                 "parameters": [
                     {
                         "in": "query",
-                        "name": "execution_run_id",
+                        "name": "component",
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         },
-                        "description": "Filter by execution run ID"
+                        "description": "Logger/component name filter (comma-separated for multiple)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by execution ID (UUID)"
                     },
                     {
                         "in": "path",
@@ -3288,7 +3412,7 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Log level filter"
+                        "description": "Log level filter (comma-separated for multiple)"
                     },
                     {
                         "in": "query",
@@ -3311,6 +3435,22 @@
                             "type": "string"
                         },
                         "description": "RFC3339 timestamp for incremental fetch"
+                    },
+                    {
+                        "in": "query",
+                        "name": "timestamp_from",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter logs from this RFC3339 timestamp (inclusive)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "timestamp_to",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter logs until this RFC3339 timestamp (inclusive)"
                     }
                 ],
                 "tags": [
@@ -3342,11 +3482,11 @@
                 "parameters": [
                     {
                         "in": "query",
-                        "name": "execution_run_id",
+                        "name": "execution_id",
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         },
-                        "description": "Filter by execution run ID"
+                        "description": "Filter by execution ID (UUID)"
                     },
                     {
                         "in": "path",
@@ -3412,11 +3552,11 @@
                     },
                     {
                         "in": "query",
-                        "name": "execution_run_id",
+                        "name": "execution_id",
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         },
-                        "description": "Filter by execution run ID"
+                        "description": "Filter by execution ID (UUID)"
                     },
                     {
                         "in": "path",
@@ -3552,11 +3692,11 @@
                     },
                     {
                         "in": "query",
-                        "name": "execution_run_id",
+                        "name": "execution_id",
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         },
-                        "description": "Filter by execution run ID"
+                        "description": "Filter by execution ID (UUID)"
                     },
                     {
                         "in": "path",
@@ -3827,11 +3967,11 @@
                     },
                     {
                         "in": "query",
-                        "name": "execution_run_id",
+                        "name": "execution_id",
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         },
-                        "description": "Filter by execution run ID"
+                        "description": "Filter by execution ID (UUID)"
                     },
                     {
                         "in": "path",
@@ -3903,11 +4043,11 @@
                 "parameters": [
                     {
                         "in": "query",
-                        "name": "execution_run_id",
+                        "name": "execution_id",
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         },
-                        "description": "Filter by execution run ID"
+                        "description": "Filter by execution ID (UUID)"
                     },
                     {
                         "in": "path",
@@ -3957,11 +4097,11 @@
                     },
                     {
                         "in": "query",
-                        "name": "execution_run_id",
+                        "name": "execution_id",
                         "schema": {
-                            "type": "integer"
+                            "type": "string"
                         },
-                        "description": "Filter by execution run ID"
+                        "description": "Filter by execution ID (UUID)"
                     },
                     {
                         "in": "path",
@@ -4062,10 +4202,12 @@
                         "readOnly": true,
                         "description": "Current task status\n\n* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
                     },
-                    "execution_run_id": {
-                        "type": "integer",
+                    "execution_id": {
+                        "type": "string",
+                        "format": "uuid",
                         "readOnly": true,
-                        "description": "Monotonic execution run identifier incremented on every start/restart/resume"
+                        "nullable": true,
+                        "description": "UUID identifying the current execution run (also used as Celery task_id)"
                     },
                     "created_at": {
                         "type": "string",
@@ -4182,7 +4324,7 @@
                     "end_time",
                     "error_message",
                     "error_traceback",
-                    "execution_run_id",
+                    "execution_id",
                     "id",
                     "name",
                     "start_time",
@@ -4643,10 +4785,27 @@
                     },
                     "ticks_processed": {
                         "type": "integer"
+                    },
+                    "account_currency": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "current_balance_display": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,18}(?:\\.\\d{0,2})?$",
+                        "nullable": true
+                    },
+                    "display_currency": {
+                        "type": "string",
+                        "nullable": true
                     }
                 },
                 "required": [
+                    "account_currency",
                     "current_balance",
+                    "current_balance_display",
+                    "display_currency",
                     "ticks_processed"
                 ]
             },
@@ -6859,11 +7018,11 @@
                         "format": "uuid",
                         "nullable": true
                     },
-                    "execution_run_id": {
-                        "type": "integer",
-                        "maximum": 2147483647,
-                        "minimum": 0,
-                        "description": "Execution run identifier for run-scoped event queries"
+                    "execution_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true,
+                        "description": "Execution run UUID (shared with Celery task_id)"
                     },
                     "details": {},
                     "created_at": {
@@ -6965,7 +7124,7 @@
                 "properties": {
                     "id": {
                         "type": "string",
-                        "description": "Execution identifier (execution_run_id as string)."
+                        "description": "Execution identifier (UUID)."
                     },
                     "task_type": {
                         "type": "string"
@@ -6975,8 +7134,8 @@
                         "format": "uuid"
                     },
                     "execution_number": {
-                        "type": "integer",
-                        "description": "Execution run ID."
+                        "type": "string",
+                        "description": "Execution ID (UUID)."
                     },
                     "status": {
                         "type": "string"
@@ -7143,11 +7302,11 @@
                         "format": "uuid",
                         "description": "UUID of the task this log entry belongs to"
                     },
-                    "execution_run_id": {
-                        "type": "integer",
-                        "maximum": 2147483647,
-                        "minimum": 0,
-                        "description": "Execution run identifier for run-scoped log queries"
+                    "execution_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true,
+                        "description": "Execution run UUID (shared with Celery task_id)"
                     },
                     "timestamp": {
                         "type": "string",
@@ -7183,6 +7342,20 @@
                     "task_id",
                     "task_type",
                     "timestamp"
+                ]
+            },
+            "TaskLogComponentsResponse": {
+                "type": "object",
+                "properties": {
+                    "components": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "required": [
+                    "components"
                 ]
             },
             "TaskLogPaginatedResponse": {
@@ -7604,6 +7777,10 @@
                         "type": "integer",
                         "nullable": true
                     },
+                    "description": {
+                        "type": "string",
+                        "default": ""
+                    },
                     "timestamp": {
                         "type": "string",
                         "format": "date-time"
@@ -7679,11 +7856,11 @@
                         "format": "uuid",
                         "nullable": true
                     },
-                    "execution_run_id": {
-                        "type": "integer",
-                        "maximum": 2147483647,
-                        "minimum": 0,
-                        "description": "Execution run identifier for run-scoped event queries"
+                    "execution_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "nullable": true,
+                        "description": "Execution run UUID (shared with Celery task_id)"
                     },
                     "details": {},
                     "created_at": {
@@ -7734,10 +7911,12 @@
                         "readOnly": true,
                         "description": "Current task status\n\n* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
                     },
-                    "execution_run_id": {
-                        "type": "integer",
+                    "execution_id": {
+                        "type": "string",
+                        "format": "uuid",
                         "readOnly": true,
-                        "description": "Monotonic execution run identifier incremented on every start/restart/resume"
+                        "nullable": true,
+                        "description": "UUID identifying the current execution run (also used as Celery task_id)"
                     },
                     "created_at": {
                         "type": "string",
@@ -7849,7 +8028,7 @@
                     "duration",
                     "error_message",
                     "error_traceback",
-                    "execution_run_id",
+                    "execution_id",
                     "id",
                     "name",
                     "oanda_account",

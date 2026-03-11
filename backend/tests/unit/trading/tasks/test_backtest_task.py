@@ -126,7 +126,8 @@ class TestHandleExceptionBacktest:
         from apps.trading.tasks.backtest import handle_exception
 
         task_id = uuid4()
-        task = MagicMock(pk=task_id, celery_task_id="c-123")
+        execution_id = uuid4()
+        task = MagicMock(pk=task_id, execution_id=execution_id)
         with patch("apps.trading.models.celery.CeleryTaskStatus") as mock_cs:
             mock_cs.Status.FAILED = "failed"
             handle_exception(task_id, task, ValueError("bad"))
@@ -140,13 +141,14 @@ class TestHandleExceptionBacktest:
         from apps.trading.tasks.backtest import handle_exception
 
         task_id = uuid4()
-        task = MagicMock(pk=task_id, celery_task_id="c-456")
+        execution_id = uuid4()
+        task = MagicMock(pk=task_id, execution_id=execution_id)
         with patch("apps.trading.models.celery.CeleryTaskStatus") as mock_cs:
             mock_cs.Status.FAILED = "failed"
             handle_exception(task_id, task, RuntimeError("fail"))
             mock_cs.objects.filter.assert_called_once_with(
                 task_name="trading.tasks.run_backtest_task",
-                instance_key=f"{task_id}:1",
+                instance_key=f"{task_id}:{execution_id}",
             )
 
 

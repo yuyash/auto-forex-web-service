@@ -52,6 +52,9 @@ class ExecutionInfo:
 
     current_balance: Decimal | None
     ticks_processed: int
+    account_currency: str | None
+    current_balance_display: Decimal | None
+    display_currency: str | None
 
 
 @dataclass(frozen=True)
@@ -80,8 +83,7 @@ class TaskSummary:
 def compute_task_summary(
     task_type: str,
     task_id: str,
-    celery_task_id: str | None = None,
-    execution_run_id: int | None = None,
+    execution_id=None,
 ) -> TaskSummary:
     """Compute comprehensive task summary using DB aggregation.
 
@@ -95,16 +97,14 @@ def compute_task_summary(
     Args:
         task_type: "backtest" or "trading".
         task_id: UUID of the task.
-        celery_task_id: Optional celery task ID filter.
+        execution_id: Optional execution UUID filter.
 
     Returns:
         TaskSummary with structured PnL, counts, execution, tick, and task info.
     """
     base_filter: dict = {"task_type": task_type, "task_id": task_id}
-    if execution_run_id is not None:
-        base_filter["execution_run_id"] = execution_run_id
-    if celery_task_id:
-        base_filter["celery_task_id"] = celery_task_id
+    if execution_id is not None:
+        base_filter["execution_id"] = execution_id
 
     # Realized PnL: aggregate over closed positions
     realized_agg = (
@@ -139,10 +139,8 @@ def compute_task_summary(
 
     # Total trade count
     trade_filter: dict = {"task_type": task_type, "task_id": task_id}
-    if execution_run_id is not None:
-        trade_filter["execution_run_id"] = execution_run_id
-    if celery_task_id:
-        trade_filter["celery_task_id"] = celery_task_id
+    if execution_id is not None:
+        trade_filter["execution_id"] = execution_id
     total_trades = Trade.objects.filter(**trade_filter).count()
 
     # Execution state
@@ -152,14 +150,15 @@ def compute_task_summary(
     tick_bid = None
     tick_ask = None
     tick_mid = None
+    account_currency: str | None = None
+    current_balance_display: Decimal | None = None
+    display_currency: str | None = None
 
     from apps.trading.models.state import ExecutionState
 
     state_filter: dict = {"task_type": task_type, "task_id": task_id}
-    if execution_run_id is not None:
-        state_filter["execution_run_id"] = execution_run_id
-    if celery_task_id:
-        state_filter["celery_task_id"] = celery_task_id
+    if execution_id is not None:
+        state_filter["execution_id"] = execution_id
     state = ExecutionState.objects.filter(**state_filter).order_by("-updated_at").first()
     if state:
         current_balance = state.current_balance
@@ -183,6 +182,26 @@ def compute_task_summary(
         completed_at = task_obj.completed_at.isoformat() if task_obj.completed_at else None
         error_message = task_obj.error_message
 
+    # Currency conversion for display
+    if task_obj and task_type == "backtest":
+        account_currency = getattr(task_obj, "account_currency", None)
+        instrument = getattr(task_obj, "instrument", "")
+        quote_ccy = instrument.split("_")[-1].upper() if "_" in instrument else ""
+        if (
+            account_currency
+            and quote_ccy
+            and account_currency.upper() != quote_ccy
+            and current_balance is not None
+            and tick_mid is not None
+            and tick_mid > 0
+        ):
+            display_currency = quote_ccy
+            current_balance_display = current_balance * tick_mid
+        elif account_currency and quote_ccy and account_currency.upper() == quote_ccy:
+            # Account currency matches quote currency — no conversion needed
+            display_currency = account_currency.upper()
+            current_balance_display = current_balance
+
     return TaskSummary(
         timestamp=tick_timestamp,
         pnl=PnlInfo(realized=realized_pnl, unrealized=unrealized_pnl),
@@ -194,6 +213,9 @@ def compute_task_summary(
         execution=ExecutionInfo(
             current_balance=current_balance,
             ticks_processed=ticks_processed,
+            account_currency=account_currency,
+            current_balance_display=current_balance_display,
+            display_currency=display_currency,
         ),
         tick=TickInfo(
             timestamp=tick_timestamp,

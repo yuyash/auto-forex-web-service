@@ -18,14 +18,14 @@ class TestEventContext:
             account=account,
             instrument="USD_JPY",
             task_id=task_id,
-            execution_run_id=1,
+            execution_id=1,
             task_type="trading",
         )
         assert ctx.user is user
         assert ctx.account is account
         assert ctx.instrument == "USD_JPY"
         assert ctx.task_id == task_id
-        assert ctx.execution_run_id == 1
+        assert ctx.execution_id == 1
 
     def test_account_can_be_none(self):
         """For backtests, account is None."""
@@ -34,7 +34,7 @@ class TestEventContext:
             account=None,
             instrument="EUR_USD",
             task_id=uuid4(),
-            execution_run_id=0,
+            execution_id=0,
             task_type="backtest",
         )
         assert ctx.account is None

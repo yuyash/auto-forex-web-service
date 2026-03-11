@@ -217,6 +217,7 @@
   "tables": {
     "trades": {
       "title": "取引",
+      "tradeId": "取引ID",
       "timestamp": "日時",
       "instrument": "通貨ペア",
       "type": "タイプ",
@@ -225,10 +226,12 @@
       "price": "価格",
       "layer": "段階",
       "retracement": "増し玉",
-      "noTrades": "取引記録なし"
+      "noTrades": "取引記録なし",
+      "description": "説明"
     },
     "orders": {
       "title": "注文",
+      "orderId": "注文ID",
       "timestamp": "日時",
       "instrument": "通貨ペア",
       "type": "タイプ",
@@ -247,6 +250,7 @@
       "openPositions": "未決済",
       "longPositions": "買い建玉",
       "shortPositions": "売り建玉",
+      "positionId": "建玉ID",
       "openTimestamp": "注文日時",
       "closeTimestamp": "決済日時",
       "instrument": "通貨ペア",
@@ -262,7 +266,16 @@
       "totalRealizedPnl": "合計実現損益",
       "totalUnrealizedPnl": "合計未実現損益",
       "noLongPositions": "買い建玉なし",
-      "noShortPositions": "売り建玉なし"
+      "noShortPositions": "売り建玉なし",
+      "lifecycle": {
+        "title": "ポジションライフサイクル",
+        "viewLifecycle": "ライフサイクルを表示",
+        "searchLabel": "ポジションID",
+        "searchPlaceholder": "ポジションIDまたはプレフィックスを入力（例：先頭8文字）",
+        "enterPositionId": "ポジションIDを入力してライフサイクルを表示します。",
+        "noLogs": "このポジションのライフサイクルログが見つかりません。",
+        "close": "閉じる"
+      }
     },
     "events": {
       "title": "タスクイベント",
@@ -276,7 +289,9 @@
       "taskEvents": "タスクイベント",
       "tradingEvents": "取引イベント",
       "strategyEvents": "戦略イベント",
-      "noEvents": "イベントなし"
+      "noEvents": "イベントなし",
+      "detailTitle": "イベント詳細",
+      "copyJson": "JSONをコピー"
     },
     "logs": {
       "title": "タスクログ",
@@ -286,7 +301,11 @@
       "message": "メッセージ",
       "levelFilter": "レベルフィルター",
       "allLevels": "すべてのレベル",
-      "noLogs": "ログなし"
+      "componentFilter": "ロガーフィルター",
+      "timestampFrom": "開始日時",
+      "timestampTo": "終了日時",
+      "noLogs": "ログなし",
+      "resetFilters": "フィルターリセット"
     },
     "trend": {
       "executionId": "実行ID",

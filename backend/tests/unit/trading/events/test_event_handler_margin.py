@@ -23,6 +23,8 @@ def _position(units: int, layer_index: int = 1):
         entry_price=Decimal("150.000"),
         entry_time=None,
         exit_price=None,
+        exit_time=None,
+        planned_exit_price=None,
         oanda_trade_id=None,
     )
 
@@ -32,7 +34,7 @@ class TestEventHandlerMarginPartialClose:
 
     def test_close_position_receives_units_in_fifo_order(self) -> None:
         order_service = MagicMock()
-        order_service.task = SimpleNamespace(id=uuid4(), celery_task_id="test-celery-id")
+        order_service.task = SimpleNamespace(id=uuid4(), execution_id=uuid4())
         order_service.task_type = TaskType.TRADING
 
         handler = EventHandler(order_service=order_service, instrument="USD_JPY")

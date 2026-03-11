@@ -276,13 +276,16 @@ class TestBacktestTaskSerializerProgress:
             start_time=start,
             end_time=end,
         )
-        task.celery_task_id = "celery-progress-test"
+        from uuid import uuid4
+
+        execution_id = uuid4()
+        task.execution_id = execution_id
         task.save()
 
         ExecutionState.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
-            celery_task_id="celery-progress-test",
+            execution_id=execution_id,
             strategy_state={},
             current_balance=Decimal("10000"),
             ticks_processed=500,
@@ -292,21 +295,24 @@ class TestBacktestTaskSerializerProgress:
         result = compute_task_summary(
             task_type="backtest",
             task_id=str(task.pk),
-            celery_task_id="celery-progress-test",
+            execution_id=str(execution_id),
         )
         # Midpoint should be ~50%
         assert 45 <= result.task.progress <= 55
 
     def test_progress_no_state(self):
+        from uuid import uuid4
+
         from apps.trading.services.summary import compute_task_summary
 
         task = BacktestTaskFactory(status=TaskStatus.RUNNING)
-        task.celery_task_id = "celery-no-state"
+        execution_id = uuid4()
+        task.execution_id = execution_id
         task.save()
 
         result = compute_task_summary(
             task_type="backtest",
             task_id=str(task.pk),
-            celery_task_id="celery-no-state",
+            execution_id=str(execution_id),
         )
         assert result.task.progress == 0

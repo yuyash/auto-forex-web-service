@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from apps.trading.models import BacktestTask, TradingTask
 
 
-DEFAULT_TASK_LOGGER_NAMES: tuple[str, ...] = ("apps.trading",)
+DEFAULT_TASK_LOGGER_NAMES: tuple[str, ...] = ("apps.trading", "position.lifecycle")
 
 
 class JSONLoggingHandler(logging.Handler):
@@ -88,7 +88,7 @@ class JSONLoggingHandler(logging.Handler):
                 "level": record.levelname,
                 "message": record.getMessage(),
                 "task_id": str(self.task.pk),
-                "execution_run_id": int(getattr(self.task, "execution_run_id", 0) or 0),
+                "execution_id": str(getattr(self.task, "execution_id", None) or ""),
                 "task_type": task_type,
                 "logger": record.name,
                 "context": context,
@@ -98,8 +98,7 @@ class JSONLoggingHandler(logging.Handler):
             TaskLog.objects.create(
                 task_type=task_type,
                 task_id=self.task.pk,
-                execution_run_id=int(getattr(self.task, "execution_run_id", 0) or 0),
-                celery_task_id=self.task.celery_task_id,
+                execution_id=getattr(self.task, "execution_id", None),
                 level=record.levelname,
                 component=record.name or "unknown",
                 message=record.getMessage(),

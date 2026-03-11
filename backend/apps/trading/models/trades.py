@@ -28,15 +28,11 @@ class Trade(models.Model):
         db_index=True,
         help_text="UUID of the task this trade belongs to",
     )
-    execution_run_id = models.PositiveIntegerField(
-        default=0,
+    execution_id = models.UUIDField(
+        null=True,
+        blank=True,
         db_index=True,
-        help_text="Execution run identifier for run-scoped trade queries",
-    )
-    celery_task_id = models.CharField(
-        max_length=255,
-        db_index=True,
-        help_text="Celery task ID for tracking execution run",
+        help_text="Execution run UUID (shared with Celery task_id)",
     )
     timestamp = models.DateTimeField(
         db_index=True,
@@ -46,7 +42,12 @@ class Trade(models.Model):
         max_length=10,
         null=True,
         blank=True,
-        help_text="Trade direction (LONG/SHORT). Null for close-only trades.",
+        help_text="Trade direction (LONG/SHORT). Matches the original position direction for close trades.",
+    )
+    description = models.TextField(
+        blank=True,
+        default="",
+        help_text="Strategy reasoning for this trade (e.g. layer 1 take profit, retracement entry)",
     )
     units = models.IntegerField(
         help_text="Number of units traded",
@@ -82,6 +83,11 @@ class Trade(models.Model):
         blank=True,
         help_text="Number of retracements in the layer at the time of this trade",
     )
+    description = models.TextField(
+        blank=True,
+        default="",
+        help_text="Strategy decision description (e.g., first layer take-profit, add position due to pip gap)",
+    )
     position = models.ForeignKey(
         "trading.Position",
         on_delete=models.SET_NULL,
@@ -114,8 +120,7 @@ class Trade(models.Model):
         ordering = ["timestamp"]
         indexes = [
             models.Index(fields=["task_type", "task_id", "-timestamp"]),
-            models.Index(fields=["task_type", "task_id", "execution_run_id", "-timestamp"]),
-            models.Index(fields=["task_type", "task_id", "celery_task_id", "-timestamp"]),
+            models.Index(fields=["task_type", "task_id", "execution_id", "-timestamp"]),
             models.Index(fields=["task_type", "task_id", "instrument"]),
             models.Index(fields=["execution_method"]),
         ]

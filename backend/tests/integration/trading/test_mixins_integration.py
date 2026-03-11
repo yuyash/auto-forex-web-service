@@ -39,12 +39,14 @@ def _auth_client(user) -> APIClient:
 
 
 def _make_task(user=None) -> BacktestTask:
-    """Create a backtest task with a celery_task_id for sub-resource filtering."""
+    """Create a backtest task with an execution_id for sub-resource filtering."""
     if user is None:
         user = UserFactory()
     config = StrategyConfigurationFactory(user=user)
     task = cast(BacktestTask, BacktestTaskFactory(user=user, config=config, status="running"))
-    task.celery_task_id = "celery-test-id-123"
+    from uuid import uuid4
+
+    task.execution_id = uuid4()
     task.save()
     return task
 
@@ -62,7 +64,7 @@ class TestMetrics:
             Metrics.objects.create(
                 task_type=TaskType.BACKTEST,
                 task_id=task.pk,
-                celery_task_id=task.celery_task_id,
+                execution_id=task.execution_id,
                 timestamp=now + timedelta(minutes=i),
                 margin_ratio=Decimal("0.05") + Decimal(str(i)) / 100,
                 current_atr=Decimal("0.0012"),
@@ -97,7 +99,7 @@ class TestLogs:
             TaskLog.objects.create(
                 task_type=TaskType.BACKTEST,
                 task_id=task.pk,
-                celery_task_id=task.celery_task_id,
+                execution_id=task.execution_id,
                 level=LogLevel.INFO,
                 component="test",
                 message=f"Log message {i}",
@@ -107,7 +109,7 @@ class TestLogs:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 3
         assert len(response.data["results"]) == 3
-        assert "celery_task_id" not in response.data["results"][0]
+        assert "execution_id" in response.data["results"][0]
 
     def test_without_logs(self):
         task = _make_task()
@@ -130,7 +132,7 @@ class TestEvents:
             TradingEvent.objects.create(
                 task_type=TaskType.BACKTEST,
                 task_id=task.pk,
-                celery_task_id=task.celery_task_id,
+                execution_id=task.execution_id,
                 event_type="initial_entry",
                 severity="info",
                 description=f"Event {i}",
@@ -142,7 +144,7 @@ class TestEvents:
         response = client.get(f"/api/trading/tasks/backtest/{task.pk}/events/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 2
-        assert "celery_task_id" not in response.data["results"][0]
+        assert "execution_id" in response.data["results"][0]
 
     def test_without_events(self):
         task = _make_task()
@@ -159,7 +161,7 @@ class TestEvents:
         TradingEvent.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
-            celery_task_id=task.celery_task_id,
+            execution_id=task.execution_id,
             event_type="status_changed",
             severity="info",
             description="Task restart requested",
@@ -170,7 +172,7 @@ class TestEvents:
         TradingEvent.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
-            celery_task_id=task.celery_task_id,
+            execution_id=task.execution_id,
             event_type="initial_entry",
             severity="info",
             description="Open long",
@@ -191,7 +193,7 @@ class TestEvents:
         TradingEvent.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
-            celery_task_id=task.celery_task_id,
+            execution_id=task.execution_id,
             event_type="status_changed",
             severity="info",
             description="Task stop requested",
@@ -202,7 +204,7 @@ class TestEvents:
         TradingEvent.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
-            celery_task_id=task.celery_task_id,
+            execution_id=task.execution_id,
             event_type="open_position",
             severity="info",
             description="Open long position",
@@ -223,7 +225,7 @@ class TestEvents:
         StrategyEventRecord.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
-            celery_task_id=task.celery_task_id,
+            execution_id=task.execution_id,
             event_type="add_layer",
             severity="info",
             description="Layer added",
@@ -250,7 +252,7 @@ class TestTrades:
         Trade.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
-            celery_task_id=task.celery_task_id,
+            execution_id=task.execution_id,
             timestamp=now,
             direction=Direction.LONG,
             units=1000,
@@ -288,7 +290,7 @@ class TestPositions:
         Position.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
-            celery_task_id=task.celery_task_id,
+            execution_id=task.execution_id,
             instrument="USD_JPY",
             direction=Direction.LONG,
             units=1000,
@@ -324,7 +326,7 @@ class TestOrders:
         Order.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
-            celery_task_id=task.celery_task_id,
+            execution_id=task.execution_id,
             instrument="USD_JPY",
             order_type=OrderType.MARKET,
             direction=Direction.LONG,
@@ -340,7 +342,7 @@ class TestOrders:
         order = response.data["results"][0]
         assert order["instrument"] == "USD_JPY"
         assert order["status"] == "filled"
-        assert "celery_task_id" not in order
+        assert "execution_id" not in order
 
     def test_without_orders(self):
         task = _make_task()
@@ -358,14 +360,26 @@ class TestExecutions:
     def test_with_execution_history(self):
         task = _make_task()
         client = _auth_client(task.user)
-        task.execution_run_id = 2
+        from uuid import uuid4
+
+        # Create a completed past execution
+        old_execution_id = uuid4()
+        CeleryTaskStatus.objects.create(
+            task_name="trading.tasks.run_backtest_task",
+            instance_key=f"{task.pk}:{old_execution_id}",
+            status=CeleryTaskStatus.Status.COMPLETED,
+        )
+
+        # Set up current execution
+        new_execution_id = uuid4()
+        task.execution_id = new_execution_id
         task.status = "running"
-        task.save(update_fields=["execution_run_id", "status", "updated_at"])
+        task.save(update_fields=["execution_id", "status", "updated_at"])
 
         CeleryTaskStatus.objects.create(
             task_name="trading.tasks.run_backtest_task",
-            instance_key=f"{task.pk}:1",
-            status=CeleryTaskStatus.Status.COMPLETED,
+            instance_key=f"{task.pk}:{new_execution_id}",
+            status=CeleryTaskStatus.Status.RUNNING,
         )
 
         response = client.get(
@@ -373,8 +387,9 @@ class TestExecutions:
         )
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 2
-        latest = response.data["results"][0]
-        assert latest["execution_number"] == 2
-        assert latest["status"] == "running"
-        assert latest["id"] == "2"
-        assert "metrics" in latest
+        ids = {r["id"] for r in response.data["results"]}
+        assert str(new_execution_id) in ids
+        assert str(old_execution_id) in ids
+        current = next(r for r in response.data["results"] if r["id"] == str(new_execution_id))
+        assert current["status"] == "running"
+        assert "metrics" in current

@@ -28,6 +28,7 @@ export interface TaskTrade {
   retracement_count?: number | null;
   execution_method?: string;
   execution_method_display?: string;
+  description?: string;
   commission?: string;
   updated_at?: string | null;
 }

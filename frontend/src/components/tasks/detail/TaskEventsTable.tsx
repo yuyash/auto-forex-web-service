@@ -26,6 +26,7 @@ import {
   type TaskEventSource,
 } from '../../../hooks/useTaskEvents';
 import { TaskType } from '../../../types/common';
+import { EventDetailDialog } from './EventDetailDialog';
 
 interface TaskEventsTableProps {
   taskId: string | number;
@@ -46,6 +47,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(100);
   const [isReloading, setIsReloading] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<TaskEvent | null>(null);
 
   const { events, totalCount, isLoading, error, refetch } = useTaskEvents({
     taskId,
@@ -254,6 +256,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
         allPageSelected={selection.isAllPageSelected(pageRowIds)}
         indeterminate={selection.isIndeterminate(pageRowIds)}
         onToggleAll={handleToggleAll}
+        onRowClick={setSelectedEvent}
         fillEmptyRows
       />
 
@@ -268,6 +271,12 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
           setPage(0);
         }}
         rowsPerPageOptions={[50, 100, 200, 500]}
+      />
+
+      <EventDetailDialog
+        open={selectedEvent !== null}
+        event={selectedEvent}
+        onClose={() => setSelectedEvent(null)}
       />
     </Box>
   );

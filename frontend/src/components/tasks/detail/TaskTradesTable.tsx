@@ -75,6 +75,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
         'Price',
         'Layer',
         'Retracement',
+        'Description',
       ],
       (id) => {
         const r = tradesMap.get(id);
@@ -88,6 +89,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
           r.price ? parseFloat(r.price).toFixed(5) : '-',
           r.layer_index != null ? String(r.layer_index) : '-',
           r.retracement_count != null ? String(r.retracement_count) : '-',
+          r.description || '-',
         ].join('\t');
       }
     );
@@ -106,23 +108,30 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
 
   const columns: Column<TaskTrade>[] = [
     {
+      id: 'id',
+      label: t('tables.trades.tradeId'),
+      width: 120,
+      minWidth: 80,
+      render: (row) => (row.id ? String(row.id).slice(0, 8) : '-'),
+    },
+    {
       id: 'timestamp',
       label: t('tables.trades.timestamp'),
-      width: 180,
-      minWidth: 140,
+      width: 220,
+      minWidth: 220,
       render: (row) => (row.timestamp ? formatTimestamp(row.timestamp) : '-'),
     },
     {
       id: 'instrument',
       label: t('tables.trades.instrument'),
-      width: 110,
-      minWidth: 80,
+      width: 100,
+      minWidth: 100,
     },
     {
       id: 'execution_method',
       label: t('tables.trades.type'),
-      width: 140,
-      minWidth: 100,
+      width: 150,
+      minWidth: 150,
       render: (row) => {
         const method =
           row.execution_method_display || row.execution_method || '-';
@@ -132,8 +141,8 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     {
       id: 'direction',
       label: t('tables.trades.direction'),
-      width: 90,
-      minWidth: 70,
+      width: 120,
+      minWidth: 120,
       render: (row) => {
         const dir = row.direction ? String(row.direction).toLowerCase() : '';
         if (!dir) return null;
@@ -141,6 +150,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
           <Chip
             label={dir === 'long' ? 'LONG' : dir === 'short' ? 'SHORT' : dir}
             color={dir === 'long' ? 'success' : 'error'}
+            size="small"
           />
         );
       },
@@ -148,15 +158,15 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     {
       id: 'units',
       label: t('tables.trades.units'),
-      width: 90,
-      minWidth: 70,
+      width: 100,
+      minWidth: 100,
       align: 'right',
     },
     {
       id: 'price',
       label: t('tables.trades.price'),
-      width: 110,
-      minWidth: 80,
+      width: 120,
+      minWidth: 120,
       align: 'right',
       render: (row: TaskTrade) =>
         row.price ? parseFloat(row.price).toFixed(5) : '-',
@@ -164,8 +174,8 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     {
       id: 'layer_index',
       label: t('tables.trades.layer'),
-      width: 70,
-      minWidth: 50,
+      width: 80,
+      minWidth: 80,
       align: 'right',
       render: (row: TaskTrade) =>
         row.layer_index != null ? String(row.layer_index) : '-',
@@ -173,11 +183,17 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     {
       id: 'retracement_count',
       label: t('tables.trades.retracement'),
-      width: 100,
-      minWidth: 70,
+      width: 80,
+      minWidth: 80,
       align: 'right',
       render: (row: TaskTrade) =>
         row.retracement_count != null ? String(row.retracement_count) : '-',
+    },
+    {
+      id: 'description',
+      label: t('tables.trades.description'),
+      minWidth: 200,
+      render: (row: TaskTrade) => row.description || '-',
     },
   ];
 

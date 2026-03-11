@@ -577,6 +577,7 @@ class OpenPositionEvent(StrategyEvent):
     entry_id: int | None = None
     strategy_event_type: str = ""
     planned_exit_price: Decimal | None = None
+    description: str = ""
 
     def __post_init__(self):
         if not self.event_type:
@@ -622,6 +623,8 @@ class OpenPositionEvent(StrategyEvent):
             result["entry_time"] = self.entry_time.isoformat()
         if self.planned_exit_price is not None:
             result["planned_exit_price"] = str(self.planned_exit_price)
+        if self.description:
+            result["description"] = self.description
         return result
 
     @classmethod
@@ -668,6 +671,7 @@ class OpenPositionEvent(StrategyEvent):
             entry_id=event_dict.get("entry_id"),
             strategy_event_type=str(event_dict.get("strategy_event_type", "")),
             planned_exit_price=planned_exit_price,
+            description=str(event_dict.get("description", "")),
         )
 
 
@@ -689,6 +693,7 @@ class ClosePositionEvent(StrategyEvent):
     entry_id: int | None = None
     position_id: str | None = None
     strategy_event_type: str = ""
+    description: str = ""
 
     def __post_init__(self):
         if not self.event_type:
@@ -734,6 +739,8 @@ class ClosePositionEvent(StrategyEvent):
             result["position_id"] = self.position_id
         if self.strategy_event_type:
             result["strategy_event_type"] = self.strategy_event_type
+        if self.description:
+            result["description"] = self.description
         if self.entry_time:
             result["entry_time"] = self.entry_time.isoformat()
         if self.exit_time:
@@ -805,6 +812,7 @@ class ClosePositionEvent(StrategyEvent):
             entry_id=event_dict.get("entry_id"),
             position_id=event_dict.get("position_id"),
             strategy_event_type=str(event_dict.get("strategy_event_type", "")),
+            description=str(event_dict.get("description", "")),
         )
 
 

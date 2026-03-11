@@ -36,7 +36,7 @@ _ACTIVE_STATUSES = [TaskStatus.RUNNING, TaskStatus.STARTING]
 
 
 def _instance_key(task: BacktestTask | TradingTask) -> str:
-    return f"{task.pk}:{int(getattr(task, 'execution_run_id', 0) or 0)}"
+    return f"{task.pk}:{task.execution_id}"
 
 
 def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
@@ -144,7 +144,7 @@ def _recover_task(
     logger.warning(
         f"[RECOVERY:{source}] Recovering orphaned task - "
         f"task_id={task.pk}, type={task_type}, "
-        f"old_status={task.status}, celery_task_id={task.celery_task_id}"
+        f"old_status={task.status}, execution_id={task.execution_id}"
     )
 
     model_class = type(task)
@@ -158,7 +158,7 @@ def _recover_task(
         status__in=_ACTIVE_STATUSES,
     ).update(
         status=TaskStatus.CREATED,
-        celery_task_id=None,
+        execution_id=None,
         started_at=None,
         completed_at=None,
         error_message=None,
@@ -177,7 +177,7 @@ def _recover_task(
     TaskLog.objects.create(
         task_type=task_type,
         task_id=task.pk,
-        execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
+        execution_id=task.execution_id,
         level="WARNING",
         component=__name__,
         message=(
@@ -211,7 +211,7 @@ def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, sou
     TaskLog.objects.create(
         task_type=TaskType.TRADING,
         task_id=task.pk,
-        execution_run_id=int(getattr(task, "execution_run_id", 0) or 0),
+        execution_id=task.execution_id,
         level="WARNING",
         component=__name__,
         message=(
@@ -223,10 +223,10 @@ def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, sou
     try:
         service.recover_trading_task(task)
         logger.info(
-            "[RECOVERY:%s] Trading task resumed in same run - task_id=%s, run=%s",
+            "[RECOVERY:%s] Trading task resumed in same run - task_id=%s, execution_id=%s",
             source,
             task.pk,
-            int(getattr(task, "execution_run_id", 0) or 0),
+            task.execution_id,
         )
     except Exception:
         logger.exception(

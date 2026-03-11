@@ -345,8 +345,7 @@ class TestSaveEvents:
             mock_te.from_event.assert_called_once_with(
                 event=mock_event,
                 context=executor.event_context,
-                celery_task_id="celery-123",
-                execution_run_id=1,
+                execution_id=task.execution_id,
             )
             mock_te.objects.bulk_create.assert_called_once_with([mock_record])
             mock_se.objects.bulk_create.assert_not_called()
@@ -388,8 +387,7 @@ class TestSaveEvents:
             mock_se.from_event.assert_called_once_with(
                 event=strategy_event,
                 context=executor.event_context,
-                celery_task_id="celery-123",
-                execution_run_id=1,
+                execution_id=task.execution_id,
             )
             mock_se.objects.bulk_create.assert_called_once_with([strategy_record])
             assert result == []
@@ -439,8 +437,7 @@ class TestSaveEvents:
             mock_se.from_event.assert_called_once_with(
                 event=floor_event,
                 context=executor.event_context,
-                celery_task_id="celery-123",
-                execution_run_id=1,
+                execution_id=task.execution_id,
             )
             mock_se.objects.bulk_create.assert_called_once_with([strategy_record])
 

@@ -19,8 +19,7 @@ def update_unrealized_pnl(
     task_type: str,
     task_id: str,
     current_price: Decimal,
-    execution_run_id: int | None = None,
-    celery_task_id: str | None = None,
+    execution_id=None,
 ) -> int:
     """Bulk-update unrealized_pnl for all open positions of a task.
 
@@ -32,7 +31,7 @@ def update_unrealized_pnl(
         task_type: "backtest" or "trading".
         task_id: UUID of the task.
         current_price: Latest mid price from the tick.
-        celery_task_id: Optional celery task ID filter.
+        execution_id: Optional execution UUID filter.
 
     Returns:
         Number of rows updated.
@@ -42,10 +41,8 @@ def update_unrealized_pnl(
         "task_id": task_id,
         "is_open": True,
     }
-    if celery_task_id:
-        filters["celery_task_id"] = celery_task_id
-    if execution_run_id is not None:
-        filters["execution_run_id"] = execution_run_id
+    if execution_id is not None:
+        filters["execution_id"] = execution_id
 
     abs_units = Case(
         When(units__lt=0, then=-F("units")),

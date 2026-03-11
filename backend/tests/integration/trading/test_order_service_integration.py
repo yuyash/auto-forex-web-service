@@ -18,8 +18,13 @@ from tests.integration.factories import BacktestTaskFactory
 
 def _make_service(task=None) -> tuple:
     """Create an OrderService in dry_run mode with a real BacktestTask."""
+    from uuid import uuid4
+
     if task is None:
         task = BacktestTaskFactory()
+    if not task.execution_id:
+        task.execution_id = uuid4()
+        task.save(update_fields=["execution_id", "updated_at"])
     svc = OrderService(account=None, task=task, dry_run=True)
     return svc, task
 

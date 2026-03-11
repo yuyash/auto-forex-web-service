@@ -246,6 +246,48 @@ export const BacktestTaskDetail: React.FC = () => {
               </Typography>
             )}
 
+            {/* Current Price */}
+            {s.tick.mid != null && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  mt: 1,
+                  pl: '4px',
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  component="span"
+                >
+                  {task.instrument}:
+                </Typography>
+                <Typography
+                  variant="body2"
+                  component="span"
+                  sx={{ fontWeight: 600, fontFamily: 'monospace' }}
+                >
+                  {s.tick.mid.toFixed(
+                    task.pip_size
+                      ? String(task.pip_size).split('.')[1]?.length || 5
+                      : 5
+                  )}
+                </Typography>
+                {s.tick.bid != null && s.tick.ask != null && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    component="span"
+                    sx={{ fontFamily: 'monospace' }}
+                  >
+                    (B: {s.tick.bid.toFixed(5)} / A: {s.tick.ask.toFixed(5)})
+                  </Typography>
+                )}
+              </Box>
+            )}
+
             {/* Progress Percentage */}
             {(polledStatus?.status || task.status) === TaskStatus.RUNNING && (
               <Typography
@@ -567,7 +609,29 @@ export const BacktestTaskDetail: React.FC = () => {
                         {t('backtest:detail.currentBalance')}
                       </Typography>
                       <Typography variant="body1">
-                        {s.execution.currentBalance.toFixed(2)} {pnlCurrency}
+                        {s.execution.currentBalanceDisplay != null &&
+                        s.execution.displayCurrency &&
+                        s.execution.displayCurrency !==
+                          s.execution.accountCurrency ? (
+                          <>
+                            {s.execution.currentBalanceDisplay.toFixed(0)}{' '}
+                            {s.execution.displayCurrency}
+                            <Typography
+                              component="span"
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ ml: 1 }}
+                            >
+                              ({s.execution.currentBalance.toFixed(2)}{' '}
+                              {s.execution.accountCurrency})
+                            </Typography>
+                          </>
+                        ) : (
+                          <>
+                            {s.execution.currentBalance.toFixed(2)}{' '}
+                            {s.execution.accountCurrency || pnlCurrency}
+                          </>
+                        )}
                       </Typography>
                     </Box>
                   )}
