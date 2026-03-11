@@ -55,7 +55,10 @@ class TickSupervisorRunner:
             meta={"kind": "supervisor"},
         )
 
+        logger.info("Supervisor starting (worker=%s)", lock_value())
+
         if self.task_service.should_stop(force=True):
+            logger.info("Supervisor exiting: stop requested before main loop")
             self.task_service.mark_stopped(
                 status=CeleryTaskStatus.Status.STOPPED,
                 status_message="Stop requested",
@@ -69,6 +72,9 @@ class TickSupervisorRunner:
             settings, "MARKET_TICK_SUPERVISOR_LOCK_KEY", "market:tick_supervisor:lock"
         )
         if not acquire_lock(client, supervisor_lock, ttl_seconds=interval_seconds + 30):
+            logger.info(
+                "Supervisor exiting: another instance holds the lock (lock=%s)", supervisor_lock
+            )
             return
 
         stop_requested = False
@@ -78,13 +84,28 @@ class TickSupervisorRunner:
             # Get or initialize account
             account = self._get_or_initialize_account(client)
             if account is None:
+                logger.warning(
+                    "Supervisor: no LIVE OANDA account found — "
+                    "tick streaming will not start until a LIVE account is created"
+                )
                 return
 
             account_pk = int(account.pk)
 
             if account.api_type != ApiType.LIVE:
-                # If the stored account was changed to non-live, do nothing.
+                logger.info(
+                    "Supervisor: cached account %s is no longer LIVE (api_type=%s), skipping",
+                    account_pk,
+                    account.api_type,
+                )
                 return
+
+            logger.info(
+                "Supervisor: using OANDA account (pk=%s, oanda_id=%s, api_type=%s)",
+                account_pk,
+                account.account_id,
+                account.api_type,
+            )
 
             # Check and restart publisher/subscriber if needed
             self._ensure_tasks_running(client, account_pk)
@@ -97,6 +118,7 @@ class TickSupervisorRunner:
             stop_requested = self.task_service.should_stop(force=True)
 
         if stop_requested:
+            logger.info("Supervisor exiting: stop requested after check cycle")
             self.task_service.mark_stopped(
                 status=CeleryTaskStatus.Status.STOPPED,
                 status_message="Stop requested",
@@ -107,6 +129,7 @@ class TickSupervisorRunner:
         # Import the task function to schedule it
         from apps.market.tasks import ensure_tick_pubsub_running
 
+        logger.info("Supervisor: scheduling next check in %ss", interval_seconds)
         ensure_tick_pubsub_running.apply_async(countdown=interval_seconds)
 
     def _get_or_initialize_account(self, client: Any) -> OandaAccounts | None:
@@ -120,8 +143,24 @@ class TickSupervisorRunner:
         if account_id_raw:
             try:
                 account_id = int(str(account_id_raw))
+                logger.info(
+                    "Supervisor: found cached account pk=%s in Redis (key=%s)",
+                    account_id,
+                    account_key,
+                )
                 account = OandaAccounts.objects.filter(id=account_id).first()
+                if account is None:
+                    logger.warning(
+                        "Supervisor: cached account pk=%s no longer exists in DB, "
+                        "will search for another LIVE account",
+                        account_id,
+                    )
             except Exception:  # pylint: disable=broad-exception-caught
+                logger.warning(
+                    "Supervisor: failed to parse cached account id '%s', "
+                    "will search for another LIVE account",
+                    account_id_raw,
+                )
                 account = None
 
         if account is None:
@@ -132,6 +171,13 @@ class TickSupervisorRunner:
                 return None
 
             account_pk = int(account.pk)
+            logger.info(
+                "Supervisor: selected first LIVE account from DB "
+                "(pk=%s, oanda_id=%s, created_at=%s)",
+                account_pk,
+                account.account_id,
+                account.created_at,
+            )
 
             # Persist the "first live" account id exactly once.
             client.setnx(account_key, str(account_pk))
@@ -155,13 +201,22 @@ class TickSupervisorRunner:
             settings, "MARKET_TICK_SUBSCRIBER_LOCK_KEY", "market:tick_subscriber:lock"
         )
 
-        if not client.exists(publisher_lock):
+        publisher_alive = client.exists(publisher_lock)
+        subscriber_alive = client.exists(subscriber_lock)
+
+        logger.info(
+            "Supervisor: task status — publisher=%s, subscriber=%s",
+            "running" if publisher_alive else "NOT running",
+            "running" if subscriber_alive else "NOT running",
+        )
+
+        if not publisher_alive:
             logger.info(
-                "Registering publisher celery task (account_id=%s)",
+                "Supervisor: spawning publisher task (account_pk=%s)",
                 account_pk,
             )
             publish_oanda_ticks.delay(account_id=account_pk)
 
-        if not client.exists(subscriber_lock):
-            logger.info("Creating subscriber celery task")
+        if not subscriber_alive:
+            logger.info("Supervisor: spawning subscriber task")
             subscribe_ticks_to_db.delay()

@@ -62,9 +62,10 @@ class TickSubscriberRunner:
         channel = settings.MARKET_TICK_CHANNEL
 
         logger.info(
-            "Starting tick subscriber task (channel=%s, redis=%s)",
+            "Subscriber starting (channel=%s, redis=%s, worker=%s)",
             channel,
             redis_url,
+            lock_value(),
         )
 
         client = redis_client()
@@ -73,17 +74,25 @@ class TickSubscriberRunner:
         )
 
         if self.task_service.should_stop(force=True):
+            logger.info("Subscriber exiting: stop requested before subscribing")
             self._cleanup_and_stop(client, lock_key, None, "Stop requested")
             return
 
         if not acquire_lock(client, lock_key, ttl_seconds=60):
-            logger.warning("Tick subscriber already running (lock=%s)", lock_key)
+            logger.warning(
+                "Subscriber exiting: another instance holds the lock (lock=%s)", lock_key
+            )
             self._cleanup_and_stop(client, lock_key, None, "Already running")
             return
 
         self.buffer_max = int(getattr(settings, "MARKET_TICK_SUBSCRIBER_BATCH_SIZE", 200))
         self.flush_interval_seconds = int(
             getattr(settings, "MARKET_TICK_SUBSCRIBER_FLUSH_INTERVAL", 2)
+        )
+        logger.info(
+            "Subscriber: buffer_max=%s, flush_interval=%ss",
+            self.buffer_max,
+            self.flush_interval_seconds,
         )
 
         # Start subscribing
@@ -99,7 +108,7 @@ class TickSubscriberRunner:
         try:
             while True:
                 if self.task_service.should_stop():
-                    logger.info("Stopping tick subscriber due to stop request")
+                    logger.info("Subscriber: stop requested, exiting listen loop")
                     break
 
                 try:
@@ -108,8 +117,12 @@ class TickSubscriberRunner:
 
                     pubsub = client.pubsub(ignore_subscribe_messages=True)
                     pubsub.subscribe(channel)
-                    logger.info("Subscribed to tick channel %s", channel)
+                    logger.info(
+                        "Subscriber: subscribed to Redis channel '%s', waiting for ticks…",
+                        channel,
+                    )
 
+                    ticks_received = 0
                     for message in pubsub.listen():
                         if self.task_service.should_stop():
                             break
@@ -127,6 +140,16 @@ class TickSubscriberRunner:
                         tick = self._parse_tick_message(data_raw)
                         if tick:
                             self.buffer.append(tick)
+                            ticks_received += 1
+
+                            if ticks_received == 1:
+                                logger.info(
+                                    "Subscriber: first tick received "
+                                    "(instrument=%s, bid=%s, ask=%s)",
+                                    tick.instrument,
+                                    tick.bid,
+                                    tick.ask,
+                                )
 
                         # Flush buffer if needed
                         now = time.monotonic()
@@ -136,12 +159,19 @@ class TickSubscriberRunner:
                             self._flush_buffer()
                             last_flush = now
 
+                        if ticks_received % 1000 == 0:
+                            logger.info(
+                                "Subscriber: %s ticks received, buffer=%s",
+                                ticks_received,
+                                len(self.buffer),
+                            )
+
                         # Keep lock alive.
                         if len(self.buffer) % 50 == 0:
                             client.expire(lock_key, 60)
 
                 except Exception as exc:  # pylint: disable=broad-exception-caught
-                    logger.exception("Tick subscriber crashed; will retry in 5s: %s", exc)
+                    logger.exception("Subscriber: error in listen loop, retrying in 5s: %s", exc)
                     self.task_service.heartbeat(status_message=f"error={str(exc)}", force=True)
 
                     # Flush any buffered ticks best-effort.
@@ -218,24 +248,24 @@ class TickSubscriberRunner:
                     update_fields=["bid", "ask", "mid"],
                     unique_fields=["instrument", "timestamp"],
                 )
+                flushed_count = len(buffer_to_flush)
                 self.buffer.clear()
 
                 self.task_service.heartbeat(
                     status_message="flushed",
                     meta_update={"last_flush": time.monotonic()},
                 )
+                logger.info(
+                    "Subscriber: flushed %s ticks to DB",
+                    flushed_count,
+                )
         except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
             # Log flush failure but don't raise
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.warning("Failed to flush buffer: %s", exc)
+            logger.warning("Subscriber: failed to flush buffer: %s", exc)
 
     def _cleanup_and_stop(self, client: Any, lock_key: str, pubsub: Any, message: str) -> None:
         """Cleanup resources and mark task as stopped."""
-        import logging
-
-        logger = logging.getLogger(__name__)
+        logger.info("Subscriber: cleaning up (reason=%s)", message)
 
         # Flush any buffered ticks best-effort.
         self._flush_buffer()
