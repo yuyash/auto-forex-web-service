@@ -6,7 +6,6 @@ from .settings import PublicAccountSettingsSerializer, UserSettingsSerializer
 from .settings_update import UserSettingsUpdateSerializer
 from .user import UserProfileSerializer
 from .verification import EmailVerificationSerializer, ResendVerificationSerializer
-from .whitelist import WhitelistedEmailSerializer
 
 __all__ = [
     "EmailVerificationSerializer",
@@ -17,5 +16,4 @@ __all__ = [
     "UserRegistrationSerializer",
     "UserSettingsSerializer",
     "UserSettingsUpdateSerializer",
-    "WhitelistedEmailSerializer",
 ]
