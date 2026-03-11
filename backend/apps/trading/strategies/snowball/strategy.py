@@ -603,7 +603,7 @@ class SnowballStrategy(Strategy):
                 f"Initial trend entry (LONG) | units={trend_units}, "
                 f"TP={long_close:.5f} (+{cfg.m_pips} pips)"
             ),
-            planned_exit_price_formula=(f"{long_price} + {cfg.m_pips} × {self.pip_size}"),
+            planned_exit_price_formula=(f"{long_price} + {cfg.m_pips} * {self.pip_size}"),
         )
         ss.trend_basket.append(long_entry)
         events.append(long_evt)
@@ -624,7 +624,7 @@ class SnowballStrategy(Strategy):
                     f"Initial trend entry (SHORT) | units={trend_units}, "
                     f"TP={short_close:.5f} (-{cfg.m_pips} pips)"
                 ),
-                planned_exit_price_formula=(f"{short_price} - {cfg.m_pips} × {self.pip_size}"),
+                planned_exit_price_formula=(f"{short_price} - {cfg.m_pips} * {self.pip_size}"),
             )
             ss.trend_basket.append(short_entry)
             events.append(short_evt)
@@ -712,7 +712,7 @@ class SnowballStrategy(Strategy):
                     f"TP={new_close:.5f} ({m_dyn} pips)"
                 ),
                 planned_exit_price_formula=(
-                    f"{new_price} {'+ ' if direction == 'long' else '- '}{m_dyn} × {self.pip_size}"
+                    f"{new_price} {'+ ' if direction == 'long' else '- '}{m_dyn} * {self.pip_size}"
                 ),
             )
             ss.trend_basket.append(new_entry)
@@ -860,6 +860,7 @@ class SnowballStrategy(Strategy):
                 total_u = units
                 total_cost = new_price * Decimal(str(units))
                 tp_calc_parts = [f"new({new_price:.5f}x{units})"]
+                formula_parts = [f"{new_price} * {units}"]
                 for te in ss.trend_basket:
                     if str(te.get("direction", "")) == direction:
                         te_units = abs(int(te.get("units", 0)))
@@ -867,8 +868,9 @@ class SnowballStrategy(Strategy):
                         total_u += te_units
                         total_cost += te_price * Decimal(str(te_units))
                         tp_calc_parts.append(f"trend({te_price:.5f}x{te_units})")
+                        formula_parts.append(f"{te_price} * {te_units}")
                 close_price = total_cost / Decimal(str(total_u)) if total_u > 0 else new_price
-                exit_formula = f"({' + '.join(tp_calc_parts)}) / {total_u}"
+                exit_formula = f"({' + '.join(formula_parts)}) / {total_u}"
                 logger.info(
                     "Counter add #%d TP (weighted_avg): (%s) / %d = %s | components: %s",
                     lot_k,
@@ -884,7 +886,7 @@ class SnowballStrategy(Strategy):
                     else new_price - tp * self.pip_size
                 )
                 op = "+" if direction == "long" else "-"
-                exit_formula = f"{new_price} {op} {tp} × {self.pip_size}"
+                exit_formula = f"{new_price} {op} {tp} * {self.pip_size}"
                 logger.info(
                     "Counter add #%d TP (fixed): price=%s %s %s*%s = %s",
                     lot_k,
@@ -967,11 +969,14 @@ class SnowballStrategy(Strategy):
         total_cost += new_price * Decimal(str(units))
         # Include same-direction trend entry in weighted average
         tp_calc_parts = []
+        formula_parts = []
         for e in all_counter:
             e_price = Decimal(str(e.get("entry_price", "0")))
             e_units = int(e.get("units", 0))
             tp_calc_parts.append(f"c({e_price:.5f}x{e_units})")
+            formula_parts.append(f"{e_price} * {e_units}")
         tp_calc_parts.append(f"new({new_price:.5f}x{units})")
+        formula_parts.append(f"{new_price} * {units}")
         for te in ss.trend_basket:
             if str(te.get("direction", "")) == direction:
                 te_units = abs(int(te.get("units", 0)))
@@ -979,11 +984,12 @@ class SnowballStrategy(Strategy):
                 total_u += te_units
                 total_cost += te_price * Decimal(str(te_units))
                 tp_calc_parts.append(f"trend({te_price:.5f}x{te_units})")
+                formula_parts.append(f"{te_price} * {te_units}")
         avg = total_cost / Decimal(str(total_u)) if total_u > 0 else new_price
 
         if cfg.counter_tp_mode == "weighted_avg":
             close_price = avg  # tp is 0 for weighted_avg
-            exit_formula = f"({' + '.join(tp_calc_parts)}) / {total_u}"
+            exit_formula = f"({' + '.join(formula_parts)}) / {total_u}"
             logger.info(
                 "Counter add #%d TP (weighted_avg): (%s) / %d = %s | components: %s",
                 lot_k,
@@ -999,7 +1005,7 @@ class SnowballStrategy(Strategy):
                 else new_price - tp * self.pip_size
             )
             op = "+" if direction == "long" else "-"
-            exit_formula = f"{new_price} {op} {tp} × {self.pip_size}"
+            exit_formula = f"{new_price} {op} {tp} * {self.pip_size}"
             logger.info(
                 "Counter add #%d TP (fixed): price=%s %s %s*%s = %s | avg=%s",
                 lot_k,
