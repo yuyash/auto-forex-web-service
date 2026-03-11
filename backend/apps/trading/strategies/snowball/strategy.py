@@ -162,6 +162,7 @@ class SnowballStrategy(Strategy):
         basket: str,
         lot_k: int | None = None,
         description: str = "",
+        planned_exit_price_formula: str | None = None,
     ) -> tuple[OpenPositionEvent, dict[str, Any]]:
         """Create an OpenPositionEvent and the corresponding basket entry dict."""
         eid = self._next_id(ss)
@@ -196,6 +197,7 @@ class SnowballStrategy(Strategy):
             retracement_count=ret,
             strategy_event_type=f"snowball_{basket}",
             planned_exit_price=close_price,
+            planned_exit_price_formula=planned_exit_price_formula,
             description=description,
         )
         return event, entry_dict
@@ -601,6 +603,7 @@ class SnowballStrategy(Strategy):
                 f"Initial trend entry (LONG) | units={trend_units}, "
                 f"TP={long_close:.5f} (+{cfg.m_pips} pips)"
             ),
+            planned_exit_price_formula=(f"{long_price} + {cfg.m_pips} × {self.pip_size}"),
         )
         ss.trend_basket.append(long_entry)
         events.append(long_evt)
@@ -621,6 +624,7 @@ class SnowballStrategy(Strategy):
                     f"Initial trend entry (SHORT) | units={trend_units}, "
                     f"TP={short_close:.5f} (-{cfg.m_pips} pips)"
                 ),
+                planned_exit_price_formula=(f"{short_price} - {cfg.m_pips} × {self.pip_size}"),
             )
             ss.trend_basket.append(short_entry)
             events.append(short_evt)
@@ -706,6 +710,9 @@ class SnowballStrategy(Strategy):
                     f"Trend re-entry after TP ({direction.upper()}) | "
                     f"units={cfg.trend_lot_size * cfg.base_units}, "
                     f"TP={new_close:.5f} ({m_dyn} pips)"
+                ),
+                planned_exit_price_formula=(
+                    f"{new_price} {'+ ' if direction == 'long' else '- '}{m_dyn} × {self.pip_size}"
                 ),
             )
             ss.trend_basket.append(new_entry)
@@ -861,6 +868,7 @@ class SnowballStrategy(Strategy):
                         total_cost += te_price * Decimal(str(te_units))
                         tp_calc_parts.append(f"trend({te_price:.5f}x{te_units})")
                 close_price = total_cost / Decimal(str(total_u)) if total_u > 0 else new_price
+                exit_formula = f"({' + '.join(tp_calc_parts)}) / {total_u}"
                 logger.info(
                     "Counter add #%d TP (weighted_avg): (%s) / %d = %s | components: %s",
                     lot_k,
@@ -875,6 +883,8 @@ class SnowballStrategy(Strategy):
                     if direction == "long"
                     else new_price - tp * self.pip_size
                 )
+                op = "+" if direction == "long" else "-"
+                exit_formula = f"{new_price} {op} {tp} × {self.pip_size}"
                 logger.info(
                     "Counter add #%d TP (fixed): price=%s %s %s*%s = %s",
                     lot_k,
@@ -913,6 +923,7 @@ class SnowballStrategy(Strategy):
                     f"adverse={adverse:.1f} pips (interval={interval}), "
                     f"TP={close_price:.5f}"
                 ),
+                planned_exit_price_formula=exit_formula,
             )
             ss.counter_basket.append(entry_dict)
             ss.add_count = 1
@@ -972,6 +983,7 @@ class SnowballStrategy(Strategy):
 
         if cfg.counter_tp_mode == "weighted_avg":
             close_price = avg  # tp is 0 for weighted_avg
+            exit_formula = f"({' + '.join(tp_calc_parts)}) / {total_u}"
             logger.info(
                 "Counter add #%d TP (weighted_avg): (%s) / %d = %s | components: %s",
                 lot_k,
@@ -986,6 +998,8 @@ class SnowballStrategy(Strategy):
                 if direction == "long"
                 else new_price - tp * self.pip_size
             )
+            op = "+" if direction == "long" else "-"
+            exit_formula = f"{new_price} {op} {tp} × {self.pip_size}"
             logger.info(
                 "Counter add #%d TP (fixed): price=%s %s %s*%s = %s | avg=%s",
                 lot_k,
@@ -1027,6 +1041,7 @@ class SnowballStrategy(Strategy):
                 f"adverse={adverse:.1f} pips (interval={interval}), "
                 f"TP={close_price:.5f}"
             ),
+            planned_exit_price_formula=exit_formula,
         )
         ss.counter_basket.append(entry_dict)
         ss.add_count += 1

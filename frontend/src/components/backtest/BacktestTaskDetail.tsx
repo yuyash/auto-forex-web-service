@@ -24,6 +24,8 @@ import {
   Divider,
   IconButton,
   Tooltip,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -70,6 +72,8 @@ export const BacktestTaskDetail: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [tabConfigOpen, setTabConfigOpen] = useState(false);
   const deleteTask = useDeleteBacktestTask();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Tab configuration with localStorage persistence
   const defaultTabs: TabItem[] = [
@@ -195,7 +199,8 @@ export const BacktestTaskDetail: React.FC = () => {
     <Container
       maxWidth={false}
       sx={{
-        py: 4,
+        py: { xs: 2, sm: 4 },
+        px: { xs: 1, sm: 3 },
         display: 'flex',
         flexDirection: 'column',
         flex: 1,
@@ -204,7 +209,7 @@ export const BacktestTaskDetail: React.FC = () => {
       }}
     >
       {/* Breadcrumbs */}
-      <Breadcrumbs sx={{ mb: 2 }}>
+      <Breadcrumbs sx={{ mb: { xs: 1, sm: 2 } }}>
         <Link
           component="button"
           variant="body1"
@@ -213,135 +218,53 @@ export const BacktestTaskDetail: React.FC = () => {
         >
           {t('backtest:pages.title')}
         </Link>
-        <Typography color="text.primary">{task.name}</Typography>
+        <Typography
+          color="text.primary"
+          noWrap
+          sx={{ maxWidth: { xs: 160, sm: 'none' } }}
+        >
+          {task.name}
+        </Typography>
       </Breadcrumbs>
 
       {/* Header */}
-      <Paper sx={{ p: 2, pb: 1, mb: 2 }}>
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: 2,
-            flexWrap: 'wrap',
-          }}
-        >
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Box
+      <Paper sx={{ p: { xs: 1.5, sm: 2 }, pb: 1, mb: { xs: 1, sm: 2 } }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {/* Row 1: Task name + status badge */}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              p: '4px',
+              flexWrap: 'wrap',
+            }}
+          >
+            <Typography
+              variant="h4"
+              component="h1"
               sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-                p: '4px',
-                mb: '4px',
-                flexWrap: 'wrap',
+                fontSize: { xs: '1.25rem', sm: '2.125rem' },
+                wordBreak: 'break-word',
+                flex: 1,
+                minWidth: 0,
               }}
             >
-              <Typography
-                variant="h4"
-                component="h1"
-                sx={{
-                  fontSize: { xs: '1.5rem', sm: '2.125rem' },
-                  wordBreak: 'break-word',
-                }}
-              >
-                {task.name}
-              </Typography>
-              <StatusBadge status={polledStatus?.status || task.status} />
-            </Box>
-
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ pl: '4px' }}
-            >
-              {getStrategyDisplayName(strategies, task.strategy_type)}
+              {task.name}
             </Typography>
-
-            {task.description && (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                {task.description}
-              </Typography>
-            )}
-
-            {/* Current Price */}
-            {s.tick.mid != null &&
-              (() => {
-                const decimals = task.pip_size
-                  ? String(task.pip_size).split('.')[1]?.length || 5
-                  : 5;
-                return (
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      alignItems: 'center',
-                      gap: 0.5,
-                      mt: 1,
-                      pl: '4px',
-                      rowGap: 0.25,
-                    }}
-                  >
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      component="span"
-                    >
-                      {task.instrument}:
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      component="span"
-                      sx={{ fontWeight: 600, fontFamily: 'monospace' }}
-                    >
-                      Mid {s.tick.mid.toFixed(decimals)}
-                    </Typography>
-                    {s.tick.bid != null && s.tick.ask != null && (
-                      <>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          component="span"
-                          sx={{ fontFamily: 'monospace' }}
-                        >
-                          Bid {s.tick.bid.toFixed(decimals)}
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          component="span"
-                          sx={{ fontFamily: 'monospace' }}
-                        >
-                          Ask {s.tick.ask.toFixed(decimals)}
-                        </Typography>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          component="span"
-                          sx={{ fontFamily: 'monospace' }}
-                        >
-                          Spread {(s.tick.ask - s.tick.bid).toFixed(decimals)}
-                        </Typography>
-                      </>
-                    )}
-                  </Box>
-                );
-              })()}
-
-            {/* Progress Percentage */}
-            {(polledStatus?.status || task.status) === TaskStatus.RUNNING && (
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ mt: 2, fontWeight: 600 }}
-              >
-                {Math.round(Math.min(Math.max(s.task.progress, 0), 100))}%{' '}
-                {t('backtest:detail.completed')}
-              </Typography>
-            )}
+            <StatusBadge status={polledStatus?.status || task.status} />
           </Box>
 
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          {/* Row 2: Controls — separate row on mobile */}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              pl: '4px',
+              flexWrap: 'wrap',
+            }}
+          >
             <TaskControlButtons
               taskId={taskId}
               status={polledStatus?.status || task.status}
@@ -397,42 +320,133 @@ export const BacktestTaskDetail: React.FC = () => {
                 refetch();
               }}
             />
-            <Box sx={{ display: 'flex' }}>
-              <Tooltip title={t('common:actions.edit')}>
-                <span>
-                  <IconButton
-                    onClick={() => navigate(`/backtest-tasks/${taskId}/edit`)}
-                    disabled={
-                      (polledStatus?.status || task.status) ===
-                        TaskStatus.RUNNING ||
-                      (polledStatus?.status || task.status) ===
-                        TaskStatus.PAUSED
-                    }
-                    aria-label={t('common:actions.edit')}
-                  >
-                    <EditIcon />
-                  </IconButton>
-                </span>
-              </Tooltip>
-              <Tooltip title={t('common:actions.delete')}>
-                <span>
-                  <IconButton
-                    onClick={() => setDeleteDialogOpen(true)}
-                    disabled={
-                      (polledStatus?.status || task.status) ===
-                        TaskStatus.RUNNING ||
-                      (polledStatus?.status || task.status) ===
-                        TaskStatus.PAUSED
-                    }
-                    color="error"
-                    aria-label={t('common:actions.delete')}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </span>
-              </Tooltip>
-            </Box>
+            <Tooltip title={t('common:actions.edit')}>
+              <span>
+                <IconButton
+                  size={isMobile ? 'small' : 'medium'}
+                  onClick={() => navigate(`/backtest-tasks/${taskId}/edit`)}
+                  disabled={
+                    (polledStatus?.status || task.status) ===
+                      TaskStatus.RUNNING ||
+                    (polledStatus?.status || task.status) === TaskStatus.PAUSED
+                  }
+                  aria-label={t('common:actions.edit')}
+                >
+                  <EditIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title={t('common:actions.delete')}>
+              <span>
+                <IconButton
+                  size={isMobile ? 'small' : 'medium'}
+                  onClick={() => setDeleteDialogOpen(true)}
+                  disabled={
+                    (polledStatus?.status || task.status) ===
+                      TaskStatus.RUNNING ||
+                    (polledStatus?.status || task.status) === TaskStatus.PAUSED
+                  }
+                  color="error"
+                  aria-label={t('common:actions.delete')}
+                >
+                  <DeleteIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
           </Box>
+
+          {/* Strategy name */}
+          <Typography variant="body2" color="text.secondary" sx={{ pl: '4px' }}>
+            {getStrategyDisplayName(strategies, task.strategy_type)}
+          </Typography>
+
+          {task.description && (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ pl: '4px' }}
+            >
+              {task.description}
+            </Typography>
+          )}
+
+          {/* Price ticker — compact on mobile */}
+          {s.tick.mid != null &&
+            (() => {
+              const decimals = task.pip_size
+                ? String(task.pip_size).split('.')[1]?.length || 5
+                : 5;
+              return (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    gap: { xs: 0.5, sm: 1 },
+                    pl: '4px',
+                    rowGap: 0.25,
+                    fontSize: { xs: '0.7rem', sm: '0.875rem' },
+                  }}
+                >
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    component="span"
+                    sx={{ fontSize: 'inherit' }}
+                  >
+                    {task.instrument}:
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    component="span"
+                    sx={{ fontFamily: 'monospace', fontSize: 'inherit' }}
+                  >
+                    Mid {s.tick.mid.toFixed(decimals)}
+                  </Typography>
+                  {s.tick.bid != null && s.tick.ask != null && (
+                    <>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        component="span"
+                        sx={{ fontFamily: 'monospace', fontSize: 'inherit' }}
+                      >
+                        Bid {s.tick.bid.toFixed(decimals)}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        component="span"
+                        sx={{ fontFamily: 'monospace', fontSize: 'inherit' }}
+                      >
+                        Ask {s.tick.ask.toFixed(decimals)}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        component="span"
+                        sx={{ fontFamily: 'monospace', fontSize: 'inherit' }}
+                      >
+                        Spd {(s.tick.ask - s.tick.bid).toFixed(decimals)}
+                      </Typography>
+                    </>
+                  )}
+                </Box>
+              );
+            })()}
+
+          {/* Progress */}
+          {(polledStatus?.status || task.status) === TaskStatus.RUNNING && (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ pl: '4px', fontWeight: 600 }}
+            >
+              {Math.round(Math.min(Math.max(s.task.progress, 0), 100))}%{' '}
+              {t('backtest:detail.completed')}
+            </Typography>
+          )}
         </Box>
       </Paper>
 
@@ -466,7 +480,16 @@ export const BacktestTaskDetail: React.FC = () => {
             sx={{ flex: 1 }}
           >
             {visibleTabs.map((tab, idx) => (
-              <Tab key={tab.id} label={tab.label} {...a11yProps(idx)} />
+              <Tab
+                key={tab.id}
+                label={tab.label}
+                {...a11yProps(idx)}
+                sx={{
+                  minWidth: { xs: 'auto', sm: 90 },
+                  px: { xs: 1, sm: 2 },
+                  fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                }}
+              />
             ))}
           </Tabs>
           <Tooltip title={t('common:tabConfig.configureTabs')}>
@@ -487,8 +510,8 @@ export const BacktestTaskDetail: React.FC = () => {
             value={activeTabIndex}
             index={visibleTabIds.indexOf('overview')}
           >
-            <Box sx={{ p: 3 }}>
-              <Grid container spacing={3}>
+            <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
+              <Grid container spacing={{ xs: 2, sm: 3 }}>
                 <Grid size={{ xs: 12, md: 6 }}>
                   <Typography variant="h6" gutterBottom>
                     {t('backtest:detail.taskInformation')}
