@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
+from uuid import UUID
 
 from django.db.models import Case, DecimalField, F, IntegerField, Sum, Value, When
 
@@ -288,10 +289,21 @@ def _compute_duration_seconds(started_at, completed_at) -> float | None:
 
 
 def _parse_run_id(*, task_id: str, instance_key: str) -> str | None:
+    """Extract the execution UUID from a CeleryTaskStatus instance_key.
+
+    instance_key format: ``{task_id}:{execution_uuid}``
+    Returns ``None`` for legacy integer-based keys so they are silently skipped.
+    """
     if not instance_key.startswith(f"{task_id}:"):
         return None
     suffix = instance_key.rsplit(":", 1)[1]
-    return suffix if suffix else None
+    if not suffix:
+        return None
+    try:
+        UUID(suffix)
+    except ValueError:
+        return None
+    return suffix
 
 
 def _map_celery_status(status: str) -> str:
