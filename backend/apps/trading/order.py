@@ -570,6 +570,10 @@ class OrderService:
                     existing_position.oanda_trade_id = oanda_trade_id
                 if retracement_count is not None:
                     existing_position.retracement_count = retracement_count
+                if planned_exit_price is not None:
+                    existing_position.planned_exit_price = planned_exit_price
+                if planned_exit_price_formula is not None:
+                    existing_position.planned_exit_price_formula = planned_exit_price_formula
                 existing_position.execution_id = self.execution_id
                 existing_position.save()
 
