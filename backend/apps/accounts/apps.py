@@ -21,5 +21,4 @@ class AccountsConfig(AppConfig):
         """
         # pylint: disable=import-outside-toplevel,unused-import
         import apps.accounts.openapi  # noqa: F401
-        import apps.accounts.schema  # noqa: F401
         import apps.accounts.signals  # noqa: F401

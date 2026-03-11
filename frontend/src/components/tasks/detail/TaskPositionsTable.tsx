@@ -2,9 +2,9 @@
  * TaskPositionsTable Component
  *
  * Displays two sections: Closed Positions and Open Positions.
- * Each section contains Long Positions and Short Positions tables side-by-side
- * (stacked vertically on narrow screens).
- * Direction column is omitted since each table only shows one direction.
+ * Each section contains Long Positions and Short Positions tables stacked
+ * vertically. Direction column is omitted since each table only shows one
+ * direction.
  * Closed Positions section shows Total Realized PnL.
  * Open Positions section shows Total Unrealized PnL.
  */
@@ -16,8 +16,6 @@ import {
   Typography,
   Alert,
   TablePagination,
-  useMediaQuery,
-  useTheme,
   IconButton,
   Tooltip,
 } from '@mui/material';
@@ -60,8 +58,6 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   pipSize,
 }) => {
   const { t } = useTranslation('common');
-  const theme = useTheme();
-  const isWide = useMediaQuery(theme.breakpoints.up('lg'));
 
   // --- Pagination state ---
   const [closedLongPage, setClosedLongPage] = useState(0);
@@ -687,7 +683,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         <Box
           sx={{
             display: 'flex',
-            flexDirection: isWide ? 'row' : 'column',
+            flexDirection: 'column',
             gap: 3,
           }}
         >
