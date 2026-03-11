@@ -769,6 +769,7 @@ export const BacktestTaskDetail: React.FC = () => {
                   <ExecutionHistoryTable
                     taskId={taskId}
                     taskType={TaskType.BACKTEST}
+                    instrument={task.instrument}
                   />
                 </Grid>
               </Grid>
