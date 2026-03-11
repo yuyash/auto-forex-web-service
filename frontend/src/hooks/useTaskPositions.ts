@@ -26,6 +26,7 @@ export interface TaskPosition {
   exit_price?: string | null;
   exit_time?: string | null;
   planned_exit_price?: string | null;
+  planned_exit_price_formula?: string | null;
   unrealized_pnl?: string | null;
   is_open: boolean;
   layer_index?: number | null;
@@ -38,7 +39,7 @@ interface UseTaskPositionsOptions {
   taskId: string | number;
   taskType: TaskType;
   /** Filter by execution run ID. When omitted, uses the latest execution run. */
-  executionRunId?: number;
+  executionRunId?: string;
   status?: 'open' | 'closed';
   direction?: 'long' | 'short';
   page?: number;
@@ -138,7 +139,7 @@ export const useTaskPositions = ({
           page_size: String(pageSize),
         };
         if (executionRunId != null) {
-          params.execution_run_id = String(executionRunId);
+          params.execution_id = String(executionRunId);
         }
         if (status) params.position_status = status;
         if (direction) params.direction = direction;

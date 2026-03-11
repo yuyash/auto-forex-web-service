@@ -25,7 +25,7 @@ interface UseTaskLogsOptions {
   taskId: string;
   taskType: TaskType;
   /** Filter by execution run ID. When omitted, uses the latest execution run. */
-  executionRunId?: number;
+  executionRunId?: string;
   level?: string[];
   component?: string[];
   /** Filter logs by position ID (supports prefix match for truncated UUIDs). */
@@ -123,7 +123,7 @@ export const useTaskLogs = ({
           page_size: String(pageSize),
         };
         if (executionRunId != null) {
-          params.execution_run_id = String(executionRunId);
+          params.execution_id = String(executionRunId);
         }
         if (level && level.length > 0) params.level = level.join(',');
         if (component && component.length > 0)

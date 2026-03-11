@@ -51,7 +51,7 @@ function getBackoffMs(
 export async function fetchAllTrades(
   taskId: string,
   taskType: TaskType,
-  executionRunId?: number
+  executionRunId?: string
 ): Promise<Array<Record<string, unknown>>> {
   const prefix =
     taskType === TaskType.BACKTEST
@@ -70,7 +70,7 @@ export async function fetchAllTrades(
         response = await api.get<PaginatedApiResponse<any>>(
           `${prefix}/${taskId}/trades/`,
           {
-            execution_run_id: executionRunId,
+            execution_id: executionRunId,
             page,
             page_size: MAX_PAGE_SIZE,
           }
@@ -121,7 +121,7 @@ export async function fetchTradesSince(
   taskId: string,
   taskType: TaskType,
   since: string,
-  executionRunId?: number
+  executionRunId?: string
 ): Promise<Array<Record<string, unknown>>> {
   const prefix =
     taskType === TaskType.BACKTEST
@@ -141,7 +141,7 @@ export async function fetchTradesSince(
       page_size: String(MAX_PAGE_SIZE),
     };
     if (executionRunId != null) {
-      params.execution_run_id = String(executionRunId);
+      params.execution_id = String(executionRunId);
     }
 
     let responseData: Record<string, unknown> | null = null;

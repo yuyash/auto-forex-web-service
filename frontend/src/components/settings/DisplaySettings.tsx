@@ -173,7 +173,7 @@ const DisplaySettings = () => {
           type="color"
           value={settings.candleUpColor}
           onChange={(e) => updateSetting('candleUpColor', e.target.value)}
-          sx={{ width: 200 }}
+          sx={{ width: { xs: '100%', sm: 200 } }}
           slotProps={{ inputLabel: { shrink: true } }}
         />
         <TextField
@@ -181,7 +181,7 @@ const DisplaySettings = () => {
           type="color"
           value={settings.candleDownColor}
           onChange={(e) => updateSetting('candleDownColor', e.target.value)}
-          sx={{ width: 200 }}
+          sx={{ width: { xs: '100%', sm: 200 } }}
           slotProps={{ inputLabel: { shrink: true } }}
         />
       </Box>

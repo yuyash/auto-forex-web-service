@@ -31,6 +31,7 @@ import {
   ToggleButton,
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import SettingsIcon from '@mui/icons-material/Settings';
 import SelectAllIcon from '@mui/icons-material/SelectAll';
 import DeselectIcon from '@mui/icons-material/Deselect';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -75,6 +76,11 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { SequencePositionLine } from '../../../utils/SequencePositionLine';
 import { getCandleColors } from '../../../utils/candleColors';
 import { useMetricsOverlay } from './MetricsOverlayChart';
+import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
+import {
+  useColumnConfig,
+  type ColumnItem,
+} from '../../../hooks/useColumnConfig';
 
 type CandlePoint = CandlestickData<Time>;
 
@@ -121,7 +127,7 @@ interface TaskTrendPanelProps {
   taskId: string | number;
   taskType: TaskType;
   instrument: string;
-  executionRunId?: number;
+  executionRunId?: string;
   startTime?: string;
   endTime?: string;
   enableRealTimeUpdates?: boolean;
@@ -562,13 +568,16 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
 
   const handleSeparatorMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+    (e: React.MouseEvent | React.TouchEvent) => {
       e.preventDefault();
-      dragRef.current = { startY: e.clientY, startHeight: chartHeight };
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+      dragRef.current = { startY: clientY, startHeight: chartHeight };
 
-      const onMouseMove = (ev: MouseEvent) => {
+      const onMove = (ev: MouseEvent | TouchEvent) => {
         if (!dragRef.current) return;
-        const diff = ev.clientY - dragRef.current.startY;
+        const moveY =
+          'touches' in ev ? ev.touches[0].clientY : (ev as MouseEvent).clientY;
+        const diff = moveY - dragRef.current.startY;
         const maxHeight = window.innerHeight;
         const newHeight = Math.min(
           maxHeight,
@@ -577,10 +586,12 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         setChartHeight(newHeight);
       };
 
-      const onMouseUp = () => {
+      const onEnd = () => {
         dragRef.current = null;
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onEnd);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onEnd);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         // Persist final height
@@ -596,8 +607,10 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
 
       document.body.style.cursor = 'row-resize';
       document.body.style.userSelect = 'none';
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onEnd);
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onEnd);
     },
     [chartHeight]
   );
@@ -619,18 +632,68 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     startW: number;
   } | null>(null);
 
+  // ── Column visibility config for the 3 trend tables ──
+  const tradesColDefaults: ColumnItem[] = [
+    { id: 'timestamp', label: t('tables.trend.time'), visible: true },
+    { id: 'direction', label: t('tables.trend.direction'), visible: true },
+    { id: 'layer_index', label: t('tables.trend.layer'), visible: true },
+    { id: 'retracement_count', label: t('tables.trend.ret'), visible: true },
+    { id: 'units', label: t('tables.trend.units'), visible: true },
+    { id: 'price', label: t('tables.trend.price'), visible: true },
+    { id: 'execution_method', label: t('tables.trend.event'), visible: true },
+  ];
+  const {
+    columns: tradesColConfig,
+    updateColumns: updateTradesCols,
+    resetToDefaults: resetTradesCols,
+  } = useColumnConfig('trend_trades', tradesColDefaults);
+  const [tradesColConfigOpen, setTradesColConfigOpen] = useState(false);
+
+  const posColDefaults: ColumnItem[] = [
+    { id: 'entry_time', label: t('tables.trend.openTime'), visible: true },
+    { id: 'exit_time', label: t('tables.trend.closeTime'), visible: true },
+    { id: '_status', label: t('tables.trend.status'), visible: true },
+    { id: 'layer_index', label: t('tables.trend.layer'), visible: true },
+    {
+      id: 'retracement_count',
+      label: t('tables.trend.retrace'),
+      visible: true,
+    },
+    { id: 'units', label: t('tables.trend.units'), visible: true },
+    { id: 'entry_price', label: t('tables.trend.entry'), visible: true },
+    { id: 'exit_price', label: t('tables.trend.exit'), visible: true },
+    { id: '_pips', label: t('tables.trend.pips'), visible: true },
+    { id: '_pnl', label: t('tables.trend.pnl'), visible: true },
+  ];
+  const {
+    columns: longPosColConfig,
+    updateColumns: updateLongPosCols,
+    resetToDefaults: resetLongPosCols,
+  } = useColumnConfig('trend_long_positions', posColDefaults);
+  const [longPosColConfigOpen, setLongPosColConfigOpen] = useState(false);
+
+  const {
+    columns: shortPosColConfig,
+    updateColumns: updateShortPosCols,
+    resetToDefaults: resetShortPosCols,
+  } = useColumnConfig('trend_short_positions', posColDefaults);
+  const [shortPosColConfigOpen, setShortPosColConfigOpen] = useState(false);
+
   const handleColResizeStart = useCallback(
-    (e: React.MouseEvent, col: string) => {
+    (e: React.MouseEvent | React.TouchEvent, col: string) => {
       e.preventDefault();
       e.stopPropagation();
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
       replayResizeRef.current = {
         col,
-        startX: e.clientX,
+        startX: clientX,
         startW: replayColWidths[col] ?? 100,
       };
-      const onMove = (ev: MouseEvent) => {
+      const onMove = (ev: MouseEvent | TouchEvent) => {
         if (!replayResizeRef.current) return;
-        const diff = ev.clientX - replayResizeRef.current.startX;
+        const moveX =
+          'touches' in ev ? ev.touches[0].clientX : (ev as MouseEvent).clientX;
+        const diff = moveX - replayResizeRef.current.startX;
         const w = Math.max(40, replayResizeRef.current.startW + diff);
         setReplayColWidths((prev) => ({
           ...prev,
@@ -641,6 +704,8 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         replayResizeRef.current = null;
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onUp);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
       };
@@ -648,6 +713,8 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       document.body.style.userSelect = 'none';
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onUp);
     },
     [replayColWidths]
   );
@@ -656,6 +723,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     (col: string) => (
       <Box
         onMouseDown={(e) => handleColResizeStart(e, col)}
+        onTouchStart={(e) => handleColResizeStart(e, col)}
         sx={{
           position: 'absolute',
           right: 0,
@@ -695,22 +763,25 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
 
   const handleLSPosColResizeStart = useCallback(
     (
-      e: React.MouseEvent,
+      e: React.MouseEvent | React.TouchEvent,
       col: string,
       widths: Record<string, number>,
       setter: React.Dispatch<React.SetStateAction<Record<string, number>>>
     ) => {
       e.preventDefault();
       e.stopPropagation();
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
       lsPosResizeRef.current = {
         col,
-        startX: e.clientX,
+        startX: clientX,
         startW: widths[col] ?? 100,
         setter,
       };
-      const onMove = (ev: MouseEvent) => {
+      const onMove = (ev: MouseEvent | TouchEvent) => {
         if (!lsPosResizeRef.current) return;
-        const diff = ev.clientX - lsPosResizeRef.current.startX;
+        const moveX =
+          'touches' in ev ? ev.touches[0].clientX : (ev as MouseEvent).clientX;
+        const diff = moveX - lsPosResizeRef.current.startX;
         const w = Math.max(40, lsPosResizeRef.current.startW + diff);
         lsPosResizeRef.current.setter((prev) => ({
           ...prev,
@@ -721,6 +792,8 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         lsPosResizeRef.current = null;
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onUp);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
       };
@@ -728,6 +801,8 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       document.body.style.userSelect = 'none';
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onUp);
     },
     []
   );
@@ -740,6 +815,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     ) => (
       <Box
         onMouseDown={(e) => handleLSPosColResizeStart(e, col, widths, setter)}
+        onTouchStart={(e) => handleLSPosColResizeStart(e, col, widths, setter)}
         sx={{
           position: 'absolute',
           right: 0,
@@ -2388,6 +2464,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           mb: 1,
           height: 48,
           minHeight: 48,
+          overflowX: 'auto',
         }}
       >
         <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
@@ -2597,6 +2674,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       {/* Draggable separator */}
       <Box
         onMouseDown={handleSeparatorMouseDown}
+        onTouchStart={handleSeparatorMouseDown}
         sx={{
           height: 8,
           cursor: 'row-resize',
@@ -2659,6 +2737,15 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
               </Typography>
             )}
             <Box sx={{ flex: 1 }} />
+            <Tooltip title={t('common:columnConfig.configureColumns')}>
+              <IconButton
+                size="small"
+                onClick={() => setTradesColConfigOpen(true)}
+                aria-label={t('common:columnConfig.configureColumns')}
+              >
+                <SettingsIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
             <Tooltip title="Copy selected rows">
               <span>
                 <IconButton
@@ -2691,7 +2778,11 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
             </Tooltip>
           </Box>
 
-          <TableContainer component={Paper} variant="outlined">
+          <TableContainer
+            component={Paper}
+            variant="outlined"
+            sx={{ overflowX: 'auto' }}
+          >
             <Table stickyHeader sx={{ tableLayout: 'fixed', minWidth: 680 }}>
               <TableHead>
                 <TableRow>
@@ -3026,6 +3117,15 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
               </Typography>
             )}
             <Box sx={{ flex: 1 }} />
+            <Tooltip title={t('common:columnConfig.configureColumns')}>
+              <IconButton
+                size="small"
+                onClick={() => setLongPosColConfigOpen(true)}
+                aria-label={t('common:columnConfig.configureColumns')}
+              >
+                <SettingsIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
             <Tooltip title="Copy selected rows">
               <span>
                 <IconButton
@@ -3078,7 +3178,11 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
               </ToggleButton>
             </Tooltip>
           </Box>
-          <TableContainer component={Paper} variant="outlined">
+          <TableContainer
+            component={Paper}
+            variant="outlined"
+            sx={{ overflowX: 'auto' }}
+          >
             <Table stickyHeader sx={{ tableLayout: 'fixed', minWidth: 1000 }}>
               <TableHead>
                 <TableRow>
@@ -3571,6 +3675,15 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
               </Typography>
             )}
             <Box sx={{ flex: 1 }} />
+            <Tooltip title={t('common:columnConfig.configureColumns')}>
+              <IconButton
+                size="small"
+                onClick={() => setShortPosColConfigOpen(true)}
+                aria-label={t('common:columnConfig.configureColumns')}
+              >
+                <SettingsIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
             <Tooltip title="Copy selected rows">
               <span>
                 <IconButton
@@ -3623,7 +3736,11 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
               </ToggleButton>
             </Tooltip>
           </Box>
-          <TableContainer component={Paper} variant="outlined">
+          <TableContainer
+            component={Paper}
+            variant="outlined"
+            sx={{ overflowX: 'auto' }}
+          >
             <Table stickyHeader sx={{ tableLayout: 'fixed', minWidth: 1000 }}>
               <TableHead>
                 <TableRow>
@@ -4088,6 +4205,28 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           />
         </Box>
       </Box>
+
+      <ColumnConfigDialog
+        open={tradesColConfigOpen}
+        columns={tradesColConfig}
+        onClose={() => setTradesColConfigOpen(false)}
+        onSave={updateTradesCols}
+        onReset={resetTradesCols}
+      />
+      <ColumnConfigDialog
+        open={longPosColConfigOpen}
+        columns={longPosColConfig}
+        onClose={() => setLongPosColConfigOpen(false)}
+        onSave={updateLongPosCols}
+        onReset={resetLongPosCols}
+      />
+      <ColumnConfigDialog
+        open={shortPosColConfigOpen}
+        columns={shortPosColConfig}
+        onClose={() => setShortPosColConfigOpen(false)}
+        onSave={updateShortPosCols}
+        onReset={resetShortPosCols}
+      />
     </Box>
   );
 };

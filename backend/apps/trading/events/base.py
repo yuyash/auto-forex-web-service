@@ -147,6 +147,7 @@ class InitialEntryEvent(StrategyEvent):
     retracement_count: int = 1
     entry_id: int | None = None  # Strategy-internal entry ID for position tracking
     planned_exit_price: Decimal | None = None
+    planned_exit_price_formula: str | None = None
 
     def __post_init__(self):
         if not self.event_type:
@@ -201,6 +202,8 @@ class InitialEntryEvent(StrategyEvent):
             result["entry_time"] = self.entry_time.isoformat()
         if self.planned_exit_price is not None:
             result["planned_exit_price"] = str(self.planned_exit_price)
+        if self.planned_exit_price_formula is not None:
+            result["planned_exit_price_formula"] = self.planned_exit_price_formula
         return result
 
     @classmethod
@@ -246,6 +249,7 @@ class InitialEntryEvent(StrategyEvent):
             retracement_count=int(event_dict.get("retracement_count", 1)),
             entry_id=event_dict.get("entry_id"),
             planned_exit_price=planned_exit_price,
+            planned_exit_price_formula=event_dict.get("planned_exit_price_formula"),
         )
 
 
@@ -283,6 +287,7 @@ class RetracementEvent(StrategyEvent):
     retracement_count: int = 1
     entry_id: int | None = None  # Strategy-internal entry ID for position tracking
     planned_exit_price: Decimal | None = None
+    planned_exit_price_formula: str | None = None
 
     def __post_init__(self):
         if not self.event_type:
@@ -338,6 +343,8 @@ class RetracementEvent(StrategyEvent):
             result["entry_time"] = self.entry_time.isoformat()
         if self.planned_exit_price is not None:
             result["planned_exit_price"] = str(self.planned_exit_price)
+        if self.planned_exit_price_formula is not None:
+            result["planned_exit_price_formula"] = self.planned_exit_price_formula
         return result
 
     @classmethod
@@ -383,6 +390,7 @@ class RetracementEvent(StrategyEvent):
             retracement_count=int(event_dict.get("retracement_count", 1)),
             entry_id=event_dict.get("entry_id"),
             planned_exit_price=planned_exit_price,
+            planned_exit_price_formula=event_dict.get("planned_exit_price_formula"),
         )
 
 
@@ -577,6 +585,7 @@ class OpenPositionEvent(StrategyEvent):
     entry_id: int | None = None
     strategy_event_type: str = ""
     planned_exit_price: Decimal | None = None
+    planned_exit_price_formula: str | None = None
     description: str = ""
 
     def __post_init__(self):
@@ -623,6 +632,8 @@ class OpenPositionEvent(StrategyEvent):
             result["entry_time"] = self.entry_time.isoformat()
         if self.planned_exit_price is not None:
             result["planned_exit_price"] = str(self.planned_exit_price)
+        if self.planned_exit_price_formula:
+            result["planned_exit_price_formula"] = self.planned_exit_price_formula
         if self.description:
             result["description"] = self.description
         return result
@@ -671,6 +682,7 @@ class OpenPositionEvent(StrategyEvent):
             entry_id=event_dict.get("entry_id"),
             strategy_event_type=str(event_dict.get("strategy_event_type", "")),
             planned_exit_price=planned_exit_price,
+            planned_exit_price_formula=event_dict.get("planned_exit_price_formula"),
             description=str(event_dict.get("description", "")),
         )
 
