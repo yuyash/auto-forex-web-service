@@ -268,6 +268,20 @@
       "totalUnrealizedPnl": "合計未実現損益",
       "noLongPositions": "買い建玉なし",
       "noShortPositions": "売り建玉なし",
+      "noPositions": "建玉なし",
+      "direction": "方向",
+      "status": "状態",
+      "long": "買い",
+      "short": "売り",
+      "open": "未決済",
+      "closed": "決済済",
+      "allPositions": "全建玉",
+      "viewMode": {
+        "all": "全て",
+        "byDirection": "売買別",
+        "byStatus": "決済状態別"
+      },
+      "totalPnl": "合計損益",
       "lifecycle": {
         "title": "ポジションライフサイクル",
         "viewLifecycle": "ライフサイクルを表示",

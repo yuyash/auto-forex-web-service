@@ -19,6 +19,7 @@ interface TaskExecutionsTabProps {
   taskId: string;
   taskType?: TaskType;
   taskStatus?: TaskStatus;
+  instrument?: string;
   task?: {
     start_time: string;
     end_time: string;
@@ -29,6 +30,7 @@ export function TaskExecutionsTab({
   taskId,
   taskType = TaskType.BACKTEST,
   taskStatus,
+  instrument,
   task,
 }: TaskExecutionsTabProps) {
   const [tabValue, setTabValue] = useState(0); // 0 = History, 1 = Compare
@@ -133,7 +135,11 @@ export function TaskExecutionsTab({
 
       {/* History Tab */}
       {tabValue === 0 && (
-        <ExecutionHistoryTable taskId={taskId} taskType={taskType} />
+        <ExecutionHistoryTable
+          taskId={taskId}
+          taskType={taskType}
+          instrument={instrument}
+        />
       )}
 
       {/* Compare Tab */}

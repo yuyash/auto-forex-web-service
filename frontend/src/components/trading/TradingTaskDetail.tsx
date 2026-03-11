@@ -679,6 +679,7 @@ export const TradingTaskDetail: React.FC = () => {
                   <ExecutionHistoryTable
                     taskId={taskId}
                     taskType={TaskType.TRADING}
+                    instrument={task.instrument}
                   />
                 </Grid>
               </Grid>

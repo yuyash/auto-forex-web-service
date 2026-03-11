@@ -102,6 +102,13 @@ export const useTaskPositions = ({
   // Monotonic counter to discard stale responses.
   const latestRequestRef = useRef(0);
 
+  // Track current cached position count so incremental polls can detect
+  // when the server-side count has dropped (positions closed/removed).
+  const positionsCountRef = useRef(0);
+  useEffect(() => {
+    positionsCountRef.current = positions.length;
+  }, [positions]);
+
   // Track the latest updated_at for incremental polling.
   const sinceRef = useRef<string | null>(null);
   // Whether we have done the initial full fetch for this set of params.
@@ -163,6 +170,25 @@ export const useTaskPositions = ({
         const incoming = (data.results || []) as TaskPosition[];
 
         if (incremental) {
+          const serverCount = data.count as number | undefined;
+
+          // When the server reports fewer total records than our local cache
+          // holds, positions have been removed from this result set (e.g. an
+          // open position was closed).  The incremental response won't contain
+          // those removed records, so we can't merge them out — fall back to a
+          // full refetch to reconcile.
+          const needsFullRefetch =
+            serverCount != null && serverCount < positionsCountRef.current;
+
+          if (needsFullRefetch) {
+            sinceRef.current = null;
+            // Re-invoke as a non-incremental fetch to replace the cache.
+            // Use setTimeout to avoid calling fetchPositions recursively
+            // inside the current execution.
+            setTimeout(() => fetchPositions(false), 0);
+            return;
+          }
+
           // Incremental poll: merge new/updated records into the cache.
           // When nothing changed (incoming is empty), leave state untouched.
           if (incoming.length > 0) {
@@ -171,7 +197,15 @@ export const useTaskPositions = ({
               for (const p of incoming) {
                 map.set(p.id, p);
               }
-              const merged = Array.from(map.values());
+              // Evict any positions whose is_open status no longer matches
+              // the requested filter.  This handles the edge case where the
+              // backend returns a recently-closed position in the incremental
+              // window before the status filter excludes it.
+              const merged = Array.from(map.values()).filter((p) => {
+                if (status === 'open') return p.is_open;
+                if (status === 'closed') return !p.is_open;
+                return true;
+              });
               // Cap to pageSize so the table never shows more rows than
               // the current page should contain.
               return merged.length > pageSize
@@ -180,8 +214,8 @@ export const useTaskPositions = ({
             });
           }
           // Always update totalCount from server (it reflects the full count).
-          if (data.count != null) {
-            setTotalCount(data.count);
+          if (serverCount != null) {
+            setTotalCount(serverCount);
           }
         } else {
           // Full replace (initial fetch or non-incremental).

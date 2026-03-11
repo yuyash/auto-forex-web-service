@@ -35,11 +35,13 @@ import type { TaskExecution } from '../../../types/execution';
 interface ExecutionHistoryTableProps {
   taskId: string;
   taskType: TaskType;
+  instrument?: string;
 }
 
 export function ExecutionHistoryTable({
   taskId,
   taskType,
+  instrument,
 }: ExecutionHistoryTableProps) {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
@@ -91,18 +93,20 @@ export function ExecutionHistoryTable({
     return isNaN(n) ? '-' : n.toFixed(2);
   };
 
+  const pnlCurrency = instrument?.includes('_') ? instrument.split('_')[1] : '';
+
   const columns: Column<TaskExecution>[] = useMemo(
     () => [
       {
         id: 'execution_number',
         label: t('tables.executions.executionId'),
-        width: 120,
-        minWidth: 80,
+        width: 300,
+        minWidth: 200,
         render: (row: TaskExecution) => (
           <Typography
             variant="body2"
             fontWeight="medium"
-            sx={{ fontFamily: 'monospace' }}
+            sx={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}
           >
             {row.execution_number}
           </Typography>
@@ -171,18 +175,22 @@ export function ExecutionHistoryTable({
       {
         id: 'metrics.total_pnl',
         label: t('tables.executions.pnl'),
-        width: 110,
-        minWidth: 80,
+        width: 130,
+        minWidth: 90,
         align: 'right' as const,
         render: (row: TaskExecution) => {
           if (!row.metrics?.total_pnl) return '-';
           const v = parseFloat(String(row.metrics.total_pnl));
+          const suffix = pnlCurrency ? ` ${pnlCurrency}` : '';
           return (
             <Typography
               variant="body2"
               color={v >= 0 ? 'success.main' : 'error.main'}
+              sx={{ whiteSpace: 'nowrap' }}
             >
+              {v >= 0 ? '+' : ''}
               {fmt(v)}
+              {suffix}
             </Typography>
           );
         },
@@ -224,7 +232,7 @@ export function ExecutionHistoryTable({
           ),
       },
     ],
-    [t]
+    [t, pnlCurrency]
   );
 
   const defaultColItems = useMemo(() => columnsToDefaults(columns), [columns]);

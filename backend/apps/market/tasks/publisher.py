@@ -70,21 +70,23 @@ class TickPublisherRunner:
         channel = settings.MARKET_TICK_CHANNEL
 
         logger.info(
-            "Starting OANDA tick publisher task (account_id=%s, channel=%s, redis=%s)",
+            "Publisher starting (account_id=%s, channel=%s, redis=%s, worker=%s)",
             account_id,
             channel,
             redis_url,
+            lock_value(),
         )
 
         client = redis_client()
         lock_key = getattr(settings, "MARKET_TICK_PUBLISHER_LOCK_KEY", "market:tick_publisher:lock")
 
         if self.task_service.should_stop(force=True):
+            logger.info("Publisher exiting: stop requested before streaming")
             self._cleanup_and_stop(client, lock_key, "Stop requested")
             return
 
         if not acquire_lock(client, lock_key, ttl_seconds=60):
-            logger.warning("Tick publisher already running (lock=%s)", lock_key)
+            logger.warning("Publisher exiting: another instance holds the lock (lock=%s)", lock_key)
             self._cleanup_and_stop(client, lock_key, "Already running")
             return
 
@@ -94,6 +96,12 @@ class TickPublisherRunner:
             return
 
         instruments_list = instruments or getattr(settings, "MARKET_TICK_INSTRUMENTS", ["EUR_USD"])
+        logger.info(
+            "Publisher: streaming instruments=%s from OANDA account (pk=%s, oanda_id=%s)",
+            instruments_list,
+            account_id,
+            self.account.account_id if self.account else "?",
+        )
 
         # Start streaming
         self._stream_ticks(client, lock_key, channel, instruments_list, account_id)
@@ -134,7 +142,8 @@ class TickPublisherRunner:
             while True:
                 if self.task_service.should_stop():
                     logger.info(
-                        "Stopping tick publisher due to stop request (account_id=%s)", account_id
+                        "Publisher: stop requested, exiting stream loop (account_id=%s)",
+                        account_id,
                     )
                     break
 
@@ -142,6 +151,12 @@ class TickPublisherRunner:
                     # Refresh lock TTL periodically (best-effort).
                     client.expire(lock_key, 60)
 
+                    logger.info(
+                        "Publisher: connecting to OANDA pricing stream "
+                        "(instruments=%s, account_id=%s)",
+                        instruments_list,
+                        account_id,
+                    )
                     service = OandaService(self.account)
                     for tick in service.stream_pricing_ticks(instruments_list, snapshot=True):
                         if self.task_service.should_stop():
@@ -157,9 +172,18 @@ class TickPublisherRunner:
                         client.publish(channel, json.dumps(payload))
                         ticks_published += 1
 
+                        if ticks_published == 1:
+                            logger.info(
+                                "Publisher: first tick received and published "
+                                "(instrument=%s, bid=%s, ask=%s)",
+                                tick.instrument,
+                                tick.bid,
+                                tick.ask,
+                            )
+
                         if ticks_published % 1000 == 0:
                             logger.info(
-                                "Published %s ticks (account_id=%s, channel=%s)",
+                                "Publisher: %s ticks published so far (account_id=%s, channel=%s)",
                                 ticks_published,
                                 account_id,
                                 channel,
@@ -173,20 +197,27 @@ class TickPublisherRunner:
                             client.expire(lock_key, 60)
 
                 except Exception as exc:  # pylint: disable=broad-exception-caught
-                    logger.exception("Tick publisher crashed; will retry in 5s: %s", exc)
+                    logger.exception(
+                        "Publisher: stream error, retrying in 5s (account_id=%s): %s",
+                        account_id,
+                        exc,
+                    )
                     self.task_service.heartbeat(status_message=f"error={str(exc)}", force=True)
                     time.sleep(5)
 
         finally:
+            logger.info(
+                "Publisher: shutting down (total_ticks_published=%s, account_id=%s)",
+                ticks_published,
+                account_id,
+            )
             self._cleanup_and_stop(client, lock_key, f"published={ticks_published}")
 
     def _cleanup_and_stop(
         self, client: Any, lock_key: str, message: str, failed: bool = False
     ) -> None:
         """Cleanup resources and mark task as stopped."""
-        import logging
-
-        logger = logging.getLogger(__name__)
+        logger.info("Publisher: cleaning up (reason=%s)", message)
 
         try:
             client.delete(lock_key)
