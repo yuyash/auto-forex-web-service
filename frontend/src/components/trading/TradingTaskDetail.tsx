@@ -207,46 +207,68 @@ export const TradingTaskDetail: React.FC = () => {
                 {task.description}
               </Typography>
             )}
-            {s.tick.mid != null && (
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  mt: 1,
-                  pl: '4px',
-                }}
-              >
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  component="span"
-                >
-                  {task.instrument}:
-                </Typography>
-                <Typography
-                  variant="body2"
-                  component="span"
-                  sx={{ fontWeight: 600, fontFamily: 'monospace' }}
-                >
-                  {s.tick.mid.toFixed(
-                    task.pip_size
-                      ? String(task.pip_size).split('.')[1]?.length || 5
-                      : 5
-                  )}
-                </Typography>
-                {s.tick.bid != null && s.tick.ask != null && (
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    component="span"
-                    sx={{ fontFamily: 'monospace' }}
+            {s.tick.mid != null &&
+              (() => {
+                const decimals = task.pip_size
+                  ? String(task.pip_size).split('.')[1]?.length || 5
+                  : 5;
+                return (
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      gap: 0.5,
+                      mt: 1,
+                      pl: '4px',
+                      rowGap: 0.25,
+                    }}
                   >
-                    (B: {s.tick.bid.toFixed(5)} / A: {s.tick.ask.toFixed(5)})
-                  </Typography>
-                )}
-              </Box>
-            )}
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      component="span"
+                    >
+                      {task.instrument}:
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      component="span"
+                      sx={{ fontWeight: 600, fontFamily: 'monospace' }}
+                    >
+                      Mid {s.tick.mid.toFixed(decimals)}
+                    </Typography>
+                    {s.tick.bid != null && s.tick.ask != null && (
+                      <>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          component="span"
+                          sx={{ fontFamily: 'monospace' }}
+                        >
+                          Bid {s.tick.bid.toFixed(decimals)}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          component="span"
+                          sx={{ fontFamily: 'monospace' }}
+                        >
+                          Ask {s.tick.ask.toFixed(decimals)}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          component="span"
+                          sx={{ fontFamily: 'monospace' }}
+                        >
+                          Spread {(s.tick.ask - s.tick.bid).toFixed(decimals)}
+                        </Typography>
+                      </>
+                    )}
+                  </Box>
+                );
+              })()}
             {(polledStatus?.status || task.status) === TaskStatus.RUNNING && (
               <Typography
                 variant="body2"
