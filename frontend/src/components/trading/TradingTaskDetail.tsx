@@ -2,11 +2,10 @@
  * TradingTaskDetail Component
  *
  * Main detail view for trading tasks using task-based API endpoints.
- * Displays task info and tab navigation for Events, Logs, Trades, and Replay.
- *
+ * Mirrors BacktestTaskDetail's structure for consistency.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -25,9 +24,13 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import {
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Settings as SettingsIcon,
+} from '@mui/icons-material';
 import { useTradingTask } from '../../hooks/useTradingTasks';
-import { useTaskSummary } from '../../hooks/useTaskSummary';
+import { useTaskPolling } from '../../hooks/useTaskPolling';
 import {
   useStrategies,
   getStrategyDisplayName,
@@ -35,22 +38,23 @@ import {
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
 import { StatusBadge } from '../tasks/display/StatusBadge';
+import { ExecutionHistoryTable } from '../tasks/display/ExecutionHistoryTable';
 import { TaskLogsTable } from '../tasks/detail/TaskLogsTable';
 import { TaskPositionsTable } from '../tasks/detail/TaskPositionsTable';
 import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
 import { TaskTrendPanel } from '../tasks/detail/TaskTrendPanel';
 import { TaskOrdersTable } from '../tasks/detail/TaskOrdersTable';
+import { useTaskSummary } from '../../hooks/useTaskSummary';
 import { TaskStatus, TaskType } from '../../types/common';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
 import { useDeleteTradingTask } from '../../hooks/useTradingTaskMutations';
 import { invalidateTradingTasksCache } from '../../hooks/useTradingTasks';
 import { LazyTabPanel } from '../common/LazyTabPanel';
+import { TabConfigDialog } from '../common/TabConfigDialog';
+import { useTabConfig, type TabItem } from '../../hooks/useTabConfig';
 
 function a11yProps(index: number) {
-  return {
-    id: `task-tab-${index}`,
-    'aria-controls': `task-tabpanel-${index}`,
-  };
+  return { id: `task-tab-${index}`, 'aria-controls': `task-tabpanel-${index}` };
 }
 
 export const TradingTaskDetail: React.FC = () => {
@@ -60,59 +64,67 @@ export const TradingTaskDetail: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const taskId = id || '';
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [tabConfigOpen, setTabConfigOpen] = useState(false);
   const deleteTask = useDeleteTradingTask();
 
-  // Get tab from URL, default to 'overview'
-  const tabParam = searchParams.get('tab') || 'overview';
-  const tabMap: Record<string, number> = {
-    overview: 0,
-    positions: 1,
-    trades: 2,
-    replay: 3,
-    events: 4,
-    logs: 5,
-    orders: 6,
-    equity: 3,
-  };
-  const tabNames = [
-    'overview',
-    'positions',
-    'trades',
-    'replay',
-    'events',
-    'logs',
-    'orders',
+  const defaultTabs: TabItem[] = [
+    { id: 'overview', label: t('trading:tabs.overview'), visible: true },
+    { id: 'trend', label: t('trading:tabs.trend'), visible: true },
+    { id: 'positions', label: t('trading:tabs.positions'), visible: true },
+    { id: 'trades', label: t('trading:tabs.trades'), visible: true },
+    { id: 'orders', label: t('trading:tabs.orders'), visible: true },
+    { id: 'events', label: t('trading:tabs.events'), visible: true },
+    { id: 'logs', label: t('trading:tabs.logs'), visible: true },
   ];
-  const [tabValue, setTabValue] = useState(tabMap[tabParam] || 0);
+  const {
+    tabs: allTabs,
+    visibleTabs,
+    updateTabs,
+    resetToDefaults,
+  } = useTabConfig('trading_detail', defaultTabs);
+  const tabParam = searchParams.get('tab') || 'overview';
+  const visibleTabIds = visibleTabs.map((tab) => tab.id);
 
   const { data: task, isLoading, error, refetch } = useTradingTask(taskId);
   const { strategies } = useStrategies();
-
-  const overviewSummary = useTaskSummary(taskId, TaskType.TRADING);
-
-  // Use summary tick data for running tasks
+  const isTaskRunning = task?.status === TaskStatus.RUNNING;
+  const overviewSummary = useTaskSummary(
+    taskId,
+    TaskType.TRADING,
+    task?.execution_id,
+    {
+      polling: isTaskRunning,
+      interval: 3000,
+    }
+  );
   const { summary: s } = overviewSummary;
-  const currentTick = s.tick.timestamp
+  const polledTick = s.tick.timestamp
     ? {
         timestamp: s.tick.timestamp,
         price: s.tick.mid != null ? String(s.tick.mid) : null,
       }
     : null;
-
-  // Derive tab value from URL parameter (use this for rendering)
-  const currentTabValue =
-    tabMap[tabParam] !== undefined ? tabMap[tabParam] : tabValue;
-
+  const {
+    status: polledStatus,
+    startPolling,
+    isPolling,
+  } = useTaskPolling(taskId, 'trading', {
+    enabled: !!taskId,
+    pollStatus: true,
+    interval: 3000,
+  });
+  // Do NOT call refetch() on status transitions to avoid 429 rate-limiting.
+  const prevStatusRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (polledStatus) {
+      prevStatusRef.current = polledStatus.status;
+    }
+  }, [polledStatus]);
+  const activeTabIndex = Math.max(0, visibleTabIds.indexOf(tabParam));
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
-    // Update URL with tab name
-    const tabName = tabNames[newValue];
-    setSearchParams({ tab: tabName });
+    setSearchParams({ tab: visibleTabIds[newValue] || 'overview' });
   };
-
-  const handleBack = () => {
-    navigate('/trading-tasks');
-  };
+  const handleBack = () => navigate('/trading-tasks');
 
   if (isLoading) {
     return (
@@ -130,7 +142,6 @@ export const TradingTaskDetail: React.FC = () => {
       </Container>
     );
   }
-
   if (error || !task) {
     return (
       <Container maxWidth={false} sx={{ py: 4 }}>
@@ -140,14 +151,22 @@ export const TradingTaskDetail: React.FC = () => {
       </Container>
     );
   }
-
   const pnlCurrency = task.instrument?.includes('_')
     ? task.instrument.split('_')[1]
     : 'N/A';
 
   return (
-    <Container maxWidth={false} sx={{ py: 4 }}>
-      {/* Breadcrumbs */}
+    <Container
+      maxWidth={false}
+      sx={{
+        py: 4,
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        minHeight: 0,
+        overflow: 'auto',
+      }}
+    >
       <Breadcrumbs sx={{ mb: 2 }}>
         <Link
           component="button"
@@ -159,8 +178,6 @@ export const TradingTaskDetail: React.FC = () => {
         </Link>
         <Typography color="text.primary">{task.name}</Typography>
       </Breadcrumbs>
-
-      {/* Header */}
       <Paper sx={{ p: 2, pb: 1, mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
           <Box sx={{ flex: 1 }}>
@@ -169,32 +186,27 @@ export const TradingTaskDetail: React.FC = () => {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 2,
-                p: '8px',
-                mb: '8px',
+                p: '4px',
+                mb: '4px',
               }}
             >
               <Typography variant="h4" component="h1">
                 {task.name}
               </Typography>
-              <StatusBadge status={task.status} />
+              <StatusBadge status={polledStatus?.status || task.status} />
             </Box>
-
             <Typography
               variant="body2"
               color="text.secondary"
-              sx={{ pl: '8px' }}
+              sx={{ pl: '4px' }}
             >
-              Configuration: {task.config_name} • Strategy:{' '}
               {getStrategyDisplayName(strategies, task.strategy_type)}
             </Typography>
-
             {task.description && (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                 {task.description}
               </Typography>
             )}
-
-            {/* Current Price */}
             {s.tick.mid != null && (
               <Box
                 sx={{
@@ -202,7 +214,7 @@ export const TradingTaskDetail: React.FC = () => {
                   alignItems: 'center',
                   gap: 1,
                   mt: 1,
-                  pl: '8px',
+                  pl: '4px',
                 }}
               >
                 <Typography
@@ -235,9 +247,7 @@ export const TradingTaskDetail: React.FC = () => {
                 )}
               </Box>
             )}
-
-            {/* Progress Percentage */}
-            {task.status === TaskStatus.RUNNING && (
+            {(polledStatus?.status || task.status) === TaskStatus.RUNNING && (
               <Typography
                 variant="body2"
                 color="text.secondary"
@@ -248,24 +258,23 @@ export const TradingTaskDetail: React.FC = () => {
               </Typography>
             )}
           </Box>
-
           <Box sx={{ display: 'flex', gap: 1 }}>
             <TaskControlButtons
               taskId={taskId}
-              status={task.status}
+              status={polledStatus?.status || task.status}
               onStart={async (id) => {
                 const { tradingTasksApi } = await import(
                   '../../services/api/tradingTasks'
                 );
                 await tradingTasksApi.start(id);
                 refetch();
+                if (!isPolling) startPolling();
               }}
               onStop={async (id) => {
                 const { tradingTasksApi } = await import(
                   '../../services/api/tradingTasks'
                 );
                 await tradingTasksApi.stop(id);
-                refetch();
               }}
               onRestart={async (id) => {
                 const { tradingTasksApi } = await import(
@@ -273,6 +282,7 @@ export const TradingTaskDetail: React.FC = () => {
                 );
                 await tradingTasksApi.restart(id);
                 refetch();
+                if (!isPolling) startPolling();
               }}
               onResume={async (id) => {
                 const { tradingTasksApi } = await import(
@@ -280,6 +290,7 @@ export const TradingTaskDetail: React.FC = () => {
                 );
                 await tradingTasksApi.resume(id);
                 refetch();
+                if (!isPolling) startPolling();
               }}
               onPause={async (id) => {
                 const { tradingTasksApi } = await import(
@@ -295,8 +306,10 @@ export const TradingTaskDetail: React.FC = () => {
                   <IconButton
                     onClick={() => navigate(`/trading-tasks/${taskId}/edit`)}
                     disabled={
-                      task.status === TaskStatus.RUNNING ||
-                      task.status === TaskStatus.PAUSED
+                      (polledStatus?.status || task.status) ===
+                        TaskStatus.RUNNING ||
+                      (polledStatus?.status || task.status) ===
+                        TaskStatus.PAUSED
                     }
                     aria-label={t('common:actions.edit')}
                   >
@@ -309,8 +322,10 @@ export const TradingTaskDetail: React.FC = () => {
                   <IconButton
                     onClick={() => setDeleteDialogOpen(true)}
                     disabled={
-                      task.status === TaskStatus.RUNNING ||
-                      task.status === TaskStatus.PAUSED
+                      (polledStatus?.status || task.status) ===
+                        TaskStatus.RUNNING ||
+                      (polledStatus?.status || task.status) ===
+                        TaskStatus.PAUSED
                     }
                     color="error"
                     aria-label={t('common:actions.delete')}
@@ -324,326 +339,391 @@ export const TradingTaskDetail: React.FC = () => {
         </Box>
       </Paper>
 
-      {/* Tabs */}
-      <Paper sx={{ mb: 0 }}>
-        <Tabs
-          value={currentTabValue}
-          onChange={handleTabChange}
-          aria-label="task detail tabs"
-          sx={{ borderBottom: 1, borderColor: 'divider' }}
+      <Paper
+        sx={{
+          mb: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
+          overflow: 'hidden',
+        }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            borderBottom: 1,
+            borderColor: 'divider',
+            flexShrink: 0,
+          }}
         >
-          <Tab label={t('trading:tabs.overview')} {...a11yProps(0)} />
-          <Tab label={t('trading:tabs.positions')} {...a11yProps(1)} />
-          <Tab label={t('trading:tabs.trades')} {...a11yProps(2)} />
-          <Tab label={t('trading:tabs.replay')} {...a11yProps(3)} />
-          <Tab label={t('trading:tabs.events')} {...a11yProps(4)} />
-          <Tab label={t('trading:tabs.logs')} {...a11yProps(5)} />
-          <Tab label={t('trading:tabs.orders')} {...a11yProps(6)} />
-        </Tabs>
+          <Tabs
+            value={activeTabIndex}
+            onChange={handleTabChange}
+            aria-label="task detail tabs"
+            sx={{ flex: 1 }}
+          >
+            {visibleTabs.map((tab, idx) => (
+              <Tab key={tab.id} label={tab.label} {...a11yProps(idx)} />
+            ))}
+          </Tabs>
+          <Tooltip title={t('common:tabConfig.configureTabs')}>
+            <IconButton
+              onClick={() => setTabConfigOpen(true)}
+              size="small"
+              sx={{ mr: 1 }}
+              aria-label={t('common:tabConfig.configureTabs')}
+            >
+              <SettingsIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
 
-        {/* Overview Tab */}
-        <LazyTabPanel value={currentTabValue} index={0}>
-          <Box sx={{ p: 3 }}>
-            <Grid container spacing={3}>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Typography variant="h6" gutterBottom>
-                  {t('trading:detail.taskInformation')}
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('common:labels.name')}
-                    </Typography>
-                    <Typography variant="body1">{task.name}</Typography>
-                  </Box>
-
-                  {task.description && (
+        {visibleTabIds.includes('overview') && (
+          <LazyTabPanel
+            value={activeTabIndex}
+            index={visibleTabIds.indexOf('overview')}
+          >
+            <Box sx={{ p: 3 }}>
+              <Grid container spacing={3}>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Typography variant="h6" gutterBottom>
+                    {t('trading:detail.taskInformation')}
+                  </Typography>
+                  <Box
+                    sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
+                  >
                     <Box>
                       <Typography variant="caption" color="text.secondary">
-                        {t('common:labels.description')}
+                        {t('common:labels.name')}
                       </Typography>
-                      <Typography variant="body1">
-                        {task.description}
-                      </Typography>
+                      <Typography variant="body1">{task.name}</Typography>
                     </Box>
-                  )}
-
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('common:labels.instrument')}
-                    </Typography>
-                    <Typography variant="body1">{task.instrument}</Typography>
-                  </Box>
-
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('common:labels.pipSize')}
-                    </Typography>
-                    <Typography variant="body1">
-                      {task.pip_size
-                        ? parseFloat(task.pip_size)
-                        : task.pip_size}
-                    </Typography>
-                  </Box>
-
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('common:labels.status')}
-                    </Typography>
-                    <Box sx={{ mt: 0.5 }}>
-                      <StatusBadge status={task.status} showIcon={false} />
-                    </Box>
-                  </Box>
-                </Box>
-              </Grid>
-
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Typography variant="h6" gutterBottom>
-                  {t('common:labels.configuration')}
-                </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('common:labels.strategyConfiguration')}
-                    </Typography>
-                    <Link
-                      component="button"
-                      variant="body1"
-                      onClick={() =>
-                        navigate(`/configurations/${task.config_id}`)
-                      }
-                      sx={{ textAlign: 'left', display: 'block' }}
-                    >
-                      {task.config_name}
-                    </Link>
-                  </Box>
-
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('common:labels.strategyType')}
-                    </Typography>
-                    <Typography
-                      variant="body1"
-                      sx={{ textTransform: 'capitalize' }}
-                    >
-                      {getStrategyDisplayName(strategies, task.strategy_type)}
-                    </Typography>
-                  </Box>
-
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('common:labels.oandaAccount')}
-                    </Typography>
-                    <Typography variant="body1">
-                      {task.account_name || 'N/A'}
-                    </Typography>
-                  </Box>
-
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('common:labels.sellOnStop')}
-                    </Typography>
-                    <Typography variant="body1">
-                      {task.sell_on_stop
-                        ? t('common:labels.yes')
-                        : t('common:labels.no')}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Grid>
-
-              <Grid size={{ xs: 12 }}>
-                <Divider sx={{ my: 2 }} />
-                <Typography variant="h6" gutterBottom>
-                  {t('trading:detail.results')}
-                </Typography>
-                <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('trading:detail.realizedPnl')} ({pnlCurrency})
-                    </Typography>
-                    <Typography
-                      variant="body1"
-                      color={
-                        s.pnl.realized >= 0 ? 'success.main' : 'error.main'
-                      }
-                    >
-                      {s.pnl.realized >= 0 ? '+' : ''}
-                      {s.pnl.realized.toFixed(2)} {pnlCurrency}
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('trading:detail.unrealizedPnl')} ({pnlCurrency})
-                    </Typography>
-                    <Typography
-                      variant="body1"
-                      color={
-                        s.pnl.unrealized >= 0 ? 'success.main' : 'error.main'
-                      }
-                    >
-                      {s.pnl.unrealized >= 0 ? '+' : ''}
-                      {s.pnl.unrealized.toFixed(2)} {pnlCurrency}
-                    </Typography>
-                  </Box>
-                  {s.execution.currentBalance != null && (
+                    {task.description && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          {t('common:labels.description')}
+                        </Typography>
+                        <Typography variant="body1">
+                          {task.description}
+                        </Typography>
+                      </Box>
+                    )}
                     <Box>
                       <Typography variant="caption" color="text.secondary">
-                        {t('trading:detail.currentBalance')}
+                        {t('common:labels.instrument')}
                       </Typography>
-                      <Typography variant="body1">
-                        {s.execution.currentBalance.toFixed(2)} {pnlCurrency}
-                      </Typography>
+                      <Typography variant="body1">{task.instrument}</Typography>
                     </Box>
-                  )}
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('trading:detail.totalTradesCount')}
-                    </Typography>
-                    <Typography variant="body1">
-                      {s.counts.totalTrades}
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('trading:detail.openPositions')}
-                    </Typography>
-                    <Typography variant="body1">
-                      {s.counts.openPositions}
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('trading:detail.closedPositions')}
-                    </Typography>
-                    <Typography variant="body1">
-                      {s.counts.closedPositions}
-                    </Typography>
-                  </Box>
-                  {s.execution.ticksProcessed > 0 && (
                     <Box>
                       <Typography variant="caption" color="text.secondary">
-                        {t('trading:detail.ticksProcessed')}
+                        {t('common:labels.pipSize')}
                       </Typography>
                       <Typography variant="body1">
-                        {s.execution.ticksProcessed.toLocaleString()}
+                        {task.pip_size
+                          ? parseFloat(task.pip_size)
+                          : task.pip_size}
                       </Typography>
                     </Box>
-                  )}
-                </Box>
-              </Grid>
-
-              {(task.started_at || task.completed_at) && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('common:labels.status')}
+                      </Typography>
+                      <Box sx={{ mt: 0.5 }}>
+                        <StatusBadge
+                          status={polledStatus?.status || task.status}
+                          showIcon={false}
+                        />
+                      </Box>
+                    </Box>
+                  </Box>
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Typography variant="h6" gutterBottom>
+                    {t('common:labels.configuration')}
+                  </Typography>
+                  <Box
+                    sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
+                  >
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('common:labels.strategyConfiguration')}
+                      </Typography>
+                      <Link
+                        component="button"
+                        variant="body1"
+                        onClick={() =>
+                          navigate(`/configurations/${task.config_id}`)
+                        }
+                        sx={{ textAlign: 'left', display: 'block' }}
+                      >
+                        {task.config_name}
+                      </Link>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('common:labels.strategyType')}
+                      </Typography>
+                      <Typography
+                        variant="body1"
+                        sx={{ textTransform: 'capitalize' }}
+                      >
+                        {getStrategyDisplayName(strategies, task.strategy_type)}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('common:labels.oandaAccount')}
+                      </Typography>
+                      <Typography variant="body1">
+                        {task.account_name || 'N/A'}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('common:labels.sellOnStop')}
+                      </Typography>
+                      <Typography variant="body1">
+                        {task.sell_on_stop
+                          ? t('common:labels.yes')
+                          : t('common:labels.no')}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('common:labels.dryRun')}
+                      </Typography>
+                      <Typography variant="body1">
+                        {task.dry_run
+                          ? t('common:labels.yes')
+                          : t('common:labels.no')}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Grid>
                 <Grid size={{ xs: 12 }}>
                   <Divider sx={{ my: 2 }} />
                   <Typography variant="h6" gutterBottom>
-                    {t('trading:detail.executionTimeline')}
+                    {t('trading:detail.results')}
                   </Typography>
-                  <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                    {task.execution_run_id != null && (
+                  <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('trading:detail.realizedPnl')} ({pnlCurrency})
+                      </Typography>
+                      <Typography
+                        variant="body1"
+                        color={
+                          s.pnl.realized >= 0 ? 'success.main' : 'error.main'
+                        }
+                      >
+                        {s.pnl.realized >= 0 ? '+' : ''}
+                        {s.pnl.realized.toFixed(2)} {pnlCurrency}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('trading:detail.unrealizedPnl')} ({pnlCurrency})
+                      </Typography>
+                      <Typography
+                        variant="body1"
+                        color={
+                          s.pnl.unrealized >= 0 ? 'success.main' : 'error.main'
+                        }
+                      >
+                        {s.pnl.unrealized >= 0 ? '+' : ''}
+                        {s.pnl.unrealized.toFixed(2)} {pnlCurrency}
+                      </Typography>
+                    </Box>
+                    {s.execution.currentBalance != null && (
                       <Box>
                         <Typography variant="caption" color="text.secondary">
-                          {t('trading:detail.executionId')}
+                          {t('trading:detail.currentBalance')}
                         </Typography>
                         <Typography variant="body1">
-                          {task.execution_run_id}
+                          {s.execution.currentBalanceDisplay != null &&
+                          s.execution.displayCurrency &&
+                          s.execution.displayCurrency !==
+                            s.execution.accountCurrency ? (
+                            <>
+                              {s.execution.currentBalanceDisplay.toFixed(0)}{' '}
+                              {s.execution.displayCurrency}
+                              <Typography
+                                component="span"
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ ml: 1 }}
+                              >
+                                ({s.execution.currentBalance.toFixed(2)}{' '}
+                                {s.execution.accountCurrency})
+                              </Typography>
+                            </>
+                          ) : (
+                            <>
+                              {s.execution.currentBalance.toFixed(2)}{' '}
+                              {s.execution.accountCurrency || pnlCurrency}
+                            </>
+                          )}
                         </Typography>
                       </Box>
                     )}
-                    {task.started_at && (
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('trading:detail.totalTradesCount')}
+                      </Typography>
+                      <Typography variant="body1">
+                        {s.counts.totalTrades}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('trading:detail.openPositions')}
+                      </Typography>
+                      <Typography variant="body1">
+                        {s.counts.openPositions}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        {t('trading:detail.closedPositions')}
+                      </Typography>
+                      <Typography variant="body1">
+                        {s.counts.closedPositions}
+                      </Typography>
+                    </Box>
+                    {s.execution.ticksProcessed > 0 && (
                       <Box>
                         <Typography variant="caption" color="text.secondary">
-                          {t('trading:detail.startedAt')}
+                          {t('trading:detail.ticksProcessed')}
                         </Typography>
                         <Typography variant="body1">
-                          {new Date(task.started_at).toLocaleString()}
-                        </Typography>
-                      </Box>
-                    )}
-                    {task.completed_at && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">
-                          {t('trading:detail.completedAt')}
-                        </Typography>
-                        <Typography variant="body1">
-                          {new Date(task.completed_at).toLocaleString()}
+                          {s.execution.ticksProcessed.toLocaleString()}
                         </Typography>
                       </Box>
                     )}
                   </Box>
                 </Grid>
-              )}
-            </Grid>
-          </Box>
-        </LazyTabPanel>
+                <Grid size={{ xs: 12 }}>
+                  <Divider sx={{ my: 2 }} />
+                  <ExecutionHistoryTable
+                    taskId={taskId}
+                    taskType={TaskType.TRADING}
+                  />
+                </Grid>
+              </Grid>
+            </Box>
+          </LazyTabPanel>
+        )}
 
-        {/* Positions Tab */}
-        <LazyTabPanel value={currentTabValue} index={1}>
-          <TaskPositionsTable
-            taskId={taskId}
-            taskType={TaskType.TRADING}
-            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
-            currentPrice={
-              currentTick?.price != null ? parseFloat(currentTick.price) : null
-            }
-            pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
-          />
-        </LazyTabPanel>
-
-        {/* Trades Tab */}
-        <LazyTabPanel value={currentTabValue} index={2}>
-          <TaskTradesTable
-            taskId={taskId}
-            taskType={TaskType.TRADING}
-            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
-            pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
-          />
-        </LazyTabPanel>
-
-        {/* Replay Tab */}
-        <LazyTabPanel value={currentTabValue} index={3}>
-          <TaskTrendPanel
-            taskId={taskId}
-            taskType={TaskType.TRADING}
-            instrument={task.instrument}
-            latestExecution={task.latest_execution}
-            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
-            currentTick={currentTick}
-            pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
-            configId={task.config_id}
-          />
-        </LazyTabPanel>
-
-        {/* Events Tab */}
-        <LazyTabPanel value={currentTabValue} index={4}>
-          <TaskEventsTable
-            taskId={taskId}
-            taskType={TaskType.TRADING}
-            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
-          />
-        </LazyTabPanel>
-
-        {/* Logs Tab */}
-        <LazyTabPanel value={currentTabValue} index={5}>
-          <TaskLogsTable
-            taskId={taskId}
-            taskType={TaskType.TRADING}
-            executionRunId={task.execution_run_id}
-            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
-          />
-        </LazyTabPanel>
-
-        {/* Orders Tab */}
-        <LazyTabPanel value={currentTabValue} index={6}>
-          <TaskOrdersTable
-            taskId={taskId}
-            taskType={TaskType.TRADING}
-            executionRunId={task.execution_run_id}
-            enableRealTimeUpdates={task.status === TaskStatus.RUNNING}
-          />
-        </LazyTabPanel>
+        {visibleTabIds.includes('trend') && (
+          <LazyTabPanel
+            value={activeTabIndex}
+            index={visibleTabIds.indexOf('trend')}
+          >
+            <TaskTrendPanel
+              taskId={taskId}
+              taskType={TaskType.TRADING}
+              instrument={task.instrument}
+              executionRunId={task.execution_id}
+              latestExecution={task.latest_execution}
+              currentTick={polledTick ?? null}
+              enableRealTimeUpdates={
+                (polledStatus?.status || task.status) === TaskStatus.RUNNING
+              }
+              pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
+              configId={task.config_id}
+            />
+          </LazyTabPanel>
+        )}
+        {visibleTabIds.includes('positions') && (
+          <LazyTabPanel
+            value={activeTabIndex}
+            index={visibleTabIds.indexOf('positions')}
+          >
+            <TaskPositionsTable
+              taskId={taskId}
+              taskType={TaskType.TRADING}
+              executionRunId={task.execution_id}
+              enableRealTimeUpdates={
+                (polledStatus?.status || task.status) === TaskStatus.RUNNING
+              }
+              currentPrice={
+                polledTick?.price != null ? parseFloat(polledTick.price) : null
+              }
+              pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
+            />
+          </LazyTabPanel>
+        )}
+        {visibleTabIds.includes('trades') && (
+          <LazyTabPanel
+            value={activeTabIndex}
+            index={visibleTabIds.indexOf('trades')}
+          >
+            <TaskTradesTable
+              taskId={taskId}
+              taskType={TaskType.TRADING}
+              executionRunId={task.execution_id}
+              enableRealTimeUpdates={
+                (polledStatus?.status || task.status) === TaskStatus.RUNNING
+              }
+              pipSize={task.pip_size ? parseFloat(task.pip_size) : null}
+            />
+          </LazyTabPanel>
+        )}
+        {visibleTabIds.includes('orders') && (
+          <LazyTabPanel
+            value={activeTabIndex}
+            index={visibleTabIds.indexOf('orders')}
+          >
+            <TaskOrdersTable
+              taskId={taskId}
+              taskType={TaskType.TRADING}
+              executionRunId={task.execution_id}
+              enableRealTimeUpdates={
+                (polledStatus?.status || task.status) === TaskStatus.RUNNING
+              }
+            />
+          </LazyTabPanel>
+        )}
+        {visibleTabIds.includes('events') && (
+          <LazyTabPanel
+            value={activeTabIndex}
+            index={visibleTabIds.indexOf('events')}
+          >
+            <TaskEventsTable
+              taskId={taskId}
+              taskType={TaskType.TRADING}
+              executionRunId={task.execution_id}
+              enableRealTimeUpdates={
+                (polledStatus?.status || task.status) === TaskStatus.RUNNING
+              }
+            />
+          </LazyTabPanel>
+        )}
+        {visibleTabIds.includes('logs') && (
+          <LazyTabPanel
+            value={activeTabIndex}
+            index={visibleTabIds.indexOf('logs')}
+          >
+            <TaskLogsTable
+              taskId={taskId}
+              taskType={TaskType.TRADING}
+              executionRunId={task.execution_id}
+              enableRealTimeUpdates={
+                (polledStatus?.status || task.status) === TaskStatus.RUNNING
+              }
+            />
+          </LazyTabPanel>
+        )}
       </Paper>
-
+      <TabConfigDialog
+        open={tabConfigOpen}
+        tabs={allTabs}
+        onClose={() => setTabConfigOpen(false)}
+        onSave={updateTabs}
+        onReset={resetToDefaults}
+      />
       <DeleteTaskDialog
         open={deleteDialogOpen}
         taskName={task.name}
@@ -656,7 +736,7 @@ export const TradingTaskDetail: React.FC = () => {
             invalidateTradingTasksCache();
             navigate('/trading-tasks', { state: { deleted: true } });
           } catch {
-            // Error handled by mutation hook
+            /* handled */
           }
         }}
         isLoading={deleteTask.isLoading}

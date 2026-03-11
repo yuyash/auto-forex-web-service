@@ -374,7 +374,12 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
           >
             <Stack spacing={2}>
               <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                <FormControl sx={{ minWidth: 150 }}>
+                <FormControl
+                  sx={{
+                    minWidth: { xs: 120, sm: 150 },
+                    flex: { xs: '1 1 120px', sm: 'none' },
+                  }}
+                >
                   <InputLabel>Instrument</InputLabel>
                   <Select
                     value={instrumentFilter}
@@ -390,7 +395,12 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
                   </Select>
                 </FormControl>
 
-                <FormControl sx={{ minWidth: 150 }}>
+                <FormControl
+                  sx={{
+                    minWidth: { xs: 120, sm: 150 },
+                    flex: { xs: '1 1 120px', sm: 'none' },
+                  }}
+                >
                   <InputLabel>Direction</InputLabel>
                   <Select
                     value={directionFilter}
@@ -411,7 +421,10 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
                   InputLabelProps={{ shrink: true }}
-                  sx={{ minWidth: 150 }}
+                  sx={{
+                    minWidth: { xs: 120, sm: 150 },
+                    flex: { xs: '1 1 120px', sm: 'none' },
+                  }}
                 />
 
                 <TextField
@@ -420,10 +433,18 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
                   InputLabelProps={{ shrink: true }}
-                  sx={{ minWidth: 150 }}
+                  sx={{
+                    minWidth: { xs: 120, sm: 150 },
+                    flex: { xs: '1 1 120px', sm: 'none' },
+                  }}
                 />
 
-                <FormControl sx={{ minWidth: 150 }}>
+                <FormControl
+                  sx={{
+                    minWidth: { xs: 120, sm: 150 },
+                    flex: { xs: '1 1 120px', sm: 'none' },
+                  }}
+                >
                   <InputLabel>Sort By</InputLabel>
                   <Select
                     value={sortField}
@@ -437,7 +458,12 @@ export const TradeHistoryTable: React.FC<TradeHistoryTableProps> = ({
                   </Select>
                 </FormControl>
 
-                <FormControl sx={{ minWidth: 120 }}>
+                <FormControl
+                  sx={{
+                    minWidth: { xs: 100, sm: 120 },
+                    flex: { xs: '1 1 100px', sm: 'none' },
+                  }}
+                >
                   <InputLabel>Order</InputLabel>
                   <Select
                     value={sortOrder}

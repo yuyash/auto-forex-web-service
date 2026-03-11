@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
   TextField,
@@ -73,13 +73,16 @@ const StrategyConfigForm = ({
   const { t, i18n } = useTranslation('strategy');
 
   /** Resolve a localized schema field: e.g. title_ja → title fallback. */
-  const localized = (
-    prop: ConfigProperty,
-    field: 'title' | 'description' | 'group'
-  ): string | undefined => {
-    const langKey = `${field}_${i18n.language}` as keyof ConfigProperty;
-    return (prop[langKey] as string | undefined) ?? prop[field];
-  };
+  const localized = useCallback(
+    (
+      prop: ConfigProperty,
+      field: 'title' | 'description' | 'group'
+    ): string | undefined => {
+      const langKey = `${field}_${i18n.language}` as keyof ConfigProperty;
+      return (prop[langKey] as string | undefined) ?? prop[field];
+    },
+    [i18n.language]
+  );
 
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>(
     {}

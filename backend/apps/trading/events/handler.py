@@ -372,6 +372,7 @@ class EventHandler:
             tick_timestamp=event.timestamp,
             retracement_count=event.retracement_count,
             planned_exit_price=event.planned_exit_price,
+            planned_exit_price_formula=getattr(event, "planned_exit_price_formula", None),
         )
 
         self._cache_position(event.layer_number, position)
@@ -421,6 +422,7 @@ class EventHandler:
                 "planned_exit_price": str(position.planned_exit_price)
                 if position.planned_exit_price
                 else None,
+                "planned_exit_price_formula": position.planned_exit_price_formula,
                 "oanda_trade_id": position.oanda_trade_id,
                 "order_id": str(order.id),
             },

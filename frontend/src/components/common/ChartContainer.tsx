@@ -174,10 +174,15 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({
           )}
 
           {/* Controls */}
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack
+            direction="row"
+            spacing={1}
+            alignItems="center"
+            flexWrap="wrap"
+          >
             {/* Granularity Selector */}
             {showGranularitySelector && onGranularityChange && (
-              <FormControl sx={{ minWidth: 150 }}>
+              <FormControl sx={{ minWidth: { xs: 120, sm: 150 } }} size="small">
                 <InputLabel id="granularity-select-label">
                   Granularity
                 </InputLabel>
@@ -243,8 +248,8 @@ export const ChartContainer: React.FC<ChartContainerProps> = ({
       <Box
         sx={{
           flex: 1,
-          minHeight,
-          height,
+          minHeight: { xs: 200, sm: minHeight },
+          height: { xs: 300, sm: height },
           position: 'relative',
           display: 'flex',
           alignItems: 'center',

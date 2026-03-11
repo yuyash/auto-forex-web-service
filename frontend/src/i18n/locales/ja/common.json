@@ -261,6 +261,7 @@
       "closePrice": "決済価格",
       "pips": "Pips",
       "plannedExitPrice": "予定決済価格",
+      "plannedExitPriceFormula": "決済価格計算式",
       "realizedPnl": "実現損益",
       "unrealizedPnl": "未実現損益",
       "totalRealizedPnl": "合計実現損益",
@@ -307,6 +308,23 @@
       "noLogs": "ログなし",
       "resetFilters": "フィルターリセット"
     },
+    "executions": {
+      "title": "実行履歴",
+      "executionId": "実行ID",
+      "status": "状態",
+      "progress": "進捗",
+      "started": "開始日時",
+      "completed": "完了日時",
+      "duration": "所要時間",
+      "returnPct": "リターン %",
+      "pnl": "損益",
+      "trades": "取引数",
+      "winRate": "勝率",
+      "error": "エラー",
+      "noExecutions": "実行履歴なし",
+      "refresh": "更新",
+      "configureColumns": "列の設定"
+    },
     "trend": {
       "executionId": "実行ID",
       "realizedPnl": "実現損益",
@@ -336,6 +354,22 @@
       "pips": "Pips",
       "pnl": "損益"
     }
+  },
+  "columnConfig": {
+    "title": "列設定",
+    "description": "列の表示/非表示を切り替え、ドラッグで順序を変更できます。",
+    "reset": "デフォルトに戻す",
+    "moveUp": "上に移動",
+    "moveDown": "下に移動",
+    "configureColumns": "列設定"
+  },
+  "tabConfig": {
+    "title": "タブ設定",
+    "description": "タブの表示/非表示を切り替え、ドラッグで順序を変更できます。概要タブは常に表示されます。",
+    "reset": "デフォルトに戻す",
+    "moveUp": "上に移動",
+    "moveDown": "下に移動",
+    "configureTabs": "タブ設定"
   },
   "footer": {
     "oandaApiReachable": "OANDA APIに接続可能",

@@ -743,7 +743,7 @@ export default function MarketChart({
           left: 8,
           zIndex: 2,
           display: 'none',
-          fontSize: '12px',
+          fontSize: '11px',
           fontFamily:
             '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           color: isDark ? '#ffffff' : '#334155',
@@ -753,7 +753,10 @@ export default function MarketChart({
           padding: '4px 8px',
           borderRadius: '4px',
           pointerEvents: 'none',
-          whiteSpace: 'nowrap',
+          whiteSpace: 'normal',
+          maxWidth: 'calc(100% - 16px)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
         }}
       />
 

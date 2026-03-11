@@ -24,7 +24,7 @@ export async function fetchMetrics(
   taskType: TaskType,
   maxPoints?: number,
   since?: string,
-  executionRunId?: number
+  executionRunId?: string
 ): Promise<MetricPoint[]> {
   const prefix =
     taskType === TaskType.BACKTEST
@@ -35,7 +35,7 @@ export async function fetchMetrics(
   if (maxPoints) searchParams.set('max_points', String(maxPoints));
   if (since) searchParams.set('since', since);
   if (executionRunId != null) {
-    searchParams.set('execution_run_id', String(executionRunId));
+    searchParams.set('execution_id', String(executionRunId));
   }
   const qs = searchParams.toString();
   const url = `${prefix}/${taskId}/metrics/${qs ? `?${qs}` : ''}`;

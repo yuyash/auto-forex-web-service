@@ -90,6 +90,17 @@ def list_task_executions(
         by_run_id[current_run_id] = current
 
     rows: list[dict[str, Any]] = []
+    # Get the latest mid rate from the task's most recent ExecutionState
+    # to use as fallback for past executions that no longer have state.
+    from apps.trading.models.state import ExecutionState as _ES
+
+    _latest_state = (
+        _ES.objects.filter(task_type=task_type, task_id=task_id)
+        .exclude(last_tick_price__isnull=True)
+        .order_by("-updated_at")
+        .values_list("last_tick_price", flat=True)
+        .first()
+    )
     for run_id in sorted(by_run_id.keys(), reverse=True):
         meta = by_run_id[run_id]
         started_at = meta.get("started_at")
@@ -122,6 +133,7 @@ def list_task_executions(
                 task_type=task_type,
                 task_id=task_id,
                 run_id=run_id,
+                fallback_mid_rate=_latest_state,
             )
         rows.append(row)
 
@@ -129,7 +141,7 @@ def list_task_executions(
 
 
 def _compute_execution_metrics(
-    *, task, task_type: str, task_id: str, run_id: str
+    *, task, task_type: str, task_id: str, run_id: str, fallback_mid_rate: Decimal | None = None
 ) -> dict[str, Any]:
     summary = compute_task_summary(
         task_type=task_type,
@@ -185,7 +197,14 @@ def _compute_execution_metrics(
     )
 
     total_pnl = summary.pnl.realized + summary.pnl.unrealized
-    total_return = _compute_total_return(task=task, task_type=task_type, total_pnl=total_pnl)
+    mid_rate = summary.tick.mid or fallback_mid_rate
+    total_return = _compute_total_return(
+        task=task,
+        task_type=task_type,
+        current_balance=summary.execution.current_balance,
+        total_pnl=total_pnl,
+        mid_rate=mid_rate,
+    )
 
     metrics: dict[str, Any] = {
         "total_pnl": total_pnl,
@@ -200,18 +219,50 @@ def _compute_execution_metrics(
     return metrics
 
 
-def _compute_total_return(*, task, task_type: str, total_pnl: Decimal) -> Decimal | None:
-    initial_balance: Decimal | None = None
-    if task_type == "backtest":
-        initial_balance = getattr(task, "initial_balance", None)
+def _compute_total_return(
+    *,
+    task,
+    task_type: str,
+    current_balance: Decimal | None,
+    total_pnl: Decimal,
+    mid_rate: Decimal | None,
+) -> Decimal | None:
+    """Compute total return % from current balance vs initial balance.
+
+    Primary method: use current_balance from ExecutionState.
+    current_balance is kept in account currency (e.g. USD) — the executor
+    converts realized PnL to account currency before adding it — so the
+    delta (current_balance - initial_balance) is already in account currency
+    and needs no conversion.
+
+    Fallback: when current_balance is unavailable (e.g. past executions whose
+    ExecutionState has been cleaned up), use total_pnl which is aggregated
+    from positions in quote currency, so it must be converted via mid_rate
+    when account currency != quote currency.
+    """
+    if task_type != "backtest":
+        return None
+    initial_balance: Decimal | None = getattr(task, "initial_balance", None)
     if not initial_balance:
         return None
     try:
-        if Decimal(str(initial_balance)) == Decimal("0"):
+        initial = Decimal(str(initial_balance))
+        if initial == Decimal("0"):
             return None
-        return (total_pnl / Decimal(str(initial_balance)) * Decimal("100")).quantize(
-            Decimal("0.0000000001")
-        )
+
+        if current_balance is not None:
+            # current_balance is in account currency — no conversion needed
+            pnl_delta = Decimal(str(current_balance)) - initial
+        else:
+            # Fallback: total_pnl is in quote currency
+            pnl_delta = total_pnl
+            account_ccy = getattr(task, "account_currency", "USD").upper()
+            instrument = getattr(task, "instrument", "")
+            quote_ccy = instrument.split("_")[-1].upper() if "_" in instrument else ""
+            if quote_ccy and account_ccy != quote_ccy and mid_rate and mid_rate > 0:
+                pnl_delta = pnl_delta / mid_rate
+
+        return (pnl_delta / initial * Decimal("100")).quantize(Decimal("0.0000000001"))
     except Exception:
         return None
 

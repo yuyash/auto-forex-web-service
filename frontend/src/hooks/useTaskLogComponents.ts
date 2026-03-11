@@ -13,7 +13,7 @@ import { handleAuthErrorStatus } from '../utils/authEvents';
 interface UseTaskLogComponentsOptions {
   taskId: string;
   taskType: TaskType;
-  executionRunId?: number;
+  executionRunId?: string;
 }
 
 interface UseTaskLogComponentsResult {
@@ -47,7 +47,7 @@ export const useTaskLogComponents = ({
 
       const params: Record<string, string> = {};
       if (executionRunId != null) {
-        params.execution_run_id = String(executionRunId);
+        params.execution_id = String(executionRunId);
       }
 
       const token = await resolveToken();

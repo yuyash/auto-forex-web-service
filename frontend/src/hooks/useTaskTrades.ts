@@ -37,7 +37,7 @@ interface UseTaskTradesOptions {
   taskId: string | number;
   taskType: TaskType;
   /** Filter by execution run ID. When omitted, uses the latest execution run. */
-  executionRunId?: number;
+  executionRunId?: string;
   direction?: 'long' | 'short';
   page?: number;
   pageSize?: number;
@@ -163,7 +163,7 @@ export const useTaskTrades = ({
           page_size: String(pageSize),
         };
         if (executionRunId != null) {
-          params.execution_run_id = String(executionRunId);
+          params.execution_id = String(executionRunId);
         }
         if (apiDirection) params.direction = apiDirection;
         const effectiveSince = since ?? (incremental ? sinceRef.current : null);

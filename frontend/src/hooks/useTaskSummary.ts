@@ -96,7 +96,7 @@ const INITIAL_SUMMARY: TaskSummary = {
 export function useTaskSummary(
   taskId: string,
   taskType: TaskType,
-  executionRunId?: number,
+  executionRunId?: string,
   options: UseTaskSummaryOptions = {}
 ): UseTaskSummaryResult {
   const { polling = false, interval = 2000 } = options;
@@ -132,7 +132,7 @@ export function useTaskSummary(
 
       const params: Record<string, string> = {};
       if (executionRunId != null) {
-        params.execution_run_id = String(executionRunId);
+        params.execution_id = String(executionRunId);
       }
 
       const response = await axios.get(url, {

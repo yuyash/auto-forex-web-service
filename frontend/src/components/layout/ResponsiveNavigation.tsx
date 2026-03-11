@@ -99,10 +99,16 @@ const ResponsiveNavigation = () => {
             value={item.path}
             icon={item.icon}
             sx={{
+              minWidth: 0,
+              px: 0.5,
               '& .MuiBottomNavigationAction-label': {
-                fontSize: '0.65rem',
+                fontSize: '0.6rem',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: '100%',
                 '&.Mui-selected': {
-                  fontSize: '0.7rem',
+                  fontSize: '0.65rem',
                 },
               },
             }}

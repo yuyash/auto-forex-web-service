@@ -116,7 +116,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-          <Box sx={{ flex: 1, minWidth: 250 }}>
+          <Box sx={{ flex: 1, minWidth: { xs: '100%', sm: 250 } }}>
             <DateTimePicker
               label={startLabel}
               value={startDateValue}
@@ -133,7 +133,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
               }}
             />
           </Box>
-          <Box sx={{ flex: 1, minWidth: 250 }}>
+          <Box sx={{ flex: 1, minWidth: { xs: '100%', sm: 250 } }}>
             <DateTimePicker
               label={endLabel}
               value={endDateValue}

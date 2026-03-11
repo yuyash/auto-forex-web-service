@@ -139,6 +139,7 @@ class PositionSerializer(serializers.Serializer):
     planned_exit_price = serializers.DecimalField(
         max_digits=20, decimal_places=10, required=False, allow_null=True
     )
+    planned_exit_price_formula = serializers.CharField(required=False, allow_null=True)
     trade_ids = serializers.SerializerMethodField()
     updated_at = serializers.DateTimeField(required=False, allow_null=True)
 

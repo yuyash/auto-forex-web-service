@@ -66,7 +66,7 @@ const AppLayout = () => {
               flexDirection: 'column',
               overflowY: 'auto',
               marginTop: '32px', // Space for AppBar
-              marginBottom: isMobile ? '112px' : 0, // Space for footer + bottom nav on mobile
+              marginBottom: isMobile ? '80px' : 0, // Space for bottom nav on mobile
               width: showSidebar ? `calc(100% - ${DRAWER_WIDTH}px)` : '100%',
               '&:focus': {
                 outline: 'none',
@@ -86,6 +86,7 @@ const AppLayout = () => {
             right: 0,
             zIndex: isMobile ? 1000 : 'auto',
             marginLeft: showSidebar ? `${DRAWER_WIDTH}px` : 0,
+            display: isMobile ? 'none' : 'block',
           }}
         >
           <AppFooter />

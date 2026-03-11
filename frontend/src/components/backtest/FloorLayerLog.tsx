@@ -312,7 +312,7 @@ export function FloorLayerLog({ strategyEvents = [] }: FloorLayerLogProps) {
         rowsPerPageOptions={[10, 25, 50, 100]}
       />
 
-      <TableContainer>
+      <TableContainer sx={{ overflowX: 'auto' }}>
         <Table>
           <TableHead>
             <TableRow>

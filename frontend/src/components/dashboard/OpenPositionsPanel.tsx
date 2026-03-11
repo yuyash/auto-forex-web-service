@@ -75,14 +75,14 @@ const OpenPositionsPanel: React.FC<OpenPositionsPanelProps> = ({
       label: t('positions.positionId', 'Position ID'),
       sortable: true,
       filterable: true,
-      minWidth: 120,
+      minWidth: 90,
     },
     {
       id: 'instrument',
       label: t('positions.instrument'),
       sortable: true,
       filterable: true,
-      minWidth: 100,
+      minWidth: 80,
     },
     {
       id: 'direction',
@@ -93,9 +93,10 @@ const OpenPositionsPanel: React.FC<OpenPositionsPanelProps> = ({
         <Chip
           label={getDirectionLabel(row.direction)}
           color={getDirectionColor(row.direction)}
+          size="small"
         />
       ),
-      minWidth: 100,
+      minWidth: 80,
     },
     {
       id: 'units',
@@ -103,7 +104,7 @@ const OpenPositionsPanel: React.FC<OpenPositionsPanelProps> = ({
       sortable: true,
       align: 'right',
       render: (row) => row.units.toLocaleString(),
-      minWidth: 100,
+      minWidth: 70,
     },
     {
       id: 'entry_price',
@@ -111,7 +112,7 @@ const OpenPositionsPanel: React.FC<OpenPositionsPanelProps> = ({
       sortable: true,
       align: 'right',
       render: (row) => row.entry_price.toFixed(5),
-      minWidth: 120,
+      minWidth: 90,
     },
     {
       id: 'current_price',
@@ -119,7 +120,7 @@ const OpenPositionsPanel: React.FC<OpenPositionsPanelProps> = ({
       sortable: true,
       align: 'right',
       render: (row) => row.current_price.toFixed(5),
-      minWidth: 120,
+      minWidth: 90,
     },
     {
       id: 'unrealized_pnl',
@@ -137,7 +138,7 @@ const OpenPositionsPanel: React.FC<OpenPositionsPanelProps> = ({
           {formatPnL(row.unrealized_pnl)}
         </Typography>
       ),
-      minWidth: 120,
+      minWidth: 90,
     },
     {
       id: 'actions',
@@ -153,11 +154,12 @@ const OpenPositionsPanel: React.FC<OpenPositionsPanelProps> = ({
             onClosePosition(row.position_id);
           }}
           disabled={loading}
+          size="small"
         >
           {t('positions.closePosition')}
         </Button>
       ),
-      minWidth: 150,
+      minWidth: 120,
     },
   ];
 
