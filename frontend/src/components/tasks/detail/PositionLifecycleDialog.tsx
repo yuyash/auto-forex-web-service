@@ -41,14 +41,16 @@ import {
 } from '@mui/icons-material';
 import { useTaskLogs, type TaskLog } from '../../../hooks/useTaskLogs';
 import { TaskType } from '../../../types/common';
+import type { TaskPosition } from '../../../hooks/useTaskPositions';
 
 interface PositionLifecycleDialogProps {
   open: boolean;
   onClose: () => void;
   taskId: string;
   taskType: TaskType;
-  executionRunId?: number;
+  executionRunId?: string;
   initialPositionId?: string;
+  positionData?: TaskPosition | null;
 }
 
 const formatTimestamp = (ts: string): string =>
@@ -87,6 +89,7 @@ export const PositionLifecycleDialog: React.FC<
   taskType,
   executionRunId,
   initialPositionId,
+  positionData,
 }) => {
   const { t } = useTranslation('common');
   const [searchValue, setSearchValue] = useState(initialPositionId ?? '');
@@ -218,7 +221,7 @@ export const PositionLifecycleDialog: React.FC<
         {activePositionId && !isLoading && sortedLogs.length > 0 && (
           <Box>
             {/* Position summary */}
-            <PositionSummary logs={sortedLogs} />
+            <PositionSummary logs={sortedLogs} positionData={positionData} />
             <Divider sx={{ my: 2 }} />
             {/* Timeline */}
             <Timeline position="alternate">
@@ -261,7 +264,7 @@ export const PositionLifecycleDialog: React.FC<
                       <Typography variant="body2" sx={{ mt: 0.5 }}>
                         {log.message}
                       </Typography>
-                      <LifecycleDetails ctx={ctx} />
+                      <LifecycleDetails ctx={ctx} positionData={positionData} />
                     </TimelineContent>
                   </TimelineItem>
                 );
@@ -280,7 +283,10 @@ export const PositionLifecycleDialog: React.FC<
 };
 
 /** Renders a summary card from the first and last lifecycle log entries. */
-const PositionSummary: React.FC<{ logs: TaskLog[] }> = ({ logs }) => {
+const PositionSummary: React.FC<{
+  logs: TaskLog[];
+  positionData?: TaskPosition | null;
+}> = ({ logs, positionData }) => {
   const { t } = useTranslation('common');
   const first = logs[0];
   const last = logs[logs.length - 1];
@@ -291,13 +297,34 @@ const PositionSummary: React.FC<{ logs: TaskLog[] }> = ({ logs }) => {
     | Record<string, unknown>
     | undefined;
 
-  const positionId = (firstCtx?.position_id as string) ?? '';
-  const direction = (firstCtx?.direction as string) ?? '';
-  const instrument = (firstCtx?.instrument as string) ?? '';
-  const entryPrice = firstCtx?.entry_price as string | undefined;
-  const exitPrice = lastCtx?.exit_price as string | undefined;
-  const units = firstCtx?.units != null ? Number(firstCtx.units) : 0;
-  const isClosed = lastCtx?.lifecycle_event === 'CLOSED';
+  // Prefer positionData (from Positions API) over log context
+  const positionId =
+    positionData?.id ?? (firstCtx?.position_id as string) ?? '';
+  const direction =
+    positionData?.direction?.toUpperCase() ??
+    (firstCtx?.direction as string) ??
+    '';
+  const instrument =
+    positionData?.instrument ?? (firstCtx?.instrument as string) ?? '';
+  const entryPrice =
+    positionData?.entry_price ?? (firstCtx?.entry_price as string | undefined);
+  const exitPrice =
+    positionData?.exit_price ?? (lastCtx?.exit_price as string | undefined);
+  const plannedExitPrice =
+    positionData?.planned_exit_price ??
+    (firstCtx?.planned_exit_price as string | undefined);
+  const plannedExitFormula =
+    positionData?.planned_exit_price_formula ??
+    (firstCtx?.planned_exit_price_formula as string | undefined);
+  const units = positionData
+    ? Math.abs(positionData.units)
+    : firstCtx?.units != null
+      ? Number(firstCtx.units)
+      : 0;
+  const isClosed =
+    positionData != null
+      ? !positionData.is_open
+      : lastCtx?.lifecycle_event === 'CLOSED';
 
   // Calculate realized PnL the same way as the positions table:
   // (exit - entry) * units for LONG, (entry - exit) * units for SHORT.
@@ -381,6 +408,26 @@ const PositionSummary: React.FC<{ logs: TaskLog[] }> = ({ logs }) => {
           </Typography>
         </Box>
       )}
+      {plannedExitPrice && (
+        <Box>
+          <Typography variant="caption" color="text.secondary">
+            {t('tables.positions.plannedExitPrice')}
+          </Typography>
+          <Typography variant="body2">
+            ¥{parseFloat(plannedExitPrice).toFixed(3)}
+          </Typography>
+        </Box>
+      )}
+      {plannedExitFormula && (
+        <Box>
+          <Typography variant="caption" color="text.secondary">
+            {t('tables.positions.plannedExitPriceFormula')}
+          </Typography>
+          <Typography variant="body2" fontFamily="monospace" fontSize="0.8rem">
+            {plannedExitFormula}
+          </Typography>
+        </Box>
+      )}
       <Box>
         <Typography variant="caption" color="text.secondary">
           Status
@@ -398,8 +445,14 @@ const PositionSummary: React.FC<{ logs: TaskLog[] }> = ({ logs }) => {
 /** Renders detail fields from lifecycle log context. */
 const LifecycleDetails: React.FC<{
   ctx: Record<string, unknown> | undefined;
-}> = ({ ctx }) => {
+  positionData?: TaskPosition | null;
+}> = ({ ctx, positionData }) => {
   if (!ctx) return null;
+
+  const formula =
+    (ctx.planned_exit_price_formula as string | undefined) ??
+    positionData?.planned_exit_price_formula ??
+    undefined;
 
   const fields: [string, string | undefined][] = [
     [
@@ -415,6 +468,7 @@ const LifecycleDetails: React.FC<{
       'Retracement',
       ctx.retracement_count != null ? String(ctx.retracement_count) : undefined,
     ],
+    ['Exit Formula', formula != null ? String(formula) : undefined],
     ['Close Reason', ctx.close_reason as string | undefined],
     ['Description', ctx.description as string | undefined],
   ];

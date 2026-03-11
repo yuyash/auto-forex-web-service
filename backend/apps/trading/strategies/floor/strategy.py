@@ -221,12 +221,16 @@ class FloorStrategy(Strategy):
 
         # Calculate planned exit price from entry price and take-profit pips
         if take_profit_pips and take_profit_pips > 0:
+            tp_offset = take_profit_pips * self.pip_size
             if direction == "long":
-                planned_exit_price = entry_price + take_profit_pips * self.pip_size
+                planned_exit_price = entry_price + tp_offset
+                planned_exit_price_formula = f"{entry_price} + {take_profit_pips} × {self.pip_size} (= {entry_price} + {tp_offset})"
             else:
-                planned_exit_price = entry_price - take_profit_pips * self.pip_size
+                planned_exit_price = entry_price - tp_offset
+                planned_exit_price_formula = f"{entry_price} - {take_profit_pips} × {self.pip_size} (= {entry_price} - {tp_offset})"
         else:
             planned_exit_price = None
+            planned_exit_price_formula = None
 
         floor_state.floor_directions[floor_index] = direction
         floor_state.open_entries.append(
@@ -254,6 +258,7 @@ class FloorStrategy(Strategy):
                 retracement_count=1,
                 entry_id=entry_id,
                 planned_exit_price=planned_exit_price,
+                planned_exit_price_formula=planned_exit_price_formula,
             )
 
         retracement_count = floor_state.floor_retracement_counts.get(floor_index, 0)
@@ -268,6 +273,7 @@ class FloorStrategy(Strategy):
             retracement_count=retracement_count,
             entry_id=entry_id,
             planned_exit_price=planned_exit_price,
+            planned_exit_price_formula=planned_exit_price_formula,
         )
 
     @staticmethod

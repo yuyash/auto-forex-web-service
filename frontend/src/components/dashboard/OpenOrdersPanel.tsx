@@ -68,7 +68,7 @@ const OpenOrdersPanel: React.FC<OpenOrdersPanelProps> = ({
       label: t('orders.orderId'),
       sortable: true,
       filterable: true,
-      minWidth: 120,
+      minWidth: 90,
     },
     {
       id: 'order_type',
@@ -76,14 +76,14 @@ const OpenOrdersPanel: React.FC<OpenOrdersPanelProps> = ({
       sortable: true,
       filterable: true,
       render: (row) => getOrderTypeLabel(row.order_type),
-      minWidth: 100,
+      minWidth: 80,
     },
     {
       id: 'instrument',
       label: t('orders.instrument'),
       sortable: true,
       filterable: true,
-      minWidth: 100,
+      minWidth: 80,
     },
     {
       id: 'price',
@@ -91,7 +91,7 @@ const OpenOrdersPanel: React.FC<OpenOrdersPanelProps> = ({
       sortable: true,
       align: 'right',
       render: (row) => (row.price ? row.price.toFixed(5) : '-'),
-      minWidth: 100,
+      minWidth: 80,
     },
     {
       id: 'units',
@@ -99,7 +99,7 @@ const OpenOrdersPanel: React.FC<OpenOrdersPanelProps> = ({
       sortable: true,
       align: 'right',
       render: (row) => row.units.toLocaleString(),
-      minWidth: 100,
+      minWidth: 70,
     },
     {
       id: 'status',
@@ -107,9 +107,13 @@ const OpenOrdersPanel: React.FC<OpenOrdersPanelProps> = ({
       sortable: true,
       filterable: true,
       render: (row) => (
-        <Chip label={row.status} color={getStatusColor(row.status)} />
+        <Chip
+          label={row.status}
+          color={getStatusColor(row.status)}
+          size="small"
+        />
       ),
-      minWidth: 120,
+      minWidth: 90,
     },
     {
       id: 'actions',
@@ -125,11 +129,12 @@ const OpenOrdersPanel: React.FC<OpenOrdersPanelProps> = ({
             onCancelOrder(row.order_id);
           }}
           disabled={loading}
+          size="small"
         >
           {t('orders.cancelOrder')}
         </Button>
       ),
-      minWidth: 150,
+      minWidth: 120,
     },
   ];
 

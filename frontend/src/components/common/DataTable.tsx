@@ -145,18 +145,27 @@ function DataTable<T extends object>({
   } | null>(null);
 
   const handleResizeStart = useCallback(
-    (e: React.MouseEvent, columnId: string, currentWidth: number) => {
+    (
+      e: React.MouseEvent | React.TouchEvent,
+      columnId: string,
+      currentWidth: number
+    ) => {
       e.preventDefault();
       e.stopPropagation();
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
       resizingRef.current = {
         columnId,
-        startX: e.clientX,
+        startX: clientX,
         startWidth: currentWidth,
       };
 
-      const handleMouseMove = (moveEvent: MouseEvent) => {
+      const handleMove = (moveEvent: MouseEvent | TouchEvent) => {
         if (!resizingRef.current) return;
-        const diff = moveEvent.clientX - resizingRef.current.startX;
+        const moveX =
+          'touches' in moveEvent
+            ? moveEvent.touches[0].clientX
+            : (moveEvent as MouseEvent).clientX;
+        const diff = moveX - resizingRef.current.startX;
         const newWidth = Math.max(40, resizingRef.current.startWidth + diff);
         setColumnWidths((prev) => ({
           ...prev,
@@ -164,10 +173,12 @@ function DataTable<T extends object>({
         }));
       };
 
-      const handleMouseUp = () => {
+      const handleEnd = () => {
         resizingRef.current = null;
-        document.removeEventListener('mousemove', handleMouseMove);
-        document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('mousemove', handleMove);
+        document.removeEventListener('mouseup', handleEnd);
+        document.removeEventListener('touchmove', handleMove);
+        document.removeEventListener('touchend', handleEnd);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
         // Persist widths to localStorage
@@ -188,8 +199,10 @@ function DataTable<T extends object>({
 
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('mousemove', handleMove);
+      document.addEventListener('mouseup', handleEnd);
+      document.addEventListener('touchmove', handleMove, { passive: false });
+      document.addEventListener('touchend', handleEnd);
     },
     [storageKey]
   );
@@ -299,6 +312,7 @@ function DataTable<T extends object>({
     return (
       <Box
         onMouseDown={(e) => handleResizeStart(e, columnId, w)}
+        onTouchStart={(e) => handleResizeStart(e, columnId, w)}
         sx={{
           position: 'absolute',
           right: 0,
@@ -317,9 +331,15 @@ function DataTable<T extends object>({
     return (
       <Paper sx={{ width: '100%', overflow: 'hidden' }}>
         <TableContainer
-          sx={{ maxHeight: tableMaxHeight ?? 'calc(100vh - 640px)' }}
+          sx={{
+            maxHeight: tableMaxHeight ?? 'calc(100vh - 640px)',
+            overflowX: 'auto',
+          }}
         >
-          <Table stickyHeader={stickyHeader} sx={{ tableLayout: 'fixed' }}>
+          <Table
+            stickyHeader={stickyHeader}
+            sx={{ tableLayout: 'fixed', minWidth: 480 }}
+          >
             <TableHead>
               <TableRow>
                 {selectable && (
@@ -386,9 +406,15 @@ function DataTable<T extends object>({
       aria-label={ariaLabel || 'Data table'}
     >
       <TableContainer
-        sx={{ maxHeight: tableMaxHeight ?? 'calc(100vh - 640px)' }}
+        sx={{
+          maxHeight: tableMaxHeight ?? 'calc(100vh - 640px)',
+          overflowX: 'auto',
+        }}
       >
-        <Table stickyHeader={stickyHeader} sx={{ tableLayout: 'fixed' }}>
+        <Table
+          stickyHeader={stickyHeader}
+          sx={{ tableLayout: 'fixed', minWidth: 480 }}
+        >
           <TableHead>
             <TableRow>
               {selectable && (
@@ -552,6 +578,8 @@ function DataTable<T extends object>({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            overflowX: 'auto',
           }}
         >
           <TablePagination
@@ -562,6 +590,12 @@ function DataTable<T extends object>({
             page={page}
             onPageChange={handleChangePage}
             onRowsPerPageChange={handleChangeRowsPerPage}
+            sx={{
+              '& .MuiTablePagination-toolbar': {
+                flexWrap: 'wrap',
+                justifyContent: 'center',
+              },
+            }}
           />
           {isLoading && (
             <Box sx={{ display: 'flex', alignItems: 'center', pr: 2 }}>

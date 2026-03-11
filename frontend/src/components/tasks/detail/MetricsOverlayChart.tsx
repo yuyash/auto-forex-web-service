@@ -23,7 +23,7 @@ import { TaskType } from '../../../types/common';
 export interface UseMetricsOverlayOptions {
   taskId: string;
   taskType: TaskType;
-  executionRunId?: number;
+  executionRunId?: string;
   enableRealTimeUpdates?: boolean;
   chart: IChartApi | null;
   candleTimestamps?: number[];

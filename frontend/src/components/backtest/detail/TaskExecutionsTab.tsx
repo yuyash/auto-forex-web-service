@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import {
   Box,
@@ -32,7 +31,6 @@ export function TaskExecutionsTab({
   taskStatus,
   task,
 }: TaskExecutionsTabProps) {
-  const navigate = useNavigate();
   const [tabValue, setTabValue] = useState(0); // 0 = History, 1 = Compare
   const [selectedComparisonIds, setSelectedComparisonIds] = useState<string[]>(
     []
@@ -64,10 +62,6 @@ export function TaskExecutionsTab({
       refetchExecutions();
     }
   }, [taskStatus, refetchExecutions]);
-
-  const handleExecutionClick = (executionId: string) => {
-    navigate(`/executions/${executionId}/results`);
-  };
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -139,11 +133,7 @@ export function TaskExecutionsTab({
 
       {/* History Tab */}
       {tabValue === 0 && (
-        <ExecutionHistoryTable
-          taskId={taskId}
-          taskType={taskType}
-          onExecutionClick={handleExecutionClick}
-        />
+        <ExecutionHistoryTable taskId={taskId} taskType={taskType} />
       )}
 
       {/* Compare Tab */}

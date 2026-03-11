@@ -103,6 +103,12 @@ class Position(models.Model):
         blank=True,
         help_text="Planned exit price calculated at order time (e.g. take-profit target)",
     )
+    planned_exit_price_formula = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Human-readable formula used to calculate planned_exit_price (e.g. '1.12345 + 0.00500')",
+    )
     oanda_trade_id = models.CharField(
         max_length=64,
         null=True,

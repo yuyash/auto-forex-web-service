@@ -43,6 +43,7 @@ def _make_position(units=1000, layer_index=1, is_open=True, direction="long"):
         exit_price=None,
         exit_time=None,
         planned_exit_price=None,
+        planned_exit_price_formula=None,
         oanda_trade_id="oanda-123",
     )
 

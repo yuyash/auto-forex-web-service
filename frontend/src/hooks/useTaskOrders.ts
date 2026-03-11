@@ -36,7 +36,7 @@ interface UseTaskOrdersOptions {
   taskId: string | number;
   taskType: TaskType;
   /** Filter orders by execution run ID. */
-  executionRunId?: number;
+  executionRunId?: string;
   status?: string;
   orderType?: string;
   direction?: string;
@@ -135,7 +135,7 @@ export const useTaskOrders = ({
         if (orderType) params.order_type = orderType;
         if (direction) params.direction = direction;
         if (executionRunId != null) {
-          params.execution_run_id = String(executionRunId);
+          params.execution_id = String(executionRunId);
         }
         const effectiveSince = since ?? (incremental ? sinceRef.current : null);
         if (effectiveSince) params.since = effectiveSince;

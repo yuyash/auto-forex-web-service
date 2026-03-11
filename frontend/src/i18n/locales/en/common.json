@@ -261,6 +261,7 @@
       "closePrice": "Close Price",
       "pips": "Pips",
       "plannedExitPrice": "Planned Exit Price",
+      "plannedExitPriceFormula": "Exit Price Formula",
       "realizedPnl": "Realized PnL",
       "unrealizedPnl": "Unrealized PnL",
       "totalRealizedPnl": "Total Realized PnL",
@@ -307,6 +308,23 @@
       "noLogs": "No logs available",
       "resetFilters": "Reset Filters"
     },
+    "executions": {
+      "title": "Execution History",
+      "executionId": "Execution ID",
+      "status": "Status",
+      "progress": "Progress",
+      "started": "Started",
+      "completed": "Completed",
+      "duration": "Duration",
+      "returnPct": "Return %",
+      "pnl": "PnL",
+      "trades": "Trades",
+      "winRate": "Win Rate",
+      "error": "Error",
+      "noExecutions": "No executions found",
+      "refresh": "Refresh",
+      "configureColumns": "Configure columns"
+    },
     "trend": {
       "executionId": "Execution ID",
       "realizedPnl": "Realized PnL",
@@ -336,6 +354,22 @@
       "pips": "Pips",
       "pnl": "PnL"
     }
+  },
+  "columnConfig": {
+    "title": "Configure Columns",
+    "description": "Toggle column visibility and drag to reorder.",
+    "reset": "Reset to Default",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "configureColumns": "Configure columns"
+  },
+  "tabConfig": {
+    "title": "Configure Tabs",
+    "description": "Toggle tab visibility and drag to reorder. The Overview tab is always shown.",
+    "reset": "Reset to Default",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "configureTabs": "Configure tabs"
   },
   "footer": {
     "oandaApiReachable": "OANDA API is reachable",

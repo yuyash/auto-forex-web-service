@@ -24,7 +24,7 @@ export interface TradingTask {
   has_open_positions: boolean;
   open_positions_count: number;
   can_resume: boolean;
-  execution_run_id?: number;
+  execution_id?: string;
   started_at?: string;
   completed_at?: string;
   error_message?: string;

@@ -6,17 +6,32 @@
 
 import React, { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Box, Chip, Typography, Alert, TablePagination } from '@mui/material';
+import {
+  Box,
+  Chip,
+  Typography,
+  Alert,
+  TablePagination,
+  IconButton,
+  Tooltip,
+} from '@mui/material';
+import { Settings as SettingsIcon } from '@mui/icons-material';
 import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
 import { useTaskOrders, type TaskOrder } from '../../../hooks/useTaskOrders';
 import { TaskType } from '../../../types/common';
+import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
+import {
+  useColumnConfig,
+  columnsToDefaults,
+  applyColumnConfig,
+} from '../../../hooks/useColumnConfig';
 
 interface TaskOrdersTableProps {
   taskId: string | number;
   taskType: TaskType;
-  executionRunId?: number;
+  executionRunId?: string;
   enableRealTimeUpdates?: boolean;
 }
 
@@ -256,6 +271,16 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     },
   ];
 
+  // Column config
+  const [colConfigOpen, setColConfigOpen] = useState(false);
+  const defaultColItems = columnsToDefaults(columns);
+  const {
+    columns: colConfig,
+    updateColumns,
+    resetToDefaults,
+  } = useColumnConfig('task_orders', defaultColItems);
+  const visibleColumns = applyColumnConfig(columns, colConfig);
+
   if (error) {
     return (
       <Box sx={{ p: 3 }}>
@@ -277,18 +302,29 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
         <Typography variant="h6">
           {t('tables.orders.title')} ({totalCount})
         </Typography>
-        <TableSelectionToolbar
-          selectedCount={selection.selectedRowIds.size}
-          onCopy={handleCopy}
-          onSelectAll={() => selection.selectAllOnPage(pageRowIds)}
-          onReset={selection.resetSelection}
-          onReload={handleReload}
-          isReloading={isReloading}
-        />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Tooltip title={t('common:columnConfig.configureColumns')}>
+            <IconButton
+              size="small"
+              onClick={() => setColConfigOpen(true)}
+              aria-label={t('common:columnConfig.configureColumns')}
+            >
+              <SettingsIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <TableSelectionToolbar
+            selectedCount={selection.selectedRowIds.size}
+            onCopy={handleCopy}
+            onSelectAll={() => selection.selectAllOnPage(pageRowIds)}
+            onReset={selection.resetSelection}
+            onReload={handleReload}
+            isReloading={isReloading}
+          />
+        </Box>
       </Box>
 
       <DataTable
-        columns={columns}
+        columns={visibleColumns}
         data={orders}
         isLoading={isLoading}
         emptyMessage={t('tables.orders.noOrders')}
@@ -319,6 +355,14 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
           setPage(0);
         }}
         rowsPerPageOptions={[10, 50, 100, 200, 500]}
+      />
+
+      <ColumnConfigDialog
+        open={colConfigOpen}
+        columns={colConfig}
+        onClose={() => setColConfigOpen(false)}
+        onSave={updateColumns}
+        onReset={resetToDefaults}
       />
     </Box>
   );

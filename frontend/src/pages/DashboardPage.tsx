@@ -116,11 +116,11 @@ const DashboardPage = () => {
       sx={{
         mt: 4,
         mb: 4,
-        px: 3,
+        px: { xs: 1, sm: 2, md: 3 },
         display: 'flex',
         flexDirection: 'column',
-        height: 'calc(100vh - 64px)',
-        overflow: 'hidden',
+        height: { xs: 'auto', md: 'calc(100vh - 64px)' },
+        overflow: { xs: 'auto', md: 'hidden' },
       }}
     >
       <Breadcrumbs />

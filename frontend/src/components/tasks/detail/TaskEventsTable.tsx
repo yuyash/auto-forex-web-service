@@ -16,7 +16,10 @@ import {
   Typography,
   Alert,
   TablePagination,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
+import { Settings as SettingsIcon } from '@mui/icons-material';
 import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
@@ -27,11 +30,17 @@ import {
 } from '../../../hooks/useTaskEvents';
 import { TaskType } from '../../../types/common';
 import { EventDetailDialog } from './EventDetailDialog';
+import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
+import {
+  useColumnConfig,
+  columnsToDefaults,
+  applyColumnConfig,
+} from '../../../hooks/useColumnConfig';
 
 interface TaskEventsTableProps {
   taskId: string | number;
   taskType: TaskType;
-  executionRunId?: number;
+  executionRunId?: string;
   enableRealTimeUpdates?: boolean;
 }
 
@@ -177,6 +186,16 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
     },
   ];
 
+  // Column config
+  const [colConfigOpen, setColConfigOpen] = useState(false);
+  const defaultColItems = columnsToDefaults(columns);
+  const {
+    columns: colConfig,
+    updateColumns,
+    resetToDefaults,
+  } = useColumnConfig('task_events', defaultColItems);
+  const visibleColumns = applyColumnConfig(columns, colConfig);
+
   if (error) {
     return (
       <Box sx={{ p: 3 }}>
@@ -229,6 +248,15 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
           </Select>
         </FormControl>
         <Box sx={{ flex: 1 }} />
+        <Tooltip title={t('common:columnConfig.configureColumns')}>
+          <IconButton
+            size="small"
+            onClick={() => setColConfigOpen(true)}
+            aria-label={t('common:columnConfig.configureColumns')}
+          >
+            <SettingsIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
         <TableSelectionToolbar
           selectedCount={selection.selectedRowIds.size}
           onCopy={handleCopy}
@@ -240,7 +268,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
       </Box>
 
       <DataTable
-        columns={columns}
+        columns={visibleColumns}
         data={events}
         isLoading={isLoading}
         emptyMessage={t('tables.events.noEvents')}
@@ -277,6 +305,14 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
         open={selectedEvent !== null}
         event={selectedEvent}
         onClose={() => setSelectedEvent(null)}
+      />
+
+      <ColumnConfigDialog
+        open={colConfigOpen}
+        columns={colConfig}
+        onClose={() => setColConfigOpen(false)}
+        onSave={updateColumns}
+        onReset={resetToDefaults}
       />
     </Box>
   );

@@ -21,7 +21,10 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material';
-import { History as HistoryIcon } from '@mui/icons-material';
+import {
+  History as HistoryIcon,
+  Settings as SettingsIcon,
+} from '@mui/icons-material';
 import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
@@ -32,11 +35,17 @@ import {
 import { useTaskSummary } from '../../../hooks/useTaskSummary';
 import { TaskType } from '../../../types/common';
 import { PositionLifecycleDialog } from './PositionLifecycleDialog';
+import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
+import {
+  useColumnConfig,
+  columnsToDefaults,
+  applyColumnConfig,
+} from '../../../hooks/useColumnConfig';
 
 interface TaskPositionsTableProps {
   taskId: string | number;
   taskType: TaskType;
-  executionRunId?: number;
+  executionRunId?: string;
   enableRealTimeUpdates?: boolean;
   currentPrice?: number | null;
   pipSize?: number | null;
@@ -148,11 +157,17 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   // --- Lifecycle dialog state ---
   const [lifecycleOpen, setLifecycleOpen] = useState(false);
   const [lifecyclePositionId, setLifecyclePositionId] = useState<string>('');
+  const [lifecyclePosition, setLifecyclePosition] =
+    useState<TaskPosition | null>(null);
 
-  const handleOpenLifecycle = useCallback((positionId: string) => {
-    setLifecyclePositionId(positionId);
-    setLifecycleOpen(true);
-  }, []);
+  const handleOpenLifecycle = useCallback(
+    (positionId: string, position?: TaskPosition) => {
+      setLifecyclePositionId(positionId);
+      setLifecyclePosition(position ?? null);
+      setLifecycleOpen(true);
+    },
+    []
+  );
 
   const formatTimestamp = (ts: string): string =>
     new Date(ts).toLocaleString('en-US', {
@@ -182,7 +197,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
                 size="small"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleOpenLifecycle(String(r.id).slice(0, 8));
+                  handleOpenLifecycle(String(r.id).slice(0, 8), r);
                 }}
                 aria-label={t('tables.positions.lifecycle.viewLifecycle')}
                 sx={{ p: 0.25 }}
@@ -270,6 +285,13 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
           : '-',
     },
     {
+      id: 'planned_exit_price_formula',
+      label: t('tables.positions.plannedExitPriceFormula'),
+      width: 220,
+      minWidth: 150,
+      render: (r) => r.planned_exit_price_formula ?? '-',
+    },
+    {
       id: 'pips',
       label: t('tables.positions.pips'),
       width: 90,
@@ -335,7 +357,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
                 size="small"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleOpenLifecycle(String(r.id).slice(0, 8));
+                  handleOpenLifecycle(String(r.id).slice(0, 8), r);
                 }}
                 aria-label={t('tables.positions.lifecycle.viewLifecycle')}
                 sx={{ p: 0.25 }}
@@ -407,6 +429,13 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
           : '-',
     },
     {
+      id: 'planned_exit_price_formula',
+      label: t('tables.positions.plannedExitPriceFormula'),
+      width: 220,
+      minWidth: 150,
+      render: (r) => r.planned_exit_price_formula ?? '-',
+    },
+    {
       id: 'pips',
       label: t('tables.positions.pips'),
       width: 90,
@@ -455,6 +484,28 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   ];
 
   // --- Helpers ---
+
+  // Column config for closed and open position tables
+  const [closedColConfigOpen, setClosedColConfigOpen] = useState(false);
+  const [openColConfigOpen, setOpenColConfigOpen] = useState(false);
+  const closedColDefaults = columnsToDefaults(closedCols('long'));
+  const openColDefaults = columnsToDefaults(openCols('long'));
+  const {
+    columns: closedColConfig,
+    updateColumns: updateClosedCols,
+    resetToDefaults: resetClosedCols,
+  } = useColumnConfig('positions_closed', closedColDefaults);
+  const {
+    columns: openColConfig,
+    updateColumns: updateOpenCols,
+    resetToDefaults: resetOpenCols,
+  } = useColumnConfig('positions_open', openColDefaults);
+
+  const filteredClosedCols = (dir: 'long' | 'short') =>
+    applyColumnConfig(closedCols(dir), closedColConfig);
+  const filteredOpenCols = (dir: 'long' | 'short') =>
+    applyColumnConfig(openCols(dir), openColConfig);
+
   const makeToggleAll = (sel: typeof closedLongSel, ids: string[]) => () => {
     if (sel.isAllPageSelected(ids)) {
       for (const id of ids) {
@@ -514,6 +565,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         r.planned_exit_price
           ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
           : '-',
+        r.planned_exit_price_formula ?? '-',
         pipsStr,
         pnlStr,
       ].join('\t');
@@ -529,6 +581,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     'Open Price',
     'Close Price',
     'Planned Exit',
+    'Exit Formula',
     'Pips',
     'Realized PnL',
   ];
@@ -560,6 +613,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         r.planned_exit_price
           ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
           : '-',
+        r.planned_exit_price_formula ?? '-',
         pipsStr,
         pnlStr,
       ].join('\t');
@@ -573,6 +627,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     'Retracement',
     'Open Price',
     'Planned Exit',
+    'Exit Formula',
     'Pips',
     'Unrealized PnL',
   ];
@@ -603,7 +658,8 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     pnlValue: number,
     copyHeaders: string[],
     longCopyRowFn: (r: TaskPosition) => string,
-    shortCopyRowFn: (r: TaskPosition) => string
+    shortCopyRowFn: (r: TaskPosition) => string,
+    onConfigClick: () => void
   ) => {
     const longIds = longData.map((r) => String(r.id));
     const shortIds = shortData.map((r) => String(r.id));
@@ -617,7 +673,9 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             alignItems: 'center',
           }}
         >
-          <Typography variant="h6">{label}</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Typography variant="h6">{label}</Typography>
+          </Box>
           <Typography
             variant="subtitle1"
             fontWeight="bold"
@@ -651,14 +709,30 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
                   ({longTotal})
                 </Typography>
               </Box>
-              <TableSelectionToolbar
-                selectedCount={longSel.selectedRowIds.size}
-                onCopy={makeCopy(longData, longSel, copyHeaders, longCopyRowFn)}
-                onSelectAll={() => longSel.selectAllOnPage(longIds)}
-                onReset={longSel.resetSelection}
-                onReload={makeReload(longKey, longRefetch)}
-                isReloading={!!reloading[longKey]}
-              />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Tooltip title={t('common:columnConfig.configureColumns')}>
+                  <IconButton
+                    size="small"
+                    onClick={onConfigClick}
+                    aria-label={t('common:columnConfig.configureColumns')}
+                  >
+                    <SettingsIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <TableSelectionToolbar
+                  selectedCount={longSel.selectedRowIds.size}
+                  onCopy={makeCopy(
+                    longData,
+                    longSel,
+                    copyHeaders,
+                    longCopyRowFn
+                  )}
+                  onSelectAll={() => longSel.selectAllOnPage(longIds)}
+                  onReset={longSel.resetSelection}
+                  onReload={makeReload(longKey, longRefetch)}
+                  isReloading={!!reloading[longKey]}
+                />
+              </Box>
             </Box>
             <DataTable
               columns={columns('long')}
@@ -711,19 +785,30 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
                   ({shortTotal})
                 </Typography>
               </Box>
-              <TableSelectionToolbar
-                selectedCount={shortSel.selectedRowIds.size}
-                onCopy={makeCopy(
-                  shortData,
-                  shortSel,
-                  copyHeaders,
-                  shortCopyRowFn
-                )}
-                onSelectAll={() => shortSel.selectAllOnPage(shortIds)}
-                onReset={shortSel.resetSelection}
-                onReload={makeReload(shortKey, shortRefetch)}
-                isReloading={!!reloading[shortKey]}
-              />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                <Tooltip title={t('common:columnConfig.configureColumns')}>
+                  <IconButton
+                    size="small"
+                    onClick={onConfigClick}
+                    aria-label={t('common:columnConfig.configureColumns')}
+                  >
+                    <SettingsIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <TableSelectionToolbar
+                  selectedCount={shortSel.selectedRowIds.size}
+                  onCopy={makeCopy(
+                    shortData,
+                    shortSel,
+                    copyHeaders,
+                    shortCopyRowFn
+                  )}
+                  onSelectAll={() => shortSel.selectAllOnPage(shortIds)}
+                  onReset={shortSel.resetSelection}
+                  onReload={makeReload(shortKey, shortRefetch)}
+                  isReloading={!!reloading[shortKey]}
+                />
+              </Box>
             </Box>
             <DataTable
               columns={columns('short')}
@@ -793,12 +878,13 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         setClosedShortRpp,
         rCS,
         'cs',
-        closedCols,
+        filteredClosedCols,
         t('tables.positions.totalRealizedPnl'),
         totalRealizedPnl,
         closedHeaders,
         closedRowFn('long'),
-        closedRowFn('short')
+        closedRowFn('short'),
+        () => setClosedColConfigOpen(true)
       )}
       {renderPair(
         t('tables.positions.openPositions'),
@@ -820,13 +906,28 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         setOpenShortRpp,
         rOS,
         'os',
-        openCols,
+        filteredOpenCols,
         t('tables.positions.totalUnrealizedPnl'),
         totalUnrealizedPnl,
         openHeaders,
         openRowFn('long'),
-        openRowFn('short')
+        openRowFn('short'),
+        () => setOpenColConfigOpen(true)
       )}
+      <ColumnConfigDialog
+        open={closedColConfigOpen}
+        columns={closedColConfig}
+        onClose={() => setClosedColConfigOpen(false)}
+        onSave={updateClosedCols}
+        onReset={resetClosedCols}
+      />
+      <ColumnConfigDialog
+        open={openColConfigOpen}
+        columns={openColConfig}
+        onClose={() => setOpenColConfigOpen(false)}
+        onSave={updateOpenCols}
+        onReset={resetOpenCols}
+      />
       <PositionLifecycleDialog
         open={lifecycleOpen}
         onClose={() => setLifecycleOpen(false)}
@@ -834,6 +935,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         taskType={taskType}
         executionRunId={executionRunId}
         initialPositionId={lifecyclePositionId}
+        positionData={lifecyclePosition}
       />
     </Box>
   );

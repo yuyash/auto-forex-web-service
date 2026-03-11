@@ -103,6 +103,7 @@ class OrderService:
         tick_timestamp: datetime | None = None,
         retracement_count: int | None = None,
         planned_exit_price: Decimal | None = None,
+        planned_exit_price_formula: str | None = None,
     ) -> tuple[Position, Order]:
         """
         Open a new position with specified direction.
@@ -149,6 +150,7 @@ class OrderService:
             tick_timestamp=tick_timestamp,
             retracement_count=retracement_count,
             planned_exit_price=planned_exit_price,
+            planned_exit_price_formula=planned_exit_price_formula,
         )
 
     def close_position(
@@ -369,6 +371,7 @@ class OrderService:
         tick_timestamp: datetime | None = None,
         retracement_count: int | None = None,
         planned_exit_price: Decimal | None = None,
+        planned_exit_price_formula: str | None = None,
     ) -> tuple[Position, Order]:
         """
         Execute a market order and create/update position.
@@ -413,6 +416,7 @@ class OrderService:
                 oanda_trade_id=getattr(oanda_order, "trade_id", None),
                 retracement_count=retracement_count,
                 planned_exit_price=planned_exit_price,
+                planned_exit_price_formula=planned_exit_price_formula,
             )
 
             # Create order record linked to the position
@@ -532,6 +536,7 @@ class OrderService:
         oanda_trade_id: str | None = None,
         retracement_count: int | None = None,
         planned_exit_price: Decimal | None = None,
+        planned_exit_price_formula: str | None = None,
     ) -> Position:
         """Create new position or update existing one."""
         if merge_with_existing:
@@ -592,6 +597,7 @@ class OrderService:
             oanda_trade_id=oanda_trade_id,
             retracement_count=retracement_count,
             planned_exit_price=planned_exit_price,
+            planned_exit_price_formula=planned_exit_price_formula,
         )
 
         logger.debug(
