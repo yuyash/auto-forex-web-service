@@ -71,10 +71,21 @@ export async function fetchMetrics(opts: {
   const body = (await response
     .json()
     .catch(() => ({}))) as Partial<MetricsPage>;
+
+  // Normalise: the backend may return `metrics` as a JSON string
+  // (double-encoded) instead of an object.  Parse it defensively.
+  const results = (body.results ?? []).map((r) => ({
+    ...r,
+    metrics:
+      typeof r.metrics === 'string'
+        ? (JSON.parse(r.metrics) as Record<string, number | string | null>)
+        : r.metrics,
+  }));
+
   return {
     count: body.count ?? 0,
     next: body.next ?? null,
     previous: body.previous ?? null,
-    results: body.results ?? [],
+    results,
   };
 }
