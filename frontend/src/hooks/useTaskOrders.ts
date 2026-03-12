@@ -88,7 +88,7 @@ export const useTaskOrders = ({
   pageSize = 100,
   since,
   enableRealTimeUpdates = false,
-  refreshInterval = 5000,
+  refreshInterval = 10_000,
 }: UseTaskOrdersOptions): UseTaskOrdersResult => {
   const [orders, setOrders] = useState<TaskOrder[]>([]);
   const [totalCount, setTotalCount] = useState(0);
