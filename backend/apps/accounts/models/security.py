@@ -33,10 +33,6 @@ class UserSession(models.Model):
         auto_now_add=True,
         help_text="Timestamp when the session was created",
     )
-    last_activity = models.DateTimeField(
-        auto_now=True,
-        help_text="Timestamp of the last activity in this session",
-    )
     is_active = models.BooleanField(
         default=True,
         help_text="Whether the session is currently active",
