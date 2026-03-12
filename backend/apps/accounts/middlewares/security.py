@@ -239,17 +239,10 @@ class SecurityMonitoringMiddleware:
         ip_address: str,
         user_agent: str,
     ) -> None:
-        """Create or update user session record."""
+        """Create a user session record if one does not already exist."""
         existing_session = UserSession.objects.filter(
             user=user, ip_address=ip_address, is_active=True
-        ).first()
+        ).exists()
 
-        if existing_session:
-            existing_session.save()
-            logger.debug(
-                "Updated session for user %s from %s",
-                user.email,
-                ip_address,
-            )
-        else:
+        if not existing_session:
             self._create_user_session(user, ip_address, user_agent)
