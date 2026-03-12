@@ -42,6 +42,10 @@ import {
   columnsToDefaults,
   applyColumnConfig,
 } from '../../../hooks/useColumnConfig';
+import {
+  buildCopyHandler,
+  type CopyValueExtractors,
+} from '../../../utils/tableCopyUtils';
 
 type ViewMode = 'all' | 'byDirection' | 'byStatus';
 
@@ -718,172 +722,151 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     (
       positions: TaskPosition[],
       sel: typeof closedLongSel,
-      headers: string[],
-      rowFn: (r: TaskPosition) => string
+      visCols: Column<TaskPosition>[],
+      extractors: CopyValueExtractors<TaskPosition>,
+      displayIds: string[]
     ) =>
     () => {
       const posMap = new Map(positions.map((p) => [String(p.id), p]));
-      sel.copySelectedRows(headers, (id) => {
-        const r = posMap.get(id);
-        return r ? rowFn(r) : '';
-      });
+      const { headers, formatRow } = buildCopyHandler(
+        visCols,
+        extractors,
+        posMap
+      );
+      sel.copySelectedRows(headers, formatRow, displayIds);
     };
 
-  // --- Row formatters for copy ---
-  const closedRowFn =
-    (dir: 'long' | 'short') =>
-    (r: TaskPosition): string => {
+  // --- Copy value extractors for each view mode ---
+  const closedExtractors = (
+    dir: 'long' | 'short'
+  ): CopyValueExtractors<TaskPosition> => ({
+    id: (r) => (r.id ? String(r.id).slice(0, 8) : '-'),
+    entry_time: (r) => (r.entry_time ? formatTimestamp(r.entry_time) : '-'),
+    exit_time: (r) => (r.exit_time ? formatTimestamp(r.exit_time) : '-'),
+    instrument: (r) => r.instrument ?? '-',
+    units: (r) => String(Math.abs(r.units)),
+    layer_index: (r) => (r.layer_index != null ? String(r.layer_index) : '-'),
+    retracement_count: (r) =>
+      r.retracement_count != null ? String(r.retracement_count) : '-',
+    entry_price: (r) =>
+      r.entry_price ? `¥${parseFloat(r.entry_price).toFixed(3)}` : '-',
+    exit_price: (r) =>
+      r.exit_price ? `¥${parseFloat(r.exit_price).toFixed(3)}` : '-',
+    planned_exit_price: (r) =>
+      r.planned_exit_price
+        ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
+        : '-',
+    planned_exit_price_formula: (r) => r.planned_exit_price_formula ?? '-',
+    pips: (r) => {
       const ep = r.entry_price ? parseFloat(r.entry_price) : null;
       const xp = r.exit_price ? parseFloat(r.exit_price) : null;
-      const u = Math.abs(r.units ?? 0);
-      let pipsStr = '-',
-        pnlStr = '-';
       if (ep != null && xp != null && pipSize) {
         const pips = (dir === 'long' ? xp - ep : ep - xp) / pipSize;
-        if (Number.isFinite(pips)) pipsStr = pips.toFixed(1);
+        if (Number.isFinite(pips)) return pips.toFixed(1);
       }
-      if (ep != null && xp != null) {
-        const val = dir === 'long' ? (xp - ep) * u : (ep - xp) * u;
-        pnlStr = val.toFixed(2);
-      }
-      return [
-        r.entry_time ? formatTimestamp(r.entry_time) : '-',
-        r.exit_time ? formatTimestamp(r.exit_time) : '-',
-        r.instrument ?? '-',
-        String(Math.abs(r.units)),
-        r.layer_index != null ? String(r.layer_index) : '-',
-        r.retracement_count != null ? String(r.retracement_count) : '-',
-        ep != null ? `¥${ep.toFixed(3)}` : '-',
-        xp != null ? `¥${xp.toFixed(3)}` : '-',
-        r.planned_exit_price
-          ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
-          : '-',
-        r.planned_exit_price_formula ?? '-',
-        pipsStr,
-        pnlStr,
-      ].join('\t');
-    };
-
-  const closedHeaders = [
-    'Open Time',
-    'Close Time',
-    'Instrument',
-    'Units',
-    'Layer',
-    'Retracement',
-    'Open Price',
-    'Close Price',
-    'Planned Exit',
-    'Exit Formula',
-    'Pips',
-    'Realized PnL',
-  ];
-
-  const openRowFn =
-    (dir: 'long' | 'short') =>
-    (r: TaskPosition): string => {
+      return '-';
+    },
+    realized_pnl: (r) => {
       const ep = r.entry_price ? parseFloat(r.entry_price) : null;
-      let pipsStr = '-',
-        pnlStr = '-';
+      const xp = r.exit_price ? parseFloat(r.exit_price) : null;
+      if (ep != null && xp != null) {
+        const u = Math.abs(r.units ?? 0);
+        const val = dir === 'long' ? (xp - ep) * u : (ep - xp) * u;
+        return val.toFixed(2);
+      }
+      return '-';
+    },
+  });
+
+  const openExtractors = (
+    dir: 'long' | 'short'
+  ): CopyValueExtractors<TaskPosition> => ({
+    id: (r) => (r.id ? String(r.id).slice(0, 8) : '-'),
+    entry_time: (r) => (r.entry_time ? formatTimestamp(r.entry_time) : '-'),
+    instrument: (r) => r.instrument ?? '-',
+    units: (r) => String(Math.abs(r.units)),
+    layer_index: (r) => (r.layer_index != null ? String(r.layer_index) : '-'),
+    retracement_count: (r) =>
+      r.retracement_count != null ? String(r.retracement_count) : '-',
+    entry_price: (r) =>
+      r.entry_price ? `¥${parseFloat(r.entry_price).toFixed(3)}` : '-',
+    planned_exit_price: (r) =>
+      r.planned_exit_price
+        ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
+        : '-',
+    planned_exit_price_formula: (r) => r.planned_exit_price_formula ?? '-',
+    pips: (r) => {
+      const ep = r.entry_price ? parseFloat(r.entry_price) : null;
       if (currentPrice != null && ep != null && pipSize) {
         const pips =
           (dir === 'long' ? currentPrice - ep : ep - currentPrice) / pipSize;
-        if (Number.isFinite(pips)) pipsStr = pips.toFixed(1);
+        if (Number.isFinite(pips)) return pips.toFixed(1);
       }
+      return '-';
+    },
+    unrealized_pnl: (r) => {
+      const ep = r.entry_price ? parseFloat(r.entry_price) : null;
       if (currentPrice != null && ep != null) {
         const u = Math.abs(r.units ?? 0);
         const val =
           dir === 'long' ? (currentPrice - ep) * u : (ep - currentPrice) * u;
-        pnlStr = val.toFixed(2);
+        return val.toFixed(2);
       }
-      return [
-        r.entry_time ? formatTimestamp(r.entry_time) : '-',
-        r.instrument ?? '-',
-        String(Math.abs(r.units)),
-        r.layer_index != null ? String(r.layer_index) : '-',
-        r.retracement_count != null ? String(r.retracement_count) : '-',
-        ep != null ? `¥${ep.toFixed(3)}` : '-',
-        r.planned_exit_price
-          ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
-          : '-',
-        r.planned_exit_price_formula ?? '-',
-        pipsStr,
-        pnlStr,
-      ].join('\t');
-    };
+      return '-';
+    },
+  });
 
-  const openHeaders = [
-    'Open Time',
-    'Instrument',
-    'Units',
-    'Layer',
-    'Retracement',
-    'Open Price',
-    'Planned Exit',
-    'Exit Formula',
-    'Pips',
-    'Unrealized PnL',
-  ];
-
-  /** Generic row formatter for all/byDirection modes. */
-  const genericRowFn = (r: TaskPosition): string => {
-    const dir = r.direction;
-    const ep = r.entry_price ? parseFloat(r.entry_price) : null;
-    const xp = r.exit_price ? parseFloat(r.exit_price) : null;
-    const u = Math.abs(r.units ?? 0);
-    let pipsStr = '-',
-      pnlStr = '-';
-    if (ep != null && xp != null && pipSize) {
-      const pips = (dir === 'long' ? xp - ep : ep - xp) / pipSize;
-      if (Number.isFinite(pips)) pipsStr = pips.toFixed(1);
-    } else if (r.is_open && currentPrice != null && ep != null && pipSize) {
-      const pips =
-        (dir === 'long' ? currentPrice - ep : ep - currentPrice) / pipSize;
-      if (Number.isFinite(pips)) pipsStr = pips.toFixed(1);
-    }
-    if (!r.is_open && ep != null && xp != null) {
-      pnlStr = (dir === 'long' ? (xp - ep) * u : (ep - xp) * u).toFixed(2);
-    } else if (r.is_open && currentPrice != null && ep != null) {
-      pnlStr = (
-        dir === 'long' ? (currentPrice - ep) * u : (ep - currentPrice) * u
-      ).toFixed(2);
-    }
-    return [
-      dir,
-      r.is_open ? 'Open' : 'Closed',
-      r.entry_time ? formatTimestamp(r.entry_time) : '-',
-      r.exit_time ? formatTimestamp(r.exit_time) : '-',
-      r.instrument ?? '-',
-      String(Math.abs(r.units)),
-      r.layer_index != null ? String(r.layer_index) : '-',
+  const genericExtractors: CopyValueExtractors<TaskPosition> = {
+    id: (r) => (r.id ? String(r.id).slice(0, 8) : '-'),
+    direction: (r) => r.direction ?? '-',
+    is_open: (r) => (r.is_open ? 'Open' : 'Closed'),
+    entry_time: (r) => (r.entry_time ? formatTimestamp(r.entry_time) : '-'),
+    exit_time: (r) => (r.exit_time ? formatTimestamp(r.exit_time) : '-'),
+    instrument: (r) => r.instrument ?? '-',
+    units: (r) => String(Math.abs(r.units)),
+    layer_index: (r) => (r.layer_index != null ? String(r.layer_index) : '-'),
+    retracement_count: (r) =>
       r.retracement_count != null ? String(r.retracement_count) : '-',
-      ep != null ? `¥${ep.toFixed(3)}` : '-',
-      xp != null ? `¥${xp.toFixed(3)}` : '-',
+    entry_price: (r) =>
+      r.entry_price ? `¥${parseFloat(r.entry_price).toFixed(3)}` : '-',
+    exit_price: (r) =>
+      r.exit_price ? `¥${parseFloat(r.exit_price).toFixed(3)}` : '-',
+    planned_exit_price: (r) =>
       r.planned_exit_price
         ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
         : '-',
-      r.planned_exit_price_formula ?? '-',
-      pipsStr,
-      pnlStr,
-    ].join('\t');
+    planned_exit_price_formula: (r) => r.planned_exit_price_formula ?? '-',
+    pips: (r) => {
+      const dir = r.direction;
+      const ep = r.entry_price ? parseFloat(r.entry_price) : null;
+      const xp = r.exit_price ? parseFloat(r.exit_price) : null;
+      if (ep != null && xp != null && pipSize) {
+        const pips = (dir === 'long' ? xp - ep : ep - xp) / pipSize;
+        if (Number.isFinite(pips)) return pips.toFixed(1);
+      }
+      if (r.is_open && currentPrice != null && ep != null && pipSize) {
+        const pips =
+          (dir === 'long' ? currentPrice - ep : ep - currentPrice) / pipSize;
+        if (Number.isFinite(pips)) return pips.toFixed(1);
+      }
+      return '-';
+    },
+    pnl: (r) => {
+      const dir = r.direction;
+      const ep = r.entry_price ? parseFloat(r.entry_price) : null;
+      const xp = r.exit_price ? parseFloat(r.exit_price) : null;
+      const u = Math.abs(r.units ?? 0);
+      if (!r.is_open && ep != null && xp != null) {
+        return (dir === 'long' ? (xp - ep) * u : (ep - xp) * u).toFixed(2);
+      }
+      if (r.is_open && currentPrice != null && ep != null) {
+        return (
+          dir === 'long' ? (currentPrice - ep) * u : (ep - currentPrice) * u
+        ).toFixed(2);
+      }
+      return '-';
+    },
   };
-
-  const genericHeaders = [
-    'Direction',
-    'Status',
-    'Open Time',
-    'Close Time',
-    'Instrument',
-    'Units',
-    'Layer',
-    'Retracement',
-    'Open Price',
-    'Close Price',
-    'Planned Exit',
-    'Exit Formula',
-    'Pips',
-    'PnL',
-  ];
 
   // --- Render a pair of Long/Short tables (used by byStatus mode) ---
   const renderPair = (
@@ -909,9 +892,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     columns: (dir: 'long' | 'short') => Column<TaskPosition>[],
     pnlLabel: string,
     pnlValue: number,
-    copyHeaders: string[],
-    longCopyRowFn: (r: TaskPosition) => string,
-    shortCopyRowFn: (r: TaskPosition) => string,
+    extractors: (dir: 'long' | 'short') => CopyValueExtractors<TaskPosition>,
     onConfigClick: () => void
   ) => {
     const longIds = longData.map((r) => String(r.id));
@@ -969,8 +950,9 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
                   onCopy={makeCopy(
                     longData,
                     longSelObj,
-                    copyHeaders,
-                    longCopyRowFn
+                    columns('long'),
+                    extractors('long'),
+                    longIds
                   )}
                   onSelectAll={() => longSelObj.selectAllOnPage(longIds)}
                   onReset={longSelObj.resetSelection}
@@ -1045,8 +1027,9 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
                   onCopy={makeCopy(
                     shortData,
                     shortSelObj,
-                    copyHeaders,
-                    shortCopyRowFn
+                    columns('short'),
+                    extractors('short'),
+                    shortIds
                   )}
                   onSelectAll={() => shortSelObj.selectAllOnPage(shortIds)}
                   onReset={shortSelObj.resetSelection}
@@ -1106,8 +1089,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     refetch: () => Promise<void>,
     key: string,
     columns: Column<TaskPosition>[],
-    copyHeaders: string[],
-    copyRowFn: (r: TaskPosition) => string,
+    extractors: CopyValueExtractors<TaskPosition>,
     onConfigClick: () => void,
     pnlLabel?: string,
     pnlValue?: number
@@ -1159,7 +1141,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
           </Tooltip>
           <TableSelectionToolbar
             selectedCount={selObj.selectedRowIds.size}
-            onCopy={makeCopy(data, selObj, copyHeaders, copyRowFn)}
+            onCopy={makeCopy(data, selObj, columns, extractors, ids)}
             onSelectAll={() => selObj.selectAllOnPage(ids)}
             onReset={selObj.resetSelection}
             onReload={makeReload(key, refetch)}
@@ -1267,8 +1249,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
           rAll,
           'all',
           filteredAllCols(),
-          genericHeaders,
-          genericRowFn,
+          genericExtractors,
           () => setAllColConfigOpen(true)
         )}
 
@@ -1287,8 +1268,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             rLong,
             'long',
             filteredDirCols('long'),
-            genericHeaders,
-            genericRowFn,
+            genericExtractors,
             () => setDirColConfigOpen(true)
           )}
           {renderSingleTable(
@@ -1303,8 +1283,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             rShort,
             'short',
             filteredDirCols('short'),
-            genericHeaders,
-            genericRowFn,
+            genericExtractors,
             () => setDirColConfigOpen(true)
           )}
         </>
@@ -1336,9 +1315,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             filteredClosedCols,
             t('tables.positions.totalRealizedPnl'),
             totalRealizedPnl,
-            closedHeaders,
-            closedRowFn('long'),
-            closedRowFn('short'),
+            closedExtractors,
             () => setClosedColConfigOpen(true)
           )}
           {renderPair(
@@ -1364,9 +1341,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             filteredOpenCols,
             t('tables.positions.totalUnrealizedPnl'),
             totalUnrealizedPnl,
-            openHeaders,
-            openRowFn('long'),
-            openRowFn('short'),
+            openExtractors,
             () => setOpenColConfigOpen(true)
           )}
         </>

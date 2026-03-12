@@ -35,6 +35,7 @@ import {
   columnsToDefaults,
   applyColumnConfig,
 } from '../../../hooks/useColumnConfig';
+import { buildCopyHandler } from '../../../utils/tableCopyUtils';
 
 interface TaskLogsTableProps {
   taskId: string;
@@ -98,23 +99,6 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     await refetch();
     setIsReloading(false);
   }, [refetch]);
-
-  const handleCopy = useCallback(() => {
-    const logsMap = new Map(logs.map((l) => [String(l.id), l]));
-    selection.copySelectedRows(
-      ['Timestamp', 'Level', 'Component', 'Message'],
-      (id) => {
-        const r = logsMap.get(id);
-        if (!r) return '';
-        return [
-          r.timestamp ? new Date(r.timestamp as string).toLocaleString() : '-',
-          (r.level as string) ?? '-',
-          (r.component as string) ?? '-',
-          (r.message as string) ?? '-',
-        ].join('\t');
-      }
-    );
-  }, [logs, selection]);
 
   const handleLevelFilterChange = (event: SelectChangeEvent<string[]>) => {
     const value = event.target.value;
@@ -217,6 +201,23 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     resetToDefaults: resetColDefaults,
   } = useColumnConfig('task_logs', defaultColItems);
   const visibleColumns = applyColumnConfig(columns, colConfig);
+
+  const handleCopy = useCallback(() => {
+    const logsMap = new Map(logs.map((l) => [String(l.id), l]));
+    const extractors: Record<string, (r: TaskLog) => string> = {
+      timestamp: (r) =>
+        r.timestamp ? new Date(r.timestamp as string).toLocaleString() : '-',
+      level: (r) => (r.level as string) ?? '-',
+      component: (r) => (r.component as string) ?? '-',
+      message: (r) => (r.message as string) ?? '-',
+    };
+    const { headers, formatRow } = buildCopyHandler(
+      visibleColumns,
+      extractors,
+      logsMap
+    );
+    selection.copySelectedRows(headers, formatRow, pageRowIds);
+  }, [logs, selection, visibleColumns, pageRowIds]);
 
   if (error) {
     return (

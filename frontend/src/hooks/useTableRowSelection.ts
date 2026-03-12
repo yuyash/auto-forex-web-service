@@ -17,7 +17,8 @@ export interface UseTableRowSelectionResult {
   isIndeterminate: (pageRowIds: string[]) => boolean;
   copySelectedRows: (
     headers: string[],
-    formatRow: (id: string) => string
+    formatRow: (id: string) => string,
+    displayOrderIds?: string[]
   ) => void;
 }
 
@@ -67,9 +68,17 @@ export function useTableRowSelection(): UseTableRowSelectionResult {
   );
 
   const copySelectedRows = useCallback(
-    (headers: string[], formatRow: (id: string) => string) => {
+    (
+      headers: string[],
+      formatRow: (id: string) => string,
+      displayOrderIds?: string[]
+    ) => {
       const header = headers.join('\t');
-      const rows = [...selectedRowIds].map(formatRow).filter(Boolean);
+      // Use display order (sort order) when provided, otherwise fall back to Set order
+      const orderedIds = displayOrderIds
+        ? displayOrderIds.filter((id) => selectedRowIds.has(id))
+        : [...selectedRowIds];
+      const rows = orderedIds.map(formatRow).filter(Boolean);
       if (rows.length > 0) {
         navigator.clipboard.writeText([header, ...rows].join('\n'));
       }

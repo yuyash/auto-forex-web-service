@@ -906,30 +906,33 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   }, []);
 
   const copySelectedRows = useCallback(() => {
-    const header = [
-      'Time',
-      'Direction',
-      'Layer',
-      'Ret',
-      'Units',
-      'Price',
-      'Event',
-    ].join('\t');
+    // Build headers and row data respecting column config order and visibility
+    const extractors: Record<string, (r: (typeof sortedTrades)[0]) => string> =
+      {
+        timestamp: (r) => new Date(r.timestamp).toLocaleString(),
+        direction: (r) => (r.direction ? r.direction.toUpperCase() : ''),
+        layer_index: (r) => String(r.layer_index ?? '-'),
+        retracement_count: (r) => String(r.retracement_count ?? '-'),
+        units: (r) => String(r.units),
+        price: (r) => (r.price ? `¥${parseFloat(r.price).toFixed(3)}` : '-'),
+        execution_method: (r) =>
+          r.execution_method_display || r.execution_method || '-',
+      };
+    const visibleCols = tradesColConfig.filter((c) => c.visible);
+    const applicableCols = visibleCols.filter((c) => extractors[c.id] != null);
+    const header = applicableCols.map((c) => c.label).join('\t');
     const rows = sortedTrades
       .filter((r) => selectedRowIds.has(r.id))
       .map((r) =>
-        [
-          new Date(r.timestamp).toLocaleString(),
-          r.direction ? r.direction.toUpperCase() : '',
-          r.layer_index ?? '-',
-          r.retracement_count ?? '-',
-          r.units,
-          r.price ? `¥${parseFloat(r.price).toFixed(3)}` : '-',
-          r.execution_method_display || r.execution_method || '-',
-        ].join('\t')
+        applicableCols
+          .map((c) => {
+            const ext = extractors[c.id];
+            return ext ? ext(r) : '-';
+          })
+          .join('\t')
       );
     navigator.clipboard.writeText([header, ...rows].join('\n'));
-  }, [selectedRowIds, sortedTrades]);
+  }, [selectedRowIds, sortedTrades, tradesColConfig]);
 
   // Reset to first page when sort changes (not on data refresh)
   useEffect(() => {
@@ -1181,21 +1184,38 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   }, []);
 
   const copySelectedLongPositions = useCallback(() => {
-    const header = [
-      'Open Time',
-      'Close Time',
-      'Status',
-      'Layer',
-      'Retrace',
-      'Units',
-      'Entry',
-      'Exit',
-      'Pips',
-      'PnL',
-    ].join('\t');
-    const rows = sortedLongPositions
-      .filter((r) => selectedLongPosIds.has(r.id))
-      .map((pos) => {
+    const extractors: Record<
+      string,
+      (pos: (typeof sortedLongPositions)[0]) => string
+    > = {
+      entry_time: (pos) =>
+        pos.entry_time ? new Date(pos.entry_time).toLocaleString() : '-',
+      exit_time: (pos) =>
+        pos.exit_time ? new Date(pos.exit_time).toLocaleString() : '-',
+      _status: (pos) => (pos._status === 'open' ? 'Open' : 'Closed'),
+      layer_index: (pos) => String(pos.layer_index ?? '-'),
+      retracement_count: (pos) => String(pos.retracement_count ?? '-'),
+      units: (pos) => String(pos.units),
+      entry_price: (pos) => {
+        const ep = pos.entry_price ? parseFloat(pos.entry_price) : null;
+        return ep != null ? `¥${ep.toFixed(3)}` : '-';
+      },
+      exit_price: (pos) => {
+        const xp = pos.exit_price ? parseFloat(pos.exit_price) : null;
+        return xp != null ? `¥${xp.toFixed(3)}` : '-';
+      },
+      _pips: (pos) => {
+        const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
+        const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
+        const isOpen = pos._status === 'open';
+        const hasPrice = isOpen
+          ? currentPrice != null && entryP != null
+          : exitP != null && entryP != null;
+        return pipSize && hasPrice
+          ? computePosPips(pos, currentPrice, pipSize).toFixed(1)
+          : '-';
+      },
+      _pnl: (pos) => {
         const isOpen = pos._status === 'open';
         const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
         const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
@@ -1205,25 +1225,30 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           pnl = (currentPrice - entryP) * units;
         else if (!isOpen && exitP != null && entryP != null)
           pnl = (exitP - entryP) * units;
-        const pips = computePosPips(pos, currentPrice, pipSize);
-        const hasPrice = isOpen
-          ? currentPrice != null && entryP != null
-          : exitP != null && entryP != null;
-        return [
-          pos.entry_time ? new Date(pos.entry_time).toLocaleString() : '-',
-          pos.exit_time ? new Date(pos.exit_time).toLocaleString() : '-',
-          isOpen ? 'Open' : 'Closed',
-          pos.layer_index ?? '-',
-          pos.retracement_count ?? '-',
-          pos.units,
-          entryP != null ? `¥${entryP.toFixed(3)}` : '-',
-          exitP != null ? `¥${exitP.toFixed(3)}` : '-',
-          pipSize && hasPrice ? pips.toFixed(1) : '-',
-          pnl != null ? pnl.toFixed(2) : '-',
-        ].join('\t');
-      });
+        return pnl != null ? pnl.toFixed(2) : '-';
+      },
+    };
+    const visibleCols = longPosColConfig.filter((c) => c.visible);
+    const applicableCols = visibleCols.filter((c) => extractors[c.id] != null);
+    const header = applicableCols.map((c) => c.label).join('\t');
+    const rows = sortedLongPositions
+      .filter((r) => selectedLongPosIds.has(r.id))
+      .map((pos) =>
+        applicableCols
+          .map((c) => {
+            const ext = extractors[c.id];
+            return ext ? ext(pos) : '-';
+          })
+          .join('\t')
+      );
     navigator.clipboard.writeText([header, ...rows].join('\n'));
-  }, [selectedLongPosIds, sortedLongPositions, currentPrice, pipSize]);
+  }, [
+    selectedLongPosIds,
+    sortedLongPositions,
+    currentPrice,
+    pipSize,
+    longPosColConfig,
+  ]);
 
   // ── Short position row selection ──
   const [selectedShortPosIds, setSelectedShortPosIds] = useState<Set<string>>(
@@ -1256,21 +1281,38 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   }, []);
 
   const copySelectedShortPositions = useCallback(() => {
-    const header = [
-      'Open Time',
-      'Close Time',
-      'Status',
-      'Layer',
-      'Retrace',
-      'Units',
-      'Entry',
-      'Exit',
-      'Pips',
-      'PnL',
-    ].join('\t');
-    const rows = sortedShortPositions
-      .filter((r) => selectedShortPosIds.has(r.id))
-      .map((pos) => {
+    const extractors: Record<
+      string,
+      (pos: (typeof sortedShortPositions)[0]) => string
+    > = {
+      entry_time: (pos) =>
+        pos.entry_time ? new Date(pos.entry_time).toLocaleString() : '-',
+      exit_time: (pos) =>
+        pos.exit_time ? new Date(pos.exit_time).toLocaleString() : '-',
+      _status: (pos) => (pos._status === 'open' ? 'Open' : 'Closed'),
+      layer_index: (pos) => String(pos.layer_index ?? '-'),
+      retracement_count: (pos) => String(pos.retracement_count ?? '-'),
+      units: (pos) => String(pos.units),
+      entry_price: (pos) => {
+        const ep = pos.entry_price ? parseFloat(pos.entry_price) : null;
+        return ep != null ? `¥${ep.toFixed(3)}` : '-';
+      },
+      exit_price: (pos) => {
+        const xp = pos.exit_price ? parseFloat(pos.exit_price) : null;
+        return xp != null ? `¥${xp.toFixed(3)}` : '-';
+      },
+      _pips: (pos) => {
+        const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
+        const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
+        const isOpen = pos._status === 'open';
+        const hasPrice = isOpen
+          ? currentPrice != null && entryP != null
+          : exitP != null && entryP != null;
+        return pipSize && hasPrice
+          ? computePosPips(pos, currentPrice, pipSize).toFixed(1)
+          : '-';
+      },
+      _pnl: (pos) => {
         const isOpen = pos._status === 'open';
         const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
         const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
@@ -1280,25 +1322,30 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           pnl = (entryP - currentPrice) * units;
         else if (!isOpen && exitP != null && entryP != null)
           pnl = (entryP - exitP) * units;
-        const pips = computePosPips(pos, currentPrice, pipSize);
-        const hasPrice = isOpen
-          ? currentPrice != null && entryP != null
-          : exitP != null && entryP != null;
-        return [
-          pos.entry_time ? new Date(pos.entry_time).toLocaleString() : '-',
-          pos.exit_time ? new Date(pos.exit_time).toLocaleString() : '-',
-          isOpen ? 'Open' : 'Closed',
-          pos.layer_index ?? '-',
-          pos.retracement_count ?? '-',
-          pos.units,
-          entryP != null ? `¥${entryP.toFixed(3)}` : '-',
-          exitP != null ? `¥${exitP.toFixed(3)}` : '-',
-          pipSize && hasPrice ? pips.toFixed(1) : '-',
-          pnl != null ? pnl.toFixed(2) : '-',
-        ].join('\t');
-      });
+        return pnl != null ? pnl.toFixed(2) : '-';
+      },
+    };
+    const visibleCols = shortPosColConfig.filter((c) => c.visible);
+    const applicableCols = visibleCols.filter((c) => extractors[c.id] != null);
+    const header = applicableCols.map((c) => c.label).join('\t');
+    const rows = sortedShortPositions
+      .filter((r) => selectedShortPosIds.has(r.id))
+      .map((pos) =>
+        applicableCols
+          .map((c) => {
+            const ext = extractors[c.id];
+            return ext ? ext(pos) : '-';
+          })
+          .join('\t')
+      );
     navigator.clipboard.writeText([header, ...rows].join('\n'));
-  }, [selectedShortPosIds, sortedShortPositions, currentPrice, pipSize]);
+  }, [
+    selectedShortPosIds,
+    sortedShortPositions,
+    currentPrice,
+    pipSize,
+    shortPosColConfig,
+  ]);
 
   // --- Cross-linking helpers: trade ↔ position (using backend IDs) ---
   const positionById = useMemo(() => {
