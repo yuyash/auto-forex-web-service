@@ -50,6 +50,51 @@ def _parse_execution_id(request: Request):
         return None
 
 
+def _parse_page_params(request: Request) -> tuple[int, int]:
+    """Return ``(page, page_size)`` from query params with defaults."""
+    page = 1
+    page_size = 1000
+    try:
+        page = max(1, int(request.query_params.get("page", 1)))
+    except (ValueError, TypeError):
+        pass
+    try:
+        page_size = max(1, min(int(request.query_params.get("page_size", 1000)), 5000))
+    except (ValueError, TypeError):
+        pass
+    return page, page_size
+
+
+def _paginated_envelope(
+    request: Request,
+    results: list,
+    total: int,
+    page: int,
+    page_size: int,
+) -> dict:
+    """Build a standard paginated response envelope."""
+    import math
+
+    total_pages = math.ceil(total / page_size) if page_size else 1
+    base_url = request.build_absolute_uri(request.path)
+    params = request.query_params.copy()
+
+    def _build_url(p: int) -> str | None:
+        if p < 1 or p > total_pages:
+            return None
+        params["page"] = str(p)
+        params["page_size"] = str(page_size)
+        qs = "&".join(f"{k}={v}" for k, v in params.items())
+        return f"{base_url}?{qs}"
+
+    return {
+        "count": total,
+        "next": _build_url(page + 1),
+        "previous": _build_url(page - 1),
+        "results": results,
+    }
+
+
 class TaskSubResourceMixin:
     """Mixin providing paginated logs / events / trades actions."""
 
@@ -59,31 +104,39 @@ class TaskSubResourceMixin:
         tags=["Trading"],
         parameters=[
             OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
+            OpenApiParameter("until", str, description="RFC3339 upper-bound timestamp (exclusive)"),
             OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-            OpenApiParameter("max_points", int, description="Maximum number of points to return"),
+            OpenApiParameter("page", int, description="Page number (1-based)"),
+            OpenApiParameter(
+                "page_size", int, description="Results per page (default 1000, max 5000)"
+            ),
+            OpenApiParameter(
+                "interval",
+                int,
+                description="Aggregation interval in minutes (default 1). "
+                "When > 1, returns one point per N-minute window.",
+            ),
         ],
         responses={
             200: inline_serializer(
                 "TaskMetricsResponse",
                 fields={
-                    "metrics": serializers.ListField(
+                    "count": serializers.IntegerField(),
+                    "next": serializers.CharField(allow_null=True),
+                    "previous": serializers.CharField(allow_null=True),
+                    "results": serializers.ListField(
                         child=inline_serializer(
                             "TaskMetricPoint",
                             fields={
                                 "t": serializers.IntegerField(),
-                                "mr": serializers.FloatField(allow_null=True),
-                                "atr": serializers.FloatField(allow_null=True),
-                                "base": serializers.FloatField(allow_null=True),
-                                "vt": serializers.FloatField(allow_null=True),
+                                "metrics": serializers.DictField(),
                             },
                         )
                     ),
-                    "total": serializers.IntegerField(),
-                    "returned": serializers.IntegerField(),
                 },
             )
         },
-        description="Retrieve time-series metrics for the task.",
+        description="Retrieve paginated time-series metrics for the task.",
     )
     @action(detail=True, methods=["get"], url_path="metrics")
     def metrics(self, request: Request, pk: int | None = None) -> Response:
@@ -93,14 +146,6 @@ class TaskSubResourceMixin:
         execution_id = _parse_execution_id(request)
         if execution_id is None:
             execution_id = task.execution_id
-
-        max_points_raw = request.query_params.get("max_points")
-        max_points = 10_000  # sensible default
-        if max_points_raw is not None:
-            try:
-                max_points = max(100, min(int(max_points_raw), 100_000))
-            except (ValueError, TypeError):
-                pass
 
         queryset = Metrics.objects.filter(
             task_type=self.task_type_label,
@@ -112,56 +157,79 @@ class TaskSubResourceMixin:
         if since:
             queryset = queryset.filter(timestamp__gt=since)
 
-        total_count = queryset.count()
+        until_raw = request.query_params.get("until")
+        if until_raw:
+            until_dt = parse_datetime(until_raw)
+            if until_dt:
+                queryset = queryset.filter(timestamp__lt=until_dt)
 
-        if total_count <= max_points:
-            # Small enough — return everything
-            rows = list(
-                queryset.values_list(
-                    "timestamp",
-                    "margin_ratio",
-                    "current_atr",
-                    "baseline_atr",
-                    "volatility_threshold",
-                )
-            )
-        else:
-            # Down-sample: fetch only every Nth row using a window function.
-            # We use raw SQL with ROW_NUMBER for efficient server-side stride.
+        # Aggregation interval (re-sample to N-minute windows)
+        interval = 1
+        interval_raw = request.query_params.get("interval")
+        if interval_raw:
+            try:
+                interval = max(1, min(int(interval_raw), 1440))
+            except (ValueError, TypeError):
+                pass
+
+        if interval > 1:
             from django.db import connection
+            from django.db.models.sql import Query  # noqa: F401
 
-            stride = total_count // max_points
-
-            # Build the filtered WHERE clause
+            # Build a sub-query that buckets timestamps into N-minute windows
+            # and picks the last metrics JSON per window.
+            base_where = "task_type = %s AND task_id = %s AND execution_id = %s"
             params: list = [self.task_type_label, str(task.pk), str(execution_id)]
 
+            if since:
+                base_where += " AND timestamp > %s"
+                params.append(since)
+            if until_raw:
+                until_dt2 = parse_datetime(until_raw)
+                if until_dt2:
+                    base_where += " AND timestamp < %s"
+                    params.append(until_dt2)
+
+            interval_seconds = interval * 60
+            params.append(interval_seconds)
+
             sql = (
-                "SELECT timestamp, margin_ratio, current_atr, baseline_atr, volatility_threshold "  # nosec B608
+                "SELECT DISTINCT ON (bucket) "  # nosec B608
+                "  timestamp, metrics "
                 "FROM ("
-                "  SELECT timestamp, margin_ratio, current_atr, baseline_atr, volatility_threshold, "
-                "         ROW_NUMBER() OVER (ORDER BY timestamp) AS rn "
+                "  SELECT timestamp, metrics, "
+                "    FLOOR(EXTRACT(EPOCH FROM timestamp) / %s) AS bucket "
                 "  FROM metrics "
-                "  WHERE task_type = %s AND task_id = %s AND execution_id = %s" + ") sub "
-                "WHERE rn %% %s = 1 "
-                "ORDER BY timestamp"
+                f"  WHERE {base_where}"
+                ") sub "
+                "ORDER BY bucket, timestamp DESC"
             )
-            params.append(stride)
+            # %s for interval_seconds is the first param in the SELECT,
+            # but we appended it last — reorder
+            reordered_params = [interval_seconds] + params[:-1]
 
             with connection.cursor() as cursor:
-                cursor.execute(sql, params)
+                cursor.execute(sql, reordered_params)
                 rows = cursor.fetchall()
 
-        data = [
-            {
-                "t": int(ts.timestamp()),
-                "mr": float(mr) if mr is not None else None,
-                "atr": float(atr) if atr is not None else None,
-                "base": float(base) if base is not None else None,
-                "vt": float(vt) if vt is not None else None,
-            }
-            for ts, mr, atr, base, vt in rows
-        ]
-        return Response({"metrics": data, "total": total_count, "returned": len(data)})
+            total_count = len(rows)
+            # Manual pagination over raw SQL results
+            page, page_size = _parse_page_params(request)
+            start = (page - 1) * page_size
+            end = start + page_size
+            page_rows = rows[start:end]
+
+            data = [{"t": int(ts.timestamp()), "metrics": m} for ts, m in page_rows]
+            return Response(_paginated_envelope(request, data, total_count, page, page_size))
+
+        # Default: interval=1, use ORM with cursor pagination
+        total_count = queryset.count()
+        page, page_size = _parse_page_params(request)
+        start = (page - 1) * page_size
+        rows = queryset.values_list("timestamp", "metrics")[start : start + page_size]
+
+        data = [{"t": int(ts.timestamp()), "metrics": m} for ts, m in rows]
+        return Response(_paginated_envelope(request, data, total_count, page, page_size))
 
     @extend_schema(
         tags=["Trading"],
