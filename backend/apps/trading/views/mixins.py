@@ -6,6 +6,8 @@ used by both BacktestTaskViewSet and TradingTaskViewSet.
 
 from __future__ import annotations
 
+import json
+
 from django.db.models import Q
 from django.utils.dateparse import parse_datetime
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
@@ -63,6 +65,20 @@ def _parse_page_params(request: Request) -> tuple[int, int]:
     except (ValueError, TypeError):
         pass
     return page, page_size
+
+
+def _ensure_dict(value) -> dict:
+    """Ensure a metrics value is a dict (handles double-encoded JSON strings)."""
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, dict):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return {}
 
 
 def _paginated_envelope(
@@ -219,7 +235,7 @@ class TaskSubResourceMixin:
             end = start + page_size
             page_rows = rows[start:end]
 
-            data = [{"t": int(ts.timestamp()), "metrics": m} for ts, m in page_rows]
+            data = [{"t": int(ts.timestamp()), "metrics": _ensure_dict(m)} for ts, m in page_rows]
             return Response(_paginated_envelope(request, data, total_count, page, page_size))
 
         # Default: interval=1, use ORM with cursor pagination
@@ -228,7 +244,7 @@ class TaskSubResourceMixin:
         start = (page - 1) * page_size
         rows = queryset.values_list("timestamp", "metrics")[start : start + page_size]
 
-        data = [{"t": int(ts.timestamp()), "metrics": m} for ts, m in rows]
+        data = [{"t": int(ts.timestamp()), "metrics": _ensure_dict(m)} for ts, m in rows]
         return Response(_paginated_envelope(request, data, total_count, page, page_size))
 
     @extend_schema(
