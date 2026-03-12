@@ -93,10 +93,15 @@ jobs:
           git checkout -b "$BRANCH"
           git add backend/pyproject.toml frontend/package.json
           git commit -m "chore: bump version to ${NEW_VERSION}"
-          git push origin "$BRANCH"
+          git push --force origin "$BRANCH"
 
-          gh pr create \
-            --base main \
-            --head "$BRANCH" \
-            --title "chore: bump version to ${NEW_VERSION}" \
-            --body "Automated version bump to **${NEW_VERSION}** based on conventional commits (${{ steps.bump.outputs.bump_type }})."
+          EXISTING_PR=$(gh pr list --head "$BRANCH" --base main --state open --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING_PR" ]; then
+            echo "PR #${EXISTING_PR} already exists for ${BRANCH}, skipping creation."
+          else
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "chore: bump version to ${NEW_VERSION}" \
+              --body "Automated version bump to **${NEW_VERSION}** based on conventional commits (${{ steps.bump.outputs.bump_type }})."
+          fi
