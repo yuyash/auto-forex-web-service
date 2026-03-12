@@ -36,6 +36,7 @@ import {
   columnsToDefaults,
   applyColumnConfig,
 } from '../../../hooks/useColumnConfig';
+import { buildCopyHandler } from '../../../utils/tableCopyUtils';
 
 interface TaskEventsTableProps {
   taskId: string | number;
@@ -88,25 +89,6 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
     await refetch();
     setIsReloading(false);
   }, [refetch]);
-
-  const handleCopy = useCallback(() => {
-    const eventsMap = new Map(events.map((e) => [String(e.id), e]));
-    selection.copySelectedRows(
-      ['Timestamp', 'Event Type', 'Severity', 'Description'],
-      (id) => {
-        const r = eventsMap.get(id);
-        if (!r) return '';
-        return [
-          r.created_at
-            ? new Date(r.created_at as string).toLocaleString()
-            : '-',
-          r.event_type_display ?? r.event_type ?? '-',
-          (r.severity as string) ?? '-',
-          (r.description as string) ?? '-',
-        ].join('\t');
-      }
-    );
-  }, [events, selection]);
 
   const handleSeverityChange = (value: string) => {
     setSeverityFilter(value);
@@ -195,6 +177,24 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
     resetToDefaults,
   } = useColumnConfig('task_events', defaultColItems);
   const visibleColumns = applyColumnConfig(columns, colConfig);
+
+  const handleCopy = useCallback(() => {
+    const eventsMap = new Map(events.map((e) => [String(e.id), e]));
+    const extractors: Record<string, (r: TaskEvent) => string> = {
+      created_at: (r) =>
+        r.created_at ? new Date(r.created_at as string).toLocaleString() : '-',
+      event_type: (r) =>
+        (r.event_type_display ?? r.event_type ?? '-') as string,
+      severity: (r) => (r.severity as string) ?? '-',
+      description: (r) => (r.description as string) ?? '-',
+    };
+    const { headers, formatRow } = buildCopyHandler(
+      visibleColumns,
+      extractors,
+      eventsMap
+    );
+    selection.copySelectedRows(headers, formatRow, pageRowIds);
+  }, [events, selection, visibleColumns, pageRowIds]);
 
   if (error) {
     return (

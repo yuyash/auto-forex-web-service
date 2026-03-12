@@ -27,6 +27,7 @@ import {
   columnsToDefaults,
   applyColumnConfig,
 } from '../../../hooks/useColumnConfig';
+import { buildCopyHandler } from '../../../utils/tableCopyUtils';
 
 interface TaskOrdersTableProps {
   taskId: string | number;
@@ -72,36 +73,6 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     await refetch();
     setIsReloading(false);
   }, [refetch]);
-
-  const handleCopy = useCallback(() => {
-    const orderMap = new Map(orders.map((o) => [String(o.id), o]));
-    selection.copySelectedRows(
-      [
-        'Submitted',
-        'Instrument',
-        'Type',
-        'Direction',
-        'Units',
-        'Status',
-        'Requested Price',
-        'Fill Price',
-      ],
-      (id) => {
-        const r = orderMap.get(id);
-        if (!r) return '';
-        return [
-          r.submitted_at ? new Date(r.submitted_at).toLocaleString() : '-',
-          r.instrument ?? '-',
-          r.order_type ?? '-',
-          r.direction ?? '-',
-          String(Math.abs(r.units)),
-          r.status ?? '-',
-          r.requested_price ? parseFloat(r.requested_price).toFixed(5) : '-',
-          r.fill_price ? parseFloat(r.fill_price).toFixed(5) : '-',
-        ].join('\t');
-      }
-    );
-  }, [orders, selection]);
 
   const formatTimestamp = (timestamp: string): string => {
     return new Date(timestamp).toLocaleString('en-US', {
@@ -280,6 +251,35 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     resetToDefaults,
   } = useColumnConfig('task_orders', defaultColItems);
   const visibleColumns = applyColumnConfig(columns, colConfig);
+
+  const handleCopy = useCallback(() => {
+    const orderMap = new Map(orders.map((o) => [String(o.id), o]));
+    const extractors: Record<string, (r: TaskOrder) => string> = {
+      id: (r) => (r.id ? String(r.id).slice(0, 8) : '-'),
+      submitted_at: (r) =>
+        r.submitted_at ? new Date(r.submitted_at).toLocaleString() : '-',
+      instrument: (r) => r.instrument ?? '-',
+      order_type: (r) => r.order_type ?? '-',
+      direction: (r) => r.direction ?? '-',
+      units: (r) => String(Math.abs(r.units)),
+      status: (r) => r.status ?? '-',
+      requested_price: (r) =>
+        r.requested_price ? parseFloat(r.requested_price).toFixed(5) : '-',
+      fill_price: (r) =>
+        r.fill_price ? parseFloat(r.fill_price).toFixed(5) : '-',
+      filled_at: (r) =>
+        r.filled_at ? new Date(r.filled_at).toLocaleString() : '-',
+      stop_loss: (r) =>
+        r.stop_loss ? parseFloat(r.stop_loss).toFixed(5) : '-',
+      error_message: (r) => r.error_message || '-',
+    };
+    const { headers, formatRow } = buildCopyHandler(
+      visibleColumns,
+      extractors,
+      orderMap
+    );
+    selection.copySelectedRows(headers, formatRow, pageRowIds);
+  }, [orders, selection, visibleColumns, pageRowIds]);
 
   if (error) {
     return (
