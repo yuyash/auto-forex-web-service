@@ -111,7 +111,7 @@ export const useTaskTrades = ({
   pageSize = 100,
   since,
   enableRealTimeUpdates = false,
-  refreshInterval = 5000,
+  refreshInterval = 10_000,
 }: UseTaskTradesOptions): UseTaskTradesResult => {
   const [trades, setTrades] = useState<TaskTrade[]>([]);
   const [totalCount, setTotalCount] = useState(0);
