@@ -87,12 +87,11 @@ class UserSessionAdmin(admin.ModelAdmin):
         "user",
         "ip_address",
         "login_time",
-        "last_activity",
         "is_active",
     ]
     list_filter = ["is_active", "login_time"]
     search_fields = ["user__email", "ip_address", "session_key"]
-    readonly_fields = ["login_time", "last_activity", "logout_time"]
+    readonly_fields = ["login_time", "logout_time"]
     ordering = ["-login_time"]
 
 
