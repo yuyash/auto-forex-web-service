@@ -38,6 +38,8 @@ import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
+import { useAuth } from '../../contexts/AuthContext';
+import { formatInTimeZone } from 'date-fns-tz';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
 import { StatusBadge } from '../tasks/display/StatusBadge';
@@ -74,6 +76,8 @@ export const BacktestTaskDetail: React.FC = () => {
   const deleteTask = useDeleteBacktestTask();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { user } = useAuth();
+  const timezone = user?.timezone || 'UTC';
 
   // Tab configuration with localStorage persistence
   const defaultTabs: TabItem[] = [
@@ -431,6 +435,21 @@ export const BacktestTaskDetail: React.FC = () => {
                         Spd {(s.tick.ask - s.tick.bid).toFixed(decimals)}
                       </Typography>
                     </>
+                  )}
+                  {s.tick.timestamp && (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      component="span"
+                      sx={{ fontFamily: 'monospace', fontSize: 'inherit' }}
+                    >
+                      @{' '}
+                      {formatInTimeZone(
+                        new Date(s.tick.timestamp),
+                        timezone,
+                        'yyyy-MM-dd HH:mm:ss zzz'
+                      )}
+                    </Typography>
                   )}
                 </Box>
               );

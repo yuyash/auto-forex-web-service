@@ -95,6 +95,16 @@ vi.mock('../../../src/hooks/useBacktestTaskMutations', () => ({
 }));
 
 // Mock child components to isolate page-level behavior
+vi.mock('../../../src/contexts/AuthContext', () => ({
+  useAuth: vi.fn(() => ({
+    user: { timezone: 'UTC' },
+    isAuthenticated: true,
+    isLoading: false,
+    login: vi.fn(),
+    logout: vi.fn(),
+    register: vi.fn(),
+  })),
+}));
 vi.mock('../../../src/components/common/TaskControlButtons', () => ({
   TaskControlButtons: () => <div data-testid="task-controls">Controls</div>,
 }));
