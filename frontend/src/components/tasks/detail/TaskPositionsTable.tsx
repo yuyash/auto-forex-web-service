@@ -107,7 +107,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
 
   // --- Pagination state (all mode — 1 table) ---
   const [allPage, setAllPage] = useState(0);
-  const [allRpp, setAllRpp] = useState(rpp);
+  const [allRpp, setAllRpp] = useState(25);
 
   // --- Reload state ---
   const [reloading, setReloading] = useState<Record<string, boolean>>({});
@@ -656,10 +656,18 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   const [dirColConfigOpen, setDirColConfigOpen] = useState(false);
   const [allColConfigOpen, setAllColConfigOpen] = useState(false);
 
-  const closedColDefaults = columnsToDefaults(closedCols('long'));
-  const openColDefaults = columnsToDefaults(openCols('long'));
-  const dirColDefaults = columnsToDefaults(dirCols('long'));
-  const allColDefaults = columnsToDefaults(allCols());
+  const closedColDefaults = columnsToDefaults(closedCols('long')).map((c) =>
+    c.id === 'planned_exit_price_formula' ? { ...c, visible: false } : c
+  );
+  const openColDefaults = columnsToDefaults(openCols('long')).map((c) =>
+    c.id === 'planned_exit_price_formula' ? { ...c, visible: false } : c
+  );
+  const dirColDefaults = columnsToDefaults(dirCols('long')).map((c) =>
+    c.id === 'planned_exit_price_formula' ? { ...c, visible: false } : c
+  );
+  const allColDefaults = columnsToDefaults(allCols()).map((c) =>
+    c.id === 'planned_exit_price_formula' ? { ...c, visible: false } : c
+  );
 
   const {
     columns: closedColConfig,
@@ -1188,7 +1196,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             setRppFn(parseInt(e.target.value, 10));
             setPageFn(0);
           }}
-          rowsPerPageOptions={[10, 50, 100, 200]}
+          rowsPerPageOptions={[10, 25, 50, 100, 200]}
         />
       </Box>
     );
@@ -1261,9 +1269,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
           filteredAllCols(),
           genericHeaders,
           genericRowFn,
-          () => setAllColConfigOpen(true),
-          t('tables.positions.totalPnl'),
-          totalPnl
+          () => setAllColConfigOpen(true)
         )}
 
       {/* === By Direction mode === */}
