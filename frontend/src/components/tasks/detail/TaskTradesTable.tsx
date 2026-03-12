@@ -29,6 +29,7 @@ import {
   columnsToDefaults,
   applyColumnConfig,
 } from '../../../hooks/useColumnConfig';
+import { buildCopyHandler } from '../../../utils/tableCopyUtils';
 
 interface TaskTradesTableProps {
   taskId: string | number;
@@ -77,38 +78,6 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     await refetch();
     setIsReloading(false);
   }, [refetch]);
-
-  const handleCopy = useCallback(() => {
-    const tradesMap = new Map(trades.map((t) => [String(t.id), t]));
-    selection.copySelectedRows(
-      [
-        'Timestamp',
-        'Instrument',
-        'Type',
-        'Direction',
-        'Units',
-        'Price',
-        'Layer',
-        'Retracement',
-        'Description',
-      ],
-      (id) => {
-        const r = tradesMap.get(id);
-        if (!r) return '';
-        return [
-          r.timestamp ? new Date(r.timestamp).toLocaleString() : '-',
-          r.instrument ?? '-',
-          r.execution_method_display || r.execution_method || '-',
-          String(r.direction ?? '').toUpperCase(),
-          r.units ?? '-',
-          r.price ? parseFloat(r.price).toFixed(5) : '-',
-          r.layer_index != null ? String(r.layer_index) : '-',
-          r.retracement_count != null ? String(r.retracement_count) : '-',
-          r.description || '-',
-        ].join('\t');
-      }
-    );
-  }, [trades, selection]);
 
   const formatTimestamp = (timestamp: string): string => {
     return new Date(timestamp).toLocaleString('en-US', {
@@ -221,6 +190,31 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     resetToDefaults,
   } = useColumnConfig('task_trades', defaultColItems);
   const visibleColumns = applyColumnConfig(columns, colConfig);
+
+  const handleCopy = useCallback(() => {
+    const tradesMap = new Map(trades.map((t) => [String(t.id), t]));
+    const extractors: Record<string, (r: TaskTrade) => string> = {
+      id: (r) => (r.id ? String(r.id).slice(0, 8) : '-'),
+      timestamp: (r) =>
+        r.timestamp ? new Date(r.timestamp).toLocaleString() : '-',
+      instrument: (r) => r.instrument ?? '-',
+      execution_method: (r) =>
+        r.execution_method_display || r.execution_method || '-',
+      direction: (r) => String(r.direction ?? '').toUpperCase(),
+      units: (r) => String(r.units ?? '-'),
+      price: (r) => (r.price ? parseFloat(r.price).toFixed(5) : '-'),
+      layer_index: (r) => (r.layer_index != null ? String(r.layer_index) : '-'),
+      retracement_count: (r) =>
+        r.retracement_count != null ? String(r.retracement_count) : '-',
+      description: (r) => r.description || '-',
+    };
+    const { headers, formatRow } = buildCopyHandler(
+      visibleColumns,
+      extractors,
+      tradesMap
+    );
+    selection.copySelectedRows(headers, formatRow, pageRowIds);
+  }, [trades, selection, visibleColumns, pageRowIds]);
 
   if (error) {
     return (
