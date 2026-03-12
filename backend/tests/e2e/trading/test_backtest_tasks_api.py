@@ -124,7 +124,8 @@ class TestBacktestTasks:
         # ── Metrics ───────────────────────────────────────────────────────
         metrics_resp = authenticated_client.get(f"/api/trading/tasks/backtest/{task_id}/metrics/")
         assert metrics_resp.status_code == 200
-        assert "metrics" in metrics_resp.data
+        assert "results" in metrics_resp.data
+        assert "count" in metrics_resp.data
 
         # ── Sub-resource pagination ───────────────────────────────────────
         logs_page = authenticated_client.get(

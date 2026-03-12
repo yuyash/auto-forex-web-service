@@ -66,15 +66,13 @@ class TestMetrics:
                 task_id=task.pk,
                 execution_id=task.execution_id,
                 timestamp=now + timedelta(minutes=i),
-                margin_ratio=Decimal("0.05") + Decimal(str(i)) / 100,
-                current_atr=Decimal("0.0012"),
+                metrics={"margin_ratio": str(Decimal("0.05") + Decimal(str(i)) / 100)},
             )
 
         response = client.get(f"/api/trading/tasks/backtest/{task.pk}/metrics/")
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["total"] == 3
-        assert response.data["returned"] == 3
-        assert len(response.data["metrics"]) == 3
+        assert response.data["count"] == 3
+        assert len(response.data["results"]) == 3
 
     def test_without_data(self):
         task = _make_task()
@@ -82,9 +80,8 @@ class TestMetrics:
 
         response = client.get(f"/api/trading/tasks/backtest/{task.pk}/metrics/")
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["total"] == 0
-        assert response.data["returned"] == 0
-        assert response.data["metrics"] == []
+        assert response.data["count"] == 0
+        assert response.data["results"] == []
 
 
 @pytest.mark.django_db

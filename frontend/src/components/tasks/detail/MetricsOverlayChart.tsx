@@ -9,6 +9,9 @@
  *
  * The candlestick series lives on the default 'right' price scale,
  * so there is no conflict.
+ *
+ * Data is fetched with time-range windowing: only the visible range
+ * (plus a small buffer) is requested from the API, keeping payloads small.
  */
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
@@ -27,10 +30,17 @@ export interface UseMetricsOverlayOptions {
   enableRealTimeUpdates?: boolean;
   chart: IChartApi | null;
   candleTimestamps?: number[];
-  /** Current tick timestamp (ISO string) — used to extend metric drawing up to the position line */
+  /** Current tick timestamp (ISO string) — used to extend metric drawing */
   currentTickTimestamp?: string | null;
-  /** Guard ref to prevent metric data updates from disabling auto-follow on the parent chart */
+  /** Guard ref to prevent metric data updates from disabling auto-follow */
   programmaticScrollRef?: { current: boolean };
+}
+
+/** Extract a numeric metric value from the JSON metrics object. */
+function metricVal(p: MetricPoint, key: string): number | null {
+  const v = p.metrics[key];
+  if (v === null || v === undefined) return null;
+  return typeof v === 'string' ? parseFloat(v) : (v as number);
 }
 
 function resampleSnapshots(
@@ -97,6 +107,16 @@ function attachSeries(chart: IChartApi) {
   return { mr, atr, vt };
 }
 
+/**
+ * Compute an appropriate aggregation interval (minutes) based on the
+ * visible time range so we never request more than ~2000 points.
+ */
+function computeInterval(rangeSeconds: number): number {
+  const targetPoints = 2000;
+  const intervalMin = Math.ceil(rangeSeconds / 60 / targetPoints);
+  return Math.max(1, intervalMin);
+}
+
 export function useMetricsOverlay({
   taskId,
   taskType,
@@ -112,6 +132,38 @@ export function useMetricsOverlay({
 
   const [snapshots, setSnapshots] = useState<MetricPoint[]>([]);
 
+  // Track the visible time range for windowed fetching
+  const visibleRangeRef = useRef<{ from: number; to: number } | null>(null);
+
+  // Derive visible range from candle timestamps
+  useEffect(() => {
+    if (!candleTimestamps || candleTimestamps.length === 0) return;
+    visibleRangeRef.current = {
+      from: candleTimestamps[0],
+      to: candleTimestamps[candleTimestamps.length - 1],
+    };
+  }, [candleTimestamps]);
+
+  const loadMetrics = useCallback(
+    async (since?: string) => {
+      const range = visibleRangeRef.current;
+      // Compute interval from the full candle range
+      const rangeSeconds = range ? range.to - range.from : 0;
+      const interval = rangeSeconds > 0 ? computeInterval(rangeSeconds) : 1;
+
+      const page = await fetchMetrics({
+        taskId,
+        taskType,
+        since,
+        executionRunId,
+        interval,
+        pageSize: 5000,
+      });
+      return page.results;
+    },
+    [taskId, taskType, executionRunId]
+  );
+
   // Track the latest timestamp for incremental fetching.
   const sinceRef = useRef<number | null>(null);
 
@@ -121,22 +173,14 @@ export function useMetricsOverlay({
       const sinceIso = sinceRef.current
         ? new Date(sinceRef.current * 1000).toISOString()
         : undefined;
-      const data = await fetchMetrics(
-        taskId,
-        taskType,
-        10_000,
-        sinceIso,
-        executionRunId
-      );
+      const data = await loadMetrics(sinceIso);
       if (data.length > 0) {
         setSnapshots((prev) => {
-          // Merge: append new points (they are ordered by timestamp).
           const existingTs = new Set(prev.map((p) => p.t));
           const newPoints = data.filter((p) => !existingTs.has(p.t));
           if (newPoints.length === 0) return prev;
           return [...prev, ...newPoints];
         });
-        // Update since to the latest timestamp.
         const maxT = Math.max(...data.map((p) => p.t));
         if (!sinceRef.current || maxT > sinceRef.current) {
           sinceRef.current = maxT;
@@ -145,7 +189,7 @@ export function useMetricsOverlay({
     } catch {
       // silent
     }
-  }, [taskId, taskType, executionRunId]);
+  }, [loadMetrics]);
 
   // Initial full fetch.
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -153,7 +197,7 @@ export function useMetricsOverlay({
   useEffect(() => {
     let cancelled = false;
 
-    fetchMetrics(taskId, taskType, 10_000, undefined, executionRunId)
+    loadMetrics()
       .then((data) => {
         if (!cancelled && data.length > 0) {
           setSnapshots(data);
@@ -166,7 +210,7 @@ export function useMetricsOverlay({
     return () => {
       cancelled = true;
     };
-  }, [taskId, taskType, executionRunId]);
+  }, [loadMetrics]);
 
   // Incremental polling while task is running.
   useEffect(() => {
@@ -207,10 +251,8 @@ export function useMetricsOverlay({
     const s = seriesRef.current;
     if (!s) return;
 
-    // When there are no metric snapshots and no candles, nothing to draw.
     const hasCandles = candleTimestamps && candleTimestamps.length > 0;
     const hasSnapshots = snapshots.length > 0;
-
     if (!hasSnapshots && !hasCandles) return;
 
     let extended: MetricPoint[] = [];
@@ -220,10 +262,6 @@ export function useMetricsOverlay({
         ? resampleSnapshots(snapshots, candleTimestamps)
         : snapshots;
 
-      // When a currentTickTimestamp is provided, extend the aligned data
-      // with any snapshots that fall between the last candle and the tick
-      // position.  This ensures the metric lines visually reach the
-      // SequencePositionLine instead of stopping at the last closed candle.
       extended = aligned;
       if (tickSec !== null && hasCandles) {
         const lastCandleTime = candleTimestamps[candleTimestamps.length - 1];
@@ -239,39 +277,41 @@ export function useMetricsOverlay({
     }
 
     try {
-      // Save the current visible range before calling setData so we can
-      // restore it afterwards.  lightweight-charts resets the scroll
-      // position to the last bar on setData, which causes the chart to
-      // jump when a running task is stopped (enableRealTimeUpdates flips
-      // to false, tickSec becomes null, and this effect re-runs).
       const savedRange = chart?.timeScale().getVisibleLogicalRange();
 
-      // Guard all setData calls so the resulting visible-range changes
-      // don't disable auto-follow on the parent chart.
       if (programmaticScrollRef) {
         programmaticScrollRef.current = true;
       }
 
       s.mr.setData(
         extended
-          .filter((p) => p.mr !== null)
+          .filter((p) => metricVal(p, 'margin_ratio') !== null)
           .map((p) => ({
             time: p.t as UTCTimestamp,
-            value: (p.mr as number) * 100,
+            value: (metricVal(p, 'margin_ratio') as number) * 100,
           }))
       );
       s.atr.setData(
         extended
-          .filter((p) => p.atr !== null)
-          .map((p) => ({ time: p.t as UTCTimestamp, value: p.atr as number }))
+          .filter((p) => metricVal(p, 'current_atr') !== null)
+          .map((p) => ({
+            time: p.t as UTCTimestamp,
+            value: metricVal(p, 'current_atr') as number,
+          }))
       );
       s.vt.setData(
         extended
-          .filter((p) => p.vt !== null && (p.vt as number) > 0)
-          .map((p) => ({ time: p.t as UTCTimestamp, value: p.vt as number }))
+          .filter(
+            (p) =>
+              metricVal(p, 'volatility_threshold') !== null &&
+              (metricVal(p, 'volatility_threshold') as number) > 0
+          )
+          .map((p) => ({
+            time: p.t as UTCTimestamp,
+            value: metricVal(p, 'volatility_threshold') as number,
+          }))
       );
 
-      // Restore the visible range so the chart doesn't jump.
       if (savedRange) {
         if (programmaticScrollRef) {
           programmaticScrollRef.current = true;

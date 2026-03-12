@@ -233,11 +233,11 @@ class TestSaveEvents:
 
 @pytest.mark.django_db
 class TestFlushMetrics:
-    """Tests for TaskExecutor._flush_metrics."""
+    """Tests for MetricsAggregator via TaskExecutor._flush_metrics."""
 
     def test_bulk_creates_snapshots(self):
         executor = _make_executor()
-        state = ExecutionState.objects.create(
+        ExecutionState.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=executor.task.pk,
             execution_id=executor.task.execution_id,
@@ -247,32 +247,21 @@ class TestFlushMetrics:
         )
 
         now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
-        executor._metric_buffer = [
-            {
-                "timestamp": now,
-                "margin_ratio": Decimal("0.05"),
-                "current_atr": Decimal("0.0012"),
-                "baseline_atr": Decimal("0.0010"),
-                "volatility_threshold": Decimal("0.0015"),
-            },
-            {
-                "timestamp": datetime(2024, 6, 1, 12, 1, 0, tzinfo=timezone.utc),
-                "margin_ratio": Decimal("0.06"),
-                "current_atr": None,
-                "baseline_atr": None,
-                "volatility_threshold": None,
-            },
-        ]
+        # Record metrics into two different minute buckets
+        executor._metrics_aggregator.record(now, {"margin_ratio": "0.05", "current_atr": "0.0012"})
+        executor._metrics_aggregator.record(
+            datetime(2024, 6, 1, 12, 1, 0, tzinfo=timezone.utc),
+            {"margin_ratio": "0.06"},
+        )
 
-        executor._flush_metrics(state)
+        # Flush with final=True to write all buckets
+        executor._metrics_aggregator.flush(final=True)
 
-        assert executor._metric_buffer == []
         assert Metrics.objects.filter(task_id=executor.task.pk).count() == 2
 
     def test_empty_buffer(self):
         executor = _make_executor()
         state = MagicMock()
-        executor._metric_buffer = []
         executor._flush_metrics(state)
         assert Metrics.objects.filter(task_id=executor.task.pk).count() == 0
 

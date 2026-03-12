@@ -64,17 +64,12 @@ class Command(BaseCommand):
                 "id UUID PRIMARY KEY, "
                 "task_type VARCHAR(32) NOT NULL, "
                 "task_id UUID NOT NULL, "
-                "celery_task_id VARCHAR(255), "
-                "execution_run_id INTEGER NOT NULL DEFAULT 0, "
+                "execution_id UUID, "
                 "timestamp TIMESTAMPTZ NOT NULL, "
-                "margin_ratio NUMERIC(10, 6), "
-                "current_atr NUMERIC(20, 10), "
-                "baseline_atr NUMERIC(20, 10), "
-                "volatility_threshold NUMERIC(20, 10), "
                 "metrics JSONB NOT NULL DEFAULT '{}'::jsonb"
                 ")"
             ),
-            "CREATE INDEX IF NOT EXISTS metrics_task_id_idx ON metrics (task_type, task_id, execution_run_id, timestamp)",
+            "CREATE INDEX IF NOT EXISTS metrics_task_id_idx ON metrics (task_type, task_id, execution_id, timestamp)",
         ]
 
         with connection.cursor() as cursor:

@@ -177,7 +177,8 @@ class TestTradingTasks:
         # ── Metrics ───────────────────────────────────────────────────────
         metrics = authenticated_client.get(f"/api/trading/tasks/trading/{task_id}/metrics/")
         assert metrics.status_code == 200
-        assert "metrics" in metrics.data
+        assert "results" in metrics.data
+        assert "count" in metrics.data
 
         # ── Sub-resource pagination ───────────────────────────────────────
         logs_page = authenticated_client.get(

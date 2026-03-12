@@ -9,65 +9,23 @@ class Metrics(models.Model):
     """
     Time-series metric recorded during strategy execution.
 
-    Stores strategy-specific metrics as a generic JSON field, allowing
-    each strategy to define its own metrics without schema changes.
-
-    For backward compatibility, the legacy Floor strategy fields
-    (margin_ratio, current_atr, baseline_atr, volatility_threshold)
-    are accessible via the ``metrics`` JSON field.
+    Stores strategy-specific metrics as a JSON field, aggregated at
+    minute-level granularity by MetricsAggregator.
     """
 
-    id = models.UUIDField(
-        primary_key=True,
-        default=uuid4,
-        editable=False,
-    )
-    task_type = models.CharField(max_length=32, db_index=True)
-    task_id = models.UUIDField(db_index=True)
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    task_type = models.CharField(max_length=32)
+    task_id = models.UUIDField()
     execution_id = models.UUIDField(
         null=True,
         blank=True,
-        db_index=True,
         help_text="Execution run UUID (shared with Celery task_id)",
     )
     timestamp = models.DateTimeField()
-
-    # Legacy Floor strategy fields (kept for backward compatibility with
-    # existing data; new strategies should use the ``metrics`` JSON field).
-    margin_ratio = models.DecimalField(
-        max_digits=10,
-        decimal_places=6,
-        null=True,
-        blank=True,
-        help_text="Required margin / NAV",
-    )
-    current_atr = models.DecimalField(
-        max_digits=20,
-        decimal_places=10,
-        null=True,
-        blank=True,
-        help_text="Current ATR in pips",
-    )
-    baseline_atr = models.DecimalField(
-        max_digits=20,
-        decimal_places=10,
-        null=True,
-        blank=True,
-        help_text="Baseline ATR in pips",
-    )
-    volatility_threshold = models.DecimalField(
-        max_digits=20,
-        decimal_places=10,
-        null=True,
-        blank=True,
-        help_text="baseline_atr * volatility_lock_multiplier",
-    )
-
-    # Generic metrics JSON field for any strategy
     metrics = models.JSONField(
         default=dict,
         blank=True,
-        help_text="Strategy-specific metrics as JSON (e.g., RSI, MACD, custom indicators)",
+        help_text="Strategy-specific metrics as JSON",
     )
 
     class Meta:
@@ -84,4 +42,4 @@ class Metrics(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"Metrics({self.timestamp}: margin={self.margin_ratio})"
+        return f"Metrics({self.timestamp})"

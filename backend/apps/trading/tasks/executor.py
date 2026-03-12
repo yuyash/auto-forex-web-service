@@ -104,7 +104,13 @@ class TaskExecutor:
             instrument=self.instrument,
         )
 
-        self._metric_buffer: list[dict] = []
+        from apps.trading.services.metrics_aggregator import MetricsAggregator
+
+        self._metrics_aggregator = MetricsAggregator(
+            task_type=self.task_type.value,
+            task_id=str(task.pk),
+            execution_id=str(task.execution_id) if task.execution_id else None,
+        )
 
         logger.info(
             "TaskExecutor initialized: instrument=%s, pip_size=%s, initial_balance=%s",
@@ -246,47 +252,8 @@ class TaskExecutor:
         state.save()
 
     def _flush_metrics(self, state: ExecutionState) -> None:
-        """Bulk-create buffered metrics and clear the buffer."""
-        if not self._metric_buffer:
-            return
-
-        from apps.trading.models.metrics import Metrics
-
-        buffer_size = len(self._metric_buffer)
-        first_ts = self._metric_buffer[0].get("timestamp")
-        last_ts = self._metric_buffer[-1].get("timestamp")
-
-        objs = [
-            Metrics(
-                task_type=self.task_type.value,
-                task_id=self.task.pk,
-                execution_id=self.task.execution_id,
-                timestamp=m["timestamp"],
-                # Legacy Floor fields (populated from metrics dict for backward compat)
-                margin_ratio=m.get("margin_ratio"),
-                current_atr=m.get("current_atr"),
-                baseline_atr=m.get("baseline_atr"),
-                volatility_threshold=m.get("volatility_threshold"),
-                # Generic metrics JSON (stores all strategy metrics)
-                # Convert Decimal values to float for JSON serialization
-                metrics={
-                    k: float(v) if isinstance(v, Decimal) else v
-                    for k, v in m.items()
-                    if k != "timestamp" and v is not None
-                },
-            )
-            for m in self._metric_buffer
-        ]
-        created = Metrics.objects.bulk_create(objs, ignore_conflicts=True)
-        logger.debug(
-            "Flushed metrics - task_id=%s, buffered=%d, created=%d, first_ts=%s, last_ts=%s",
-            self.task.pk,
-            buffer_size,
-            len(created),
-            first_ts,
-            last_ts,
-        )
-        self._metric_buffer.clear()
+        """Flush completed minute-level metric buckets to the database."""
+        self._metrics_aggregator.flush()
 
     def save_events(self, events: List[StrategyEvent]) -> List[TradingEvent]:
         """Save strategy events to database.
@@ -647,25 +614,11 @@ class TaskExecutor:
         trading_event.processing_error = str(message)[:4000]
 
     def _buffer_tick_metrics(self, state: ExecutionState, tick) -> None:
-        """Buffer strategy metrics from current state for time-series persistence."""
+        """Record strategy metrics into the minute-level aggregator."""
         metrics = (state.strategy_state or {}).get("metrics", {})
-        if metrics:
-            self._metric_buffer.append(
-                {
-                    "timestamp": tick.timestamp,
-                    "margin_ratio": metrics.get("margin_ratio"),
-                    "current_atr": metrics.get("current_atr"),
-                    "baseline_atr": metrics.get("baseline_atr"),
-                    "volatility_threshold": metrics.get("volatility_threshold"),
-                }
-            )
+        if not metrics:
             return
-
-        logger.debug(
-            "No metrics in strategy_state at tick %s (ticks_processed=%d)",
-            tick.timestamp,
-            state.ticks_processed,
-        )
+        self._metrics_aggregator.record(tick.timestamp, metrics)
 
     def _persist_batch_progress(self, loop: ExecutionLoopState) -> None:
         """Persist state/metrics and emit periodic telemetry."""
@@ -696,11 +649,11 @@ class TaskExecutor:
         """Emit periodic progress logs and heartbeat updates."""
         if loop.batch_count % 50 == 0:
             logger.debug(
-                "Metrics progress - task_id=%s, batch=%d, ticks_processed=%d, metric_buffer_size=%d, last_tick_ts=%s",
+                "Metrics progress - task_id=%s, batch=%d, ticks_processed=%d, pending_buckets=%d, last_tick_ts=%s",
                 self.task.pk,
                 loop.batch_count,
                 loop.state.ticks_processed,
-                len(self._metric_buffer),
+                len(self._metrics_aggregator._buckets),
                 loop.state.last_tick_timestamp,
             )
 
@@ -722,6 +675,8 @@ class TaskExecutor:
         loop.state = result.state
         self.save_events(result.events)
         self.save_state(loop.state)
+        # Flush any remaining metrics (including the last partial minute)
+        self._metrics_aggregator.flush(final=True)
         logger.info("Engine stopped, events_count=%d", len(result.events))
 
         if loop.stopped_early:
