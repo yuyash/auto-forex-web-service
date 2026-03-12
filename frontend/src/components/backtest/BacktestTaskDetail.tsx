@@ -116,7 +116,7 @@ export const BacktestTaskDetail: React.FC = () => {
     task?.execution_id,
     {
       polling: isTaskRunning,
-      interval: 3000,
+      interval: 10_000,
     }
   );
 
@@ -136,7 +136,7 @@ export const BacktestTaskDetail: React.FC = () => {
   } = useTaskPolling(taskId, 'backtest', {
     enabled: !!taskId,
     pollStatus: true,
-    interval: 3000,
+    interval: 10_000,
   });
 
   // Update the displayed status from the lightweight status poller.

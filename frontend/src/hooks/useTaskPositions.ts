@@ -90,7 +90,7 @@ export const useTaskPositions = ({
   pageSize = 100,
   since,
   enableRealTimeUpdates = false,
-  refreshInterval = 5000,
+  refreshInterval = 10_000,
 }: UseTaskPositionsOptions): UseTaskPositionsResult => {
   const [positions, setPositions] = useState<TaskPosition[]>([]);
   const [totalCount, setTotalCount] = useState(0);

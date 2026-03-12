@@ -99,7 +99,7 @@ export function useTaskSummary(
   executionRunId?: string,
   options: UseTaskSummaryOptions = {}
 ): UseTaskSummaryResult {
-  const { polling = false, interval = 2000 } = options;
+  const { polling = false, interval = 10_000 } = options;
 
   const [data, setData] = useState<TaskSummary>(INITIAL_SUMMARY);
   const [isLoading, setIsLoading] = useState(true);

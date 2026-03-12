@@ -102,7 +102,7 @@ export const TradingTaskDetail: React.FC = () => {
     task?.execution_id,
     {
       polling: isTaskRunning,
-      interval: 3000,
+      interval: 10_000,
     }
   );
   const { summary: s } = overviewSummary;
@@ -119,7 +119,7 @@ export const TradingTaskDetail: React.FC = () => {
   } = useTaskPolling(taskId, 'trading', {
     enabled: !!taskId,
     pollStatus: true,
-    interval: 3000,
+    interval: 10_000,
   });
   // Do NOT call refetch() on status transitions to avoid 429 rate-limiting.
   const prevStatusRef = useRef<string | undefined>(undefined);
