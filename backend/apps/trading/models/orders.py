@@ -57,8 +57,7 @@ class Order(models.Model):
         db_index=True,
         help_text="Execution run UUID (shared with Celery task_id)",
     )
-    broker_order_id = models.CharField(
-        max_length=255,
+    broker_order_id = models.TextField(
         null=True,
         blank=True,
         db_index=True,
