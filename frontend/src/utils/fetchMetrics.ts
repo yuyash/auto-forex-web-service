@@ -1,5 +1,5 @@
 /**
- * Fetch metrics (margin ratio, volatility) for replay overlay charts.
+ * Fetch paginated metrics for replay overlay charts.
  */
 
 import { getAuthToken } from '../api/client';
@@ -9,36 +9,44 @@ import { handleAuthErrorStatus } from './authEvents';
 export interface MetricPoint {
   /** Unix timestamp (seconds) */
   t: number;
-  /** Margin ratio (required_margin / NAV) */
-  mr: number | null;
-  /** Current ATR in pips */
-  atr: number | null;
-  /** Baseline ATR in pips */
-  base: number | null;
-  /** Volatility threshold (baseline * multiplier) */
-  vt: number | null;
+  /** Strategy-specific metrics JSON */
+  metrics: Record<string, number | string | null>;
 }
 
-export async function fetchMetrics(
-  taskId: string,
-  taskType: TaskType,
-  maxPoints?: number,
-  since?: string,
-  executionRunId?: string
-): Promise<MetricPoint[]> {
+export interface MetricsPage {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: MetricPoint[];
+}
+
+export async function fetchMetrics(opts: {
+  taskId: string;
+  taskType: TaskType;
+  since?: string;
+  until?: string;
+  executionRunId?: string;
+  interval?: number;
+  page?: number;
+  pageSize?: number;
+}): Promise<MetricsPage> {
   const prefix =
-    taskType === TaskType.BACKTEST
+    opts.taskType === TaskType.BACKTEST
       ? '/api/trading/tasks/backtest'
       : '/api/trading/tasks/trading';
 
   const searchParams = new URLSearchParams();
-  if (maxPoints) searchParams.set('max_points', String(maxPoints));
-  if (since) searchParams.set('since', since);
-  if (executionRunId != null) {
-    searchParams.set('execution_id', String(executionRunId));
-  }
+  if (opts.since) searchParams.set('since', opts.since);
+  if (opts.until) searchParams.set('until', opts.until);
+  if (opts.executionRunId != null)
+    searchParams.set('execution_id', String(opts.executionRunId));
+  if (opts.interval && opts.interval > 1)
+    searchParams.set('interval', String(opts.interval));
+  if (opts.page) searchParams.set('page', String(opts.page));
+  if (opts.pageSize) searchParams.set('page_size', String(opts.pageSize));
+
   const qs = searchParams.toString();
-  const url = `${prefix}/${taskId}/metrics/${qs ? `?${qs}` : ''}`;
+  const url = `${prefix}/${opts.taskId}/metrics/${qs ? `?${qs}` : ''}`;
 
   const response = await fetch(url, {
     method: 'GET',
@@ -57,10 +65,16 @@ export async function fetchMetrics(
     context: 'metrics',
   });
 
-  if (!response.ok) return [];
+  if (!response.ok)
+    return { count: 0, next: null, previous: null, results: [] };
 
-  const body = (await response.json().catch(() => ({}))) as {
-    metrics?: MetricPoint[];
+  const body = (await response
+    .json()
+    .catch(() => ({}))) as Partial<MetricsPage>;
+  return {
+    count: body.count ?? 0,
+    next: body.next ?? null,
+    previous: body.previous ?? null,
+    results: body.results ?? [],
   };
-  return body.metrics ?? [];
 }

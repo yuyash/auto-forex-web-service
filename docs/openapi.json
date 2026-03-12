@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.13.1",
+        "version": "1.13.3",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -2251,7 +2251,7 @@
         "/api/trading/tasks/backtest/{id}/metrics/": {
             "get": {
                 "operationId": "trading_tasks_backtest_metrics_retrieve",
-                "description": "Retrieve time-series metrics for the task.",
+                "description": "Retrieve paginated time-series metrics for the task.",
                 "parameters": [
                     {
                         "in": "query",
@@ -2273,11 +2273,27 @@
                     },
                     {
                         "in": "query",
-                        "name": "max_points",
+                        "name": "interval",
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "Maximum number of points to return"
+                        "description": "Aggregation interval in minutes (default 1). When > 1, returns one point per N-minute window."
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Page number (1-based)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Results per page (default 1000, max 5000)"
                     },
                     {
                         "in": "query",
@@ -2286,6 +2302,14 @@
                             "type": "string"
                         },
                         "description": "RFC3339 timestamp for incremental fetch"
+                    },
+                    {
+                        "in": "query",
+                        "name": "until",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 upper-bound timestamp (exclusive)"
                     }
                 ],
                 "tags": [
@@ -3478,7 +3502,7 @@
         "/api/trading/tasks/trading/{id}/metrics/": {
             "get": {
                 "operationId": "trading_tasks_trading_metrics_retrieve",
-                "description": "Retrieve time-series metrics for the task.",
+                "description": "Retrieve paginated time-series metrics for the task.",
                 "parameters": [
                     {
                         "in": "query",
@@ -3500,11 +3524,27 @@
                     },
                     {
                         "in": "query",
-                        "name": "max_points",
+                        "name": "interval",
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "Maximum number of points to return"
+                        "description": "Aggregation interval in minutes (default 1). When > 1, returns one point per N-minute window."
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Page number (1-based)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Results per page (default 1000, max 5000)"
                     },
                     {
                         "in": "query",
@@ -3513,6 +3553,14 @@
                             "type": "string"
                         },
                         "description": "RFC3339 timestamp for incremental fetch"
+                    },
+                    {
+                        "in": "query",
+                        "name": "until",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 upper-bound timestamp (exclusive)"
                     }
                 ],
                 "tags": [
@@ -7396,55 +7444,42 @@
                     "t": {
                         "type": "integer"
                     },
-                    "mr": {
-                        "type": "number",
-                        "format": "double",
-                        "nullable": true
-                    },
-                    "atr": {
-                        "type": "number",
-                        "format": "double",
-                        "nullable": true
-                    },
-                    "base": {
-                        "type": "number",
-                        "format": "double",
-                        "nullable": true
-                    },
-                    "vt": {
-                        "type": "number",
-                        "format": "double",
-                        "nullable": true
+                    "metrics": {
+                        "type": "object",
+                        "additionalProperties": {}
                     }
                 },
                 "required": [
-                    "atr",
-                    "base",
-                    "mr",
-                    "t",
-                    "vt"
+                    "metrics",
+                    "t"
                 ]
             },
             "TaskMetricsResponse": {
                 "type": "object",
                 "properties": {
-                    "metrics": {
+                    "count": {
+                        "type": "integer"
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "results": {
                         "type": "array",
                         "items": {
                             "$ref": "#/components/schemas/TaskMetricPoint"
                         }
-                    },
-                    "total": {
-                        "type": "integer"
-                    },
-                    "returned": {
-                        "type": "integer"
                     }
                 },
                 "required": [
-                    "metrics",
-                    "returned",
-                    "total"
+                    "count",
+                    "next",
+                    "previous",
+                    "results"
                 ]
             },
             "TaskOrderPaginatedResponse": {
