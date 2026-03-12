@@ -163,18 +163,27 @@ class HTTPAccessLoggingMiddleware:
                 },
             )
 
-        logger.debug(
-            "%s %s %s %s %.2fms",
+        user = self._get_authenticated_user(getattr(request, "user", None))
+        username = user.username if user else "-"
+        content_length = response.get("Content-Length", "-")
+
+        logger.info(
+            '%s %s "%s %s HTTP/%s" %s %s %.0fms',
             ip_address,
+            username,
             method,
             path,
+            request.META.get("SERVER_PROTOCOL", "1.1").split("/")[-1],
             status_code,
+            content_length,
             response_time_ms,
             extra={
                 "ip_address": ip_address,
+                "username": username,
                 "method": method,
                 "path": path,
                 "status_code": status_code,
+                "content_length": content_length,
                 "response_time_ms": response_time_ms,
                 "user_agent": user_agent,
             },

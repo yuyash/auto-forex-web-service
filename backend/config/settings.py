@@ -510,15 +510,15 @@ LOGGING = {
     "disable_existing_loggers": False,
     "formatters": {
         "verbose": {
-            "format": "{asctime} {levelname} {module} {process:d} {thread:d} {message}",
+            "format": "{asctime} {levelname:<8s} {name:<40s} {message}",
             "style": "{",
         },
         "celery_task": {
-            "format": "{asctime} {levelname} {name} {pathname}:{lineno} {process:d} {thread:d} {message}",
+            "format": "{asctime} {levelname:<8s} {name:<40s} {pathname}:{lineno} {message}",
             "style": "{",
         },
         "simple": {
-            "format": "{asctime} {levelname} {message}",
+            "format": "{asctime} {levelname:<8s} {message}",
             "style": "{",
         },
     },
@@ -594,6 +594,12 @@ LOGGING = {
         "channels": {
             "handlers": ["console", "file"],
             "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        # HTTP access logs — always INFO+ so requests are visible in production.
+        "apps.accounts.middlewares.logging": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
             "propagate": False,
         },
         # Avoid noisy cancellation traces from asyncio when clients disconnect
