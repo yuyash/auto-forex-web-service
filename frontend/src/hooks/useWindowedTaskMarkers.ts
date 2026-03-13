@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import axios from 'axios';
+import axios, { type AxiosResponse } from 'axios';
 import { apiConfig, resolveToken } from '../api/apiConfig';
 import { TaskType } from '../types/common';
 import { type TaskEvent } from './useTaskEvents';
@@ -70,12 +70,12 @@ async function fetchAllPages<
   let nextParams: Record<string, string> | undefined = params;
 
   while (nextUrl) {
-    const response = await axios.get<T>(nextUrl, {
+    const response: AxiosResponse<T> = await axios.get<T>(nextUrl, {
       params: nextParams,
       headers,
       withCredentials: apiConfig.WITH_CREDENTIALS,
     });
-    const data = response.data;
+    const data: T = response.data;
     if (Array.isArray(data?.results)) {
       items.push(...data.results);
     }
@@ -250,7 +250,7 @@ export function useWindowedTaskMarkers({
     if (!enableRealTimeUpdates) return;
     const id = window.setInterval(async () => {
       const headers = await getHeaders();
-      const commonParams = executionRunId
+      const commonParams: Record<string, string> = executionRunId
         ? { execution_id: executionRunId }
         : {};
       try {

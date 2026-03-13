@@ -524,7 +524,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     isLoading: areMarkerLayersLoading,
     ensureRange: ensureMarkerRange,
   } = useWindowedTaskMarkers({
-    taskId,
+    taskId: String(taskId),
     taskType,
     executionRunId,
     enableRealTimeUpdates,
