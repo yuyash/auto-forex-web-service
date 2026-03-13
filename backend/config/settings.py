@@ -335,6 +335,7 @@ REST_FRAMEWORK = {
         "rest_framework.filters.SearchFilter",
         "rest_framework.filters.OrderingFilter",
     ],
+    "EXCEPTION_HANDLER": "apps.accounts.api_logging.custom_exception_handler",
     "DATETIME_FORMAT": "%Y-%m-%dT%H:%M:%S.%fZ",
     "DATE_FORMAT": "%Y-%m-%d",
     "TIME_FORMAT": "%H:%M:%S",

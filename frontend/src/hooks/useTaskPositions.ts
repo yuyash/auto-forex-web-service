@@ -113,6 +113,7 @@ export const useTaskPositions = ({
   const sinceRef = useRef<string | null>(null);
   // Whether we have done the initial full fetch for this set of params.
   const hasInitialFetchRef = useRef(false);
+  const canUseIncrementalPolling = page === 1;
 
   // Reset incremental state when key params change.
   const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${status}-${direction}-${page}-${pageSize}-${since ?? ''}`;
@@ -151,7 +152,9 @@ export const useTaskPositions = ({
         if (status) params.position_status = status;
         if (direction) params.direction = direction;
         // Use caller-provided `since` OR our tracked incremental timestamp.
-        const effectiveSince = since ?? (incremental ? sinceRef.current : null);
+        const effectiveSince =
+          since ??
+          (incremental && canUseIncrementalPolling ? sinceRef.current : null);
         if (effectiveSince) params.since = effectiveSince;
 
         const url = `${apiConfig.BASE}${prefix}/${taskId}/positions/`;
@@ -250,7 +253,17 @@ export const useTaskPositions = ({
         }
       }
     },
-    [taskId, taskType, executionRunId, status, direction, page, pageSize, since]
+    [
+      taskId,
+      taskType,
+      executionRunId,
+      status,
+      direction,
+      page,
+      pageSize,
+      since,
+      canUseIncrementalPolling,
+    ]
   );
 
   // Initial full fetch.
@@ -263,11 +276,16 @@ export const useTaskPositions = ({
     if (!enableRealTimeUpdates) return;
     const interval = setInterval(() => {
       if (hasInitialFetchRef.current) {
-        fetchPositions(true);
+        fetchPositions(canUseIncrementalPolling);
       }
     }, refreshInterval);
     return () => clearInterval(interval);
-  }, [enableRealTimeUpdates, refreshInterval, fetchPositions]);
+  }, [
+    enableRealTimeUpdates,
+    refreshInterval,
+    fetchPositions,
+    canUseIncrementalPolling,
+  ]);
 
   // When real-time updates stop (task finished), do one final full refetch.
   const prevRealTimeRef = useRef(enableRealTimeUpdates);

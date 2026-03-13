@@ -24,6 +24,7 @@ import { StatCard } from '../tasks/display/StatCard';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import BacktestTaskActions from './BacktestTaskActions';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
+import { BacktestStopDialog } from '../tasks/actions/BacktestStopDialog';
 import { useTaskPolling } from '../../hooks/useTaskPolling';
 import { useTaskSummary } from '../../hooks/useTaskSummary';
 import {
@@ -54,6 +55,7 @@ export default function BacktestTaskCard({
   const [isLoading, setIsLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [stopDialogOpen, setStopDialogOpen] = useState(false);
 
   // Fetch strategies for display names
   const { strategies } = useStrategies();
@@ -135,6 +137,7 @@ export default function BacktestTaskCard({
   };
 
   const handleStop = async (taskId: string) => {
+    setStopDialogOpen(false);
     setIsLoading(true);
     try {
       await backtestTasksApi.stop(taskId);
@@ -150,6 +153,13 @@ export default function BacktestTaskCard({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleStopRequest = async () => {
+    if (isLoading) {
+      return;
+    }
+    setStopDialogOpen(true);
   };
 
   const handleResume = async (taskId: string) => {
@@ -316,7 +326,7 @@ export default function BacktestTaskCard({
             taskId={task.id}
             status={displayStatus}
             onStart={handleStart}
-            onStop={handleStop}
+            onStop={handleStopRequest}
             onResume={handleResume}
             onRestart={handleRestart}
             onDelete={handleDelete}
@@ -434,6 +444,13 @@ export default function BacktestTaskCard({
         onConfirm={handleDeleteConfirm}
         isLoading={isDeleting}
         hasExecutionHistory={true}
+      />
+      <BacktestStopDialog
+        open={stopDialogOpen}
+        taskName={task.name}
+        isLoading={isLoading}
+        onCancel={() => setStopDialogOpen(false)}
+        onConfirm={() => void handleStop(task.id)}
       />
     </Card>
   );

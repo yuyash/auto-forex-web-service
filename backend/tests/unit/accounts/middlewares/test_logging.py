@@ -1,5 +1,7 @@
 """Unit tests for HTTPAccessLoggingMiddleware (mocked dependencies)."""
 
+from django.http import HttpResponse
+from django.test import RequestFactory
 from unittest.mock import MagicMock, patch
 
 from apps.accounts.middlewares.logging import HTTPAccessLoggingMiddleware
@@ -71,3 +73,54 @@ class TestHTTPAccessLoggingMiddleware:
 
         mock_log.assert_called_once()
         assert "path_traversal_attempt" in str(mock_log.call_args)
+
+    def test_adds_request_id_header_and_logs_api_4xx_context(self) -> None:
+        """Test API error responses emit troubleshooting logs with request id."""
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/test/?page=2",
+            data='{"password":"secret"}',
+            content_type="application/json",
+        )
+        request.user = MagicMock(is_authenticated=False)
+        response = HttpResponse(status=404)
+
+        middleware = HTTPAccessLoggingMiddleware(lambda _request: response)
+
+        with (
+            patch("apps.accounts.middlewares.logging.logger.info"),
+            patch("apps.accounts.middlewares.logging.logger.warning") as mock_warning,
+        ):
+            result = middleware(request)
+
+        assert "X-Request-ID" in result
+        mock_warning.assert_called_once()
+        extra = mock_warning.call_args.kwargs["extra"]
+        assert extra["status_code"] == 404
+        assert extra["path"] == "/api/test/"
+        assert extra["query_params"] == {"page": "2"}
+
+    def test_logs_unhandled_api_exception_before_response(self) -> None:
+        """Test unhandled API exceptions include request context."""
+        factory = RequestFactory()
+        request = factory.post(
+            "/api/test/",
+            data='{"token":"secret"}',
+            content_type="application/json",
+        )
+        request.user = MagicMock(is_authenticated=False)
+
+        middleware = HTTPAccessLoggingMiddleware(
+            lambda _request: (_ for _ in ()).throw(RuntimeError("boom"))
+        )
+
+        with patch("apps.accounts.middlewares.logging.logger.exception") as mock_exception:
+            try:
+                middleware(request)
+            except RuntimeError:
+                pass
+
+        mock_exception.assert_called_once()
+        extra = mock_exception.call_args.kwargs["extra"]
+        assert extra["path"] == "/api/test/"
+        assert extra["request_data"] == {"token": "[REDACTED]"}

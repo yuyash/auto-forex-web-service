@@ -3,11 +3,14 @@
 from collections.abc import Callable
 from logging import Logger, getLogger
 from typing import Any
+from uuid import uuid4
 
 from django.http import HttpRequest, HttpResponse
 from django.utils import timezone
 
+from apps.accounts.api_logging import build_request_log_context, safe_request_data
 from apps.accounts.models import User
+from apps.accounts.request_logging import get_request_id, set_request_id
 from apps.accounts.services.events import SecurityEventService
 
 logger: Logger = getLogger(name=__name__)
@@ -25,15 +28,30 @@ class HTTPAccessLoggingMiddleware:
         """Process the request and log HTTP access."""
         start_time = timezone.now()
         ip_address = self._get_client_ip(request)
+        set_request_id(
+            request,
+            request.META.get("HTTP_X_REQUEST_ID") or str(uuid4()),
+        )
 
         self._detect_suspicious_patterns(request, ip_address)
 
-        response = self.get_response(request)
+        try:
+            response = self.get_response(request)
+        except Exception:
+            self._log_unhandled_exception(request, ip_address)
+            raise
 
         end_time = timezone.now()
         response_time_ms = (end_time - start_time).total_seconds() * 1000
+        response["X-Request-ID"] = get_request_id(request)
 
         self._log_http_access(
+            request,
+            response,
+            ip_address,
+            response_time_ms,
+        )
+        self._log_http_error(
             request,
             response,
             ip_address,
@@ -168,7 +186,7 @@ class HTTPAccessLoggingMiddleware:
         content_length = response.get("Content-Length", "-")
 
         logger.info(
-            '%s %s "%s %s HTTP/%s" %s %s %.0fms',
+            '%s %s "%s %s HTTP/%s" %s %s %.0fms req_id=%s',
             ip_address,
             username,
             method,
@@ -177,7 +195,9 @@ class HTTPAccessLoggingMiddleware:
             status_code,
             content_length,
             response_time_ms,
+            get_request_id(request),
             extra={
+                "request_id": get_request_id(request),
                 "ip_address": ip_address,
                 "username": username,
                 "method": method,
@@ -188,3 +208,49 @@ class HTTPAccessLoggingMiddleware:
                 "user_agent": user_agent,
             },
         )
+
+    def _log_http_error(
+        self,
+        request: HttpRequest,
+        response: HttpResponse,
+        ip_address: str,
+        response_time_ms: float,
+    ) -> None:
+        """Log additional request context for API 4xx/5xx responses."""
+        if not request.path.startswith("/api/"):
+            return
+        if response.status_code < 400:
+            return
+
+        log_context = build_request_log_context(request)
+        log_context.update(
+            {
+                "status_code": response.status_code,
+                "response_time_ms": response_time_ms,
+                "client_ip": ip_address,
+                "request_data": safe_request_data(request),
+            }
+        )
+
+        if response.status_code >= 500:
+            logger.error("API response error", extra=log_context)
+        else:
+            logger.warning("API response warning", extra=log_context)
+
+    def _log_unhandled_exception(
+        self,
+        request: HttpRequest,
+        ip_address: str,
+    ) -> None:
+        """Log request context for exceptions raised before a response exists."""
+        if not request.path.startswith("/api/"):
+            return
+
+        log_context = build_request_log_context(request)
+        log_context.update(
+            {
+                "client_ip": ip_address,
+                "request_data": safe_request_data(request),
+            }
+        )
+        logger.exception("Unhandled API exception before response", extra=log_context)

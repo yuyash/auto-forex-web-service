@@ -52,6 +52,7 @@ import { TaskOrdersTable } from '../tasks/detail/TaskOrdersTable';
 import { useTaskSummary } from '../../hooks/useTaskSummary';
 import { TaskStatus, TaskType } from '../../types/common';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
+import { BacktestStopDialog } from '../tasks/actions/BacktestStopDialog';
 import { useDeleteBacktestTask } from '../../hooks/useBacktestTaskMutations';
 import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
 import { LazyTabPanel } from '../common/LazyTabPanel';
@@ -72,6 +73,8 @@ export const BacktestTaskDetail: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const taskId = id || '';
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
   const [tabConfigOpen, setTabConfigOpen] = useState(false);
   const deleteTask = useDeleteBacktestTask();
   const theme = useTheme();
@@ -166,6 +169,19 @@ export const BacktestTaskDetail: React.FC = () => {
 
   const handleBack = () => {
     navigate('/backtest-tasks');
+  };
+
+  const handleStopConfirm = async () => {
+    setIsStopping(true);
+    try {
+      const { backtestTasksApi } = await import(
+        '../../services/api/backtestTasks'
+      );
+      await backtestTasksApi.stop(taskId);
+      setStopDialogOpen(false);
+    } finally {
+      setIsStopping(false);
+    }
   };
 
   if (isLoading) {
@@ -280,21 +296,8 @@ export const BacktestTaskDetail: React.FC = () => {
                 refetch();
                 if (!isPolling) startPolling();
               }}
-              onStop={async (id) => {
-                const { backtestTasksApi } = await import(
-                  '../../services/api/backtestTasks'
-                );
-                await backtestTasksApi.stop(id);
-                // Do NOT call refetch() here — the status poller will detect
-                // the STOPPING→STOPPED transition and trigger refetch
-                // automatically.  Calling refetch() immediately floods the
-                // backend with concurrent requests (task detail + positions +
-                // events + trades + summary + metrics) which triggers 429
-                // rate-limiting.  The 429 errors cause useBacktestTask to set
-                // error state, which unmounts the entire component tree
-                // (including TaskTrendPanel), destroying the chart.  When the
-                // next successful response arrives the tree remounts and
-                // fitContent() scrolls the chart to the last candle.
+              onStop={async () => {
+                setStopDialogOpen(true);
               }}
               onRestart={async (id) => {
                 const { backtestTasksApi } = await import(
@@ -936,6 +939,13 @@ export const BacktestTaskDetail: React.FC = () => {
         }}
         isLoading={deleteTask.isLoading}
         hasExecutionHistory={true}
+      />
+      <BacktestStopDialog
+        open={stopDialogOpen}
+        taskName={task.name}
+        isLoading={isStopping}
+        onCancel={() => setStopDialogOpen(false)}
+        onConfirm={handleStopConfirm}
       />
     </Container>
   );
