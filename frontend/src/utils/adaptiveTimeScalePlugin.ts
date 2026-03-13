@@ -18,14 +18,6 @@ import type {
 } from 'lightweight-charts';
 import { formatInTimeZone } from 'date-fns-tz';
 
-// ── Helpers ─────────────────────────────────────────────────────────
-
-const isMidnightInTz = (date: Date, tz: string): boolean => {
-  const hh = formatInTimeZone(date, tz, 'HH');
-  const mm = formatInTimeZone(date, tz, 'mm');
-  return hh === '00' && mm === '00';
-};
-
 // ── Types ───────────────────────────────────────────────────────────
 
 export interface AdaptiveTimeScaleOptions {
@@ -39,6 +31,55 @@ interface TickLabel {
 }
 
 const WIDE_RANGE_SEC = 30 * 86_400;
+
+type TickInterval = {
+  approxSec: number;
+  isAligned: (date: Date, timezone: string) => boolean;
+  format: (
+    date: Date,
+    timezone: string,
+    previousDateStr: string
+  ) => { line1: string; line2: string; nextDateStr: string };
+};
+
+const getTzNumber = (date: Date, timezone: string, token: string): number =>
+  Number(formatInTimeZone(date, timezone, token));
+
+const formatIntradayLabel = (
+  date: Date,
+  timezone: string,
+  previousDateStr: string
+) => {
+  const dateStr = formatInTimeZone(date, timezone, 'MM/dd');
+  const timeStr = formatInTimeZone(date, timezone, 'HH:mm');
+  if (dateStr !== previousDateStr) {
+    return { line1: dateStr, line2: timeStr, nextDateStr: dateStr };
+  }
+  return { line1: '', line2: timeStr, nextDateStr: dateStr };
+};
+
+const formatDateOnlyLabel = (
+  date: Date,
+  timezone: string,
+  previousDateStr: string
+) => {
+  const dateStr = formatInTimeZone(date, timezone, 'MM/dd');
+  return {
+    line1: dateStr,
+    line2: previousDateStr === dateStr ? '' : '',
+    nextDateStr: dateStr,
+  };
+};
+
+const formatMonthLabel = (date: Date, timezone: string) => {
+  const monthStr = formatInTimeZone(date, timezone, 'yyyy/MM');
+  return { line1: monthStr, line2: '', nextDateStr: monthStr };
+};
+
+const formatYearLabel = (date: Date, timezone: string) => {
+  const yearStr = formatInTimeZone(date, timezone, 'yyyy');
+  return { line1: yearStr, line2: '', nextDateStr: yearStr };
+};
 
 // ── Time Axis Renderer (labels in the bottom time-axis pane) ────────
 
@@ -199,23 +240,131 @@ export class AdaptiveTimeScale implements ISeriesPrimitive<Time> {
 
   // ── Shared label computation (called at render time) ──────────────
 
-  // Nice tick intervals in seconds, from small to large
-  private static readonly TICK_INTERVALS = [
-    60, // 1 min
-    120, // 2 min
-    300, // 5 min
-    600, // 10 min
-    900, // 15 min
-    1800, // 30 min
-    3600, // 1 h
-    7200, // 2 h
-    14400, // 4 h
-    21600, // 6 h
-    43200, // 12 h
-    86400, // 1 day
-    172800, // 2 days
-    604800, // 1 week
-    2592000, // 30 days
+  private static readonly TICK_INTERVALS: TickInterval[] = [
+    {
+      approxSec: 60,
+      isAligned: () => true,
+      format: formatIntradayLabel,
+    },
+    {
+      approxSec: 300,
+      isAligned: (date, tz) => getTzNumber(date, tz, 'm') % 5 === 0,
+      format: formatIntradayLabel,
+    },
+    {
+      approxSec: 600,
+      isAligned: (date, tz) => getTzNumber(date, tz, 'm') % 10 === 0,
+      format: formatIntradayLabel,
+    },
+    {
+      approxSec: 900,
+      isAligned: (date, tz) => getTzNumber(date, tz, 'm') % 15 === 0,
+      format: formatIntradayLabel,
+    },
+    {
+      approxSec: 1800,
+      isAligned: (date, tz) => getTzNumber(date, tz, 'm') % 30 === 0,
+      format: formatIntradayLabel,
+    },
+    {
+      approxSec: 3600,
+      isAligned: (date, tz) => getTzNumber(date, tz, 'm') === 0,
+      format: formatIntradayLabel,
+    },
+    {
+      approxSec: 7200,
+      isAligned: (date, tz) =>
+        getTzNumber(date, tz, 'm') === 0 &&
+        getTzNumber(date, tz, 'H') % 2 === 0,
+      format: formatIntradayLabel,
+    },
+    {
+      approxSec: 14400,
+      isAligned: (date, tz) =>
+        getTzNumber(date, tz, 'm') === 0 &&
+        getTzNumber(date, tz, 'H') % 4 === 0,
+      format: formatIntradayLabel,
+    },
+    {
+      approxSec: 28800,
+      isAligned: (date, tz) =>
+        getTzNumber(date, tz, 'm') === 0 &&
+        getTzNumber(date, tz, 'H') % 8 === 0,
+      format: formatIntradayLabel,
+    },
+    {
+      approxSec: 43200,
+      isAligned: (date, tz) =>
+        getTzNumber(date, tz, 'm') === 0 &&
+        getTzNumber(date, tz, 'H') % 12 === 0,
+      format: formatIntradayLabel,
+    },
+    {
+      approxSec: 86400,
+      isAligned: (date, tz) =>
+        getTzNumber(date, tz, 'H') === 0 && getTzNumber(date, tz, 'm') === 0,
+      format: formatDateOnlyLabel,
+    },
+    {
+      approxSec: 172800,
+      isAligned: (date, tz) =>
+        getTzNumber(date, tz, 'H') === 0 &&
+        getTzNumber(date, tz, 'm') === 0 &&
+        getTzNumber(date, tz, 'd') % 2 === 1,
+      format: formatDateOnlyLabel,
+    },
+    {
+      approxSec: 604800,
+      isAligned: (date, tz) =>
+        getTzNumber(date, tz, 'H') === 0 &&
+        getTzNumber(date, tz, 'm') === 0 &&
+        getTzNumber(date, tz, 'i') === 1,
+      format: formatDateOnlyLabel,
+    },
+    {
+      approxSec: 2629746,
+      isAligned: (date, tz) =>
+        getTzNumber(date, tz, 'H') === 0 &&
+        getTzNumber(date, tz, 'm') === 0 &&
+        getTzNumber(date, tz, 'd') === 1,
+      format: formatMonthLabel,
+    },
+    {
+      approxSec: 2 * 2629746,
+      isAligned: (date, tz) =>
+        getTzNumber(date, tz, 'H') === 0 &&
+        getTzNumber(date, tz, 'm') === 0 &&
+        getTzNumber(date, tz, 'd') === 1 &&
+        (getTzNumber(date, tz, 'M') - 1) % 2 === 0,
+      format: formatMonthLabel,
+    },
+    {
+      approxSec: 3 * 2629746,
+      isAligned: (date, tz) =>
+        getTzNumber(date, tz, 'H') === 0 &&
+        getTzNumber(date, tz, 'm') === 0 &&
+        getTzNumber(date, tz, 'd') === 1 &&
+        (getTzNumber(date, tz, 'M') - 1) % 3 === 0,
+      format: formatMonthLabel,
+    },
+    {
+      approxSec: 6 * 2629746,
+      isAligned: (date, tz) =>
+        getTzNumber(date, tz, 'H') === 0 &&
+        getTzNumber(date, tz, 'm') === 0 &&
+        getTzNumber(date, tz, 'd') === 1 &&
+        (getTzNumber(date, tz, 'M') - 1) % 6 === 0,
+      format: formatMonthLabel,
+    },
+    {
+      approxSec: 31556952,
+      isAligned: (date, tz) =>
+        getTzNumber(date, tz, 'H') === 0 &&
+        getTzNumber(date, tz, 'm') === 0 &&
+        getTzNumber(date, tz, 'd') === 1 &&
+        getTzNumber(date, tz, 'M') === 1,
+      format: formatYearLabel,
+    },
   ];
 
   private _computeLabels(): TickLabel[] | null {
@@ -242,8 +391,6 @@ export class AdaptiveTimeScale implements ISeriesPrimitive<Time> {
     const spanSec = toSec - fromSec;
     const isWideRange = spanSec >= WIDE_RANGE_SEC;
 
-    // We need two known data-point coordinates to build a time→pixel mapping.
-    // Use the first and last visible data points.
     const series = this._param.series;
     const data = series.data();
     if (!data || data.length === 0) return null;
@@ -255,73 +402,55 @@ export class AdaptiveTimeScale implements ISeriesPrimitive<Time> {
     const ei = Math.min(data.length - 1, Math.ceil(logicalRange.to));
     if (si >= ei) return null;
 
-    const ptA = data[si];
-    const ptB = data[ei];
-    const xA = timeScale.timeToCoordinate(ptA.time);
-    const xB = timeScale.timeToCoordinate(ptB.time);
-    if (xA === null || xB === null) return null;
-
-    const secA =
-      typeof ptA.time === 'number'
-        ? ptA.time
-        : new Date(ptA.time as string).getTime() / 1000;
-    const secB =
-      typeof ptB.time === 'number'
-        ? ptB.time
-        : new Date(ptB.time as string).getTime() / 1000;
-    if (secB <= secA) return null;
-
-    // Linear interpolation: time (seconds) → pixel x
-    const secToX = (sec: number): number => {
-      return xA + ((sec - secA) / (secB - secA)) * (xB - xA);
-    };
+    const visiblePoints: Array<{ x: number; sec: number }> = [];
+    for (const point of data.slice(si, ei + 1)) {
+      const x = timeScale.timeToCoordinate(point.time);
+      if (x === null) continue;
+      const sec =
+        typeof point.time === 'number'
+          ? point.time
+          : new Date(point.time as string).getTime() / 1000;
+      visiblePoints.push({ x: Number(x), sec });
+    }
+    if (visiblePoints.length === 0) return null;
 
     // Determine how many labels fit and pick a nice interval
-    const pxWidth = Math.abs(xB - xA);
-    const labelWidth = isWideRange ? 55 : 65;
+    const pxWidth = Math.abs(
+      visiblePoints[visiblePoints.length - 1].x - visiblePoints[0].x
+    );
+    const labelWidth = isWideRange ? 28 : 32;
     const maxLabels = Math.max(2, Math.floor(pxWidth / labelWidth));
     const idealIntervalSec = spanSec / maxLabels;
 
-    // Pick the smallest nice interval >= idealIntervalSec
-    let intervalSec =
+    // Pick the smallest allowed interval >= idealIntervalSec.
+    let interval =
       AdaptiveTimeScale.TICK_INTERVALS[
         AdaptiveTimeScale.TICK_INTERVALS.length - 1
       ];
     for (const candidate of AdaptiveTimeScale.TICK_INTERVALS) {
-      if (candidate >= idealIntervalSec) {
-        intervalSec = candidate;
+      if (candidate.approxSec >= idealIntervalSec) {
+        interval = candidate;
         break;
       }
     }
 
-    // Round fromSec up to the next multiple of intervalSec (in UTC)
-    const firstTick = Math.ceil(fromSec / intervalSec) * intervalSec;
-
-    // Generate tick times
     const labels: TickLabel[] = [];
     let lastDateStr = '';
-    // When interval is >= 1 day, every tick lands on a day boundary
-    // so showing "00:00" is redundant — use date-only labels.
-    const dateOnly = isWideRange || intervalSec >= 86400;
+    let lastLabelSec = Number.NEGATIVE_INFINITY;
 
-    for (let tick = firstTick; tick <= toSec; tick += intervalSec) {
-      const x = secToX(tick);
-      const date = new Date(tick * 1000);
-      const dateStr = formatInTimeZone(date, tz, 'MM/dd');
-      const timeStr = formatInTimeZone(date, tz, 'HH:mm');
-      const midnight = isMidnightInTz(date, tz);
-
-      if (dateOnly) {
-        // Date only (single line)
-        labels.push({ x, line1: dateStr, line2: '' });
-      } else if (midnight || dateStr !== lastDateStr) {
-        // Major tick: date + time (two lines)
-        labels.push({ x, line1: dateStr, line2: timeStr });
-      } else {
-        // Minor tick: time only
-        labels.push({ x, line1: '', line2: timeStr });
+    for (const point of visiblePoints) {
+      if (point.sec < fromSec || point.sec > toSec) continue;
+      const date = new Date(point.sec * 1000);
+      if (!interval.isAligned(date, tz)) continue;
+      if (labels.length > 0 && point.sec - lastLabelSec < interval.approxSec) {
+        continue;
       }
-      lastDateStr = dateStr;
+
+      const x = point.x;
+      const formatted = interval.format(date, tz, lastDateStr);
+      labels.push({ x, line1: formatted.line1, line2: formatted.line2 });
+      lastDateStr = formatted.nextDateStr;
+      lastLabelSec = point.sec;
     }
 
     return labels;
