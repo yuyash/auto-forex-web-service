@@ -187,6 +187,11 @@ export const BacktestTaskDetail: React.FC = () => {
   const liveTask = polledDetails?.task ?? task;
   const currentStatus =
     optimisticStatus?.status ?? polledStatus?.status ?? liveTask?.status;
+  const triggerPolledRefetch = () => {
+    if (typeof refetchPolledTask === 'function') {
+      refetchPolledTask();
+    }
+  };
 
   useEffect(() => {
     const actualStatus = polledStatus?.status ?? liveTask?.status;
@@ -253,7 +258,7 @@ export const BacktestTaskDetail: React.FC = () => {
         TaskStatus.FAILED,
       ]);
       startPolling();
-      refetchPolledTask();
+      triggerPolledRefetch();
       setStopDialogOpen(false);
     } finally {
       setIsStopping(false);
@@ -375,7 +380,7 @@ export const BacktestTaskDetail: React.FC = () => {
                   TaskStatus.FAILED,
                 ]);
                 startPolling();
-                refetchPolledTask();
+                triggerPolledRefetch();
               }}
               onStop={async () => {
                 setStopDialogOpen(true);
@@ -391,7 +396,7 @@ export const BacktestTaskDetail: React.FC = () => {
                   TaskStatus.FAILED,
                 ]);
                 startPolling();
-                refetchPolledTask();
+                triggerPolledRefetch();
               }}
               onResume={async (id) => {
                 const { backtestTasksApi } = await import(
@@ -404,7 +409,7 @@ export const BacktestTaskDetail: React.FC = () => {
                   TaskStatus.FAILED,
                 ]);
                 startPolling();
-                refetchPolledTask();
+                triggerPolledRefetch();
               }}
               onPause={async (id) => {
                 const { backtestTasksApi } = await import(
@@ -417,7 +422,7 @@ export const BacktestTaskDetail: React.FC = () => {
                   TaskStatus.FAILED,
                 ]);
                 startPolling();
-                refetchPolledTask();
+                triggerPolledRefetch();
               }}
             />
             <Tooltip title={t('common:actions.edit')}>

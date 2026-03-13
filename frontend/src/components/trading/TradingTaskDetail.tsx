@@ -173,6 +173,11 @@ export const TradingTaskDetail: React.FC = () => {
   const liveTask = polledDetails?.task ?? task;
   const currentStatus =
     optimisticStatus?.status ?? polledStatus?.status ?? liveTask?.status;
+  const triggerPolledRefetch = () => {
+    if (typeof refetchPolledTask === 'function') {
+      refetchPolledTask();
+    }
+  };
 
   useEffect(() => {
     const actualStatus = polledStatus?.status ?? liveTask?.status;
@@ -319,7 +324,7 @@ export const TradingTaskDetail: React.FC = () => {
                   TaskStatus.FAILED,
                 ]);
                 startPolling();
-                refetchPolledTask();
+                triggerPolledRefetch();
               }}
               onStop={async (id) => {
                 const { tradingTasksApi } = await import(
@@ -333,7 +338,7 @@ export const TradingTaskDetail: React.FC = () => {
                   TaskStatus.FAILED,
                 ]);
                 startPolling();
-                refetchPolledTask();
+                triggerPolledRefetch();
               }}
               onRestart={async (id) => {
                 const { tradingTasksApi } = await import(
@@ -346,7 +351,7 @@ export const TradingTaskDetail: React.FC = () => {
                   TaskStatus.FAILED,
                 ]);
                 startPolling();
-                refetchPolledTask();
+                triggerPolledRefetch();
               }}
               onResume={async (id) => {
                 const { tradingTasksApi } = await import(
@@ -359,7 +364,7 @@ export const TradingTaskDetail: React.FC = () => {
                   TaskStatus.FAILED,
                 ]);
                 startPolling();
-                refetchPolledTask();
+                triggerPolledRefetch();
               }}
               onPause={async (id) => {
                 const { tradingTasksApi } = await import(
@@ -372,7 +377,7 @@ export const TradingTaskDetail: React.FC = () => {
                   TaskStatus.FAILED,
                 ]);
                 startPolling();
-                refetchPolledTask();
+                triggerPolledRefetch();
               }}
             />
             <Tooltip title={t('common:actions.edit')}>
