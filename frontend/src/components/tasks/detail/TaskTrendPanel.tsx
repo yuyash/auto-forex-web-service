@@ -15,6 +15,7 @@ import {
   FormControl,
   IconButton,
   InputLabel,
+  LinearProgress,
   MenuItem,
   Paper,
   Select,
@@ -50,21 +51,22 @@ import {
   type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import { getAuthToken } from '../../../api/client';
 import {
   fetchAllTrades,
   fetchTradesSince,
 } from '../../../utils/fetchAllTrades';
 import { useSupportedGranularities } from '../../../hooks/useMarketConfig';
-import { useTaskEvents, type TaskEvent } from '../../../hooks/useTaskEvents';
+import type { TaskEvent } from '../../../hooks/useTaskEvents';
 import {
   useTaskPositions,
   type TaskPosition,
 } from '../../../hooks/useTaskPositions';
 import { useTaskSummary } from '../../../hooks/useTaskSummary';
 import { TaskType } from '../../../types/common';
-import { handleAuthErrorStatus } from '../../../utils/authEvents';
-import { detectMarketGaps } from '../../../utils/marketClosedMarkers';
+import {
+  buildMarketClosedMarkers,
+  detectMarketGaps,
+} from '../../../utils/marketClosedMarkers';
 import { MarketClosedHighlight } from '../../../utils/MarketClosedHighlight';
 import {
   AdaptiveTimeScale,
@@ -81,6 +83,12 @@ import {
   useColumnConfig,
   type ColumnItem,
 } from '../../../hooks/useColumnConfig';
+import { useWindowedCandles } from '../../../hooks/useWindowedCandles';
+import {
+  useWindowedTaskMarkers,
+  type WindowedTradeMarker,
+} from '../../../hooks/useWindowedTaskMarkers';
+import { clampRange, type TimeRange } from '../../../utils/windowedRanges';
 
 type CandlePoint = CandlestickData<Time>;
 
@@ -106,6 +114,12 @@ const GRANULARITY_MINUTES: Record<string, number> = {
   W: 10080,
   M: 43200,
 };
+
+function isoToSec(value?: string | null): number | null {
+  if (!value) return null;
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
+}
 
 type ReplayTrade = {
   id: string;
@@ -193,12 +207,6 @@ const parseUtcTimestamp = (value: unknown): UTCTimestamp | null => {
   return null;
 };
 
-const toRfc3339Seconds = (value: string): string => {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
-};
-
 const toEventMarkerTime = (event: TaskEvent): UTCTimestamp | null => {
   const detailTimestamp =
     typeof event.details?.timestamp === 'string'
@@ -249,6 +257,81 @@ const snapToCandleTime = (
   return candleTimes[best] as UTCTimestamp;
 };
 
+const snapToCandleTimeInLoadedRange = (
+  timeSec: number,
+  candleTimes: number[]
+): UTCTimestamp | null => {
+  if (candleTimes.length === 0) return null;
+  if (
+    timeSec < candleTimes[0] ||
+    timeSec > candleTimes[candleTimes.length - 1]
+  ) {
+    return null;
+  }
+  return snapToCandleTime(timeSec, candleTimes);
+};
+
+const findFirstCandleAtOrAfter = (
+  timeSec: number,
+  candleTimes: number[]
+): UTCTimestamp | null => {
+  if (candleTimes.length === 0) return null;
+  const first = candleTimes[0];
+  const last = candleTimes[candleTimes.length - 1];
+  if (timeSec < first || timeSec > last) return null;
+
+  let lo = 0;
+  let hi = candleTimes.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (candleTimes[mid] < timeSec) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  return candleTimes[lo] as UTCTimestamp;
+};
+
+const findLastCandleAtOrBefore = (
+  timeSec: number,
+  candleTimes: number[]
+): UTCTimestamp | null => {
+  if (candleTimes.length === 0) return null;
+  const first = candleTimes[0];
+  const last = candleTimes[candleTimes.length - 1];
+  if (timeSec < first || timeSec > last) return null;
+
+  let lo = 0;
+  let hi = candleTimes.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >>> 1;
+    if (candleTimes[mid] <= timeSec) {
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return candleTimes[lo] as UTCTimestamp;
+};
+
+const findGapAroundTime = (
+  timeSec: number,
+  candleTimes: number[],
+  gapThresholdSeconds: number
+): { from: number; to: number } | null => {
+  if (candleTimes.length < 2) return null;
+  for (let i = 1; i < candleTimes.length; i += 1) {
+    const prev = candleTimes[i - 1];
+    const next = candleTimes[i];
+    if (timeSec < prev || timeSec > next) continue;
+    if (next - prev > gapThresholdSeconds) {
+      return { from: prev, to: next };
+    }
+  }
+  return null;
+};
+
 const recommendGranularity = (
   fromIso: string | undefined,
   toIso: string | undefined,
@@ -277,77 +360,6 @@ const recommendGranularity = (
   }
 
   return best;
-};
-
-const fetchCandles = async (
-  instrument: string,
-  granularity: string,
-  startTime?: string,
-  endTime?: string
-): Promise<Record<string, unknown>> => {
-  const params = new URLSearchParams();
-  params.set('instrument', instrument);
-  params.set('granularity', granularity);
-
-  if (startTime && endTime) {
-    params.set('from_time', toRfc3339Seconds(startTime));
-    params.set('to_time', toRfc3339Seconds(endTime));
-  } else {
-    params.set('count', '1440');
-    if (startTime) params.set('from_time', toRfc3339Seconds(startTime));
-    if (endTime) params.set('to_time', toRfc3339Seconds(endTime));
-  }
-
-  const MAX_RETRIES = 3;
-  const INITIAL_BACKOFF_MS = 1000;
-
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const response = await fetch(`/api/market/candles/?${params.toString()}`, {
-      method: 'GET',
-      credentials: 'include',
-      headers: (() => {
-        const token = getAuthToken();
-        return token
-          ? { Authorization: `Bearer ${token}` }
-          : ({} as Record<string, string>);
-      })(),
-    });
-
-    // Retry on 429 with exponential backoff
-    if (response.status === 429 && attempt < MAX_RETRIES) {
-      const retryAfter = response.headers.get('retry-after');
-      const delayMs =
-        retryAfter && Number.isFinite(Number(retryAfter))
-          ? Number(retryAfter) * 1000
-          : INITIAL_BACKOFF_MS * Math.pow(2, attempt);
-      await new Promise((r) => setTimeout(r, delayMs));
-      continue;
-    }
-
-    handleAuthErrorStatus(response.status, {
-      source: 'http',
-      status: response.status,
-      context: 'task_replay_candles',
-    });
-
-    const body = (await response.json().catch(() => ({}))) as Record<
-      string,
-      unknown
-    >;
-    if (!response.ok) {
-      const errorMessage =
-        typeof body.error === 'string'
-          ? body.error
-          : typeof body.detail === 'string'
-            ? body.detail
-            : `Failed to load candles (HTTP ${response.status})`;
-      throw new Error(errorMessage);
-    }
-
-    return body;
-  }
-
-  throw new Error('Failed to load candles after retries');
 };
 
 /** Compute PnL for a single position (used for sorting). */
@@ -420,17 +432,72 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   const muiTheme = useTheme();
   const isDark = muiTheme.palette.mode === 'dark';
   const timezone = user?.timezone || 'UTC';
-
-  const [candles, setCandles] = useState<CandlePoint[]>([]);
+  const [granularity, setGranularity] = useState<string>('M1');
   const [trades, setTrades] = useState<ReplayTrade[]>([]);
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
   // State-based chart reference so hooks can react to chart creation
   const [chartInstance, setChartInstance] = useState<IChartApi | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [pollingIntervalMs, setPollingIntervalMs] = useState(10_000);
-  const [error, setError] = useState<string | null>(null);
   const { granularities } = useSupportedGranularities();
+  const {
+    candles: windowedCandles,
+    isInitialLoading: isLoading,
+    isRefreshing: isCandleRefreshing,
+    loadingOlder: loadingOlderCandles,
+    loadingNewer: loadingNewerCandles,
+    error,
+    ensureRange: ensureCandleRange,
+    refreshTail: refreshTailCandles,
+  } = useWindowedCandles({
+    instrument,
+    granularity,
+    startTime,
+    endTime,
+    initialCount: 800,
+    edgeCount: 800,
+    autoRefresh: enableRealTimeUpdates,
+    refreshIntervalSeconds: Math.max(10, Math.floor(pollingIntervalMs / 1000)),
+  });
+  const candles = useMemo(
+    () =>
+      windowedCandles.map((c) => ({
+        ...c,
+        time: c.time as UTCTimestamp,
+      })) as CandlePoint[],
+    [windowedCandles]
+  );
+  const startTimeSec = useMemo(() => isoToSec(startTime), [startTime]);
+  const endTimeSec = useMemo(() => isoToSec(endTime), [endTime]);
+  const currentTickSec = useMemo(
+    () => isoToSec(currentTick?.timestamp ?? null),
+    [currentTick?.timestamp]
+  );
+  const taskDataBounds = useMemo<Partial<TimeRange> | null>(() => {
+    const from = startTimeSec ?? undefined;
+    const to = enableRealTimeUpdates
+      ? (currentTickSec ?? undefined)
+      : (endTimeSec ?? undefined);
+    if (from == null && to == null) {
+      return null;
+    }
+    return { from, to };
+  }, [currentTickSec, enableRealTimeUpdates, endTimeSec, startTimeSec]);
+  const granularitySeconds = useMemo(
+    () => (GRANULARITY_MINUTES[granularity] ?? 1) * 60,
+    [granularity]
+  );
+
+  const clampTaskRange = useCallback(
+    (range: TimeRange): TimeRange | null => {
+      if (!taskDataBounds) {
+        return range;
+      }
+      const clamped = clampRange(range, taskDataBounds);
+      return clamped.to >= clamped.from ? clamped : null;
+    },
+    [taskDataBounds]
+  );
 
   // Fetch open/closed positions via useTaskPositions so that
   // Realized PnL and Unrealized PnL are computed from the positions table.
@@ -450,26 +517,18 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     pageSize: 5000,
     enableRealTimeUpdates,
   });
-  const { events: taskLifecycleEvents } = useTaskEvents({
-    taskId,
+  const {
+    taskEvents: taskLifecycleEvents,
+    strategyEvents,
+    trades: windowedTradeMarkers,
+    isLoading: areMarkerLayersLoading,
+    ensureRange: ensureMarkerRange,
+  } = useWindowedTaskMarkers({
+    taskId: String(taskId),
     taskType,
     executionRunId,
-    source: 'task',
-    page: 1,
-    pageSize: 5000,
     enableRealTimeUpdates,
-  });
-  // Trading events are not fetched here because tradeMarkers (from the
-  // trades API) already display open/close with direction and lot size,
-  // making separate trading-event markers redundant.
-  const { events: strategyEvents } = useTaskEvents({
-    taskId,
-    taskType,
-    executionRunId,
-    source: 'strategy',
-    page: 1,
-    pageSize: 5000,
-    enableRealTimeUpdates,
+    bounds: taskDataBounds,
   });
 
   // Auto-follow: track whether the chart should auto-scroll to the position line
@@ -1490,7 +1549,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     return recommendGranularity(startTime, endTime, availableValues);
   }, [granularityOptions, startTime, endTime]);
 
-  const [granularity, setGranularity] = useState<string>('M1');
   // Stores the visible time range before a granularity change so we can
   // restore it after new candles load, preventing the chart from jumping.
   const savedVisibleRangeRef = useRef<{ from: number; to: number } | null>(
@@ -1506,9 +1564,17 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     [candles]
   );
 
+  useEffect(() => {
+    if (candleTimestampsMemo.length === 0) return;
+    void ensureMarkerRange({
+      from: candleTimestampsMemo[0],
+      to: candleTimestampsMemo[candleTimestampsMemo.length - 1],
+    });
+  }, [candleTimestampsMemo, ensureMarkerRange]);
+
   // Attach metric overlay series (Margin Ratio, ATR, thresholds) to the
   // candlestick chart so they share the exact same X-axis.
-  useMetricsOverlay({
+  const { isLoading: metricsLoading } = useMetricsOverlay({
     taskId: String(taskId),
     taskType,
     executionRunId,
@@ -1647,107 +1713,16 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   const fetchReplayData = useCallback(async () => {
     const isInitialLoad = !hasLoadedOnce.current;
     try {
-      if (isInitialLoad) {
-        setIsLoading(true);
-      } else {
+      if (!isInitialLoad) {
         setIsRefreshing(true);
       }
-      setError(null);
-
-      // Fetch candles first — show chart ASAP before loading trades.
-      // Errors here are only fatal on the very first load (when we have
-      // no data to show).  On subsequent fetches we keep the previously
-      // loaded candles visible so that stopping a task does not wipe the chart.
-      //
-      // During polling (non-initial loads), candle data is only refreshed
-      // every CANDLE_REFRESH_INTERVAL_MS (60s) because only the latest bar
-      // changes.  Trades and positions (from local DB) are always fetched.
       const now = Date.now();
-      const shouldFetchCandles =
-        isInitialLoad ||
+      const shouldRefreshTail =
+        !isInitialLoad &&
         now - lastCandleFetchRef.current >= CANDLE_REFRESH_INTERVAL_MS;
-      let candlesFetched = false;
-
-      if (shouldFetchCandles) {
-        try {
-          const candleResponse = await fetchCandles(
-            instrument,
-            granularity,
-            startTime,
-            endTime
-          );
-          const rawCandles = Array.isArray(candleResponse?.candles)
-            ? candleResponse.candles
-            : [];
-          const candleByTime = new Map<number, CandlePoint>();
-          rawCandles
-            .map((c: Record<string, unknown>) => {
-              const parsedTime = parseUtcTimestamp(c.time);
-              const open = Number(c.open);
-              const high = Number(c.high);
-              const low = Number(c.low);
-              const close = Number(c.close);
-              if (
-                parsedTime === null ||
-                [open, high, low, close].some((v) => Number.isNaN(v))
-              ) {
-                return null;
-              }
-              return {
-                time: parsedTime,
-                open,
-                high,
-                low,
-                close,
-              } as CandlePoint;
-            })
-            .filter((v: CandlePoint | null): v is CandlePoint => v !== null)
-            .forEach((c) => candleByTime.set(Number(c.time), c));
-
-          const candlePoints: CandlePoint[] = Array.from(
-            candleByTime.values()
-          ).sort((a, b) => Number(a.time) - Number(b.time));
-          // Only update candles state when we receive non-empty data so that a
-          // transient empty response (e.g. market API hiccup during polling)
-          // does not wipe out previously loaded candles and destroy the chart.
-          if (candlePoints.length > 0) {
-            setCandles((prev) => {
-              // Skip update if candle count and last candle timestamp are identical
-              if (
-                prev.length === candlePoints.length &&
-                prev.length > 0 &&
-                Number(prev[prev.length - 1].time) ===
-                  Number(candlePoints[candlePoints.length - 1].time)
-              ) {
-                return prev;
-              }
-              return candlePoints;
-            });
-          }
-          candlesFetched = true;
-          lastCandleFetchRef.current = Date.now();
-        } catch (candleError) {
-          // On the very first load with no existing data, propagate the error
-          // so the user sees feedback.  Otherwise silently keep the old candles.
-          if (isInitialLoad) {
-            throw candleError;
-          }
-          console.warn('Failed to refresh candle data:', candleError);
-        }
-      } // end shouldFetchCandles
-
-      // Mark initial load complete and show chart before fetching trades.
-      // This lets the user see candles immediately while trades load lazily.
-      if (isInitialLoad && candlesFetched) {
-        hasLoadedOnce.current = true;
-        setIsLoading(false);
-      }
-
-      // Small delay between candle and trade requests to avoid burst traffic
-      // that can trigger OANDA / backend rate limits.
-      // Only needed when we actually fetched candles this cycle.
-      if (shouldFetchCandles) {
-        await new Promise((r) => setTimeout(r, 300));
+      if (shouldRefreshTail) {
+        await refreshTailCandles();
+        lastCandleFetchRef.current = Date.now();
       }
 
       // Fetch trades — errors here never hide already-loaded candles.
@@ -1814,30 +1789,15 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           });
         }
       } catch (tradeError) {
-        // On the very first load when candles also failed, propagate.
-        // Otherwise keep existing trades and log the warning.
-        if (isInitialLoad && !candlesFetched) {
-          throw tradeError;
-        }
         console.warn('Failed to refresh trade data:', tradeError);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load replay data');
+      console.warn('Failed to load replay data:', e);
     } finally {
       hasLoadedOnce.current = true;
-      setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [
-    instrument,
-    granularity,
-    startTime,
-    endTime,
-    taskType,
-    taskId,
-    executionRunId,
-    mapRawTrades,
-  ]);
+  }, [taskType, taskId, executionRunId, mapRawTrades, refreshTailCandles]);
 
   useEffect(() => {
     fetchReplayData();
@@ -1859,6 +1819,89 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   // for the chart-creation effect so it only fires on the false→true
   // transition, not on every candle-count change.
   const hasCandles = candles.length > 0;
+  const previousFirstCandleTimeRef = useRef<number | null>(null);
+
+  const maybeFetchVisibleWindow = useCallback(async () => {
+    const chart = chartRef.current;
+    const series = seriesRef.current;
+    if (!chart || !series) return;
+
+    const visibleTimeRange = chart.timeScale().getVisibleRange();
+    if (
+      visibleTimeRange &&
+      typeof visibleTimeRange.from === 'number' &&
+      typeof visibleTimeRange.to === 'number'
+    ) {
+      const target = clampTaskRange({
+        from: Number(visibleTimeRange.from),
+        to: Number(visibleTimeRange.to),
+      });
+      if (target) {
+        await Promise.all([
+          ensureCandleRange(target),
+          ensureMarkerRange(target),
+        ]);
+      }
+    }
+
+    const logicalRange = chart.timeScale().getVisibleLogicalRange();
+    const data = series.data();
+    if (!logicalRange || !data || data.length === 0) return;
+
+    const EDGE_THRESHOLD = 5;
+    const firstTime = Number(candles[0]?.time ?? 0);
+    const lastTime = Number(candles[candles.length - 1]?.time ?? 0);
+    const spanSeconds =
+      visibleTimeRange &&
+      typeof visibleTimeRange.from === 'number' &&
+      typeof visibleTimeRange.to === 'number'
+        ? Math.max(
+            granularitySeconds,
+            Number(visibleTimeRange.to) - Number(visibleTimeRange.from)
+          )
+        : Math.max(granularitySeconds, lastTime - firstTime);
+    const lowerBound = taskDataBounds?.from;
+    const upperBound = taskDataBounds?.to;
+
+    if (
+      logicalRange.from < EDGE_THRESHOLD &&
+      (lowerBound == null || firstTime > lowerBound)
+    ) {
+      await ensureCandleRange({
+        from: Math.max(
+          lowerBound ?? firstTime - spanSeconds,
+          firstTime - spanSeconds
+        ),
+        to: firstTime,
+      });
+      return;
+    }
+
+    if (
+      logicalRange.to > data.length - EDGE_THRESHOLD &&
+      (upperBound == null || lastTime < upperBound)
+    ) {
+      await ensureCandleRange({
+        from: lastTime,
+        to: Math.min(
+          upperBound ?? lastTime + spanSeconds,
+          lastTime + spanSeconds
+        ),
+      });
+    }
+  }, [
+    candles,
+    clampTaskRange,
+    ensureCandleRange,
+    ensureMarkerRange,
+    granularitySeconds,
+    taskDataBounds,
+  ]);
+  const maybeFetchVisibleWindowRef = useRef(maybeFetchVisibleWindow);
+
+  useEffect(() => {
+    maybeFetchVisibleWindowRef.current = maybeFetchVisibleWindow;
+  }, [maybeFetchVisibleWindow]);
 
   useEffect(() => {
     if (isLoading || !hasCandles) return;
@@ -1966,10 +2009,17 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     });
 
     // Detect user-initiated scroll/zoom and disable auto-follow
-    chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
+    let viewportDebounce: ReturnType<typeof setTimeout> | null = null;
+    const handleViewportChange = () => {
       if (programmaticScrollRef.consume()) return;
       setAutoFollow(false);
-    });
+      if (viewportDebounce) clearTimeout(viewportDebounce);
+      viewportDebounce = setTimeout(() => {
+        void maybeFetchVisibleWindowRef.current();
+      }, 250);
+    };
+    chart.timeScale().subscribeVisibleLogicalRangeChange(handleViewportChange);
+    chart.timeScale().subscribeVisibleTimeRangeChange(handleViewportChange);
 
     const observer = new ResizeObserver(() => {
       const width = container.clientWidth;
@@ -1989,15 +2039,26 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
 
     return () => {
       observer.disconnect();
-      chart.remove();
-      chartRef.current = null;
+      if (viewportDebounce) clearTimeout(viewportDebounce);
+      chart
+        .timeScale()
+        .unsubscribeVisibleLogicalRangeChange(handleViewportChange);
+      chart.timeScale().unsubscribeVisibleTimeRangeChange(handleViewportChange);
       setChartInstance(null);
+      chartRef.current = null;
       seriesRef.current = null;
       markersRef.current = null;
       highlightRef.current = null;
       adaptiveRef.current = null;
       sequenceLineRef.current = null;
       hasInitialFit.current = false;
+      requestAnimationFrame(() => {
+        try {
+          chart.remove();
+        } catch {
+          /* chart already disposed */
+        }
+      });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chartHeight is read once for initial creation; ResizeObserver handles subsequent resizes.  We derive `hasCandles` (boolean) so the effect only re-runs on the false→true transition and never on candle-count changes that would needlessly destroy and recreate the chart.
   }, [isLoading, hasCandles, timezone, isDark]);
@@ -2005,8 +2066,8 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   // Track whether this is the first candle load (for initial fitContent)
   const hasInitialFit = useRef(false);
 
-  // Auto-follow: show ~500 candles worth of data with the position line centred.
-  const AUTO_FOLLOW_CANDLES = 500;
+  // Auto-follow and initial viewport width, measured in candles.
+  const AUTO_FOLLOW_CANDLES = 1000;
 
   // Update candle data, market gaps, and fit chart when data changes
   useEffect(() => {
@@ -2047,7 +2108,12 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         ? Math.floor(new Date(currentTick.timestamp).getTime() / 1000)
         : null;
 
-      if (tickTs && Number.isFinite(tickTs) && seriesRef.current) {
+      if (
+        enableRealTimeUpdates &&
+        tickTs &&
+        Number.isFinite(tickTs) &&
+        seriesRef.current
+      ) {
         // Centre on the current tick position
         const data = seriesRef.current.data();
         let logicalCenter = 0;
@@ -2074,6 +2140,33 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         } catch (e) {
           console.warn('Failed to set initial visible range on tick:', e);
         }
+      } else if (!enableRealTimeUpdates && startTimeSec != null) {
+        const totalSpanSeconds = AUTO_FOLLOW_CANDLES * granularitySeconds;
+        const leftBufferSeconds = Math.max(
+          60 * 60,
+          granularitySeconds * 8,
+          Math.floor(totalSpanSeconds * 0.08)
+        );
+        const gapAroundStart = findGapAroundTime(
+          startTimeSec,
+          times,
+          granularitySeconds * 6
+        );
+        const initialFrom = gapAroundStart
+          ? gapAroundStart.from - leftBufferSeconds
+          : startTimeSec - leftBufferSeconds;
+        const requiredGapSpan = gapAroundStart
+          ? gapAroundStart.to - gapAroundStart.from + leftBufferSeconds * 2
+          : 0;
+        const initialSpanSeconds = Math.max(totalSpanSeconds, requiredGapSpan);
+        try {
+          chartRef.current?.timeScale().setVisibleRange({
+            from: initialFrom as Time,
+            to: (initialFrom + initialSpanSeconds) as Time,
+          });
+        } catch (e) {
+          console.warn('Failed to set initial visible range at task start:', e);
+        }
       } else {
         // No tick — show the start of the data
         try {
@@ -2091,7 +2184,19 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       // Restore the visible range so the chart doesn't jump on data refresh.
       programmaticScrollRef.current = true;
       try {
-        chartRef.current?.timeScale().setVisibleLogicalRange(savedLogicalRange);
+        const previousFirst = previousFirstCandleTimeRef.current;
+        const currentFirst =
+          candles.length > 0 ? Number(candles[0].time) : null;
+        const prependCount =
+          previousFirst != null &&
+          currentFirst != null &&
+          currentFirst < previousFirst
+            ? candles.filter((c) => Number(c.time) < previousFirst).length
+            : 0;
+        chartRef.current?.timeScale().setVisibleLogicalRange({
+          from: savedLogicalRange.from + prependCount,
+          to: savedLogicalRange.to + prependCount,
+        });
       } catch (e) {
         console.warn('Failed to restore visible range after setData:', e);
       }
@@ -2115,6 +2220,8 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         );
       }
     }
+    previousFirstCandleTimeRef.current =
+      candles.length > 0 ? Number(candles[0].time) : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- currentTick is intentionally excluded: it is only read on the very first load (guarded by hasInitialFit) to decide the initial viewport position.  Including it would re-run setData on every tick update.
   }, [candles, programmaticScrollRef]);
 
@@ -2202,15 +2309,18 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     const markers: Array<{
       time: Time;
       position: 'aboveBar' | 'belowBar';
-      shape: 'circle' | 'arrowUp' | 'arrowDown';
+      shape: 'circle' | 'arrowUp' | 'arrowDown' | 'square';
       color: string;
       text?: string;
+      size?: number;
     }> = [];
+
+    markers.push(...buildMarketClosedMarkers(candleTimes));
 
     for (const event of taskLifecycleEvents) {
       const rawTime = toEventMarkerTime(event);
       if (!rawTime) continue;
-      const time = snapToCandleTime(Number(rawTime), candleTimes);
+      const time = snapToCandleTimeInLoadedRange(Number(rawTime), candleTimes);
       if (!time) continue;
       markers.push({
         time,
@@ -2228,7 +2338,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     for (const event of strategyEvents) {
       const rawTime = toEventMarkerTime(event);
       if (!rawTime) continue;
-      const time = snapToCandleTime(Number(rawTime), candleTimes);
+      const time = snapToCandleTimeInLoadedRange(Number(rawTime), candleTimes);
       if (!time) continue;
       markers.push({
         time,
@@ -2239,57 +2349,98 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       });
     }
 
+    if (startTimeSec != null) {
+      const time = findFirstCandleAtOrAfter(startTimeSec, candleTimes);
+      if (time) {
+        markers.push({
+          time,
+          position: 'aboveBar',
+          shape: 'arrowDown',
+          color: '#0f766e',
+          text: 'START',
+        });
+      }
+    }
+
+    if (endTimeSec != null) {
+      const time = findLastCandleAtOrBefore(endTimeSec, candleTimes);
+      if (time) {
+        markers.push({
+          time,
+          position: 'aboveBar',
+          shape: 'arrowDown',
+          color: '#dc2626',
+          text: 'STOP',
+        });
+      }
+    }
+
     return markers.sort((a, b) => Number(a.time) - Number(b.time));
-  }, [taskLifecycleEvents, strategyEvents, candles]);
+  }, [taskLifecycleEvents, strategyEvents, candles, startTimeSec, endTimeSec]);
 
   // Update trade markers when trades or selection changes (without resetting the view)
   useEffect(() => {
     if (!seriesRef.current || !markersRef.current) return;
+    const candleTimes = candles.map((c) => Number(c.time));
 
-    const tradeMarkers = trades.map((t) => {
-      const selected =
-        t.id === selectedTradeId || highlightedTradeIds.has(t.id);
-      const units = Number(t.units);
-      const lots = Number.isFinite(units) ? Math.abs(units) / LOT_UNITS : null;
-      const executionMethod = String(t.execution_method || '').toLowerCase();
-      const isClose =
-        executionMethod === 'take_profit' ||
-        executionMethod === 'margin_protection' ||
-        executionMethod === 'volatility_lock' ||
-        executionMethod === 'close_position' ||
-        executionMethod === 'volatility_hedge_neutralize';
+    const tradeMarkers = windowedTradeMarkers
+      .map((t: WindowedTradeMarker) => {
+        const selected =
+          t.id === selectedTradeId || highlightedTradeIds.has(t.id);
+        const units = Number(t.units);
+        const lots = Number.isFinite(units)
+          ? Math.abs(units) / LOT_UNITS
+          : null;
+        const executionMethod = String(t.execution_method || '').toLowerCase();
+        const isClose =
+          executionMethod === 'take_profit' ||
+          executionMethod === 'margin_protection' ||
+          executionMethod === 'volatility_lock' ||
+          executionMethod === 'close_position' ||
+          executionMethod === 'volatility_hedge_neutralize';
 
-      // Resolve direction: use explicit field first, then infer from units sign
-      const direction: 'long' | 'short' =
-        t.direction === 'long' || t.direction === 'short'
-          ? t.direction
-          : Number.isFinite(units) && units < 0
-            ? 'short'
-            : 'long';
+        // Resolve direction: use explicit field first, then infer from units sign
+        const direction: 'long' | 'short' =
+          t.direction === 'long' || t.direction === 'short'
+            ? t.direction
+            : Number.isFinite(units) && units < 0
+              ? 'short'
+              : 'long';
 
-      const lotLabel = lots === null ? '' : `${Math.round(lots)}L`;
-      const dirLabel = direction.toUpperCase();
-      // Open: "OPEN LONG 1L" / "OPEN SHORT 1L", Close: "CLOSE LONG 1L" / "CLOSE SHORT 1L" (grey)
-      const text = isClose
-        ? `CLOSE ${dirLabel} ${lotLabel}`.trim()
-        : `OPEN ${dirLabel} ${lotLabel}`.trim();
+        const lotLabel = lots === null ? '' : `${Math.round(lots)}L`;
+        const dirLabel = direction.toUpperCase();
+        // Open: "OPEN LONG 1L" / "OPEN SHORT 1L", Close: "CLOSE LONG 1L" / "CLOSE SHORT 1L" (grey)
+        const text = isClose
+          ? `CLOSE ${dirLabel} ${lotLabel}`.trim()
+          : `OPEN ${dirLabel} ${lotLabel}`.trim();
 
-      return {
-        time: t.timeSec,
-        position:
-          direction === 'short' ? ('aboveBar' as const) : ('belowBar' as const),
-        shape:
-          direction === 'short' ? ('arrowDown' as const) : ('arrowUp' as const),
-        color: selected
-          ? '#f59e0b'
-          : isClose
-            ? '#9ca3af'
-            : direction === 'long'
-              ? '#16a34a'
-              : '#ef4444',
-        text,
-      };
-    });
+        const rawTradeTime = parseUtcTimestamp(t.timestamp);
+        const markerTime =
+          rawTradeTime != null
+            ? snapToCandleTimeInLoadedRange(Number(rawTradeTime), candleTimes)
+            : null;
+
+        return {
+          time: (markerTime ?? 0) as UTCTimestamp,
+          position:
+            direction === 'short'
+              ? ('aboveBar' as const)
+              : ('belowBar' as const),
+          shape:
+            direction === 'short'
+              ? ('arrowDown' as const)
+              : ('arrowUp' as const),
+          color: selected
+            ? '#f59e0b'
+            : isClose
+              ? '#9ca3af'
+              : direction === 'long'
+                ? '#16a34a'
+                : '#ef4444',
+          text,
+        };
+      })
+      .filter((marker) => Number(marker.time) > 0);
 
     try {
       programmaticScrollRef.current = true;
@@ -2301,7 +2452,8 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       console.warn('Failed to set trade markers:', e);
     }
   }, [
-    trades,
+    windowedTradeMarkers,
+    candles,
     selectedTradeId,
     highlightedTradeIds,
     eventMarkers,
@@ -2591,8 +2743,28 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
             justifyContent: 'center',
           }}
         >
-          {isRefreshing && <CircularProgress size={16} thickness={5} />}
+          {(isRefreshing || isCandleRefreshing) && (
+            <CircularProgress size={16} thickness={5} />
+          )}
         </Box>
+
+        <Chip
+          size="small"
+          variant={
+            loadingOlderCandles || loadingNewerCandles ? 'filled' : 'outlined'
+          }
+          label="Candles"
+        />
+        <Chip
+          size="small"
+          variant={areMarkerLayersLoading ? 'filled' : 'outlined'}
+          label="Markers"
+        />
+        <Chip
+          size="small"
+          variant={metricsLoading ? 'filled' : 'outlined'}
+          label="Metrics"
+        />
 
         <FormControl
           sx={{ minWidth: 100, '& .MuiInputBase-root': { height: 32 } }}
@@ -2698,6 +2870,38 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           position: 'relative',
         }}
       >
+        {(loadingOlderCandles || loadingNewerCandles) && (
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              zIndex: 3,
+              display: 'flex',
+              gap: 1,
+              px: 1,
+              pt: 0.5,
+            }}
+          >
+            <Box
+              sx={{
+                flex: 1,
+                visibility: loadingOlderCandles ? 'visible' : 'hidden',
+              }}
+            >
+              <LinearProgress color="inherit" />
+            </Box>
+            <Box
+              sx={{
+                flex: 1,
+                visibility: loadingNewerCandles ? 'visible' : 'hidden',
+              }}
+            >
+              <LinearProgress color="inherit" />
+            </Box>
+          </Box>
+        )}
         <Box ref={chartContainerRef} sx={{ width: '100%', flex: 1 }} />
         {/* Timezone indicator (bottom-right) */}
         <Box

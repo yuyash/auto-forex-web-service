@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.13.5",
+        "version": "1.13.6",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -1957,6 +1957,22 @@
                 "parameters": [
                     {
                         "in": "query",
+                        "name": "created_from",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter events created at or after this RFC3339 timestamp"
+                    },
+                    {
+                        "in": "query",
+                        "name": "created_to",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter events created at or before this RFC3339 timestamp"
+                    },
+                    {
+                        "in": "query",
                         "name": "event_type",
                         "schema": {
                             "type": "string"
@@ -2757,6 +2773,22 @@
                 "parameters": [
                     {
                         "in": "query",
+                        "name": "created_from",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter strategy events created at or after this RFC3339 timestamp"
+                    },
+                    {
+                        "in": "query",
+                        "name": "created_to",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter strategy events created at or before this RFC3339 timestamp"
+                    },
+                    {
+                        "in": "query",
                         "name": "event_type",
                         "schema": {
                             "type": "string"
@@ -2932,6 +2964,22 @@
                             "type": "string"
                         },
                         "description": "RFC3339 timestamp for incremental fetch"
+                    },
+                    {
+                        "in": "query",
+                        "name": "timestamp_from",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter trades executed at or after this RFC3339 timestamp"
+                    },
+                    {
+                        "in": "query",
+                        "name": "timestamp_to",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter trades executed at or before this RFC3339 timestamp"
                     }
                 ],
                 "tags": [
@@ -3206,6 +3254,22 @@
                 "operationId": "trading_tasks_trading_events_retrieve",
                 "description": "Retrieve paginated task events.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "created_from",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter events created at or after this RFC3339 timestamp"
+                    },
+                    {
+                        "in": "query",
+                        "name": "created_to",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter events created at or before this RFC3339 timestamp"
+                    },
                     {
                         "in": "query",
                         "name": "event_type",
@@ -4007,6 +4071,22 @@
                 "parameters": [
                     {
                         "in": "query",
+                        "name": "created_from",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter strategy events created at or after this RFC3339 timestamp"
+                    },
+                    {
+                        "in": "query",
+                        "name": "created_to",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter strategy events created at or before this RFC3339 timestamp"
+                    },
+                    {
+                        "in": "query",
                         "name": "event_type",
                         "schema": {
                             "type": "string"
@@ -4182,6 +4262,22 @@
                             "type": "string"
                         },
                         "description": "RFC3339 timestamp for incremental fetch"
+                    },
+                    {
+                        "in": "query",
+                        "name": "timestamp_from",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter trades executed at or after this RFC3339 timestamp"
+                    },
+                    {
+                        "in": "query",
+                        "name": "timestamp_to",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter trades executed at or before this RFC3339 timestamp"
                     }
                 ],
                 "tags": [

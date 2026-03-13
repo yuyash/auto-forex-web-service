@@ -8,7 +8,14 @@
  * for the new viewport (debounced) and merges them into a local cache.
  */
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+  useMemo,
+  useLayoutEffect,
+} from 'react';
 import {
   LineSeries,
   type IChartApi,
@@ -119,20 +126,22 @@ export function useMetricsOverlay({
   chart,
   candleTimestamps,
   currentTickTimestamp,
-  programmaticScrollRef,
 }: UseMetricsOverlayOptions) {
   const seriesRef = useRef<ReturnType<typeof attachSeries> | null>(null);
   const attachedToChart = useRef<IChartApi | null>(null);
   const [snapshots, setSnapshots] = useState<MetricPoint[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const fetchedRangeRef = useRef<{ from: number; to: number } | null>(null);
   const latestTsRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const attachGenerationRef = useRef(0);
 
   const fetchWindow = useCallback(
     async (from: number, to: number) => {
       const span = to - from;
       const bufFrom = from - span * 0.1;
       const bufTo = to + span * 0.1;
+      setIsLoading(true);
       const page = await fetchMetrics({
         taskId,
         taskType,
@@ -142,7 +151,8 @@ export function useMetricsOverlay({
         interval: computeInterval(bufTo - bufFrom),
         pageSize: 5000,
       });
-      return page.results;
+      setIsLoading(false);
+      return { results: page.results, fetched: { from: bufFrom, to: bufTo } };
     },
     [taskId, taskType, executionRunId]
   );
@@ -172,13 +182,15 @@ export function useMetricsOverlay({
     const from = candleTimestamps[0];
     const to = candleTimestamps[candleTimestamps.length - 1];
     fetchWindow(from, to)
-      .then((data) => {
-        if (!cancelled && data.length > 0) {
-          setSnapshots(data);
-          expandRange(from, to);
+      .then(({ results, fetched }) => {
+        if (!cancelled && results.length > 0) {
+          setSnapshots(results);
+          expandRange(fetched.from, fetched.to);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setIsLoading(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -198,13 +210,15 @@ export function useMetricsOverlay({
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         fetchWindow(from, to)
-          .then((data) => {
-            if (data.length > 0) {
-              setSnapshots((prev) => mergeSnapshots(prev, data));
-              expandRange(from, to);
+          .then(({ results, fetched }) => {
+            if (results.length > 0) {
+              setSnapshots((prev) => mergeSnapshots(prev, results));
+              expandRange(fetched.from, fetched.to);
             }
           })
-          .catch(() => {});
+          .catch(() => {
+            setIsLoading(false);
+          });
       }, 300);
     };
     chart.timeScale().subscribeVisibleTimeRangeChange(handler);
@@ -241,8 +255,9 @@ export function useMetricsOverlay({
   }, [enableRealTimeUpdates, taskId, taskType, executionRunId]);
 
   // Attach series once per chart instance
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!chart) return;
+    const generation = ++attachGenerationRef.current;
     seriesRef.current = null;
     attachedToChart.current = null;
     try {
@@ -252,6 +267,9 @@ export function useMetricsOverlay({
       /* disposed */
     }
     return () => {
+      if (attachGenerationRef.current === generation) {
+        attachGenerationRef.current += 1;
+      }
       seriesRef.current = null;
       attachedToChart.current = null;
     };
@@ -266,7 +284,7 @@ export function useMetricsOverlay({
   // Push data to chart series
   useEffect(() => {
     const s = seriesRef.current;
-    if (!s) return;
+    if (!s || !chart || attachedToChart.current !== chart) return;
     const hasCandles = candleTimestamps && candleTimestamps.length > 0;
     if (!snapshots.length && !hasCandles) return;
     let extended: MetricPoint[] = [];
@@ -284,8 +302,6 @@ export function useMetricsOverlay({
       }
     }
     try {
-      const saved = chart?.timeScale().getVisibleLogicalRange();
-      if (programmaticScrollRef) programmaticScrollRef.current = true;
       s.mr.setData(
         extended
           .filter((p) => metricVal(p, 'margin_ratio') !== null)
@@ -314,14 +330,11 @@ export function useMetricsOverlay({
             value: metricVal(p, 'volatility_threshold') as number,
           }))
       );
-      if (saved) {
-        if (programmaticScrollRef) programmaticScrollRef.current = true;
-        chart?.timeScale().setVisibleLogicalRange(saved);
-      }
     } catch {
-      /* Chart disposed */
+      seriesRef.current = null;
+      attachedToChart.current = null;
     }
-  }, [snapshots, candleTimestamps, chart, tickSec, programmaticScrollRef]);
+  }, [snapshots, candleTimestamps, chart, tickSec]);
 
-  return { hasData: snapshots.length > 0 };
+  return { hasData: snapshots.length > 0, isLoading };
 }

@@ -39,6 +39,14 @@ def _parse_since(request: Request):
     return None
 
 
+def _parse_datetime_param(request: Request, key: str):
+    """Return a datetime from an arbitrary query param, or *None*."""
+    raw = request.query_params.get(key)
+    if raw:
+        return parse_datetime(raw)
+    return None
+
+
 def _parse_execution_id(request: Request):
     """Return execution_id (UUID) from query param when valid."""
     raw = request.query_params.get("execution_id")
@@ -192,10 +200,37 @@ class TaskSubResourceMixin:
             from django.db import connection
             from django.db.models.sql import Query  # noqa: F401
 
+            if connection.vendor != "postgresql":
+                rows = list(queryset.values_list("timestamp", "metrics"))
+                bucketed: dict[int, tuple] = {}
+                interval_seconds = interval * 60
+                for ts, metrics in rows:
+                    bucket = int(ts.timestamp()) // interval_seconds
+                    bucketed[bucket] = (ts, metrics)
+
+                aggregated = [bucketed[key] for key in sorted(bucketed)]
+                total_count = len(aggregated)
+                page, page_size = _parse_page_params(request)
+                start = (page - 1) * page_size
+                end = start + page_size
+                page_rows = aggregated[start:end]
+
+                data = [
+                    {"t": int(ts.timestamp()), "metrics": _ensure_dict(metrics)}
+                    for ts, metrics in page_rows
+                ]
+                return Response(_paginated_envelope(request, data, total_count, page, page_size))
+
             # Build a sub-query that buckets timestamps into N-minute windows
             # and picks the last metrics JSON per window.
-            base_where = "task_type = %s AND task_id = %s AND execution_id = %s"
-            params: list = [self.task_type_label, str(task.pk), str(execution_id)]
+            base_where = "task_type = %s AND task_id = %s"
+            params: list = [self.task_type_label, str(task.pk)]
+
+            if execution_id is None:
+                base_where += " AND execution_id IS NULL"
+            else:
+                base_where += " AND execution_id = %s"
+                params.append(str(execution_id))
 
             if since:
                 base_where += " AND timestamp > %s"
@@ -376,6 +411,16 @@ class TaskSubResourceMixin:
             OpenApiParameter("event_type", str, description="Event type filter"),
             OpenApiParameter("severity", str, description="Severity filter"),
             OpenApiParameter("scope", str, description="Event scope: all|trading|task"),
+            OpenApiParameter(
+                "created_from",
+                str,
+                description="Filter events created at or after this RFC3339 timestamp",
+            ),
+            OpenApiParameter(
+                "created_to",
+                str,
+                description="Filter events created at or before this RFC3339 timestamp",
+            ),
             OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
             OpenApiParameter("page", int),
             OpenApiParameter("page_size", int),
@@ -427,6 +472,12 @@ class TaskSubResourceMixin:
         since = _parse_since(request)
         if since:
             queryset = queryset.filter(created_at__gt=since)
+        created_from = _parse_datetime_param(request, "created_from")
+        if created_from:
+            queryset = queryset.filter(created_at__gte=created_from)
+        created_to = _parse_datetime_param(request, "created_to")
+        if created_to:
+            queryset = queryset.filter(created_at__lte=created_to)
 
         paginator = TaskSubResourcePagination()
         page = paginator.paginate_queryset(queryset, request)
@@ -439,6 +490,16 @@ class TaskSubResourceMixin:
             OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
             OpenApiParameter("event_type", str, description="Event type filter"),
             OpenApiParameter("severity", str, description="Severity filter"),
+            OpenApiParameter(
+                "created_from",
+                str,
+                description="Filter strategy events created at or after this RFC3339 timestamp",
+            ),
+            OpenApiParameter(
+                "created_to",
+                str,
+                description="Filter strategy events created at or before this RFC3339 timestamp",
+            ),
             OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
             OpenApiParameter("page", int),
             OpenApiParameter("page_size", int),
@@ -479,6 +540,12 @@ class TaskSubResourceMixin:
         since = _parse_since(request)
         if since:
             queryset = queryset.filter(created_at__gt=since)
+        created_from = _parse_datetime_param(request, "created_from")
+        if created_from:
+            queryset = queryset.filter(created_at__gte=created_from)
+        created_to = _parse_datetime_param(request, "created_to")
+        if created_to:
+            queryset = queryset.filter(created_at__lte=created_to)
 
         paginator = TaskSubResourcePagination()
         page = paginator.paginate_queryset(queryset, request)
@@ -491,6 +558,16 @@ class TaskSubResourceMixin:
             OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
             OpenApiParameter(
                 "direction", str, description="Direction filter (buy/sell/long/short)"
+            ),
+            OpenApiParameter(
+                "timestamp_from",
+                str,
+                description="Filter trades executed at or after this RFC3339 timestamp",
+            ),
+            OpenApiParameter(
+                "timestamp_to",
+                str,
+                description="Filter trades executed at or before this RFC3339 timestamp",
             ),
             OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
             OpenApiParameter("page", int),
@@ -534,6 +611,12 @@ class TaskSubResourceMixin:
         since = _parse_since(request)
         if since:
             queryset = queryset.filter(updated_at__gt=since)
+        timestamp_from = _parse_datetime_param(request, "timestamp_from")
+        if timestamp_from:
+            queryset = queryset.filter(timestamp__gte=timestamp_from)
+        timestamp_to = _parse_datetime_param(request, "timestamp_to")
+        if timestamp_to:
+            queryset = queryset.filter(timestamp__lte=timestamp_to)
 
         trades_qs = queryset.values(
             "id",
