@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+import pytest
 from rest_framework import status as http_status
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
@@ -156,6 +157,38 @@ class TestPerformCreate:
         serializer = MagicMock()
         vs.perform_create(serializer)
         serializer.save.assert_called_once_with(user=request.user)
+
+    @patch("apps.trading.views.trading.logger")
+    def test_integrity_error_with_unique_name(self, mock_logger):
+        from django.db import IntegrityError
+        from apps.trading.views.trading import ConflictError
+
+        request = _drf_post()
+        vs = _build_viewset(action="create")
+        vs.request = request
+
+        serializer = MagicMock()
+        serializer.save.side_effect = IntegrityError("unique_user_trading_task_name")
+
+        with pytest.raises(ConflictError) as exc_info:
+            vs.perform_create(serializer)
+        assert exc_info.value.status_code == http_status.HTTP_409_CONFLICT
+
+    @patch("apps.trading.views.trading.logger")
+    def test_integrity_error_with_active_account_constraint(self, mock_logger):
+        from django.db import IntegrityError
+        from apps.trading.views.trading import ConflictError
+
+        request = _drf_post()
+        vs = _build_viewset(action="create")
+        vs.request = request
+
+        serializer = MagicMock()
+        serializer.save.side_effect = IntegrityError("uniq_active_trading_task_per_account")
+
+        with pytest.raises(ConflictError) as exc_info:
+            vs.perform_create(serializer)
+        assert exc_info.value.status_code == http_status.HTTP_409_CONFLICT
 
 
 class TestStart:
