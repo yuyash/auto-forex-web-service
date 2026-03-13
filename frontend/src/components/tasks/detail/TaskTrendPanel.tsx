@@ -8,17 +8,11 @@ import React, {
 import {
   Alert,
   Box,
-  Button,
   Checkbox,
   Chip,
   CircularProgress,
-  FormControl,
-  IconButton,
-  InputLabel,
   LinearProgress,
-  MenuItem,
   Paper,
-  Select,
   Table,
   TableBody,
   TableCell,
@@ -27,16 +21,7 @@ import {
   TablePagination,
   TableRow,
   TableSortLabel,
-  Tooltip,
-  Typography,
-  ToggleButton,
 } from '@mui/material';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import SettingsIcon from '@mui/icons-material/Settings';
-import SelectAllIcon from '@mui/icons-material/SelectAll';
-import DeselectIcon from '@mui/icons-material/Deselect';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import ZoomOutMapIcon from '@mui/icons-material/ZoomOutMap';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
@@ -44,7 +29,6 @@ import {
   CandlestickSeries,
   createChart,
   createSeriesMarkers,
-  type CandlestickData,
   type IChartApi,
   type ISeriesApi,
   type ISeriesMarkersPluginApi,
@@ -56,7 +40,6 @@ import {
   fetchTradesSince,
 } from '../../../utils/fetchAllTrades';
 import { useSupportedGranularities } from '../../../hooks/useMarketConfig';
-import type { TaskEvent } from '../../../hooks/useTaskEvents';
 import {
   useTaskPositions,
   type TaskPosition,
@@ -86,53 +69,28 @@ import {
   type WindowedTradeMarker,
 } from '../../../hooks/useWindowedTaskMarkers';
 import { clampRange, type TimeRange } from '../../../utils/windowedRanges';
-
-type CandlePoint = CandlestickData<Time>;
-
-const TARGET_CANDLE_COUNT = 10000;
-const LOT_UNITS = 1000;
-
-const GRANULARITY_MINUTES: Record<string, number> = {
-  M1: 1,
-  M2: 2,
-  M4: 4,
-  M5: 5,
-  M10: 10,
-  M15: 15,
-  M30: 30,
-  H1: 60,
-  H2: 120,
-  H3: 180,
-  H4: 240,
-  H6: 360,
-  H8: 480,
-  H12: 720,
-  D: 1440,
-  W: 10080,
-  M: 43200,
-};
-
-function isoToSec(value?: string | null): number | null {
-  if (!value) return null;
-  const ms = new Date(value).getTime();
-  return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
-}
-
-type ReplayTrade = {
-  id: string;
-  sequence: number;
-  timestamp: string;
-  timeSec: UTCTimestamp;
-  instrument: string;
-  direction: 'long' | 'short' | '';
-  units: string;
-  price: string;
-  execution_method?: string;
-  execution_method_display?: string;
-  layer_index?: number | null;
-  retracement_count?: number | null;
-  position_id?: string | null;
-};
+import {
+  ALLOWED_GRANULARITIES,
+  ALLOWED_VALUES,
+  DEFAULT_LS_POSITION_WIDTHS,
+  DEFAULT_REPLAY_WIDTHS,
+  GRANULARITY_MINUTES,
+  LOT_UNITS,
+  POLLING_INTERVAL_OPTIONS,
+  computePosPips,
+  computePosPnl,
+  findFirstCandleAtOrAfter,
+  findGapAroundTime,
+  findLastCandleAtOrBefore,
+  isoToSec,
+  parseUtcTimestamp,
+  recommendGranularity,
+  snapToCandleTimeInLoadedRange,
+  toEventMarkerTime,
+} from './taskTrendPanel/shared';
+import type { CandlePoint, ReplayTrade } from './taskTrendPanel/shared';
+import { TaskTrendToolbar } from './taskTrendPanel/TaskTrendToolbar';
+import { TaskTrendSectionHeader } from './taskTrendPanel/TaskTrendSectionHeader';
 
 interface TaskTrendPanelProps {
   taskId: string | number;
@@ -149,261 +107,6 @@ interface TaskTrendPanelProps {
   pipSize?: number | null;
   configId?: string;
 }
-
-const ALLOWED_GRANULARITIES = [
-  { value: 'M1', label: '1 Minute' },
-  { value: 'M5', label: '5 Minutes' },
-  { value: 'M15', label: '15 Minutes' },
-  { value: 'M30', label: '30 Minutes' },
-  { value: 'H1', label: '1 Hour' },
-  { value: 'H4', label: '4 Hours' },
-  { value: 'H8', label: '8 Hours' },
-  { value: 'H12', label: '12 Hours' },
-  { value: 'D', label: 'Daily' },
-  { value: 'W', label: 'Weekly' },
-  { value: 'M', label: 'Monthly' },
-];
-
-const ALLOWED_VALUES = new Set(ALLOWED_GRANULARITIES.map((g) => g.value));
-
-const POLLING_INTERVAL_OPTIONS = [
-  { value: 10_000, label: '10s' },
-  { value: 30_000, label: '30s' },
-  { value: 60_000, label: '1m' },
-  { value: 300_000, label: '5m' },
-  { value: 900_000, label: '15m' },
-];
-
-const parseUtcTimestamp = (value: unknown): UTCTimestamp | null => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    if (value > 1_000_000_000_000) {
-      return Math.floor(value / 1000) as UTCTimestamp;
-    }
-    if (value > 1_000_000_000) {
-      return Math.floor(value) as UTCTimestamp;
-    }
-  }
-
-  if (typeof value === 'string') {
-    const asNumber = Number(value);
-    if (Number.isFinite(asNumber)) {
-      if (asNumber > 1_000_000_000_000) {
-        return Math.floor(asNumber / 1000) as UTCTimestamp;
-      }
-      if (asNumber > 1_000_000_000) {
-        return Math.floor(asNumber) as UTCTimestamp;
-      }
-    }
-
-    const ms = new Date(value).getTime();
-    if (Number.isFinite(ms)) {
-      return Math.floor(ms / 1000) as UTCTimestamp;
-    }
-  }
-
-  return null;
-};
-
-const toEventMarkerTime = (event: TaskEvent): UTCTimestamp | null => {
-  const detailTimestamp =
-    typeof event.details?.timestamp === 'string'
-      ? event.details.timestamp
-      : undefined;
-  return (
-    parseUtcTimestamp(detailTimestamp) ?? parseUtcTimestamp(event.created_at)
-  );
-};
-
-/**
- * Snap a UTC-second timestamp to the nearest candle time using binary search.
- * lightweight-charts requires marker times to match existing data points;
- * without snapping, markers whose time falls between (or beyond) candles are
- * silently pushed to the very last bar.
- */
-const snapToCandleTime = (
-  timeSec: number,
-  candleTimes: number[]
-): UTCTimestamp | null => {
-  if (candleTimes.length === 0) return null;
-
-  let lo = 0;
-  let hi = candleTimes.length - 1;
-
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (candleTimes[mid] < timeSec) {
-      lo = mid + 1;
-    } else {
-      hi = mid;
-    }
-  }
-
-  // lo is the first candle >= timeSec.  Compare with the previous candle to
-  // pick whichever is closer.
-  const candidates = [lo - 1, lo].filter(
-    (i) => i >= 0 && i < candleTimes.length
-  );
-  let best = candidates[0]!;
-  for (const i of candidates) {
-    if (
-      Math.abs(candleTimes[i] - timeSec) < Math.abs(candleTimes[best] - timeSec)
-    ) {
-      best = i;
-    }
-  }
-  return candleTimes[best] as UTCTimestamp;
-};
-
-const snapToCandleTimeInLoadedRange = (
-  timeSec: number,
-  candleTimes: number[]
-): UTCTimestamp | null => {
-  if (candleTimes.length === 0) return null;
-  if (
-    timeSec < candleTimes[0] ||
-    timeSec > candleTimes[candleTimes.length - 1]
-  ) {
-    return null;
-  }
-  return snapToCandleTime(timeSec, candleTimes);
-};
-
-const findFirstCandleAtOrAfter = (
-  timeSec: number,
-  candleTimes: number[]
-): UTCTimestamp | null => {
-  if (candleTimes.length === 0) return null;
-  const first = candleTimes[0];
-  const last = candleTimes[candleTimes.length - 1];
-  if (timeSec <= first) return first as UTCTimestamp;
-  if (timeSec > last) return null;
-
-  let lo = 0;
-  let hi = candleTimes.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (candleTimes[mid] < timeSec) {
-      lo = mid + 1;
-    } else {
-      hi = mid;
-    }
-  }
-  return candleTimes[lo] as UTCTimestamp;
-};
-
-const findLastCandleAtOrBefore = (
-  timeSec: number,
-  candleTimes: number[]
-): UTCTimestamp | null => {
-  if (candleTimes.length === 0) return null;
-  const first = candleTimes[0];
-  const last = candleTimes[candleTimes.length - 1];
-  if (timeSec < first) return null;
-  if (timeSec >= last) return last as UTCTimestamp;
-
-  let lo = 0;
-  let hi = candleTimes.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >>> 1;
-    if (candleTimes[mid] <= timeSec) {
-      lo = mid;
-    } else {
-      hi = mid - 1;
-    }
-  }
-  return candleTimes[lo] as UTCTimestamp;
-};
-
-const findGapAroundTime = (
-  timeSec: number,
-  candleTimes: number[],
-  gapThresholdSeconds: number
-): { from: number; to: number } | null => {
-  if (candleTimes.length < 2) return null;
-  for (let i = 1; i < candleTimes.length; i += 1) {
-    const prev = candleTimes[i - 1];
-    const next = candleTimes[i];
-    if (timeSec < prev || timeSec > next) continue;
-    if (next - prev > gapThresholdSeconds) {
-      return { from: prev, to: next };
-    }
-  }
-  return null;
-};
-
-const recommendGranularity = (
-  fromIso: string | undefined,
-  toIso: string | undefined,
-  available: string[]
-): string => {
-  if (!fromIso || !toIso || available.length === 0) return 'M1';
-
-  const fromMs = new Date(fromIso).getTime();
-  const toMs = new Date(toIso).getTime();
-  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs)
-    return 'H1';
-
-  const rangeMinutes = (toMs - fromMs) / (1000 * 60);
-  let best = available[0] ?? 'H1';
-  let bestDiff = Number.POSITIVE_INFINITY;
-
-  for (const g of available) {
-    const mins = GRANULARITY_MINUTES[g];
-    if (!mins) continue;
-    const candles = rangeMinutes / mins;
-    const diff = Math.abs(candles - TARGET_CANDLE_COUNT);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      best = g;
-    }
-  }
-
-  return best;
-};
-
-/** Compute PnL for a single position (used for sorting). */
-const computePosPnl = (
-  pos: TaskPosition & { _status: 'open' | 'closed' },
-  currentPrice: number | null
-): number => {
-  const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
-  const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
-  const units = Math.abs(pos.units ?? 0);
-  const dir = String(pos.direction).toLowerCase();
-  if (pos._status === 'open' && currentPrice != null && entryP != null) {
-    return dir === 'long'
-      ? (currentPrice - entryP) * units
-      : (entryP - currentPrice) * units;
-  }
-  if (pos._status === 'closed' && exitP != null && entryP != null) {
-    return dir === 'long' ? (exitP - entryP) * units : (entryP - exitP) * units;
-  }
-  return 0;
-};
-
-/** Compute Pips for a single position (used for sorting and display). */
-const computePosPips = (
-  pos: TaskPosition & { _status: 'open' | 'closed' },
-  currentPrice: number | null,
-  pipSize: number | null | undefined
-): number => {
-  if (!pipSize) return 0;
-  const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
-  if (entryP == null || !Number.isFinite(entryP)) return 0;
-  const dir = String(pos.direction).toLowerCase();
-  if (pos._status === 'open' && currentPrice != null) {
-    const diff = dir === 'long' ? currentPrice - entryP : entryP - currentPrice;
-    const pips = diff / pipSize;
-    return Number.isFinite(pips) ? pips : 0;
-  }
-  const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
-  if (exitP != null && Number.isFinite(exitP)) {
-    const diff = dir === 'long' ? exitP - entryP : entryP - exitP;
-    const pips = diff / pipSize;
-    return Number.isFinite(pips) ? pips : 0;
-  }
-  return 0;
-};
 
 export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   taskId,
@@ -688,16 +391,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   );
 
   // Column resize state
-  const defaultReplayWidths: Record<string, number> = {
-    timestamp: 160,
-    direction: 70,
-    layer_index: 60,
-    retracement_count: 60,
-    units: 70,
-    price: 90,
-    execution_method: 110,
-  };
-  const [replayColWidths, setReplayColWidths] = useState(defaultReplayWidths);
+  const [replayColWidths, setReplayColWidths] = useState(DEFAULT_REPLAY_WIDTHS);
   const replayResizeRef = useRef<{
     col: string;
     startX: number;
@@ -811,21 +505,12 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   );
 
   // ── Long/Short position column resize ──
-  const defaultLSPosWidths: Record<string, number> = {
-    entry_time: 160,
-    exit_time: 150,
-    _status: 70,
-    layer_index: 60,
-    retracement_count: 65,
-    units: 70,
-    entry_price: 100,
-    exit_price: 100,
-    _pips: 80,
-    _pnl: 140,
-  };
-  const [longPosColWidths, setLongPosColWidths] = useState(defaultLSPosWidths);
-  const [shortPosColWidths, setShortPosColWidths] =
-    useState(defaultLSPosWidths);
+  const [longPosColWidths, setLongPosColWidths] = useState(
+    DEFAULT_LS_POSITION_WIDTHS
+  );
+  const [shortPosColWidths, setShortPosColWidths] = useState(
+    DEFAULT_LS_POSITION_WIDTHS
+  );
   const lsPosResizeRef = useRef<{
     col: string;
     startX: number;
@@ -2744,191 +2429,33 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           {error}
         </Alert>
       )}
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
-          mb: 1,
-          height: 48,
-          minHeight: 48,
-          overflowX: 'auto',
+      <TaskTrendToolbar
+        replaySummary={replaySummary}
+        pnlCurrency={pnlCurrency}
+        executionRunId={executionRunId}
+        isRefreshing={isRefreshing}
+        isCandleRefreshing={isCandleRefreshing}
+        pollingIntervalMs={pollingIntervalMs}
+        granularity={granularity}
+        granularityOptions={granularityOptions}
+        pollingIntervalOptions={POLLING_INTERVAL_OPTIONS}
+        enableRealTimeUpdates={enableRealTimeUpdates}
+        autoFollow={autoFollow}
+        onPollingIntervalChange={setPollingIntervalMs}
+        onGranularityChange={handleGranularityChange}
+        onFollow={() => {
+          setAutoFollow(true);
+          setSelectedTradeId(null);
+          setSelectedRowIds(new Set());
+          setSelectedPosId(null);
+          setHighlightedTradeIds(new Set());
+          setPage(0);
         }}
-      >
-        <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
-          <Typography variant="caption" color="text.secondary" lineHeight={1.2}>
-            {t('tables.trend.realizedPnl')} ({pnlCurrency})
-          </Typography>
-          <Typography
-            variant="body2"
-            fontWeight="bold"
-            lineHeight={1.4}
-            color={
-              replaySummary.realizedPnl >= 0 ? 'success.main' : 'error.main'
-            }
-          >
-            {replaySummary.realizedPnl >= 0 ? '+' : ''}
-            {replaySummary.realizedPnl.toFixed(2)} {pnlCurrency}
-          </Typography>
-        </Box>
-
-        <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
-          <Typography variant="caption" color="text.secondary" lineHeight={1.2}>
-            {t('tables.trend.unrealizedPnl')} ({pnlCurrency})
-          </Typography>
-          <Typography
-            variant="body2"
-            fontWeight="bold"
-            lineHeight={1.4}
-            color={
-              replaySummary.unrealizedPnl >= 0 ? 'success.main' : 'error.main'
-            }
-          >
-            {replaySummary.unrealizedPnl >= 0 ? '+' : ''}
-            {replaySummary.unrealizedPnl.toFixed(2)} {pnlCurrency}
-          </Typography>
-        </Box>
-
-        <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
-          <Typography variant="caption" color="text.secondary" lineHeight={1.2}>
-            {t('tables.trend.totalTrades')}
-          </Typography>
-          <Typography variant="body2" fontWeight="bold" lineHeight={1.4}>
-            {replaySummary.totalTrades} trades
-          </Typography>
-        </Box>
-
-        <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
-          <Typography variant="caption" color="text.secondary" lineHeight={1.2}>
-            {t('tables.trend.openPositions')}
-          </Typography>
-          <Typography variant="body2" fontWeight="bold" lineHeight={1.4}>
-            {replaySummary.openPositions} positions
-          </Typography>
-        </Box>
-
-        {executionRunId != null && (
-          <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              lineHeight={1.2}
-            >
-              {t('tables.trend.executionId')}
-            </Typography>
-            <Typography variant="body2" fontWeight="bold" lineHeight={1.4}>
-              {executionRunId}
-            </Typography>
-          </Box>
-        )}
-
-        <Box sx={{ flex: 1 }} />
-
-        <Box
-          sx={{
-            width: 20,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          {(isRefreshing || isCandleRefreshing) && (
-            <CircularProgress size={16} thickness={5} />
-          )}
-        </Box>
-
-        <FormControl
-          sx={{ minWidth: 100, '& .MuiInputBase-root': { height: 32 } }}
-        >
-          <InputLabel
-            id="replay-polling-interval-label"
-            sx={{ fontSize: '0.75rem' }}
-          >
-            {t('tables.trend.polling')}
-          </InputLabel>
-          <Select
-            labelId="replay-polling-interval-label"
-            value={pollingIntervalMs}
-            label={t('tables.trend.polling')}
-            onChange={(e) => setPollingIntervalMs(Number(e.target.value))}
-            sx={{ fontSize: '0.75rem' }}
-          >
-            {POLLING_INTERVAL_OPTIONS.map((opt) => (
-              <MenuItem
-                key={opt.value}
-                value={opt.value}
-                sx={{ fontSize: '0.75rem' }}
-              >
-                {opt.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        <FormControl
-          sx={{ minWidth: 110, '& .MuiInputBase-root': { height: 32 } }}
-        >
-          <InputLabel
-            id="replay-granularity-label"
-            sx={{ fontSize: '0.75rem' }}
-          >
-            {t('tables.trend.granularity')}
-          </InputLabel>
-          <Select
-            labelId="replay-granularity-label"
-            value={granularity}
-            label={t('tables.trend.granularity')}
-            onChange={handleGranularityChange}
-            sx={{ fontSize: '0.75rem' }}
-          >
-            {granularityOptions.map((g) => (
-              <MenuItem
-                key={g.value}
-                value={g.value}
-                sx={{ fontSize: '0.75rem' }}
-              >
-                {g.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        {enableRealTimeUpdates && (
-          <Button
-            variant={autoFollow ? 'contained' : 'outlined'}
-            onClick={() => {
-              setAutoFollow(true);
-              setSelectedTradeId(null);
-              setSelectedRowIds(new Set());
-              setSelectedPosId(null);
-              setHighlightedTradeIds(new Set());
-              setPage(0);
-            }}
-            disabled={autoFollow}
-            sx={{
-              fontSize: '0.75rem',
-              whiteSpace: 'nowrap',
-              minWidth: 0,
-              px: 1.5,
-              height: 32,
-            }}
-          >
-            {t('tables.trend.follow')}
-          </Button>
-        )}
-
-        <Tooltip title="Reset zoom (show all)">
-          <IconButton
-            onClick={() => {
-              programmaticScrollRef.current = true;
-              chartRef.current?.timeScale().fitContent();
-            }}
-            sx={{ height: 32, width: 32 }}
-          >
-            <ZoomOutMapIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </Box>
+        onResetZoom={() => {
+          programmaticScrollRef.current = true;
+          chartRef.current?.timeScale().fitContent();
+        }}
+      />
 
       <Paper
         variant="outlined"
@@ -3035,70 +2562,17 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
             flexDirection: 'column',
           }}
         >
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              height: 36,
-              minHeight: 36,
-            }}
-          >
-            <Typography variant="subtitle1">
-              {t('tables.trend.trades')}
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-              ({sortedTrades.length})
-            </Typography>
-            {selectedRowIds.size > 0 && (
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ ml: 0.5 }}
-              >
-                — {selectedRowIds.size} selected
-              </Typography>
-            )}
-            <Box sx={{ flex: 1 }} />
-            <Tooltip title={t('common:columnConfig.configureColumns')}>
-              <IconButton
-                size="small"
-                onClick={() => setTradesColConfigOpen(true)}
-                aria-label={t('common:columnConfig.configureColumns')}
-              >
-                <SettingsIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Copy selected rows">
-              <span>
-                <IconButton
-                  onClick={copySelectedRows}
-                  disabled={selectedRowIds.size === 0}
-                >
-                  <ContentCopyIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Select all on page">
-              <IconButton onClick={selectAllOnPage}>
-                <SelectAllIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Reset selection">
-              <span>
-                <IconButton
-                  onClick={resetSelection}
-                  disabled={selectedRowIds.size === 0}
-                >
-                  <DeselectIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Reload data">
-              <IconButton onClick={fetchReplayData} disabled={isRefreshing}>
-                <RefreshIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Box>
+          <TaskTrendSectionHeader
+            title={t('tables.trend.trades')}
+            count={sortedTrades.length}
+            selectedCount={selectedRowIds.size}
+            isRefreshing={isRefreshing}
+            onConfigureColumns={() => setTradesColConfigOpen(true)}
+            onCopySelected={copySelectedRows}
+            onSelectAllOnPage={selectAllOnPage}
+            onResetSelection={resetSelection}
+            onReload={fetchReplayData}
+          />
 
           <TableContainer
             component={Paper}
@@ -3415,91 +2889,22 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
             flexDirection: 'column',
           }}
         >
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              height: 36,
-              minHeight: 36,
+          <TaskTrendSectionHeader
+            title={t('tables.trend.longPositions')}
+            count={longPositions.length}
+            selectedCount={selectedLongPosIds.size}
+            isRefreshing={isRefreshing}
+            onConfigureColumns={() => setLongPosColConfigOpen(true)}
+            onCopySelected={copySelectedLongPositions}
+            onSelectAllOnPage={selectAllLongPosOnPage}
+            onResetSelection={resetLongPosSelection}
+            onReload={fetchReplayData}
+            showOpenOnly={showOpenLongOnly}
+            onToggleOpenOnly={() => {
+              setShowOpenLongOnly((prev) => !prev);
+              setLongPosPage(0);
             }}
-          >
-            <Typography variant="subtitle1">
-              {t('tables.trend.longPositions')}
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-              ({longPositions.length})
-            </Typography>
-            {selectedLongPosIds.size > 0 && (
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ ml: 0.5 }}
-              >
-                — {selectedLongPosIds.size} selected
-              </Typography>
-            )}
-            <Box sx={{ flex: 1 }} />
-            <Tooltip title={t('common:columnConfig.configureColumns')}>
-              <IconButton
-                size="small"
-                onClick={() => setLongPosColConfigOpen(true)}
-                aria-label={t('common:columnConfig.configureColumns')}
-              >
-                <SettingsIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Copy selected rows">
-              <span>
-                <IconButton
-                  onClick={copySelectedLongPositions}
-                  disabled={selectedLongPosIds.size === 0}
-                >
-                  <ContentCopyIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Select all on page">
-              <IconButton onClick={selectAllLongPosOnPage}>
-                <SelectAllIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Reset selection">
-              <span>
-                <IconButton
-                  onClick={resetLongPosSelection}
-                  disabled={selectedLongPosIds.size === 0}
-                >
-                  <DeselectIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Reload data">
-              <IconButton onClick={fetchReplayData} disabled={isRefreshing}>
-                <RefreshIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Show open positions only">
-              <ToggleButton
-                value="openOnly"
-                selected={showOpenLongOnly}
-                onChange={() => {
-                  setShowOpenLongOnly((prev) => !prev);
-                  setLongPosPage(0);
-                }}
-                sx={{
-                  ml: 1,
-                  px: 1,
-                  py: 0,
-                  height: 24,
-                  fontSize: '0.7rem',
-                  textTransform: 'none',
-                  lineHeight: 1,
-                }}
-              >
-                {t('tables.trend.openOnly')}
-              </ToggleButton>
-            </Tooltip>
-          </Box>
+          />
           <TableContainer
             component={Paper}
             variant="outlined"
@@ -3973,91 +3378,22 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
             flexDirection: 'column',
           }}
         >
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              height: 36,
-              minHeight: 36,
+          <TaskTrendSectionHeader
+            title={t('tables.trend.shortPositions')}
+            count={shortPositions.length}
+            selectedCount={selectedShortPosIds.size}
+            isRefreshing={isRefreshing}
+            onConfigureColumns={() => setShortPosColConfigOpen(true)}
+            onCopySelected={copySelectedShortPositions}
+            onSelectAllOnPage={selectAllShortPosOnPage}
+            onResetSelection={resetShortPosSelection}
+            onReload={fetchReplayData}
+            showOpenOnly={showOpenShortOnly}
+            onToggleOpenOnly={() => {
+              setShowOpenShortOnly((prev) => !prev);
+              setShortPosPage(0);
             }}
-          >
-            <Typography variant="subtitle1">
-              {t('tables.trend.shortPositions')}
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-              ({shortPositions.length})
-            </Typography>
-            {selectedShortPosIds.size > 0 && (
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ ml: 0.5 }}
-              >
-                — {selectedShortPosIds.size} selected
-              </Typography>
-            )}
-            <Box sx={{ flex: 1 }} />
-            <Tooltip title={t('common:columnConfig.configureColumns')}>
-              <IconButton
-                size="small"
-                onClick={() => setShortPosColConfigOpen(true)}
-                aria-label={t('common:columnConfig.configureColumns')}
-              >
-                <SettingsIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Copy selected rows">
-              <span>
-                <IconButton
-                  onClick={copySelectedShortPositions}
-                  disabled={selectedShortPosIds.size === 0}
-                >
-                  <ContentCopyIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Select all on page">
-              <IconButton onClick={selectAllShortPosOnPage}>
-                <SelectAllIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Reset selection">
-              <span>
-                <IconButton
-                  onClick={resetShortPosSelection}
-                  disabled={selectedShortPosIds.size === 0}
-                >
-                  <DeselectIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Reload data">
-              <IconButton onClick={fetchReplayData} disabled={isRefreshing}>
-                <RefreshIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Show open positions only">
-              <ToggleButton
-                value="openOnly"
-                selected={showOpenShortOnly}
-                onChange={() => {
-                  setShowOpenShortOnly((prev) => !prev);
-                  setShortPosPage(0);
-                }}
-                sx={{
-                  ml: 1,
-                  px: 1,
-                  py: 0,
-                  height: 24,
-                  fontSize: '0.7rem',
-                  textTransform: 'none',
-                  lineHeight: 1,
-                }}
-              >
-                {t('tables.trend.openOnly')}
-              </ToggleButton>
-            </Tooltip>
-          </Box>
+          />
           <TableContainer
             component={Paper}
             variant="outlined"
