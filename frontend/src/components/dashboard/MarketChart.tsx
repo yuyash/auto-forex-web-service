@@ -167,6 +167,7 @@ export default function MarketChart({
     loadingOlder,
     loadingNewer,
     error,
+    dataRanges,
     ensureRange,
     refreshTail,
   } = useWindowedCandles({
@@ -634,7 +635,9 @@ export default function MarketChart({
     seriesRef.current.setData(candlesRef.current);
     const times = candlesRef.current.map((c) => Number(c.time));
     if (highlightRef.current) {
-      highlightRef.current.setGaps(detectMarketGaps(times));
+      highlightRef.current.setGaps(
+        detectMarketGaps(times, granularity, dataRanges, timezone)
+      );
     }
 
     if (!initialLoadDoneRef.current) {
@@ -659,7 +662,14 @@ export default function MarketChart({
       ? Number(candlesRef.current[0].time)
       : null;
     applyOverlays();
-  }, [candles, applyOverlays, restoreVisibleLogicalRange]);
+  }, [
+    candles,
+    granularity,
+    dataRanges,
+    timezone,
+    applyOverlays,
+    restoreVisibleLogicalRange,
+  ]);
 
   useEffect(() => {
     initialLoadDoneRef.current = false;
