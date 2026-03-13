@@ -49,10 +49,6 @@ import { SequencePositionLine } from '../../../utils/SequencePositionLine';
 import { getCandleColors } from '../../../utils/candleColors';
 import { useMetricsOverlay } from './MetricsOverlayChart';
 import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
-import {
-  useColumnConfig,
-  type ColumnItem,
-} from '../../../hooks/useColumnConfig';
 import { useWindowedCandles } from '../../../hooks/useWindowedCandles';
 import {
   useWindowedTaskMarkers,
@@ -62,13 +58,9 @@ import { clampRange, type TimeRange } from '../../../utils/windowedRanges';
 import {
   ALLOWED_GRANULARITIES,
   ALLOWED_VALUES,
-  DEFAULT_LS_POSITION_WIDTHS,
-  DEFAULT_REPLAY_WIDTHS,
   GRANULARITY_MINUTES,
   LOT_UNITS,
   POLLING_INTERVAL_OPTIONS,
-  computePosPips,
-  computePosPnl,
   findFirstCandleAtOrAfter,
   findGapAroundTime,
   findLastCandleAtOrBefore,
@@ -82,11 +74,9 @@ import type { CandlePoint, ReplayTrade } from './taskTrendPanel/shared';
 import { TaskTrendToolbar } from './taskTrendPanel/TaskTrendToolbar';
 import { TaskTrendTradesTable } from './taskTrendPanel/TaskTrendTradesTable';
 import { TaskTrendPositionsTable } from './taskTrendPanel/TaskTrendPositionsTable';
-import type {
-  LSPosSortableKey,
-  SortableKey,
-  TrendPosition,
-} from './taskTrendPanel/shared';
+import type { TrendPosition } from './taskTrendPanel/shared';
+import { useTaskTrendTradesTable } from './taskTrendPanel/useTaskTrendTradesTable';
+import { useTaskTrendPositionsTable } from './taskTrendPanel/useTaskTrendPositionsTable';
 
 interface TaskTrendPanelProps {
   taskId: string | number;
@@ -305,18 +295,13 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       setAutoFollow(true);
     }
   }, [enableRealTimeUpdates]);
-
-  const [orderBy, setOrderBy] = useState<SortableKey>('timestamp');
-  const [order, setOrder] = useState<'asc' | 'desc'>('desc');
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-
-  // Row selection for copy
-  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
-
-  // Track whether the selection came from a chart click (to auto-navigate table)
   const chartClickedRef = useRef(false);
-  const selectedRowRef = useRef<HTMLTableRowElement | null>(null);
+  const selectedPosRowRef = useRef<HTMLTableRowElement | null>(null);
+  const pendingPosScrollRef = useRef(false);
+  const [selectedPosId, setSelectedPosId] = useState<string | null>(null);
+  const [highlightedTradeIds, setHighlightedTradeIds] = useState<Set<string>>(
+    new Set()
+  );
 
   // Chart height state for draggable separator
   const MIN_CHART_HEIGHT = 200;
@@ -384,312 +369,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     [chartHeight]
   );
 
-  // Column resize state
-  const [replayColWidths, setReplayColWidths] = useState(DEFAULT_REPLAY_WIDTHS);
-  const replayResizeRef = useRef<{
-    col: string;
-    startX: number;
-    startW: number;
-  } | null>(null);
-
-  // ── Column visibility config for the 3 trend tables ──
-  const tradesColDefaults: ColumnItem[] = [
-    { id: 'timestamp', label: t('tables.trend.time'), visible: true },
-    { id: 'direction', label: t('tables.trend.direction'), visible: true },
-    { id: 'layer_index', label: t('tables.trend.layer'), visible: true },
-    { id: 'retracement_count', label: t('tables.trend.ret'), visible: true },
-    { id: 'units', label: t('tables.trend.units'), visible: true },
-    { id: 'price', label: t('tables.trend.price'), visible: true },
-    { id: 'execution_method', label: t('tables.trend.event'), visible: true },
-  ];
-  const {
-    columns: tradesColConfig,
-    updateColumns: updateTradesCols,
-    resetToDefaults: resetTradesCols,
-  } = useColumnConfig('trend_trades', tradesColDefaults);
-  const [tradesColConfigOpen, setTradesColConfigOpen] = useState(false);
-
-  const posColDefaults: ColumnItem[] = [
-    { id: 'entry_time', label: t('tables.trend.openTime'), visible: true },
-    { id: 'exit_time', label: t('tables.trend.closeTime'), visible: true },
-    { id: '_status', label: t('tables.trend.status'), visible: true },
-    { id: 'layer_index', label: t('tables.trend.layer'), visible: true },
-    {
-      id: 'retracement_count',
-      label: t('tables.trend.retrace'),
-      visible: true,
-    },
-    { id: 'units', label: t('tables.trend.units'), visible: true },
-    { id: 'entry_price', label: t('tables.trend.entry'), visible: true },
-    { id: 'exit_price', label: t('tables.trend.exit'), visible: true },
-    { id: '_pips', label: t('tables.trend.pips'), visible: true },
-    { id: '_pnl', label: t('tables.trend.pnl'), visible: true },
-  ];
-  const {
-    columns: longPosColConfig,
-    updateColumns: updateLongPosCols,
-    resetToDefaults: resetLongPosCols,
-  } = useColumnConfig('trend_long_positions', posColDefaults);
-  const [longPosColConfigOpen, setLongPosColConfigOpen] = useState(false);
-
-  const {
-    columns: shortPosColConfig,
-    updateColumns: updateShortPosCols,
-    resetToDefaults: resetShortPosCols,
-  } = useColumnConfig('trend_short_positions', posColDefaults);
-  const [shortPosColConfigOpen, setShortPosColConfigOpen] = useState(false);
-
-  const handleColResizeStart = useCallback(
-    (e: React.MouseEvent | React.TouchEvent, col: string) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      replayResizeRef.current = {
-        col,
-        startX: clientX,
-        startW: replayColWidths[col] ?? 100,
-      };
-      const onMove = (ev: MouseEvent | TouchEvent) => {
-        if (!replayResizeRef.current) return;
-        const moveX =
-          'touches' in ev ? ev.touches[0].clientX : (ev as MouseEvent).clientX;
-        const diff = moveX - replayResizeRef.current.startX;
-        const w = Math.max(40, replayResizeRef.current.startW + diff);
-        setReplayColWidths((prev) => ({
-          ...prev,
-          [replayResizeRef.current!.col]: w,
-        }));
-      };
-      const onUp = () => {
-        replayResizeRef.current = null;
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        document.removeEventListener('touchmove', onMove);
-        document.removeEventListener('touchend', onUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      };
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-      document.addEventListener('touchmove', onMove, { passive: false });
-      document.addEventListener('touchend', onUp);
-    },
-    [replayColWidths]
-  );
-
-  const resizeHandle = useCallback(
-    (col: string) => (
-      <Box
-        onMouseDown={(e) => handleColResizeStart(e, col)}
-        onTouchStart={(e) => handleColResizeStart(e, col)}
-        sx={{
-          position: 'absolute',
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: 4,
-          cursor: 'col-resize',
-          '&:hover': { backgroundColor: 'primary.main', opacity: 0.4 },
-        }}
-      />
-    ),
-    [handleColResizeStart]
-  );
-
-  // ── Long/Short position column resize ──
-  const [longPosColWidths, setLongPosColWidths] = useState(
-    DEFAULT_LS_POSITION_WIDTHS
-  );
-  const [shortPosColWidths, setShortPosColWidths] = useState(
-    DEFAULT_LS_POSITION_WIDTHS
-  );
-  const lsPosResizeRef = useRef<{
-    col: string;
-    startX: number;
-    startW: number;
-    setter: React.Dispatch<React.SetStateAction<Record<string, number>>>;
-  } | null>(null);
-
-  const handleLSPosColResizeStart = useCallback(
-    (
-      e: React.MouseEvent | React.TouchEvent,
-      col: string,
-      widths: Record<string, number>,
-      setter: React.Dispatch<React.SetStateAction<Record<string, number>>>
-    ) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      lsPosResizeRef.current = {
-        col,
-        startX: clientX,
-        startW: widths[col] ?? 100,
-        setter,
-      };
-      const onMove = (ev: MouseEvent | TouchEvent) => {
-        if (!lsPosResizeRef.current) return;
-        const moveX =
-          'touches' in ev ? ev.touches[0].clientX : (ev as MouseEvent).clientX;
-        const diff = moveX - lsPosResizeRef.current.startX;
-        const w = Math.max(40, lsPosResizeRef.current.startW + diff);
-        lsPosResizeRef.current.setter((prev) => ({
-          ...prev,
-          [lsPosResizeRef.current!.col]: w,
-        }));
-      };
-      const onUp = () => {
-        lsPosResizeRef.current = null;
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        document.removeEventListener('touchmove', onMove);
-        document.removeEventListener('touchend', onUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      };
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-      document.addEventListener('touchmove', onMove, { passive: false });
-      document.addEventListener('touchend', onUp);
-    },
-    []
-  );
-
-  const makeLSResizeHandle = useCallback(
-    (
-      col: string,
-      widths: Record<string, number>,
-      setter: React.Dispatch<React.SetStateAction<Record<string, number>>>
-    ) => (
-      <Box
-        onMouseDown={(e) => handleLSPosColResizeStart(e, col, widths, setter)}
-        onTouchStart={(e) => handleLSPosColResizeStart(e, col, widths, setter)}
-        sx={{
-          position: 'absolute',
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: 4,
-          cursor: 'col-resize',
-          '&:hover': { backgroundColor: 'primary.main', opacity: 0.4 },
-        }}
-      />
-    ),
-    [handleLSPosColResizeStart]
-  );
-
-  const handleSort = (column: SortableKey) => {
-    if (orderBy === column) {
-      setOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setOrderBy(column);
-      setOrder('asc');
-    }
-  };
-
-  const sortedTrades = useMemo(() => {
-    const sorted = [...trades].sort((a, b) => {
-      let cmp = 0;
-      switch (orderBy) {
-        case 'timestamp':
-          cmp =
-            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
-          break;
-        case 'direction':
-          cmp = a.direction.localeCompare(b.direction);
-          break;
-        case 'layer_index':
-          cmp = (a.layer_index ?? -1) - (b.layer_index ?? -1);
-          break;
-        case 'retracement_count':
-          cmp = (a.retracement_count ?? -1) - (b.retracement_count ?? -1);
-          break;
-        case 'units':
-          cmp = Number(a.units) - Number(b.units);
-          break;
-        case 'price':
-          cmp = Number(a.price) - Number(b.price);
-          break;
-        case 'execution_method':
-          cmp = (a.execution_method || '').localeCompare(
-            b.execution_method || ''
-          );
-          break;
-      }
-      return order === 'asc' ? cmp : -cmp;
-    });
-    return sorted;
-  }, [trades, orderBy, order]);
-
-  const paginatedTrades = useMemo(
-    () =>
-      sortedTrades.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
-    [sortedTrades, page, rowsPerPage]
-  );
-
-  // Row selection helpers
-  const isAllPageSelected =
-    paginatedTrades.length > 0 &&
-    paginatedTrades.every((r) => selectedRowIds.has(r.id));
-
-  const toggleRowSelection = useCallback((id: string) => {
-    setSelectedRowIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const selectAllOnPage = useCallback(() => {
-    setSelectedRowIds((prev) => {
-      const next = new Set(prev);
-      for (const row of paginatedTrades) next.add(row.id);
-      return next;
-    });
-  }, [paginatedTrades]);
-
-  const resetSelection = useCallback(() => {
-    setSelectedRowIds(new Set());
-  }, []);
-
-  const copySelectedRows = useCallback(() => {
-    // Build headers and row data respecting column config order and visibility
-    const extractors: Record<string, (r: (typeof sortedTrades)[0]) => string> =
-      {
-        timestamp: (r) => new Date(r.timestamp).toLocaleString(),
-        direction: (r) => (r.direction ? r.direction.toUpperCase() : ''),
-        layer_index: (r) => String(r.layer_index ?? '-'),
-        retracement_count: (r) => String(r.retracement_count ?? '-'),
-        units: (r) => String(r.units),
-        price: (r) => (r.price ? `¥${parseFloat(r.price).toFixed(3)}` : '-'),
-        execution_method: (r) =>
-          r.execution_method_display || r.execution_method || '-',
-      };
-    const visibleCols = tradesColConfig.filter((c) => c.visible);
-    const applicableCols = visibleCols.filter((c) => extractors[c.id] != null);
-    const header = applicableCols.map((c) => c.label).join('\t');
-    const rows = sortedTrades
-      .filter((r) => selectedRowIds.has(r.id))
-      .map((r) =>
-        applicableCols
-          .map((c) => {
-            const ext = extractors[c.id];
-            return ext ? ext(r) : '-';
-          })
-          .join('\t')
-      );
-    navigator.clipboard.writeText([header, ...rows].join('\n'));
-  }, [selectedRowIds, sortedTrades, tradesColConfig]);
-
-  // Reset to first page when sort changes (not on data refresh)
-  useEffect(() => {
-    setPage(0);
-  }, [orderBy, order]);
-
   const currentPrice =
     currentTick?.price != null ? parseFloat(currentTick.price) : null;
 
@@ -730,360 +409,23 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     () => allPositions.filter((p) => p.direction === 'short'),
     [allPositions]
   );
-
-  const [showOpenLongOnly, setShowOpenLongOnly] = useState(false);
-  const [showOpenShortOnly, setShowOpenShortOnly] = useState(false);
-
-  const [, setPosPage] = useState(0);
-  const [, setPosRowsPerPage] = useState(10);
-
-  // Separate pagination for Long / Short position tables in the Trend tab
-  const [longPosPage, setLongPosPage] = useState(0);
-  const [shortPosPage, setShortPosPage] = useState(0);
-  const [longPosRowsPerPage, setLongPosRowsPerPage] = useState(10);
-  const [shortPosRowsPerPage, setShortPosRowsPerPage] = useState(10);
-
-  const [longPosOrderBy, setLongPosOrderBy] =
-    useState<LSPosSortableKey>('entry_time');
-  const [longPosOrder, setLongPosOrder] = useState<'asc' | 'desc'>('desc');
-  const [shortPosOrderBy, setShortPosOrderBy] =
-    useState<LSPosSortableKey>('entry_time');
-  const [shortPosOrder, setShortPosOrder] = useState<'asc' | 'desc'>('desc');
-
-  const handleLongPosSort = useCallback((column: LSPosSortableKey) => {
-    setLongPosOrderBy((prev) => {
-      if (prev === column) {
-        setLongPosOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
-        return prev;
-      }
-      setLongPosOrder(
-        column === 'entry_time' || column === 'exit_time' ? 'desc' : 'asc'
-      );
-      return column;
-    });
-    setLongPosPage(0);
-  }, []);
-
-  const handleShortPosSort = useCallback((column: LSPosSortableKey) => {
-    setShortPosOrderBy((prev) => {
-      if (prev === column) {
-        setShortPosOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
-        return prev;
-      }
-      setShortPosOrder(
-        column === 'entry_time' || column === 'exit_time' ? 'desc' : 'asc'
-      );
-      return column;
-    });
-    setShortPosPage(0);
-  }, []);
-
-  // Sorted & paginated long/short positions for the split tables
-  const sortLSPositions = useCallback(
-    (
-      positions: (TaskPosition & { _status: 'open' | 'closed' })[],
-      sortBy: LSPosSortableKey,
-      sortOrder: 'asc' | 'desc'
-    ) => {
-      return [...positions].sort((a, b) => {
-        let cmp = 0;
-        switch (sortBy) {
-          case 'entry_time':
-            cmp =
-              new Date(a.entry_time).getTime() -
-              new Date(b.entry_time).getTime();
-            break;
-          case 'exit_time': {
-            const aT = a.exit_time ? new Date(a.exit_time).getTime() : 0;
-            const bT = b.exit_time ? new Date(b.exit_time).getTime() : 0;
-            cmp = aT - bT;
-            break;
-          }
-          case '_status':
-            cmp = a._status.localeCompare(b._status);
-            break;
-          case 'layer_index':
-            cmp = (a.layer_index ?? -1) - (b.layer_index ?? -1);
-            break;
-          case 'retracement_count':
-            cmp = (a.retracement_count ?? -1) - (b.retracement_count ?? -1);
-            break;
-          case 'units':
-            cmp = Math.abs(a.units ?? 0) - Math.abs(b.units ?? 0);
-            break;
-          case 'entry_price':
-            cmp =
-              parseFloat(a.entry_price || '0') -
-              parseFloat(b.entry_price || '0');
-            break;
-          case 'exit_price':
-            cmp =
-              parseFloat(a.exit_price || '0') - parseFloat(b.exit_price || '0');
-            break;
-          case '_pips': {
-            const pipsA = computePosPips(a, currentPrice, pipSize);
-            const pipsB = computePosPips(b, currentPrice, pipSize);
-            cmp = pipsA - pipsB;
-            break;
-          }
-          case '_pnl': {
-            const pnlA = computePosPnl(a, currentPrice);
-            const pnlB = computePosPnl(b, currentPrice);
-            cmp = pnlA - pnlB;
-            break;
-          }
-        }
-        return sortOrder === 'asc' ? cmp : -cmp;
-      });
-    },
-    [currentPrice, pipSize]
-  );
-
-  const sortedLongPositions = useMemo(() => {
-    const base = showOpenLongOnly
-      ? longPositions.filter((p) => p._status === 'open')
-      : longPositions;
-    return sortLSPositions(base, longPosOrderBy, longPosOrder);
-  }, [
-    longPositions,
-    showOpenLongOnly,
-    longPosOrderBy,
-    longPosOrder,
-    sortLSPositions,
-  ]);
-
-  const sortedShortPositions = useMemo(() => {
-    const base = showOpenShortOnly
-      ? shortPositions.filter((p) => p._status === 'open')
-      : shortPositions;
-    return sortLSPositions(base, shortPosOrderBy, shortPosOrder);
-  }, [
-    shortPositions,
-    showOpenShortOnly,
-    shortPosOrderBy,
-    shortPosOrder,
-    sortLSPositions,
-  ]);
-
-  const paginatedLongPositions = useMemo(
-    () =>
-      sortedLongPositions.slice(
-        longPosPage * longPosRowsPerPage,
-        longPosPage * longPosRowsPerPage + longPosRowsPerPage
-      ),
-    [sortedLongPositions, longPosPage, longPosRowsPerPage]
-  );
-  const paginatedShortPositions = useMemo(
-    () =>
-      sortedShortPositions.slice(
-        shortPosPage * shortPosRowsPerPage,
-        shortPosPage * shortPosRowsPerPage + shortPosRowsPerPage
-      ),
-    [sortedShortPositions, shortPosPage, shortPosRowsPerPage]
-  );
-
-  // Single-position highlight (like selectedTradeId for trades)
-  const [selectedPosId, setSelectedPosId] = useState<string | null>(null);
-  // Set of trade IDs highlighted because of a position click
-  const [highlightedTradeIds, setHighlightedTradeIds] = useState<Set<string>>(
-    new Set()
-  );
-  const selectedPosRowRef = useRef<HTMLTableRowElement | null>(null);
-  const pendingPosScrollRef = useRef(false);
-
-  // ── Long position row selection ──
-  const [selectedLongPosIds, setSelectedLongPosIds] = useState<Set<string>>(
-    new Set()
-  );
-
-  const isAllLongPosPageSelected =
-    paginatedLongPositions.length > 0 &&
-    paginatedLongPositions.every((r) => selectedLongPosIds.has(r.id));
-
-  const toggleLongPosSelection = useCallback((id: string) => {
-    setSelectedLongPosIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const selectAllLongPosOnPage = useCallback(() => {
-    setSelectedLongPosIds((prev) => {
-      const next = new Set(prev);
-      for (const row of paginatedLongPositions) next.add(row.id);
-      return next;
-    });
-  }, [paginatedLongPositions]);
-
-  const resetLongPosSelection = useCallback(() => {
-    setSelectedLongPosIds(new Set());
-  }, []);
-
-  const copySelectedLongPositions = useCallback(() => {
-    const extractors: Record<
-      string,
-      (pos: (typeof sortedLongPositions)[0]) => string
-    > = {
-      entry_time: (pos) =>
-        pos.entry_time ? new Date(pos.entry_time).toLocaleString() : '-',
-      exit_time: (pos) =>
-        pos.exit_time ? new Date(pos.exit_time).toLocaleString() : '-',
-      _status: (pos) => (pos._status === 'open' ? 'Open' : 'Closed'),
-      layer_index: (pos) => String(pos.layer_index ?? '-'),
-      retracement_count: (pos) => String(pos.retracement_count ?? '-'),
-      units: (pos) => String(pos.units),
-      entry_price: (pos) => {
-        const ep = pos.entry_price ? parseFloat(pos.entry_price) : null;
-        return ep != null ? `¥${ep.toFixed(3)}` : '-';
-      },
-      exit_price: (pos) => {
-        const xp = pos.exit_price ? parseFloat(pos.exit_price) : null;
-        return xp != null ? `¥${xp.toFixed(3)}` : '-';
-      },
-      _pips: (pos) => {
-        const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
-        const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
-        const isOpen = pos._status === 'open';
-        const hasPrice = isOpen
-          ? currentPrice != null && entryP != null
-          : exitP != null && entryP != null;
-        return pipSize && hasPrice
-          ? computePosPips(pos, currentPrice, pipSize).toFixed(1)
-          : '-';
-      },
-      _pnl: (pos) => {
-        const isOpen = pos._status === 'open';
-        const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
-        const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
-        const units = Math.abs(pos.units ?? 0);
-        let pnl: number | null = null;
-        if (isOpen && currentPrice != null && entryP != null)
-          pnl = (currentPrice - entryP) * units;
-        else if (!isOpen && exitP != null && entryP != null)
-          pnl = (exitP - entryP) * units;
-        return pnl != null ? pnl.toFixed(2) : '-';
-      },
-    };
-    const visibleCols = longPosColConfig.filter((c) => c.visible);
-    const applicableCols = visibleCols.filter((c) => extractors[c.id] != null);
-    const header = applicableCols.map((c) => c.label).join('\t');
-    const rows = sortedLongPositions
-      .filter((r) => selectedLongPosIds.has(r.id))
-      .map((pos) =>
-        applicableCols
-          .map((c) => {
-            const ext = extractors[c.id];
-            return ext ? ext(pos) : '-';
-          })
-          .join('\t')
-      );
-    navigator.clipboard.writeText([header, ...rows].join('\n'));
-  }, [
-    selectedLongPosIds,
-    sortedLongPositions,
+  const tradeTable = useTaskTrendTradesTable(trades);
+  const longPositionsTable = useTaskTrendPositionsTable({
+    positions: longPositions,
     currentPrice,
     pipSize,
-    longPosColConfig,
-  ]);
-
-  // ── Short position row selection ──
-  const [selectedShortPosIds, setSelectedShortPosIds] = useState<Set<string>>(
-    new Set()
-  );
-
-  const isAllShortPosPageSelected =
-    paginatedShortPositions.length > 0 &&
-    paginatedShortPositions.every((r) => selectedShortPosIds.has(r.id));
-
-  const toggleShortPosSelection = useCallback((id: string) => {
-    setSelectedShortPosIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const selectAllShortPosOnPage = useCallback(() => {
-    setSelectedShortPosIds((prev) => {
-      const next = new Set(prev);
-      for (const row of paginatedShortPositions) next.add(row.id);
-      return next;
-    });
-  }, [paginatedShortPositions]);
-
-  const resetShortPosSelection = useCallback(() => {
-    setSelectedShortPosIds(new Set());
-  }, []);
-
-  const copySelectedShortPositions = useCallback(() => {
-    const extractors: Record<
-      string,
-      (pos: (typeof sortedShortPositions)[0]) => string
-    > = {
-      entry_time: (pos) =>
-        pos.entry_time ? new Date(pos.entry_time).toLocaleString() : '-',
-      exit_time: (pos) =>
-        pos.exit_time ? new Date(pos.exit_time).toLocaleString() : '-',
-      _status: (pos) => (pos._status === 'open' ? 'Open' : 'Closed'),
-      layer_index: (pos) => String(pos.layer_index ?? '-'),
-      retracement_count: (pos) => String(pos.retracement_count ?? '-'),
-      units: (pos) => String(pos.units),
-      entry_price: (pos) => {
-        const ep = pos.entry_price ? parseFloat(pos.entry_price) : null;
-        return ep != null ? `¥${ep.toFixed(3)}` : '-';
-      },
-      exit_price: (pos) => {
-        const xp = pos.exit_price ? parseFloat(pos.exit_price) : null;
-        return xp != null ? `¥${xp.toFixed(3)}` : '-';
-      },
-      _pips: (pos) => {
-        const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
-        const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
-        const isOpen = pos._status === 'open';
-        const hasPrice = isOpen
-          ? currentPrice != null && entryP != null
-          : exitP != null && entryP != null;
-        return pipSize && hasPrice
-          ? computePosPips(pos, currentPrice, pipSize).toFixed(1)
-          : '-';
-      },
-      _pnl: (pos) => {
-        const isOpen = pos._status === 'open';
-        const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
-        const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
-        const units = Math.abs(pos.units ?? 0);
-        let pnl: number | null = null;
-        if (isOpen && currentPrice != null && entryP != null)
-          pnl = (entryP - currentPrice) * units;
-        else if (!isOpen && exitP != null && entryP != null)
-          pnl = (entryP - exitP) * units;
-        return pnl != null ? pnl.toFixed(2) : '-';
-      },
-    };
-    const visibleCols = shortPosColConfig.filter((c) => c.visible);
-    const applicableCols = visibleCols.filter((c) => extractors[c.id] != null);
-    const header = applicableCols.map((c) => c.label).join('\t');
-    const rows = sortedShortPositions
-      .filter((r) => selectedShortPosIds.has(r.id))
-      .map((pos) =>
-        applicableCols
-          .map((c) => {
-            const ext = extractors[c.id];
-            return ext ? ext(pos) : '-';
-          })
-          .join('\t')
-      );
-    navigator.clipboard.writeText([header, ...rows].join('\n'));
-  }, [
-    selectedShortPosIds,
-    sortedShortPositions,
+    storageKey: 'trend_long_positions',
+  });
+  const shortPositionsTable = useTaskTrendPositionsTable({
+    positions: shortPositions,
     currentPrice,
     pipSize,
-    shortPosColConfig,
-  ]);
+    storageKey: 'trend_short_positions',
+  });
+  const tradeRowsPerPage = tradeTable.rowsPerPage;
+  const sortedTrades = tradeTable.sortedTrades;
+  const tradeSelectedRowRef = tradeTable.selectedRowRef;
+  const setTradePage = tradeTable.setPage;
 
   // --- Cross-linking helpers: trade ↔ position (using backend IDs) ---
   const positionById = useMemo(() => {
@@ -1137,23 +479,26 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       pendingPosScrollRef.current = true;
 
       if (pos.direction === 'long') {
-        const idx = sortedLongPositions.findIndex((p) => p.id === pos.id);
+        const idx = longPositionsTable.sortedPositions.findIndex(
+          (p) => p.id === pos.id
+        );
         if (idx !== -1) {
-          setLongPosPage(Math.floor(idx / longPosRowsPerPage));
+          longPositionsTable.setPage(
+            Math.floor(idx / longPositionsTable.rowsPerPage)
+          );
         }
       } else if (pos.direction === 'short') {
-        const idx = sortedShortPositions.findIndex((p) => p.id === pos.id);
+        const idx = shortPositionsTable.sortedPositions.findIndex(
+          (p) => p.id === pos.id
+        );
         if (idx !== -1) {
-          setShortPosPage(Math.floor(idx / shortPosRowsPerPage));
+          shortPositionsTable.setPage(
+            Math.floor(idx / shortPositionsTable.rowsPerPage)
+          );
         }
       }
     },
-    [
-      sortedLongPositions,
-      sortedShortPositions,
-      longPosRowsPerPage,
-      shortPosRowsPerPage,
-    ]
+    [longPositionsTable, shortPositionsTable]
   );
 
   useEffect(() => {
@@ -1163,9 +508,9 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     const idx = sortedTrades.findIndex((t) => t.id === selectedTradeId);
     if (idx === -1) return;
 
-    const targetPage = Math.floor(idx / rowsPerPage);
+    const targetPage = Math.floor(idx / tradeRowsPerPage);
     pendingScrollRef.current = true;
-    setPage(targetPage);
+    setTradePage(targetPage);
 
     // Also highlight the related position
     const trade = trades.find((t) => t.id === selectedTradeId);
@@ -1181,7 +526,8 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   }, [
     selectedTradeId,
     sortedTrades,
-    rowsPerPage,
+    tradeRowsPerPage,
+    setTradePage,
     trades,
     findPositionForTrade,
     navigateToPosition,
@@ -1193,13 +539,13 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     if (!pendingScrollRef.current) return;
     pendingScrollRef.current = false;
     const raf = requestAnimationFrame(() => {
-      selectedRowRef.current?.scrollIntoView({
+      tradeSelectedRowRef.current?.scrollIntoView({
         behavior: 'smooth',
         block: 'center',
       });
     });
     return () => cancelAnimationFrame(raf);
-  }, [page, selectedTradeId]);
+  }, [tradeSelectedRowRef, tradeTable.page, selectedTradeId]);
 
   // Scroll the Positions table to the highlighted position row
   useEffect(() => {
@@ -1212,7 +558,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       });
     });
     return () => cancelAnimationFrame(raf);
-  }, [longPosPage, shortPosPage, selectedPosId]);
+  }, [longPositionsTable.page, shortPositionsTable.page, selectedPosId]);
 
   const granularityOptions = useMemo(() => {
     if (granularities.length > 0) {
@@ -2336,9 +1682,9 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       // Navigate Trades table to the open trade's page
       const idx = sortedTrades.findIndex((t) => t.id === openTrade.id);
       if (idx !== -1) {
-        const targetPage = Math.floor(idx / rowsPerPage);
+        const targetPage = Math.floor(idx / tradeRowsPerPage);
         pendingScrollRef.current = true;
-        setPage(targetPage);
+        setTradePage(targetPage);
       }
 
       // Scroll chart to show all related markers (open + close).
@@ -2450,10 +1796,10 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         onFollow={() => {
           setAutoFollow(true);
           setSelectedTradeId(null);
-          setSelectedRowIds(new Set());
+          tradeTable.setSelectedRowIds(new Set());
           setSelectedPosId(null);
           setHighlightedTradeIds(new Set());
-          setPage(0);
+          tradeTable.setPage(0);
         }}
         onResetZoom={() => {
           programmaticScrollRef.current = true;
@@ -2567,193 +1913,147 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           }}
         >
           <TaskTrendTradesTable
-            trades={sortedTrades}
-            paginatedTrades={paginatedTrades}
+            trades={tradeTable.sortedTrades}
+            paginatedTrades={tradeTable.paginatedTrades}
             selectedTradeId={selectedTradeId}
             highlightedTradeIds={highlightedTradeIds}
-            selectedRowIds={selectedRowIds}
-            isAllPageSelected={isAllPageSelected}
+            selectedRowIds={tradeTable.selectedRowIds}
+            isAllPageSelected={tradeTable.isAllPageSelected}
             isRefreshing={isRefreshing}
-            orderBy={orderBy}
-            order={order}
-            replayColWidths={replayColWidths}
-            page={page}
-            rowsPerPage={rowsPerPage}
-            selectedRowRef={selectedRowRef}
-            onConfigureColumns={() => setTradesColConfigOpen(true)}
-            onCopySelected={copySelectedRows}
-            onSelectAllOnPage={selectAllOnPage}
-            onResetSelection={resetSelection}
+            orderBy={tradeTable.orderBy}
+            order={tradeTable.order}
+            replayColWidths={tradeTable.colWidths}
+            page={tradeTable.page}
+            rowsPerPage={tradeTable.rowsPerPage}
+            selectedRowRef={tradeTable.selectedRowRef}
+            onConfigureColumns={() => tradeTable.setConfigOpen(true)}
+            onCopySelected={tradeTable.copySelectedRows}
+            onSelectAllOnPage={tradeTable.selectAllOnPage}
+            onResetSelection={tradeTable.resetSelection}
             onReload={fetchReplayData}
             onSelectTrade={onRowSelect}
-            onToggleRowSelection={toggleRowSelection}
-            onTogglePageSelection={() => {
-              if (isAllPageSelected) {
-                setSelectedRowIds((prev) => {
-                  const next = new Set(prev);
-                  for (const row of paginatedTrades) next.delete(row.id);
-                  return next;
-                });
-              } else {
-                selectAllOnPage();
-              }
-            }}
-            onSort={handleSort}
-            onPageChange={(_e, newPage) => setPage(newPage)}
+            onToggleRowSelection={tradeTable.toggleRowSelection}
+            onTogglePageSelection={tradeTable.togglePageSelection}
+            onSort={tradeTable.handleSort}
+            onPageChange={(_e, newPage) => tradeTable.setPage(newPage)}
             onRowsPerPageChange={(e) => {
               const newVal = parseInt(e.target.value, 10);
-              setRowsPerPage(newVal);
-              setPage(0);
-              setPosRowsPerPage(newVal);
-              setPosPage(0);
-              setLongPosRowsPerPage(newVal);
-              setLongPosPage(0);
-              setShortPosRowsPerPage(newVal);
-              setShortPosPage(0);
+              tradeTable.setRowsPerPage(newVal);
+              tradeTable.setPage(0);
+              longPositionsTable.setRowsPerPage(newVal);
+              longPositionsTable.setPage(0);
+              shortPositionsTable.setRowsPerPage(newVal);
+              shortPositionsTable.setPage(0);
             }}
-            resizeHandle={resizeHandle}
+            resizeHandle={tradeTable.createResizeHandle}
           />
         </Box>
 
         <TaskTrendPositionsTable
           title={t('tables.trend.longPositions')}
           count={longPositions.length}
-          positions={sortedLongPositions}
-          paginatedPositions={paginatedLongPositions}
+          positions={longPositionsTable.sortedPositions}
+          paginatedPositions={longPositionsTable.paginatedPositions}
           selectedPosId={selectedPosId}
-          selectedIds={selectedLongPosIds}
-          isAllPageSelected={isAllLongPosPageSelected}
+          selectedIds={longPositionsTable.selectedIds}
+          isAllPageSelected={longPositionsTable.isAllPageSelected}
           isRefreshing={isRefreshing}
-          showOpenOnly={showOpenLongOnly}
-          orderBy={longPosOrderBy}
-          order={longPosOrder}
-          colWidths={longPosColWidths}
+          showOpenOnly={longPositionsTable.showOpenOnly}
+          orderBy={longPositionsTable.orderBy}
+          order={longPositionsTable.order}
+          colWidths={longPositionsTable.colWidths}
           currentPrice={currentPrice}
           pipSize={pipSize}
           isShort={false}
-          page={longPosPage}
-          rowsPerPage={longPosRowsPerPage}
+          page={longPositionsTable.page}
+          rowsPerPage={longPositionsTable.rowsPerPage}
           selectedPosRowRef={selectedPosRowRef}
-          onConfigureColumns={() => setLongPosColConfigOpen(true)}
-          onCopySelected={copySelectedLongPositions}
-          onSelectAllOnPage={selectAllLongPosOnPage}
-          onResetSelection={resetLongPosSelection}
+          onConfigureColumns={() => longPositionsTable.setConfigOpen(true)}
+          onCopySelected={() => longPositionsTable.copySelectedPositions(false)}
+          onSelectAllOnPage={longPositionsTable.selectAllOnPage}
+          onResetSelection={longPositionsTable.resetSelection}
           onReload={fetchReplayData}
-          onToggleOpenOnly={() => {
-            setShowOpenLongOnly((prev) => !prev);
-            setLongPosPage(0);
-          }}
-          onTogglePageSelection={() => {
-            if (isAllLongPosPageSelected) {
-              setSelectedLongPosIds((prev) => {
-                const next = new Set(prev);
-                for (const row of paginatedLongPositions) next.delete(row.id);
-                return next;
-              });
-            } else {
-              selectAllLongPosOnPage();
-            }
-          }}
-          onSort={handleLongPosSort}
+          onToggleOpenOnly={longPositionsTable.toggleOpenOnly}
+          onTogglePageSelection={longPositionsTable.togglePageSelection}
+          onSort={longPositionsTable.handleSort}
           onSelectPosition={onPosRowSelect}
-          onToggleSelection={toggleLongPosSelection}
-          onPageChange={(_e, newPage) => setLongPosPage(newPage)}
+          onToggleSelection={longPositionsTable.toggleSelection}
+          onPageChange={(_e, newPage) => longPositionsTable.setPage(newPage)}
           onRowsPerPageChange={(e) => {
             const newVal = parseInt(e.target.value, 10);
-            setLongPosRowsPerPage(newVal);
-            setLongPosPage(0);
-            setRowsPerPage(newVal);
-            setPage(0);
-            setPosRowsPerPage(newVal);
-            setPosPage(0);
-            setShortPosRowsPerPage(newVal);
-            setShortPosPage(0);
+            longPositionsTable.setRowsPerPage(newVal);
+            longPositionsTable.setPage(0);
+            tradeTable.setRowsPerPage(newVal);
+            tradeTable.setPage(0);
+            shortPositionsTable.setRowsPerPage(newVal);
+            shortPositionsTable.setPage(0);
           }}
-          resizeHandle={(col) =>
-            makeLSResizeHandle(col, longPosColWidths, setLongPosColWidths)
-          }
+          resizeHandle={longPositionsTable.createResizeHandle}
         />
 
         <TaskTrendPositionsTable
           title={t('tables.trend.shortPositions')}
           count={shortPositions.length}
-          positions={sortedShortPositions}
-          paginatedPositions={paginatedShortPositions}
+          positions={shortPositionsTable.sortedPositions}
+          paginatedPositions={shortPositionsTable.paginatedPositions}
           selectedPosId={selectedPosId}
-          selectedIds={selectedShortPosIds}
-          isAllPageSelected={isAllShortPosPageSelected}
+          selectedIds={shortPositionsTable.selectedIds}
+          isAllPageSelected={shortPositionsTable.isAllPageSelected}
           isRefreshing={isRefreshing}
-          showOpenOnly={showOpenShortOnly}
-          orderBy={shortPosOrderBy}
-          order={shortPosOrder}
-          colWidths={shortPosColWidths}
+          showOpenOnly={shortPositionsTable.showOpenOnly}
+          orderBy={shortPositionsTable.orderBy}
+          order={shortPositionsTable.order}
+          colWidths={shortPositionsTable.colWidths}
           currentPrice={currentPrice}
           pipSize={pipSize}
           isShort={true}
-          page={shortPosPage}
-          rowsPerPage={shortPosRowsPerPage}
+          page={shortPositionsTable.page}
+          rowsPerPage={shortPositionsTable.rowsPerPage}
           selectedPosRowRef={selectedPosRowRef}
-          onConfigureColumns={() => setShortPosColConfigOpen(true)}
-          onCopySelected={copySelectedShortPositions}
-          onSelectAllOnPage={selectAllShortPosOnPage}
-          onResetSelection={resetShortPosSelection}
+          onConfigureColumns={() => shortPositionsTable.setConfigOpen(true)}
+          onCopySelected={() => shortPositionsTable.copySelectedPositions(true)}
+          onSelectAllOnPage={shortPositionsTable.selectAllOnPage}
+          onResetSelection={shortPositionsTable.resetSelection}
           onReload={fetchReplayData}
-          onToggleOpenOnly={() => {
-            setShowOpenShortOnly((prev) => !prev);
-            setShortPosPage(0);
-          }}
-          onTogglePageSelection={() => {
-            if (isAllShortPosPageSelected) {
-              setSelectedShortPosIds((prev) => {
-                const next = new Set(prev);
-                for (const row of paginatedShortPositions) next.delete(row.id);
-                return next;
-              });
-            } else {
-              selectAllShortPosOnPage();
-            }
-          }}
-          onSort={handleShortPosSort}
+          onToggleOpenOnly={shortPositionsTable.toggleOpenOnly}
+          onTogglePageSelection={shortPositionsTable.togglePageSelection}
+          onSort={shortPositionsTable.handleSort}
           onSelectPosition={onPosRowSelect}
-          onToggleSelection={toggleShortPosSelection}
-          onPageChange={(_e, newPage) => setShortPosPage(newPage)}
+          onToggleSelection={shortPositionsTable.toggleSelection}
+          onPageChange={(_e, newPage) => shortPositionsTable.setPage(newPage)}
           onRowsPerPageChange={(e) => {
             const newVal = parseInt(e.target.value, 10);
-            setShortPosRowsPerPage(newVal);
-            setShortPosPage(0);
-            setRowsPerPage(newVal);
-            setPage(0);
-            setPosRowsPerPage(newVal);
-            setPosPage(0);
-            setLongPosRowsPerPage(newVal);
-            setLongPosPage(0);
+            shortPositionsTable.setRowsPerPage(newVal);
+            shortPositionsTable.setPage(0);
+            tradeTable.setRowsPerPage(newVal);
+            tradeTable.setPage(0);
+            longPositionsTable.setRowsPerPage(newVal);
+            longPositionsTable.setPage(0);
           }}
-          resizeHandle={(col) =>
-            makeLSResizeHandle(col, shortPosColWidths, setShortPosColWidths)
-          }
+          resizeHandle={shortPositionsTable.createResizeHandle}
         />
       </Box>
 
       <ColumnConfigDialog
-        open={tradesColConfigOpen}
-        columns={tradesColConfig}
-        onClose={() => setTradesColConfigOpen(false)}
-        onSave={updateTradesCols}
-        onReset={resetTradesCols}
+        open={tradeTable.configOpen}
+        columns={tradeTable.columnConfig}
+        onClose={() => tradeTable.setConfigOpen(false)}
+        onSave={tradeTable.updateColumns}
+        onReset={tradeTable.resetToDefaults}
       />
       <ColumnConfigDialog
-        open={longPosColConfigOpen}
-        columns={longPosColConfig}
-        onClose={() => setLongPosColConfigOpen(false)}
-        onSave={updateLongPosCols}
-        onReset={resetLongPosCols}
+        open={longPositionsTable.configOpen}
+        columns={longPositionsTable.columnConfig}
+        onClose={() => longPositionsTable.setConfigOpen(false)}
+        onSave={longPositionsTable.updateColumns}
+        onReset={longPositionsTable.resetToDefaults}
       />
       <ColumnConfigDialog
-        open={shortPosColConfigOpen}
-        columns={shortPosColConfig}
-        onClose={() => setShortPosColConfigOpen(false)}
-        onSave={updateShortPosCols}
-        onReset={resetShortPosCols}
+        open={shortPositionsTable.configOpen}
+        columns={shortPositionsTable.columnConfig}
+        onClose={() => shortPositionsTable.setConfigOpen(false)}
+        onSave={shortPositionsTable.updateColumns}
+        onReset={shortPositionsTable.resetToDefaults}
       />
     </Box>
   );
