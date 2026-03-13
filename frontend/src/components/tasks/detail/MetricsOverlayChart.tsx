@@ -29,6 +29,7 @@ export interface UseMetricsOverlayOptions {
   taskType: TaskType;
   executionRunId?: string;
   enableRealTimeUpdates?: boolean;
+  pollingIntervalMs?: number;
   chart: IChartApi | null;
   candleTimestamps?: number[];
   currentTickTimestamp?: string | null;
@@ -123,6 +124,7 @@ export function useMetricsOverlay({
   taskType,
   executionRunId,
   enableRealTimeUpdates = false,
+  pollingIntervalMs = 5000,
   chart,
   candleTimestamps,
   currentTickTimestamp,
@@ -247,12 +249,18 @@ export function useMetricsOverlay({
         /* silent */
       }
     };
-    intervalRef.current = setInterval(poll, 5000);
+    intervalRef.current = setInterval(poll, pollingIntervalMs);
     return () => {
       if (intervalRef.current !== null) clearInterval(intervalRef.current);
       intervalRef.current = null;
     };
-  }, [enableRealTimeUpdates, taskId, taskType, executionRunId]);
+  }, [
+    enableRealTimeUpdates,
+    executionRunId,
+    pollingIntervalMs,
+    taskId,
+    taskType,
+  ]);
 
   // Attach series once per chart instance
   useLayoutEffect(() => {
@@ -285,18 +293,30 @@ export function useMetricsOverlay({
   useEffect(() => {
     const s = seriesRef.current;
     if (!s || !chart || attachedToChart.current !== chart) return;
-    const hasCandles = candleTimestamps && candleTimestamps.length > 0;
+    const boundedCandleTimestamps =
+      tickSec !== null && enableRealTimeUpdates && candleTimestamps
+        ? candleTimestamps.filter((time) => time <= tickSec)
+        : candleTimestamps;
+    const boundedSnapshots =
+      tickSec !== null && enableRealTimeUpdates
+        ? snapshots.filter((point) => point.t <= tickSec)
+        : snapshots;
+    const hasCandles =
+      boundedCandleTimestamps != null && boundedCandleTimestamps.length > 0;
     if (!snapshots.length && !hasCandles) return;
     let extended: MetricPoint[] = [];
-    if (snapshots.length > 0) {
+    if (boundedSnapshots.length > 0) {
       const aligned = hasCandles
-        ? resampleSnapshots(snapshots, candleTimestamps)
-        : snapshots;
+        ? resampleSnapshots(boundedSnapshots, boundedCandleTimestamps)
+        : boundedSnapshots;
       extended = aligned;
-      if (tickSec !== null && hasCandles) {
-        const last = candleTimestamps[candleTimestamps.length - 1];
+      if (tickSec !== null && hasCandles && boundedCandleTimestamps) {
+        const last =
+          boundedCandleTimestamps[boundedCandleTimestamps.length - 1];
         if (tickSec > last) {
-          const extra = snapshots.filter((p) => p.t > last && p.t <= tickSec);
+          const extra = boundedSnapshots.filter(
+            (p) => p.t > last && p.t <= tickSec
+          );
           if (extra.length > 0) extended = [...aligned, ...extra];
         }
       }
@@ -334,7 +354,7 @@ export function useMetricsOverlay({
       seriesRef.current = null;
       attachedToChart.current = null;
     }
-  }, [snapshots, candleTimestamps, chart, tickSec]);
+  }, [snapshots, candleTimestamps, chart, enableRealTimeUpdates, tickSec]);
 
   return { hasData: snapshots.length > 0, isLoading };
 }

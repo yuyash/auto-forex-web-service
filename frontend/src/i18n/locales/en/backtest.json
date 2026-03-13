@@ -207,6 +207,13 @@
     "deletedSuccessfully": "Backtest task deleted successfully",
     "cannotDeleteRunning": "Cannot delete running task. Stop it first."
   },
+  "stopDialog": {
+    "title": "Stop Backtest Task",
+    "message": "Are you sure you want to stop \"{{taskName}}\"?",
+    "cancel": "Cancel",
+    "confirm": "Stop Task",
+    "stopping": "Stopping..."
+  },
   "floorLog": {
     "title": "Floor Strategy Execution Log",
     "noEvents": "No floor strategy events available for this backtest.",
