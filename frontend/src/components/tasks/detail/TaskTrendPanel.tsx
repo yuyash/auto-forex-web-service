@@ -63,10 +63,7 @@ import {
 } from '../../../hooks/useTaskPositions';
 import { useTaskSummary } from '../../../hooks/useTaskSummary';
 import { TaskType } from '../../../types/common';
-import {
-  buildMarketClosedMarkers,
-  detectMarketGaps,
-} from '../../../utils/marketClosedMarkers';
+import { detectMarketGaps } from '../../../utils/marketClosedMarkers';
 import { MarketClosedHighlight } from '../../../utils/MarketClosedHighlight';
 import {
   AdaptiveTimeScale,
@@ -447,6 +444,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     loadingOlder: loadingOlderCandles,
     loadingNewer: loadingNewerCandles,
     error,
+    dataRanges: candleDataRanges,
     ensureRange: ensureCandleRange,
     refreshTail: refreshTailCandles,
   } = useWindowedCandles({
@@ -2094,7 +2092,9 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     const times = candles.map((c) => Number(c.time));
 
     if (highlightRef.current) {
-      highlightRef.current.setGaps(detectMarketGaps(times));
+      highlightRef.current.setGaps(
+        detectMarketGaps(times, granularity, candleDataRanges, timezone)
+      );
     }
 
     // Only fit content on the very first load — preserve user's zoom/pan on updates
@@ -2222,8 +2222,20 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     }
     previousFirstCandleTimeRef.current =
       candles.length > 0 ? Number(candles[0].time) : null;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- currentTick is intentionally excluded: it is only read on the very first load (guarded by hasInitialFit) to decide the initial viewport position.  Including it would re-run setData on every tick update.
-  }, [candles, programmaticScrollRef]);
+    // currentTick is intentionally excluded: it is only read on the very first
+    // load (guarded by hasInitialFit) to decide the initial viewport position.
+    // Including it would re-run setData on every tick update.
+  }, [
+    candles,
+    granularity,
+    candleDataRanges,
+    enableRealTimeUpdates,
+    startTimeSec,
+    granularitySeconds,
+    currentTick?.timestamp,
+    timezone,
+    programmaticScrollRef,
+  ]);
 
   // Update sequence position line when current tick changes
   useEffect(() => {
@@ -2314,8 +2326,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       text?: string;
       size?: number;
     }> = [];
-
-    markers.push(...buildMarketClosedMarkers(candleTimes));
 
     for (const event of taskLifecycleEvents) {
       const rawTime = toEventMarkerTime(event);
