@@ -207,6 +207,13 @@
     "deletedSuccessfully": "バックテストタスクが正常に削除されました",
     "cannotDeleteRunning": "実行中のタスクは削除できません。先に停止してください。"
   },
+  "stopDialog": {
+    "title": "バックテストタスクを停止",
+    "message": "「{{taskName}}」を停止してもよろしいですか？",
+    "cancel": "キャンセル",
+    "confirm": "タスクを停止",
+    "stopping": "停止中..."
+  },
   "floorLog": {
     "title": "フロア戦略実行ログ",
     "noEvents": "このバックテストのフロア戦略イベントはありません。",

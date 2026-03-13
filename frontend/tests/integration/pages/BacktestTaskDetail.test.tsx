@@ -11,6 +11,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BacktestTaskDetail } from '../../../src/components/backtest/BacktestTaskDetail';
 import { TaskStatus } from '../../../src/types/common';
 
+const { mockBacktestStop } = vi.hoisted(() => ({
+  mockBacktestStop: vi.fn(),
+}));
+
 // Mock API services
 vi.mock('../../../src/api/generated/services/TradingService', () => ({
   TradingService: {
@@ -94,6 +98,12 @@ vi.mock('../../../src/hooks/useBacktestTaskMutations', () => ({
   useDeleteBacktestTask: vi.fn(() => ({ mutate: vi.fn(), isLoading: false })),
 }));
 
+vi.mock('../../../src/services/api/backtestTasks', () => ({
+  backtestTasksApi: {
+    stop: mockBacktestStop,
+  },
+}));
+
 // Mock child components to isolate page-level behavior
 vi.mock('../../../src/contexts/AuthContext', () => ({
   useAuth: vi.fn(() => ({
@@ -106,7 +116,17 @@ vi.mock('../../../src/contexts/AuthContext', () => ({
   })),
 }));
 vi.mock('../../../src/components/common/TaskControlButtons', () => ({
-  TaskControlButtons: () => <div data-testid="task-controls">Controls</div>,
+  TaskControlButtons: ({
+    onStop,
+  }: {
+    onStop?: (taskId: string) => void | Promise<void>;
+  }) => (
+    <div data-testid="task-controls">
+      <button type="button" onClick={() => onStop?.('1')}>
+        Stop
+      </button>
+    </div>
+  ),
 }));
 vi.mock('../../../src/components/tasks/display/StatusBadge', () => ({
   StatusBadge: ({ status }: { status: string }) => <span>{status}</span>,
@@ -148,6 +168,7 @@ function createWrapper() {
 describe('BacktestTaskDetail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockBacktestStop.mockResolvedValue({});
   });
 
   it('renders task name and status', async () => {
@@ -249,6 +270,24 @@ describe('BacktestTaskDetail', () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
     await waitFor(() => {
       expect(screen.getByRole('navigation')).toBeInTheDocument();
+    });
+  });
+
+  it('confirms before stopping a backtest task', async () => {
+    const user = userEvent.setup();
+    render(<BacktestTaskDetail />, { wrapper: createWrapper() });
+
+    await user.click(screen.getByRole('button', { name: 'Stop' }));
+
+    expect(mockBacktestStop).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('heading', { name: 'Stop Backtest Task' })
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Stop Task' }));
+
+    await waitFor(() => {
+      expect(mockBacktestStop).toHaveBeenCalledWith('1');
     });
   });
 });

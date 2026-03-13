@@ -275,7 +275,8 @@ const findFirstCandleAtOrAfter = (
   if (candleTimes.length === 0) return null;
   const first = candleTimes[0];
   const last = candleTimes[candleTimes.length - 1];
-  if (timeSec < first || timeSec > last) return null;
+  if (timeSec <= first) return first as UTCTimestamp;
+  if (timeSec > last) return null;
 
   let lo = 0;
   let hi = candleTimes.length - 1;
@@ -297,7 +298,8 @@ const findLastCandleAtOrBefore = (
   if (candleTimes.length === 0) return null;
   const first = candleTimes[0];
   const last = candleTimes[candleTimes.length - 1];
-  if (timeSec < first || timeSec > last) return null;
+  if (timeSec < first) return null;
+  if (timeSec >= last) return last as UTCTimestamp;
 
   let lo = 0;
   let hi = candleTimes.length - 1;
@@ -457,30 +459,44 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     autoRefresh: enableRealTimeUpdates,
     refreshIntervalSeconds: Math.max(10, Math.floor(pollingIntervalMs / 1000)),
   });
-  const candles = useMemo(
-    () =>
-      windowedCandles.map((c) => ({
-        ...c,
-        time: c.time as UTCTimestamp,
-      })) as CandlePoint[],
-    [windowedCandles]
-  );
   const startTimeSec = useMemo(() => isoToSec(startTime), [startTime]);
   const endTimeSec = useMemo(() => isoToSec(endTime), [endTime]);
   const currentTickSec = useMemo(
     () => isoToSec(currentTick?.timestamp ?? null),
     [currentTick?.timestamp]
   );
+  const liveRangeUpperBound = useMemo(() => {
+    if (!enableRealTimeUpdates) {
+      return endTimeSec ?? undefined;
+    }
+    if (taskType === TaskType.BACKTEST) {
+      return endTimeSec ?? currentTickSec ?? undefined;
+    }
+    return currentTickSec ?? undefined;
+  }, [currentTickSec, enableRealTimeUpdates, endTimeSec, taskType]);
   const taskDataBounds = useMemo<Partial<TimeRange> | null>(() => {
     const from = startTimeSec ?? undefined;
-    const to = enableRealTimeUpdates
-      ? (currentTickSec ?? undefined)
-      : (endTimeSec ?? undefined);
+    const to = liveRangeUpperBound;
     if (from == null && to == null) {
       return null;
     }
     return { from, to };
-  }, [currentTickSec, enableRealTimeUpdates, endTimeSec, startTimeSec]);
+  }, [liveRangeUpperBound, startTimeSec]);
+  const candles = useMemo(
+    () =>
+      windowedCandles
+        .filter((c) => {
+          if (startTimeSec != null && c.time < startTimeSec) return false;
+          if (liveRangeUpperBound != null && c.time > liveRangeUpperBound)
+            return false;
+          return true;
+        })
+        .map((c) => ({
+          ...c,
+          time: c.time as UTCTimestamp,
+        })) as CandlePoint[],
+    [liveRangeUpperBound, startTimeSec, windowedCandles]
+  );
   const granularitySeconds = useMemo(
     () => (GRANULARITY_MINUTES[granularity] ?? 1) * 60,
     [granularity]
@@ -519,7 +535,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     taskEvents: taskLifecycleEvents,
     strategyEvents,
     trades: windowedTradeMarkers,
-    isLoading: areMarkerLayersLoading,
     ensureRange: ensureMarkerRange,
   } = useWindowedTaskMarkers({
     taskId: String(taskId),
@@ -1572,11 +1587,12 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
 
   // Attach metric overlay series (Margin Ratio, ATR, thresholds) to the
   // candlestick chart so they share the exact same X-axis.
-  const { isLoading: metricsLoading } = useMetricsOverlay({
+  useMetricsOverlay({
     taskId: String(taskId),
     taskType,
     executionRunId,
     enableRealTimeUpdates,
+    pollingIntervalMs,
     chart: chartInstance,
     candleTimestamps: candleTimestampsMemo,
     currentTickTimestamp: enableRealTimeUpdates ? currentTick?.timestamp : null,
@@ -2067,6 +2083,74 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   // Auto-follow and initial viewport width, measured in candles.
   const AUTO_FOLLOW_CANDLES = 1000;
 
+  // When a task is actively progressing, preload the candle/marker window
+  // around the current tick so auto-follow can anchor to the real "now"
+  // position instead of the initial start chunk.
+  useEffect(() => {
+    if (!enableRealTimeUpdates || currentTickSec == null) return;
+
+    const isTrading = taskType === TaskType.TRADING;
+    const leftCandles = isTrading
+      ? AUTO_FOLLOW_CANDLES * 0.75
+      : AUTO_FOLLOW_CANDLES / 2;
+    const rightCandles = AUTO_FOLLOW_CANDLES - leftCandles;
+    const target = clampTaskRange({
+      from: currentTickSec - leftCandles * granularitySeconds,
+      to: currentTickSec + rightCandles * granularitySeconds,
+    });
+
+    if (!target) return;
+
+    void Promise.all([ensureCandleRange(target), ensureMarkerRange(target)]);
+  }, [
+    AUTO_FOLLOW_CANDLES,
+    clampTaskRange,
+    currentTickSec,
+    enableRealTimeUpdates,
+    ensureCandleRange,
+    ensureMarkerRange,
+    granularitySeconds,
+    taskType,
+  ]);
+
+  // Keep small windows around task boundaries loaded so START/STOP markers
+  // can still snap to actual candles even when the main viewport is focused
+  // on the current progress position.
+  useEffect(() => {
+    const boundaryPaddingSeconds = Math.max(granularitySeconds * 8, 60 * 60);
+    const requests: Promise<void>[] = [];
+
+    if (startTimeSec != null) {
+      const startRange = clampTaskRange({
+        from: startTimeSec,
+        to: startTimeSec + boundaryPaddingSeconds,
+      });
+      if (startRange) {
+        requests.push(ensureCandleRange(startRange));
+      }
+    }
+
+    if (endTimeSec != null) {
+      const endRange = clampTaskRange({
+        from: endTimeSec - boundaryPaddingSeconds,
+        to: endTimeSec + boundaryPaddingSeconds,
+      });
+      if (endRange) {
+        requests.push(ensureCandleRange(endRange));
+      }
+    }
+
+    if (requests.length === 0) return;
+
+    void Promise.all(requests);
+  }, [
+    clampTaskRange,
+    endTimeSec,
+    ensureCandleRange,
+    granularitySeconds,
+    startTimeSec,
+  ]);
+
   // Update candle data, market gaps, and fit chart when data changes
   useEffect(() => {
     if (!seriesRef.current || !markersRef.current) return;
@@ -2142,21 +2226,16 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         }
       } else if (!enableRealTimeUpdates && startTimeSec != null) {
         const totalSpanSeconds = AUTO_FOLLOW_CANDLES * granularitySeconds;
-        const leftBufferSeconds = Math.max(
-          60 * 60,
-          granularitySeconds * 8,
-          Math.floor(totalSpanSeconds * 0.08)
-        );
         const gapAroundStart = findGapAroundTime(
           startTimeSec,
           times,
           granularitySeconds * 6
         );
         const initialFrom = gapAroundStart
-          ? gapAroundStart.from - leftBufferSeconds
-          : startTimeSec - leftBufferSeconds;
+          ? Math.max(startTimeSec, gapAroundStart.from)
+          : startTimeSec;
         const requiredGapSpan = gapAroundStart
-          ? gapAroundStart.to - gapAroundStart.from + leftBufferSeconds * 2
+          ? gapAroundStart.to - initialFrom
           : 0;
         const initialSpanSeconds = Math.max(totalSpanSeconds, requiredGapSpan);
         try {
@@ -2352,8 +2431,8 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       if (!time) continue;
       markers.push({
         time,
-        position: 'belowBar',
-        shape: 'circle',
+        position: 'aboveBar',
+        shape: 'arrowDown',
         color: '#111111',
         text: event.event_type_display || event.event_type,
       });
@@ -2366,7 +2445,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           time,
           position: 'aboveBar',
           shape: 'arrowDown',
-          color: '#0f766e',
+          color: '#111111',
           text: 'START',
         });
       }
@@ -2379,7 +2458,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           time,
           position: 'aboveBar',
           shape: 'arrowDown',
-          color: '#dc2626',
+          color: '#111111',
           text: 'STOP',
         });
       }
@@ -2757,24 +2836,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
             <CircularProgress size={16} thickness={5} />
           )}
         </Box>
-
-        <Chip
-          size="small"
-          variant={
-            loadingOlderCandles || loadingNewerCandles ? 'filled' : 'outlined'
-          }
-          label="Candles"
-        />
-        <Chip
-          size="small"
-          variant={areMarkerLayersLoading ? 'filled' : 'outlined'}
-          label="Markers"
-        />
-        <Chip
-          size="small"
-          variant={metricsLoading ? 'filled' : 'outlined'}
-          label="Metrics"
-        />
 
         <FormControl
           sx={{ minWidth: 100, '& .MuiInputBase-root': { height: 32 } }}
