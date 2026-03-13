@@ -20,6 +20,29 @@ export type ReplayTrade = {
   position_id?: string | null;
 };
 
+export type TrendPosition = TaskPosition & { _status: 'open' | 'closed' };
+
+export type SortableKey =
+  | 'timestamp'
+  | 'direction'
+  | 'layer_index'
+  | 'retracement_count'
+  | 'units'
+  | 'price'
+  | 'execution_method';
+
+export type LSPosSortableKey =
+  | 'entry_time'
+  | 'exit_time'
+  | '_status'
+  | 'layer_index'
+  | 'retracement_count'
+  | 'units'
+  | 'entry_price'
+  | 'exit_price'
+  | '_pips'
+  | '_pnl';
+
 export interface ReplaySummary {
   realizedPnl: number;
   unrealizedPnl: number;

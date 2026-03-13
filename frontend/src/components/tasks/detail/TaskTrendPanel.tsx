@@ -8,19 +8,9 @@ import React, {
 import {
   Alert,
   Box,
-  Checkbox,
-  Chip,
   CircularProgress,
   LinearProgress,
   Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TablePagination,
-  TableRow,
-  TableSortLabel,
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import { useTheme } from '@mui/material/styles';
@@ -90,7 +80,13 @@ import {
 } from './taskTrendPanel/shared';
 import type { CandlePoint, ReplayTrade } from './taskTrendPanel/shared';
 import { TaskTrendToolbar } from './taskTrendPanel/TaskTrendToolbar';
-import { TaskTrendSectionHeader } from './taskTrendPanel/TaskTrendSectionHeader';
+import { TaskTrendTradesTable } from './taskTrendPanel/TaskTrendTradesTable';
+import { TaskTrendPositionsTable } from './taskTrendPanel/TaskTrendPositionsTable';
+import type {
+  LSPosSortableKey,
+  SortableKey,
+  TrendPosition,
+} from './taskTrendPanel/shared';
 
 interface TaskTrendPanelProps {
   taskId: string | number;
@@ -185,6 +181,12 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     }
     return { from, to };
   }, [liveRangeUpperBound, startTimeSec]);
+  const markerDisplayCutoffSec = useMemo(() => {
+    if (!enableRealTimeUpdates) {
+      return null;
+    }
+    return currentTickSec;
+  }, [currentTickSec, enableRealTimeUpdates]);
   const candles = useMemo(
     () =>
       windowedCandles
@@ -304,14 +306,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     }
   }, [enableRealTimeUpdates]);
 
-  type SortableKey =
-    | 'timestamp'
-    | 'direction'
-    | 'layer_index'
-    | 'retracement_count'
-    | 'units'
-    | 'price'
-    | 'execution_method';
   const [orderBy, setOrderBy] = useState<SortableKey>('timestamp');
   const [order, setOrder] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(0);
@@ -705,9 +699,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   // This prevents a position that was just closed from appearing as "open"
   // when the open-positions poll returns stale data while the closed-
   // positions poll already includes the updated record.
-  const allPositions = useMemo<
-    (TaskPosition & { _status: 'open' | 'closed' })[]
-  >(() => {
+  const allPositions = useMemo<TrendPosition[]>(() => {
     const map = new Map<string, TaskPosition>();
     // Insert closed first, then open – but if the same id appears in both
     // lists the closed version (is_open=false) wins because it is the more
@@ -751,17 +743,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   const [longPosRowsPerPage, setLongPosRowsPerPage] = useState(10);
   const [shortPosRowsPerPage, setShortPosRowsPerPage] = useState(10);
 
-  type LSPosSortableKey =
-    | 'entry_time'
-    | 'exit_time'
-    | '_status'
-    | 'layer_index'
-    | 'retracement_count'
-    | 'units'
-    | 'entry_price'
-    | 'exit_price'
-    | '_pips'
-    | '_pnl';
   const [longPosOrderBy, setLongPosOrderBy] =
     useState<LSPosSortableKey>('entry_time');
   const [longPosOrder, setLongPosOrder] = useState<'asc' | 'desc'>('desc');
@@ -2149,8 +2130,22 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       }
     }
 
-    return markers.sort((a, b) => Number(a.time) - Number(b.time));
-  }, [taskLifecycleEvents, strategyEvents, candles, startTimeSec, endTimeSec]);
+    return markers
+      .filter((marker) => {
+        if (markerDisplayCutoffSec == null) {
+          return true;
+        }
+        return Number(marker.time) <= markerDisplayCutoffSec;
+      })
+      .sort((a, b) => Number(a.time) - Number(b.time));
+  }, [
+    taskLifecycleEvents,
+    strategyEvents,
+    candles,
+    startTimeSec,
+    endTimeSec,
+    markerDisplayCutoffSec,
+  ]);
 
   // Update trade markers when trades or selection changes (without resetting the view)
   useEffect(() => {
@@ -2214,7 +2209,15 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           text,
         };
       })
-      .filter((marker) => Number(marker.time) > 0);
+      .filter((marker) => {
+        if (Number(marker.time) <= 0) {
+          return false;
+        }
+        if (markerDisplayCutoffSec == null) {
+          return true;
+        }
+        return Number(marker.time) <= markerDisplayCutoffSec;
+      });
 
     try {
       programmaticScrollRef.current = true;
@@ -2231,6 +2234,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     selectedTradeId,
     highlightedTradeIds,
     eventMarkers,
+    markerDisplayCutoffSec,
     programmaticScrollRef,
   ]);
 
@@ -2562,309 +2566,40 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
             flexDirection: 'column',
           }}
         >
-          <TaskTrendSectionHeader
-            title={t('tables.trend.trades')}
-            count={sortedTrades.length}
-            selectedCount={selectedRowIds.size}
+          <TaskTrendTradesTable
+            trades={sortedTrades}
+            paginatedTrades={paginatedTrades}
+            selectedTradeId={selectedTradeId}
+            highlightedTradeIds={highlightedTradeIds}
+            selectedRowIds={selectedRowIds}
+            isAllPageSelected={isAllPageSelected}
             isRefreshing={isRefreshing}
+            orderBy={orderBy}
+            order={order}
+            replayColWidths={replayColWidths}
+            page={page}
+            rowsPerPage={rowsPerPage}
+            selectedRowRef={selectedRowRef}
             onConfigureColumns={() => setTradesColConfigOpen(true)}
             onCopySelected={copySelectedRows}
             onSelectAllOnPage={selectAllOnPage}
             onResetSelection={resetSelection}
             onReload={fetchReplayData}
-          />
-
-          <TableContainer
-            component={Paper}
-            variant="outlined"
-            sx={{ overflowX: 'auto' }}
-          >
-            <Table stickyHeader sx={{ tableLayout: 'fixed', minWidth: 680 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox" sx={{ width: 42 }}>
-                    <Checkbox
-                      checked={isAllPageSelected}
-                      indeterminate={
-                        !isAllPageSelected &&
-                        paginatedTrades.some((r) => selectedRowIds.has(r.id))
-                      }
-                      onChange={() => {
-                        if (isAllPageSelected) {
-                          setSelectedRowIds((prev) => {
-                            const next = new Set(prev);
-                            for (const row of paginatedTrades)
-                              next.delete(row.id);
-                            return next;
-                          });
-                        } else {
-                          selectAllOnPage();
-                        }
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell
-                    sortDirection={orderBy === 'timestamp' ? order : false}
-                    sx={{
-                      position: 'relative',
-                      width: replayColWidths.timestamp,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={orderBy === 'timestamp'}
-                      direction={orderBy === 'timestamp' ? order : 'asc'}
-                      onClick={() => handleSort('timestamp')}
-                    >
-                      {t('tables.trend.time')}
-                    </TableSortLabel>
-                    {resizeHandle('timestamp')}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={orderBy === 'direction' ? order : false}
-                    sx={{
-                      position: 'relative',
-                      width: replayColWidths.direction,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={orderBy === 'direction'}
-                      direction={orderBy === 'direction' ? order : 'asc'}
-                      onClick={() => handleSort('direction')}
-                    >
-                      {t('tables.trend.direction')}
-                    </TableSortLabel>
-                    {resizeHandle('direction')}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={orderBy === 'layer_index' ? order : false}
-                    sx={{
-                      position: 'relative',
-                      width: replayColWidths.layer_index,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={orderBy === 'layer_index'}
-                      direction={orderBy === 'layer_index' ? order : 'asc'}
-                      onClick={() => handleSort('layer_index')}
-                    >
-                      {t('tables.trend.layer')}
-                    </TableSortLabel>
-                    {resizeHandle('layer_index')}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      orderBy === 'retracement_count' ? order : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: replayColWidths.retracement_count,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={orderBy === 'retracement_count'}
-                      direction={
-                        orderBy === 'retracement_count' ? order : 'asc'
-                      }
-                      onClick={() => handleSort('retracement_count')}
-                    >
-                      {t('tables.trend.ret')}
-                    </TableSortLabel>
-                    {resizeHandle('retracement_count')}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={orderBy === 'units' ? order : false}
-                    sx={{
-                      position: 'relative',
-                      width: replayColWidths.units,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={orderBy === 'units'}
-                      direction={orderBy === 'units' ? order : 'asc'}
-                      onClick={() => handleSort('units')}
-                    >
-                      {t('tables.trend.units')}
-                    </TableSortLabel>
-                    {resizeHandle('units')}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={orderBy === 'price' ? order : false}
-                    sx={{
-                      position: 'relative',
-                      width: replayColWidths.price,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={orderBy === 'price'}
-                      direction={orderBy === 'price' ? order : 'asc'}
-                      onClick={() => handleSort('price')}
-                    >
-                      {t('tables.trend.price')}
-                    </TableSortLabel>
-                    {resizeHandle('price')}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      orderBy === 'execution_method' ? order : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: replayColWidths.execution_method,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={orderBy === 'execution_method'}
-                      direction={orderBy === 'execution_method' ? order : 'asc'}
-                      onClick={() => handleSort('execution_method')}
-                    >
-                      {t('tables.trend.event')}
-                    </TableSortLabel>
-                    {resizeHandle('execution_method')}
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paginatedTrades.map((row) => {
-                  const selected = row.id === selectedTradeId;
-                  const highlighted = highlightedTradeIds.has(row.id);
-                  const checked = selectedRowIds.has(row.id);
-                  return (
-                    <TableRow
-                      key={row.id}
-                      ref={selected ? selectedRowRef : undefined}
-                      hover
-                      onClick={() => onRowSelect(row)}
-                      selected={selected || highlighted}
-                      sx={{
-                        cursor: 'pointer',
-                        height: 37,
-                        ...((selected || highlighted) && {
-                          backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                          '&.Mui-selected': {
-                            backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                          },
-                          '&.Mui-selected:hover': {
-                            backgroundColor: 'rgba(245, 158, 11, 0.25)',
-                          },
-                        }),
-                      }}
-                    >
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={checked}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={() => toggleRowSelection(row.id)}
-                        />
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {new Date(row.timestamp).toLocaleString()}
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {row.direction ? row.direction.toUpperCase() : ''}
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {row.layer_index ?? '-'}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {row.retracement_count ?? '-'}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {row.units}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {row.price
-                          ? `¥${parseFloat(row.price).toFixed(3)}`
-                          : '-'}
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {row.execution_method_display ||
-                          row.execution_method ||
-                          '-'}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {/* Fill empty rows to keep table height stable */}
-                {paginatedTrades.length < rowsPerPage &&
-                  Array.from({
-                    length: rowsPerPage - paginatedTrades.length,
-                  }).map((_, i) => (
-                    <TableRow key={`trade-empty-${i}`} sx={{ height: 37 }}>
-                      <TableCell
-                        colSpan={8}
-                        sx={{
-                          backgroundColor: 'action.hover',
-                          borderBottom: '1px solid',
-                          borderColor: 'divider',
-                          py: 0,
-                        }}
-                      />
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <TablePagination
-            component="div"
-            count={sortedTrades.length}
-            page={page}
+            onSelectTrade={onRowSelect}
+            onToggleRowSelection={toggleRowSelection}
+            onTogglePageSelection={() => {
+              if (isAllPageSelected) {
+                setSelectedRowIds((prev) => {
+                  const next = new Set(prev);
+                  for (const row of paginatedTrades) next.delete(row.id);
+                  return next;
+                });
+              } else {
+                selectAllOnPage();
+              }
+            }}
+            onSort={handleSort}
             onPageChange={(_e, newPage) => setPage(newPage)}
-            rowsPerPage={rowsPerPage}
             onRowsPerPageChange={(e) => {
               const newVal = parseInt(e.target.value, 10);
               setRowsPerPage(newVal);
@@ -2876,992 +2611,127 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
               setShortPosRowsPerPage(newVal);
               setShortPosPage(0);
             }}
-            rowsPerPageOptions={[10, 25, 50, 100]}
+            resizeHandle={resizeHandle}
           />
         </Box>
 
-        {/* Long Positions */}
-        <Box
-          sx={{
-            flex: 1,
-            minWidth: 0,
-            display: 'flex',
-            flexDirection: 'column',
+        <TaskTrendPositionsTable
+          title={t('tables.trend.longPositions')}
+          count={longPositions.length}
+          positions={sortedLongPositions}
+          paginatedPositions={paginatedLongPositions}
+          selectedPosId={selectedPosId}
+          selectedIds={selectedLongPosIds}
+          isAllPageSelected={isAllLongPosPageSelected}
+          isRefreshing={isRefreshing}
+          showOpenOnly={showOpenLongOnly}
+          orderBy={longPosOrderBy}
+          order={longPosOrder}
+          colWidths={longPosColWidths}
+          currentPrice={currentPrice}
+          pipSize={pipSize}
+          isShort={false}
+          page={longPosPage}
+          rowsPerPage={longPosRowsPerPage}
+          selectedPosRowRef={selectedPosRowRef}
+          onConfigureColumns={() => setLongPosColConfigOpen(true)}
+          onCopySelected={copySelectedLongPositions}
+          onSelectAllOnPage={selectAllLongPosOnPage}
+          onResetSelection={resetLongPosSelection}
+          onReload={fetchReplayData}
+          onToggleOpenOnly={() => {
+            setShowOpenLongOnly((prev) => !prev);
+            setLongPosPage(0);
           }}
-        >
-          <TaskTrendSectionHeader
-            title={t('tables.trend.longPositions')}
-            count={longPositions.length}
-            selectedCount={selectedLongPosIds.size}
-            isRefreshing={isRefreshing}
-            onConfigureColumns={() => setLongPosColConfigOpen(true)}
-            onCopySelected={copySelectedLongPositions}
-            onSelectAllOnPage={selectAllLongPosOnPage}
-            onResetSelection={resetLongPosSelection}
-            onReload={fetchReplayData}
-            showOpenOnly={showOpenLongOnly}
-            onToggleOpenOnly={() => {
-              setShowOpenLongOnly((prev) => !prev);
-              setLongPosPage(0);
-            }}
-          />
-          <TableContainer
-            component={Paper}
-            variant="outlined"
-            sx={{ overflowX: 'auto' }}
-          >
-            <Table stickyHeader sx={{ tableLayout: 'fixed', minWidth: 1000 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox" sx={{ width: 42 }}>
-                    <Checkbox
-                      checked={isAllLongPosPageSelected}
-                      indeterminate={
-                        !isAllLongPosPageSelected &&
-                        paginatedLongPositions.some((r) =>
-                          selectedLongPosIds.has(r.id)
-                        )
-                      }
-                      onChange={() => {
-                        if (isAllLongPosPageSelected) {
-                          setSelectedLongPosIds((prev) => {
-                            const next = new Set(prev);
-                            for (const row of paginatedLongPositions)
-                              next.delete(row.id);
-                            return next;
-                          });
-                        } else {
-                          selectAllLongPosOnPage();
-                        }
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      longPosOrderBy === 'entry_time' ? longPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths.entry_time,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === 'entry_time'}
-                      direction={
-                        longPosOrderBy === 'entry_time' ? longPosOrder : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('entry_time')}
-                    >
-                      {t('tables.trend.openTime')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'entry_time',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      longPosOrderBy === 'exit_time' ? longPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths.exit_time,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === 'exit_time'}
-                      direction={
-                        longPosOrderBy === 'exit_time' ? longPosOrder : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('exit_time')}
-                    >
-                      {t('tables.trend.closeTime')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'exit_time',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      longPosOrderBy === '_status' ? longPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths._status,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === '_status'}
-                      direction={
-                        longPosOrderBy === '_status' ? longPosOrder : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('_status')}
-                    >
-                      {t('tables.trend.status')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      '_status',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      longPosOrderBy === 'layer_index' ? longPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths.layer_index,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === 'layer_index'}
-                      direction={
-                        longPosOrderBy === 'layer_index' ? longPosOrder : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('layer_index')}
-                    >
-                      {t('tables.trend.layer')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'layer_index',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      longPosOrderBy === 'retracement_count'
-                        ? longPosOrder
-                        : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths.retracement_count,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === 'retracement_count'}
-                      direction={
-                        longPosOrderBy === 'retracement_count'
-                          ? longPosOrder
-                          : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('retracement_count')}
-                    >
-                      {t('tables.trend.retrace')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'retracement_count',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      longPosOrderBy === 'units' ? longPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths.units,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === 'units'}
-                      direction={
-                        longPosOrderBy === 'units' ? longPosOrder : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('units')}
-                    >
-                      {t('tables.trend.units')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'units',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      longPosOrderBy === 'entry_price' ? longPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths.entry_price,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === 'entry_price'}
-                      direction={
-                        longPosOrderBy === 'entry_price' ? longPosOrder : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('entry_price')}
-                    >
-                      {t('tables.trend.entry')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'entry_price',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      longPosOrderBy === 'exit_price' ? longPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths.exit_price,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === 'exit_price'}
-                      direction={
-                        longPosOrderBy === 'exit_price' ? longPosOrder : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('exit_price')}
-                    >
-                      {t('tables.trend.exit')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'exit_price',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      longPosOrderBy === '_pips' ? longPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths._pips,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === '_pips'}
-                      direction={
-                        longPosOrderBy === '_pips' ? longPosOrder : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('_pips')}
-                    >
-                      {t('tables.trend.pips')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      '_pips',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      longPosOrderBy === '_pnl' ? longPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths._pnl,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === '_pnl'}
-                      direction={
-                        longPosOrderBy === '_pnl' ? longPosOrder : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('_pnl')}
-                    >
-                      {t('tables.trend.pnl')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      '_pnl',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paginatedLongPositions.map((pos) => {
-                  const isOpen = pos._status === 'open';
-                  const entryP = pos.entry_price
-                    ? parseFloat(pos.entry_price)
-                    : null;
-                  const exitP = pos.exit_price
-                    ? parseFloat(pos.exit_price)
-                    : null;
-                  const units = Math.abs(pos.units ?? 0);
-                  let pnl: number | null = null;
-                  if (isOpen && currentPrice != null && entryP != null)
-                    pnl = (currentPrice - entryP) * units;
-                  else if (!isOpen && exitP != null && entryP != null)
-                    pnl = (exitP - entryP) * units;
-                  const posSelected = pos.id === selectedPosId;
-                  const longChecked = selectedLongPosIds.has(pos.id);
-                  return (
-                    <TableRow
-                      key={pos.id}
-                      ref={posSelected ? selectedPosRowRef : undefined}
-                      hover
-                      onClick={() => onPosRowSelect(pos)}
-                      selected={posSelected}
-                      sx={{
-                        cursor: 'pointer',
-                        height: 37,
-                        ...(posSelected && {
-                          backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                          '&.Mui-selected': {
-                            backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                          },
-                          '&.Mui-selected:hover': {
-                            backgroundColor: 'rgba(245, 158, 11, 0.25)',
-                          },
-                        }),
-                      }}
-                    >
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={longChecked}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={() => toggleLongPosSelection(pos.id)}
-                        />
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {pos.entry_time
-                          ? new Date(pos.entry_time).toLocaleString()
-                          : '-'}
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {pos.exit_time
-                          ? new Date(pos.exit_time).toLocaleString()
-                          : '-'}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={isOpen ? 'Open' : 'Closed'}
-                          color={isOpen ? 'success' : 'default'}
-                          variant="outlined"
-                          sx={{ height: 20, fontSize: '0.7rem' }}
-                        />
-                      </TableCell>
-                      <TableCell>{pos.layer_index ?? '-'}</TableCell>
-                      <TableCell>{pos.retracement_count ?? '-'}</TableCell>
-                      <TableCell align="right">{pos.units}</TableCell>
-                      <TableCell align="right">
-                        {entryP != null ? `¥${entryP.toFixed(3)}` : '-'}
-                      </TableCell>
-                      <TableCell align="right">
-                        {exitP != null ? `¥${exitP.toFixed(3)}` : '-'}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          color: (() => {
-                            const pips = computePosPips(
-                              pos,
-                              currentPrice,
-                              pipSize
-                            );
-                            if (!pipSize) return 'text.secondary';
-                            return pips >= 0 ? 'success.main' : 'error.main';
-                          })(),
-                          fontWeight: 'bold',
-                        }}
-                      >
-                        {(() => {
-                          if (!pipSize) return '-';
-                          const hasPrice = isOpen
-                            ? currentPrice != null && entryP != null
-                            : exitP != null && entryP != null;
-                          if (!hasPrice) return '-';
-                          const pips = computePosPips(
-                            pos,
-                            currentPrice,
-                            pipSize
-                          );
-                          return `${pips >= 0 ? '+' : ''}${pips.toFixed(1)}`;
-                        })()}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          color:
-                            pnl != null
-                              ? pnl >= 0
-                                ? 'success.main'
-                                : 'error.main'
-                              : 'text.secondary',
-                          fontWeight: 'bold',
-                        }}
-                      >
-                        {pnl != null
-                          ? `${pnl >= 0 ? '+' : ''}¥${pnl.toFixed(2)}`
-                          : '-'}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {paginatedLongPositions.length < longPosRowsPerPage &&
-                  Array.from({
-                    length: longPosRowsPerPage - paginatedLongPositions.length,
-                  }).map((_, i) => (
-                    <TableRow key={`lpos-empty-${i}`} sx={{ height: 37 }}>
-                      <TableCell
-                        colSpan={11}
-                        sx={{
-                          backgroundColor: 'action.hover',
-                          borderBottom: '1px solid',
-                          borderColor: 'divider',
-                          py: 0,
-                        }}
-                      />
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <TablePagination
-            component="div"
-            count={sortedLongPositions.length}
-            page={longPosPage}
-            onPageChange={(_e, newPage) => setLongPosPage(newPage)}
-            rowsPerPage={longPosRowsPerPage}
-            onRowsPerPageChange={(e) => {
-              const newVal = parseInt(e.target.value, 10);
-              setLongPosRowsPerPage(newVal);
-              setLongPosPage(0);
-              setRowsPerPage(newVal);
-              setPage(0);
-              setPosRowsPerPage(newVal);
-              setPosPage(0);
-              setShortPosRowsPerPage(newVal);
-              setShortPosPage(0);
-            }}
-            rowsPerPageOptions={[10, 25, 50, 100]}
-          />
-        </Box>
+          onTogglePageSelection={() => {
+            if (isAllLongPosPageSelected) {
+              setSelectedLongPosIds((prev) => {
+                const next = new Set(prev);
+                for (const row of paginatedLongPositions) next.delete(row.id);
+                return next;
+              });
+            } else {
+              selectAllLongPosOnPage();
+            }
+          }}
+          onSort={handleLongPosSort}
+          onSelectPosition={onPosRowSelect}
+          onToggleSelection={toggleLongPosSelection}
+          onPageChange={(_e, newPage) => setLongPosPage(newPage)}
+          onRowsPerPageChange={(e) => {
+            const newVal = parseInt(e.target.value, 10);
+            setLongPosRowsPerPage(newVal);
+            setLongPosPage(0);
+            setRowsPerPage(newVal);
+            setPage(0);
+            setPosRowsPerPage(newVal);
+            setPosPage(0);
+            setShortPosRowsPerPage(newVal);
+            setShortPosPage(0);
+          }}
+          resizeHandle={(col) =>
+            makeLSResizeHandle(col, longPosColWidths, setLongPosColWidths)
+          }
+        />
 
-        {/* Short Positions */}
-        <Box
-          sx={{
-            flex: 1,
-            minWidth: 0,
-            display: 'flex',
-            flexDirection: 'column',
+        <TaskTrendPositionsTable
+          title={t('tables.trend.shortPositions')}
+          count={shortPositions.length}
+          positions={sortedShortPositions}
+          paginatedPositions={paginatedShortPositions}
+          selectedPosId={selectedPosId}
+          selectedIds={selectedShortPosIds}
+          isAllPageSelected={isAllShortPosPageSelected}
+          isRefreshing={isRefreshing}
+          showOpenOnly={showOpenShortOnly}
+          orderBy={shortPosOrderBy}
+          order={shortPosOrder}
+          colWidths={shortPosColWidths}
+          currentPrice={currentPrice}
+          pipSize={pipSize}
+          isShort={true}
+          page={shortPosPage}
+          rowsPerPage={shortPosRowsPerPage}
+          selectedPosRowRef={selectedPosRowRef}
+          onConfigureColumns={() => setShortPosColConfigOpen(true)}
+          onCopySelected={copySelectedShortPositions}
+          onSelectAllOnPage={selectAllShortPosOnPage}
+          onResetSelection={resetShortPosSelection}
+          onReload={fetchReplayData}
+          onToggleOpenOnly={() => {
+            setShowOpenShortOnly((prev) => !prev);
+            setShortPosPage(0);
           }}
-        >
-          <TaskTrendSectionHeader
-            title={t('tables.trend.shortPositions')}
-            count={shortPositions.length}
-            selectedCount={selectedShortPosIds.size}
-            isRefreshing={isRefreshing}
-            onConfigureColumns={() => setShortPosColConfigOpen(true)}
-            onCopySelected={copySelectedShortPositions}
-            onSelectAllOnPage={selectAllShortPosOnPage}
-            onResetSelection={resetShortPosSelection}
-            onReload={fetchReplayData}
-            showOpenOnly={showOpenShortOnly}
-            onToggleOpenOnly={() => {
-              setShowOpenShortOnly((prev) => !prev);
-              setShortPosPage(0);
-            }}
-          />
-          <TableContainer
-            component={Paper}
-            variant="outlined"
-            sx={{ overflowX: 'auto' }}
-          >
-            <Table stickyHeader sx={{ tableLayout: 'fixed', minWidth: 1000 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox" sx={{ width: 42 }}>
-                    <Checkbox
-                      checked={isAllShortPosPageSelected}
-                      indeterminate={
-                        !isAllShortPosPageSelected &&
-                        paginatedShortPositions.some((r) =>
-                          selectedShortPosIds.has(r.id)
-                        )
-                      }
-                      onChange={() => {
-                        if (isAllShortPosPageSelected) {
-                          setSelectedShortPosIds((prev) => {
-                            const next = new Set(prev);
-                            for (const row of paginatedShortPositions)
-                              next.delete(row.id);
-                            return next;
-                          });
-                        } else {
-                          selectAllShortPosOnPage();
-                        }
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      shortPosOrderBy === 'entry_time' ? shortPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths.entry_time,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === 'entry_time'}
-                      direction={
-                        shortPosOrderBy === 'entry_time' ? shortPosOrder : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('entry_time')}
-                    >
-                      {t('tables.trend.openTime')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'entry_time',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      shortPosOrderBy === 'exit_time' ? shortPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths.exit_time,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === 'exit_time'}
-                      direction={
-                        shortPosOrderBy === 'exit_time' ? shortPosOrder : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('exit_time')}
-                    >
-                      {t('tables.trend.closeTime')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'exit_time',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      shortPosOrderBy === '_status' ? shortPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths._status,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === '_status'}
-                      direction={
-                        shortPosOrderBy === '_status' ? shortPosOrder : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('_status')}
-                    >
-                      {t('tables.trend.status')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      '_status',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      shortPosOrderBy === 'layer_index' ? shortPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths.layer_index,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === 'layer_index'}
-                      direction={
-                        shortPosOrderBy === 'layer_index'
-                          ? shortPosOrder
-                          : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('layer_index')}
-                    >
-                      {t('tables.trend.layer')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'layer_index',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      shortPosOrderBy === 'retracement_count'
-                        ? shortPosOrder
-                        : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths.retracement_count,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === 'retracement_count'}
-                      direction={
-                        shortPosOrderBy === 'retracement_count'
-                          ? shortPosOrder
-                          : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('retracement_count')}
-                    >
-                      {t('tables.trend.retrace')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'retracement_count',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      shortPosOrderBy === 'units' ? shortPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths.units,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === 'units'}
-                      direction={
-                        shortPosOrderBy === 'units' ? shortPosOrder : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('units')}
-                    >
-                      {t('tables.trend.units')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'units',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      shortPosOrderBy === 'entry_price' ? shortPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths.entry_price,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === 'entry_price'}
-                      direction={
-                        shortPosOrderBy === 'entry_price'
-                          ? shortPosOrder
-                          : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('entry_price')}
-                    >
-                      {t('tables.trend.entry')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'entry_price',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      shortPosOrderBy === 'exit_price' ? shortPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths.exit_price,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === 'exit_price'}
-                      direction={
-                        shortPosOrderBy === 'exit_price' ? shortPosOrder : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('exit_price')}
-                    >
-                      {t('tables.trend.exit')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'exit_price',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      shortPosOrderBy === '_pips' ? shortPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths._pips,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === '_pips'}
-                      direction={
-                        shortPosOrderBy === '_pips' ? shortPosOrder : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('_pips')}
-                    >
-                      {t('tables.trend.pips')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      '_pips',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      shortPosOrderBy === '_pnl' ? shortPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths._pnl,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === '_pnl'}
-                      direction={
-                        shortPosOrderBy === '_pnl' ? shortPosOrder : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('_pnl')}
-                    >
-                      {t('tables.trend.pnl')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      '_pnl',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paginatedShortPositions.map((pos) => {
-                  const isOpen = pos._status === 'open';
-                  const entryP = pos.entry_price
-                    ? parseFloat(pos.entry_price)
-                    : null;
-                  const exitP = pos.exit_price
-                    ? parseFloat(pos.exit_price)
-                    : null;
-                  const units = Math.abs(pos.units ?? 0);
-                  let pnl: number | null = null;
-                  if (isOpen && currentPrice != null && entryP != null)
-                    pnl = (entryP - currentPrice) * units;
-                  else if (!isOpen && exitP != null && entryP != null)
-                    pnl = (entryP - exitP) * units;
-                  const posSelected = pos.id === selectedPosId;
-                  const shortChecked = selectedShortPosIds.has(pos.id);
-                  return (
-                    <TableRow
-                      key={pos.id}
-                      ref={posSelected ? selectedPosRowRef : undefined}
-                      hover
-                      onClick={() => onPosRowSelect(pos)}
-                      selected={posSelected}
-                      sx={{
-                        cursor: 'pointer',
-                        height: 37,
-                        ...(posSelected && {
-                          backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                          '&.Mui-selected': {
-                            backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                          },
-                          '&.Mui-selected:hover': {
-                            backgroundColor: 'rgba(245, 158, 11, 0.25)',
-                          },
-                        }),
-                      }}
-                    >
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={shortChecked}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={() => toggleShortPosSelection(pos.id)}
-                        />
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {pos.entry_time
-                          ? new Date(pos.entry_time).toLocaleString()
-                          : '-'}
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {pos.exit_time
-                          ? new Date(pos.exit_time).toLocaleString()
-                          : '-'}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={isOpen ? 'Open' : 'Closed'}
-                          color={isOpen ? 'success' : 'default'}
-                          variant="outlined"
-                          sx={{ height: 20, fontSize: '0.7rem' }}
-                        />
-                      </TableCell>
-                      <TableCell>{pos.layer_index ?? '-'}</TableCell>
-                      <TableCell>{pos.retracement_count ?? '-'}</TableCell>
-                      <TableCell align="right">{pos.units}</TableCell>
-                      <TableCell align="right">
-                        {entryP != null ? `¥${entryP.toFixed(3)}` : '-'}
-                      </TableCell>
-                      <TableCell align="right">
-                        {exitP != null ? `¥${exitP.toFixed(3)}` : '-'}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          color: (() => {
-                            const pips = computePosPips(
-                              pos,
-                              currentPrice,
-                              pipSize
-                            );
-                            if (!pipSize) return 'text.secondary';
-                            return pips >= 0 ? 'success.main' : 'error.main';
-                          })(),
-                          fontWeight: 'bold',
-                        }}
-                      >
-                        {(() => {
-                          if (!pipSize) return '-';
-                          const hasPrice = isOpen
-                            ? currentPrice != null && entryP != null
-                            : exitP != null && entryP != null;
-                          if (!hasPrice) return '-';
-                          const pips = computePosPips(
-                            pos,
-                            currentPrice,
-                            pipSize
-                          );
-                          return `${pips >= 0 ? '+' : ''}${pips.toFixed(1)}`;
-                        })()}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          color:
-                            pnl != null
-                              ? pnl >= 0
-                                ? 'success.main'
-                                : 'error.main'
-                              : 'text.secondary',
-                          fontWeight: 'bold',
-                        }}
-                      >
-                        {pnl != null
-                          ? `${pnl >= 0 ? '+' : ''}¥${pnl.toFixed(2)}`
-                          : '-'}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {paginatedShortPositions.length < shortPosRowsPerPage &&
-                  Array.from({
-                    length:
-                      shortPosRowsPerPage - paginatedShortPositions.length,
-                  }).map((_, i) => (
-                    <TableRow key={`spos-empty-${i}`} sx={{ height: 37 }}>
-                      <TableCell
-                        colSpan={11}
-                        sx={{
-                          backgroundColor: 'action.hover',
-                          borderBottom: '1px solid',
-                          borderColor: 'divider',
-                          py: 0,
-                        }}
-                      />
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <TablePagination
-            component="div"
-            count={sortedShortPositions.length}
-            page={shortPosPage}
-            onPageChange={(_e, newPage) => setShortPosPage(newPage)}
-            rowsPerPage={shortPosRowsPerPage}
-            onRowsPerPageChange={(e) => {
-              const newVal = parseInt(e.target.value, 10);
-              setShortPosRowsPerPage(newVal);
-              setShortPosPage(0);
-              setRowsPerPage(newVal);
-              setPage(0);
-              setPosRowsPerPage(newVal);
-              setPosPage(0);
-              setLongPosRowsPerPage(newVal);
-              setLongPosPage(0);
-            }}
-            rowsPerPageOptions={[10, 25, 50, 100]}
-          />
-        </Box>
+          onTogglePageSelection={() => {
+            if (isAllShortPosPageSelected) {
+              setSelectedShortPosIds((prev) => {
+                const next = new Set(prev);
+                for (const row of paginatedShortPositions) next.delete(row.id);
+                return next;
+              });
+            } else {
+              selectAllShortPosOnPage();
+            }
+          }}
+          onSort={handleShortPosSort}
+          onSelectPosition={onPosRowSelect}
+          onToggleSelection={toggleShortPosSelection}
+          onPageChange={(_e, newPage) => setShortPosPage(newPage)}
+          onRowsPerPageChange={(e) => {
+            const newVal = parseInt(e.target.value, 10);
+            setShortPosRowsPerPage(newVal);
+            setShortPosPage(0);
+            setRowsPerPage(newVal);
+            setPage(0);
+            setPosRowsPerPage(newVal);
+            setPosPage(0);
+            setLongPosRowsPerPage(newVal);
+            setLongPosPage(0);
+          }}
+          resizeHandle={(col) =>
+            makeLSResizeHandle(col, shortPosColWidths, setShortPosColWidths)
+          }
+        />
       </Box>
 
       <ColumnConfigDialog
