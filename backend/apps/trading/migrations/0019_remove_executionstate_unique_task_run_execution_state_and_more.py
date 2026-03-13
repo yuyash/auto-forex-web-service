@@ -4,6 +4,141 @@ from django.conf import settings
 from django.db import migrations, models
 
 
+LEGACY_CONSTRAINTS = (
+    (
+        "execution_state",
+        "unique_task_run_execution_state",
+        'UNIQUE ("task_type", "task_id", "execution_run_id")',
+    ),
+    (
+        "metrics",
+        "unique_metric_timestamp_per_run",
+        'UNIQUE ("task_type", "task_id", "execution_run_id", "timestamp")',
+    ),
+)
+
+LEGACY_INDEXES = (
+    (
+        "backtest_ta_celery__9504ee_idx",
+        'CREATE INDEX IF NOT EXISTS "backtest_ta_celery__9504ee_idx" ON "backtest_tasks" ("celery_task_id")',
+    ),
+    (
+        "execution_s_task_ty_5f4789_idx",
+        'CREATE INDEX IF NOT EXISTS "execution_s_task_ty_5f4789_idx" ON "execution_state" ("task_type", "task_id", "celery_task_id")',
+    ),
+    (
+        "execution_s_celery__7fb117_idx",
+        'CREATE INDEX IF NOT EXISTS "execution_s_celery__7fb117_idx" ON "execution_state" ("celery_task_id")',
+    ),
+    (
+        "execution_s_task_ty_2650b5_idx",
+        'CREATE INDEX IF NOT EXISTS "execution_s_task_ty_2650b5_idx" ON "execution_state" ("task_type", "task_id", "execution_run_id")',
+    ),
+    (
+        "metrics_task_ty_309c89_idx",
+        'CREATE INDEX IF NOT EXISTS "metrics_task_ty_309c89_idx" ON "metrics" ("task_type", "task_id", "celery_task_id")',
+    ),
+    (
+        "metrics_task_ty_bd39fc_idx",
+        'CREATE INDEX IF NOT EXISTS "metrics_task_ty_bd39fc_idx" ON "metrics" ("task_type", "task_id", "execution_run_id", "timestamp")',
+    ),
+    (
+        "orders_task_ty_71dc0b_idx",
+        'CREATE INDEX IF NOT EXISTS "orders_task_ty_71dc0b_idx" ON "orders" ("task_type", "task_id", "execution_run_id", "submitted_at" DESC)',
+    ),
+    (
+        "positions_task_ty_07222e_idx",
+        'CREATE INDEX IF NOT EXISTS "positions_task_ty_07222e_idx" ON "positions" ("task_type", "task_id", "celery_task_id", "entry_time" DESC)',
+    ),
+    (
+        "positions_task_ty_c2c96f_idx",
+        'CREATE INDEX IF NOT EXISTS "positions_task_ty_c2c96f_idx" ON "positions" ("task_type", "task_id", "execution_run_id", "entry_time" DESC)',
+    ),
+    (
+        "strategy_ev_task_ty_fac977_idx",
+        'CREATE INDEX IF NOT EXISTS "strategy_ev_task_ty_fac977_idx" ON "strategy_events" ("task_type", "task_id", "execution_run_id", "created_at" DESC)',
+    ),
+    (
+        "task_logs_celery__7cc863_idx",
+        'CREATE INDEX IF NOT EXISTS "task_logs_celery__7cc863_idx" ON "task_logs" ("celery_task_id")',
+    ),
+    (
+        "task_logs_task_ty_7067c6_idx",
+        'CREATE INDEX IF NOT EXISTS "task_logs_task_ty_7067c6_idx" ON "task_logs" ("task_type", "task_id", "execution_run_id", "timestamp")',
+    ),
+    (
+        "trades_task_ty_765da6_idx",
+        'CREATE INDEX IF NOT EXISTS "trades_task_ty_765da6_idx" ON "trades" ("task_type", "task_id", "celery_task_id", "timestamp" DESC)',
+    ),
+    (
+        "trades_task_ty_56c536_idx",
+        'CREATE INDEX IF NOT EXISTS "trades_task_ty_56c536_idx" ON "trades" ("task_type", "task_id", "execution_run_id", "timestamp" DESC)',
+    ),
+    (
+        "trading_eve_task_ty_08d514_idx",
+        'CREATE INDEX IF NOT EXISTS "trading_eve_task_ty_08d514_idx" ON "trading_events" ("task_type", "task_id", "celery_task_id", "created_at" DESC)',
+    ),
+    (
+        "trading_eve_task_ty_8f3162_idx",
+        'CREATE INDEX IF NOT EXISTS "trading_eve_task_ty_8f3162_idx" ON "trading_events" ("task_type", "task_id", "execution_run_id", "created_at" DESC)',
+    ),
+    (
+        "trading_tas_celery__9cfcfe_idx",
+        'CREATE INDEX IF NOT EXISTS "trading_tas_celery__9cfcfe_idx" ON "trading_tasks" ("celery_task_id")',
+    ),
+)
+
+
+def _drop_legacy_constraints(apps, schema_editor):
+    _ = apps
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    for table_name, constraint_name, _definition in LEGACY_CONSTRAINTS:
+        schema_editor.execute(
+            f'ALTER TABLE "{table_name}" DROP CONSTRAINT IF EXISTS "{constraint_name}"'
+        )
+
+
+def _restore_legacy_constraints(apps, schema_editor):
+    _ = apps
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    with schema_editor.connection.cursor() as cursor:
+        for table_name, constraint_name, definition in LEGACY_CONSTRAINTS:
+            cursor.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1
+                    FROM pg_constraint
+                    WHERE conrelid = %s::regclass
+                      AND conname = %s
+                )
+                """,
+                [table_name, constraint_name],
+            )
+            row = cursor.fetchone()
+            if not (row and row[0]):
+                schema_editor.execute(
+                    f'ALTER TABLE "{table_name}" ADD CONSTRAINT "{constraint_name}" {definition}'
+                )
+
+
+def _drop_legacy_indexes(apps, schema_editor):
+    _ = apps
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    for index_name, _create_sql in LEGACY_INDEXES:
+        schema_editor.execute(f'DROP INDEX IF EXISTS "{index_name}"')
+
+
+def _restore_legacy_indexes(apps, schema_editor):
+    _ = apps
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    for _index_name, create_sql in LEGACY_INDEXES:
+        schema_editor.execute(create_sql)
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -13,81 +148,101 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveConstraint(
-            model_name='executionstate',
-            name='unique_task_run_execution_state',
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunPython(
+                    _drop_legacy_constraints,
+                    _restore_legacy_constraints,
+                ),
+            ],
+            state_operations=[
+                migrations.RemoveConstraint(
+                    model_name='executionstate',
+                    name='unique_task_run_execution_state',
+                ),
+                migrations.RemoveConstraint(
+                    model_name='metrics',
+                    name='unique_metric_timestamp_per_run',
+                ),
+            ],
         ),
-        migrations.RemoveConstraint(
-            model_name='metrics',
-            name='unique_metric_timestamp_per_run',
-        ),
-        migrations.RemoveIndex(
-            model_name='backtesttask',
-            name='backtest_ta_celery__9504ee_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='executionstate',
-            name='execution_s_task_ty_5f4789_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='executionstate',
-            name='execution_s_celery__7fb117_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='executionstate',
-            name='execution_s_task_ty_2650b5_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='metrics',
-            name='metrics_task_ty_309c89_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='metrics',
-            name='metrics_task_ty_bd39fc_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='order',
-            name='orders_task_ty_71dc0b_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='position',
-            name='positions_task_ty_07222e_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='position',
-            name='positions_task_ty_c2c96f_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='strategyeventrecord',
-            name='strategy_ev_task_ty_fac977_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='tasklog',
-            name='task_logs_celery__7cc863_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='tasklog',
-            name='task_logs_task_ty_7067c6_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='trade',
-            name='trades_task_ty_765da6_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='trade',
-            name='trades_task_ty_56c536_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='tradingevent',
-            name='trading_eve_task_ty_08d514_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='tradingevent',
-            name='trading_eve_task_ty_8f3162_idx',
-        ),
-        migrations.RemoveIndex(
-            model_name='tradingtask',
-            name='trading_tas_celery__9cfcfe_idx',
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunPython(
+                    _drop_legacy_indexes,
+                    _restore_legacy_indexes,
+                ),
+            ],
+            state_operations=[
+                migrations.RemoveIndex(
+                    model_name='backtesttask',
+                    name='backtest_ta_celery__9504ee_idx',
+                ),
+                migrations.RemoveIndex(
+                    model_name='executionstate',
+                    name='execution_s_task_ty_5f4789_idx',
+                ),
+                migrations.RemoveIndex(
+                    model_name='executionstate',
+                    name='execution_s_celery__7fb117_idx',
+                ),
+                migrations.RemoveIndex(
+                    model_name='executionstate',
+                    name='execution_s_task_ty_2650b5_idx',
+                ),
+                migrations.RemoveIndex(
+                    model_name='metrics',
+                    name='metrics_task_ty_309c89_idx',
+                ),
+                migrations.RemoveIndex(
+                    model_name='metrics',
+                    name='metrics_task_ty_bd39fc_idx',
+                ),
+                migrations.RemoveIndex(
+                    model_name='order',
+                    name='orders_task_ty_71dc0b_idx',
+                ),
+                migrations.RemoveIndex(
+                    model_name='position',
+                    name='positions_task_ty_07222e_idx',
+                ),
+                migrations.RemoveIndex(
+                    model_name='position',
+                    name='positions_task_ty_c2c96f_idx',
+                ),
+                migrations.RemoveIndex(
+                    model_name='strategyeventrecord',
+                    name='strategy_ev_task_ty_fac977_idx',
+                ),
+                migrations.RemoveIndex(
+                    model_name='tasklog',
+                    name='task_logs_celery__7cc863_idx',
+                ),
+                migrations.RemoveIndex(
+                    model_name='tasklog',
+                    name='task_logs_task_ty_7067c6_idx',
+                ),
+                migrations.RemoveIndex(
+                    model_name='trade',
+                    name='trades_task_ty_765da6_idx',
+                ),
+                migrations.RemoveIndex(
+                    model_name='trade',
+                    name='trades_task_ty_56c536_idx',
+                ),
+                migrations.RemoveIndex(
+                    model_name='tradingevent',
+                    name='trading_eve_task_ty_08d514_idx',
+                ),
+                migrations.RemoveIndex(
+                    model_name='tradingevent',
+                    name='trading_eve_task_ty_8f3162_idx',
+                ),
+                migrations.RemoveIndex(
+                    model_name='tradingtask',
+                    name='trading_tas_celery__9cfcfe_idx',
+                ),
+            ],
         ),
         migrations.RemoveField(
             model_name='backtesttask',

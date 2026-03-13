@@ -83,6 +83,30 @@ class TestMetrics:
         assert response.data["count"] == 0
         assert response.data["results"] == []
 
+    def test_interval_metrics_with_null_execution_id(self):
+        task = _make_task()
+        task.execution_id = None
+        task.save(update_fields=["execution_id"])
+        client = _auth_client(task.user)
+        now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        for i in range(2):
+            Metrics.objects.create(
+                task_type=TaskType.BACKTEST,
+                task_id=task.pk,
+                execution_id=None,
+                timestamp=now + timedelta(minutes=i),
+                metrics={"margin_ratio": str(Decimal("0.05") + Decimal(str(i)) / 100)},
+            )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/metrics/",
+            {"interval": 2, "page_size": 5000},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 1
+        assert len(response.data["results"]) == 1
+
 
 @pytest.mark.django_db
 class TestLogs:
@@ -236,6 +260,84 @@ class TestEvents:
         assert response.data["count"] == 1
         assert response.data["results"][0]["event_scope"] == "strategy"
 
+    def test_events_support_created_at_range_filter(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        older = TradingEvent.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            event_type="initial_entry",
+            severity="info",
+            description="Older event",
+            user=task.user,
+            instrument="USD_JPY",
+        )
+        newer = TradingEvent.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            event_type="initial_entry",
+            severity="info",
+            description="Newer event",
+            user=task.user,
+            instrument="USD_JPY",
+        )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/events/",
+            {
+                "created_from": older.created_at.isoformat(),
+                "created_to": newer.created_at.isoformat(),
+            },
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 2
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/events/",
+            {"created_from": newer.created_at.isoformat()},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 1
+        assert response.data["results"][0]["description"] == "Newer event"
+
+    def test_strategy_events_support_created_at_range_filter(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        StrategyEventRecord.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            event_type="add_layer",
+            severity="info",
+            description="Older strategy event",
+            user=task.user,
+            instrument="USD_JPY",
+            details={"event_type": "add_layer"},
+        )
+        newer = StrategyEventRecord.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            event_type="take_profit",
+            severity="info",
+            description="Newer strategy event",
+            user=task.user,
+            instrument="USD_JPY",
+            details={"event_type": "take_profit"},
+        )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/strategy-events/",
+            {"created_from": newer.created_at.isoformat()},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 1
+        assert response.data["results"][0]["description"] == "Newer strategy event"
+
 
 @pytest.mark.django_db
 class TestTrades:
@@ -273,6 +375,42 @@ class TestTrades:
         response = client.get(f"/api/trading/tasks/backtest/{task.pk}/trades/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 0
+
+    def test_trades_support_timestamp_range_filter(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        Trade.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=now,
+            direction=Direction.LONG,
+            units=1000,
+            instrument="USD_JPY",
+            price=Decimal("150.500"),
+            execution_method="initial_entry",
+        )
+        Trade.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=now + timedelta(minutes=5),
+            direction=Direction.SHORT,
+            units=1000,
+            instrument="USD_JPY",
+            price=Decimal("150.700"),
+            execution_method="take_profit",
+        )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/trades/",
+            {"timestamp_from": (now + timedelta(minutes=1)).isoformat()},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 1
+        assert response.data["results"][0]["direction"] == "sell"
 
 
 @pytest.mark.django_db

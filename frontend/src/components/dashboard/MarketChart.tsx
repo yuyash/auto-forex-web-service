@@ -1,6 +1,11 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { Box, CircularProgress, Typography } from '@mui/material';
-import { useTranslation } from 'react-i18next';
+import {
+  Box,
+  Chip,
+  CircularProgress,
+  LinearProgress,
+  Typography,
+} from '@mui/material';
 import { getCandleColors } from '../../utils/candleColors';
 import {
   CandlestickSeries,
@@ -15,7 +20,6 @@ import {
   type UTCTimestamp,
   type SeriesMarker,
 } from 'lightweight-charts';
-import { api } from '../../api/apiClient';
 import type { Granularity } from '../../types/chart';
 import { detectMarketGaps } from '../../utils/marketClosedMarkers';
 import { MarketClosedHighlight } from '../../utils/MarketClosedHighlight';
@@ -37,6 +41,7 @@ import {
   DEFAULT_OVERLAY_SETTINGS,
   type OverlaySettings,
 } from './chartOverlaySettings';
+import { useWindowedCandles } from '../../hooks/useWindowedCandles';
 
 /** Granularities where showing seconds on the crosshair makes sense */
 const SECONDS_GRANULARITIES = new Set<string>(['M1', 'M2', 'M4', 'M5']);
@@ -62,45 +67,6 @@ interface CandlePoint {
   low: number;
   close: number;
   volume?: number;
-}
-
-function parseCandles(raw: unknown): CandlePoint[] {
-  const arr = Array.isArray(raw) ? raw : [];
-  const byTime = new Map<number, CandlePoint>();
-
-  for (const c of arr) {
-    if (!c || typeof c !== 'object') continue;
-    const rec = c as Record<string, unknown>;
-    const timeVal = rec.time;
-    let ts: number;
-    if (typeof timeVal === 'number') {
-      ts = timeVal;
-    } else if (typeof timeVal === 'string') {
-      const parsed = Date.parse(timeVal);
-      if (Number.isNaN(parsed)) continue;
-      ts = Math.floor(parsed / 1000);
-    } else {
-      continue;
-    }
-    const open = Number(rec.open);
-    const high = Number(rec.high);
-    const low = Number(rec.low);
-    const close = Number(rec.close);
-    if ([open, high, low, close].some((v) => Number.isNaN(v))) continue;
-    const volume = rec.volume !== undefined ? Number(rec.volume) : undefined;
-    byTime.set(ts, {
-      time: ts as UTCTimestamp,
-      open,
-      high,
-      low,
-      close,
-      volume,
-    });
-  }
-
-  return Array.from(byTime.values()).sort(
-    (a, b) => Number(a.time) - Number(b.time)
-  );
 }
 
 /** Overlay series color palette */
@@ -164,7 +130,6 @@ export default function MarketChart({
   refreshInterval = 60,
   overlays: overlaysProp,
 }: MarketChartProps) {
-  const { t } = useTranslation('dashboard');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -183,15 +148,7 @@ export default function MarketChart({
   const volumeRef = useRef<ISeriesApi<'Histogram', Time> | null>(null);
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const candlesRef = useRef<CandlePoint[]>([]);
-  const loadingMoreRef = useRef(false);
   const initialLoadDoneRef = useRef(false);
-  const noMoreOlderRef = useRef(false);
-  const noMoreNewerRef = useRef(false);
-  const fetchMoreRef = useRef<
-    ((direction: 'older' | 'newer') => Promise<void>) | null
-  >(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [overlaysInternal, setOverlaysInternal] = useState<OverlaySettings>(
     DEFAULT_OVERLAY_SETTINGS
   );
@@ -202,6 +159,32 @@ export default function MarketChart({
   const muiTheme = useTheme();
   const isDark = muiTheme.palette.mode === 'dark';
   const timezone = user?.timezone || 'UTC';
+  const previousFirstCandleTimeRef = useRef<number | null>(null);
+  const {
+    candles,
+    isInitialLoading,
+    isRefreshing,
+    loadingOlder,
+    loadingNewer,
+    error,
+    ensureRange,
+    refreshTail,
+  } = useWindowedCandles({
+    instrument,
+    granularity,
+    accountId,
+    initialCount: 500,
+    edgeCount: 500,
+    autoRefresh,
+    refreshIntervalSeconds: refreshInterval,
+  });
+
+  useEffect(() => {
+    candlesRef.current = candles.map((c) => ({
+      ...c,
+      time: c.time as UTCTimestamp,
+    }));
+  }, [candles]);
 
   // ── Apply overlays whenever settings or data change ──────────────
   const applyOverlays = useCallback(() => {
@@ -411,109 +394,69 @@ export default function MarketChart({
     }
   }, [overlays]);
 
-  // ── Fetch additional candles when scrolling ──────────────────────
-  const fetchMore = useCallback(
-    async (direction: 'older' | 'newer') => {
-      if (loadingMoreRef.current) return;
-      const candles = candlesRef.current;
-      if (candles.length === 0) return;
-      if (direction === 'older' && noMoreOlderRef.current) return;
-      if (direction === 'newer' && noMoreNewerRef.current) return;
-
-      loadingMoreRef.current = true;
+  const restoreVisibleLogicalRange = useCallback(
+    (saved: { from: number; to: number } | null, prependCount = 0) => {
+      if (!saved || !chartRef.current) return;
       try {
-        const params: Record<string, string | number> = {
-          instrument,
-          granularity,
-          count: 500,
-        };
-        if (accountId) params.account_id = accountId;
-
-        if (direction === 'older') {
-          // Use the earliest candle's timestamp as the "before" boundary
-          params.before = Number(candles[0].time);
-        } else {
-          // Use the latest candle's timestamp as the "after" boundary
-          params.after = Number(candles[candles.length - 1].time);
-        }
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const response = await api.get<any>('/api/market/candles/', params);
-        const newCandles = parseCandles(response?.candles);
-
-        if (newCandles.length === 0) {
-          if (direction === 'older') noMoreOlderRef.current = true;
-          else noMoreNewerRef.current = true;
-          return;
-        }
-
-        // Merge with existing candles, dedup by time
-        const existing = candlesRef.current;
-        const byTime = new Map<number, CandlePoint>();
-        for (const c of existing) byTime.set(Number(c.time), c);
-        for (const c of newCandles) byTime.set(Number(c.time), c);
-        const merged = Array.from(byTime.values()).sort(
-          (a, b) => Number(a.time) - Number(b.time)
-        );
-        candlesRef.current = merged;
-
-        if (seriesRef.current) {
-          seriesRef.current.setData(merged);
-          const times = merged.map((c) => Number(c.time));
-          if (highlightRef.current) {
-            highlightRef.current.setGaps(detectMarketGaps(times));
-          }
-          applyOverlays();
-        }
+        chartRef.current.timeScale().setVisibleLogicalRange({
+          from: saved.from + prependCount,
+          to: saved.to + prependCount,
+        });
       } catch {
-        // Silently ignore fetch-more errors to avoid disrupting the UX
-      } finally {
-        loadingMoreRef.current = false;
+        /* no-op */
       }
     },
-    [instrument, granularity, accountId, applyOverlays]
+    []
   );
 
-  // Keep a stable ref so the chart effect doesn't need to depend on fetchMore
-  fetchMoreRef.current = fetchMore;
-
-  const fetchData = useCallback(async () => {
-    noMoreOlderRef.current = false;
-    noMoreNewerRef.current = false;
-    const isInitial = !initialLoadDoneRef.current;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response = await api.get<any>('/api/market/candles/', {
-        instrument,
-        account_id: accountId,
-        count: 500,
-        granularity,
+  const maybeFetchEdgeData = useCallback(async () => {
+    const chart = chartRef.current;
+    const series = seriesRef.current;
+    if (!chart || !series) return;
+    const visibleTimeRange = chart.timeScale().getVisibleRange();
+    if (
+      visibleTimeRange &&
+      typeof visibleTimeRange.from === 'number' &&
+      typeof visibleTimeRange.to === 'number'
+    ) {
+      await ensureRange({
+        from: Number(visibleTimeRange.from),
+        to: Number(visibleTimeRange.to),
       });
-      const candles = parseCandles(response?.candles);
-      candlesRef.current = candles;
-      if (seriesRef.current) {
-        seriesRef.current.setData(candles);
-        const times = candles.map((c) => Number(c.time));
-        if (highlightRef.current) {
-          highlightRef.current.setGaps(detectMarketGaps(times));
-        }
-        // Only fit content on the very first load — auto-refresh should
-        // preserve the current zoom / scroll position.
-        if (isInitial) {
-          chartRef.current?.timeScale().fitContent();
-          initialLoadDoneRef.current = true;
-        }
-        applyOverlays();
-      }
-      setError(null);
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : t('marketChart.failedToLoadMarketData')
-      );
-    } finally {
-      setIsLoading(false);
     }
-  }, [instrument, granularity, accountId, applyOverlays, t]);
+    const logicalRange = chart.timeScale().getVisibleLogicalRange();
+    const data = series.data();
+    if (!logicalRange || !data || data.length === 0) return;
+
+    const EDGE_THRESHOLD = 5;
+    const firstTime = Number(candlesRef.current[0]?.time ?? 0);
+    const lastTime = Number(
+      candlesRef.current[candlesRef.current.length - 1]?.time ?? 0
+    );
+    const spanSeconds =
+      visibleTimeRange &&
+      typeof visibleTimeRange.from === 'number' &&
+      typeof visibleTimeRange.to === 'number'
+        ? Math.max(
+            60,
+            Number(visibleTimeRange.to) - Number(visibleTimeRange.from)
+          )
+        : Math.max(60, lastTime - firstTime);
+
+    if (logicalRange.from < EDGE_THRESHOLD) {
+      await ensureRange({
+        from: firstTime - spanSeconds,
+        to: firstTime,
+      });
+      return;
+    }
+    if (logicalRange.to > data.length - EDGE_THRESHOLD) {
+      await ensureRange({
+        from: lastTime,
+        to: lastTime + spanSeconds,
+      });
+    }
+  }, [ensureRange]);
 
   // Re-apply overlays when toggle changes
   useEffect(() => {
@@ -585,28 +528,12 @@ export default function MarketChart({
       applyOverlays();
     }
 
-    // ── Scroll-based lazy loading ──
-    // When the user scrolls so that the visible logical range extends
-    // beyond the loaded data, fetch more candles.
-    const EDGE_THRESHOLD = 5; // trigger when within 5 bars of the edge
     let scrollDebounce: ReturnType<typeof setTimeout> | null = null;
 
     const onVisibleRangeChange = () => {
       if (scrollDebounce) clearTimeout(scrollDebounce);
       scrollDebounce = setTimeout(() => {
-        const logicalRange = chart.timeScale().getVisibleLogicalRange();
-        if (!logicalRange) return;
-        const data = series.data();
-        if (!data || data.length === 0) return;
-
-        // logicalRange.from < EDGE_THRESHOLD means user scrolled to the left edge
-        if (logicalRange.from < EDGE_THRESHOLD) {
-          fetchMoreRef.current?.('older');
-        }
-        // logicalRange.to > data.length - EDGE_THRESHOLD means user scrolled to the right edge
-        if (logicalRange.to > data.length - EDGE_THRESHOLD) {
-          fetchMoreRef.current?.('newer');
-        }
+        void maybeFetchEdgeData();
       }, 300);
     };
 
@@ -695,23 +622,55 @@ export default function MarketChart({
     // applyOverlays is intentionally excluded — overlay changes are handled
     // by a dedicated useEffect to avoid recreating the chart on every toggle.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [height, fillHeight, granularity, timezone, isDark]);
+  }, [height, fillHeight, granularity, timezone, isDark, maybeFetchEdgeData]);
 
-  // Fetch data when instrument/granularity changes
+  useEffect(() => {
+    if (!seriesRef.current) return;
+
+    const savedLogicalRange = initialLoadDoneRef.current
+      ? chartRef.current?.timeScale().getVisibleLogicalRange()
+      : null;
+
+    seriesRef.current.setData(candlesRef.current);
+    const times = candlesRef.current.map((c) => Number(c.time));
+    if (highlightRef.current) {
+      highlightRef.current.setGaps(detectMarketGaps(times));
+    }
+
+    if (!initialLoadDoneRef.current) {
+      chartRef.current?.timeScale().fitContent();
+      initialLoadDoneRef.current = true;
+    } else if (savedLogicalRange) {
+      const previousFirst = previousFirstCandleTimeRef.current;
+      const currentFirst = candlesRef.current[0]
+        ? Number(candlesRef.current[0].time)
+        : null;
+      const prependCount =
+        previousFirst != null &&
+        currentFirst != null &&
+        currentFirst < previousFirst
+          ? candlesRef.current.filter((c) => Number(c.time) < previousFirst)
+              .length
+          : 0;
+      restoreVisibleLogicalRange(savedLogicalRange, prependCount);
+    }
+
+    previousFirstCandleTimeRef.current = candlesRef.current[0]
+      ? Number(candlesRef.current[0].time)
+      : null;
+    applyOverlays();
+  }, [candles, applyOverlays, restoreVisibleLogicalRange]);
+
   useEffect(() => {
     initialLoadDoneRef.current = false;
-    setIsLoading(true);
-    fetchData();
-  }, [fetchData]);
+  }, [instrument, granularity]);
 
-  // Auto-refresh
   useEffect(() => {
-    if (!autoRefresh || refreshInterval <= 0) return;
-    const id = setInterval(fetchData, refreshInterval * 1000);
-    return () => clearInterval(id);
-  }, [autoRefresh, refreshInterval, fetchData]);
+    if (!autoRefresh) return;
+    void refreshTail();
+  }, [autoRefresh, refreshTail]);
 
-  if (error && !seriesRef.current) {
+  if (error && !seriesRef.current && candles.length === 0) {
     return (
       <Box
         sx={{
@@ -760,7 +719,50 @@ export default function MarketChart({
         }}
       />
 
-      {isLoading && (
+      {(loadingOlder || loadingNewer) && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 3,
+            display: 'flex',
+            gap: 1,
+            px: 1,
+            pt: 0.5,
+          }}
+        >
+          <Box
+            sx={{ flex: 1, visibility: loadingOlder ? 'visible' : 'hidden' }}
+          >
+            <LinearProgress color="inherit" />
+          </Box>
+          <Box
+            sx={{ flex: 1, visibility: loadingNewer ? 'visible' : 'hidden' }}
+          >
+            <LinearProgress color="inherit" />
+          </Box>
+        </Box>
+      )}
+
+      {(isRefreshing || error) && (
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            zIndex: 3,
+            display: 'flex',
+            gap: 1,
+          }}
+        >
+          {isRefreshing && <Chip size="small" label="Syncing candles" />}
+          {error && <Chip size="small" color="error" label={error} />}
+        </Box>
+      )}
+
+      {isInitialLoading && (
         <Box
           sx={{
             position: 'absolute',
