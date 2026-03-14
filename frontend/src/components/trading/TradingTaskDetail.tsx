@@ -350,6 +350,7 @@ export const TradingTaskDetail: React.FC = () => {
               startTime={detailTask.started_at}
               endTime={detailTask.completed_at}
               latestExecution={detailTask.latest_execution}
+              summary={s}
               currentTick={polledTick ?? null}
               enableRealTimeUpdates={
                 currentStatus === TaskStatus.STARTING ||

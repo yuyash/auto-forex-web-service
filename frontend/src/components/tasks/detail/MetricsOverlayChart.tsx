@@ -18,11 +18,14 @@ import {
 } from 'react';
 import {
   LineSeries,
+  type AutoscaleInfoProvider,
   type IChartApi,
   type UTCTimestamp,
 } from 'lightweight-charts';
+import { useDocumentVisibility } from '../../../hooks/useDocumentVisibility';
 import { fetchMetrics, type MetricPoint } from '../../../utils/fetchMetrics';
 import { TaskType } from '../../../types/common';
+import { getRetryAfterMsFromError } from '../../../utils/retryAfter';
 
 export interface UseMetricsOverlayOptions {
   taskId: string;
@@ -64,6 +67,13 @@ function attachSeries(chart: IChartApi) {
     lineWidth: 2,
     title: 'Margin Ratio',
     priceScaleId: 'left',
+    autoscaleInfoProvider: ((baseImplementation) => {
+      const autoscaleInfo = baseImplementation();
+      if (autoscaleInfo?.priceRange) {
+        autoscaleInfo.priceRange.minValue = 0;
+      }
+      return autoscaleInfo;
+    }) as AutoscaleInfoProvider,
     priceFormat: {
       type: 'custom' as const,
       minMove: 0.01,
@@ -129,6 +139,7 @@ export function useMetricsOverlay({
   candleTimestamps,
   currentTickTimestamp,
 }: UseMetricsOverlayOptions) {
+  const isPageVisible = useDocumentVisibility();
   const seriesRef = useRef<ReturnType<typeof attachSeries> | null>(null);
   const attachedToChart = useRef<IChartApi | null>(null);
   const [snapshots, setSnapshots] = useState<MetricPoint[]>([]);
@@ -137,24 +148,40 @@ export function useMetricsOverlay({
   const latestTsRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const attachGenerationRef = useRef(0);
+  const backoffUntilRef = useRef<number>(0);
 
   const fetchWindow = useCallback(
     async (from: number, to: number) => {
+      if (Date.now() < backoffUntilRef.current) {
+        return { results: [], fetched: { from, to } };
+      }
       const span = to - from;
       const bufFrom = from - span * 0.1;
       const bufTo = to + span * 0.1;
       setIsLoading(true);
-      const page = await fetchMetrics({
-        taskId,
-        taskType,
-        executionRunId,
-        since: new Date(bufFrom * 1000).toISOString(),
-        until: new Date(bufTo * 1000).toISOString(),
-        interval: computeInterval(bufTo - bufFrom),
-        pageSize: 5000,
-      });
-      setIsLoading(false);
-      return { results: page.results, fetched: { from: bufFrom, to: bufTo } };
+      try {
+        const page = await fetchMetrics({
+          taskId,
+          taskType,
+          executionRunId,
+          since: new Date(bufFrom * 1000).toISOString(),
+          until: new Date(bufTo * 1000).toISOString(),
+          interval: computeInterval(bufTo - bufFrom),
+          pageSize: 5000,
+        });
+        return {
+          results: page.results,
+          fetched: { from: bufFrom, to: bufTo },
+        };
+      } catch (error) {
+        const retryAfterMs = getRetryAfterMsFromError(error);
+        if (retryAfterMs != null) {
+          backoffUntilRef.current = Date.now() + retryAfterMs;
+        }
+        throw error;
+      } finally {
+        setIsLoading(false);
+      }
     },
     [taskId, taskType, executionRunId]
   );
@@ -179,7 +206,9 @@ export function useMetricsOverlay({
 
   // Initial fetch for the full candle range
   useEffect(() => {
-    if (!candleTimestamps || candleTimestamps.length === 0) return;
+    if (!candleTimestamps || candleTimestamps.length === 0 || !isPageVisible) {
+      return;
+    }
     let cancelled = false;
     const from = candleTimestamps[0];
     const to = candleTimestamps[candleTimestamps.length - 1];
@@ -197,11 +226,18 @@ export function useMetricsOverlay({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskId, taskType, executionRunId, fetchWindow, expandRange]);
+  }, [
+    taskId,
+    taskType,
+    executionRunId,
+    fetchWindow,
+    expandRange,
+    isPageVisible,
+  ]);
 
   // Viewport-driven fetch on scroll/zoom (debounced)
   useEffect(() => {
-    if (!chart) return;
+    if (!chart || !isPageVisible) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const handler = () => {
       const tr = chart.timeScale().getVisibleRange();
@@ -228,12 +264,13 @@ export function useMetricsOverlay({
       if (timer) clearTimeout(timer);
       chart.timeScale().unsubscribeVisibleTimeRangeChange(handler);
     };
-  }, [chart, fetchWindow, isCovered, expandRange]);
+  }, [chart, fetchWindow, isCovered, expandRange, isPageVisible]);
 
   // Real-time incremental polling
   useEffect(() => {
-    if (!enableRealTimeUpdates) return;
+    if (!enableRealTimeUpdates || !isPageVisible) return;
     const poll = async () => {
+      if (Date.now() < backoffUntilRef.current) return;
       try {
         const ts = latestTsRef.current;
         const page = await fetchMetrics({
@@ -245,8 +282,11 @@ export function useMetricsOverlay({
         });
         if (page.results.length > 0)
           setSnapshots((prev) => mergeSnapshots(prev, page.results));
-      } catch {
-        /* silent */
+      } catch (error) {
+        const retryAfterMs = getRetryAfterMsFromError(error);
+        if (retryAfterMs != null) {
+          backoffUntilRef.current = Date.now() + retryAfterMs;
+        }
       }
     };
     intervalRef.current = setInterval(poll, pollingIntervalMs);
@@ -257,6 +297,7 @@ export function useMetricsOverlay({
   }, [
     enableRealTimeUpdates,
     executionRunId,
+    isPageVisible,
     pollingIntervalMs,
     taskId,
     taskType,

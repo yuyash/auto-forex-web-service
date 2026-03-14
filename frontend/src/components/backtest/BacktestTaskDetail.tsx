@@ -393,6 +393,7 @@ export const BacktestTaskDetail: React.FC = () => {
               startTime={detailTask.start_time}
               endTime={detailTask.end_time}
               latestExecution={detailTask.latest_execution}
+              summary={s}
               currentTick={polledTick ?? null}
               enableRealTimeUpdates={
                 currentStatus === TaskStatus.STARTING ||
