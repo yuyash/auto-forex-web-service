@@ -25,6 +25,7 @@ interface UseWindowedCandlesOptions {
   accountId?: string;
   startTime?: string;
   endTime?: string;
+  initialFocusTime?: string;
   initialCount?: number;
   edgeCount?: number;
   autoRefresh?: boolean;
@@ -178,6 +179,7 @@ export function useWindowedCandles({
   accountId,
   startTime,
   endTime,
+  initialFocusTime,
   initialCount = 500,
   edgeCount = 500,
   autoRefresh = false,
@@ -202,6 +204,10 @@ export function useWindowedCandles({
       to: isoToSec(endTime) ?? undefined,
     }),
     [startTime, endTime]
+  );
+  const initialFocusTimeSec = useMemo(
+    () => isoToSec(initialFocusTime),
+    [initialFocusTime]
   );
 
   useEffect(() => {
@@ -487,6 +493,38 @@ export function useWindowedCandles({
     setCandles([]);
     setLoadedRanges([]);
     setDataRanges([]);
+    if (initialFocusTimeSec != null) {
+      const granularitySeconds = GRANULARITY_SECONDS[String(granularity)] ?? 60;
+      const leftCount = Math.floor(Math.max(1, initialCount) * 0.75);
+      const rightCount = Math.max(1, initialCount - leftCount);
+      const focusedRange = alignRangeToGranularity(
+        {
+          from: initialFocusTimeSec - leftCount * granularitySeconds,
+          to: initialFocusTimeSec + rightCount * granularitySeconds,
+        },
+        granularity
+      );
+      const clampedFocusedRange = clampRange(
+        focusedRange,
+        buildRequestBounds(bounds, granularity)
+      );
+      setIsInitialLoading(true);
+      void (async () => {
+        try {
+          const result = await requestRangeOrBridgeGap(clampedFocusedRange);
+          setCandles(result.candles);
+          setLoadedRanges(mergeRanges([result.handledRange]));
+          setDataRanges(mergeRanges(result.dataRanges));
+        } catch (err) {
+          setError(
+            err instanceof Error ? err.message : 'Failed to load candles'
+          );
+        } finally {
+          setIsInitialLoading(false);
+        }
+      })();
+      return;
+    }
     if (startTime && endTime) {
       const from = isoToSec(startTime);
       const to = isoToSec(endTime);
@@ -525,8 +563,11 @@ export function useWindowedCandles({
     }
     void replaceWithCountWindow();
   }, [
+    bounds,
     edgeCount,
     endTime,
+    initialCount,
+    initialFocusTimeSec,
     instrument,
     granularity,
     replaceWithCountWindow,

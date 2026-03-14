@@ -110,6 +110,9 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     granularity,
     startTime,
     endTime,
+    initialFocusTime: realTimeUpdatesEnabled
+      ? currentTick?.timestamp
+      : undefined,
     initialCount: 800,
     edgeCount: 800,
     autoRefresh: false,
@@ -558,12 +561,12 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   );
 
   useEffect(() => {
-    if (candleTimestampsMemo.length === 0) return;
+    if (realTimeUpdatesEnabled || candleTimestampsMemo.length === 0) return;
     void ensureMarkerRange({
       from: candleTimestampsMemo[0],
       to: candleTimestampsMemo[candleTimestampsMemo.length - 1],
     });
-  }, [candleTimestampsMemo, ensureMarkerRange]);
+  }, [candleTimestampsMemo, ensureMarkerRange, realTimeUpdatesEnabled]);
 
   const {
     chartContainerRef,
