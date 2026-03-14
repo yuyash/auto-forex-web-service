@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { TaskTrendSectionHeader } from './TaskTrendSectionHeader';
+import { formatTrendTimestamp } from './shared';
 import type { ReplayTrade, SortableKey } from './shared';
 
 interface TaskTrendTradesTableProps {
@@ -29,6 +30,7 @@ interface TaskTrendTradesTableProps {
   replayColWidths: Record<string, number>;
   page: number;
   rowsPerPage: number;
+  timezone: string;
   selectedRowRef: RefObject<HTMLTableRowElement | null>;
   onConfigureColumns: () => void;
   onCopySelected: () => void;
@@ -57,6 +59,7 @@ export function TaskTrendTradesTable({
   replayColWidths,
   page,
   rowsPerPage,
+  timezone,
   selectedRowRef,
   onConfigureColumns,
   onCopySelected,
@@ -191,7 +194,7 @@ export function TaskTrendTradesTable({
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {new Date(row.timestamp).toLocaleString()}
+                    {formatTrendTimestamp(row.timestamp, timezone)}
                   </TableCell>
                   <TableCell
                     sx={{

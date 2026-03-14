@@ -8,6 +8,7 @@ import {
   computePosPips,
   computePosPnl,
   DEFAULT_LS_POSITION_WIDTHS,
+  formatTrendTimestamp,
 } from './shared';
 import type { LSPosSortableKey, TrendPosition } from './shared';
 import { useResizableColumns } from './useResizableColumns';
@@ -17,6 +18,7 @@ interface UseTaskTrendPositionsTableParams {
   currentPrice: number | null;
   pipSize: number | null | undefined;
   storageKey: string;
+  timezone: string;
 }
 
 export function useTaskTrendPositionsTable({
@@ -24,6 +26,7 @@ export function useTaskTrendPositionsTable({
   currentPrice,
   pipSize,
   storageKey,
+  timezone,
 }: UseTaskTrendPositionsTableParams) {
   const { t } = useTranslation('common');
   const [showOpenOnly, setShowOpenOnly] = useState(false);
@@ -175,13 +178,9 @@ export function useTaskTrendPositionsTable({
     (isShort: boolean) => {
       const extractors: Record<string, (position: TrendPosition) => string> = {
         entry_time: (position) =>
-          position.entry_time
-            ? new Date(position.entry_time).toLocaleString()
-            : '-',
+          formatTrendTimestamp(position.entry_time, timezone),
         exit_time: (position) =>
-          position.exit_time
-            ? new Date(position.exit_time).toLocaleString()
-            : '-',
+          formatTrendTimestamp(position.exit_time, timezone),
         _status: (position) =>
           position._status === 'open' ? 'Open' : 'Closed',
         layer_index: (position) => String(position.layer_index ?? '-'),
@@ -259,7 +258,14 @@ export function useTaskTrendPositionsTable({
 
       navigator.clipboard.writeText([header, ...rows].join('\n'));
     },
-    [columnConfig, currentPrice, pipSize, selectedIds, sortedPositions]
+    [
+      columnConfig,
+      currentPrice,
+      pipSize,
+      selectedIds,
+      sortedPositions,
+      timezone,
+    ]
   );
 
   const toggleOpenOnly = useCallback(() => {

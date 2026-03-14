@@ -1,3 +1,4 @@
+import { formatInTimeZone } from 'date-fns-tz';
 import type { CandlestickData, Time, UTCTimestamp } from 'lightweight-charts';
 import type { TaskEvent } from '../../../../hooks/useTaskEvents';
 import type { TaskPosition } from '../../../../hooks/useTaskPositions';
@@ -126,6 +127,28 @@ export function isoToSec(value?: string | null): number | null {
   if (!value) return null;
   const ms = new Date(value).getTime();
   return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
+}
+
+export function formatTrendTimestamp(
+  value: string | null | undefined,
+  timezone: string
+): string {
+  if (!value) {
+    return '-';
+  }
+
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    return '-';
+  }
+
+  try {
+    return timezone === 'UTC'
+      ? `${formatInTimeZone(date, 'UTC', 'yyyy-MM-dd HH:mm:ss')} UTC`
+      : formatInTimeZone(date, timezone, 'yyyy-MM-dd HH:mm:ss');
+  } catch {
+    return formatInTimeZone(date, 'UTC', 'yyyy-MM-dd HH:mm:ss') + ' UTC';
+  }
 }
 
 export const parseUtcTimestamp = (value: unknown): UTCTimestamp | null => {

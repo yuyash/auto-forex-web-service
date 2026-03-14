@@ -347,6 +347,8 @@ export const TradingTaskDetail: React.FC = () => {
               taskType={TaskType.TRADING}
               instrument={detailTask.instrument}
               executionRunId={activeExecutionId}
+              startTime={detailTask.started_at}
+              endTime={detailTask.completed_at}
               latestExecution={detailTask.latest_execution}
               currentTick={polledTick ?? null}
               enableRealTimeUpdates={

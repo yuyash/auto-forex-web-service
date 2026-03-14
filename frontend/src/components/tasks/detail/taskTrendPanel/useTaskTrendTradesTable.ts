@@ -4,11 +4,14 @@ import {
   useColumnConfig,
   type ColumnItem,
 } from '../../../../hooks/useColumnConfig';
-import { DEFAULT_REPLAY_WIDTHS } from './shared';
+import { DEFAULT_REPLAY_WIDTHS, formatTrendTimestamp } from './shared';
 import type { ReplayTrade, SortableKey } from './shared';
 import { useResizableColumns } from './useResizableColumns';
 
-export function useTaskTrendTradesTable(trades: ReplayTrade[]) {
+export function useTaskTrendTradesTable(
+  trades: ReplayTrade[],
+  timezone: string
+) {
   const { t } = useTranslation('common');
   const [orderBy, setOrderBy] = useState<SortableKey>('timestamp');
   const [order, setOrder] = useState<'asc' | 'desc'>('desc');
@@ -129,7 +132,7 @@ export function useTaskTrendTradesTable(trades: ReplayTrade[]) {
 
   const copySelectedRows = useCallback(() => {
     const extractors: Record<string, (row: ReplayTrade) => string> = {
-      timestamp: (row) => new Date(row.timestamp).toLocaleString(),
+      timestamp: (row) => formatTrendTimestamp(row.timestamp, timezone),
       direction: (row) => (row.direction ? row.direction.toUpperCase() : ''),
       layer_index: (row) => String(row.layer_index ?? '-'),
       retracement_count: (row) => String(row.retracement_count ?? '-'),
@@ -157,7 +160,7 @@ export function useTaskTrendTradesTable(trades: ReplayTrade[]) {
       );
 
     navigator.clipboard.writeText([header, ...rows].join('\n'));
-  }, [columnConfig, selectedRowIds, sortedTrades]);
+  }, [columnConfig, selectedRowIds, sortedTrades, timezone]);
 
   return {
     orderBy,

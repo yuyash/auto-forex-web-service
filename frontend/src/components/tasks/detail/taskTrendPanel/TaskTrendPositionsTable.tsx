@@ -15,7 +15,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { TaskTrendSectionHeader } from './TaskTrendSectionHeader';
-import { computePosPips } from './shared';
+import { computePosPips, formatTrendTimestamp } from './shared';
 import type { LSPosSortableKey, TrendPosition } from './shared';
 
 interface TaskTrendPositionsTableProps {
@@ -36,6 +36,7 @@ interface TaskTrendPositionsTableProps {
   isShort: boolean;
   page: number;
   rowsPerPage: number;
+  timezone: string;
   selectedPosRowRef: RefObject<HTMLTableRowElement | null>;
   onConfigureColumns: () => void;
   onCopySelected: () => void;
@@ -70,6 +71,7 @@ export function TaskTrendPositionsTable({
   isShort,
   page,
   rowsPerPage,
+  timezone,
   selectedPosRowRef,
   onConfigureColumns,
   onCopySelected,
@@ -224,9 +226,7 @@ export function TaskTrendPositionsTable({
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {pos.entry_time
-                      ? new Date(pos.entry_time).toLocaleString()
-                      : '-'}
+                    {formatTrendTimestamp(pos.entry_time, timezone)}
                   </TableCell>
                   <TableCell
                     sx={{
@@ -235,9 +235,7 @@ export function TaskTrendPositionsTable({
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {pos.exit_time
-                      ? new Date(pos.exit_time).toLocaleString()
-                      : '-'}
+                    {formatTrendTimestamp(pos.exit_time, timezone)}
                   </TableCell>
                   <TableCell>
                     <Chip
