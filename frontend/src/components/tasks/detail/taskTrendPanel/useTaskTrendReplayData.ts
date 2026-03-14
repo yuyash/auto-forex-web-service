@@ -3,7 +3,7 @@ import {
   fetchAllTrades,
   fetchTradesSince,
 } from '../../../../utils/fetchAllTrades';
-import { useTaskSummary } from '../../../../hooks/useTaskSummary';
+import type { TaskSummary } from '../../../../hooks/useTaskSummary';
 import { parseUtcTimestamp } from './shared';
 import type { ReplaySummary, ReplayTrade } from './shared';
 import type { TaskType } from '../../../../types/common';
@@ -19,6 +19,7 @@ interface UseTaskTrendReplayDataParams {
   enableRealTimeUpdates: boolean;
   pollingIntervalMs: number;
   refreshTailCandles: () => Promise<number>;
+  summary?: TaskSummary;
 }
 
 const CANDLE_REFRESH_INTERVAL_MS = 60_000;
@@ -105,30 +106,19 @@ export function useTaskTrendReplayData({
   enableRealTimeUpdates,
   pollingIntervalMs,
   refreshTailCandles,
+  summary,
 }: UseTaskTrendReplayDataParams) {
   const [trades, setTrades] = useState<ReplayTrade[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const hasLoadedOnce = useRef(false);
   const tradeSinceRef = useRef<string | null>(null);
   const lastCandleFetchRef = useRef<number>(0);
-  const {
-    summary: {
-      pnl: { realized: serverRealizedPnl, unrealized: serverUnrealizedPnl },
-      counts: {
-        totalTrades: serverTotalTrades,
-        openPositions: serverOpenPositionCount,
-      },
-    },
-    refetch: refetchPnl,
-  } = useTaskSummary(String(taskId), taskType, executionRunId);
-
-  useEffect(() => {
-    if (!enableRealTimeUpdates) return;
-    const interval = setInterval(refetchPnl, pollingIntervalMs);
-    return () => clearInterval(interval);
-  }, [enableRealTimeUpdates, pollingIntervalMs, refetchPnl]);
 
   const replaySummary = useMemo<ReplaySummary>(() => {
+    const serverRealizedPnl = summary?.pnl.realized ?? 0;
+    const serverUnrealizedPnl = summary?.pnl.unrealized ?? 0;
+    const serverTotalTrades = summary?.counts.totalTrades ?? 0;
+    const serverOpenPositionCount = summary?.counts.openPositions ?? 0;
     const totalTrades =
       typeof latestExecution?.total_trades === 'number'
         ? latestExecution.total_trades
@@ -142,14 +132,7 @@ export function useTaskTrendReplayData({
       totalTrades,
       openPositions: serverOpenPositionCount,
     };
-  }, [
-    latestExecution,
-    serverOpenPositionCount,
-    serverRealizedPnl,
-    serverTotalTrades,
-    serverUnrealizedPnl,
-    trades.length,
-  ]);
+  }, [latestExecution, summary, trades.length]);
 
   const fetchReplayData = useCallback(async () => {
     const isInitialLoad = !hasLoadedOnce.current;

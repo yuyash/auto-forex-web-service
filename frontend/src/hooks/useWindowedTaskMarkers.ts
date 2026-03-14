@@ -10,6 +10,7 @@ import {
   mergeRanges,
   subtractLoadedRanges,
 } from '../utils/windowedRanges';
+import { getRetryAfterMsFromError } from '../utils/retryAfter';
 
 export interface WindowedTradeMarker {
   id: string;
@@ -28,6 +29,7 @@ interface UseWindowedTaskMarkersOptions {
   executionRunId?: string;
   enableRealTimeUpdates?: boolean;
   bounds?: Partial<TimeRange> | null;
+  pollTrades?: boolean;
 }
 
 interface UseWindowedTaskMarkersResult {
@@ -92,6 +94,7 @@ export function useWindowedTaskMarkers({
   executionRunId,
   enableRealTimeUpdates = false,
   bounds,
+  pollTrades = true,
 }: UseWindowedTaskMarkersOptions): UseWindowedTaskMarkersResult {
   const [taskState, setTaskState] = useState<MarkerState<TaskEvent>>({
     loadedRanges: [],
@@ -115,6 +118,7 @@ export function useWindowedTaskMarkers({
   const strategyLoadedRangesRef = useRef<TimeRange[]>([]);
   const tradeLoadedRangesRef = useRef<TimeRange[]>([]);
   const strategyFullyLoadedRef = useRef(false);
+  const backoffUntilRef = useRef<number>(0);
 
   const prefix = useMemo(
     () =>
@@ -151,6 +155,9 @@ export function useWindowedTaskMarkers({
 
   const ensureRange = useCallback(
     async (range: TimeRange) => {
+      if (Date.now() < backoffUntilRef.current) {
+        return;
+      }
       const buffered = clampRange(expandRange(range, 0.2), bounds);
       if (buffered.to < buffered.from) {
         return;
@@ -165,10 +172,9 @@ export function useWindowedTaskMarkers({
           ? [buffered]
           : strategyLoadedRangesRef.current
       );
-      const missingTrades = subtractLoadedRanges(
-        buffered,
-        tradeLoadedRangesRef.current
-      );
+      const missingTrades = pollTrades
+        ? subtractLoadedRanges(buffered, tradeLoadedRangesRef.current)
+        : [];
       if (
         missingTask.length === 0 &&
         missingStrategy.length === 0 &&
@@ -228,11 +234,16 @@ export function useWindowedTaskMarkers({
             loadedRanges: mergeRanges([...prev.loadedRanges, missing]),
           }));
         }
+      } catch (error) {
+        const retryAfterMs = getRetryAfterMsFromError(error);
+        if (retryAfterMs != null) {
+          backoffUntilRef.current = Date.now() + retryAfterMs;
+        }
       } finally {
         setIsLoading(false);
       }
     },
-    [bounds, executionRunId, fetchEventsInRange, fetchTradesInRange]
+    [bounds, executionRunId, fetchEventsInRange, fetchTradesInRange, pollTrades]
   );
 
   useEffect(() => {
@@ -263,6 +274,8 @@ export function useWindowedTaskMarkers({
   useEffect(() => {
     if (!enableRealTimeUpdates) return;
     const id = window.setInterval(async () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() < backoffUntilRef.current) return;
       const headers = await getHeaders();
       const commonParams: Record<string, string> = executionRunId
         ? { execution_id: executionRunId }
@@ -298,20 +311,22 @@ export function useWindowedTaskMarkers({
             },
             headers
           ),
-          fetchAllPages<
-            { next?: string | null; results?: WindowedTradeMarker[] },
-            WindowedTradeMarker
-          >(
-            `${prefix}/trades/`,
-            {
-              ...commonParams,
-              page_size: '5000',
-              ...(latestTradeUpdatedAtRef.current
-                ? { since: latestTradeUpdatedAtRef.current }
-                : {}),
-            },
-            headers
-          ),
+          pollTrades
+            ? fetchAllPages<
+                { next?: string | null; results?: WindowedTradeMarker[] },
+                WindowedTradeMarker
+              >(
+                `${prefix}/trades/`,
+                {
+                  ...commonParams,
+                  page_size: '5000',
+                  ...(latestTradeUpdatedAtRef.current
+                    ? { since: latestTradeUpdatedAtRef.current }
+                    : {}),
+                },
+                headers
+              )
+            : Promise.resolve([]),
         ]);
 
         if (taskItems.length > 0) {
@@ -351,12 +366,15 @@ export function useWindowedTaskMarkers({
             items: mergeById(prev.items, tradeItems),
           }));
         }
-      } catch {
-        /* keep stale markers visible */
+      } catch (error) {
+        const retryAfterMs = getRetryAfterMsFromError(error);
+        if (retryAfterMs != null) {
+          backoffUntilRef.current = Date.now() + retryAfterMs;
+        }
       }
     }, 10000);
     return () => window.clearInterval(id);
-  }, [enableRealTimeUpdates, executionRunId, prefix]);
+  }, [enableRealTimeUpdates, executionRunId, pollTrades, prefix]);
 
   useEffect(() => {
     if (taskState.items.length > 0) {

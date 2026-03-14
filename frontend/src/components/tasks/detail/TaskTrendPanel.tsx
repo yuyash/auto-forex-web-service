@@ -16,21 +16,17 @@ import type { SelectChangeEvent } from '@mui/material/Select';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { type Time, type UTCTimestamp } from 'lightweight-charts';
+import { type TaskSummary } from '../../../hooks/useTaskSummary';
+import { useDocumentVisibility } from '../../../hooks/useDocumentVisibility';
 import { useSupportedGranularities } from '../../../hooks/useMarketConfig';
-import {
-  useTaskPositions,
-  type TaskPosition,
-} from '../../../hooks/useTaskPositions';
+import { useTaskPositions } from '../../../hooks/useTaskPositions';
 import { TaskType } from '../../../types/common';
 import { getTimezoneAbbr } from '../../../utils/chartTimezone';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useMetricsOverlay } from './MetricsOverlayChart';
 import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
 import { useWindowedCandles } from '../../../hooks/useWindowedCandles';
-import {
-  useWindowedTaskMarkers,
-  type WindowedTradeMarker,
-} from '../../../hooks/useWindowedTaskMarkers';
+import { useWindowedTaskMarkers } from '../../../hooks/useWindowedTaskMarkers';
 import { clampRange, type TimeRange } from '../../../utils/windowedRanges';
 import {
   ALLOWED_GRANULARITIES,
@@ -68,6 +64,7 @@ interface TaskTrendPanelProps {
   latestExecution?: {
     total_trades?: number;
   };
+  summary?: TaskSummary;
   pipSize?: number | null;
   configId?: string;
 }
@@ -82,6 +79,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   enableRealTimeUpdates = false,
   currentTick,
   latestExecution,
+  summary,
   pipSize,
 }) => {
   const panelRootRef = useRef<HTMLDivElement | null>(null);
@@ -94,6 +92,8 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   const [granularity, setGranularity] = useState<string>('M1');
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
   const [pollingIntervalMs, setPollingIntervalMs] = useState(10_000);
+  const isPageVisible = useDocumentVisibility();
+  const realTimeUpdatesEnabled = enableRealTimeUpdates && isPageVisible;
   const { granularities } = useSupportedGranularities();
   const {
     candles: windowedCandles,
@@ -112,7 +112,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     endTime,
     initialCount: 800,
     edgeCount: 800,
-    autoRefresh: enableRealTimeUpdates,
+    autoRefresh: false,
     refreshIntervalSeconds: Math.max(10, Math.floor(pollingIntervalMs / 1000)),
   });
   const startTimeSec = useMemo(() => isoToSec(startTime), [startTime]);
@@ -122,14 +122,14 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     [currentTick?.timestamp]
   );
   const liveRangeUpperBound = useMemo(() => {
-    if (!enableRealTimeUpdates) {
+    if (!realTimeUpdatesEnabled) {
       return endTimeSec ?? undefined;
     }
     if (taskType === TaskType.BACKTEST) {
       return endTimeSec ?? currentTickSec ?? undefined;
     }
     return currentTickSec ?? undefined;
-  }, [currentTickSec, enableRealTimeUpdates, endTimeSec, taskType]);
+  }, [currentTickSec, endTimeSec, realTimeUpdatesEnabled, taskType]);
   const taskDataBounds = useMemo<Partial<TimeRange> | null>(() => {
     const from = startTimeSec ?? undefined;
     const to = liveRangeUpperBound;
@@ -139,11 +139,11 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     return { from, to };
   }, [liveRangeUpperBound, startTimeSec]);
   const markerDisplayCutoffSec = useMemo(() => {
-    if (!enableRealTimeUpdates) {
+    if (!realTimeUpdatesEnabled) {
       return null;
     }
     return currentTickSec;
-  }, [currentTickSec, enableRealTimeUpdates]);
+  }, [currentTickSec, realTimeUpdatesEnabled]);
   const candles = useMemo(
     () =>
       windowedCandles
@@ -175,35 +175,26 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     [taskDataBounds]
   );
 
-  // Fetch open/closed positions via useTaskPositions so that
-  // Realized PnL and Unrealized PnL are computed from the positions table.
-  const { positions: pnlClosedPositions } = useTaskPositions({
+  // Fetch positions once and derive open/closed state client-side to avoid
+  // duplicating position polling for the trend panel.
+  const { positions: fetchedPositions } = useTaskPositions({
     taskId,
     taskType,
     executionRunId,
-    status: 'closed',
     pageSize: 5000,
-    enableRealTimeUpdates,
-  });
-  const { positions: pnlOpenPositions } = useTaskPositions({
-    taskId,
-    taskType,
-    executionRunId,
-    status: 'open',
-    pageSize: 5000,
-    enableRealTimeUpdates,
+    enableRealTimeUpdates: realTimeUpdatesEnabled,
   });
   const {
     taskEvents: taskLifecycleEvents,
     strategyEvents,
-    trades: windowedTradeMarkers,
     ensureRange: ensureMarkerRange,
   } = useWindowedTaskMarkers({
     taskId: String(taskId),
     taskType,
     executionRunId,
-    enableRealTimeUpdates,
+    enableRealTimeUpdates: realTimeUpdatesEnabled,
     bounds: taskDataBounds,
+    pollTrades: false,
   });
 
   // Auto-follow: track whether the chart should auto-scroll to the position line
@@ -291,9 +282,10 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       executionRunId,
       instrument,
       latestExecution,
-      enableRealTimeUpdates,
+      enableRealTimeUpdates: realTimeUpdatesEnabled,
       pollingIntervalMs,
       refreshTailCandles,
+      summary,
     });
 
   // Merge open + closed positions for the Positions panel in the Trend tab
@@ -303,17 +295,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   // when the open-positions poll returns stale data while the closed-
   // positions poll already includes the updated record.
   const allPositions = useMemo<TrendPosition[]>(() => {
-    const map = new Map<string, TaskPosition>();
-    // Insert closed first, then open – but if the same id appears in both
-    // lists the closed version (is_open=false) wins because it is the more
-    // up-to-date state.
-    for (const p of pnlOpenPositions) {
-      map.set(p.id, p);
-    }
-    for (const p of pnlClosedPositions) {
-      map.set(p.id, p); // overwrites the open entry if duplicate
-    }
-    return Array.from(map.values())
+    return [...fetchedPositions]
       .map((p) => ({
         ...p,
         _status: (p.is_open ? 'open' : 'closed') as 'open' | 'closed',
@@ -322,7 +304,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         (a, b) =>
           new Date(b.entry_time).getTime() - new Date(a.entry_time).getTime()
       );
-  }, [pnlOpenPositions, pnlClosedPositions]);
+  }, [fetchedPositions]);
 
   // Filtered positions by direction for the split Long/Short tables
   const longPositions = useMemo(
@@ -604,7 +586,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     endTimeSec,
     currentTick: currentTick ?? null,
     currentTickSec,
-    enableRealTimeUpdates,
+    enableRealTimeUpdates: realTimeUpdatesEnabled,
     autoFollow,
     taskType,
     tradesRef,
@@ -631,11 +613,13 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     taskId: String(taskId),
     taskType,
     executionRunId,
-    enableRealTimeUpdates,
+    enableRealTimeUpdates: realTimeUpdatesEnabled,
     pollingIntervalMs,
     chart: chartInstance,
     candleTimestamps: candleTimestampsMemo,
-    currentTickTimestamp: enableRealTimeUpdates ? currentTick?.timestamp : null,
+    currentTickTimestamp: realTimeUpdatesEnabled
+      ? currentTick?.timestamp
+      : null,
     programmaticScrollRef,
   });
   useEffect(() => {
@@ -742,8 +726,8 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     if (!markersRef.current) return;
     const candleTimes = candles.map((c) => Number(c.time));
 
-    const tradeMarkers = windowedTradeMarkers
-      .map((t: WindowedTradeMarker) => {
+    const tradeMarkers = trades
+      .map((t) => {
         const selected =
           t.id === selectedTradeId || highlightedTradeIds.has(t.id);
         const units = Number(t.units);
@@ -819,7 +803,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       console.warn('Failed to set trade markers:', e);
     }
   }, [
-    windowedTradeMarkers,
+    trades,
     candles,
     selectedTradeId,
     highlightedTradeIds,
