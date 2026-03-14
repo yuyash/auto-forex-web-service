@@ -1,6 +1,6 @@
 [project]
 name = "auto-forex"
-version = "1.13.11"
+version = "1.13.12"
 description = "Auto forex trading application."
 requires-python = ">=3.13"
 dependencies = [
