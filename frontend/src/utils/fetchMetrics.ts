@@ -65,8 +65,9 @@ export async function fetchMetrics(opts: {
     context: 'metrics',
   });
 
-  if (!response.ok)
-    return { count: 0, next: null, previous: null, results: [] };
+  if (!response.ok) {
+    throw response;
+  }
 
   const body = (await response
     .json()
