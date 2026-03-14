@@ -67,6 +67,37 @@ const GRANULARITY_SECONDS: Record<string, number> = {
   M: 2592000,
 };
 
+function getGranularitySeconds(granularity: Granularity | string): number {
+  return GRANULARITY_SECONDS[String(granularity)] ?? 60;
+}
+
+function floorToGranularity(
+  timeSec: number,
+  granularitySeconds: number
+): number {
+  if (!Number.isFinite(timeSec) || granularitySeconds <= 0) return timeSec;
+  return Math.floor(timeSec / granularitySeconds) * granularitySeconds;
+}
+
+function ceilToGranularity(
+  timeSec: number,
+  granularitySeconds: number
+): number {
+  if (!Number.isFinite(timeSec) || granularitySeconds <= 0) return timeSec;
+  return Math.ceil(timeSec / granularitySeconds) * granularitySeconds;
+}
+
+function alignRangeToGranularity(
+  range: TimeRange,
+  granularity: Granularity | string
+): TimeRange {
+  const granularitySeconds = getGranularitySeconds(granularity);
+  return {
+    from: floorToGranularity(range.from, granularitySeconds),
+    to: ceilToGranularity(range.to, granularitySeconds),
+  };
+}
+
 function parseCandles(raw: unknown): WindowedCandle[] {
   const arr = Array.isArray(raw) ? raw : [];
   const byTime = new Map<number, WindowedCandle>();
@@ -128,12 +159,16 @@ function buildRequestBounds(
   bounds: { from?: number; to?: number },
   granularity: Granularity | string
 ): TimeRange {
+  const granularitySeconds = getGranularitySeconds(granularity);
   return {
-    from: Math.max(0, bounds.from ?? 0),
+    from: Math.max(0, floorToGranularity(bounds.from ?? 0, granularitySeconds)),
     to:
-      bounds.to ??
-      Math.floor(Date.now() / 1000) +
-        (GRANULARITY_SECONDS[String(granularity)] ?? 60) * 2,
+      bounds.to != null
+        ? ceilToGranularity(bounds.to, granularitySeconds)
+        : ceilToGranularity(
+            Math.floor(Date.now() / 1000) + granularitySeconds * 2,
+            granularitySeconds
+          ),
   };
 }
 
@@ -210,14 +245,15 @@ export function useWindowedCandles({
 
   const requestRangeOrBridgeGap = useCallback(
     async (range: TimeRange) => {
+      const alignedRange = alignRangeToGranularity(range, granularity);
       const directChunk = await requestCandles({
-        from_time: new Date(range.from * 1000).toISOString(),
-        to_time: new Date(range.to * 1000).toISOString(),
+        from_time: new Date(alignedRange.from * 1000).toISOString(),
+        to_time: new Date(alignedRange.to * 1000).toISOString(),
       });
       if (directChunk.length > 0) {
         return {
           candles: directChunk,
-          handledRange: range,
+          handledRange: alignedRange,
           dataRanges: [
             {
               from: directChunk[0].time,
@@ -230,18 +266,18 @@ export function useWindowedCandles({
       const [beforeChunk, afterChunk] = await Promise.all([
         requestCandles({
           count: edgeCount,
-          before: range.from,
+          before: alignedRange.from,
         }),
         requestCandles({
           count: edgeCount,
-          after: range.to,
+          after: alignedRange.to,
         }),
       ]);
       const bridgedCandles = mergeCandles(beforeChunk, afterChunk);
       if (bridgedCandles.length === 0) {
         return {
           candles: [],
-          handledRange: range,
+          handledRange: alignedRange,
           dataRanges: [],
         };
       }
@@ -263,7 +299,7 @@ export function useWindowedCandles({
       return {
         candles: bridgedCandles,
         handledRange: mergeRanges([
-          range,
+          alignedRange,
           {
             from: bridgedCandles[0].time,
             to: bridgedCandles[bridgedCandles.length - 1].time,
@@ -272,7 +308,7 @@ export function useWindowedCandles({
         dataRanges,
       };
     },
-    [edgeCount, requestCandles]
+    [edgeCount, granularity, requestCandles]
   );
 
   const ensureRange = useCallback(
@@ -464,10 +500,13 @@ export function useWindowedCandles({
         setIsInitialLoading(true);
         void (async () => {
           try {
-            const initialRange = {
-              from,
-              to: initialTo,
-            };
+            const initialRange = alignRangeToGranularity(
+              {
+                from,
+                to: initialTo,
+              },
+              granularity
+            );
             const result = await requestRangeOrBridgeGap(initialRange);
             setCandles(result.candles);
             const initialLoadedRanges: TimeRange[] = [result.handledRange];

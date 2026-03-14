@@ -8,131 +8,53 @@ import React, {
 import {
   Alert,
   Box,
-  Button,
-  Checkbox,
-  Chip,
   CircularProgress,
-  FormControl,
-  IconButton,
-  InputLabel,
   LinearProgress,
-  MenuItem,
   Paper,
-  Select,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TablePagination,
-  TableRow,
-  TableSortLabel,
-  Tooltip,
-  Typography,
-  ToggleButton,
 } from '@mui/material';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import SettingsIcon from '@mui/icons-material/Settings';
-import SelectAllIcon from '@mui/icons-material/SelectAll';
-import DeselectIcon from '@mui/icons-material/Deselect';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import ZoomOutMapIcon from '@mui/icons-material/ZoomOutMap';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
-import {
-  CandlestickSeries,
-  createChart,
-  createSeriesMarkers,
-  type CandlestickData,
-  type IChartApi,
-  type ISeriesApi,
-  type ISeriesMarkersPluginApi,
-  type Time,
-  type UTCTimestamp,
-} from 'lightweight-charts';
-import {
-  fetchAllTrades,
-  fetchTradesSince,
-} from '../../../utils/fetchAllTrades';
+import { type Time, type UTCTimestamp } from 'lightweight-charts';
 import { useSupportedGranularities } from '../../../hooks/useMarketConfig';
-import type { TaskEvent } from '../../../hooks/useTaskEvents';
 import {
   useTaskPositions,
   type TaskPosition,
 } from '../../../hooks/useTaskPositions';
-import { useTaskSummary } from '../../../hooks/useTaskSummary';
 import { TaskType } from '../../../types/common';
-import { detectMarketGaps } from '../../../utils/marketClosedMarkers';
-import { MarketClosedHighlight } from '../../../utils/MarketClosedHighlight';
-import {
-  AdaptiveTimeScale,
-  createSuppressedTickMarkFormatter,
-  createTooltipTimeFormatter,
-} from '../../../utils/adaptiveTimeScalePlugin';
 import { getTimezoneAbbr } from '../../../utils/chartTimezone';
 import { useAuth } from '../../../contexts/AuthContext';
-import { SequencePositionLine } from '../../../utils/SequencePositionLine';
-import { getCandleColors } from '../../../utils/candleColors';
 import { useMetricsOverlay } from './MetricsOverlayChart';
 import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
-import {
-  useColumnConfig,
-  type ColumnItem,
-} from '../../../hooks/useColumnConfig';
 import { useWindowedCandles } from '../../../hooks/useWindowedCandles';
 import {
   useWindowedTaskMarkers,
   type WindowedTradeMarker,
 } from '../../../hooks/useWindowedTaskMarkers';
 import { clampRange, type TimeRange } from '../../../utils/windowedRanges';
-
-type CandlePoint = CandlestickData<Time>;
-
-const TARGET_CANDLE_COUNT = 10000;
-const LOT_UNITS = 1000;
-
-const GRANULARITY_MINUTES: Record<string, number> = {
-  M1: 1,
-  M2: 2,
-  M4: 4,
-  M5: 5,
-  M10: 10,
-  M15: 15,
-  M30: 30,
-  H1: 60,
-  H2: 120,
-  H3: 180,
-  H4: 240,
-  H6: 360,
-  H8: 480,
-  H12: 720,
-  D: 1440,
-  W: 10080,
-  M: 43200,
-};
-
-function isoToSec(value?: string | null): number | null {
-  if (!value) return null;
-  const ms = new Date(value).getTime();
-  return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
-}
-
-type ReplayTrade = {
-  id: string;
-  sequence: number;
-  timestamp: string;
-  timeSec: UTCTimestamp;
-  instrument: string;
-  direction: 'long' | 'short' | '';
-  units: string;
-  price: string;
-  execution_method?: string;
-  execution_method_display?: string;
-  layer_index?: number | null;
-  retracement_count?: number | null;
-  position_id?: string | null;
-};
+import {
+  ALLOWED_GRANULARITIES,
+  ALLOWED_VALUES,
+  GRANULARITY_MINUTES,
+  LOT_UNITS,
+  POLLING_INTERVAL_OPTIONS,
+  findFirstCandleAtOrAfter,
+  findLastCandleAtOrBefore,
+  isoToSec,
+  parseUtcTimestamp,
+  recommendGranularity,
+  snapToCandleTimeInLoadedRange,
+  toEventMarkerTime,
+} from './taskTrendPanel/shared';
+import type { CandlePoint, ReplayTrade } from './taskTrendPanel/shared';
+import { TaskTrendToolbar } from './taskTrendPanel/TaskTrendToolbar';
+import { TaskTrendTradesTable } from './taskTrendPanel/TaskTrendTradesTable';
+import { TaskTrendPositionsTable } from './taskTrendPanel/TaskTrendPositionsTable';
+import type { TrendPosition } from './taskTrendPanel/shared';
+import { useTaskTrendChart } from './taskTrendPanel/useTaskTrendChart';
+import { useTaskTrendReplayData } from './taskTrendPanel/useTaskTrendReplayData';
+import { useTaskTrendTradesTable } from './taskTrendPanel/useTaskTrendTradesTable';
+import { useTaskTrendPositionsTable } from './taskTrendPanel/useTaskTrendPositionsTable';
 
 interface TaskTrendPanelProps {
   taskId: string | number;
@@ -150,261 +72,6 @@ interface TaskTrendPanelProps {
   configId?: string;
 }
 
-const ALLOWED_GRANULARITIES = [
-  { value: 'M1', label: '1 Minute' },
-  { value: 'M5', label: '5 Minutes' },
-  { value: 'M15', label: '15 Minutes' },
-  { value: 'M30', label: '30 Minutes' },
-  { value: 'H1', label: '1 Hour' },
-  { value: 'H4', label: '4 Hours' },
-  { value: 'H8', label: '8 Hours' },
-  { value: 'H12', label: '12 Hours' },
-  { value: 'D', label: 'Daily' },
-  { value: 'W', label: 'Weekly' },
-  { value: 'M', label: 'Monthly' },
-];
-
-const ALLOWED_VALUES = new Set(ALLOWED_GRANULARITIES.map((g) => g.value));
-
-const POLLING_INTERVAL_OPTIONS = [
-  { value: 10_000, label: '10s' },
-  { value: 30_000, label: '30s' },
-  { value: 60_000, label: '1m' },
-  { value: 300_000, label: '5m' },
-  { value: 900_000, label: '15m' },
-];
-
-const parseUtcTimestamp = (value: unknown): UTCTimestamp | null => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    if (value > 1_000_000_000_000) {
-      return Math.floor(value / 1000) as UTCTimestamp;
-    }
-    if (value > 1_000_000_000) {
-      return Math.floor(value) as UTCTimestamp;
-    }
-  }
-
-  if (typeof value === 'string') {
-    const asNumber = Number(value);
-    if (Number.isFinite(asNumber)) {
-      if (asNumber > 1_000_000_000_000) {
-        return Math.floor(asNumber / 1000) as UTCTimestamp;
-      }
-      if (asNumber > 1_000_000_000) {
-        return Math.floor(asNumber) as UTCTimestamp;
-      }
-    }
-
-    const ms = new Date(value).getTime();
-    if (Number.isFinite(ms)) {
-      return Math.floor(ms / 1000) as UTCTimestamp;
-    }
-  }
-
-  return null;
-};
-
-const toEventMarkerTime = (event: TaskEvent): UTCTimestamp | null => {
-  const detailTimestamp =
-    typeof event.details?.timestamp === 'string'
-      ? event.details.timestamp
-      : undefined;
-  return (
-    parseUtcTimestamp(detailTimestamp) ?? parseUtcTimestamp(event.created_at)
-  );
-};
-
-/**
- * Snap a UTC-second timestamp to the nearest candle time using binary search.
- * lightweight-charts requires marker times to match existing data points;
- * without snapping, markers whose time falls between (or beyond) candles are
- * silently pushed to the very last bar.
- */
-const snapToCandleTime = (
-  timeSec: number,
-  candleTimes: number[]
-): UTCTimestamp | null => {
-  if (candleTimes.length === 0) return null;
-
-  let lo = 0;
-  let hi = candleTimes.length - 1;
-
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (candleTimes[mid] < timeSec) {
-      lo = mid + 1;
-    } else {
-      hi = mid;
-    }
-  }
-
-  // lo is the first candle >= timeSec.  Compare with the previous candle to
-  // pick whichever is closer.
-  const candidates = [lo - 1, lo].filter(
-    (i) => i >= 0 && i < candleTimes.length
-  );
-  let best = candidates[0]!;
-  for (const i of candidates) {
-    if (
-      Math.abs(candleTimes[i] - timeSec) < Math.abs(candleTimes[best] - timeSec)
-    ) {
-      best = i;
-    }
-  }
-  return candleTimes[best] as UTCTimestamp;
-};
-
-const snapToCandleTimeInLoadedRange = (
-  timeSec: number,
-  candleTimes: number[]
-): UTCTimestamp | null => {
-  if (candleTimes.length === 0) return null;
-  if (
-    timeSec < candleTimes[0] ||
-    timeSec > candleTimes[candleTimes.length - 1]
-  ) {
-    return null;
-  }
-  return snapToCandleTime(timeSec, candleTimes);
-};
-
-const findFirstCandleAtOrAfter = (
-  timeSec: number,
-  candleTimes: number[]
-): UTCTimestamp | null => {
-  if (candleTimes.length === 0) return null;
-  const first = candleTimes[0];
-  const last = candleTimes[candleTimes.length - 1];
-  if (timeSec <= first) return first as UTCTimestamp;
-  if (timeSec > last) return null;
-
-  let lo = 0;
-  let hi = candleTimes.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1;
-    if (candleTimes[mid] < timeSec) {
-      lo = mid + 1;
-    } else {
-      hi = mid;
-    }
-  }
-  return candleTimes[lo] as UTCTimestamp;
-};
-
-const findLastCandleAtOrBefore = (
-  timeSec: number,
-  candleTimes: number[]
-): UTCTimestamp | null => {
-  if (candleTimes.length === 0) return null;
-  const first = candleTimes[0];
-  const last = candleTimes[candleTimes.length - 1];
-  if (timeSec < first) return null;
-  if (timeSec >= last) return last as UTCTimestamp;
-
-  let lo = 0;
-  let hi = candleTimes.length - 1;
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >>> 1;
-    if (candleTimes[mid] <= timeSec) {
-      lo = mid;
-    } else {
-      hi = mid - 1;
-    }
-  }
-  return candleTimes[lo] as UTCTimestamp;
-};
-
-const findGapAroundTime = (
-  timeSec: number,
-  candleTimes: number[],
-  gapThresholdSeconds: number
-): { from: number; to: number } | null => {
-  if (candleTimes.length < 2) return null;
-  for (let i = 1; i < candleTimes.length; i += 1) {
-    const prev = candleTimes[i - 1];
-    const next = candleTimes[i];
-    if (timeSec < prev || timeSec > next) continue;
-    if (next - prev > gapThresholdSeconds) {
-      return { from: prev, to: next };
-    }
-  }
-  return null;
-};
-
-const recommendGranularity = (
-  fromIso: string | undefined,
-  toIso: string | undefined,
-  available: string[]
-): string => {
-  if (!fromIso || !toIso || available.length === 0) return 'M1';
-
-  const fromMs = new Date(fromIso).getTime();
-  const toMs = new Date(toIso).getTime();
-  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs)
-    return 'H1';
-
-  const rangeMinutes = (toMs - fromMs) / (1000 * 60);
-  let best = available[0] ?? 'H1';
-  let bestDiff = Number.POSITIVE_INFINITY;
-
-  for (const g of available) {
-    const mins = GRANULARITY_MINUTES[g];
-    if (!mins) continue;
-    const candles = rangeMinutes / mins;
-    const diff = Math.abs(candles - TARGET_CANDLE_COUNT);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      best = g;
-    }
-  }
-
-  return best;
-};
-
-/** Compute PnL for a single position (used for sorting). */
-const computePosPnl = (
-  pos: TaskPosition & { _status: 'open' | 'closed' },
-  currentPrice: number | null
-): number => {
-  const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
-  const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
-  const units = Math.abs(pos.units ?? 0);
-  const dir = String(pos.direction).toLowerCase();
-  if (pos._status === 'open' && currentPrice != null && entryP != null) {
-    return dir === 'long'
-      ? (currentPrice - entryP) * units
-      : (entryP - currentPrice) * units;
-  }
-  if (pos._status === 'closed' && exitP != null && entryP != null) {
-    return dir === 'long' ? (exitP - entryP) * units : (entryP - exitP) * units;
-  }
-  return 0;
-};
-
-/** Compute Pips for a single position (used for sorting and display). */
-const computePosPips = (
-  pos: TaskPosition & { _status: 'open' | 'closed' },
-  currentPrice: number | null,
-  pipSize: number | null | undefined
-): number => {
-  if (!pipSize) return 0;
-  const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
-  if (entryP == null || !Number.isFinite(entryP)) return 0;
-  const dir = String(pos.direction).toLowerCase();
-  if (pos._status === 'open' && currentPrice != null) {
-    const diff = dir === 'long' ? currentPrice - entryP : entryP - currentPrice;
-    const pips = diff / pipSize;
-    return Number.isFinite(pips) ? pips : 0;
-  }
-  const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
-  if (exitP != null && Number.isFinite(exitP)) {
-    const diff = dir === 'long' ? exitP - entryP : entryP - exitP;
-    const pips = diff / pipSize;
-    return Number.isFinite(pips) ? pips : 0;
-  }
-  return 0;
-};
-
 export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   taskId,
   taskType,
@@ -418,13 +85,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   pipSize,
 }) => {
   const panelRootRef = useRef<HTMLDivElement | null>(null);
-  const chartContainerRef = useRef<HTMLDivElement | null>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const seriesRef = useRef<ISeriesApi<'Candlestick', Time> | null>(null);
-  const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
-  const highlightRef = useRef<MarketClosedHighlight | null>(null);
-  const adaptiveRef = useRef<AdaptiveTimeScale | null>(null);
-  const sequenceLineRef = useRef<SequencePositionLine | null>(null);
   const tradesRef = useRef<ReplayTrade[]>([]);
   const { user } = useAuth();
   const { t } = useTranslation('common');
@@ -432,11 +92,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   const isDark = muiTheme.palette.mode === 'dark';
   const timezone = user?.timezone || 'UTC';
   const [granularity, setGranularity] = useState<string>('M1');
-  const [trades, setTrades] = useState<ReplayTrade[]>([]);
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
-  // State-based chart reference so hooks can react to chart creation
-  const [chartInstance, setChartInstance] = useState<IChartApi | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [pollingIntervalMs, setPollingIntervalMs] = useState(10_000);
   const { granularities } = useSupportedGranularities();
   const {
@@ -482,6 +138,12 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     }
     return { from, to };
   }, [liveRangeUpperBound, startTimeSec]);
+  const markerDisplayCutoffSec = useMemo(() => {
+    if (!enableRealTimeUpdates) {
+      return null;
+    }
+    return currentTickSec;
+  }, [currentTickSec, enableRealTimeUpdates]);
   const candles = useMemo(
     () =>
       windowedCandles
@@ -546,80 +208,13 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
 
   // Auto-follow: track whether the chart should auto-scroll to the position line
   const [autoFollow, setAutoFollow] = useState(true);
-  // Counter-based guard: every programmatic scroll increments this counter.
-  // The visibleLogicalRangeChange listener decrements it instead of disabling
-  // auto-follow.  This is more reliable than a time-based window because the
-  // chart library can fire the change callback with unpredictable async delays
-  // (especially when the browser tab is throttled or the machine is under load).
-  const programmaticScrollCountRef = useRef(0);
-  // Timestamp-based guard kept as a secondary safety net for callbacks that
-  // fire multiple times per single programmatic action (e.g. setData triggers
-  // both a range reset and a fitContent, each producing a callback).
-  const programmaticScrollUntilRef = useRef(0);
-  const PROGRAMMATIC_SCROLL_GUARD_MS = 800;
-  // Keep the old ref name around as a thin wrapper so every call-site still
-  // compiles – but now it sets both the counter and the timestamp.
-  // Wrapped in useMemo so the object identity is stable across renders,
-  // which satisfies the react-hooks/exhaustive-deps rule.
-  const programmaticScrollRef = useMemo(
-    () => ({
-      get current() {
-        return (
-          programmaticScrollCountRef.current > 0 ||
-          Date.now() < programmaticScrollUntilRef.current
-        );
-      },
-      set current(v: boolean) {
-        if (v) {
-          programmaticScrollCountRef.current += 1;
-          programmaticScrollUntilRef.current =
-            Date.now() + PROGRAMMATIC_SCROLL_GUARD_MS;
-        } else {
-          programmaticScrollCountRef.current = 0;
-          programmaticScrollUntilRef.current = 0;
-        }
-      },
-      /** Decrement the counter by one (called from the range-change listener). */
-      consume() {
-        if (programmaticScrollCountRef.current > 0) {
-          programmaticScrollCountRef.current -= 1;
-          return true;
-        }
-        if (Date.now() < programmaticScrollUntilRef.current) {
-          return true;
-        }
-        return false;
-      },
-    }),
-    [PROGRAMMATIC_SCROLL_GUARD_MS]
-  );
 
-  // Re-enable auto-follow when real-time updates are turned on (task started)
-  useEffect(() => {
-    if (enableRealTimeUpdates) {
-      setAutoFollow(true);
-    }
-  }, [enableRealTimeUpdates]);
-
-  type SortableKey =
-    | 'timestamp'
-    | 'direction'
-    | 'layer_index'
-    | 'retracement_count'
-    | 'units'
-    | 'price'
-    | 'execution_method';
-  const [orderBy, setOrderBy] = useState<SortableKey>('timestamp');
-  const [order, setOrder] = useState<'asc' | 'desc'>('desc');
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-
-  // Row selection for copy
-  const [selectedRowIds, setSelectedRowIds] = useState<Set<string>>(new Set());
-
-  // Track whether the selection came from a chart click (to auto-navigate table)
   const chartClickedRef = useRef(false);
-  const selectedRowRef = useRef<HTMLTableRowElement | null>(null);
+  const selectedPosRowRef = useRef<HTMLTableRowElement | null>(null);
+  const [selectedPosId, setSelectedPosId] = useState<string | null>(null);
+  const [highlightedTradeIds, setHighlightedTradeIds] = useState<Set<string>>(
+    new Set()
+  );
 
   // Chart height state for draggable separator
   const MIN_CHART_HEIGHT = 200;
@@ -687,332 +282,19 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     [chartHeight]
   );
 
-  // Column resize state
-  const defaultReplayWidths: Record<string, number> = {
-    timestamp: 160,
-    direction: 70,
-    layer_index: 60,
-    retracement_count: 60,
-    units: 70,
-    price: 90,
-    execution_method: 110,
-  };
-  const [replayColWidths, setReplayColWidths] = useState(defaultReplayWidths);
-  const replayResizeRef = useRef<{
-    col: string;
-    startX: number;
-    startW: number;
-  } | null>(null);
-
-  // ── Column visibility config for the 3 trend tables ──
-  const tradesColDefaults: ColumnItem[] = [
-    { id: 'timestamp', label: t('tables.trend.time'), visible: true },
-    { id: 'direction', label: t('tables.trend.direction'), visible: true },
-    { id: 'layer_index', label: t('tables.trend.layer'), visible: true },
-    { id: 'retracement_count', label: t('tables.trend.ret'), visible: true },
-    { id: 'units', label: t('tables.trend.units'), visible: true },
-    { id: 'price', label: t('tables.trend.price'), visible: true },
-    { id: 'execution_method', label: t('tables.trend.event'), visible: true },
-  ];
-  const {
-    columns: tradesColConfig,
-    updateColumns: updateTradesCols,
-    resetToDefaults: resetTradesCols,
-  } = useColumnConfig('trend_trades', tradesColDefaults);
-  const [tradesColConfigOpen, setTradesColConfigOpen] = useState(false);
-
-  const posColDefaults: ColumnItem[] = [
-    { id: 'entry_time', label: t('tables.trend.openTime'), visible: true },
-    { id: 'exit_time', label: t('tables.trend.closeTime'), visible: true },
-    { id: '_status', label: t('tables.trend.status'), visible: true },
-    { id: 'layer_index', label: t('tables.trend.layer'), visible: true },
-    {
-      id: 'retracement_count',
-      label: t('tables.trend.retrace'),
-      visible: true,
-    },
-    { id: 'units', label: t('tables.trend.units'), visible: true },
-    { id: 'entry_price', label: t('tables.trend.entry'), visible: true },
-    { id: 'exit_price', label: t('tables.trend.exit'), visible: true },
-    { id: '_pips', label: t('tables.trend.pips'), visible: true },
-    { id: '_pnl', label: t('tables.trend.pnl'), visible: true },
-  ];
-  const {
-    columns: longPosColConfig,
-    updateColumns: updateLongPosCols,
-    resetToDefaults: resetLongPosCols,
-  } = useColumnConfig('trend_long_positions', posColDefaults);
-  const [longPosColConfigOpen, setLongPosColConfigOpen] = useState(false);
-
-  const {
-    columns: shortPosColConfig,
-    updateColumns: updateShortPosCols,
-    resetToDefaults: resetShortPosCols,
-  } = useColumnConfig('trend_short_positions', posColDefaults);
-  const [shortPosColConfigOpen, setShortPosColConfigOpen] = useState(false);
-
-  const handleColResizeStart = useCallback(
-    (e: React.MouseEvent | React.TouchEvent, col: string) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      replayResizeRef.current = {
-        col,
-        startX: clientX,
-        startW: replayColWidths[col] ?? 100,
-      };
-      const onMove = (ev: MouseEvent | TouchEvent) => {
-        if (!replayResizeRef.current) return;
-        const moveX =
-          'touches' in ev ? ev.touches[0].clientX : (ev as MouseEvent).clientX;
-        const diff = moveX - replayResizeRef.current.startX;
-        const w = Math.max(40, replayResizeRef.current.startW + diff);
-        setReplayColWidths((prev) => ({
-          ...prev,
-          [replayResizeRef.current!.col]: w,
-        }));
-      };
-      const onUp = () => {
-        replayResizeRef.current = null;
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        document.removeEventListener('touchmove', onMove);
-        document.removeEventListener('touchend', onUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      };
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-      document.addEventListener('touchmove', onMove, { passive: false });
-      document.addEventListener('touchend', onUp);
-    },
-    [replayColWidths]
-  );
-
-  const resizeHandle = useCallback(
-    (col: string) => (
-      <Box
-        onMouseDown={(e) => handleColResizeStart(e, col)}
-        onTouchStart={(e) => handleColResizeStart(e, col)}
-        sx={{
-          position: 'absolute',
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: 4,
-          cursor: 'col-resize',
-          '&:hover': { backgroundColor: 'primary.main', opacity: 0.4 },
-        }}
-      />
-    ),
-    [handleColResizeStart]
-  );
-
-  // ── Long/Short position column resize ──
-  const defaultLSPosWidths: Record<string, number> = {
-    entry_time: 160,
-    exit_time: 150,
-    _status: 70,
-    layer_index: 60,
-    retracement_count: 65,
-    units: 70,
-    entry_price: 100,
-    exit_price: 100,
-    _pips: 80,
-    _pnl: 140,
-  };
-  const [longPosColWidths, setLongPosColWidths] = useState(defaultLSPosWidths);
-  const [shortPosColWidths, setShortPosColWidths] =
-    useState(defaultLSPosWidths);
-  const lsPosResizeRef = useRef<{
-    col: string;
-    startX: number;
-    startW: number;
-    setter: React.Dispatch<React.SetStateAction<Record<string, number>>>;
-  } | null>(null);
-
-  const handleLSPosColResizeStart = useCallback(
-    (
-      e: React.MouseEvent | React.TouchEvent,
-      col: string,
-      widths: Record<string, number>,
-      setter: React.Dispatch<React.SetStateAction<Record<string, number>>>
-    ) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-      lsPosResizeRef.current = {
-        col,
-        startX: clientX,
-        startW: widths[col] ?? 100,
-        setter,
-      };
-      const onMove = (ev: MouseEvent | TouchEvent) => {
-        if (!lsPosResizeRef.current) return;
-        const moveX =
-          'touches' in ev ? ev.touches[0].clientX : (ev as MouseEvent).clientX;
-        const diff = moveX - lsPosResizeRef.current.startX;
-        const w = Math.max(40, lsPosResizeRef.current.startW + diff);
-        lsPosResizeRef.current.setter((prev) => ({
-          ...prev,
-          [lsPosResizeRef.current!.col]: w,
-        }));
-      };
-      const onUp = () => {
-        lsPosResizeRef.current = null;
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        document.removeEventListener('touchmove', onMove);
-        document.removeEventListener('touchend', onUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      };
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-      document.addEventListener('touchmove', onMove, { passive: false });
-      document.addEventListener('touchend', onUp);
-    },
-    []
-  );
-
-  const makeLSResizeHandle = useCallback(
-    (
-      col: string,
-      widths: Record<string, number>,
-      setter: React.Dispatch<React.SetStateAction<Record<string, number>>>
-    ) => (
-      <Box
-        onMouseDown={(e) => handleLSPosColResizeStart(e, col, widths, setter)}
-        onTouchStart={(e) => handleLSPosColResizeStart(e, col, widths, setter)}
-        sx={{
-          position: 'absolute',
-          right: 0,
-          top: 0,
-          bottom: 0,
-          width: 4,
-          cursor: 'col-resize',
-          '&:hover': { backgroundColor: 'primary.main', opacity: 0.4 },
-        }}
-      />
-    ),
-    [handleLSPosColResizeStart]
-  );
-
-  const handleSort = (column: SortableKey) => {
-    if (orderBy === column) {
-      setOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setOrderBy(column);
-      setOrder('asc');
-    }
-  };
-
-  const sortedTrades = useMemo(() => {
-    const sorted = [...trades].sort((a, b) => {
-      let cmp = 0;
-      switch (orderBy) {
-        case 'timestamp':
-          cmp =
-            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
-          break;
-        case 'direction':
-          cmp = a.direction.localeCompare(b.direction);
-          break;
-        case 'layer_index':
-          cmp = (a.layer_index ?? -1) - (b.layer_index ?? -1);
-          break;
-        case 'retracement_count':
-          cmp = (a.retracement_count ?? -1) - (b.retracement_count ?? -1);
-          break;
-        case 'units':
-          cmp = Number(a.units) - Number(b.units);
-          break;
-        case 'price':
-          cmp = Number(a.price) - Number(b.price);
-          break;
-        case 'execution_method':
-          cmp = (a.execution_method || '').localeCompare(
-            b.execution_method || ''
-          );
-          break;
-      }
-      return order === 'asc' ? cmp : -cmp;
-    });
-    return sorted;
-  }, [trades, orderBy, order]);
-
-  const paginatedTrades = useMemo(
-    () =>
-      sortedTrades.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
-    [sortedTrades, page, rowsPerPage]
-  );
-
-  // Row selection helpers
-  const isAllPageSelected =
-    paginatedTrades.length > 0 &&
-    paginatedTrades.every((r) => selectedRowIds.has(r.id));
-
-  const toggleRowSelection = useCallback((id: string) => {
-    setSelectedRowIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const selectAllOnPage = useCallback(() => {
-    setSelectedRowIds((prev) => {
-      const next = new Set(prev);
-      for (const row of paginatedTrades) next.add(row.id);
-      return next;
-    });
-  }, [paginatedTrades]);
-
-  const resetSelection = useCallback(() => {
-    setSelectedRowIds(new Set());
-  }, []);
-
-  const copySelectedRows = useCallback(() => {
-    // Build headers and row data respecting column config order and visibility
-    const extractors: Record<string, (r: (typeof sortedTrades)[0]) => string> =
-      {
-        timestamp: (r) => new Date(r.timestamp).toLocaleString(),
-        direction: (r) => (r.direction ? r.direction.toUpperCase() : ''),
-        layer_index: (r) => String(r.layer_index ?? '-'),
-        retracement_count: (r) => String(r.retracement_count ?? '-'),
-        units: (r) => String(r.units),
-        price: (r) => (r.price ? `¥${parseFloat(r.price).toFixed(3)}` : '-'),
-        execution_method: (r) =>
-          r.execution_method_display || r.execution_method || '-',
-      };
-    const visibleCols = tradesColConfig.filter((c) => c.visible);
-    const applicableCols = visibleCols.filter((c) => extractors[c.id] != null);
-    const header = applicableCols.map((c) => c.label).join('\t');
-    const rows = sortedTrades
-      .filter((r) => selectedRowIds.has(r.id))
-      .map((r) =>
-        applicableCols
-          .map((c) => {
-            const ext = extractors[c.id];
-            return ext ? ext(r) : '-';
-          })
-          .join('\t')
-      );
-    navigator.clipboard.writeText([header, ...rows].join('\n'));
-  }, [selectedRowIds, sortedTrades, tradesColConfig]);
-
-  // Reset to first page when sort changes (not on data refresh)
-  useEffect(() => {
-    setPage(0);
-  }, [orderBy, order]);
-
   const currentPrice =
     currentTick?.price != null ? parseFloat(currentTick.price) : null;
+  const { trades, isRefreshing, replaySummary, fetchReplayData } =
+    useTaskTrendReplayData({
+      taskId,
+      taskType,
+      executionRunId,
+      instrument,
+      latestExecution,
+      enableRealTimeUpdates,
+      pollingIntervalMs,
+      refreshTailCandles,
+    });
 
   // Merge open + closed positions for the Positions panel in the Trend tab
   // Merge open + closed positions, de-duplicate by id, and derive _status
@@ -1020,9 +302,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   // This prevents a position that was just closed from appearing as "open"
   // when the open-positions poll returns stale data while the closed-
   // positions poll already includes the updated record.
-  const allPositions = useMemo<
-    (TaskPosition & { _status: 'open' | 'closed' })[]
-  >(() => {
+  const allPositions = useMemo<TrendPosition[]>(() => {
     const map = new Map<string, TaskPosition>();
     // Insert closed first, then open – but if the same id appears in both
     // lists the closed version (is_open=false) wins because it is the more
@@ -1053,371 +333,102 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     () => allPositions.filter((p) => p.direction === 'short'),
     [allPositions]
   );
-
-  const [showOpenLongOnly, setShowOpenLongOnly] = useState(false);
-  const [showOpenShortOnly, setShowOpenShortOnly] = useState(false);
-
-  const [, setPosPage] = useState(0);
-  const [, setPosRowsPerPage] = useState(10);
-
-  // Separate pagination for Long / Short position tables in the Trend tab
-  const [longPosPage, setLongPosPage] = useState(0);
-  const [shortPosPage, setShortPosPage] = useState(0);
-  const [longPosRowsPerPage, setLongPosRowsPerPage] = useState(10);
-  const [shortPosRowsPerPage, setShortPosRowsPerPage] = useState(10);
-
-  type LSPosSortableKey =
-    | 'entry_time'
-    | 'exit_time'
-    | '_status'
-    | 'layer_index'
-    | 'retracement_count'
-    | 'units'
-    | 'entry_price'
-    | 'exit_price'
-    | '_pips'
-    | '_pnl';
-  const [longPosOrderBy, setLongPosOrderBy] =
-    useState<LSPosSortableKey>('entry_time');
-  const [longPosOrder, setLongPosOrder] = useState<'asc' | 'desc'>('desc');
-  const [shortPosOrderBy, setShortPosOrderBy] =
-    useState<LSPosSortableKey>('entry_time');
-  const [shortPosOrder, setShortPosOrder] = useState<'asc' | 'desc'>('desc');
-
-  const handleLongPosSort = useCallback((column: LSPosSortableKey) => {
-    setLongPosOrderBy((prev) => {
-      if (prev === column) {
-        setLongPosOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
-        return prev;
-      }
-      setLongPosOrder(
-        column === 'entry_time' || column === 'exit_time' ? 'desc' : 'asc'
-      );
-      return column;
-    });
-    setLongPosPage(0);
-  }, []);
-
-  const handleShortPosSort = useCallback((column: LSPosSortableKey) => {
-    setShortPosOrderBy((prev) => {
-      if (prev === column) {
-        setShortPosOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
-        return prev;
-      }
-      setShortPosOrder(
-        column === 'entry_time' || column === 'exit_time' ? 'desc' : 'asc'
-      );
-      return column;
-    });
-    setShortPosPage(0);
-  }, []);
-
-  // Sorted & paginated long/short positions for the split tables
-  const sortLSPositions = useCallback(
-    (
-      positions: (TaskPosition & { _status: 'open' | 'closed' })[],
-      sortBy: LSPosSortableKey,
-      sortOrder: 'asc' | 'desc'
-    ) => {
-      return [...positions].sort((a, b) => {
-        let cmp = 0;
-        switch (sortBy) {
-          case 'entry_time':
-            cmp =
-              new Date(a.entry_time).getTime() -
-              new Date(b.entry_time).getTime();
-            break;
-          case 'exit_time': {
-            const aT = a.exit_time ? new Date(a.exit_time).getTime() : 0;
-            const bT = b.exit_time ? new Date(b.exit_time).getTime() : 0;
-            cmp = aT - bT;
-            break;
-          }
-          case '_status':
-            cmp = a._status.localeCompare(b._status);
-            break;
-          case 'layer_index':
-            cmp = (a.layer_index ?? -1) - (b.layer_index ?? -1);
-            break;
-          case 'retracement_count':
-            cmp = (a.retracement_count ?? -1) - (b.retracement_count ?? -1);
-            break;
-          case 'units':
-            cmp = Math.abs(a.units ?? 0) - Math.abs(b.units ?? 0);
-            break;
-          case 'entry_price':
-            cmp =
-              parseFloat(a.entry_price || '0') -
-              parseFloat(b.entry_price || '0');
-            break;
-          case 'exit_price':
-            cmp =
-              parseFloat(a.exit_price || '0') - parseFloat(b.exit_price || '0');
-            break;
-          case '_pips': {
-            const pipsA = computePosPips(a, currentPrice, pipSize);
-            const pipsB = computePosPips(b, currentPrice, pipSize);
-            cmp = pipsA - pipsB;
-            break;
-          }
-          case '_pnl': {
-            const pnlA = computePosPnl(a, currentPrice);
-            const pnlB = computePosPnl(b, currentPrice);
-            cmp = pnlA - pnlB;
-            break;
-          }
-        }
-        return sortOrder === 'asc' ? cmp : -cmp;
-      });
-    },
-    [currentPrice, pipSize]
-  );
-
-  const sortedLongPositions = useMemo(() => {
-    const base = showOpenLongOnly
-      ? longPositions.filter((p) => p._status === 'open')
-      : longPositions;
-    return sortLSPositions(base, longPosOrderBy, longPosOrder);
-  }, [
-    longPositions,
-    showOpenLongOnly,
-    longPosOrderBy,
-    longPosOrder,
-    sortLSPositions,
-  ]);
-
-  const sortedShortPositions = useMemo(() => {
-    const base = showOpenShortOnly
-      ? shortPositions.filter((p) => p._status === 'open')
-      : shortPositions;
-    return sortLSPositions(base, shortPosOrderBy, shortPosOrder);
-  }, [
-    shortPositions,
-    showOpenShortOnly,
-    shortPosOrderBy,
-    shortPosOrder,
-    sortLSPositions,
-  ]);
-
-  const paginatedLongPositions = useMemo(
-    () =>
-      sortedLongPositions.slice(
-        longPosPage * longPosRowsPerPage,
-        longPosPage * longPosRowsPerPage + longPosRowsPerPage
-      ),
-    [sortedLongPositions, longPosPage, longPosRowsPerPage]
-  );
-  const paginatedShortPositions = useMemo(
-    () =>
-      sortedShortPositions.slice(
-        shortPosPage * shortPosRowsPerPage,
-        shortPosPage * shortPosRowsPerPage + shortPosRowsPerPage
-      ),
-    [sortedShortPositions, shortPosPage, shortPosRowsPerPage]
-  );
-
-  // Single-position highlight (like selectedTradeId for trades)
-  const [selectedPosId, setSelectedPosId] = useState<string | null>(null);
-  // Set of trade IDs highlighted because of a position click
-  const [highlightedTradeIds, setHighlightedTradeIds] = useState<Set<string>>(
-    new Set()
-  );
-  const selectedPosRowRef = useRef<HTMLTableRowElement | null>(null);
-  const pendingPosScrollRef = useRef(false);
-
-  // ── Long position row selection ──
-  const [selectedLongPosIds, setSelectedLongPosIds] = useState<Set<string>>(
-    new Set()
-  );
-
-  const isAllLongPosPageSelected =
-    paginatedLongPositions.length > 0 &&
-    paginatedLongPositions.every((r) => selectedLongPosIds.has(r.id));
-
-  const toggleLongPosSelection = useCallback((id: string) => {
-    setSelectedLongPosIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const selectAllLongPosOnPage = useCallback(() => {
-    setSelectedLongPosIds((prev) => {
-      const next = new Set(prev);
-      for (const row of paginatedLongPositions) next.add(row.id);
-      return next;
-    });
-  }, [paginatedLongPositions]);
-
-  const resetLongPosSelection = useCallback(() => {
-    setSelectedLongPosIds(new Set());
-  }, []);
-
-  const copySelectedLongPositions = useCallback(() => {
-    const extractors: Record<
-      string,
-      (pos: (typeof sortedLongPositions)[0]) => string
-    > = {
-      entry_time: (pos) =>
-        pos.entry_time ? new Date(pos.entry_time).toLocaleString() : '-',
-      exit_time: (pos) =>
-        pos.exit_time ? new Date(pos.exit_time).toLocaleString() : '-',
-      _status: (pos) => (pos._status === 'open' ? 'Open' : 'Closed'),
-      layer_index: (pos) => String(pos.layer_index ?? '-'),
-      retracement_count: (pos) => String(pos.retracement_count ?? '-'),
-      units: (pos) => String(pos.units),
-      entry_price: (pos) => {
-        const ep = pos.entry_price ? parseFloat(pos.entry_price) : null;
-        return ep != null ? `¥${ep.toFixed(3)}` : '-';
-      },
-      exit_price: (pos) => {
-        const xp = pos.exit_price ? parseFloat(pos.exit_price) : null;
-        return xp != null ? `¥${xp.toFixed(3)}` : '-';
-      },
-      _pips: (pos) => {
-        const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
-        const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
-        const isOpen = pos._status === 'open';
-        const hasPrice = isOpen
-          ? currentPrice != null && entryP != null
-          : exitP != null && entryP != null;
-        return pipSize && hasPrice
-          ? computePosPips(pos, currentPrice, pipSize).toFixed(1)
-          : '-';
-      },
-      _pnl: (pos) => {
-        const isOpen = pos._status === 'open';
-        const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
-        const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
-        const units = Math.abs(pos.units ?? 0);
-        let pnl: number | null = null;
-        if (isOpen && currentPrice != null && entryP != null)
-          pnl = (currentPrice - entryP) * units;
-        else if (!isOpen && exitP != null && entryP != null)
-          pnl = (exitP - entryP) * units;
-        return pnl != null ? pnl.toFixed(2) : '-';
-      },
-    };
-    const visibleCols = longPosColConfig.filter((c) => c.visible);
-    const applicableCols = visibleCols.filter((c) => extractors[c.id] != null);
-    const header = applicableCols.map((c) => c.label).join('\t');
-    const rows = sortedLongPositions
-      .filter((r) => selectedLongPosIds.has(r.id))
-      .map((pos) =>
-        applicableCols
-          .map((c) => {
-            const ext = extractors[c.id];
-            return ext ? ext(pos) : '-';
-          })
-          .join('\t')
-      );
-    navigator.clipboard.writeText([header, ...rows].join('\n'));
-  }, [
-    selectedLongPosIds,
-    sortedLongPositions,
+  const tradeTable = useTaskTrendTradesTable(trades, timezone);
+  const longPositionsTable = useTaskTrendPositionsTable({
+    positions: longPositions,
     currentPrice,
     pipSize,
-    longPosColConfig,
-  ]);
-
-  // ── Short position row selection ──
-  const [selectedShortPosIds, setSelectedShortPosIds] = useState<Set<string>>(
-    new Set()
-  );
-
-  const isAllShortPosPageSelected =
-    paginatedShortPositions.length > 0 &&
-    paginatedShortPositions.every((r) => selectedShortPosIds.has(r.id));
-
-  const toggleShortPosSelection = useCallback((id: string) => {
-    setSelectedShortPosIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const selectAllShortPosOnPage = useCallback(() => {
-    setSelectedShortPosIds((prev) => {
-      const next = new Set(prev);
-      for (const row of paginatedShortPositions) next.add(row.id);
-      return next;
-    });
-  }, [paginatedShortPositions]);
-
-  const resetShortPosSelection = useCallback(() => {
-    setSelectedShortPosIds(new Set());
-  }, []);
-
-  const copySelectedShortPositions = useCallback(() => {
-    const extractors: Record<
-      string,
-      (pos: (typeof sortedShortPositions)[0]) => string
-    > = {
-      entry_time: (pos) =>
-        pos.entry_time ? new Date(pos.entry_time).toLocaleString() : '-',
-      exit_time: (pos) =>
-        pos.exit_time ? new Date(pos.exit_time).toLocaleString() : '-',
-      _status: (pos) => (pos._status === 'open' ? 'Open' : 'Closed'),
-      layer_index: (pos) => String(pos.layer_index ?? '-'),
-      retracement_count: (pos) => String(pos.retracement_count ?? '-'),
-      units: (pos) => String(pos.units),
-      entry_price: (pos) => {
-        const ep = pos.entry_price ? parseFloat(pos.entry_price) : null;
-        return ep != null ? `¥${ep.toFixed(3)}` : '-';
-      },
-      exit_price: (pos) => {
-        const xp = pos.exit_price ? parseFloat(pos.exit_price) : null;
-        return xp != null ? `¥${xp.toFixed(3)}` : '-';
-      },
-      _pips: (pos) => {
-        const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
-        const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
-        const isOpen = pos._status === 'open';
-        const hasPrice = isOpen
-          ? currentPrice != null && entryP != null
-          : exitP != null && entryP != null;
-        return pipSize && hasPrice
-          ? computePosPips(pos, currentPrice, pipSize).toFixed(1)
-          : '-';
-      },
-      _pnl: (pos) => {
-        const isOpen = pos._status === 'open';
-        const entryP = pos.entry_price ? parseFloat(pos.entry_price) : null;
-        const exitP = pos.exit_price ? parseFloat(pos.exit_price) : null;
-        const units = Math.abs(pos.units ?? 0);
-        let pnl: number | null = null;
-        if (isOpen && currentPrice != null && entryP != null)
-          pnl = (entryP - currentPrice) * units;
-        else if (!isOpen && exitP != null && entryP != null)
-          pnl = (entryP - exitP) * units;
-        return pnl != null ? pnl.toFixed(2) : '-';
-      },
-    };
-    const visibleCols = shortPosColConfig.filter((c) => c.visible);
-    const applicableCols = visibleCols.filter((c) => extractors[c.id] != null);
-    const header = applicableCols.map((c) => c.label).join('\t');
-    const rows = sortedShortPositions
-      .filter((r) => selectedShortPosIds.has(r.id))
-      .map((pos) =>
-        applicableCols
-          .map((c) => {
-            const ext = extractors[c.id];
-            return ext ? ext(pos) : '-';
-          })
-          .join('\t')
-      );
-    navigator.clipboard.writeText([header, ...rows].join('\n'));
-  }, [
-    selectedShortPosIds,
-    sortedShortPositions,
+    storageKey: 'trend_long_positions',
+    timezone,
+  });
+  const shortPositionsTable = useTaskTrendPositionsTable({
+    positions: shortPositions,
     currentPrice,
     pipSize,
-    shortPosColConfig,
-  ]);
+    storageKey: 'trend_short_positions',
+    timezone,
+  });
+  const {
+    showOpenOnly: showOpenLongOnly,
+    page: longPosPage,
+    rowsPerPage: longPosRowsPerPage,
+    orderBy: longPosOrderBy,
+    order: longPosOrder,
+    selectedIds: selectedLongPosIds,
+    setPage: setLongPosPage,
+    setRowsPerPage: setLongPosRowsPerPage,
+    sortedPositions: sortedLongPositions,
+    paginatedPositions: paginatedLongPositions,
+    isAllPageSelected: isAllLongPosPageSelected,
+    colWidths: longPosColWidths,
+    createResizeHandle: createLongPosResizeHandle,
+    columnConfig: longPosColumnConfig,
+    updateColumns: updateLongPosColumns,
+    resetToDefaults: resetLongPosDefaults,
+    configOpen: longPosConfigOpen,
+    setConfigOpen: setLongPosConfigOpen,
+    handleSort: handleLongPosSort,
+    toggleSelection: toggleLongPosSelection,
+    selectAllOnPage: selectAllLongPosOnPage,
+    togglePageSelection: toggleLongPosPageSelection,
+    resetSelection: resetLongPosSelection,
+    copySelectedPositions: copySelectedLongPositions,
+    toggleOpenOnly: toggleOpenLongOnly,
+  } = longPositionsTable;
+  const {
+    showOpenOnly: showOpenShortOnly,
+    page: shortPosPage,
+    rowsPerPage: shortPosRowsPerPage,
+    orderBy: shortPosOrderBy,
+    order: shortPosOrder,
+    selectedIds: selectedShortPosIds,
+    setPage: setShortPosPage,
+    setRowsPerPage: setShortPosRowsPerPage,
+    sortedPositions: sortedShortPositions,
+    paginatedPositions: paginatedShortPositions,
+    isAllPageSelected: isAllShortPosPageSelected,
+    colWidths: shortPosColWidths,
+    createResizeHandle: createShortPosResizeHandle,
+    columnConfig: shortPosColumnConfig,
+    updateColumns: updateShortPosColumns,
+    resetToDefaults: resetShortPosDefaults,
+    configOpen: shortPosConfigOpen,
+    setConfigOpen: setShortPosConfigOpen,
+    handleSort: handleShortPosSort,
+    toggleSelection: toggleShortPosSelection,
+    selectAllOnPage: selectAllShortPosOnPage,
+    togglePageSelection: toggleShortPosPageSelection,
+    resetSelection: resetShortPosSelection,
+    copySelectedPositions: copySelectedShortPositions,
+    toggleOpenOnly: toggleOpenShortOnly,
+  } = shortPositionsTable;
+  const {
+    orderBy: tradeOrderBy,
+    order: tradeOrder,
+    page: tradePage,
+    rowsPerPage: tradeRowsPerPage,
+    setPage: setTradePage,
+    setRowsPerPage: setTradeRowsPerPage,
+    selectedRowIds: tradeSelectedRowIds,
+    setSelectedRowIds: setTradeSelectedRowIds,
+    selectedRowRef: tradeSelectedRowRef,
+    sortedTrades,
+    paginatedTrades,
+    isAllPageSelected: isAllTradePageSelected,
+    colWidths: tradeColWidths,
+    createResizeHandle: createTradeResizeHandle,
+    columnConfig: tradeColumnConfig,
+    updateColumns: updateTradeColumns,
+    resetToDefaults: resetTradeDefaults,
+    configOpen: tradeConfigOpen,
+    setConfigOpen: setTradeConfigOpen,
+    handleSort: handleTradeSort,
+    toggleRowSelection: toggleTradeRowSelection,
+    togglePageSelection: toggleTradePageSelection,
+    resetSelection: resetTradeSelection,
+    copySelectedRows,
+    selectAllOnPage: selectAllTradeRowsOnPage,
+  } = tradeTable;
 
   // --- Cross-linking helpers: trade ↔ position (using backend IDs) ---
   const positionById = useMemo(() => {
@@ -1459,16 +470,10 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     [posToTradeIds]
   );
 
-  // When a chart marker is clicked, navigate the table to the page containing
-  // the selected trade and scroll the row into view.
-  const pendingScrollRef = useRef(false);
-
-  /** Navigate the correct Long or Short position table to the page
-   *  containing the given position, and schedule a scroll-into-view. */
+  /** Highlight the related position in the correct Long or Short table. */
   const navigateToPosition = useCallback(
     (pos: (typeof allPositions)[number]) => {
       setSelectedPosId(pos.id);
-      pendingPosScrollRef.current = true;
 
       if (pos.direction === 'long') {
         const idx = sortedLongPositions.findIndex((p) => p.id === pos.id);
@@ -1483,10 +488,12 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       }
     },
     [
+      longPosRowsPerPage,
+      setLongPosPage,
+      setShortPosPage,
+      shortPosRowsPerPage,
       sortedLongPositions,
       sortedShortPositions,
-      longPosRowsPerPage,
-      shortPosRowsPerPage,
     ]
   );
 
@@ -1495,58 +502,54 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     chartClickedRef.current = false;
 
     const idx = sortedTrades.findIndex((t) => t.id === selectedTradeId);
-    if (idx === -1) return;
+    if (idx !== -1) {
+      setTradePage(Math.floor(idx / tradeRowsPerPage));
+    }
 
-    const targetPage = Math.floor(idx / rowsPerPage);
-    pendingScrollRef.current = true;
-    setPage(targetPage);
+    const highlightReset = requestAnimationFrame(() => {
+      setHighlightedTradeIds(new Set());
+    });
 
     // Also highlight the related position
     const trade = trades.find((t) => t.id === selectedTradeId);
     if (trade) {
       const pos = findPositionForTrade(trade);
       if (pos) {
-        navigateToPosition(pos);
+        const relatedTradeIds = findTradeIdsForPosition(pos).filter(
+          (tradeId) => tradeId !== selectedTradeId
+        );
+        const highlightRelatedMarkers = requestAnimationFrame(() => {
+          setHighlightedTradeIds(new Set(relatedTradeIds));
+        });
+        const raf = requestAnimationFrame(() => {
+          navigateToPosition(pos);
+        });
+        return () => {
+          cancelAnimationFrame(highlightReset);
+          cancelAnimationFrame(highlightRelatedMarkers);
+          cancelAnimationFrame(raf);
+        };
       } else {
-        setSelectedPosId(null);
+        const raf = requestAnimationFrame(() => {
+          setSelectedPosId(null);
+        });
+        return () => {
+          cancelAnimationFrame(highlightReset);
+          cancelAnimationFrame(raf);
+        };
       }
     }
-    setHighlightedTradeIds(new Set());
+    return () => cancelAnimationFrame(highlightReset);
   }, [
     selectedTradeId,
     sortedTrades,
-    rowsPerPage,
+    tradeRowsPerPage,
+    setTradePage,
     trades,
     findPositionForTrade,
+    findTradeIdsForPosition,
     navigateToPosition,
   ]);
-
-  // After the table re-renders with the selected row on the correct page,
-  // scroll to it (only when triggered by a chart click).
-  useEffect(() => {
-    if (!pendingScrollRef.current) return;
-    pendingScrollRef.current = false;
-    const raf = requestAnimationFrame(() => {
-      selectedRowRef.current?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      });
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [page, selectedTradeId]);
-
-  // Scroll the Positions table to the highlighted position row
-  useEffect(() => {
-    if (!pendingPosScrollRef.current) return;
-    pendingPosScrollRef.current = false;
-    const raf = requestAnimationFrame(() => {
-      selectedPosRowRef.current?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      });
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [longPosPage, shortPosPage, selectedPosId]);
 
   const granularityOptions = useMemo(() => {
     if (granularities.length > 0) {
@@ -1562,11 +565,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     return recommendGranularity(startTime, endTime, availableValues);
   }, [granularityOptions, startTime, endTime]);
 
-  // Stores the visible time range before a granularity change so we can
-  // restore it after new candles load, preventing the chart from jumping.
-  const savedVisibleRangeRef = useRef<{ from: number; to: number } | null>(
-    null
-  );
   const pnlCurrency = instrument?.includes('_')
     ? instrument.split('_')[1]
     : 'N/A';
@@ -1585,6 +583,48 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     });
   }, [candleTimestampsMemo, ensureMarkerRange]);
 
+  const {
+    chartContainerRef,
+    chartInstance,
+    chartRef,
+    markersRef,
+    programmaticScrollRef,
+    storeVisibleRange,
+    fitContent,
+  } = useTaskTrendChart({
+    isLoading,
+    chartHeight,
+    isDark,
+    timezone,
+    candles,
+    granularity,
+    granularitySeconds,
+    candleDataRanges,
+    startTimeSec,
+    endTimeSec,
+    currentTick: currentTick ?? null,
+    currentTickSec,
+    enableRealTimeUpdates,
+    autoFollow,
+    taskType,
+    tradesRef,
+    clampTaskRange,
+    ensureCandleRange,
+    ensureMarkerRange,
+    setAutoFollow,
+    onTradeMarkerClick: (tradeId) => {
+      setSelectedTradeId((prev) => {
+        if (!tradeId || prev === tradeId) {
+          setSelectedPosId(null);
+          setHighlightedTradeIds(new Set());
+          return null;
+        }
+        chartClickedRef.current = true;
+        return tradeId;
+      });
+    },
+  });
+
   // Attach metric overlay series (Margin Ratio, ATR, thresholds) to the
   // candlestick chart so they share the exact same X-axis.
   useMetricsOverlay({
@@ -1598,802 +638,18 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     currentTickTimestamp: enableRealTimeUpdates ? currentTick?.timestamp : null,
     programmaticScrollRef,
   });
-
-  // PnL summary from server-side aggregation (lightweight endpoint)
-  const {
-    summary: {
-      pnl: { realized: serverRealizedPnl, unrealized: serverUnrealizedPnl },
-      counts: {
-        totalTrades: serverTotalTrades,
-        openPositions: serverOpenPositionCount,
-      },
-    },
-    refetch: refetchPnl,
-  } = useTaskSummary(String(taskId), taskType, executionRunId);
-
-  // Periodic PnL refresh while task is running
   useEffect(() => {
-    if (!enableRealTimeUpdates) return;
-    const interval = setInterval(refetchPnl, pollingIntervalMs);
-    return () => clearInterval(interval);
-  }, [enableRealTimeUpdates, refetchPnl, pollingIntervalMs]);
-
-  const replaySummary = useMemo(() => {
-    const totalTradesRaw =
-      typeof latestExecution?.total_trades === 'number'
-        ? latestExecution.total_trades
-        : serverTotalTrades || trades.length;
-
-    return {
-      realizedPnl: Number.isFinite(serverRealizedPnl) ? serverRealizedPnl : 0,
-      unrealizedPnl: Number.isFinite(serverUnrealizedPnl)
-        ? serverUnrealizedPnl
-        : 0,
-      totalTrades: totalTradesRaw,
-      openPositions: serverOpenPositionCount,
-    };
-  }, [
-    serverRealizedPnl,
-    serverUnrealizedPnl,
-    serverTotalTrades,
-    serverOpenPositionCount,
-    latestExecution,
-    trades.length,
-  ]);
-
-  useEffect(() => {
-    setGranularity(recommendedGranularity);
+    const raf = requestAnimationFrame(() => {
+      setGranularity(recommendedGranularity);
+    });
+    return () => cancelAnimationFrame(raf);
   }, [recommendedGranularity, instrument, startTime, endTime]);
-
-  const hasLoadedOnce = useRef(false);
-  // Track the latest trade updated_at for incremental fetching.
-  const tradeSinceRef = useRef<string | null>(null);
-  // Track when candles were last fetched to throttle OANDA API calls during polling.
-  // Candle data only changes at the latest bar, so refreshing every 60s is sufficient.
-  const lastCandleFetchRef = useRef<number>(0);
-  const CANDLE_REFRESH_INTERVAL_MS = 60_000;
-
-  /** Map raw API trade objects to ReplayTrade rows. */
-  const mapRawTrades = useCallback(
-    (
-      rawTrades: Array<Record<string, unknown>>,
-      startSequence = 0
-    ): ReplayTrade[] =>
-      rawTrades
-        .map((t: Record<string, unknown>, idx: number): ReplayTrade | null => {
-          const timestamp = String(t.timestamp || '');
-          const parsedTime = parseUtcTimestamp(timestamp);
-          if (!timestamp || parsedTime === null) return null;
-          const rawDir = t.direction;
-          let mappedDirection: 'long' | 'short' | '';
-          if (
-            rawDir == null ||
-            rawDir === '' ||
-            String(rawDir).toLowerCase() === 'none'
-          ) {
-            mappedDirection = '';
-          } else {
-            const direction = String(rawDir).toLowerCase();
-            mappedDirection =
-              direction === 'buy'
-                ? 'long'
-                : direction === 'sell'
-                  ? 'short'
-                  : (direction as 'long' | 'short' | '');
-          }
-          return {
-            id: t.id ? String(t.id) : `${timestamp}-${idx}`,
-            sequence: startSequence + idx + 1,
-            timestamp,
-            timeSec: parsedTime,
-            instrument: String(t.instrument || instrument),
-            direction: mappedDirection,
-            units: String(t.units ?? ''),
-            price: String(t.price ?? ''),
-            execution_method: String(t.execution_method || ''),
-            execution_method_display: t.execution_method_display
-              ? String(t.execution_method_display)
-              : undefined,
-            layer_index:
-              t.layer_index === null || t.layer_index === undefined
-                ? null
-                : Number(t.layer_index),
-            retracement_count:
-              t.retracement_count === null || t.retracement_count === undefined
-                ? null
-                : Number(t.retracement_count),
-            position_id:
-              t.position_id === null || t.position_id === undefined
-                ? null
-                : String(t.position_id),
-          };
-        })
-        .filter((v): v is ReplayTrade => v !== null),
-    [instrument]
-  );
-
-  /** Extract the latest updated_at from raw trade records. */
-  const getLatestTradeUpdatedAt = (
-    rawTrades: Array<Record<string, unknown>>
-  ): string | null => {
-    let latest: string | null = null;
-    for (const t of rawTrades) {
-      const ua = t.updated_at as string | undefined;
-      if (ua && (!latest || ua > latest)) latest = ua;
-    }
-    return latest;
-  };
-
-  const fetchReplayData = useCallback(async () => {
-    const isInitialLoad = !hasLoadedOnce.current;
-    try {
-      if (!isInitialLoad) {
-        setIsRefreshing(true);
-      }
-      const now = Date.now();
-      const shouldRefreshTail =
-        !isInitialLoad &&
-        now - lastCandleFetchRef.current >= CANDLE_REFRESH_INTERVAL_MS;
-      if (shouldRefreshTail) {
-        await refreshTailCandles();
-        lastCandleFetchRef.current = Date.now();
-      }
-
-      // Fetch trades — errors here never hide already-loaded candles.
-      try {
-        const isIncrementalTrades =
-          !isInitialLoad && tradeSinceRef.current !== null;
-
-        const rawTrades = isIncrementalTrades
-          ? await fetchTradesSince(
-              String(taskId),
-              taskType,
-              tradeSinceRef.current!,
-              executionRunId
-            )
-          : await fetchAllTrades(String(taskId), taskType, executionRunId);
-
-        // Track latest updated_at for next incremental poll.
-        const latestUa = getLatestTradeUpdatedAt(rawTrades);
-        if (
-          latestUa &&
-          (!tradeSinceRef.current || latestUa > tradeSinceRef.current)
-        ) {
-          tradeSinceRef.current = latestUa;
-        }
-
-        if (isIncrementalTrades && rawTrades.length > 0) {
-          // Merge new trades into existing array.
-          const incoming = mapRawTrades(rawTrades);
-          setTrades((prev) => {
-            const map = new Map(prev.map((t) => [t.id, t]));
-            for (const t of incoming) {
-              map.set(t.id, t);
-            }
-            const merged = Array.from(map.values()).sort(
-              (a, b) =>
-                new Date(a.timestamp).getTime() -
-                new Date(b.timestamp).getTime()
-            );
-            // Re-sequence after merge.
-            merged.forEach((t, i) => {
-              t.sequence = i + 1;
-            });
-            return merged;
-          });
-        } else if (!isIncrementalTrades) {
-          // Full replace (initial load).
-          const tradeRows = mapRawTrades(rawTrades).sort(
-            (a, b) =>
-              new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-          );
-          tradeRows.forEach((t, i) => {
-            t.sequence = i + 1;
-          });
-
-          setTrades((prev) => {
-            if (
-              prev.length === tradeRows.length &&
-              prev.length > 0 &&
-              prev[prev.length - 1].id === tradeRows[tradeRows.length - 1].id
-            ) {
-              return prev;
-            }
-            return tradeRows;
-          });
-        }
-      } catch (tradeError) {
-        console.warn('Failed to refresh trade data:', tradeError);
-      }
-    } catch (e) {
-      console.warn('Failed to load replay data:', e);
-    } finally {
-      hasLoadedOnce.current = true;
-      setIsRefreshing(false);
-    }
-  }, [taskType, taskId, executionRunId, mapRawTrades, refreshTailCandles]);
-
-  useEffect(() => {
-    fetchReplayData();
-  }, [fetchReplayData]);
-
-  useEffect(() => {
-    if (!enableRealTimeUpdates) return undefined;
-    const id = setInterval(fetchReplayData, pollingIntervalMs);
-    return () => clearInterval(id);
-  }, [enableRealTimeUpdates, fetchReplayData, pollingIntervalMs]);
 
   useEffect(() => {
     tradesRef.current = trades;
   }, [trades]);
 
   // Chart height is managed by flex layout + ResizeObserver
-
-  // Derived boolean: true once we have candle data.  Used as a dependency
-  // for the chart-creation effect so it only fires on the false→true
-  // transition, not on every candle-count change.
-  const hasCandles = candles.length > 0;
-  const previousFirstCandleTimeRef = useRef<number | null>(null);
-
-  const maybeFetchVisibleWindow = useCallback(async () => {
-    const chart = chartRef.current;
-    const series = seriesRef.current;
-    if (!chart || !series) return;
-
-    const visibleTimeRange = chart.timeScale().getVisibleRange();
-    if (
-      visibleTimeRange &&
-      typeof visibleTimeRange.from === 'number' &&
-      typeof visibleTimeRange.to === 'number'
-    ) {
-      const target = clampTaskRange({
-        from: Number(visibleTimeRange.from),
-        to: Number(visibleTimeRange.to),
-      });
-      if (target) {
-        await Promise.all([
-          ensureCandleRange(target),
-          ensureMarkerRange(target),
-        ]);
-      }
-    }
-
-    const logicalRange = chart.timeScale().getVisibleLogicalRange();
-    const data = series.data();
-    if (!logicalRange || !data || data.length === 0) return;
-
-    const EDGE_THRESHOLD = 5;
-    const firstTime = Number(candles[0]?.time ?? 0);
-    const lastTime = Number(candles[candles.length - 1]?.time ?? 0);
-    const spanSeconds =
-      visibleTimeRange &&
-      typeof visibleTimeRange.from === 'number' &&
-      typeof visibleTimeRange.to === 'number'
-        ? Math.max(
-            granularitySeconds,
-            Number(visibleTimeRange.to) - Number(visibleTimeRange.from)
-          )
-        : Math.max(granularitySeconds, lastTime - firstTime);
-    const lowerBound = taskDataBounds?.from;
-    const upperBound = taskDataBounds?.to;
-
-    if (
-      logicalRange.from < EDGE_THRESHOLD &&
-      (lowerBound == null || firstTime > lowerBound)
-    ) {
-      await ensureCandleRange({
-        from: Math.max(
-          lowerBound ?? firstTime - spanSeconds,
-          firstTime - spanSeconds
-        ),
-        to: firstTime,
-      });
-      return;
-    }
-
-    if (
-      logicalRange.to > data.length - EDGE_THRESHOLD &&
-      (upperBound == null || lastTime < upperBound)
-    ) {
-      await ensureCandleRange({
-        from: lastTime,
-        to: Math.min(
-          upperBound ?? lastTime + spanSeconds,
-          lastTime + spanSeconds
-        ),
-      });
-    }
-  }, [
-    candles,
-    clampTaskRange,
-    ensureCandleRange,
-    ensureMarkerRange,
-    granularitySeconds,
-    taskDataBounds,
-  ]);
-  const maybeFetchVisibleWindowRef = useRef(maybeFetchVisibleWindow);
-
-  useEffect(() => {
-    maybeFetchVisibleWindowRef.current = maybeFetchVisibleWindow;
-  }, [maybeFetchVisibleWindow]);
-
-  useEffect(() => {
-    if (isLoading || !hasCandles) return;
-    if (!chartContainerRef.current || chartRef.current) return;
-
-    const container = chartContainerRef.current;
-
-    const dynamicHeight = chartHeight;
-    const chart = createChart(container, {
-      height: dynamicHeight,
-      layout: {
-        background: { color: isDark ? '#131722' : '#ffffff' },
-        textColor: isDark ? '#ffffff' : '#334155',
-      },
-      grid: {
-        vertLines: { visible: false },
-        horzLines: { color: isDark ? '#2a2e39' : '#e2e8f0' },
-      },
-      handleScale: {
-        axisPressedMouseMove: true,
-        mouseWheel: true,
-        pinch: true,
-      },
-      handleScroll: {
-        mouseWheel: true,
-        pressedMouseMove: true,
-        vertTouchDrag: true,
-        horzTouchDrag: true,
-      },
-      rightPriceScale: {
-        borderColor: isDark ? '#2a2e39' : '#cbd5e1',
-        minimumWidth: 80,
-        scaleMargins: { top: 0.02, bottom: 0.45 },
-      },
-      leftPriceScale: {
-        borderColor: isDark ? '#2a2e39' : '#cbd5e1',
-        visible: true,
-        minimumWidth: 80,
-        ticksVisible: true,
-      },
-      timeScale: {
-        borderColor: isDark ? '#2a2e39' : '#cbd5e1',
-        timeVisible: true,
-        secondsVisible: false,
-        tickMarkFormatter: createSuppressedTickMarkFormatter(),
-      },
-      localization: {
-        timeFormatter: createTooltipTimeFormatter({ timezone }),
-      },
-    });
-
-    const { upColor, downColor } = getCandleColors();
-    const series = chart.addSeries(CandlestickSeries, {
-      upColor,
-      downColor,
-      wickUpColor: upColor,
-      wickDownColor: downColor,
-      borderUpColor: upColor,
-      borderDownColor: downColor,
-    });
-    const markers = createSeriesMarkers(series, []);
-
-    chartRef.current = chart;
-    setChartInstance(chart);
-    seriesRef.current = series;
-    markersRef.current = markers;
-
-    const highlight = new MarketClosedHighlight();
-    series.attachPrimitive(highlight);
-    highlightRef.current = highlight;
-
-    const adaptive = new AdaptiveTimeScale(
-      { timezone },
-      isDark ? '#ffffff' : '#334155',
-      isDark ? '#2a2e39' : '#e2e8f0'
-    );
-    series.attachPrimitive(adaptive);
-    adaptiveRef.current = adaptive;
-
-    const sequenceLine = new SequencePositionLine();
-    series.attachPrimitive(sequenceLine);
-    sequenceLineRef.current = sequenceLine;
-
-    chart.subscribeClick((param) => {
-      if (!param.time || tradesRef.current.length === 0) return;
-      const t = Number(param.time);
-      const nearest = tradesRef.current.reduce((prev, curr) => {
-        const prevDiff = Math.abs(Number(prev.timeSec) - t);
-        const currDiff = Math.abs(Number(curr.timeSec) - t);
-        return currDiff < prevDiff ? curr : prev;
-      }, tradesRef.current[0]);
-
-      // Toggle off if the same trade is already selected
-      setSelectedTradeId((prev) => {
-        if (prev === nearest.id) {
-          // Deselect — clear all cross-highlights
-          setSelectedPosId(null);
-          setHighlightedTradeIds(new Set());
-          return null;
-        }
-        // Select — let the existing effect handle cross-highlighting
-        chartClickedRef.current = true;
-        return nearest.id;
-      });
-    });
-
-    // Detect user-initiated scroll/zoom and disable auto-follow
-    let viewportDebounce: ReturnType<typeof setTimeout> | null = null;
-    const handleViewportChange = () => {
-      if (programmaticScrollRef.consume()) return;
-      setAutoFollow(false);
-      if (viewportDebounce) clearTimeout(viewportDebounce);
-      viewportDebounce = setTimeout(() => {
-        void maybeFetchVisibleWindowRef.current();
-      }, 250);
-    };
-    chart.timeScale().subscribeVisibleLogicalRangeChange(handleViewportChange);
-    chart.timeScale().subscribeVisibleTimeRangeChange(handleViewportChange);
-
-    const observer = new ResizeObserver(() => {
-      const width = container.clientWidth;
-      const height = container.clientHeight;
-      programmaticScrollRef.current = true;
-      if (width > 0) {
-        chart.applyOptions({ width });
-      }
-      if (height > 0) {
-        chart.applyOptions({ height });
-      }
-    });
-    observer.observe(container);
-    // Guard initial layout so it doesn't disable auto-follow
-    programmaticScrollRef.current = true;
-    chart.applyOptions({ width: container.clientWidth });
-
-    return () => {
-      observer.disconnect();
-      if (viewportDebounce) clearTimeout(viewportDebounce);
-      chart
-        .timeScale()
-        .unsubscribeVisibleLogicalRangeChange(handleViewportChange);
-      chart.timeScale().unsubscribeVisibleTimeRangeChange(handleViewportChange);
-      setChartInstance(null);
-      chartRef.current = null;
-      seriesRef.current = null;
-      markersRef.current = null;
-      highlightRef.current = null;
-      adaptiveRef.current = null;
-      sequenceLineRef.current = null;
-      hasInitialFit.current = false;
-      requestAnimationFrame(() => {
-        try {
-          chart.remove();
-        } catch {
-          /* chart already disposed */
-        }
-      });
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- chartHeight is read once for initial creation; ResizeObserver handles subsequent resizes.  We derive `hasCandles` (boolean) so the effect only re-runs on the false→true transition and never on candle-count changes that would needlessly destroy and recreate the chart.
-  }, [isLoading, hasCandles, timezone, isDark]);
-
-  // Track whether this is the first candle load (for initial fitContent)
-  const hasInitialFit = useRef(false);
-
-  // Auto-follow and initial viewport width, measured in candles.
-  const AUTO_FOLLOW_CANDLES = 1000;
-
-  // When a task is actively progressing, preload the candle/marker window
-  // around the current tick so auto-follow can anchor to the real "now"
-  // position instead of the initial start chunk.
-  useEffect(() => {
-    if (!enableRealTimeUpdates || currentTickSec == null) return;
-
-    const isTrading = taskType === TaskType.TRADING;
-    const leftCandles = isTrading
-      ? AUTO_FOLLOW_CANDLES * 0.75
-      : AUTO_FOLLOW_CANDLES / 2;
-    const rightCandles = AUTO_FOLLOW_CANDLES - leftCandles;
-    const target = clampTaskRange({
-      from: currentTickSec - leftCandles * granularitySeconds,
-      to: currentTickSec + rightCandles * granularitySeconds,
-    });
-
-    if (!target) return;
-
-    void Promise.all([ensureCandleRange(target), ensureMarkerRange(target)]);
-  }, [
-    AUTO_FOLLOW_CANDLES,
-    clampTaskRange,
-    currentTickSec,
-    enableRealTimeUpdates,
-    ensureCandleRange,
-    ensureMarkerRange,
-    granularitySeconds,
-    taskType,
-  ]);
-
-  // Keep small windows around task boundaries loaded so START/STOP markers
-  // can still snap to actual candles even when the main viewport is focused
-  // on the current progress position.
-  useEffect(() => {
-    const boundaryPaddingSeconds = Math.max(granularitySeconds * 8, 60 * 60);
-    const requests: Promise<void>[] = [];
-
-    if (startTimeSec != null) {
-      const startRange = clampTaskRange({
-        from: startTimeSec,
-        to: startTimeSec + boundaryPaddingSeconds,
-      });
-      if (startRange) {
-        requests.push(ensureCandleRange(startRange));
-      }
-    }
-
-    if (endTimeSec != null) {
-      const endRange = clampTaskRange({
-        from: endTimeSec - boundaryPaddingSeconds,
-        to: endTimeSec + boundaryPaddingSeconds,
-      });
-      if (endRange) {
-        requests.push(ensureCandleRange(endRange));
-      }
-    }
-
-    if (requests.length === 0) return;
-
-    void Promise.all(requests);
-  }, [
-    clampTaskRange,
-    endTimeSec,
-    ensureCandleRange,
-    granularitySeconds,
-    startTimeSec,
-  ]);
-
-  // Update candle data, market gaps, and fit chart when data changes
-  useEffect(() => {
-    if (!seriesRef.current || !markersRef.current) return;
-
-    // Guard setData so the resulting visible-range change doesn't disable auto-follow
-    programmaticScrollRef.current = true;
-
-    // Save the current visible range before setData.  lightweight-charts
-    // resets the scroll position to the last bar on setData, which would
-    // cause the chart to jump when data is refreshed while the user has
-    // scrolled to a different position.
-    const savedLogicalRange = hasInitialFit.current
-      ? chartRef.current?.timeScale().getVisibleLogicalRange()
-      : null;
-
-    try {
-      seriesRef.current.setData(candles);
-    } catch (e) {
-      console.warn('Failed to set candle data:', e);
-      return;
-    }
-
-    const times = candles.map((c) => Number(c.time));
-
-    if (highlightRef.current) {
-      highlightRef.current.setGaps(
-        detectMarketGaps(times, granularity, candleDataRanges, timezone)
-      );
-    }
-
-    // Only fit content on the very first load — preserve user's zoom/pan on updates
-    if (candles.length > 0 && !hasInitialFit.current) {
-      programmaticScrollRef.current = true;
-
-      // Determine the initial viewport:
-      // 1. If a sequence position line exists (currentTick), centre on it
-      // 2. Otherwise, show the start of the data (left edge)
-      const tickTs = currentTick?.timestamp
-        ? Math.floor(new Date(currentTick.timestamp).getTime() / 1000)
-        : null;
-
-      if (
-        enableRealTimeUpdates &&
-        tickTs &&
-        Number.isFinite(tickTs) &&
-        seriesRef.current
-      ) {
-        // Centre on the current tick position
-        const data = seriesRef.current.data();
-        let logicalCenter = 0;
-        if (data.length > 0) {
-          let lo = 0;
-          let hi = data.length - 1;
-          while (lo < hi) {
-            const mid = (lo + hi) >>> 1;
-            const midSec =
-              typeof data[mid].time === 'number'
-                ? (data[mid].time as number)
-                : new Date(data[mid].time as string).getTime() / 1000;
-            if (midSec < tickTs) lo = mid + 1;
-            else hi = mid;
-          }
-          logicalCenter = lo;
-        }
-        const half = AUTO_FOLLOW_CANDLES / 2;
-        try {
-          chartRef.current?.timeScale().setVisibleLogicalRange({
-            from: logicalCenter - half,
-            to: logicalCenter + half,
-          });
-        } catch (e) {
-          console.warn('Failed to set initial visible range on tick:', e);
-        }
-      } else if (!enableRealTimeUpdates && startTimeSec != null) {
-        const totalSpanSeconds = AUTO_FOLLOW_CANDLES * granularitySeconds;
-        const gapAroundStart = findGapAroundTime(
-          startTimeSec,
-          times,
-          granularitySeconds * 6
-        );
-        const initialFrom = gapAroundStart
-          ? Math.max(startTimeSec, gapAroundStart.from)
-          : startTimeSec;
-        const requiredGapSpan = gapAroundStart
-          ? gapAroundStart.to - initialFrom
-          : 0;
-        const initialSpanSeconds = Math.max(totalSpanSeconds, requiredGapSpan);
-        try {
-          chartRef.current?.timeScale().setVisibleRange({
-            from: initialFrom as Time,
-            to: (initialFrom + initialSpanSeconds) as Time,
-          });
-        } catch (e) {
-          console.warn('Failed to set initial visible range at task start:', e);
-        }
-      } else {
-        // No tick — show the start of the data
-        try {
-          chartRef.current?.timeScale().setVisibleLogicalRange({
-            from: 0,
-            to: AUTO_FOLLOW_CANDLES,
-          });
-        } catch (e) {
-          console.warn('Failed to set initial visible range at start:', e);
-        }
-      }
-
-      hasInitialFit.current = true;
-    } else if (savedLogicalRange) {
-      // Restore the visible range so the chart doesn't jump on data refresh.
-      programmaticScrollRef.current = true;
-      try {
-        const previousFirst = previousFirstCandleTimeRef.current;
-        const currentFirst =
-          candles.length > 0 ? Number(candles[0].time) : null;
-        const prependCount =
-          previousFirst != null &&
-          currentFirst != null &&
-          currentFirst < previousFirst
-            ? candles.filter((c) => Number(c.time) < previousFirst).length
-            : 0;
-        chartRef.current?.timeScale().setVisibleLogicalRange({
-          from: savedLogicalRange.from + prependCount,
-          to: savedLogicalRange.to + prependCount,
-        });
-      } catch (e) {
-        console.warn('Failed to restore visible range after setData:', e);
-      }
-    }
-
-    // After a granularity change, restore the previously visible time range
-    // so the chart doesn't jump to the latest candles.
-    if (savedVisibleRangeRef.current && chartRef.current) {
-      const { from, to } = savedVisibleRangeRef.current;
-      savedVisibleRangeRef.current = null;
-      programmaticScrollRef.current = true;
-      try {
-        chartRef.current.timeScale().setVisibleRange({
-          from: from as import('lightweight-charts').Time,
-          to: to as import('lightweight-charts').Time,
-        });
-      } catch (e) {
-        console.warn(
-          'Failed to restore visible range after granularity change:',
-          e
-        );
-      }
-    }
-    previousFirstCandleTimeRef.current =
-      candles.length > 0 ? Number(candles[0].time) : null;
-    // currentTick is intentionally excluded: it is only read on the very first
-    // load (guarded by hasInitialFit) to decide the initial viewport position.
-    // Including it would re-run setData on every tick update.
-  }, [
-    candles,
-    granularity,
-    candleDataRanges,
-    enableRealTimeUpdates,
-    startTimeSec,
-    granularitySeconds,
-    currentTick?.timestamp,
-    timezone,
-    programmaticScrollRef,
-  ]);
-
-  // Update sequence position line when current tick changes
-  useEffect(() => {
-    if (!sequenceLineRef.current) return;
-    if (!currentTick?.timestamp) {
-      sequenceLineRef.current.clear();
-      return;
-    }
-    const price =
-      currentTick.price != null ? parseFloat(currentTick.price) : null;
-    sequenceLineRef.current.setPosition(currentTick.timestamp, price);
-
-    // Auto-scroll: keep the sequence line at the horizontal centre of the
-    // viewport (backtest) or at the 3/4 position from the left (trading),
-    // since trading has no future candles to display on the right.
-    // We use logical-index based positioning so that market gaps
-    // don't shift the line away from the visual centre.
-    if (autoFollow && enableRealTimeUpdates) {
-      const ts = chartRef.current?.timeScale();
-      const series = seriesRef.current;
-      if (ts && series) {
-        const centerSec = Math.floor(
-          new Date(currentTick.timestamp).getTime() / 1000
-        );
-        if (Number.isFinite(centerSec)) {
-          // Find the logical index of the candle closest to the current tick
-          const data = series.data();
-          let logicalCenter = data.length - 1; // default: latest candle
-          if (data.length > 0) {
-            // Binary search for the nearest candle
-            let lo = 0;
-            let hi = data.length - 1;
-            while (lo < hi) {
-              const mid = (lo + hi) >>> 1;
-              const midSec =
-                typeof data[mid].time === 'number'
-                  ? (data[mid].time as number)
-                  : new Date(data[mid].time as string).getTime() / 1000;
-              if (midSec < centerSec) {
-                lo = mid + 1;
-              } else {
-                hi = mid;
-              }
-            }
-            logicalCenter = lo;
-          }
-
-          // For trading tasks, place the position line at 3/4 from the left
-          // so the right side (no future data) is minimal.
-          // For backtest tasks, keep it centred.
-          const isTrading = taskType === TaskType.TRADING;
-          const leftCandles = isTrading
-            ? AUTO_FOLLOW_CANDLES * 0.75
-            : AUTO_FOLLOW_CANDLES / 2;
-          const rightCandles = AUTO_FOLLOW_CANDLES - leftCandles;
-
-          programmaticScrollRef.current = true;
-          try {
-            ts.setVisibleLogicalRange({
-              from: logicalCenter - leftCandles,
-              to: logicalCenter + rightCandles,
-            });
-          } catch (e) {
-            console.warn('Failed to set visible range during auto-follow:', e);
-          }
-        }
-      }
-    }
-    // Re-run when candles load so the ref is available after chart creation
-  }, [
-    currentTick?.timestamp,
-    currentTick?.price,
-    enableRealTimeUpdates,
-    candles.length,
-    granularity,
-    autoFollow,
-    programmaticScrollRef,
-    taskType,
-  ]);
 
   const eventMarkers = useMemo(() => {
     const candleTimes = candles.map((c) => Number(c.time));
@@ -2464,12 +720,26 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       }
     }
 
-    return markers.sort((a, b) => Number(a.time) - Number(b.time));
-  }, [taskLifecycleEvents, strategyEvents, candles, startTimeSec, endTimeSec]);
+    return markers
+      .filter((marker) => {
+        if (markerDisplayCutoffSec == null) {
+          return true;
+        }
+        return Number(marker.time) <= markerDisplayCutoffSec;
+      })
+      .sort((a, b) => Number(a.time) - Number(b.time));
+  }, [
+    taskLifecycleEvents,
+    strategyEvents,
+    candles,
+    startTimeSec,
+    endTimeSec,
+    markerDisplayCutoffSec,
+  ]);
 
   // Update trade markers when trades or selection changes (without resetting the view)
   useEffect(() => {
-    if (!seriesRef.current || !markersRef.current) return;
+    if (!markersRef.current) return;
     const candleTimes = candles.map((c) => Number(c.time));
 
     const tradeMarkers = windowedTradeMarkers
@@ -2529,7 +799,15 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           text,
         };
       })
-      .filter((marker) => Number(marker.time) > 0);
+      .filter((marker) => {
+        if (Number(marker.time) <= 0) {
+          return false;
+        }
+        if (markerDisplayCutoffSec == null) {
+          return true;
+        }
+        return Number(marker.time) <= markerDisplayCutoffSec;
+      });
 
     try {
       programmaticScrollRef.current = true;
@@ -2546,22 +824,13 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     selectedTradeId,
     highlightedTradeIds,
     eventMarkers,
+    markerDisplayCutoffSec,
+    markersRef,
     programmaticScrollRef,
   ]);
 
   const handleGranularityChange = (e: SelectChangeEvent) => {
-    // Save the current visible time range so we can restore it after new
-    // candles load, keeping the user's view position stable.
-    const ts = chartRef.current?.timeScale();
-    if (ts) {
-      const range = ts.getVisibleRange();
-      if (range) {
-        savedVisibleRangeRef.current = {
-          from: Number(range.from),
-          to: Number(range.to),
-        };
-      }
-    }
+    storeVisibleRange();
     setGranularity(String(e.target.value));
   };
 
@@ -2647,9 +916,8 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       // Navigate Trades table to the open trade's page
       const idx = sortedTrades.findIndex((t) => t.id === openTrade.id);
       if (idx !== -1) {
-        const targetPage = Math.floor(idx / rowsPerPage);
-        pendingScrollRef.current = true;
-        setPage(targetPage);
+        const targetPage = Math.floor(idx / tradeRowsPerPage);
+        setTradePage(targetPage);
       }
 
       // Scroll chart to show all related markers (open + close).
@@ -2744,191 +1012,32 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           {error}
         </Alert>
       )}
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
-          mb: 1,
-          height: 48,
-          minHeight: 48,
-          overflowX: 'auto',
+      <TaskTrendToolbar
+        replaySummary={replaySummary}
+        pnlCurrency={pnlCurrency}
+        executionRunId={executionRunId}
+        isRefreshing={isRefreshing}
+        isCandleRefreshing={isCandleRefreshing}
+        pollingIntervalMs={pollingIntervalMs}
+        granularity={granularity}
+        granularityOptions={granularityOptions}
+        pollingIntervalOptions={POLLING_INTERVAL_OPTIONS}
+        enableRealTimeUpdates={enableRealTimeUpdates}
+        autoFollow={autoFollow}
+        onPollingIntervalChange={setPollingIntervalMs}
+        onGranularityChange={handleGranularityChange}
+        onFollow={() => {
+          setAutoFollow(true);
+          setSelectedTradeId(null);
+          setTradeSelectedRowIds(new Set());
+          setSelectedPosId(null);
+          setHighlightedTradeIds(new Set());
+          setTradePage(0);
         }}
-      >
-        <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
-          <Typography variant="caption" color="text.secondary" lineHeight={1.2}>
-            {t('tables.trend.realizedPnl')} ({pnlCurrency})
-          </Typography>
-          <Typography
-            variant="body2"
-            fontWeight="bold"
-            lineHeight={1.4}
-            color={
-              replaySummary.realizedPnl >= 0 ? 'success.main' : 'error.main'
-            }
-          >
-            {replaySummary.realizedPnl >= 0 ? '+' : ''}
-            {replaySummary.realizedPnl.toFixed(2)} {pnlCurrency}
-          </Typography>
-        </Box>
-
-        <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
-          <Typography variant="caption" color="text.secondary" lineHeight={1.2}>
-            {t('tables.trend.unrealizedPnl')} ({pnlCurrency})
-          </Typography>
-          <Typography
-            variant="body2"
-            fontWeight="bold"
-            lineHeight={1.4}
-            color={
-              replaySummary.unrealizedPnl >= 0 ? 'success.main' : 'error.main'
-            }
-          >
-            {replaySummary.unrealizedPnl >= 0 ? '+' : ''}
-            {replaySummary.unrealizedPnl.toFixed(2)} {pnlCurrency}
-          </Typography>
-        </Box>
-
-        <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
-          <Typography variant="caption" color="text.secondary" lineHeight={1.2}>
-            {t('tables.trend.totalTrades')}
-          </Typography>
-          <Typography variant="body2" fontWeight="bold" lineHeight={1.4}>
-            {replaySummary.totalTrades} trades
-          </Typography>
-        </Box>
-
-        <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
-          <Typography variant="caption" color="text.secondary" lineHeight={1.2}>
-            {t('tables.trend.openPositions')}
-          </Typography>
-          <Typography variant="body2" fontWeight="bold" lineHeight={1.4}>
-            {replaySummary.openPositions} positions
-          </Typography>
-        </Box>
-
-        {executionRunId != null && (
-          <Box sx={{ px: 2, whiteSpace: 'nowrap' }}>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              lineHeight={1.2}
-            >
-              {t('tables.trend.executionId')}
-            </Typography>
-            <Typography variant="body2" fontWeight="bold" lineHeight={1.4}>
-              {executionRunId}
-            </Typography>
-          </Box>
-        )}
-
-        <Box sx={{ flex: 1 }} />
-
-        <Box
-          sx={{
-            width: 20,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          {(isRefreshing || isCandleRefreshing) && (
-            <CircularProgress size={16} thickness={5} />
-          )}
-        </Box>
-
-        <FormControl
-          sx={{ minWidth: 100, '& .MuiInputBase-root': { height: 32 } }}
-        >
-          <InputLabel
-            id="replay-polling-interval-label"
-            sx={{ fontSize: '0.75rem' }}
-          >
-            {t('tables.trend.polling')}
-          </InputLabel>
-          <Select
-            labelId="replay-polling-interval-label"
-            value={pollingIntervalMs}
-            label={t('tables.trend.polling')}
-            onChange={(e) => setPollingIntervalMs(Number(e.target.value))}
-            sx={{ fontSize: '0.75rem' }}
-          >
-            {POLLING_INTERVAL_OPTIONS.map((opt) => (
-              <MenuItem
-                key={opt.value}
-                value={opt.value}
-                sx={{ fontSize: '0.75rem' }}
-              >
-                {opt.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        <FormControl
-          sx={{ minWidth: 110, '& .MuiInputBase-root': { height: 32 } }}
-        >
-          <InputLabel
-            id="replay-granularity-label"
-            sx={{ fontSize: '0.75rem' }}
-          >
-            {t('tables.trend.granularity')}
-          </InputLabel>
-          <Select
-            labelId="replay-granularity-label"
-            value={granularity}
-            label={t('tables.trend.granularity')}
-            onChange={handleGranularityChange}
-            sx={{ fontSize: '0.75rem' }}
-          >
-            {granularityOptions.map((g) => (
-              <MenuItem
-                key={g.value}
-                value={g.value}
-                sx={{ fontSize: '0.75rem' }}
-              >
-                {g.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        {enableRealTimeUpdates && (
-          <Button
-            variant={autoFollow ? 'contained' : 'outlined'}
-            onClick={() => {
-              setAutoFollow(true);
-              setSelectedTradeId(null);
-              setSelectedRowIds(new Set());
-              setSelectedPosId(null);
-              setHighlightedTradeIds(new Set());
-              setPage(0);
-            }}
-            disabled={autoFollow}
-            sx={{
-              fontSize: '0.75rem',
-              whiteSpace: 'nowrap',
-              minWidth: 0,
-              px: 1.5,
-              height: 32,
-            }}
-          >
-            {t('tables.trend.follow')}
-          </Button>
-        )}
-
-        <Tooltip title="Reset zoom (show all)">
-          <IconButton
-            onClick={() => {
-              programmaticScrollRef.current = true;
-              chartRef.current?.timeScale().fitContent();
-            }}
-            sx={{ height: 32, width: 32 }}
-          >
-            <ZoomOutMapIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </Box>
+        onResetZoom={() => {
+          fitContent();
+        }}
+      />
 
       <Paper
         variant="outlined"
@@ -3035,1519 +1144,151 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
             flexDirection: 'column',
           }}
         >
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              height: 36,
-              minHeight: 36,
-            }}
-          >
-            <Typography variant="subtitle1">
-              {t('tables.trend.trades')}
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-              ({sortedTrades.length})
-            </Typography>
-            {selectedRowIds.size > 0 && (
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ ml: 0.5 }}
-              >
-                — {selectedRowIds.size} selected
-              </Typography>
-            )}
-            <Box sx={{ flex: 1 }} />
-            <Tooltip title={t('common:columnConfig.configureColumns')}>
-              <IconButton
-                size="small"
-                onClick={() => setTradesColConfigOpen(true)}
-                aria-label={t('common:columnConfig.configureColumns')}
-              >
-                <SettingsIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Copy selected rows">
-              <span>
-                <IconButton
-                  onClick={copySelectedRows}
-                  disabled={selectedRowIds.size === 0}
-                >
-                  <ContentCopyIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Select all on page">
-              <IconButton onClick={selectAllOnPage}>
-                <SelectAllIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Reset selection">
-              <span>
-                <IconButton
-                  onClick={resetSelection}
-                  disabled={selectedRowIds.size === 0}
-                >
-                  <DeselectIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Reload data">
-              <IconButton onClick={fetchReplayData} disabled={isRefreshing}>
-                <RefreshIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Box>
-
-          <TableContainer
-            component={Paper}
-            variant="outlined"
-            sx={{ overflowX: 'auto' }}
-          >
-            <Table stickyHeader sx={{ tableLayout: 'fixed', minWidth: 680 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox" sx={{ width: 42 }}>
-                    <Checkbox
-                      checked={isAllPageSelected}
-                      indeterminate={
-                        !isAllPageSelected &&
-                        paginatedTrades.some((r) => selectedRowIds.has(r.id))
-                      }
-                      onChange={() => {
-                        if (isAllPageSelected) {
-                          setSelectedRowIds((prev) => {
-                            const next = new Set(prev);
-                            for (const row of paginatedTrades)
-                              next.delete(row.id);
-                            return next;
-                          });
-                        } else {
-                          selectAllOnPage();
-                        }
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell
-                    sortDirection={orderBy === 'timestamp' ? order : false}
-                    sx={{
-                      position: 'relative',
-                      width: replayColWidths.timestamp,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={orderBy === 'timestamp'}
-                      direction={orderBy === 'timestamp' ? order : 'asc'}
-                      onClick={() => handleSort('timestamp')}
-                    >
-                      {t('tables.trend.time')}
-                    </TableSortLabel>
-                    {resizeHandle('timestamp')}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={orderBy === 'direction' ? order : false}
-                    sx={{
-                      position: 'relative',
-                      width: replayColWidths.direction,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={orderBy === 'direction'}
-                      direction={orderBy === 'direction' ? order : 'asc'}
-                      onClick={() => handleSort('direction')}
-                    >
-                      {t('tables.trend.direction')}
-                    </TableSortLabel>
-                    {resizeHandle('direction')}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={orderBy === 'layer_index' ? order : false}
-                    sx={{
-                      position: 'relative',
-                      width: replayColWidths.layer_index,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={orderBy === 'layer_index'}
-                      direction={orderBy === 'layer_index' ? order : 'asc'}
-                      onClick={() => handleSort('layer_index')}
-                    >
-                      {t('tables.trend.layer')}
-                    </TableSortLabel>
-                    {resizeHandle('layer_index')}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      orderBy === 'retracement_count' ? order : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: replayColWidths.retracement_count,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={orderBy === 'retracement_count'}
-                      direction={
-                        orderBy === 'retracement_count' ? order : 'asc'
-                      }
-                      onClick={() => handleSort('retracement_count')}
-                    >
-                      {t('tables.trend.ret')}
-                    </TableSortLabel>
-                    {resizeHandle('retracement_count')}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={orderBy === 'units' ? order : false}
-                    sx={{
-                      position: 'relative',
-                      width: replayColWidths.units,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={orderBy === 'units'}
-                      direction={orderBy === 'units' ? order : 'asc'}
-                      onClick={() => handleSort('units')}
-                    >
-                      {t('tables.trend.units')}
-                    </TableSortLabel>
-                    {resizeHandle('units')}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={orderBy === 'price' ? order : false}
-                    sx={{
-                      position: 'relative',
-                      width: replayColWidths.price,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={orderBy === 'price'}
-                      direction={orderBy === 'price' ? order : 'asc'}
-                      onClick={() => handleSort('price')}
-                    >
-                      {t('tables.trend.price')}
-                    </TableSortLabel>
-                    {resizeHandle('price')}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      orderBy === 'execution_method' ? order : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: replayColWidths.execution_method,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={orderBy === 'execution_method'}
-                      direction={orderBy === 'execution_method' ? order : 'asc'}
-                      onClick={() => handleSort('execution_method')}
-                    >
-                      {t('tables.trend.event')}
-                    </TableSortLabel>
-                    {resizeHandle('execution_method')}
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paginatedTrades.map((row) => {
-                  const selected = row.id === selectedTradeId;
-                  const highlighted = highlightedTradeIds.has(row.id);
-                  const checked = selectedRowIds.has(row.id);
-                  return (
-                    <TableRow
-                      key={row.id}
-                      ref={selected ? selectedRowRef : undefined}
-                      hover
-                      onClick={() => onRowSelect(row)}
-                      selected={selected || highlighted}
-                      sx={{
-                        cursor: 'pointer',
-                        height: 37,
-                        ...((selected || highlighted) && {
-                          backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                          '&.Mui-selected': {
-                            backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                          },
-                          '&.Mui-selected:hover': {
-                            backgroundColor: 'rgba(245, 158, 11, 0.25)',
-                          },
-                        }),
-                      }}
-                    >
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={checked}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={() => toggleRowSelection(row.id)}
-                        />
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {new Date(row.timestamp).toLocaleString()}
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {row.direction ? row.direction.toUpperCase() : ''}
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {row.layer_index ?? '-'}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {row.retracement_count ?? '-'}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {row.units}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {row.price
-                          ? `¥${parseFloat(row.price).toFixed(3)}`
-                          : '-'}
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {row.execution_method_display ||
-                          row.execution_method ||
-                          '-'}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {/* Fill empty rows to keep table height stable */}
-                {paginatedTrades.length < rowsPerPage &&
-                  Array.from({
-                    length: rowsPerPage - paginatedTrades.length,
-                  }).map((_, i) => (
-                    <TableRow key={`trade-empty-${i}`} sx={{ height: 37 }}>
-                      <TableCell
-                        colSpan={8}
-                        sx={{
-                          backgroundColor: 'action.hover',
-                          borderBottom: '1px solid',
-                          borderColor: 'divider',
-                          py: 0,
-                        }}
-                      />
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <TablePagination
-            component="div"
-            count={sortedTrades.length}
-            page={page}
-            onPageChange={(_e, newPage) => setPage(newPage)}
-            rowsPerPage={rowsPerPage}
+          <TaskTrendTradesTable
+            trades={sortedTrades}
+            paginatedTrades={paginatedTrades}
+            selectedTradeId={selectedTradeId}
+            highlightedTradeIds={highlightedTradeIds}
+            selectedRowIds={tradeSelectedRowIds}
+            isAllPageSelected={isAllTradePageSelected}
+            isRefreshing={isRefreshing}
+            orderBy={tradeOrderBy}
+            order={tradeOrder}
+            replayColWidths={tradeColWidths}
+            page={tradePage}
+            rowsPerPage={tradeRowsPerPage}
+            timezone={timezone}
+            selectedRowRef={tradeSelectedRowRef}
+            onConfigureColumns={() => setTradeConfigOpen(true)}
+            onCopySelected={copySelectedRows}
+            onSelectAllOnPage={selectAllTradeRowsOnPage}
+            onResetSelection={resetTradeSelection}
+            onReload={fetchReplayData}
+            onSelectTrade={onRowSelect}
+            onToggleRowSelection={toggleTradeRowSelection}
+            onTogglePageSelection={toggleTradePageSelection}
+            onSort={handleTradeSort}
+            onPageChange={(_e, newPage) => setTradePage(newPage)}
             onRowsPerPageChange={(e) => {
               const newVal = parseInt(e.target.value, 10);
-              setRowsPerPage(newVal);
-              setPage(0);
-              setPosRowsPerPage(newVal);
-              setPosPage(0);
+              setTradeRowsPerPage(newVal);
+              setTradePage(0);
               setLongPosRowsPerPage(newVal);
               setLongPosPage(0);
               setShortPosRowsPerPage(newVal);
               setShortPosPage(0);
             }}
-            rowsPerPageOptions={[10, 25, 50, 100]}
+            resizeHandle={createTradeResizeHandle}
           />
         </Box>
 
-        {/* Long Positions */}
-        <Box
-          sx={{
-            flex: 1,
-            minWidth: 0,
-            display: 'flex',
-            flexDirection: 'column',
+        <TaskTrendPositionsTable
+          title={t('tables.trend.longPositions')}
+          count={longPositions.length}
+          positions={sortedLongPositions}
+          paginatedPositions={paginatedLongPositions}
+          selectedPosId={selectedPosId}
+          selectedIds={selectedLongPosIds}
+          isAllPageSelected={isAllLongPosPageSelected}
+          isRefreshing={isRefreshing}
+          showOpenOnly={showOpenLongOnly}
+          orderBy={longPosOrderBy}
+          order={longPosOrder}
+          colWidths={longPosColWidths}
+          currentPrice={currentPrice}
+          pipSize={pipSize}
+          isShort={false}
+          page={longPosPage}
+          rowsPerPage={longPosRowsPerPage}
+          timezone={timezone}
+          selectedPosRowRef={selectedPosRowRef}
+          onConfigureColumns={() => setLongPosConfigOpen(true)}
+          onCopySelected={() => copySelectedLongPositions(false)}
+          onSelectAllOnPage={selectAllLongPosOnPage}
+          onResetSelection={resetLongPosSelection}
+          onReload={fetchReplayData}
+          onToggleOpenOnly={toggleOpenLongOnly}
+          onTogglePageSelection={toggleLongPosPageSelection}
+          onSort={handleLongPosSort}
+          onSelectPosition={onPosRowSelect}
+          onToggleSelection={toggleLongPosSelection}
+          onPageChange={(_e, newPage) => setLongPosPage(newPage)}
+          onRowsPerPageChange={(e) => {
+            const newVal = parseInt(e.target.value, 10);
+            setLongPosRowsPerPage(newVal);
+            setLongPosPage(0);
+            setTradeRowsPerPage(newVal);
+            setTradePage(0);
+            setShortPosRowsPerPage(newVal);
+            setShortPosPage(0);
           }}
-        >
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              height: 36,
-              minHeight: 36,
-            }}
-          >
-            <Typography variant="subtitle1">
-              {t('tables.trend.longPositions')}
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-              ({longPositions.length})
-            </Typography>
-            {selectedLongPosIds.size > 0 && (
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ ml: 0.5 }}
-              >
-                — {selectedLongPosIds.size} selected
-              </Typography>
-            )}
-            <Box sx={{ flex: 1 }} />
-            <Tooltip title={t('common:columnConfig.configureColumns')}>
-              <IconButton
-                size="small"
-                onClick={() => setLongPosColConfigOpen(true)}
-                aria-label={t('common:columnConfig.configureColumns')}
-              >
-                <SettingsIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Copy selected rows">
-              <span>
-                <IconButton
-                  onClick={copySelectedLongPositions}
-                  disabled={selectedLongPosIds.size === 0}
-                >
-                  <ContentCopyIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Select all on page">
-              <IconButton onClick={selectAllLongPosOnPage}>
-                <SelectAllIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Reset selection">
-              <span>
-                <IconButton
-                  onClick={resetLongPosSelection}
-                  disabled={selectedLongPosIds.size === 0}
-                >
-                  <DeselectIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Reload data">
-              <IconButton onClick={fetchReplayData} disabled={isRefreshing}>
-                <RefreshIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Show open positions only">
-              <ToggleButton
-                value="openOnly"
-                selected={showOpenLongOnly}
-                onChange={() => {
-                  setShowOpenLongOnly((prev) => !prev);
-                  setLongPosPage(0);
-                }}
-                sx={{
-                  ml: 1,
-                  px: 1,
-                  py: 0,
-                  height: 24,
-                  fontSize: '0.7rem',
-                  textTransform: 'none',
-                  lineHeight: 1,
-                }}
-              >
-                {t('tables.trend.openOnly')}
-              </ToggleButton>
-            </Tooltip>
-          </Box>
-          <TableContainer
-            component={Paper}
-            variant="outlined"
-            sx={{ overflowX: 'auto' }}
-          >
-            <Table stickyHeader sx={{ tableLayout: 'fixed', minWidth: 1000 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox" sx={{ width: 42 }}>
-                    <Checkbox
-                      checked={isAllLongPosPageSelected}
-                      indeterminate={
-                        !isAllLongPosPageSelected &&
-                        paginatedLongPositions.some((r) =>
-                          selectedLongPosIds.has(r.id)
-                        )
-                      }
-                      onChange={() => {
-                        if (isAllLongPosPageSelected) {
-                          setSelectedLongPosIds((prev) => {
-                            const next = new Set(prev);
-                            for (const row of paginatedLongPositions)
-                              next.delete(row.id);
-                            return next;
-                          });
-                        } else {
-                          selectAllLongPosOnPage();
-                        }
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      longPosOrderBy === 'entry_time' ? longPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths.entry_time,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === 'entry_time'}
-                      direction={
-                        longPosOrderBy === 'entry_time' ? longPosOrder : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('entry_time')}
-                    >
-                      {t('tables.trend.openTime')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'entry_time',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      longPosOrderBy === 'exit_time' ? longPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths.exit_time,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === 'exit_time'}
-                      direction={
-                        longPosOrderBy === 'exit_time' ? longPosOrder : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('exit_time')}
-                    >
-                      {t('tables.trend.closeTime')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'exit_time',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      longPosOrderBy === '_status' ? longPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths._status,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === '_status'}
-                      direction={
-                        longPosOrderBy === '_status' ? longPosOrder : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('_status')}
-                    >
-                      {t('tables.trend.status')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      '_status',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      longPosOrderBy === 'layer_index' ? longPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths.layer_index,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === 'layer_index'}
-                      direction={
-                        longPosOrderBy === 'layer_index' ? longPosOrder : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('layer_index')}
-                    >
-                      {t('tables.trend.layer')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'layer_index',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      longPosOrderBy === 'retracement_count'
-                        ? longPosOrder
-                        : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths.retracement_count,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === 'retracement_count'}
-                      direction={
-                        longPosOrderBy === 'retracement_count'
-                          ? longPosOrder
-                          : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('retracement_count')}
-                    >
-                      {t('tables.trend.retrace')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'retracement_count',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      longPosOrderBy === 'units' ? longPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths.units,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === 'units'}
-                      direction={
-                        longPosOrderBy === 'units' ? longPosOrder : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('units')}
-                    >
-                      {t('tables.trend.units')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'units',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      longPosOrderBy === 'entry_price' ? longPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths.entry_price,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === 'entry_price'}
-                      direction={
-                        longPosOrderBy === 'entry_price' ? longPosOrder : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('entry_price')}
-                    >
-                      {t('tables.trend.entry')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'entry_price',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      longPosOrderBy === 'exit_price' ? longPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths.exit_price,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === 'exit_price'}
-                      direction={
-                        longPosOrderBy === 'exit_price' ? longPosOrder : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('exit_price')}
-                    >
-                      {t('tables.trend.exit')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'exit_price',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      longPosOrderBy === '_pips' ? longPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths._pips,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === '_pips'}
-                      direction={
-                        longPosOrderBy === '_pips' ? longPosOrder : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('_pips')}
-                    >
-                      {t('tables.trend.pips')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      '_pips',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      longPosOrderBy === '_pnl' ? longPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: longPosColWidths._pnl,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={longPosOrderBy === '_pnl'}
-                      direction={
-                        longPosOrderBy === '_pnl' ? longPosOrder : 'asc'
-                      }
-                      onClick={() => handleLongPosSort('_pnl')}
-                    >
-                      {t('tables.trend.pnl')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      '_pnl',
-                      longPosColWidths,
-                      setLongPosColWidths
-                    )}
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paginatedLongPositions.map((pos) => {
-                  const isOpen = pos._status === 'open';
-                  const entryP = pos.entry_price
-                    ? parseFloat(pos.entry_price)
-                    : null;
-                  const exitP = pos.exit_price
-                    ? parseFloat(pos.exit_price)
-                    : null;
-                  const units = Math.abs(pos.units ?? 0);
-                  let pnl: number | null = null;
-                  if (isOpen && currentPrice != null && entryP != null)
-                    pnl = (currentPrice - entryP) * units;
-                  else if (!isOpen && exitP != null && entryP != null)
-                    pnl = (exitP - entryP) * units;
-                  const posSelected = pos.id === selectedPosId;
-                  const longChecked = selectedLongPosIds.has(pos.id);
-                  return (
-                    <TableRow
-                      key={pos.id}
-                      ref={posSelected ? selectedPosRowRef : undefined}
-                      hover
-                      onClick={() => onPosRowSelect(pos)}
-                      selected={posSelected}
-                      sx={{
-                        cursor: 'pointer',
-                        height: 37,
-                        ...(posSelected && {
-                          backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                          '&.Mui-selected': {
-                            backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                          },
-                          '&.Mui-selected:hover': {
-                            backgroundColor: 'rgba(245, 158, 11, 0.25)',
-                          },
-                        }),
-                      }}
-                    >
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={longChecked}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={() => toggleLongPosSelection(pos.id)}
-                        />
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {pos.entry_time
-                          ? new Date(pos.entry_time).toLocaleString()
-                          : '-'}
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {pos.exit_time
-                          ? new Date(pos.exit_time).toLocaleString()
-                          : '-'}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={isOpen ? 'Open' : 'Closed'}
-                          color={isOpen ? 'success' : 'default'}
-                          variant="outlined"
-                          sx={{ height: 20, fontSize: '0.7rem' }}
-                        />
-                      </TableCell>
-                      <TableCell>{pos.layer_index ?? '-'}</TableCell>
-                      <TableCell>{pos.retracement_count ?? '-'}</TableCell>
-                      <TableCell align="right">{pos.units}</TableCell>
-                      <TableCell align="right">
-                        {entryP != null ? `¥${entryP.toFixed(3)}` : '-'}
-                      </TableCell>
-                      <TableCell align="right">
-                        {exitP != null ? `¥${exitP.toFixed(3)}` : '-'}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          color: (() => {
-                            const pips = computePosPips(
-                              pos,
-                              currentPrice,
-                              pipSize
-                            );
-                            if (!pipSize) return 'text.secondary';
-                            return pips >= 0 ? 'success.main' : 'error.main';
-                          })(),
-                          fontWeight: 'bold',
-                        }}
-                      >
-                        {(() => {
-                          if (!pipSize) return '-';
-                          const hasPrice = isOpen
-                            ? currentPrice != null && entryP != null
-                            : exitP != null && entryP != null;
-                          if (!hasPrice) return '-';
-                          const pips = computePosPips(
-                            pos,
-                            currentPrice,
-                            pipSize
-                          );
-                          return `${pips >= 0 ? '+' : ''}${pips.toFixed(1)}`;
-                        })()}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          color:
-                            pnl != null
-                              ? pnl >= 0
-                                ? 'success.main'
-                                : 'error.main'
-                              : 'text.secondary',
-                          fontWeight: 'bold',
-                        }}
-                      >
-                        {pnl != null
-                          ? `${pnl >= 0 ? '+' : ''}¥${pnl.toFixed(2)}`
-                          : '-'}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {paginatedLongPositions.length < longPosRowsPerPage &&
-                  Array.from({
-                    length: longPosRowsPerPage - paginatedLongPositions.length,
-                  }).map((_, i) => (
-                    <TableRow key={`lpos-empty-${i}`} sx={{ height: 37 }}>
-                      <TableCell
-                        colSpan={11}
-                        sx={{
-                          backgroundColor: 'action.hover',
-                          borderBottom: '1px solid',
-                          borderColor: 'divider',
-                          py: 0,
-                        }}
-                      />
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <TablePagination
-            component="div"
-            count={sortedLongPositions.length}
-            page={longPosPage}
-            onPageChange={(_e, newPage) => setLongPosPage(newPage)}
-            rowsPerPage={longPosRowsPerPage}
-            onRowsPerPageChange={(e) => {
-              const newVal = parseInt(e.target.value, 10);
-              setLongPosRowsPerPage(newVal);
-              setLongPosPage(0);
-              setRowsPerPage(newVal);
-              setPage(0);
-              setPosRowsPerPage(newVal);
-              setPosPage(0);
-              setShortPosRowsPerPage(newVal);
-              setShortPosPage(0);
-            }}
-            rowsPerPageOptions={[10, 25, 50, 100]}
-          />
-        </Box>
+          resizeHandle={createLongPosResizeHandle}
+        />
 
-        {/* Short Positions */}
-        <Box
-          sx={{
-            flex: 1,
-            minWidth: 0,
-            display: 'flex',
-            flexDirection: 'column',
+        <TaskTrendPositionsTable
+          title={t('tables.trend.shortPositions')}
+          count={shortPositions.length}
+          positions={sortedShortPositions}
+          paginatedPositions={paginatedShortPositions}
+          selectedPosId={selectedPosId}
+          selectedIds={selectedShortPosIds}
+          isAllPageSelected={isAllShortPosPageSelected}
+          isRefreshing={isRefreshing}
+          showOpenOnly={showOpenShortOnly}
+          orderBy={shortPosOrderBy}
+          order={shortPosOrder}
+          colWidths={shortPosColWidths}
+          currentPrice={currentPrice}
+          pipSize={pipSize}
+          isShort={true}
+          page={shortPosPage}
+          rowsPerPage={shortPosRowsPerPage}
+          timezone={timezone}
+          selectedPosRowRef={selectedPosRowRef}
+          onConfigureColumns={() => setShortPosConfigOpen(true)}
+          onCopySelected={() => copySelectedShortPositions(true)}
+          onSelectAllOnPage={selectAllShortPosOnPage}
+          onResetSelection={resetShortPosSelection}
+          onReload={fetchReplayData}
+          onToggleOpenOnly={toggleOpenShortOnly}
+          onTogglePageSelection={toggleShortPosPageSelection}
+          onSort={handleShortPosSort}
+          onSelectPosition={onPosRowSelect}
+          onToggleSelection={toggleShortPosSelection}
+          onPageChange={(_e, newPage) => setShortPosPage(newPage)}
+          onRowsPerPageChange={(e) => {
+            const newVal = parseInt(e.target.value, 10);
+            setShortPosRowsPerPage(newVal);
+            setShortPosPage(0);
+            setTradeRowsPerPage(newVal);
+            setTradePage(0);
+            setLongPosRowsPerPage(newVal);
+            setLongPosPage(0);
           }}
-        >
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              height: 36,
-              minHeight: 36,
-            }}
-          >
-            <Typography variant="subtitle1">
-              {t('tables.trend.shortPositions')}
-            </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-              ({shortPositions.length})
-            </Typography>
-            {selectedShortPosIds.size > 0 && (
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ ml: 0.5 }}
-              >
-                — {selectedShortPosIds.size} selected
-              </Typography>
-            )}
-            <Box sx={{ flex: 1 }} />
-            <Tooltip title={t('common:columnConfig.configureColumns')}>
-              <IconButton
-                size="small"
-                onClick={() => setShortPosColConfigOpen(true)}
-                aria-label={t('common:columnConfig.configureColumns')}
-              >
-                <SettingsIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Copy selected rows">
-              <span>
-                <IconButton
-                  onClick={copySelectedShortPositions}
-                  disabled={selectedShortPosIds.size === 0}
-                >
-                  <ContentCopyIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Select all on page">
-              <IconButton onClick={selectAllShortPosOnPage}>
-                <SelectAllIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Reset selection">
-              <span>
-                <IconButton
-                  onClick={resetShortPosSelection}
-                  disabled={selectedShortPosIds.size === 0}
-                >
-                  <DeselectIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Reload data">
-              <IconButton onClick={fetchReplayData} disabled={isRefreshing}>
-                <RefreshIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Show open positions only">
-              <ToggleButton
-                value="openOnly"
-                selected={showOpenShortOnly}
-                onChange={() => {
-                  setShowOpenShortOnly((prev) => !prev);
-                  setShortPosPage(0);
-                }}
-                sx={{
-                  ml: 1,
-                  px: 1,
-                  py: 0,
-                  height: 24,
-                  fontSize: '0.7rem',
-                  textTransform: 'none',
-                  lineHeight: 1,
-                }}
-              >
-                {t('tables.trend.openOnly')}
-              </ToggleButton>
-            </Tooltip>
-          </Box>
-          <TableContainer
-            component={Paper}
-            variant="outlined"
-            sx={{ overflowX: 'auto' }}
-          >
-            <Table stickyHeader sx={{ tableLayout: 'fixed', minWidth: 1000 }}>
-              <TableHead>
-                <TableRow>
-                  <TableCell padding="checkbox" sx={{ width: 42 }}>
-                    <Checkbox
-                      checked={isAllShortPosPageSelected}
-                      indeterminate={
-                        !isAllShortPosPageSelected &&
-                        paginatedShortPositions.some((r) =>
-                          selectedShortPosIds.has(r.id)
-                        )
-                      }
-                      onChange={() => {
-                        if (isAllShortPosPageSelected) {
-                          setSelectedShortPosIds((prev) => {
-                            const next = new Set(prev);
-                            for (const row of paginatedShortPositions)
-                              next.delete(row.id);
-                            return next;
-                          });
-                        } else {
-                          selectAllShortPosOnPage();
-                        }
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      shortPosOrderBy === 'entry_time' ? shortPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths.entry_time,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === 'entry_time'}
-                      direction={
-                        shortPosOrderBy === 'entry_time' ? shortPosOrder : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('entry_time')}
-                    >
-                      {t('tables.trend.openTime')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'entry_time',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      shortPosOrderBy === 'exit_time' ? shortPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths.exit_time,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === 'exit_time'}
-                      direction={
-                        shortPosOrderBy === 'exit_time' ? shortPosOrder : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('exit_time')}
-                    >
-                      {t('tables.trend.closeTime')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'exit_time',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      shortPosOrderBy === '_status' ? shortPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths._status,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === '_status'}
-                      direction={
-                        shortPosOrderBy === '_status' ? shortPosOrder : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('_status')}
-                    >
-                      {t('tables.trend.status')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      '_status',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      shortPosOrderBy === 'layer_index' ? shortPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths.layer_index,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === 'layer_index'}
-                      direction={
-                        shortPosOrderBy === 'layer_index'
-                          ? shortPosOrder
-                          : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('layer_index')}
-                    >
-                      {t('tables.trend.layer')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'layer_index',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    sortDirection={
-                      shortPosOrderBy === 'retracement_count'
-                        ? shortPosOrder
-                        : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths.retracement_count,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === 'retracement_count'}
-                      direction={
-                        shortPosOrderBy === 'retracement_count'
-                          ? shortPosOrder
-                          : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('retracement_count')}
-                    >
-                      {t('tables.trend.retrace')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'retracement_count',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      shortPosOrderBy === 'units' ? shortPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths.units,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === 'units'}
-                      direction={
-                        shortPosOrderBy === 'units' ? shortPosOrder : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('units')}
-                    >
-                      {t('tables.trend.units')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'units',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      shortPosOrderBy === 'entry_price' ? shortPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths.entry_price,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === 'entry_price'}
-                      direction={
-                        shortPosOrderBy === 'entry_price'
-                          ? shortPosOrder
-                          : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('entry_price')}
-                    >
-                      {t('tables.trend.entry')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'entry_price',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      shortPosOrderBy === 'exit_price' ? shortPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths.exit_price,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === 'exit_price'}
-                      direction={
-                        shortPosOrderBy === 'exit_price' ? shortPosOrder : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('exit_price')}
-                    >
-                      {t('tables.trend.exit')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      'exit_price',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      shortPosOrderBy === '_pips' ? shortPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths._pips,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === '_pips'}
-                      direction={
-                        shortPosOrderBy === '_pips' ? shortPosOrder : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('_pips')}
-                    >
-                      {t('tables.trend.pips')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      '_pips',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sortDirection={
-                      shortPosOrderBy === '_pnl' ? shortPosOrder : false
-                    }
-                    sx={{
-                      position: 'relative',
-                      width: shortPosColWidths._pnl,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <TableSortLabel
-                      active={shortPosOrderBy === '_pnl'}
-                      direction={
-                        shortPosOrderBy === '_pnl' ? shortPosOrder : 'asc'
-                      }
-                      onClick={() => handleShortPosSort('_pnl')}
-                    >
-                      {t('tables.trend.pnl')}
-                    </TableSortLabel>
-                    {makeLSResizeHandle(
-                      '_pnl',
-                      shortPosColWidths,
-                      setShortPosColWidths
-                    )}
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {paginatedShortPositions.map((pos) => {
-                  const isOpen = pos._status === 'open';
-                  const entryP = pos.entry_price
-                    ? parseFloat(pos.entry_price)
-                    : null;
-                  const exitP = pos.exit_price
-                    ? parseFloat(pos.exit_price)
-                    : null;
-                  const units = Math.abs(pos.units ?? 0);
-                  let pnl: number | null = null;
-                  if (isOpen && currentPrice != null && entryP != null)
-                    pnl = (entryP - currentPrice) * units;
-                  else if (!isOpen && exitP != null && entryP != null)
-                    pnl = (entryP - exitP) * units;
-                  const posSelected = pos.id === selectedPosId;
-                  const shortChecked = selectedShortPosIds.has(pos.id);
-                  return (
-                    <TableRow
-                      key={pos.id}
-                      ref={posSelected ? selectedPosRowRef : undefined}
-                      hover
-                      onClick={() => onPosRowSelect(pos)}
-                      selected={posSelected}
-                      sx={{
-                        cursor: 'pointer',
-                        height: 37,
-                        ...(posSelected && {
-                          backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                          '&.Mui-selected': {
-                            backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                          },
-                          '&.Mui-selected:hover': {
-                            backgroundColor: 'rgba(245, 158, 11, 0.25)',
-                          },
-                        }),
-                      }}
-                    >
-                      <TableCell padding="checkbox">
-                        <Checkbox
-                          checked={shortChecked}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={() => toggleShortPosSelection(pos.id)}
-                        />
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {pos.entry_time
-                          ? new Date(pos.entry_time).toLocaleString()
-                          : '-'}
-                      </TableCell>
-                      <TableCell
-                        sx={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {pos.exit_time
-                          ? new Date(pos.exit_time).toLocaleString()
-                          : '-'}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={isOpen ? 'Open' : 'Closed'}
-                          color={isOpen ? 'success' : 'default'}
-                          variant="outlined"
-                          sx={{ height: 20, fontSize: '0.7rem' }}
-                        />
-                      </TableCell>
-                      <TableCell>{pos.layer_index ?? '-'}</TableCell>
-                      <TableCell>{pos.retracement_count ?? '-'}</TableCell>
-                      <TableCell align="right">{pos.units}</TableCell>
-                      <TableCell align="right">
-                        {entryP != null ? `¥${entryP.toFixed(3)}` : '-'}
-                      </TableCell>
-                      <TableCell align="right">
-                        {exitP != null ? `¥${exitP.toFixed(3)}` : '-'}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          color: (() => {
-                            const pips = computePosPips(
-                              pos,
-                              currentPrice,
-                              pipSize
-                            );
-                            if (!pipSize) return 'text.secondary';
-                            return pips >= 0 ? 'success.main' : 'error.main';
-                          })(),
-                          fontWeight: 'bold',
-                        }}
-                      >
-                        {(() => {
-                          if (!pipSize) return '-';
-                          const hasPrice = isOpen
-                            ? currentPrice != null && entryP != null
-                            : exitP != null && entryP != null;
-                          if (!hasPrice) return '-';
-                          const pips = computePosPips(
-                            pos,
-                            currentPrice,
-                            pipSize
-                          );
-                          return `${pips >= 0 ? '+' : ''}${pips.toFixed(1)}`;
-                        })()}
-                      </TableCell>
-                      <TableCell
-                        align="right"
-                        sx={{
-                          color:
-                            pnl != null
-                              ? pnl >= 0
-                                ? 'success.main'
-                                : 'error.main'
-                              : 'text.secondary',
-                          fontWeight: 'bold',
-                        }}
-                      >
-                        {pnl != null
-                          ? `${pnl >= 0 ? '+' : ''}¥${pnl.toFixed(2)}`
-                          : '-'}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {paginatedShortPositions.length < shortPosRowsPerPage &&
-                  Array.from({
-                    length:
-                      shortPosRowsPerPage - paginatedShortPositions.length,
-                  }).map((_, i) => (
-                    <TableRow key={`spos-empty-${i}`} sx={{ height: 37 }}>
-                      <TableCell
-                        colSpan={11}
-                        sx={{
-                          backgroundColor: 'action.hover',
-                          borderBottom: '1px solid',
-                          borderColor: 'divider',
-                          py: 0,
-                        }}
-                      />
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <TablePagination
-            component="div"
-            count={sortedShortPositions.length}
-            page={shortPosPage}
-            onPageChange={(_e, newPage) => setShortPosPage(newPage)}
-            rowsPerPage={shortPosRowsPerPage}
-            onRowsPerPageChange={(e) => {
-              const newVal = parseInt(e.target.value, 10);
-              setShortPosRowsPerPage(newVal);
-              setShortPosPage(0);
-              setRowsPerPage(newVal);
-              setPage(0);
-              setPosRowsPerPage(newVal);
-              setPosPage(0);
-              setLongPosRowsPerPage(newVal);
-              setLongPosPage(0);
-            }}
-            rowsPerPageOptions={[10, 25, 50, 100]}
-          />
-        </Box>
+          resizeHandle={createShortPosResizeHandle}
+        />
       </Box>
 
       <ColumnConfigDialog
-        open={tradesColConfigOpen}
-        columns={tradesColConfig}
-        onClose={() => setTradesColConfigOpen(false)}
-        onSave={updateTradesCols}
-        onReset={resetTradesCols}
+        open={tradeConfigOpen}
+        columns={tradeColumnConfig}
+        onClose={() => setTradeConfigOpen(false)}
+        onSave={updateTradeColumns}
+        onReset={resetTradeDefaults}
       />
       <ColumnConfigDialog
-        open={longPosColConfigOpen}
-        columns={longPosColConfig}
-        onClose={() => setLongPosColConfigOpen(false)}
-        onSave={updateLongPosCols}
-        onReset={resetLongPosCols}
+        open={longPosConfigOpen}
+        columns={longPosColumnConfig}
+        onClose={() => setLongPosConfigOpen(false)}
+        onSave={updateLongPosColumns}
+        onReset={resetLongPosDefaults}
       />
       <ColumnConfigDialog
-        open={shortPosColConfigOpen}
-        columns={shortPosColConfig}
-        onClose={() => setShortPosColConfigOpen(false)}
-        onSave={updateShortPosCols}
-        onReset={resetShortPosCols}
+        open={shortPosConfigOpen}
+        columns={shortPosColumnConfig}
+        onClose={() => setShortPosConfigOpen(false)}
+        onSave={updateShortPosColumns}
+        onReset={resetShortPosDefaults}
       />
     </Box>
   );

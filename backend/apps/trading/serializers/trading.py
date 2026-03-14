@@ -5,6 +5,7 @@ import logging
 from rest_framework import serializers
 
 from apps.market.models import OandaAccounts
+from apps.trading.enums import TradingMode
 from apps.trading.models import StrategyConfiguration, TradingTask
 
 logger = logging.getLogger(__name__)
@@ -242,6 +243,11 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
 
         user = self.context["request"].user
         validated_data["user"] = user
+        hedging_enabled = validated_data.get("hedging_enabled", True)
+        validated_data.setdefault(
+            "trading_mode",
+            TradingMode.HEDGING if hedging_enabled else TradingMode.NETTING,
+        )
 
         # Set instrument and pip_size from config if not explicitly provided
         config = validated_data.get("config")
@@ -259,6 +265,11 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
         # Don't allow updating if task is running
         if instance.status == "running":
             raise serializers.ValidationError("Cannot update a running task. Stop it first.")
+
+        if "hedging_enabled" in validated_data:
+            validated_data["trading_mode"] = (
+                TradingMode.HEDGING if validated_data["hedging_enabled"] else TradingMode.NETTING
+            )
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)

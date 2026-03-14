@@ -1,6 +1,8 @@
 """Unit tests for trading serializers trading."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+
+from apps.trading.enums import TradingMode
 
 from apps.trading.serializers.trading import (
     TradingTaskCreateSerializer,
@@ -73,3 +75,23 @@ class TestTradingTaskCreateSerializer:
         assert "config_id" in fields
         assert "account_id" in fields
         assert "name" in fields
+
+    @patch("apps.trading.serializers.trading.TradingTask.objects.create")
+    def test_create_sets_trading_mode_from_hedging_flag(self, mock_create):
+        request = MagicMock()
+        request.user = MagicMock()
+        serializer = TradingTaskCreateSerializer(context={"request": request})
+        config = MagicMock()
+        config.parameters = {}
+
+        serializer.create(
+            {
+                "config": config,
+                "oanda_account": MagicMock(),
+                "name": "Task",
+                "hedging_enabled": False,
+            }
+        )
+
+        mock_create.assert_called_once()
+        assert mock_create.call_args.kwargs["trading_mode"] == TradingMode.NETTING

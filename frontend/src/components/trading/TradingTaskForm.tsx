@@ -79,6 +79,7 @@ export default function TradingTaskForm({
   const [formData, setFormData] = useState<Partial<TradingTaskFormData>>(
     initialData || {}
   );
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const createTask = useCreateTradingTask();
   const updateTask = useUpdateTradingTask();
 
@@ -153,6 +154,15 @@ export default function TradingTaskForm({
     ? (accountDetail as Account)
     : selectedAccountFromList;
 
+  useEffect(() => {
+    if (selectedAccount?.hedging_enabled === false) {
+      setValue('hedging_enabled', false, {
+        shouldValidate: false,
+        shouldDirty: true,
+      });
+    }
+  }, [selectedAccount?.hedging_enabled, setValue]);
+
   // Fetch all configurations and strategies
   const { data: configurationsData } = useConfigurations({ page_size: 100 });
   const configurations = configurationsData?.results || [];
@@ -218,6 +228,8 @@ export default function TradingTaskForm({
 
   const onSubmit = async (data: TradingTaskFormData) => {
     try {
+      setSubmitError(null);
+
       // Merge the saved formData with the current form data to ensure we have all values
       const completeData = { ...formData, ...data } as TradingTaskFormData;
 
@@ -235,7 +247,10 @@ export default function TradingTaskForm({
         name: completeData.name,
         description: completeData.description,
         dry_run: completeData.dry_run,
-        hedging_enabled: completeData.hedging_enabled,
+        hedging_enabled:
+          selectedAccount?.hedging_enabled === false
+            ? false
+            : completeData.hedging_enabled,
       };
 
       if (taskId) {
@@ -244,8 +259,39 @@ export default function TradingTaskForm({
         await createTask.mutate(taskData);
       }
       navigate('/trading-tasks');
-    } catch {
-      // Error is already handled by the mutation hook
+    } catch (error: unknown) {
+      const err = error as {
+        details?: Record<string, string | string[]>;
+        message?: string;
+      };
+
+      let errorMessage = 'Failed to create trading task';
+      if (err?.details && typeof err.details === 'object') {
+        const backendErrors = err.details as Record<string, string | string[]>;
+        const errorMessages: string[] = [];
+        const fieldMapping: Record<string, string> = {
+          account_id: 'Account',
+          config_id: 'Configuration',
+          name: 'Task Name',
+          hedging_enabled: 'Hedging',
+        };
+
+        Object.entries(backendErrors).forEach(([field, messages]) => {
+          const fieldName = fieldMapping[field] || field;
+          const fieldErrors = Array.isArray(messages) ? messages : [messages];
+          fieldErrors.forEach((msg: string) => {
+            errorMessages.push(`${fieldName}: ${msg}`);
+          });
+        });
+
+        if (errorMessages.length > 0) {
+          errorMessage = errorMessages.join(' ');
+        }
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+
+      setSubmitError(errorMessage);
     }
   };
 
@@ -468,6 +514,7 @@ export default function TradingTaskForm({
                         <Checkbox
                           checked={field.value ?? true}
                           onChange={field.onChange}
+                          disabled={selectedAccount?.hedging_enabled === false}
                         />
                       }
                       label={t(
@@ -487,6 +534,14 @@ export default function TradingTaskForm({
                     'When enabled, the strategy can hold both long and short positions simultaneously. Requires a hedging-enabled OANDA account.'
                   )}
                 </Typography>
+                {selectedAccount?.hedging_enabled === false && (
+                  <Alert severity="warning" sx={{ mt: 2 }}>
+                    {t(
+                      'trading:form.hedgingUnsupported',
+                      'This OANDA account uses netting mode and does not support hedging. Hedging has been disabled for this task.'
+                    )}
+                  </Alert>
+                )}
               </Grid>
             </Grid>
           </Box>
@@ -669,6 +724,12 @@ export default function TradingTaskForm({
 
       <Paper sx={{ p: 3 }}>
         {getStepContent(activeStep)}
+
+        {submitError && (
+          <Alert severity="error" sx={{ mt: 3 }}>
+            {submitError}
+          </Alert>
+        )}
 
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
           <Button onClick={() => navigate(-1)} sx={{ mr: 'auto' }}>

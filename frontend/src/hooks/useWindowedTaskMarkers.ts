@@ -114,6 +114,7 @@ export function useWindowedTaskMarkers({
   const taskLoadedRangesRef = useRef<TimeRange[]>([]);
   const strategyLoadedRangesRef = useRef<TimeRange[]>([]);
   const tradeLoadedRangesRef = useRef<TimeRange[]>([]);
+  const strategyFullyLoadedRef = useRef(false);
 
   const prefix = useMemo(
     () =>
@@ -160,7 +161,9 @@ export function useWindowedTaskMarkers({
       );
       const missingStrategy = subtractLoadedRanges(
         buffered,
-        strategyLoadedRangesRef.current
+        strategyFullyLoadedRef.current
+          ? [buffered]
+          : strategyLoadedRangesRef.current
       );
       const missingTrades = subtractLoadedRanges(
         buffered,
@@ -190,16 +193,26 @@ export function useWindowedTaskMarkers({
           }));
         }
 
-        for (const missing of missingStrategy) {
+        if (missingStrategy.length > 0 && !strategyFullyLoadedRef.current) {
           const results = await fetchEventsInRange('strategy-events', {
             page_size: '5000',
             ...(executionRunId ? { execution_id: executionRunId } : {}),
-            created_from: new Date(missing.from * 1000).toISOString(),
-            created_to: new Date(missing.to * 1000).toISOString(),
           });
+          strategyFullyLoadedRef.current = true;
           setStrategyState((prev) => ({
             items: mergeById(prev.items, results),
-            loadedRanges: mergeRanges([...prev.loadedRanges, missing]),
+            loadedRanges:
+              bounds?.from != null || bounds?.to != null
+                ? [
+                    clampRange(
+                      {
+                        from: bounds?.from ?? Number.MIN_SAFE_INTEGER,
+                        to: bounds?.to ?? Number.MAX_SAFE_INTEGER,
+                      },
+                      bounds
+                    ),
+                  ]
+                : [buffered],
           }));
         }
 
@@ -244,6 +257,7 @@ export function useWindowedTaskMarkers({
     taskLoadedRangesRef.current = [];
     strategyLoadedRangesRef.current = [];
     tradeLoadedRangesRef.current = [];
+    strategyFullyLoadedRef.current = false;
   }, [executionRunId, taskId, taskType]);
 
   useEffect(() => {

@@ -63,6 +63,18 @@ class StopMode(models.TextChoices):
     GRACEFUL_CLOSE = "graceful_close", "Graceful Stop (Close Positions)"
 
 
+class TradingMode(models.TextChoices):
+    """
+    Position management mode for live trading tasks.
+
+    - NETTING: positions are aggregated per instrument
+    - HEDGING: multiple independent trades can exist per instrument
+    """
+
+    NETTING = "netting", "Netting Mode"
+    HEDGING = "hedging", "Hedging Mode"
+
+
 class EventType(models.TextChoices):
     """
     Types of strategy events.
