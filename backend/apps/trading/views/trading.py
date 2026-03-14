@@ -4,10 +4,12 @@ import logging
 from logging import Logger
 from typing import Any
 
+from django.db import IntegrityError
 from django.db.models import Q, QuerySet
 from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import APIException
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -20,6 +22,13 @@ from apps.trading.tasks.service import TaskService
 from apps.trading.views.mixins import TaskSubResourceMixin
 
 logger: Logger = logging.getLogger(name=__name__)
+
+
+class ConflictError(APIException):
+    """API exception for known business conflicts."""
+
+    status_code = status.HTTP_409_CONFLICT
+    default_code = "conflict"
 
 
 @extend_schema_view(
@@ -162,7 +171,26 @@ class TradingTaskViewSet(TaskSubResourceMixin, ModelViewSet):
 
     def perform_create(self, serializer: TradingTaskSerializer) -> None:
         """Set the user when creating a task."""
-        serializer.save(user=self.request.user)
+        try:
+            serializer.save(user=self.request.user)
+        except IntegrityError as e:
+            logger.error("IntegrityError creating trading task: %s", e)
+            if "unique_user_trading_task_name" in str(e):
+                raise ConflictError(
+                    {"name": ["A trading task with this name already exists."]}
+                ) from e
+            if "uniq_active_trading_task_per_account" in str(e):
+                raise ConflictError(
+                    {"account_id": ["This account already has an active trading task."]}
+                ) from e
+            raise
+        except Exception as e:
+            logger.error(
+                "Unexpected error creating trading task: %s: %s",
+                type(e).__name__,
+                e,
+            )
+            raise
 
     @action(detail=True, methods=["post"])
     def start(self, request: Request, pk: int | None = None) -> Response:

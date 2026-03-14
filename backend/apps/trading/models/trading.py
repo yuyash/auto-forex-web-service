@@ -7,7 +7,7 @@ from typing import Any
 from django.db import models
 
 from apps.market.models import OandaAccounts
-from apps.trading.enums import TaskStatus
+from apps.trading.enums import TaskStatus, TradingMode
 from apps.trading.models.base import UUIDModel
 
 
@@ -138,6 +138,12 @@ class TradingTask(UUIDModel):
         default=Decimal("0.01"),
         help_text="Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account.",
     )
+    trading_mode = models.CharField(
+        max_length=20,
+        choices=TradingMode.choices,
+        default=TradingMode.NETTING,
+        help_text="Trading mode: netting (aggregated positions) or hedging (independent trades).",
+    )
     hedging_enabled = models.BooleanField(
         default=True,
         help_text="Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account.",
@@ -239,6 +245,10 @@ class TradingTask(UUIDModel):
             description=self.description,
             status=TaskStatus.CREATED,
             dry_run=self.dry_run,
+            trading_mode=self.trading_mode,
+            hedging_enabled=self.hedging_enabled,
+            instrument=self.instrument,
+            pip_size=self.pip_size,
         )
 
         return new_task
