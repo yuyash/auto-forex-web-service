@@ -36,6 +36,10 @@ A full-stack web application for managing algorithmic forex trading operations a
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed local development setup instructions.
 
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the steps to deploy the application.
+
 ## Architecture
 
 The system follows a microservices-inspired architecture:
