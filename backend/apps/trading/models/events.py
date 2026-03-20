@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -10,6 +12,42 @@ from django.db import models
 if TYPE_CHECKING:
     from apps.trading.dataclasses.context import EventContext
     from apps.trading.events.base import StrategyEvent
+
+
+def _as_int(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_decimal(value: object) -> Decimal | None:
+    if value in (None, ""):
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def _as_datetime(value: object) -> datetime | None:
+    if value is None or isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_uuid(value: object) -> UUID | None:
+    if value is None or isinstance(value, UUID):
+        return value
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError, AttributeError):
+        return None
 
 
 class TradingEvent(models.Model):
@@ -46,6 +84,33 @@ class TradingEvent(models.Model):
         db_index=True,
         help_text="Execution run UUID (shared with Celery task_id)",
     )
+    strategy_type = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    visual_group_id = models.CharField(max_length=128, blank=True, default="", db_index=True)
+    root_entry_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    parent_entry_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    entry_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    basket = models.CharField(max_length=32, blank=True, default="", db_index=True)
+    step = models.IntegerField(null=True, blank=True)
+    close_reason = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    position_id = models.UUIDField(null=True, blank=True, db_index=True)
+    direction = models.CharField(max_length=16, blank=True, default="", db_index=True)
+    event_timestamp = models.DateTimeField(null=True, blank=True, db_index=True)
+    expected_interval_pips = models.DecimalField(
+        max_digits=12, decimal_places=4, null=True, blank=True
+    )
+    actual_interval_pips = models.DecimalField(
+        max_digits=12, decimal_places=4, null=True, blank=True
+    )
+    expected_tp_pips = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True)
+    actual_tp_pips = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True)
+    expected_exit_price = models.DecimalField(
+        max_digits=20, decimal_places=10, null=True, blank=True
+    )
+    actual_exit_price = models.DecimalField(max_digits=20, decimal_places=10, null=True, blank=True)
+    validation_tolerance_pips = models.DecimalField(
+        max_digits=12, decimal_places=4, null=True, blank=True
+    )
+    validation_status = models.CharField(max_length=32, blank=True, default="", db_index=True)
 
     details = models.JSONField(default=dict, blank=True)
     is_processed = models.BooleanField(
@@ -75,6 +140,24 @@ class TradingEvent(models.Model):
             models.Index(fields=["task_type", "task_id", "-created_at"]),
             models.Index(fields=["task_type", "task_id", "execution_id", "-created_at"]),
             models.Index(fields=["event_type", "-created_at"]),
+            models.Index(
+                fields=[
+                    "task_type",
+                    "task_id",
+                    "execution_id",
+                    "strategy_type",
+                    "-event_timestamp",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "task_type",
+                    "task_id",
+                    "execution_id",
+                    "visual_group_id",
+                    "event_timestamp",
+                ]
+            ),
         ]
 
     def __str__(self) -> str:
@@ -87,6 +170,7 @@ class TradingEvent(models.Model):
         event: "StrategyEvent",
         context: "EventContext",
         execution_id: UUID | str | None = None,
+        strategy_type: str = "",
     ) -> "TradingEvent":
         """Create a TradingEvent instance from a StrategyEvent.
 
@@ -108,6 +192,27 @@ class TradingEvent(models.Model):
             user=context.user,
             account=context.account,
             instrument=context.instrument,
+            strategy_type=str(strategy_type or getattr(event, "strategy_type", "") or ""),
+            visual_group_id=str(getattr(event, "visual_group_id", "") or ""),
+            root_entry_id=_as_int(getattr(event, "root_entry_id", None)),
+            parent_entry_id=_as_int(getattr(event, "parent_entry_id", None)),
+            entry_id=_as_int(getattr(event, "entry_id", None)),
+            basket=str(getattr(event, "basket", "") or ""),
+            step=_as_int(getattr(event, "step", None)),
+            close_reason=str(getattr(event, "close_reason", "") or ""),
+            position_id=_as_uuid(getattr(event, "position_id", None)),
+            direction=str(getattr(event, "direction", "") or ""),
+            event_timestamp=_as_datetime(getattr(event, "timestamp", None)),
+            expected_interval_pips=_as_decimal(getattr(event, "expected_interval_pips", None)),
+            actual_interval_pips=_as_decimal(getattr(event, "actual_interval_pips", None)),
+            expected_tp_pips=_as_decimal(getattr(event, "expected_tp_pips", None)),
+            actual_tp_pips=_as_decimal(getattr(event, "actual_tp_pips", None)),
+            expected_exit_price=_as_decimal(getattr(event, "expected_exit_price", None)),
+            actual_exit_price=_as_decimal(getattr(event, "actual_exit_price", None)),
+            validation_tolerance_pips=_as_decimal(
+                getattr(event, "validation_tolerance_pips", None)
+            ),
+            validation_status=str(getattr(event, "validation_status", "") or ""),
             details=event.to_dict(),
         )
 
@@ -147,6 +252,33 @@ class StrategyEventRecord(models.Model):
         db_index=True,
         help_text="Execution run UUID (shared with Celery task_id)",
     )
+    strategy_type = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    visual_group_id = models.CharField(max_length=128, blank=True, default="", db_index=True)
+    root_entry_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    parent_entry_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    entry_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    basket = models.CharField(max_length=32, blank=True, default="", db_index=True)
+    step = models.IntegerField(null=True, blank=True)
+    close_reason = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    position_id = models.UUIDField(null=True, blank=True, db_index=True)
+    direction = models.CharField(max_length=16, blank=True, default="", db_index=True)
+    event_timestamp = models.DateTimeField(null=True, blank=True, db_index=True)
+    expected_interval_pips = models.DecimalField(
+        max_digits=12, decimal_places=4, null=True, blank=True
+    )
+    actual_interval_pips = models.DecimalField(
+        max_digits=12, decimal_places=4, null=True, blank=True
+    )
+    expected_tp_pips = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True)
+    actual_tp_pips = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True)
+    expected_exit_price = models.DecimalField(
+        max_digits=20, decimal_places=10, null=True, blank=True
+    )
+    actual_exit_price = models.DecimalField(max_digits=20, decimal_places=10, null=True, blank=True)
+    validation_tolerance_pips = models.DecimalField(
+        max_digits=12, decimal_places=4, null=True, blank=True
+    )
+    validation_status = models.CharField(max_length=32, blank=True, default="", db_index=True)
 
     details = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -160,6 +292,33 @@ class StrategyEventRecord(models.Model):
             models.Index(fields=["task_type", "task_id", "-created_at"]),
             models.Index(fields=["task_type", "task_id", "execution_id", "-created_at"]),
             models.Index(fields=["event_type", "-created_at"]),
+            models.Index(
+                fields=[
+                    "task_type",
+                    "task_id",
+                    "execution_id",
+                    "strategy_type",
+                    "-event_timestamp",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "task_type",
+                    "task_id",
+                    "execution_id",
+                    "visual_group_id",
+                    "event_timestamp",
+                ]
+            ),
+            models.Index(
+                fields=[
+                    "task_type",
+                    "task_id",
+                    "execution_id",
+                    "root_entry_id",
+                    "event_timestamp",
+                ]
+            ),
         ]
 
     def __str__(self) -> str:
@@ -172,6 +331,7 @@ class StrategyEventRecord(models.Model):
         event: "StrategyEvent",
         context: "EventContext",
         execution_id: UUID | str | None = None,
+        strategy_type: str = "",
     ) -> "StrategyEventRecord":
         """Create a StrategyEventRecord from a StrategyEvent."""
         return cls(
@@ -184,5 +344,26 @@ class StrategyEventRecord(models.Model):
             user=context.user,
             account=context.account,
             instrument=context.instrument,
+            strategy_type=str(strategy_type or getattr(event, "strategy_type", "") or ""),
+            visual_group_id=str(getattr(event, "visual_group_id", "") or ""),
+            root_entry_id=_as_int(getattr(event, "root_entry_id", None)),
+            parent_entry_id=_as_int(getattr(event, "parent_entry_id", None)),
+            entry_id=_as_int(getattr(event, "entry_id", None)),
+            basket=str(getattr(event, "basket", "") or ""),
+            step=_as_int(getattr(event, "step", None)),
+            close_reason=str(getattr(event, "close_reason", "") or ""),
+            position_id=_as_uuid(getattr(event, "position_id", None)),
+            direction=str(getattr(event, "direction", "") or ""),
+            event_timestamp=_as_datetime(getattr(event, "timestamp", None)),
+            expected_interval_pips=_as_decimal(getattr(event, "expected_interval_pips", None)),
+            actual_interval_pips=_as_decimal(getattr(event, "actual_interval_pips", None)),
+            expected_tp_pips=_as_decimal(getattr(event, "expected_tp_pips", None)),
+            actual_tp_pips=_as_decimal(getattr(event, "actual_tp_pips", None)),
+            expected_exit_price=_as_decimal(getattr(event, "expected_exit_price", None)),
+            actual_exit_price=_as_decimal(getattr(event, "actual_exit_price", None)),
+            validation_tolerance_pips=_as_decimal(
+                getattr(event, "validation_tolerance_pips", None)
+            ),
+            validation_status=str(getattr(event, "validation_status", "") or ""),
             details=event.to_dict(),
         )

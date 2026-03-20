@@ -47,6 +47,7 @@ import { useTabConfig, type TabItem } from '../../hooks/useTabConfig';
 import { useOptimisticTaskStatus } from '../../hooks/useOptimisticTaskStatus';
 import { TaskDetailHeader } from '../tasks/detail/TaskDetailHeader';
 import { TaskDetailTabs } from '../tasks/detail/TaskDetailTabs';
+import { TaskStrategyTab } from '../tasks/detail/strategy/TaskStrategyTab';
 import { BacktestOverviewTab } from './detail/BacktestOverviewTab';
 
 export const BacktestTaskDetail: React.FC = () => {
@@ -68,6 +69,7 @@ export const BacktestTaskDetail: React.FC = () => {
   // Tab configuration with localStorage persistence
   const defaultTabs: TabItem[] = [
     { id: 'overview', label: t('backtest:tabs.overview'), visible: true },
+    { id: 'strategy', label: t('backtest:tabs.strategy'), visible: true },
     { id: 'trend', label: t('backtest:tabs.trend'), visible: true },
     { id: 'positions', label: t('backtest:tabs.positions'), visible: true },
     { id: 'trades', label: t('backtest:tabs.trades'), visible: true },
@@ -373,6 +375,23 @@ export const BacktestTaskDetail: React.FC = () => {
               pnlCurrency={pnlCurrency}
               onOpenConfiguration={() =>
                 navigate(`/configurations/${detailTask.config_id}`)
+              }
+            />
+          </LazyTabPanel>
+        )}
+
+        {visibleTabIds.includes('strategy') && (
+          <LazyTabPanel
+            value={activeTabIndex}
+            index={visibleTabIds.indexOf('strategy')}
+          >
+            <TaskStrategyTab
+              taskId={taskId}
+              taskType={TaskType.BACKTEST}
+              executionRunId={activeExecutionId}
+              enableRealTimeUpdates={
+                currentStatus === TaskStatus.STARTING ||
+                currentStatus === TaskStatus.RUNNING
               }
             />
           </LazyTabPanel>

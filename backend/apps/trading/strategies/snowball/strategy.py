@@ -150,6 +150,43 @@ class SnowballStrategy(Strategy):
         ss.next_entry_id += 1
         return eid
 
+    @staticmethod
+    def _group_id(root_entry_id: int | None) -> str:
+        return str(root_entry_id) if root_entry_id is not None else ""
+
+    def _annotate_event(
+        self,
+        event: Any,
+        *,
+        basket: str = "",
+        root_entry_id: int | None = None,
+        parent_entry_id: int | None = None,
+        step: int | None = None,
+        close_reason: str = "",
+        validation_status: str = "",
+        expected_interval_pips: Decimal | None = None,
+        actual_interval_pips: Decimal | None = None,
+        expected_tp_pips: Decimal | None = None,
+        actual_tp_pips: Decimal | None = None,
+        expected_exit_price: Decimal | None = None,
+        actual_exit_price: Decimal | None = None,
+    ) -> Any:
+        event.strategy_type = StrategyType.SNOWBALL.value
+        event.basket = basket
+        event.root_entry_id = root_entry_id
+        event.parent_entry_id = parent_entry_id
+        event.visual_group_id = self._group_id(root_entry_id)
+        event.step = step
+        event.close_reason = close_reason
+        event.validation_status = validation_status
+        event.expected_interval_pips = expected_interval_pips
+        event.actual_interval_pips = actual_interval_pips
+        event.expected_tp_pips = expected_tp_pips
+        event.actual_tp_pips = actual_tp_pips
+        event.expected_exit_price = expected_exit_price
+        event.actual_exit_price = actual_exit_price
+        return event
+
     def _make_open_event(
         self,
         ss: SnowballStrategyState,
@@ -163,6 +200,12 @@ class SnowballStrategy(Strategy):
         lot_k: int | None = None,
         description: str = "",
         planned_exit_price_formula: str | None = None,
+        root_entry_id: int | None = None,
+        parent_entry_id: int | None = None,
+        expected_interval_pips: Decimal | None = None,
+        actual_interval_pips: Decimal | None = None,
+        expected_tp_pips: Decimal | None = None,
+        validation_status: str = "",
     ) -> tuple[OpenPositionEvent, dict[str, Any]]:
         """Create an OpenPositionEvent and the corresponding basket entry dict."""
         eid = self._next_id(ss)
@@ -183,9 +226,25 @@ class SnowballStrategy(Strategy):
             opened_at=tick.timestamp.isoformat(),
         )
         entry_dict = entry.to_dict()
+        if root_entry_id is None:
+            root_entry_id = eid if basket == "trend" else None
         # Persist layer/retracement so close events use the same values.
         entry_dict["layer_number"] = layer
         entry_dict["retracement_count"] = ret
+        entry_dict["basket"] = basket
+        entry_dict["root_entry_id"] = root_entry_id
+        entry_dict["parent_entry_id"] = parent_entry_id
+        entry_dict["visual_group_id"] = self._group_id(root_entry_id)
+        entry_dict["expected_interval_pips"] = (
+            str(expected_interval_pips) if expected_interval_pips is not None else None
+        )
+        entry_dict["actual_interval_pips"] = (
+            str(actual_interval_pips) if actual_interval_pips is not None else None
+        )
+        entry_dict["expected_tp_pips"] = (
+            str(expected_tp_pips) if expected_tp_pips is not None else None
+        )
+        entry_dict["validation_status"] = validation_status
         event = OpenPositionEvent(
             event_type=EventType.OPEN_POSITION,
             timestamp=tick.timestamp,
@@ -200,6 +259,18 @@ class SnowballStrategy(Strategy):
             planned_exit_price_formula=planned_exit_price_formula,
             description=description,
         )
+        self._annotate_event(
+            event,
+            basket=basket,
+            root_entry_id=root_entry_id,
+            parent_entry_id=parent_entry_id,
+            step=step,
+            validation_status=validation_status,
+            expected_interval_pips=expected_interval_pips,
+            actual_interval_pips=actual_interval_pips,
+            expected_tp_pips=expected_tp_pips,
+            expected_exit_price=close_price,
+        )
         return event, entry_dict
 
     def _make_close_event(
@@ -210,6 +281,9 @@ class SnowballStrategy(Strategy):
         *,
         basket: str = "counter",
         description: str = "",
+        close_reason: str = "",
+        actual_tp_pips: Decimal | None = None,
+        validation_status: str = "",
     ) -> ClosePositionEvent:
         direction = str(entry.get("direction", "long"))
         entry_price = Decimal(str(entry.get("entry_price", "0")))
@@ -219,12 +293,13 @@ class SnowballStrategy(Strategy):
         pnl = (exit_price - entry_price) * Decimal(str(units)) * conv
         if direction == "short":
             pnl = -pnl
+        pips = abs(exit_price - entry_price) / self.pip_size
         # Use the layer/retracement stored at open time so close events
         # are consistent with the corresponding open events.
         is_trend = basket == "trend"
         layer = entry.get("layer_number", 1 if is_trend else ss.freeze_count + 1)
         ret = entry.get("retracement_count", 1 if is_trend else ss.add_count + 1)
-        return ClosePositionEvent(
+        event = ClosePositionEvent(
             event_type=EventType.CLOSE_POSITION,
             timestamp=tick.timestamp,
             layer_number=layer,
@@ -233,11 +308,48 @@ class SnowballStrategy(Strategy):
             exit_price=exit_price,
             units=units,
             pnl=pnl,
+            pips=pips,
             entry_id=int(entry.get("entry_id", 0)),
             position_id=entry.get("position_id"),
             retracement_count=ret,
             description=description,
         )
+        self._annotate_event(
+            event,
+            basket=str(entry.get("basket", basket)),
+            root_entry_id=(
+                int(entry["root_entry_id"]) if entry.get("root_entry_id") is not None else None
+            ),
+            parent_entry_id=(
+                int(entry["parent_entry_id"]) if entry.get("parent_entry_id") is not None else None
+            ),
+            step=int(entry["step"]) if entry.get("step") is not None else None,
+            close_reason=close_reason,
+            validation_status=validation_status,
+            expected_interval_pips=(
+                Decimal(str(entry["expected_interval_pips"]))
+                if entry.get("expected_interval_pips") not in (None, "")
+                else None
+            ),
+            actual_interval_pips=(
+                Decimal(str(entry["actual_interval_pips"]))
+                if entry.get("actual_interval_pips") not in (None, "")
+                else None
+            ),
+            expected_tp_pips=(
+                Decimal(str(entry["expected_tp_pips"]))
+                if entry.get("expected_tp_pips") not in (None, "")
+                else None
+            ),
+            actual_tp_pips=actual_tp_pips,
+            expected_exit_price=(
+                Decimal(str(entry["close_price"]))
+                if entry.get("close_price") not in (None, "")
+                else None
+            ),
+            actual_exit_price=exit_price,
+        )
+        return event
 
     # ------------------------------------------------------------------
     # Core tick processing
@@ -303,10 +415,13 @@ class SnowballStrategy(Strategy):
                 len(ss.counter_basket),
             )
             events.append(
-                GenericStrategyEvent(
-                    event_type=EventType.STRATEGY_STOPPED,
-                    timestamp=tick.timestamp,
-                    data={"kind": "emergency_stop", "ratio": str(ratio)},
+                self._annotate_event(
+                    GenericStrategyEvent(
+                        event_type=EventType.STRATEGY_STOPPED,
+                        timestamp=tick.timestamp,
+                        data={"kind": "emergency_stop", "ratio": str(ratio)},
+                    ),
+                    validation_status="fail",
                 )
             )
             state.strategy_state = ss.to_dict()
@@ -370,26 +485,35 @@ class SnowballStrategy(Strategy):
                 ss.counter_basket.append(hedge_entry)
                 ss.lock_hedge_ids.append(eid)
                 events.append(
-                    OpenPositionEvent(
-                        event_type=EventType.OPEN_POSITION,
-                        timestamp=tick.timestamp,
-                        direction=hedge_dir,
-                        price=price,
-                        units=hedge_units,
-                        entry_id=eid,
-                        strategy_event_type="snowball_lock_hedge",
-                        description=(
-                            f"Lock hedge ({hedge_dir.upper()}) | "
-                            f"units={hedge_units}, net={net}, "
-                            f"margin ratio={ratio:.1f}%"
+                    self._annotate_event(
+                        OpenPositionEvent(
+                            event_type=EventType.OPEN_POSITION,
+                            timestamp=tick.timestamp,
+                            direction=hedge_dir,
+                            price=price,
+                            units=hedge_units,
+                            entry_id=eid,
+                            strategy_event_type="snowball_lock_hedge",
+                            description=(
+                                f"Lock hedge ({hedge_dir.upper()}) | "
+                                f"units={hedge_units}, net={net}, "
+                                f"margin ratio={ratio:.1f}%"
+                            ),
                         ),
+                        basket="hedge",
+                        step=0,
+                        close_reason="lock_hedge_open",
+                        validation_status="not_applicable",
                     )
                 )
             events.append(
-                GenericStrategyEvent(
-                    event_type=EventType.STATUS_CHANGED,
-                    timestamp=tick.timestamp,
-                    data={"kind": "snowball_locked", "ratio": str(ratio)},
+                self._annotate_event(
+                    GenericStrategyEvent(
+                        event_type=EventType.STATUS_CHANGED,
+                        timestamp=tick.timestamp,
+                        data={"kind": "snowball_locked", "ratio": str(ratio)},
+                    ),
+                    close_reason="lock_entered",
                 )
             )
             state.strategy_state = ss.to_dict()
@@ -428,6 +552,8 @@ class SnowballStrategy(Strategy):
                                             f"Lock hedge unwound | "
                                             f"margin ratio={ratio:.1f}% recovered"
                                         ),
+                                        close_reason="lock_hedge_neutralize",
+                                        validation_status="not_applicable",
                                     )
                                 )
                                 basket.remove(e)
@@ -438,10 +564,13 @@ class SnowballStrategy(Strategy):
                     ProtectionLevel.SHRINK if ratio >= cfg.m_th else ProtectionLevel.NORMAL
                 )
                 events.append(
-                    GenericStrategyEvent(
-                        event_type=EventType.STATUS_CHANGED,
-                        timestamp=tick.timestamp,
-                        data={"kind": "snowball_unlocked", "ratio": str(ratio)},
+                    self._annotate_event(
+                        GenericStrategyEvent(
+                            event_type=EventType.STATUS_CHANGED,
+                            timestamp=tick.timestamp,
+                            data={"kind": "snowball_unlocked", "ratio": str(ratio)},
+                        ),
+                        close_reason="lock_released",
                     )
                 )
             state.strategy_state = ss.to_dict()
@@ -459,10 +588,13 @@ class SnowballStrategy(Strategy):
                     len(ss.counter_basket),
                 )
                 events.append(
-                    GenericStrategyEvent(
-                        event_type=EventType.STATUS_CHANGED,
-                        timestamp=tick.timestamp,
-                        data={"kind": "snowball_shrink", "ratio": str(ratio)},
+                    self._annotate_event(
+                        GenericStrategyEvent(
+                            event_type=EventType.STATUS_CHANGED,
+                            timestamp=tick.timestamp,
+                            data={"kind": "snowball_shrink", "ratio": str(ratio)},
+                        ),
+                        close_reason="shrink_entered",
                     )
                 )
             # Close largest-loss entry from counter basket
@@ -495,6 +627,8 @@ class SnowballStrategy(Strategy):
                             f"L{worst_layer}/R{worst_ret}, "
                             f"loss={worst_loss:.1f} pips, margin ratio={ratio:.1f}%"
                         ),
+                        close_reason="shrink",
+                        validation_status="warn",
                     )
                 )
                 ss.counter_basket = [
@@ -604,6 +738,8 @@ class SnowballStrategy(Strategy):
                 f"TP={long_close:.5f} (+{cfg.m_pips} pips)"
             ),
             planned_exit_price_formula=(f"{long_price} + {cfg.m_pips} * {self.pip_size}"),
+            expected_tp_pips=cfg.m_pips,
+            validation_status="pass",
         )
         ss.trend_basket.append(long_entry)
         events.append(long_evt)
@@ -625,6 +761,8 @@ class SnowballStrategy(Strategy):
                     f"TP={short_close:.5f} (-{cfg.m_pips} pips)"
                 ),
                 planned_exit_price_formula=(f"{short_price} - {cfg.m_pips} * {self.pip_size}"),
+                expected_tp_pips=cfg.m_pips,
+                validation_status="pass",
             )
             ss.trend_basket.append(short_entry)
             events.append(short_evt)
@@ -676,6 +814,9 @@ class SnowballStrategy(Strategy):
                         f"entry={ep:.5f}, exit={exit_price:.5f}, "
                         f"+{pips_gained:.1f} pips"
                     ),
+                    close_reason="trend_tp",
+                    actual_tp_pips=pips_gained,
+                    validation_status="pass",
                 )
             )
             ss.trend_basket = [
@@ -714,6 +855,8 @@ class SnowballStrategy(Strategy):
                 planned_exit_price_formula=(
                     f"{new_price} {'+ ' if direction == 'long' else '- '}{m_dyn} * {self.pip_size}"
                 ),
+                expected_tp_pips=m_dyn,
+                validation_status="pass",
             )
             ss.trend_basket.append(new_entry)
             events.append(evt)
@@ -777,6 +920,9 @@ class SnowballStrategy(Strategy):
                         f"L{layer}/R{ret}, entry={entry_price:.5f}, "
                         f"exit={exit_price:.5f}, +{pips_gained:.1f} pips"
                     ),
+                    close_reason="counter_tp",
+                    actual_tp_pips=pips_gained,
+                    validation_status="pass",
                 )
             )
             ss.counter_basket = [
@@ -926,6 +1072,12 @@ class SnowballStrategy(Strategy):
                     f"TP={close_price:.5f}"
                 ),
                 planned_exit_price_formula=exit_formula,
+                root_entry_id=int(losing_trend.get("entry_id", 0)),
+                parent_entry_id=int(losing_trend.get("entry_id", 0)),
+                expected_interval_pips=interval,
+                actual_interval_pips=adverse,
+                expected_tp_pips=tp,
+                validation_status="pass",
             )
             ss.counter_basket.append(entry_dict)
             ss.add_count = 1
@@ -1048,6 +1200,16 @@ class SnowballStrategy(Strategy):
                 f"TP={close_price:.5f}"
             ),
             planned_exit_price_formula=exit_formula,
+            root_entry_id=(
+                int(latest["root_entry_id"])
+                if latest.get("root_entry_id") is not None
+                else int(latest.get("entry_id", 0))
+            ),
+            parent_entry_id=int(latest.get("entry_id", 0)),
+            expected_interval_pips=interval,
+            actual_interval_pips=adverse,
+            expected_tp_pips=tp,
+            validation_status="pass",
         )
         ss.counter_basket.append(entry_dict)
         ss.add_count += 1
@@ -1121,6 +1283,8 @@ class SnowballStrategy(Strategy):
                         f"L{entry_layer}/R{entry_ret}, "
                         f"LONG={long_units} vs SHORT={short_units} (diff={imbalance})"
                     ),
+                    close_reason="rebalance",
+                    validation_status="warn",
                 )
             )
             ss.counter_basket = [

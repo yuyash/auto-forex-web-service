@@ -53,6 +53,21 @@ class StrategyEvent(ABC):
 
     event_type: EventType
     timestamp: datetime | None = None
+    strategy_type: str = ""
+    visual_group_id: str = ""
+    root_entry_id: int | None = None
+    parent_entry_id: int | None = None
+    basket: str = ""
+    step: int | None = None
+    close_reason: str = ""
+    validation_status: str = ""
+    expected_interval_pips: Decimal | None = None
+    actual_interval_pips: Decimal | None = None
+    expected_tp_pips: Decimal | None = None
+    actual_tp_pips: Decimal | None = None
+    expected_exit_price: Decimal | None = None
+    actual_exit_price: Decimal | None = None
+    validation_tolerance_pips: Decimal | None = None
 
     @property
     def category(self) -> str:
@@ -91,6 +106,36 @@ class StrategyEvent(ABC):
         result = {"event_type": str(self.event_type.value)}
         if self.timestamp:
             result["timestamp"] = self.timestamp.isoformat()
+        if self.strategy_type:
+            result["strategy_type"] = self.strategy_type
+        if self.visual_group_id:
+            result["visual_group_id"] = self.visual_group_id
+        if self.root_entry_id is not None:
+            result["root_entry_id"] = self.root_entry_id
+        if self.parent_entry_id is not None:
+            result["parent_entry_id"] = self.parent_entry_id
+        if self.basket:
+            result["basket"] = self.basket
+        if self.step is not None:
+            result["step"] = self.step
+        if self.close_reason:
+            result["close_reason"] = self.close_reason
+        if self.validation_status:
+            result["validation_status"] = self.validation_status
+        if self.expected_interval_pips is not None:
+            result["expected_interval_pips"] = str(self.expected_interval_pips)
+        if self.actual_interval_pips is not None:
+            result["actual_interval_pips"] = str(self.actual_interval_pips)
+        if self.expected_tp_pips is not None:
+            result["expected_tp_pips"] = str(self.expected_tp_pips)
+        if self.actual_tp_pips is not None:
+            result["actual_tp_pips"] = str(self.actual_tp_pips)
+        if self.expected_exit_price is not None:
+            result["expected_exit_price"] = str(self.expected_exit_price)
+        if self.actual_exit_price is not None:
+            result["actual_exit_price"] = str(self.actual_exit_price)
+        if self.validation_tolerance_pips is not None:
+            result["validation_tolerance_pips"] = str(self.validation_tolerance_pips)
         return result
 
     @classmethod

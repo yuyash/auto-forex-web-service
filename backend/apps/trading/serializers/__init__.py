@@ -20,6 +20,9 @@ from apps.trading.serializers.strategy import (
     StrategyConfigSerializer,
     StrategyListSerializer,
 )
+from apps.trading.serializers.strategy_visualization import (
+    StrategyVisualizationSerializer,
+)
 from apps.trading.serializers.summary import TaskSummarySerializer
 from apps.trading.serializers.task import (
     BacktestTaskSerializer as BacktestTaskSerializerNew,
@@ -53,6 +56,7 @@ __all__ = [
     "StrategyConfigListSerializer",
     "StrategyConfigSerializer",
     "StrategyListSerializer",
+    "StrategyVisualizationSerializer",
     # Task (new unified serializers)
     "BacktestTaskSerializerNew",
     "TaskLogSerializer",

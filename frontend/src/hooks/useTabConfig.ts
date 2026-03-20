@@ -60,8 +60,33 @@ export function useTabConfig(storageKey: string, defaultTabs: TabItem[]) {
   const [tabs, setTabs] = useState<TabItem[]>(() =>
     loadConfig(storageKey, defaultTabs)
   );
+  const mergedTabs = useMemo(() => {
+    const defaultMap = new Map(defaultTabs.map((tab) => [tab.id, tab]));
+    const nextTabs: TabItem[] = [];
 
-  const visibleTabs = useMemo(() => tabs.filter((t) => t.visible), [tabs]);
+    for (const tab of tabs) {
+      const defaultTab = defaultMap.get(tab.id);
+      if (defaultTab) {
+        nextTabs.push({
+          ...defaultTab,
+          visible: tab.visible,
+        });
+      }
+    }
+
+    for (const defaultTab of defaultTabs) {
+      if (!tabs.some((tab) => tab.id === defaultTab.id)) {
+        nextTabs.push(defaultTab);
+      }
+    }
+
+    return nextTabs;
+  }, [defaultTabs, tabs]);
+
+  const visibleTabs = useMemo(
+    () => mergedTabs.filter((t) => t.visible),
+    [mergedTabs]
+  );
 
   const updateTabs = useCallback(
     (newTabs: TabItem[]) => {
@@ -76,5 +101,5 @@ export function useTabConfig(storageKey: string, defaultTabs: TabItem[]) {
     localStorage.removeItem(`${STORAGE_PREFIX}${storageKey}`);
   }, [storageKey, defaultTabs]);
 
-  return { tabs, visibleTabs, updateTabs, resetToDefaults };
+  return { tabs: mergedTabs, visibleTabs, updateTabs, resetToDefaults };
 }

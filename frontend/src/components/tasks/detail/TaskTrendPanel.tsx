@@ -102,6 +102,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     loadingOlder: loadingOlderCandles,
     loadingNewer: loadingNewerCandles,
     error,
+    errorCode,
     dataRanges: candleDataRanges,
     ensureRange: ensureCandleRange,
     refreshTail: refreshTailCandles,
@@ -118,6 +119,14 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     autoRefresh: false,
     refreshIntervalSeconds: Math.max(10, Math.floor(pollingIntervalMs / 1000)),
   });
+  const candleErrorMessage = useMemo(() => {
+    if (errorCode === 'NO_OANDA_ACCOUNT') {
+      return t('trend.noOandaAccount');
+    }
+    return error;
+  }, [error, errorCode, t]);
+  const candleErrorSeverity: 'info' | 'error' =
+    errorCode === 'NO_OANDA_ACCOUNT' ? 'info' : 'error';
   const startTimeSec = useMemo(() => isoToSec(startTime), [startTime]);
   const endTimeSec = useMemo(() => isoToSec(endTime), [endTime]);
   const currentTickSec = useMemo(
@@ -976,10 +985,10 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     );
   }
 
-  if (error && candles.length === 0) {
+  if (candleErrorMessage && candles.length === 0) {
     return (
       <Box ref={panelRootRef} sx={{ p: 3 }}>
-        <Alert severity="error">{error}</Alert>
+        <Alert severity={candleErrorSeverity}>{candleErrorMessage}</Alert>
       </Box>
     );
   }
@@ -994,9 +1003,12 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         boxSizing: 'border-box',
       }}
     >
-      {error && (
-        <Alert severity="warning" sx={{ mb: 1 }}>
-          {error}
+      {candleErrorMessage && (
+        <Alert
+          severity={errorCode === 'NO_OANDA_ACCOUNT' ? 'info' : 'warning'}
+          sx={{ mb: 1 }}
+        >
+          {candleErrorMessage}
         </Alert>
       )}
       <TaskTrendToolbar
