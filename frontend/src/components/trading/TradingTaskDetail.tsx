@@ -45,6 +45,7 @@ import { useTabConfig, type TabItem } from '../../hooks/useTabConfig';
 import { useOptimisticTaskStatus } from '../../hooks/useOptimisticTaskStatus';
 import { TaskDetailHeader } from '../tasks/detail/TaskDetailHeader';
 import { TaskDetailTabs } from '../tasks/detail/TaskDetailTabs';
+import { TaskStrategyTab } from '../tasks/detail/strategy/TaskStrategyTab';
 import { TradingOverviewTab } from './detail/TradingOverviewTab';
 
 export const TradingTaskDetail: React.FC = () => {
@@ -63,6 +64,7 @@ export const TradingTaskDetail: React.FC = () => {
 
   const defaultTabs: TabItem[] = [
     { id: 'overview', label: t('trading:tabs.overview'), visible: true },
+    { id: 'strategy', label: t('trading:tabs.strategy'), visible: true },
     { id: 'trend', label: t('trading:tabs.trend'), visible: true },
     { id: 'positions', label: t('trading:tabs.positions'), visible: true },
     { id: 'trades', label: t('trading:tabs.trades'), visible: true },
@@ -331,6 +333,23 @@ export const TradingTaskDetail: React.FC = () => {
               pnlCurrency={pnlCurrency}
               onOpenConfiguration={() =>
                 navigate(`/configurations/${detailTask.config_id}`)
+              }
+            />
+          </LazyTabPanel>
+        )}
+
+        {visibleTabIds.includes('strategy') && (
+          <LazyTabPanel
+            value={activeTabIndex}
+            index={visibleTabIds.indexOf('strategy')}
+          >
+            <TaskStrategyTab
+              taskId={taskId}
+              taskType={TaskType.TRADING}
+              executionRunId={activeExecutionId}
+              enableRealTimeUpdates={
+                currentStatus === TaskStatus.STARTING ||
+                currentStatus === TaskStatus.RUNNING
               }
             />
           </LazyTabPanel>

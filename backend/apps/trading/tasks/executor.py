@@ -268,6 +268,7 @@ class TaskExecutor:
 
         trading_records: List[TradingEvent] = []
         strategy_records: list[StrategyEventRecord] = []
+        strategy_type = str(getattr(self.task.config, "strategy_type", "") or "")
 
         for event in events:
             event_type = str(getattr(getattr(event, "event_type", None), "value", event.event_type))
@@ -280,26 +281,24 @@ class TaskExecutor:
                     details = event.to_dict()
                     details["strategy_event_type"] = event_type
                     details["event_type"] = execution_event_type
-                    trading_records.append(
-                        TradingEvent(
-                            event_type=execution_event_type,
-                            severity="info",
-                            description=str(details),
-                            user=self.event_context.user,
-                            account=self.event_context.account,
-                            instrument=self.event_context.instrument,
-                            task_type=self.event_context.task_type.value,
-                            task_id=self.event_context.task_id,
-                            execution_id=self.task.execution_id,
-                            details=details,
-                        )
+                    trading_record = TradingEvent.from_event(
+                        event=event,
+                        context=self.event_context,
+                        execution_id=self.task.execution_id,
+                        strategy_type=strategy_type,
                     )
+                    trading_record.event_type = execution_event_type
+                    trading_record.severity = "info"
+                    trading_record.description = str(details)
+                    trading_record.details = details
+                    trading_records.append(trading_record)
                 else:
                     trading_records.append(
                         TradingEvent.from_event(
                             event=event,
                             context=self.event_context,
                             execution_id=self.task.execution_id,
+                            strategy_type=strategy_type,
                         )
                     )
 
@@ -309,6 +308,7 @@ class TaskExecutor:
                         event=event,
                         context=self.event_context,
                         execution_id=self.task.execution_id,
+                        strategy_type=strategy_type,
                     )
                 )
             elif event_scope == EventScope.STRATEGY.value:
@@ -317,6 +317,7 @@ class TaskExecutor:
                         event=event,
                         context=self.event_context,
                         execution_id=self.task.execution_id,
+                        strategy_type=strategy_type,
                     )
                 )
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api } from '../api/apiClient';
+import { api, getApiErrorCode, getApiErrorMessage } from '../api/apiClient';
 import type { Granularity } from '../types/chart';
 import {
   clampRange,
@@ -39,6 +39,7 @@ interface UseWindowedCandlesResult {
   loadingOlder: boolean;
   loadingNewer: boolean;
   error: string | null;
+  errorCode: string | null;
   loadedRanges: TimeRange[];
   dataRanges: TimeRange[];
   ensureRange: (range: TimeRange) => Promise<void>;
@@ -191,6 +192,7 @@ export function useWindowedCandles({
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [loadingNewer, setLoadingNewer] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [loadedRanges, setLoadedRanges] = useState<TimeRange[]>([]);
   const [dataRanges, setDataRanges] = useState<TimeRange[]>([]);
 
@@ -237,6 +239,13 @@ export function useWindowedCandles({
     },
     [accountId, granularity, instrument]
   );
+
+  const setRequestError = useCallback((err: unknown, fallback: string) => {
+    setErrorCode(getApiErrorCode(err));
+    setError(
+      getApiErrorMessage(err) ?? (err instanceof Error ? err.message : fallback)
+    );
+  }, []);
 
   const mergeLoadedRange = useCallback((range: TimeRange) => {
     setLoadedRanges((prev) => mergeRanges([...prev, normalizeRange(range)]));
@@ -330,6 +339,7 @@ export function useWindowedCandles({
       if (missing.length === 0) return;
 
       setError(null);
+      setErrorCode(null);
       const fetched: WindowedCandle[] = [];
 
       for (const range of missing) {
@@ -344,9 +354,7 @@ export function useWindowedCandles({
           mergeLoadedRange(result.handledRange);
           mergeDataRanges(result.dataRanges);
         } catch (err) {
-          setError(
-            err instanceof Error ? err.message : 'Failed to load candles'
-          );
+          setRequestError(err, 'Failed to load candles');
         } finally {
           inFlightKeysRef.current.delete(key);
         }
@@ -362,6 +370,7 @@ export function useWindowedCandles({
       mergeDataRanges,
       mergeLoadedRange,
       requestRangeOrBridgeGap,
+      setRequestError,
     ]
   );
 
@@ -369,6 +378,7 @@ export function useWindowedCandles({
     async (count = initialCount) => {
       setIsInitialLoading(true);
       setError(null);
+      setErrorCode(null);
       try {
         const nextCandles = await requestCandles({ count });
         setCandles(nextCandles);
@@ -385,13 +395,13 @@ export function useWindowedCandles({
         }
         return nextCandles.length;
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load candles');
+        setRequestError(err, 'Failed to load candles');
         return 0;
       } finally {
         setIsInitialLoading(false);
       }
     },
-    [initialCount, requestCandles]
+    [initialCount, requestCandles, setRequestError]
   );
 
   const fetchOlder = useCallback(async () => {
@@ -399,6 +409,7 @@ export function useWindowedCandles({
     if (!first) return 0;
     setLoadingOlder(true);
     setError(null);
+    setErrorCode(null);
     try {
       const incoming = await requestCandles({
         count: edgeCount,
@@ -415,20 +426,25 @@ export function useWindowedCandles({
       }
       return incoming.length;
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to load older candles'
-      );
+      setRequestError(err, 'Failed to load older candles');
       return 0;
     } finally {
       setLoadingOlder(false);
     }
-  }, [edgeCount, mergeDataRanges, mergeLoadedRange, requestCandles]);
+  }, [
+    edgeCount,
+    mergeDataRanges,
+    mergeLoadedRange,
+    requestCandles,
+    setRequestError,
+  ]);
 
   const fetchNewer = useCallback(async () => {
     const last = candlesRef.current[candlesRef.current.length - 1];
     if (!last) return 0;
     setLoadingNewer(true);
     setError(null);
+    setErrorCode(null);
     try {
       const incoming = await requestCandles({
         count: edgeCount,
@@ -445,14 +461,18 @@ export function useWindowedCandles({
       }
       return incoming.length;
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to load newer candles'
-      );
+      setRequestError(err, 'Failed to load newer candles');
       return 0;
     } finally {
       setLoadingNewer(false);
     }
-  }, [edgeCount, mergeDataRanges, mergeLoadedRange, requestCandles]);
+  }, [
+    edgeCount,
+    mergeDataRanges,
+    mergeLoadedRange,
+    requestCandles,
+    setRequestError,
+  ]);
 
   const refreshTail = useCallback(async () => {
     const current = candlesRef.current;
@@ -460,6 +480,7 @@ export function useWindowedCandles({
     const from = current[Math.max(0, current.length - edgeCount)].time;
     const to = current[current.length - 1].time;
     setIsRefreshing(true);
+    setErrorCode(null);
     try {
       const incoming = await requestCandles({
         from_time: new Date(from * 1000).toISOString(),
@@ -477,14 +498,18 @@ export function useWindowedCandles({
       }
       return incoming.length;
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to refresh candles'
-      );
+      setRequestError(err, 'Failed to refresh candles');
       return 0;
     } finally {
       setIsRefreshing(false);
     }
-  }, [edgeCount, mergeDataRanges, mergeLoadedRange, requestCandles]);
+  }, [
+    edgeCount,
+    mergeDataRanges,
+    mergeLoadedRange,
+    requestCandles,
+    setRequestError,
+  ]);
 
   useEffect(() => {
     candlesRef.current = [];
@@ -493,6 +518,8 @@ export function useWindowedCandles({
     setCandles([]);
     setLoadedRanges([]);
     setDataRanges([]);
+    setError(null);
+    setErrorCode(null);
     if (initialFocusTimeSec != null) {
       const granularitySeconds = GRANULARITY_SECONDS[String(granularity)] ?? 60;
       const leftCount = Math.floor(Math.max(1, initialCount) * 0.75);
@@ -516,9 +543,7 @@ export function useWindowedCandles({
           setLoadedRanges(mergeRanges([result.handledRange]));
           setDataRanges(mergeRanges(result.dataRanges));
         } catch (err) {
-          setError(
-            err instanceof Error ? err.message : 'Failed to load candles'
-          );
+          setRequestError(err, 'Failed to load candles');
         } finally {
           setIsInitialLoading(false);
         }
@@ -551,9 +576,7 @@ export function useWindowedCandles({
             setLoadedRanges(mergeRanges(initialLoadedRanges));
             setDataRanges(mergeRanges(result.dataRanges));
           } catch (err) {
-            setError(
-              err instanceof Error ? err.message : 'Failed to load candles'
-            );
+            setRequestError(err, 'Failed to load candles');
           } finally {
             setIsInitialLoading(false);
           }
@@ -572,6 +595,7 @@ export function useWindowedCandles({
     granularity,
     replaceWithCountWindow,
     requestRangeOrBridgeGap,
+    setRequestError,
     startTime,
   ]);
 
@@ -590,6 +614,7 @@ export function useWindowedCandles({
     loadingOlder,
     loadingNewer,
     error,
+    errorCode,
     loadedRanges,
     dataRanges,
     ensureRange,

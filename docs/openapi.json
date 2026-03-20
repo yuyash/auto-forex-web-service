@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.13.13",
+        "version": "1.13.14",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -2769,32 +2769,8 @@
         "/api/trading/tasks/backtest/{id}/strategy-events/": {
             "get": {
                 "operationId": "trading_tasks_backtest_strategy_events_retrieve",
-                "description": "Retrieve paginated strategy-internal events.",
+                "description": "Retrieve strategy visualization data.",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "created_from",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter strategy events created at or after this RFC3339 timestamp"
-                    },
-                    {
-                        "in": "query",
-                        "name": "created_to",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter strategy events created at or before this RFC3339 timestamp"
-                    },
-                    {
-                        "in": "query",
-                        "name": "event_type",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Event type filter"
-                    },
                     {
                         "in": "query",
                         "name": "execution_id",
@@ -2829,19 +2805,11 @@
                     },
                     {
                         "in": "query",
-                        "name": "severity",
+                        "name": "root_entry_id",
                         "schema": {
-                            "type": "string"
+                            "type": "integer"
                         },
-                        "description": "Severity filter"
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "RFC3339 timestamp for incremental fetch"
+                        "description": "Optional group filter"
                     }
                 ],
                 "tags": [
@@ -2857,7 +2825,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TaskStrategyEventPaginatedResponse"
+                                    "$ref": "#/components/schemas/TaskStrategyVisualizationResponse"
                                 }
                             }
                         },
@@ -4067,32 +4035,8 @@
         "/api/trading/tasks/trading/{id}/strategy-events/": {
             "get": {
                 "operationId": "trading_tasks_trading_strategy_events_retrieve",
-                "description": "Retrieve paginated strategy-internal events.",
+                "description": "Retrieve strategy visualization data.",
                 "parameters": [
-                    {
-                        "in": "query",
-                        "name": "created_from",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter strategy events created at or after this RFC3339 timestamp"
-                    },
-                    {
-                        "in": "query",
-                        "name": "created_to",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Filter strategy events created at or before this RFC3339 timestamp"
-                    },
-                    {
-                        "in": "query",
-                        "name": "event_type",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Event type filter"
-                    },
                     {
                         "in": "query",
                         "name": "execution_id",
@@ -4127,19 +4071,11 @@
                     },
                     {
                         "in": "query",
-                        "name": "severity",
+                        "name": "root_entry_id",
                         "schema": {
-                            "type": "string"
+                            "type": "integer"
                         },
-                        "description": "Severity filter"
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "RFC3339 timestamp for incremental fetch"
+                        "description": "Optional group filter"
                     }
                 ],
                 "tags": [
@@ -4155,7 +4091,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TaskStrategyEventPaginatedResponse"
+                                    "$ref": "#/components/schemas/TaskStrategyVisualizationResponse"
                                 }
                             }
                         },
@@ -7115,79 +7051,6 @@
                     "strategy_id"
                 ]
             },
-            "StrategyEvent": {
-                "type": "object",
-                "description": "Serializer for strategy-internal events.",
-                "properties": {
-                    "id": {
-                        "type": "integer",
-                        "readOnly": true
-                    },
-                    "event_type": {
-                        "type": "string",
-                        "maxLength": 64
-                    },
-                    "event_type_display": {
-                        "type": "string",
-                        "readOnly": true,
-                        "description": "Human-readable display name for the event type."
-                    },
-                    "event_scope": {
-                        "type": "string",
-                        "readOnly": true,
-                        "default": "strategy"
-                    },
-                    "severity": {
-                        "type": "string",
-                        "maxLength": 16
-                    },
-                    "description": {
-                        "type": "string"
-                    },
-                    "user": {
-                        "type": "integer",
-                        "nullable": true
-                    },
-                    "account": {
-                        "type": "integer",
-                        "nullable": true
-                    },
-                    "instrument": {
-                        "type": "string",
-                        "nullable": true,
-                        "maxLength": 32
-                    },
-                    "task_type": {
-                        "type": "string",
-                        "maxLength": 32
-                    },
-                    "task_id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "nullable": true
-                    },
-                    "execution_id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "nullable": true,
-                        "description": "Execution run UUID (shared with Celery task_id)"
-                    },
-                    "details": {},
-                    "created_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "readOnly": true
-                    }
-                },
-                "required": [
-                    "created_at",
-                    "description",
-                    "event_scope",
-                    "event_type",
-                    "event_type_display",
-                    "id"
-                ]
-            },
             "StrategyList": {
                 "type": "object",
                 "description": "Serializer for listing available strategies.",
@@ -7634,32 +7497,37 @@
                     "results"
                 ]
             },
-            "TaskStrategyEventPaginatedResponse": {
+            "TaskStrategyVisualizationResponse": {
                 "type": "object",
                 "properties": {
-                    "count": {
-                        "type": "integer"
+                    "strategy_type": {
+                        "type": "string"
                     },
-                    "next": {
+                    "supported": {
+                        "type": "boolean"
+                    },
+                    "execution_id": {
                         "type": "string",
                         "nullable": true
                     },
-                    "previous": {
+                    "generated_at": {
                         "type": "string",
+                        "format": "date-time",
                         "nullable": true
                     },
-                    "results": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/StrategyEvent"
-                        }
+                    "summary": {},
+                    "view_model": {},
+                    "message": {
+                        "type": "string"
                     }
                 },
                 "required": [
-                    "count",
-                    "next",
-                    "previous",
-                    "results"
+                    "execution_id",
+                    "generated_at",
+                    "strategy_type",
+                    "summary",
+                    "supported",
+                    "view_model"
                 ]
             },
             "TaskSummary": {

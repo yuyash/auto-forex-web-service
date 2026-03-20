@@ -77,6 +77,7 @@ services:
       # Secrets only - all other config comes from environment variables
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key required}
       # IMPORTANT: include your public domain(s) here to avoid DisallowedHost.
       # Override via .env if needed.
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-auto-forex.com,www.auto-forex.com}
@@ -117,6 +118,7 @@ services:
       # Secrets only - all other config comes from environment variables
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key required}
     volumes:
       # See note in backend service: avoid shadowing the Django `config` package.
       - ./logs:/app/logs
@@ -145,6 +147,7 @@ services:
       # Secrets only - all other config comes from environment variables
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key required}
     volumes:
       # See note in backend service: avoid shadowing the Django `config` package.
       - ./logs:/app/logs

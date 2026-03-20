@@ -26,6 +26,7 @@ export * from './configuration';
 export * from './backtestTask';
 export * from './tradingTask';
 export * from './execution';
+export * from './strategyVisualization';
 // Export StrategyEvent explicitly for clarity
 export type { StrategyEvent } from './execution';
 

@@ -21,7 +21,6 @@ from apps.trading.models.logs import TaskLog
 from apps.trading.serializers.events import (
     OrderSerializer,
     PositionSerializer,
-    StrategyEventSerializer,
     TradeSerializer,
     TradingEventSerializer,
 )
@@ -487,70 +486,45 @@ class TaskSubResourceMixin:
     @extend_schema(
         tags=["Trading"],
         parameters=[
-            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
-            OpenApiParameter("event_type", str, description="Event type filter"),
-            OpenApiParameter("severity", str, description="Severity filter"),
-            OpenApiParameter(
-                "created_from",
-                str,
-                description="Filter strategy events created at or after this RFC3339 timestamp",
-            ),
-            OpenApiParameter(
-                "created_to",
-                str,
-                description="Filter strategy events created at or before this RFC3339 timestamp",
-            ),
             OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
+            OpenApiParameter("root_entry_id", int, description="Optional group filter"),
             OpenApiParameter("page", int),
             OpenApiParameter("page_size", int),
         ],
         responses={
             200: inline_serializer(
-                "TaskStrategyEventPaginatedResponse",
+                "TaskStrategyVisualizationResponse",
                 fields={
-                    "count": serializers.IntegerField(),
-                    "next": serializers.CharField(allow_null=True),
-                    "previous": serializers.CharField(allow_null=True),
-                    "results": StrategyEventSerializer(many=True),
+                    "strategy_type": serializers.CharField(),
+                    "supported": serializers.BooleanField(),
+                    "execution_id": serializers.CharField(allow_null=True),
+                    "generated_at": serializers.DateTimeField(allow_null=True),
+                    "summary": serializers.JSONField(),
+                    "view_model": serializers.JSONField(),
+                    "message": serializers.CharField(required=False),
                 },
             )
         },
-        description="Retrieve paginated strategy-internal events.",
+        description="Retrieve strategy visualization data.",
     )
     @action(detail=True, methods=["get"], url_path="strategy-events")
     def strategy_events(self, request: Request, pk: int | None = None) -> Response:
-        from apps.trading.models import StrategyEventRecord
+        from apps.trading.services.strategy_visualization import (
+            StrategyVisualizationService,
+        )
 
         task = self.get_object()  # type: ignore[attr-defined]
         execution_id = _parse_execution_id(request)
         if execution_id is None:
             execution_id = task.execution_id
-        event_type = request.query_params.get("event_type")
-        severity = request.query_params.get("severity")
-        queryset = StrategyEventRecord.objects.filter(
+        root_entry_id = request.query_params.get("root_entry_id")
+        response = StrategyVisualizationService().build(
+            task=task,
             task_type=self.task_type_label,
-            task_id=task.pk,
             execution_id=execution_id,
-        ).order_by("-created_at")
-        if event_type:
-            queryset = queryset.filter(event_type=event_type)
-        if severity:
-            queryset = queryset.filter(severity=severity)
-
-        since = _parse_since(request)
-        if since:
-            queryset = queryset.filter(created_at__gt=since)
-        created_from = _parse_datetime_param(request, "created_from")
-        if created_from:
-            queryset = queryset.filter(created_at__gte=created_from)
-        created_to = _parse_datetime_param(request, "created_to")
-        if created_to:
-            queryset = queryset.filter(created_at__lte=created_to)
-
-        paginator = TaskSubResourcePagination()
-        page = paginator.paginate_queryset(queryset, request)
-        serializer = StrategyEventSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+            root_entry_id=int(root_entry_id) if root_entry_id else None,
+        )
+        return Response(response)
 
     @extend_schema(
         tags=["Trading"],
