@@ -23,11 +23,7 @@ import { Settings as SettingsIcon } from '@mui/icons-material';
 import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
-import {
-  useTaskEvents,
-  type TaskEvent,
-  type TaskEventSource,
-} from '../../../hooks/useTaskEvents';
+import { useTaskEvents, type TaskEvent } from '../../../hooks/useTaskEvents';
 import { TaskType } from '../../../types/common';
 import { EventDetailDialog } from './EventDetailDialog';
 import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
@@ -53,7 +49,9 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
 }) => {
   const { t } = useTranslation('common');
   const [severityFilter, setSeverityFilter] = useState<string>('');
-  const [sourceFilter, setSourceFilter] = useState<TaskEventSource>('trading');
+  const [sourceFilter, setSourceFilter] = useState<'trading' | 'task'>(
+    'trading'
+  );
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(100);
   const [isReloading, setIsReloading] = useState(false);
@@ -94,7 +92,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
     setSeverityFilter(value);
     setPage(0);
   };
-  const handleSourceChange = (value: TaskEventSource) => {
+  const handleSourceChange = (value: 'trading' | 'task') => {
     setSourceFilter(value);
     setPage(0);
   };
@@ -221,15 +219,12 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
             value={sourceFilter}
             label={t('tables.events.category')}
             onChange={(e) =>
-              handleSourceChange(e.target.value as TaskEventSource)
+              handleSourceChange(e.target.value as 'trading' | 'task')
             }
           >
             <MenuItem value="task">{t('tables.events.taskEvents')}</MenuItem>
             <MenuItem value="trading">
               {t('tables.events.tradingEvents')}
-            </MenuItem>
-            <MenuItem value="strategy">
-              {t('tables.events.strategyEvents')}
             </MenuItem>
           </Select>
         </FormControl>

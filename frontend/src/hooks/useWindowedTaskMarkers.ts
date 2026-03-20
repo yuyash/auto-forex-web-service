@@ -100,10 +100,6 @@ export function useWindowedTaskMarkers({
     loadedRanges: [],
     items: [],
   });
-  const [strategyState, setStrategyState] = useState<MarkerState<TaskEvent>>({
-    loadedRanges: [],
-    items: [],
-  });
   const [tradeState, setTradeState] = useState<
     MarkerState<WindowedTradeMarker>
   >({
@@ -112,12 +108,9 @@ export function useWindowedTaskMarkers({
   });
   const [isLoading, setIsLoading] = useState(false);
   const latestTaskCreatedAtRef = useRef<string | null>(null);
-  const latestStrategyCreatedAtRef = useRef<string | null>(null);
   const latestTradeUpdatedAtRef = useRef<string | null>(null);
   const taskLoadedRangesRef = useRef<TimeRange[]>([]);
-  const strategyLoadedRangesRef = useRef<TimeRange[]>([]);
   const tradeLoadedRangesRef = useRef<TimeRange[]>([]);
-  const strategyFullyLoadedRef = useRef(false);
   const backoffUntilRef = useRef<number>(0);
 
   const prefix = useMemo(
@@ -166,20 +159,10 @@ export function useWindowedTaskMarkers({
         buffered,
         taskLoadedRangesRef.current
       );
-      const missingStrategy = subtractLoadedRanges(
-        buffered,
-        strategyFullyLoadedRef.current
-          ? [buffered]
-          : strategyLoadedRangesRef.current
-      );
       const missingTrades = pollTrades
         ? subtractLoadedRanges(buffered, tradeLoadedRangesRef.current)
         : [];
-      if (
-        missingTask.length === 0 &&
-        missingStrategy.length === 0 &&
-        missingTrades.length === 0
-      ) {
+      if (missingTask.length === 0 && missingTrades.length === 0) {
         return;
       }
 
@@ -198,30 +181,6 @@ export function useWindowedTaskMarkers({
             loadedRanges: mergeRanges([...prev.loadedRanges, missing]),
           }));
         }
-
-        if (missingStrategy.length > 0 && !strategyFullyLoadedRef.current) {
-          const results = await fetchEventsInRange('strategy-events', {
-            page_size: '5000',
-            ...(executionRunId ? { execution_id: executionRunId } : {}),
-          });
-          strategyFullyLoadedRef.current = true;
-          setStrategyState((prev) => ({
-            items: mergeById(prev.items, results),
-            loadedRanges:
-              bounds?.from != null || bounds?.to != null
-                ? [
-                    clampRange(
-                      {
-                        from: bounds?.from ?? Number.MIN_SAFE_INTEGER,
-                        to: bounds?.to ?? Number.MAX_SAFE_INTEGER,
-                      },
-                      bounds
-                    ),
-                  ]
-                : [buffered],
-          }));
-        }
-
         for (const missing of missingTrades) {
           const results = await fetchTradesInRange({
             page_size: '5000',
@@ -251,24 +210,16 @@ export function useWindowedTaskMarkers({
   }, [taskState.loadedRanges]);
 
   useEffect(() => {
-    strategyLoadedRangesRef.current = strategyState.loadedRanges;
-  }, [strategyState.loadedRanges]);
-
-  useEffect(() => {
     tradeLoadedRangesRef.current = tradeState.loadedRanges;
   }, [tradeState.loadedRanges]);
 
   useEffect(() => {
     setTaskState({ loadedRanges: [], items: [] });
-    setStrategyState({ loadedRanges: [], items: [] });
     setTradeState({ loadedRanges: [], items: [] });
     latestTaskCreatedAtRef.current = null;
-    latestStrategyCreatedAtRef.current = null;
     latestTradeUpdatedAtRef.current = null;
     taskLoadedRangesRef.current = [];
-    strategyLoadedRangesRef.current = [];
     tradeLoadedRangesRef.current = [];
-    strategyFullyLoadedRef.current = false;
   }, [executionRunId, taskId, taskType]);
 
   useEffect(() => {
@@ -281,7 +232,7 @@ export function useWindowedTaskMarkers({
         ? { execution_id: executionRunId }
         : {};
       try {
-        const [taskItems, strategyItems, tradeItems] = await Promise.all([
+        const [taskItems, tradeItems] = await Promise.all([
           fetchAllPages<
             { next?: string | null; results?: TaskEvent[] },
             TaskEvent
@@ -293,20 +244,6 @@ export function useWindowedTaskMarkers({
               page_size: '5000',
               ...(latestTaskCreatedAtRef.current
                 ? { since: latestTaskCreatedAtRef.current }
-                : {}),
-            },
-            headers
-          ),
-          fetchAllPages<
-            { next?: string | null; results?: TaskEvent[] },
-            TaskEvent
-          >(
-            `${prefix}/strategy-events/`,
-            {
-              ...commonParams,
-              page_size: '5000',
-              ...(latestStrategyCreatedAtRef.current
-                ? { since: latestStrategyCreatedAtRef.current }
                 : {}),
             },
             headers
@@ -338,19 +275,6 @@ export function useWindowedTaskMarkers({
           setTaskState((prev) => ({
             ...prev,
             items: mergeById(prev.items, taskItems),
-          }));
-        }
-        if (strategyItems.length > 0) {
-          latestStrategyCreatedAtRef.current = strategyItems.reduce<
-            string | null
-          >(
-            (latest, item) =>
-              !latest || item.created_at > latest ? item.created_at : latest,
-            latestStrategyCreatedAtRef.current
-          );
-          setStrategyState((prev) => ({
-            ...prev,
-            items: mergeById(prev.items, strategyItems),
           }));
         }
         if (tradeItems.length > 0) {
@@ -386,21 +310,9 @@ export function useWindowedTaskMarkers({
     }
   }, [taskState.items]);
 
-  useEffect(() => {
-    if (strategyState.items.length > 0) {
-      latestStrategyCreatedAtRef.current = strategyState.items.reduce<
-        string | null
-      >(
-        (latest, item) =>
-          !latest || item.created_at > latest ? item.created_at : latest,
-        latestStrategyCreatedAtRef.current
-      );
-    }
-  }, [strategyState.items]);
-
   return {
     taskEvents: taskState.items,
-    strategyEvents: strategyState.items,
+    strategyEvents: [],
     trades: tradeState.items,
     isLoading,
     ensureRange,

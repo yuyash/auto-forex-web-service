@@ -643,6 +643,7 @@ export function useTaskTrendChart({
   }, [
     AUTO_FOLLOW_CANDLES,
     autoFollow,
+    chartInstance,
     currentTick?.price,
     currentTick?.timestamp,
     enableRealTimeUpdates,

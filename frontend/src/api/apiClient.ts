@@ -24,6 +24,32 @@ export class ApiError extends Error {
   }
 }
 
+type ApiErrorBody = {
+  error?: unknown;
+  error_code?: unknown;
+};
+
+export function getApiErrorBody(error: unknown): ApiErrorBody | null {
+  if (
+    !(error instanceof ApiError) ||
+    !error.body ||
+    typeof error.body !== 'object'
+  ) {
+    return null;
+  }
+  return error.body as ApiErrorBody;
+}
+
+export function getApiErrorCode(error: unknown): string | null {
+  const body = getApiErrorBody(error);
+  return typeof body?.error_code === 'string' ? body.error_code : null;
+}
+
+export function getApiErrorMessage(error: unknown): string | null {
+  const body = getApiErrorBody(error);
+  return typeof body?.error === 'string' ? body.error : null;
+}
+
 function buildUrl(path: string): string {
   return `${apiConfig.BASE}${path}`;
 }
