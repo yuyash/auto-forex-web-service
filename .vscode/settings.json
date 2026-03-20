@@ -136,22 +136,18 @@
     "wc *",
     "which *"
   ],
-  "ruff.configuration": "${workspaceFolder}/backend/pyproject.toml",
-  "ruff.interpreter": [
-    "${workspaceFolder}/backend/.venv/bin/python"
-  ],
+  "ruff.configuration": "backend/pyproject.toml",
+  "ruff.interpreter": ["backend/.venv/bin/python"],
   "python.createEnvironment.contentButton": "show",
-  "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python",
+  "python.defaultInterpreterPath": "backend/.venv/bin/python",
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
-  "python.testing.pytestPath": "${workspaceFolder}/backend/.venv/bin/pytest",
-  "python.testing.pytestArgs": [
-    "tests"
-  ],
-  "python.testing.cwd": "${workspaceFolder}/backend",
+  "python.testing.pytestPath": "backend/.venv/bin/pytest",
+  "python.testing.pytestArgs": ["tests"],
+  "python.testing.cwd": "backend",
   "python.terminal.activateEnvironment": false,
   "python.terminal.activateEnvInCurrentTerminal": false,
-  "typescript.autoClosingTags": false,
+  "js/ts.autoClosingTags.enabled": false,
   "playwright.reuseBrowser": false,
   "playwright.pickLocatorCopyToClipboard": true,
   "playwright.runGlobalSetupOnEachRun": true,
