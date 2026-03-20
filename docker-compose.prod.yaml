@@ -65,7 +65,11 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health/ || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f -H \"Host: $${HEALTHCHECK_HOST:-www.auto-forex.com}\" http://localhost:8000/api/health/ || exit 1",
+        ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -78,6 +82,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key required}
+      HEALTHCHECK_HOST: ${HEALTHCHECK_HOST:-www.auto-forex.com}
       # IMPORTANT: include your public domain(s) here to avoid DisallowedHost.
       # Override via .env if needed.
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-auto-forex.com,www.auto-forex.com}
@@ -182,7 +187,11 @@ services:
       - backend
       - frontend
     healthcheck:
-      test: ["CMD-SHELL", "curl -fkSs https://localhost:443/api/health/ > /dev/null || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fkSs -H \"Host: $${HEALTHCHECK_HOST:-www.auto-forex.com}\" https://localhost:443/api/health/ > /dev/null || exit 1",
+        ]
       interval: 10s
       timeout: 5s
       retries: 3
