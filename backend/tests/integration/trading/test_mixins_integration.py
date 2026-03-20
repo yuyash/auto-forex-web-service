@@ -38,11 +38,11 @@ def _auth_client(user) -> APIClient:
     return client
 
 
-def _make_task(user=None) -> BacktestTask:
+def _make_task(user=None, *, strategy_type: str = "floor") -> BacktestTask:
     """Create a backtest task with an execution_id for sub-resource filtering."""
     if user is None:
         user = UserFactory()
-    config = StrategyConfigurationFactory(user=user)
+    config = StrategyConfigurationFactory(user=user, strategy_type=strategy_type)
     task = cast(BacktestTask, BacktestTaskFactory(user=user, config=config, status="running"))
     from uuid import uuid4
 
@@ -240,25 +240,35 @@ class TestEvents:
         assert response.data["results"][0]["event_scope"] == "trading"
 
     def test_strategy_events_endpoint(self):
-        task = _make_task()
+        task = _make_task(strategy_type="snowball")
         client = _auth_client(task.user)
 
         StrategyEventRecord.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
             execution_id=task.execution_id,
-            event_type="add_layer",
+            strategy_type="snowball",
+            visual_group_id="group-1",
+            root_entry_id=1,
+            entry_id=1,
+            basket="trend",
+            direction="long",
+            event_timestamp=datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc),
+            event_type="open_position",
             severity="info",
-            description="Layer added",
+            description="Initial entry",
             user=task.user,
             instrument="USD_JPY",
-            details={"event_type": "add_layer"},
+            details={"event_type": "open_position", "price": "150.100"},
         )
 
         response = client.get(f"/api/trading/tasks/backtest/{task.pk}/strategy-events/")
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["count"] == 1
-        assert response.data["results"][0]["event_scope"] == "strategy"
+        assert response.data["strategy_type"] == "snowball"
+        assert response.data["supported"] is True
+        assert response.data["view_model"]["kind"] == "snowball_runs"
+        assert len(response.data["view_model"]["groups"]) == 1
+        assert response.data["view_model"]["groups"][0]["root_entry_id"] == 1
 
     def test_events_support_created_at_range_filter(self):
         task = _make_task()
@@ -304,39 +314,54 @@ class TestEvents:
         assert response.data["results"][0]["description"] == "Newer event"
 
     def test_strategy_events_support_created_at_range_filter(self):
-        task = _make_task()
+        task = _make_task(strategy_type="snowball")
         client = _auth_client(task.user)
 
         StrategyEventRecord.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
             execution_id=task.execution_id,
-            event_type="add_layer",
+            strategy_type="snowball",
+            visual_group_id="group-1",
+            root_entry_id=1,
+            entry_id=1,
+            basket="trend",
+            direction="long",
+            event_timestamp=datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc),
+            event_type="open_position",
             severity="info",
             description="Older strategy event",
             user=task.user,
             instrument="USD_JPY",
-            details={"event_type": "add_layer"},
+            details={"event_type": "open_position"},
         )
-        newer = StrategyEventRecord.objects.create(
+        StrategyEventRecord.objects.create(
             task_type=TaskType.BACKTEST,
             task_id=task.pk,
             execution_id=task.execution_id,
-            event_type="take_profit",
+            strategy_type="snowball",
+            visual_group_id="group-2",
+            root_entry_id=2,
+            entry_id=2,
+            basket="trend",
+            direction="short",
+            event_timestamp=datetime(2024, 6, 1, 13, 0, 0, tzinfo=timezone.utc),
+            event_type="open_position",
             severity="info",
             description="Newer strategy event",
             user=task.user,
             instrument="USD_JPY",
-            details={"event_type": "take_profit"},
+            details={"event_type": "open_position"},
         )
 
         response = client.get(
             f"/api/trading/tasks/backtest/{task.pk}/strategy-events/",
-            {"created_from": newer.created_at.isoformat()},
+            {"root_entry_id": 2},
         )
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["count"] == 1
-        assert response.data["results"][0]["description"] == "Newer strategy event"
+        assert response.data["supported"] is True
+        assert len(response.data["view_model"]["groups"]) == 1
+        assert response.data["view_model"]["groups"][0]["root_entry_id"] == 2
 
 
 @pytest.mark.django_db

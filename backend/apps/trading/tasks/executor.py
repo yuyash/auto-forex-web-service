@@ -281,41 +281,17 @@ class TaskExecutor:
                     details = event.to_dict()
                     details["strategy_event_type"] = event_type
                     details["event_type"] = execution_event_type
-                    trading_records.append(
-                        TradingEvent(
-                            event_type=execution_event_type,
-                            severity="info",
-                            description=str(details),
-                            user=self.event_context.user,
-                            account=self.event_context.account,
-                            instrument=self.event_context.instrument,
-                            task_type=self.event_context.task_type.value,
-                            task_id=self.event_context.task_id,
-                            execution_id=self.task.execution_id,
-                            strategy_type=strategy_type,
-                            visual_group_id=str(getattr(event, "visual_group_id", "") or ""),
-                            root_entry_id=getattr(event, "root_entry_id", None),
-                            parent_entry_id=getattr(event, "parent_entry_id", None),
-                            entry_id=getattr(event, "entry_id", None),
-                            basket=str(getattr(event, "basket", "") or ""),
-                            step=getattr(event, "step", None),
-                            close_reason=str(getattr(event, "close_reason", "") or ""),
-                            position_id=getattr(event, "position_id", None),
-                            direction=str(getattr(event, "direction", "") or ""),
-                            event_timestamp=getattr(event, "timestamp", None),
-                            expected_interval_pips=getattr(event, "expected_interval_pips", None),
-                            actual_interval_pips=getattr(event, "actual_interval_pips", None),
-                            expected_tp_pips=getattr(event, "expected_tp_pips", None),
-                            actual_tp_pips=getattr(event, "actual_tp_pips", None),
-                            expected_exit_price=getattr(event, "expected_exit_price", None),
-                            actual_exit_price=getattr(event, "actual_exit_price", None),
-                            validation_tolerance_pips=getattr(
-                                event, "validation_tolerance_pips", None
-                            ),
-                            validation_status=str(getattr(event, "validation_status", "") or ""),
-                            details=details,
-                        )
+                    trading_record = TradingEvent.from_event(
+                        event=event,
+                        context=self.event_context,
+                        execution_id=self.task.execution_id,
+                        strategy_type=strategy_type,
                     )
+                    trading_record.event_type = execution_event_type
+                    trading_record.severity = "info"
+                    trading_record.description = str(details)
+                    trading_record.details = details
+                    trading_records.append(trading_record)
                 else:
                     trading_records.append(
                         TradingEvent.from_event(
