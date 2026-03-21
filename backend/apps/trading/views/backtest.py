@@ -209,7 +209,7 @@ class BacktestTaskViewSet(TaskViewSetBase):
 
     @action(detail=True, methods=["post"])
     def resume(self, request: Request, pk: str | None = None) -> Response:
-        """Resume a paused or stopped task."""
+        """Resume a paused task."""
         task = self.get_object()
         try:
             resumed = self.task_service.resume_task(task.pk)

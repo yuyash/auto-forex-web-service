@@ -2744,7 +2744,7 @@
         "/api/trading/tasks/backtest/{id}/resume/": {
             "post": {
                 "operationId": "backtest_tasks_resume",
-                "description": "Resume a paused or stopped task.",
+                "description": "Resume a paused task.",
                 "parameters": [
                     {
                         "in": "path",
@@ -4011,7 +4011,7 @@
         "/api/trading/tasks/trading/{id}/resume/": {
             "post": {
                 "operationId": "trading_tasks_resume",
-                "description": "Resume a paused or stopped task.",
+                "description": "Resume a paused task.",
                 "parameters": [
                     {
                         "in": "path",

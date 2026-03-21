@@ -143,7 +143,7 @@ class TestRecoverOrphanedTasks:
 
         result = recover_orphaned_tasks(source="test")
 
-        assert result["backtest"] == 1
+        assert result["backtest"] == 0
         # Should have been called twice: once for reset, once for marking FAILED
         assert type(task).objects.filter.return_value.update.call_count == 2
 
@@ -201,6 +201,29 @@ class TestRecoverOrphanedTasks:
         assert result["trading"] == 1
         service_instance.recover_trading_task.assert_called_once_with(task)
         service_instance.start_task.assert_not_called()
+
+    @pytest.mark.usefixtures("_mock_models")
+    def test_failed_trading_recovery_is_not_counted(self, _mock_models):
+        bt, tt, cts, tl, svc_cls = _mock_models
+
+        task = MagicMock()
+        task.pk = uuid4()
+        task.status = TaskStatus.RUNNING
+        bt.objects.filter.return_value = []
+        update_qs = MagicMock()
+        update_qs.update.return_value = 1
+        tt.objects.filter.side_effect = [[task], update_qs]
+        cts.objects.filter.return_value.first.return_value = None
+
+        service_instance = MagicMock()
+        service_instance.recover_trading_task.side_effect = RuntimeError("resume failed")
+        svc_cls.return_value = service_instance
+
+        from apps.trading.tasks.recovery import recover_orphaned_tasks
+
+        result = recover_orphaned_tasks(source="test")
+
+        assert result["trading"] == 0
 
 
 class TestRecoverOrphanedTasksBeat:

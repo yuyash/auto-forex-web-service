@@ -4,6 +4,12 @@ import type { OandaAccountsRequest } from '../../api/types';
 import type { BackendAccount } from './contracts';
 import type { Account } from '../../types/strategy';
 
+export interface AccountListParams {
+  page?: number;
+  page_size?: number;
+  search?: string;
+}
+
 function toAccount(account: BackendAccount): Account {
   return {
     ...account,
@@ -20,9 +26,11 @@ function toAccount(account: BackendAccount): Account {
 }
 
 export const accountsApi = {
-  list: async () => {
+  list: async (params?: AccountListParams) => {
     return (
-      await withRetry(() => api.get<BackendAccount[]>('/api/market/accounts/'))
+      await withRetry(() =>
+        api.get<BackendAccount[]>('/api/market/accounts/', params)
+      )
     ).map(toAccount);
   },
 

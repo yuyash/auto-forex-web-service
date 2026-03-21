@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { queryKeys } from '../config/reactQuery';
 import { accountsApi } from '../services/api';
+import type { Account } from '../types/strategy';
 
 export interface OandaAccount {
   id: number;
@@ -27,43 +28,27 @@ interface UseOandaAccountsResult {
   hasAccounts: boolean;
 }
 
-function normalizeAccount(account: Record<string, unknown>): OandaAccount {
+function normalizeAccount(account: Account): OandaAccount {
   const apiType =
     account.api_type === 'practice' || account.api_type === 'live'
       ? account.api_type
       : undefined;
-  const isPractice =
-    typeof account.is_practice === 'boolean'
-      ? account.is_practice
-      : apiType === 'practice';
+  const isPractice = apiType === 'practice';
 
   return {
-    id: Number(account.id),
-    account_id: String(account.account_id),
-    name: typeof account.name === 'string' ? account.name : undefined,
+    id: account.id,
+    account_id: account.account_id,
+    name: undefined,
     api_type: apiType,
     is_practice: isPractice,
-    is_active: Boolean(account.is_active),
-    is_default:
-      typeof account.is_default === 'boolean' ? account.is_default : undefined,
+    is_active: account.is_active,
+    is_default: account.is_default,
     balance:
-      typeof account.balance === 'number'
-        ? account.balance
-        : typeof account.balance === 'string'
-          ? Number(account.balance)
-          : undefined,
-    margin_used:
-      typeof account.margin_used === 'string' ? account.margin_used : undefined,
-    margin_available:
-      typeof account.margin_available === 'string'
-        ? account.margin_available
-        : undefined,
-    unrealized_pnl:
-      typeof account.unrealized_pnl === 'string'
-        ? account.unrealized_pnl
-        : undefined,
-    currency:
-      typeof account.currency === 'string' ? account.currency : undefined,
+      typeof account.balance === 'string' ? Number(account.balance) : undefined,
+    margin_used: account.margin_used,
+    margin_available: account.margin_available,
+    unrealized_pnl: account.unrealized_pnl,
+    currency: account.currency,
   };
 }
 
@@ -75,10 +60,7 @@ export function useOandaAccounts(): UseOandaAccountsResult {
     queryFn: () => accountsApi.list(),
     enabled: isAuthenticated,
     staleTime: 60_000,
-    select: (data) =>
-      data.map((account) =>
-        normalizeAccount(account as Record<string, unknown>)
-      ),
+    select: (data) => data.map(normalizeAccount),
   });
 
   const refetch = useCallback(async () => {

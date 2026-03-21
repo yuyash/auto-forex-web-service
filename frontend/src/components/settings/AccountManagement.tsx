@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -34,7 +34,7 @@ import { useToast } from '../common/useToast';
 import ConfirmDialog from '../common/ConfirmDialog';
 import type { Account } from '../../types/strategy';
 import { accountsApi } from '../../services/api/accounts';
-import type { OandaAccounts, OandaAccountsRequest } from '../../api/types';
+import type { OandaAccountsRequest } from '../../api/types';
 import { logger } from '../../utils/logger';
 
 interface AccountFormData {
@@ -46,8 +46,6 @@ interface AccountFormData {
 const AccountManagement = () => {
   const { t } = useTranslation(['settings', 'common']);
   const { showSuccess, showError } = useToast();
-
-  const isMountedRef = useRef(true);
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,48 +74,7 @@ const AccountManagement = () => {
         if (showLoading) {
           setLoading(true);
         }
-        const data = await accountsApi.list();
-
-        const listedAccounts = Array.isArray(data) ? data : [];
-        setAccounts(listedAccounts as Account[]);
-
-        // Hydrate each account with live data (balance/margins/etc) from the detail endpoint.
-        // Do this after the list loads so the UI renders quickly.
-        if (listedAccounts.length > 0) {
-          void (async () => {
-            const results = await Promise.allSettled(
-              listedAccounts
-                .filter((account: OandaAccounts) => account.id !== undefined)
-                .map((account: OandaAccounts) => accountsApi.get(account.id!))
-            );
-
-            if (!isMountedRef.current) {
-              return;
-            }
-
-            const hydratedAccounts = results
-              .filter(
-                (result): result is PromiseFulfilledResult<OandaAccounts> =>
-                  result.status === 'fulfilled'
-              )
-              .map(
-                (result: PromiseFulfilledResult<OandaAccounts>) => result.value
-              );
-
-            if (hydratedAccounts.length === 0) {
-              return;
-            }
-
-            setAccounts((previousAccounts) =>
-              previousAccounts.map(
-                (account: Account) =>
-                  (hydratedAccounts.find(
-                    (hydrated) => hydrated.id === account.id
-                  ) as Account | undefined) ?? account
-              )
-            );
-          })();
-        }
+        setAccounts(await accountsApi.list());
       } catch (caughtError) {
         logger.error('Error fetching accounts', {
           error:
@@ -136,11 +93,7 @@ const AccountManagement = () => {
   );
 
   useEffect(() => {
-    isMountedRef.current = true;
     fetchAccounts();
-    return () => {
-      isMountedRef.current = false;
-    };
   }, [fetchAccounts]);
 
   // Open dialog for adding new account

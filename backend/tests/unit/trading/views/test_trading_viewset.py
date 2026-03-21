@@ -447,7 +447,7 @@ class TestResume:
     """Tests for resume action."""
 
     def test_resume_success(self):
-        task = _make_task(task_status=TaskStatus.STOPPED)
+        task = _make_task(task_status=TaskStatus.PAUSED)
         vs = _build_viewset(action="resume")
         vs.get_object = MagicMock(return_value=task)
         vs.get_serializer = MagicMock(return_value=MagicMock(data={"id": 1}))
@@ -460,7 +460,7 @@ class TestResume:
         assert response.status_code == 200
 
     def test_resume_value_error_returns_400(self):
-        task = _make_task(task_status=TaskStatus.STOPPED)
+        task = _make_task(task_status=TaskStatus.PAUSED)
         vs = _build_viewset(action="resume")
         vs.get_object = MagicMock(return_value=task)
         vs.task_service.resume_task.side_effect = ValueError("bad state")
@@ -472,7 +472,7 @@ class TestResume:
         assert response.status_code == http_status.HTTP_400_BAD_REQUEST
 
     def test_resume_exception_returns_500(self):
-        task = _make_task(task_status=TaskStatus.STOPPED)
+        task = _make_task(task_status=TaskStatus.PAUSED)
         vs = _build_viewset(action="resume")
         vs.get_object = MagicMock(return_value=task)
         vs.task_service.resume_task.side_effect = Exception("fail")

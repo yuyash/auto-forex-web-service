@@ -21,6 +21,7 @@ vi.mock('../../../src/api/client', () => ({
 
 import { backtestTasksApi } from '../../../src/services/api/backtestTasks';
 import { configurationsApi } from '../../../src/services/api/configurations';
+import { accountsApi } from '../../../src/services/api/accounts';
 import {
   fetchAllTaskResourcePages,
   fetchTaskResourceObject,
@@ -47,6 +48,37 @@ describe('API service contracts', () => {
     expect(mockApi.get).toHaveBeenCalledWith(
       '/api/trading/strategy-configs/cfg-1/tasks/'
     );
+  });
+
+  it('forwards account list params to the accounts endpoint', async () => {
+    mockApi.get.mockResolvedValue([
+      {
+        id: 1,
+        account_id: '001-011-1234567-001',
+        api_type: 'practice',
+        currency: 'USD',
+        balance: '1000.00',
+        margin_used: '0.00',
+        margin_available: '1000.00',
+        unrealized_pnl: '0.00',
+        is_active: true,
+      },
+    ]);
+
+    await expect(
+      accountsApi.list({ page: 2, page_size: 50, search: 'practice' })
+    ).resolves.toMatchObject([
+      {
+        id: 1,
+        account_id: '001-011-1234567-001',
+      },
+    ]);
+
+    expect(mockApi.get).toHaveBeenCalledWith('/api/market/accounts/', {
+      page: 2,
+      page_size: 50,
+      search: 'practice',
+    });
   });
 
   it('sends stop mode for trading task stop requests', async () => {
