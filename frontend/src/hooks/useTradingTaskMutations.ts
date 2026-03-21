@@ -1,426 +1,165 @@
-// Trading Task mutation hooks
-import { useState, useCallback } from 'react';
+import { queryClient, queryKeys } from '../config/reactQuery';
 import { tradingTasksApi } from '../services/api';
-import { invalidateTradingTasksCache } from './useTradingTasks';
 import type {
   TradingTask,
+  TradingTaskCopyData,
   TradingTaskCreateData,
   TradingTaskUpdateData,
-  TradingTaskCopyData,
 } from '../types';
+import { useWrappedMutation } from './useWrappedMutation';
 
-interface MutationState<T> {
-  data: T | null;
-  isLoading: boolean;
-  error: Error | null;
+export type StopMode = 'immediate' | 'graceful' | 'graceful_close';
+
+async function invalidateTradingQueries(taskId?: string): Promise<void> {
+  await queryClient.invalidateQueries({ queryKey: queryKeys.tradingTasks.all });
+  if (taskId) {
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.tradingTasks.detail(taskId),
+    });
+  }
 }
 
-interface MutationResult<TData, TVariables> extends MutationState<TData> {
-  mutate: (variables: TVariables) => Promise<TData>;
-  reset: () => void;
-}
-
-/**
- * Hook to create a new trading task
- */
 export function useCreateTradingTask(options?: {
   onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<TradingTask, TradingTaskCreateData> {
-  const [state, setState] = useState<MutationState<TradingTask>>({
-    data: null,
-    isLoading: false,
-    error: null,
-  });
-
-  const mutate = useCallback(
-    async (variables: TradingTaskCreateData) => {
-      try {
-        setState({ data: null, isLoading: true, error: null });
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = await tradingTasksApi.create(variables as any);
-        setState({ data: result, isLoading: false, error: null });
-        invalidateTradingTasksCache();
-        options?.onSuccess?.(result);
-        return result;
-      } catch (err) {
-        const error = err as Error;
-        setState({ data: null, isLoading: false, error });
-        options?.onError?.(error);
-        throw error;
-      }
-    },
-    [options]
+}) {
+  return useWrappedMutation(
+    (variables: TradingTaskCreateData) =>
+      tradingTasksApi.create({
+        config: variables.config_id,
+        oanda_account: variables.account_id,
+        name: variables.name,
+        description: variables.description,
+        sell_on_stop: variables.sell_on_stop,
+      }),
+    {
+      onSuccess: async (data) => {
+        await invalidateTradingQueries(data.id);
+        options?.onSuccess?.(data);
+      },
+      onError: (error) => options?.onError?.(error),
+    }
   );
-
-  const reset = useCallback(() => {
-    setState({ data: null, isLoading: false, error: null });
-  }, []);
-
-  return { ...state, mutate, reset };
 }
 
-/**
- * Hook to update a trading task
- */
 export function useUpdateTradingTask(options?: {
   onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<TradingTask, { id: string; data: TradingTaskUpdateData }> {
-  const [state, setState] = useState<MutationState<TradingTask>>({
-    data: null,
-    isLoading: false,
-    error: null,
-  });
-
-  const mutate = useCallback(
-    async (variables: { id: string; data: TradingTaskUpdateData }) => {
-      try {
-        setState({ data: null, isLoading: true, error: null });
-        const result = await tradingTasksApi.update(
-          variables.id,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          variables.data as any
-        );
-        setState({ data: result, isLoading: false, error: null });
-        invalidateTradingTasksCache();
-        options?.onSuccess?.(result);
-        return result;
-      } catch (err) {
-        const error = err as Error;
-        setState({ data: null, isLoading: false, error });
-        options?.onError?.(error);
-        throw error;
-      }
-    },
-    [options]
+}) {
+  return useWrappedMutation(
+    (variables: { id: string; data: TradingTaskUpdateData }) =>
+      tradingTasksApi.partialUpdate(variables.id, {
+        config: variables.data.config,
+        oanda_account: variables.data.account_id,
+        name: variables.data.name,
+        description: variables.data.description,
+        sell_on_stop: variables.data.sell_on_stop,
+      }),
+    {
+      onSuccess: async (data) => {
+        await invalidateTradingQueries(data.id);
+        options?.onSuccess?.(data);
+      },
+      onError: (error) => options?.onError?.(error),
+    }
   );
-
-  const reset = useCallback(() => {
-    setState({ data: null, isLoading: false, error: null });
-  }, []);
-
-  return { ...state, mutate, reset };
 }
 
-/**
- * Hook to delete a trading task
- */
 export function useDeleteTradingTask(options?: {
   onSuccess?: () => void;
   onError?: (error: Error) => void;
-}): MutationResult<void, string> {
-  const [state, setState] = useState<MutationState<void>>({
-    data: null,
-    isLoading: false,
-    error: null,
-  });
-
-  const mutate = useCallback(
-    async (id: string) => {
-      try {
-        setState({ data: null, isLoading: true, error: null });
-        await tradingTasksApi.delete(id);
-        setState({ data: undefined, isLoading: false, error: null });
-        invalidateTradingTasksCache();
-        options?.onSuccess?.();
-      } catch (err) {
-        const error = err as Error;
-        setState({ data: null, isLoading: false, error });
-        options?.onError?.(error);
-        throw error;
-      }
+}) {
+  return useWrappedMutation((id: string) => tradingTasksApi.delete(id), {
+    onSuccess: async () => {
+      await invalidateTradingQueries();
+      options?.onSuccess?.();
     },
-    [options]
-  );
-
-  const reset = useCallback(() => {
-    setState({ data: null, isLoading: false, error: null });
-  }, []);
-
-  return { ...state, mutate, reset };
+    onError: (error) => options?.onError?.(error),
+  });
 }
 
-/**
- * Hook to copy a trading task
- */
 export function useCopyTradingTask(options?: {
   onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<TradingTask, { id: string; data: TradingTaskCopyData }> {
-  const [state, setState] = useState<MutationState<TradingTask>>({
-    data: null,
-    isLoading: false,
-    error: null,
-  });
-
-  const mutate = useCallback(
-    async (variables: { id: string; data: TradingTaskCopyData }) => {
-      try {
-        setState({ data: null, isLoading: true, error: null });
-        const result = await tradingTasksApi.copy(variables.id, variables.data);
-        setState({ data: result, isLoading: false, error: null });
-        invalidateTradingTasksCache();
-        options?.onSuccess?.(result);
-        return result;
-      } catch (err) {
-        const error = err as Error;
-        setState({ data: null, isLoading: false, error });
-        options?.onError?.(error);
-        throw error;
-      }
-    },
-    [options]
+}) {
+  return useWrappedMutation(
+    (variables: { id: string; data: TradingTaskCopyData }) =>
+      tradingTasksApi.copy(variables.id, variables.data),
+    {
+      onSuccess: async (data) => {
+        await invalidateTradingQueries(data.id);
+        options?.onSuccess?.(data);
+      },
+      onError: (error) => options?.onError?.(error),
+    }
   );
-
-  const reset = useCallback(() => {
-    setState({ data: null, isLoading: false, error: null });
-  }, []);
-
-  return { ...state, mutate, reset };
 }
 
-/**
- * Hook to start a trading task
- */
 export function useStartTradingTask(options?: {
   onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<TradingTask, string> {
-  const [state, setState] = useState<MutationState<TradingTask>>({
-    data: null,
-    isLoading: false,
-    error: null,
-  });
-
-  const mutate = useCallback(
-    async (id: string) => {
-      try {
-        setState({ data: null, isLoading: true, error: null });
-        const result = await tradingTasksApi.start(id);
-        setState({ data: result, isLoading: false, error: null });
-        invalidateTradingTasksCache();
-        options?.onSuccess?.(result);
-        return result;
-      } catch (err) {
-        const error = err as Error;
-        setState({ data: null, isLoading: false, error });
-        options?.onError?.(error);
-        throw error;
-      }
+}) {
+  return useWrappedMutation((id: string) => tradingTasksApi.start(id), {
+    onSuccess: async (data) => {
+      await invalidateTradingQueries(data.id);
+      options?.onSuccess?.(data);
     },
-    [options]
-  );
-
-  const reset = useCallback(() => {
-    setState({ data: null, isLoading: false, error: null });
-  }, []);
-
-  return { ...state, mutate, reset };
+    onError: (error) => options?.onError?.(error),
+  });
 }
 
-/**
- * Stop mode options for trading tasks
- */
-export type StopMode = 'immediate' | 'graceful' | 'graceful_close';
-
-/**
- * Hook to stop a trading task
- */
 export function useStopTradingTask(options?: {
   onSuccess?: (data: Record<string, unknown>) => void;
   onError?: (error: Error) => void;
-}): MutationResult<Record<string, unknown>, { id: string; mode?: StopMode }> {
-  const [state, setState] = useState<MutationState<Record<string, unknown>>>({
-    data: null,
-    isLoading: false,
-    error: null,
-  });
-
-  const mutate = useCallback(
-    async (variables: { id: string; mode?: StopMode }) => {
-      try {
-        setState({ data: null, isLoading: true, error: null });
-        const result = await tradingTasksApi.stop(
-          variables.id,
-          variables.mode || 'graceful'
-        );
-        setState({ data: result, isLoading: false, error: null });
-        invalidateTradingTasksCache();
-        options?.onSuccess?.(result);
-        return result;
-      } catch (err) {
-        const error = err as Error;
-        setState({ data: null, isLoading: false, error });
-        options?.onError?.(error);
-        throw error;
-      }
-    },
-    [options]
+}) {
+  return useWrappedMutation(
+    (variables: { id: string; mode?: StopMode }) =>
+      tradingTasksApi.stop(variables.id, variables.mode ?? 'graceful'),
+    {
+      onSuccess: async (data) => {
+        await invalidateTradingQueries();
+        options?.onSuccess?.(data);
+      },
+      onError: (error) => options?.onError?.(error),
+    }
   );
-
-  const reset = useCallback(() => {
-    setState({ data: null, isLoading: false, error: null });
-  }, []);
-
-  return { ...state, mutate, reset };
 }
 
-/**
- * Hook to pause a trading task
- */
 export function usePauseTradingTask(options?: {
   onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<TradingTask, string> {
-  const [state, setState] = useState<MutationState<TradingTask>>({
-    data: null,
-    isLoading: false,
-    error: null,
-  });
-
-  const mutate = useCallback(
-    async (id: string) => {
-      try {
-        setState({ data: null, isLoading: true, error: null });
-        const result = await tradingTasksApi.pause(id);
-        setState({ data: result, isLoading: false, error: null });
-        invalidateTradingTasksCache();
-        options?.onSuccess?.(result);
-        return result;
-      } catch (err) {
-        const error = err as Error;
-        setState({ data: null, isLoading: false, error });
-        options?.onError?.(error);
-        throw error;
-      }
+}) {
+  return useWrappedMutation((id: string) => tradingTasksApi.pause(id), {
+    onSuccess: async (data) => {
+      await invalidateTradingQueries(data.id);
+      options?.onSuccess?.(data);
     },
-    [options]
-  );
-
-  const reset = useCallback(() => {
-    setState({ data: null, isLoading: false, error: null });
-  }, []);
-
-  return { ...state, mutate, reset };
+    onError: (error) => options?.onError?.(error),
+  });
 }
 
-/**
- * Hook to resume a trading task
- */
 export function useResumeTradingTask(options?: {
   onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<TradingTask, string> {
-  const [state, setState] = useState<MutationState<TradingTask>>({
-    data: null,
-    isLoading: false,
-    error: null,
-  });
-
-  const mutate = useCallback(
-    async (id: string) => {
-      try {
-        setState({ data: null, isLoading: true, error: null });
-        const result = await tradingTasksApi.resume(id);
-        setState({ data: result, isLoading: false, error: null });
-        invalidateTradingTasksCache();
-        options?.onSuccess?.(result);
-        return result;
-      } catch (err) {
-        const error = err as Error;
-        setState({ data: null, isLoading: false, error });
-        options?.onError?.(error);
-        throw error;
-      }
+}) {
+  return useWrappedMutation((id: string) => tradingTasksApi.resume(id), {
+    onSuccess: async (data) => {
+      await invalidateTradingQueries(data.id);
+      options?.onSuccess?.(data);
     },
-    [options]
-  );
-
-  const reset = useCallback(() => {
-    setState({ data: null, isLoading: false, error: null });
-  }, []);
-
-  return { ...state, mutate, reset };
+    onError: (error) => options?.onError?.(error),
+  });
 }
 
-/**
- * Hook to rerun a trading task
- */
-export function useRerunTradingTask(options?: {
-  onSuccess?: (data: TradingTask) => void;
-  onError?: (error: Error) => void;
-}): MutationResult<TradingTask, string> {
-  const [state, setState] = useState<MutationState<TradingTask>>({
-    data: null,
-    isLoading: false,
-    error: null,
-  });
-
-  const mutate = useCallback(
-    async (id: string) => {
-      try {
-        setState({ data: null, isLoading: true, error: null });
-        const result = await tradingTasksApi.restart(id, true);
-        setState({ data: result, isLoading: false, error: null });
-        invalidateTradingTasksCache();
-        options?.onSuccess?.(result);
-        return result;
-      } catch (err) {
-        const error = err as Error;
-        setState({ data: null, isLoading: false, error });
-        options?.onError?.(error);
-        throw error;
-      }
-    },
-    [options]
-  );
-
-  const reset = useCallback(() => {
-    setState({ data: null, isLoading: false, error: null });
-  }, []);
-
-  return { ...state, mutate, reset };
-}
-
-/**
- * Hook to restart a trading task with fresh state
- */
 export function useRestartTradingTask(options?: {
   onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
-}): MutationResult<TradingTask, { id: string; clearState?: boolean }> {
-  const [state, setState] = useState<MutationState<TradingTask>>({
-    data: null,
-    isLoading: false,
-    error: null,
-  });
-
-  const mutate = useCallback(
-    async (variables: { id: string; clearState?: boolean }) => {
-      try {
-        setState({ data: null, isLoading: true, error: null });
-        const result = await tradingTasksApi.restart(
-          variables.id,
-          variables.clearState ?? true
-        );
-        setState({ data: result, isLoading: false, error: null });
-        invalidateTradingTasksCache();
-        options?.onSuccess?.(result);
-        return result;
-      } catch (err) {
-        const error = err as Error;
-        setState({ data: null, isLoading: false, error });
-        options?.onError?.(error);
-        throw error;
-      }
+}) {
+  return useWrappedMutation((id: string) => tradingTasksApi.restart(id), {
+    onSuccess: async (data) => {
+      await invalidateTradingQueries(data.id);
+      options?.onSuccess?.(data);
     },
-    [options]
-  );
-
-  const reset = useCallback(() => {
-    setState({ data: null, isLoading: false, error: null });
-  }, []);
-
-  return { ...state, mutate, reset };
+    onError: (error) => options?.onError?.(error),
+  });
 }

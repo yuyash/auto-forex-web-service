@@ -11,6 +11,7 @@ from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
 from apps.trading.enums import TaskStatus
+from apps.trading.tasks.service import TaskSubmissionError, TaskValidationError
 from apps.trading.views.backtest import BacktestTaskViewSet
 
 factory = APIRequestFactory()
@@ -75,7 +76,7 @@ class TestGetSerializerClass:
     def test_returns_default_serializer_for_list(self):
         vs = _build_viewset(action="list")
         cls = vs.get_serializer_class()
-        assert cls.__name__ == "BacktestTaskSerializer"
+        assert cls.__name__ == "BacktestTaskListSerializer"
 
     def test_returns_default_serializer_for_retrieve(self):
         vs = _build_viewset(action="retrieve")
@@ -159,7 +160,7 @@ class TestStart:
 
         response = vs.start(request, pk=1)
         assert response.status_code == 200
-        assert "results" in response.data
+        assert response.data == {"id": 1}
 
     def test_start_wrong_status_returns_400(self):
         task = _make_task(task_status=TaskStatus.RUNNING)
@@ -184,11 +185,11 @@ class TestStart:
         assert response.status_code == http_status.HTTP_400_BAD_REQUEST
         assert "restart" in response.data["detail"]
 
-    def test_start_value_error_returns_400(self):
+    def test_start_validation_error_returns_400(self):
         task = _make_task(task_status=TaskStatus.CREATED)
         vs = _build_viewset(action="start")
         vs.get_object = MagicMock(return_value=task)
-        vs.task_service.start_task.side_effect = ValueError("bad config")
+        vs.task_service.start_task.side_effect = TaskValidationError("bad config")
 
         request = _drf_post()
         vs.request = request
@@ -196,11 +197,11 @@ class TestStart:
         response = vs.start(request, pk=1)
         assert response.status_code == http_status.HTTP_400_BAD_REQUEST
 
-    def test_start_runtime_error_returns_500(self):
+    def test_start_submission_error_returns_500(self):
         task = _make_task(task_status=TaskStatus.CREATED)
         vs = _build_viewset(action="start")
         vs.get_object = MagicMock(return_value=task)
-        vs.task_service.start_task.side_effect = RuntimeError("celery down")
+        vs.task_service.start_task.side_effect = TaskSubmissionError("celery down")
 
         request = _drf_post()
         vs.request = request
@@ -340,7 +341,7 @@ class TestRestart:
 
         response = vs.restart(request, pk=1)
         assert response.status_code == 200
-        assert "results" in response.data
+        assert response.data == {"id": 1}
 
     def test_restart_value_error_returns_400(self):
         task = _make_task(task_status=TaskStatus.RUNNING)
@@ -399,6 +400,7 @@ class TestResume:
         task = _make_task(task_status=TaskStatus.RUNNING)
         vs = _build_viewset(action="resume")
         vs.get_object = MagicMock(return_value=task)
+        vs.task_service.resume_task.side_effect = ValueError("invalid state")
 
         request = _drf_post()
         vs.request = request
@@ -406,7 +408,7 @@ class TestResume:
         response = vs.resume(request, pk=1)
         assert response.status_code == http_status.HTTP_400_BAD_REQUEST
 
-    def test_resume_value_error_not_found_returns_404(self):
+    def test_resume_value_error_not_found_returns_400(self):
         task = _make_task(task_status=TaskStatus.PAUSED)
         vs = _build_viewset(action="resume")
         vs.get_object = MagicMock(return_value=task)
@@ -416,7 +418,7 @@ class TestResume:
         vs.request = request
 
         response = vs.resume(request, pk=1)
-        assert response.status_code == http_status.HTTP_404_NOT_FOUND
+        assert response.status_code == http_status.HTTP_400_BAD_REQUEST
 
     def test_resume_value_error_returns_400(self):
         task = _make_task(task_status=TaskStatus.PAUSED)

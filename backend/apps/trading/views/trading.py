@@ -2,24 +2,28 @@
 
 import logging
 from logging import Logger
-from typing import Any
 
 from django.db import IntegrityError
-from django.db.models import Q, QuerySet
 from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import APIException
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.viewsets import ModelViewSet
 
 from apps.trading.enums import TaskStatus
 from apps.trading.models import TradingTask
-from apps.trading.serializers.task import TradingTaskSerializer
-from apps.trading.tasks.service import TaskService
-from apps.trading.views.mixins import TaskSubResourceMixin
+from apps.trading.serializers.trading import (
+    TradingTaskCreateSerializer,
+    TradingTaskListSerializer,
+    TradingTaskSerializer,
+)
+from apps.trading.tasks.service import (
+    TaskConflictError,
+    TaskSubmissionError,
+    TaskValidationError,
+)
+from apps.trading.views.task_base import TaskViewSetBase
 
 logger: Logger = logging.getLogger(name=__name__)
 
@@ -33,20 +37,15 @@ class ConflictError(APIException):
 
 @extend_schema_view(
     list=extend_schema(tags=["Trading"]),
-    create=extend_schema(tags=["Trading"]),
-    retrieve=extend_schema(tags=["Trading"]),
-    update=extend_schema(tags=["Trading"]),
-    partial_update=extend_schema(tags=["Trading"]),
+    create=extend_schema(tags=["Trading"], responses={201: TradingTaskSerializer}),
+    retrieve=extend_schema(tags=["Trading"], responses={200: TradingTaskSerializer}),
+    update=extend_schema(tags=["Trading"], responses={200: TradingTaskSerializer}),
+    partial_update=extend_schema(tags=["Trading"], responses={200: TradingTaskSerializer}),
     destroy=extend_schema(tags=["Trading"]),
     start=extend_schema(
         operation_id="trading_tasks_start",
         tags=["Trading"],
-        responses={
-            200: inline_serializer(
-                "TradingTaskActionResponse",
-                fields={"results": TradingTaskSerializer()},
-            ),
-        },
+        responses={200: TradingTaskSerializer},
     ),
     stop=extend_schema(
         operation_id="trading_tasks_stop",
@@ -66,7 +65,7 @@ class ConflictError(APIException):
                 "TradingTaskStopResponse",
                 fields={
                     "message": serializers.CharField(),
-                    "task_id": serializers.IntegerField(),
+                    "task_id": serializers.CharField(),
                     "mode": serializers.CharField(),
                     "status": serializers.CharField(),
                 },
@@ -76,134 +75,67 @@ class ConflictError(APIException):
     pause=extend_schema(
         operation_id="trading_tasks_pause",
         tags=["Trading"],
-        responses={
-            200: inline_serializer(
-                "TradingTaskPauseResponse",
-                fields={"results": TradingTaskSerializer()},
-            ),
-        },
+        responses={200: TradingTaskSerializer},
     ),
     resume=extend_schema(
         operation_id="trading_tasks_resume",
         tags=["Trading"],
-        responses={
-            200: inline_serializer(
-                "TradingTaskResumeResponse",
-                fields={"results": TradingTaskSerializer()},
-            ),
-        },
+        responses={200: TradingTaskSerializer},
     ),
     restart=extend_schema(
         operation_id="trading_tasks_restart",
         tags=["Trading"],
-        responses={
-            200: inline_serializer(
-                "TradingTaskRestartResponse",
-                fields={"results": TradingTaskSerializer()},
-            ),
-        },
+        responses={200: TradingTaskSerializer},
     ),
 )
 @extend_schema(tags=["Trading"])
-class TradingTaskViewSet(TaskSubResourceMixin, ModelViewSet):
-    """
-    ViewSet for TradingTask operations with task-centric API.
+class TradingTaskViewSet(TaskViewSetBase):
+    """ViewSet for TradingTask operations with task-centric API."""
 
-    Provides CRUD operations and task lifecycle management including:
-    - submit: Submit task for execution
-    - stop: Stop running task
-    - restart: Restart task from beginning
-    - resume: Resume cancelled task
-    - logs: Retrieve task logs with pagination
-    - events: Retrieve task events
-    - trades: Retrieve trade history
-    """
-
-    permission_classes = [IsAuthenticated]
+    queryset = TradingTask.objects.none()
     serializer_class = TradingTaskSerializer
+    detail_serializer_class = TradingTaskSerializer
+    list_serializer_class = TradingTaskListSerializer
+    create_serializer_class = TradingTaskCreateSerializer
+    task_model_name = "TradingTask"
     lookup_field = "pk"
     task_type_label = "trading"
+    select_related_fields = ("config", "user", "oanda_account")
+    filter_field_map = {
+        "status": "status",
+        "config_id": "config_id",
+        "account_id": "oanda_account_id",
+    }
 
-    def get_serializer_class(self):
-        """Use TradingTaskCreateSerializer for create/update actions."""
-        if self.action in ("create", "update", "partial_update"):
-            from apps.trading.serializers.trading import TradingTaskCreateSerializer
-
-            return TradingTaskCreateSerializer
-        return TradingTaskSerializer
-
-    def __init__(self, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        self.task_service: TaskService = TaskService()
-
-    def get_queryset(self) -> QuerySet[TradingTask]:
-        """Get trading tasks for the authenticated user with filtering."""
-        assert isinstance(self.request, Request)
-        queryset = TradingTask.objects.filter(user=self.request.user.pk).select_related(
-            "config", "user", "oanda_account"
-        )
-
-        # Filter by status
-        status_param = self.request.query_params.get("status")
-        if status_param:
-            queryset = queryset.filter(status=status_param)
-
-        # Filter by config ID
-        config_id = self.request.query_params.get("config_id")
-        if config_id:
-            queryset = queryset.filter(config_id=int(config_id))
-
-        # Filter by account ID
-        account_id = self.request.query_params.get("account_id")
-        if account_id:
-            queryset = queryset.filter(oanda_account_id=int(account_id))
-
-        # Search in name or description
-        search = self.request.query_params.get("search")
-        if search:
-            queryset = queryset.filter(Q(name__icontains=search) | Q(description__icontains=search))
-
-        # Ordering
-        ordering = self.request.query_params.get("ordering", "-created_at")
-        queryset = queryset.order_by(ordering)
-
-        return queryset
-
-    def perform_create(self, serializer: TradingTaskSerializer) -> None:
+    def perform_create(self, serializer: TradingTaskCreateSerializer) -> None:
         """Set the user when creating a task."""
         try:
             serializer.save(user=self.request.user)
-        except IntegrityError as e:
-            logger.error("IntegrityError creating trading task: %s", e)
-            if "unique_user_trading_task_name" in str(e):
+        except IntegrityError as exc:
+            logger.error("IntegrityError creating trading task: %s", exc)
+            if "unique_user_trading_task_name" in str(exc):
                 raise ConflictError(
                     {"name": ["A trading task with this name already exists."]}
-                ) from e
-            if "uniq_active_trading_task_per_account" in str(e):
+                ) from exc
+            if "uniq_active_trading_task_per_account" in str(exc):
                 raise ConflictError(
                     {"account_id": ["This account already has an active trading task."]}
-                ) from e
-            raise
-        except Exception as e:
-            logger.error(
-                "Unexpected error creating trading task: %s: %s",
-                type(e).__name__,
-                e,
-            )
+                ) from exc
             raise
 
     @action(detail=True, methods=["post"])
-    def start(self, request: Request, pk: int | None = None) -> Response:
+    def start(self, request: Request, pk: str | None = None) -> Response:
         """Submit task for execution."""
         task = self.get_object()
-
         if task.status != TaskStatus.CREATED:
-            # Provide helpful error message for STOPPED tasks
             if task.status == TaskStatus.STOPPED:
                 return Response(
                     {
                         "error": "Cannot submit a stopped task",
-                        "detail": "Use 'restart' to clear execution data and start fresh, or 'resume' to continue from where it stopped",
+                        "detail": (
+                            "Use 'restart' to clear execution data and start fresh, "
+                            "or 'resume' to continue from where it stopped"
+                        ),
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
@@ -216,187 +148,127 @@ class TradingTaskViewSet(TaskSubResourceMixin, ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Check for active task on the same account
-        active_task = (
-            TradingTask.objects.filter(
-                oanda_account=task.oanda_account,
-                status__in=[TaskStatus.STARTING, TaskStatus.RUNNING],
-            )
-            .exclude(pk=task.pk)
-            .first()
-        )
-        if active_task:
+        try:
+            started = self.task_service.start_task(task)
+            return Response(self._serialize_detail(started))
+        except TaskConflictError as exc:
             return Response(
-                {
-                    "error": "Account already has an active task",
-                    "detail": (
-                        f"Task '{active_task.name}' is currently {active_task.status} "
-                        f"on this account. Please stop it before starting a new task."
-                    ),
-                    "active_task_id": str(active_task.pk),
-                    "active_task_name": active_task.name,
-                    "active_task_status": active_task.status,
-                },
+                {"error": "Account already has an active task", "detail": str(exc)},
                 status=status.HTTP_409_CONFLICT,
             )
-
-        try:
-            task = self.task_service.start_task(task)
-            serializer = self.get_serializer(task)
-            return Response({"results": serializer.data})
-        except Exception:
-            logger.error(
-                "API: Failed to submit trading task",
-                extra={"task_id": task.pk},
-                exc_info=True,
+        except TaskValidationError as exc:
+            return Response(
+                {"error": "Validation error", "detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
             )
+        except TaskSubmissionError:
+            logger.exception("Failed to submit trading task", extra={"task_id": str(task.pk)})
+            return Response(
+                {"error": "Failed to submit task"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        except Exception:
+            logger.exception("Unexpected trading start failure", extra={"task_id": str(task.pk)})
             return Response(
                 {"error": "Failed to submit task"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
     @action(detail=True, methods=["post"])
-    def stop(self, request: Request, pk: int | None = None) -> Response:
+    def stop(self, request: Request, pk: str | None = None) -> Response:
         """Stop running task asynchronously."""
         task = self.get_object()
-
-        logger.info(
-            "API: Stopping trading task asynchronously",
-            extra={"task_id": task.pk, "user_id": request.user.pk},
-        )
-
+        mode = request.data.get("mode", "graceful")
         try:
-            # Get stop mode from request (default: graceful)
-            mode = request.data.get("mode", "graceful")
-
-            # Use TaskService to stop the task
             success = self.task_service.stop_task(task.pk, mode=mode)
-
-            if success:
-                logger.info(
-                    "API: Stop task initiated",
-                    extra={"task_id": task.pk, "mode": mode},
-                )
-
-                return Response(
-                    {
-                        "message": "Stop request submitted (graceful stop)",
-                        "task_id": task.pk,
-                        "mode": mode,
-                        "status": "stopping",
-                    },
-                    status=status.HTTP_202_ACCEPTED,
-                )
-            else:
-                return Response(
-                    {"error": "Failed to initiate stop"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
-
-        except ValueError as e:
-            # Task not found or not in stoppable state
-            logger.warning(
-                "API: Cannot stop task",
-                extra={"task_id": task.pk, "error": str(e)},
-            )
-            return Response(
-                {"error": "Cannot stop task in its current state"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        except ValueError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception:
-            logger.error(
-                "API: Unexpected error stopping task",
-                extra={"task_id": task.pk},
-                exc_info=True,
-            )
+            logger.exception("Unexpected trading stop failure", extra={"task_id": str(task.pk)})
             return Response(
-                {"error": "Internal server error", "detail": "An unexpected error occurred"},
+                {"error": "Failed to stop task"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(detail=True, methods=["post"])
-    def restart(self, request: Request, pk: int | None = None) -> Response:
-        """Restart task from beginning."""
-        task = self.get_object()
-
-        try:
-            task = self.task_service.restart_task(task.pk)
-            serializer = self.get_serializer(task)
-            return Response({"results": serializer.data})
-        except ValueError:
+        if not success:
             return Response(
-                {"error": "Cannot restart task in its current state"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except Exception:
-            logger.error(
-                "API: Failed to restart trading task",
-                extra={"task_id": task.pk},
-                exc_info=True,
-            )
-            return Response(
-                {"error": "Failed to restart task"},
+                {"error": "Failed to stop task"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(detail=True, methods=["post"])
-    def pause(self, request: Request, pk: int | None = None) -> Response:
-        """Pause running task."""
-        task = self.get_object()
-
-        logger.info(
-            "API: Pausing trading task",
-            extra={"task_id": task.pk, "user_id": request.user.pk, "current_status": task.status},
+        return Response(
+            {
+                "message": "Task stop requested",
+                "task_id": str(task.pk),
+                "mode": mode,
+                "status": TaskStatus.STOPPING,
+            },
+            status=status.HTTP_202_ACCEPTED,
         )
 
-        if task.status != TaskStatus.RUNNING:
+    @action(detail=True, methods=["post"])
+    def pause(self, request: Request, pk: str | None = None) -> Response:
+        """Pause a running task."""
+        task = self.get_object()
+        if task.status not in {TaskStatus.RUNNING, TaskStatus.STARTING}:
             return Response(
-                {"error": "Task must be running to pause"},
+                {"error": f"Task cannot be paused from {task.status} state"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
         try:
             success = self.task_service.pause_task(task.pk)
-            if success:
-                serializer = self.get_serializer(task)
-                return Response({"results": serializer.data})
-            else:
-                return Response(
-                    {"error": "Failed to pause task"},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
-        except Exception as e:
-            logger.error(
-                "API: Failed to pause trading task",
-                extra={"task_id": task.pk, "error": str(e)},
-                exc_info=True,
-            )
+        except ValueError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception("Unexpected trading pause failure", extra={"task_id": str(task.pk)})
             return Response(
                 {"error": "Failed to pause task"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-    @action(detail=True, methods=["post"])
-    def resume(self, request: Request, pk: int | None = None) -> Response:
-        """Resume cancelled task."""
-        task = self.get_object()
-
-        try:
-            task = self.task_service.resume_task(task.pk)
-            serializer = self.get_serializer(task)
-            return Response({"results": serializer.data})
-        except ValueError:
+        if not success:
             return Response(
-                {"error": "Cannot resume task in its current state"},
-                status=status.HTTP_400_BAD_REQUEST,
+                {"error": "Failed to pause task"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+        task.refresh_from_db()
+        return Response(self._serialize_detail(task))
+
+    @action(detail=True, methods=["post"])
+    def resume(self, request: Request, pk: str | None = None) -> Response:
+        """Resume a paused or stopped task."""
+        task = self.get_object()
+        try:
+            resumed = self.task_service.resume_task(task.pk)
+        except TaskConflictError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_409_CONFLICT)
+        except ValueError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         except Exception:
-            logger.error(
-                "API: Failed to resume trading task",
-                extra={"task_id": task.pk},
-                exc_info=True,
-            )
+            logger.exception("Unexpected trading resume failure", extra={"task_id": str(task.pk)})
             return Response(
                 {"error": "Failed to resume task"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+        return Response(self._serialize_detail(resumed))
+
+    @action(detail=True, methods=["post"])
+    def restart(self, request: Request, pk: str | None = None) -> Response:
+        """Restart a task from the beginning."""
+        task = self.get_object()
+        try:
+            restarted = self.task_service.restart_task(task.pk)
+        except TaskConflictError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_409_CONFLICT)
+        except ValueError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            logger.exception("Unexpected trading restart failure", extra={"task_id": str(task.pk)})
+            return Response(
+                {"error": "Failed to restart task"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        return Response(self._serialize_detail(restarted))

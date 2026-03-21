@@ -1,8 +1,4 @@
-/**
- * Market API service for direct HTTP requests to /api/market/ endpoints.
- */
-
-import { apiConfig, getAuthHeaders } from '../../api/apiConfig';
+import { api } from '../../api/apiClient';
 
 export interface TickDataRange {
   instrument: string;
@@ -17,21 +13,5 @@ export interface TickDataRange {
 export async function fetchTickDataRange(
   instrument: string
 ): Promise<TickDataRange> {
-  const base = apiConfig.BASE || '';
-  const url = `${base}/api/market/ticks/range/?instrument=${encodeURIComponent(instrument)}`;
-  const headers = await getAuthHeaders();
-
-  const response = await fetch(url, {
-    method: 'GET',
-    headers,
-    credentials: apiConfig.WITH_CREDENTIALS ? 'include' : 'same-origin',
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch tick data range: ${response.status} ${response.statusText}`
-    );
-  }
-
-  return response.json() as Promise<TickDataRange>;
+  return api.get<TickDataRange>('/api/market/ticks/range/', { instrument });
 }

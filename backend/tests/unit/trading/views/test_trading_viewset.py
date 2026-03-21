@@ -11,6 +11,7 @@ from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
 from apps.trading.enums import TaskStatus
+from apps.trading.tasks.service import TaskConflictError
 from apps.trading.views.trading import TradingTaskViewSet
 
 factory = APIRequestFactory()
@@ -75,7 +76,7 @@ class TestGetSerializerClass:
     def test_returns_default_serializer_for_list(self):
         vs = _build_viewset(action="list")
         cls = vs.get_serializer_class()
-        assert cls.__name__ == "TradingTaskSerializer"
+        assert cls.__name__ == "TradingTaskListSerializer"
 
     def test_returns_default_serializer_for_retrieve(self):
         vs = _build_viewset(action="retrieve")
@@ -212,7 +213,7 @@ class TestStart:
 
         response = vs.start(request, pk=1)
         assert response.status_code == 200
-        assert "results" in response.data
+        assert response.data == {"id": 1}
 
     def test_start_wrong_status_returns_400(self):
         task = _make_task(task_status=TaskStatus.RUNNING)
@@ -240,15 +241,11 @@ class TestStart:
     @patch("apps.trading.views.trading.TradingTask")
     def test_start_conflict_active_task(self, MockModel):
         task = _make_task(task_status=TaskStatus.CREATED)
-        active = _make_task(pk=2, task_status=TaskStatus.RUNNING, name="active-task")
-
-        mock_qs = MagicMock()
-        MockModel.objects.filter.return_value = mock_qs
-        mock_qs.exclude.return_value = mock_qs
-        mock_qs.first.return_value = active
-
         vs = _build_viewset(action="start")
         vs.get_object = MagicMock(return_value=task)
+        vs.task_service.start_task.side_effect = TaskConflictError(
+            "Account already has an active task"
+        )
 
         request = _drf_post()
         vs.request = request

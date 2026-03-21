@@ -99,6 +99,13 @@ export const queryKeys = {
     detail: (id: number) => [...queryKeys.accounts.details(), id] as const,
   },
 
+  strategies: {
+    all: ['strategies'] as const,
+    list: () => [...queryKeys.strategies.all, 'list'] as const,
+    defaults: (id: string) =>
+      [...queryKeys.strategies.all, 'defaults', id] as const,
+  },
+
   // System settings keys
   systemSettings: {
     all: ['system-settings'] as const,

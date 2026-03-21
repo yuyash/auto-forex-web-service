@@ -34,6 +34,22 @@ from apps.trading.tasks import (
 logger: Logger = logging.getLogger(name=__name__)
 
 
+class TaskServiceError(Exception):
+    """Base exception for task service failures."""
+
+
+class TaskValidationError(TaskServiceError, ValueError):
+    """Raised when a task request fails domain validation."""
+
+
+class TaskConflictError(TaskServiceError, ValueError):
+    """Raised when a task conflicts with current system state."""
+
+
+class TaskSubmissionError(TaskServiceError, RuntimeError):
+    """Raised when dispatching a task to workers fails."""
+
+
 class TaskService:
     """Service for managing task lifecycle.
 
@@ -152,7 +168,7 @@ class TaskService:
                             locked_task.pk,
                             locked_task.status,
                         )
-                        raise ValueError(
+                        raise TaskValidationError(
                             f"Task must be in CREATED status to submit (current status: {locked_task.status})"
                         )
 
@@ -178,7 +194,7 @@ class TaskService:
                                 active_task.pk,
                                 active_task.name,
                             )
-                            raise ValueError(
+                            raise TaskConflictError(
                                 f"Account already has an active task: '{active_task.name}' "
                                 f"(status: {active_task.status}). "
                                 f"Please stop the existing task before starting a new one."
@@ -194,7 +210,7 @@ class TaskService:
                             locked_task.pk,
                             error_message,
                         )
-                        raise ValueError(f"Task configuration is invalid: {error_message}")
+                        raise TaskValidationError(f"Task configuration is invalid: {error_message}")
 
                     new_execution_id = uuid4()
                     logger.info(
@@ -215,7 +231,7 @@ class TaskService:
                     task = locked_task
             else:
                 if task.status != TaskStatus.CREATED:
-                    raise ValueError(
+                    raise TaskValidationError(
                         f"Task must be in CREATED status to submit (current status: {task.status})"
                     )
                 if isinstance(task, TradingTask):
@@ -229,7 +245,7 @@ class TaskService:
                         .first()
                     )
                     if active_task:
-                        raise ValueError(
+                        raise TaskConflictError(
                             f"Account already has an active task: '{active_task.name}' "
                             f"(status: {active_task.status}). "
                             f"Please stop the existing task before starting a new one."
@@ -251,14 +267,14 @@ class TaskService:
                             .first()
                         )
                         if active_task:
-                            raise ValueError(
+                            raise TaskConflictError(
                                 f"Account already has an active task: '{active_task.name}' "
                                 f"(status: {active_task.status}). "
                                 f"Please stop the existing task before starting a new one."
                             )
                 is_valid, error_message = task.validate_configuration()
                 if not is_valid:
-                    raise ValueError(f"Task configuration is invalid: {error_message}")
+                    raise TaskValidationError(f"Task configuration is invalid: {error_message}")
 
                 task.execution_id = uuid4()
                 task.status = TaskStatus.STARTING
@@ -329,7 +345,7 @@ class TaskService:
 
             return task
 
-        except (ValueError, RuntimeError):
+        except TaskServiceError:
             raise
         except Exception as e:
             logger.error(
@@ -352,7 +368,7 @@ class TaskService:
                     task.save(update_fields=["status", "execution_id"])
                 except TypeError:
                     task.save()
-            raise RuntimeError(f"Failed to submit task to Celery: {str(e)}") from e
+            raise TaskSubmissionError(f"Failed to submit task to Celery: {str(e)}") from e
 
     def recover_trading_task(self, task: TradingTask) -> TradingTask:
         """Requeue an orphaned trading task with a new execution_id.

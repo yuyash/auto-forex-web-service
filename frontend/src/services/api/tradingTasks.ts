@@ -1,38 +1,58 @@
-/**
- * Trading Task API service using direct axios calls.
- */
-
 import { api } from '../../api/apiClient';
 import { withRetry } from '../../api/client';
+import type {
+  PaginatedResponse,
+  TaskExecution,
+  TradingTask,
+  TradingTaskListParams,
+} from '../../types';
 import type {
   TradingTaskRequest,
   PatchedTradingTaskCreateRequest,
   PaginatedApiResponse,
 } from '../../api/types';
 import type {
-  TradingTask,
-  TradingTaskListParams,
-  PaginatedResponse,
-} from '../../types';
-import type {
   ExecutionMetricsCheckpoint,
   EquityPoint,
   Trade,
   BacktestStrategyEvent,
 } from '../../types/execution';
+import type {
+  BackendPaginatedTradingTasks,
+  BackendTradingTask,
+} from './contracts';
 
 const BASE = '/api/trading/tasks/trading';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const toLocal = (task: any): TradingTask => task as TradingTask;
+function toTradingTask(task: BackendTradingTask): TradingTask {
+  return {
+    ...task,
+    account_id: String(task.account_id),
+    status: task.status as TradingTask['status'],
+    execution_id: task.execution_id ?? undefined,
+    started_at: task.started_at ?? undefined,
+    completed_at: task.completed_at ?? undefined,
+    error_message: task.error_message ?? undefined,
+  };
+}
+
+function toPaginatedResponse(
+  result: BackendPaginatedTradingTasks
+): PaginatedResponse<TradingTask> {
+  return {
+    count: result.count,
+    next: result.next ?? null,
+    previous: result.previous ?? null,
+    results: result.results.map(toTradingTask),
+  };
+}
 
 export const tradingTasksApi = {
   list: async (
     params?: TradingTaskListParams
   ): Promise<PaginatedResponse<TradingTask>> => {
     const result = await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      api.get<PaginatedApiResponse<any>>(`${BASE}/`, {
+      api.get<BackendPaginatedTradingTasks>(`${BASE}/`, {
         account_id: params?.account_id ? Number(params.account_id) : undefined,
         config_id: params?.config_id,
         ordering: params?.ordering,
@@ -42,50 +62,39 @@ export const tradingTasksApi = {
         status: params?.status,
       })
     );
-    return {
-      count: result.count,
-      next: result.next ?? null,
-      previous: result.previous ?? null,
-      results: result.results.map(toLocal),
-    };
+    return toPaginatedResponse(result);
   },
 
   get: async (id: string): Promise<TradingTask> => {
-    const result = await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      api.get<any>(`${BASE}/${id}/`)
+    return toTradingTask(
+      await withRetry(() => api.get<BackendTradingTask>(`${BASE}/${id}/`))
     );
-    return toLocal(result);
   },
 
   create: async (data: TradingTaskRequest): Promise<TradingTask> => {
-    const result = await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      api.post<any>(`${BASE}/`, data)
+    return toTradingTask(
+      await withRetry(() => api.post<BackendTradingTask>(`${BASE}/`, data))
     );
-    return toLocal(result);
   },
 
   update: async (
     id: string,
     data: TradingTaskRequest
   ): Promise<TradingTask> => {
-    const result = await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      api.put<any>(`${BASE}/${id}/`, data)
+    return toTradingTask(
+      await withRetry(() => api.put<BackendTradingTask>(`${BASE}/${id}/`, data))
     );
-    return toLocal(result);
   },
 
   partialUpdate: async (
     id: string,
     data: PatchedTradingTaskCreateRequest
   ): Promise<TradingTask> => {
-    const result = await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      api.patch<any>(`${BASE}/${id}/`, data)
+    return toTradingTask(
+      await withRetry(() =>
+        api.patch<BackendTradingTask>(`${BASE}/${id}/`, data)
+      )
     );
-    return toLocal(result);
   },
 
   delete: async (id: string): Promise<void> => {
@@ -93,51 +102,63 @@ export const tradingTasksApi = {
   },
 
   start: async (id: string): Promise<TradingTask> => {
-    // Do NOT use withRetry — start is not idempotent (dispatches a Celery task).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await api.post<any>(`${BASE}/${id}/start/`, {});
-    return toLocal(result);
+    return toTradingTask(
+      await api.post<BackendTradingTask>(`${BASE}/${id}/start/`, {})
+    );
   },
 
   stop: async (
     id: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _mode?: 'immediate' | 'graceful' | 'graceful_close'
+    mode: 'immediate' | 'graceful' | 'graceful_close' = 'graceful'
   ): Promise<Record<string, unknown>> => {
-    // Do NOT use withRetry — stop dispatches a Celery task.
-    return api.post<Record<string, unknown>>(`${BASE}/${id}/stop/`, {});
+    return api.post<Record<string, unknown>>(`${BASE}/${id}/stop/`, { mode });
   },
 
   pause: async (id: string): Promise<TradingTask> => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await api.post<any>(`${BASE}/${id}/pause/`, {});
-    return toLocal(result);
+    return toTradingTask(
+      await api.post<BackendTradingTask>(`${BASE}/${id}/pause/`, {})
+    );
   },
 
   resume: async (id: string): Promise<TradingTask> => {
-    // Do NOT use withRetry — resume dispatches a Celery task.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await api.post<any>(`${BASE}/${id}/resume/`, {});
-    return toLocal(result);
+    return toTradingTask(
+      await api.post<BackendTradingTask>(`${BASE}/${id}/resume/`, {})
+    );
   },
 
-  restart: async (
+  restart: async (id: string): Promise<TradingTask> => {
+    return toTradingTask(
+      await api.post<BackendTradingTask>(`${BASE}/${id}/restart/`, {})
+    );
+  },
+
+  copy: async (
     id: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _clearState?: boolean
+    data: { new_name: string }
   ): Promise<TradingTask> => {
-    // Do NOT use withRetry — restart is not idempotent.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await api.post<any>(`${BASE}/${id}/restart/`, {});
-    return toLocal(result);
+    const original = await withRetry(() =>
+      api.get<BackendTradingTask>(`${BASE}/${id}/`)
+    );
+    const result = await withRetry(() =>
+      api.post<BackendTradingTask>(`${BASE}/`, {
+        name: data.new_name,
+        config_id: original.config_id,
+        account_id: original.account_id,
+        description: original.description,
+        sell_on_stop: original.sell_on_stop,
+        dry_run: original.dry_run,
+        hedging_enabled: original.hedging_enabled,
+      })
+    );
+    return toTradingTask(result);
   },
 
   getExecutions: async (
     id: string,
     params?: { page?: number; page_size?: number; include_metrics?: boolean }
-  ): Promise<PaginatedResponse<import('../../types').TaskExecution>> => {
+  ): Promise<PaginatedResponse<TaskExecution>> => {
     const result = await withRetry(() =>
-      api.get<PaginatedApiResponse<import('../../types').TaskExecution>>(
+      api.get<PaginatedApiResponse<TaskExecution>>(
         `${BASE}/${id}/executions/`,
         {
           page: params?.page,
@@ -154,67 +175,30 @@ export const tradingTasksApi = {
     };
   },
 
-  copy: async (
-    id: string,
-    _data: { new_name: string }
-  ): Promise<TradingTask> => {
-    const original = await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      api.get<any>(`${BASE}/${id}/`)
-    );
-    const result = await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      api.post<any>(`${BASE}/`, {
-        name: _data.new_name,
-        config: original.config,
-        oanda_account: original.oanda_account,
-        description: original.description,
-        sell_on_stop: original.sell_on_stop,
-      })
-    );
-    return toLocal(result);
-  },
-
   getMetricsCheckpoint: async (
     id: string
   ): Promise<{ checkpoint: ExecutionMetricsCheckpoint | null }> => {
     const task = await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      api.get<any>(`${BASE}/${id}/`)
+      api.get<BackendTradingTask>(`${BASE}/${id}/`)
     );
-    const execution = (task as unknown as TradingTask).latest_execution;
     return {
-      checkpoint: execution
-        ? ({
-            total_return: execution.total_return,
-            total_pnl: execution.total_pnl,
-            total_trades: execution.total_trades,
-            winning_trades: execution.winning_trades,
-            losing_trades: execution.losing_trades,
-            win_rate: execution.win_rate,
-          } as ExecutionMetricsCheckpoint)
+      checkpoint: task.error_message
+        ? { timestamp: task.updated_at, total_pnl: undefined }
         : null,
     };
   },
 
-  getEquityCurve: async (
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _id: string
-  ): Promise<{ equity_curve: EquityPoint[] }> => {
+  getEquityCurve: async (): Promise<{ equity_curve: EquityPoint[] }> => {
     return { equity_curve: [] };
   },
 
-  getTradeLogs: async (
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _id: string
-  ): Promise<{ trade_logs: Trade[] }> => {
+  getTradeLogs: async (): Promise<{ trade_logs: Trade[] }> => {
     return { trade_logs: [] };
   },
 
-  getStrategyEvents: async (
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _id: string
-  ): Promise<{ strategy_events: BacktestStrategyEvent[] }> => {
+  getStrategyEvents: async (): Promise<{
+    strategy_events: BacktestStrategyEvent[];
+  }> => {
     return { strategy_events: [] };
   },
 };
