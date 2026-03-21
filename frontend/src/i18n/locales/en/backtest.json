@@ -202,6 +202,7 @@
   },
   "toast": {
     "startedSuccessfully": "Backtest task started successfully",
+    "pausedSuccessfully": "Backtest task paused successfully",
     "stoppedSuccessfully": "Backtest task stopped successfully",
     "resumedSuccessfully": "Backtest task resumed successfully",
     "restartedSuccessfully": "Backtest task restarted successfully",

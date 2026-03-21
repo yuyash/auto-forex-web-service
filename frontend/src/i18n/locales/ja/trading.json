@@ -118,6 +118,7 @@
   },
   "toast": {
     "startedSuccessfully": "トレーディングタスクが正常に開始されました",
+    "pausedSuccessfully": "トレーディングタスクが正常に一時停止されました",
     "stoppedSuccessfully": "トレーディングタスクが正常に停止されました",
     "resumedSuccessfully": "トレーディングタスクが正常に再開されました",
     "restartedSuccessfully": "トレーディングタスクが正常に再起動されました",

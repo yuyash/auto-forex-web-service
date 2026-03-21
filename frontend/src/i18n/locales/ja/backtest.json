@@ -202,6 +202,7 @@
   },
   "toast": {
     "startedSuccessfully": "バックテストタスクが正常に開始されました",
+    "pausedSuccessfully": "バックテストタスクが正常に一時停止されました",
     "stoppedSuccessfully": "バックテストタスクが正常に停止されました",
     "resumedSuccessfully": "バックテストタスクが正常に再開されました",
     "restartedSuccessfully": "バックテストタスクが正常に再起動されました",
