@@ -104,7 +104,7 @@ export default function TradingTasksPage() {
     }
   };
 
-  const { data, isLoading, error, refetch } = useTradingTasks({
+  const { data, isLoading, error, refresh } = useTradingTasks({
     page,
     page_size: pageSize,
     search: searchQuery || undefined,
@@ -119,9 +119,9 @@ export default function TradingTasksPage() {
   );
 
   useSequentialPolling(
-    async () => {
+    () => {
       logger.debug('Auto-refreshing trading task list');
-      await refetch();
+      return refresh();
     },
     {
       enabled: hasRunningTasks,
@@ -130,7 +130,7 @@ export default function TradingTasksPage() {
   );
 
   const handleRefresh = () => {
-    refetch();
+    void refresh();
   };
 
   // Fetch configurations for filter dropdown and strategies

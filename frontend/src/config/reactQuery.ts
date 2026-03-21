@@ -61,8 +61,8 @@ export const queryKeys = {
       [...queryKeys.backtestTasks.lists(), params] as const,
     details: () => [...queryKeys.backtestTasks.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.backtestTasks.details(), id] as const,
-    executions: (id: string) =>
-      [...queryKeys.backtestTasks.detail(id), 'executions'] as const,
+    executions: (id: string, params?: Record<string, unknown>) =>
+      [...queryKeys.backtestTasks.detail(id), 'executions', params] as const,
     execution: (taskId: string, executionId: string) =>
       [...queryKeys.backtestTasks.executions(taskId), executionId] as const,
   },
@@ -75,8 +75,8 @@ export const queryKeys = {
       [...queryKeys.tradingTasks.lists(), params] as const,
     details: () => [...queryKeys.tradingTasks.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.tradingTasks.details(), id] as const,
-    executions: (id: string) =>
-      [...queryKeys.tradingTasks.detail(id), 'executions'] as const,
+    executions: (id: string, params?: Record<string, unknown>) =>
+      [...queryKeys.tradingTasks.detail(id), 'executions', params] as const,
     execution: (taskId: string, executionId: string) =>
       [...queryKeys.tradingTasks.executions(taskId), executionId] as const,
   },

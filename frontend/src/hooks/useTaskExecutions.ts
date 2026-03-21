@@ -1,20 +1,15 @@
 // Task Execution hooks for data fetching
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { queryClient, queryKeys } from '../config/reactQuery';
 import { backtestTasksApi, tradingTasksApi } from '../services/api';
 import { TaskType } from '../types';
 import type { TaskExecution, PaginatedResponse } from '../types';
-
-// Query key factories for cache invalidation
-export const executionQueryKeys = {
-  backtestExecutions: (taskId: string) => ['backtest-task-executions', taskId],
-  tradingExecutions: (taskId: string) => ['trading-task-executions', taskId],
-};
 
 interface UseTaskExecutionsResult {
   data: PaginatedResponse<TaskExecution> | undefined;
   isLoading: boolean;
   error: Error | null;
-  refetch: () => void;
+  refresh: () => Promise<unknown>;
 }
 
 /**
@@ -35,10 +30,10 @@ export function useTaskExecutions(
 ): UseTaskExecutionsResult {
   const queryKey =
     taskType === TaskType.BACKTEST
-      ? ['backtest-task-executions', taskId, params]
-      : ['trading-task-executions', taskId, params];
+      ? queryKeys.backtestTasks.executions(taskId, params)
+      : queryKeys.tradingTasks.executions(taskId, params);
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey,
     queryFn: async () => {
       const fetchParams =
@@ -78,7 +73,7 @@ export function useTaskExecutions(
     data,
     isLoading,
     error: error as Error | null,
-    refetch,
+    refresh: () => queryClient.invalidateQueries({ queryKey }),
   };
 }
 
@@ -86,7 +81,7 @@ interface UseTaskExecutionResult {
   data: TaskExecution | undefined;
   isLoading: boolean;
   error: Error | null;
-  refetch: () => void;
+  refresh: () => Promise<unknown>;
 }
 
 /**
@@ -99,10 +94,10 @@ export function useTaskExecution(
 ): UseTaskExecutionResult {
   const queryKey =
     taskType === TaskType.BACKTEST
-      ? ['backtest-task-execution', taskId, executionId]
-      : ['trading-task-execution', taskId, executionId];
+      ? queryKeys.backtestTasks.execution(taskId, executionId)
+      : queryKeys.tradingTasks.execution(taskId, executionId);
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey,
     queryFn: async () => {
       const pageSize = 5000;
@@ -129,7 +124,7 @@ export function useTaskExecution(
     data,
     isLoading,
     error: error as Error | null,
-    refetch,
+    refresh: () => queryClient.invalidateQueries({ queryKey }),
   };
 }
 
@@ -137,17 +132,15 @@ export function useTaskExecution(
  * Hook to get a function that invalidates executions cache for a task
  */
 export function useInvalidateExecutions() {
-  const queryClient = useQueryClient();
-
   return {
     invalidateBacktestExecutions: (taskId: string) => {
       queryClient.invalidateQueries({
-        queryKey: executionQueryKeys.backtestExecutions(taskId),
+        queryKey: queryKeys.backtestTasks.executions(taskId),
       });
     },
     invalidateTradingExecutions: (taskId: string) => {
       queryClient.invalidateQueries({
-        queryKey: executionQueryKeys.tradingExecutions(taskId),
+        queryKey: queryKeys.tradingTasks.executions(taskId),
       });
     },
   };

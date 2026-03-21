@@ -97,7 +97,7 @@ export default function BacktestTasksPage() {
     }
   };
 
-  const { data, isLoading, error, refetch } = useBacktestTasks({
+  const { data, isLoading, error, refresh } = useBacktestTasks({
     page,
     page_size: pageSize,
     search: searchQuery || undefined,
@@ -110,9 +110,9 @@ export default function BacktestTasksPage() {
   );
 
   useSequentialPolling(
-    async () => {
+    () => {
       logger.debug('Auto-refreshing backtest task list');
-      await refetch();
+      return refresh();
     },
     {
       enabled: hasRunningTasks,
@@ -121,7 +121,7 @@ export default function BacktestTasksPage() {
   );
 
   const handleRefresh = () => {
-    refetch();
+    void refresh();
   };
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {

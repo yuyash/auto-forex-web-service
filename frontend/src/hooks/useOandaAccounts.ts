@@ -1,8 +1,5 @@
-import { useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
-import { queryKeys } from '../config/reactQuery';
-import { accountsApi } from '../services/api';
+import { useAccounts } from './useAccounts';
 import type { Account } from '../types/strategy';
 
 export interface OandaAccount {
@@ -24,7 +21,7 @@ interface UseOandaAccountsResult {
   accounts: OandaAccount[];
   isLoading: boolean;
   error: Error | null;
-  refetch: () => Promise<void>;
+  refresh: () => Promise<unknown>;
   hasAccounts: boolean;
 }
 
@@ -54,26 +51,16 @@ function normalizeAccount(account: Account): OandaAccount {
 
 export function useOandaAccounts(): UseOandaAccountsResult {
   const { isAuthenticated } = useAuth();
-
-  const query = useQuery({
-    queryKey: queryKeys.accounts.list(),
-    queryFn: () => accountsApi.list(),
-    enabled: isAuthenticated,
-    staleTime: 60_000,
-    select: (data) => data.map(normalizeAccount),
-  });
-
-  const refetch = useCallback(async () => {
-    await query.refetch();
-  }, [query]);
-
-  const accounts = isAuthenticated ? (query.data ?? []) : [];
+  const query = useAccounts(undefined, { enabled: isAuthenticated });
+  const accounts = isAuthenticated
+    ? (query.data ?? []).map(normalizeAccount)
+    : [];
 
   return {
     accounts,
-    isLoading: query.isLoading,
+    isLoading: isAuthenticated ? query.isLoading : false,
     error: query.error as Error | null,
-    refetch,
+    refresh: query.refresh,
     hasAccounts: accounts.length > 0,
   };
 }

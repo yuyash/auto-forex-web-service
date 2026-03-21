@@ -11,14 +11,14 @@ interface UseBacktestTasksResult {
   data: PaginatedResponse<BacktestTask> | null;
   isLoading: boolean;
   error: Error | null;
-  refetch: () => Promise<void>;
+  refresh: () => Promise<unknown>;
 }
 
 interface UseBacktestTaskResult {
   data: BacktestTask | null;
   isLoading: boolean;
   error: Error | null;
-  refetch: () => Promise<void>;
+  refresh: () => Promise<unknown>;
 }
 
 export function invalidateBacktestTasksCache(): void {
@@ -38,9 +38,10 @@ export function useBacktestTasks(
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: async () => {
-      await query.refetch();
-    },
+    refresh: () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.backtestTasks.list(params),
+      }),
   };
 }
 
@@ -57,9 +58,12 @@ export function useBacktestTask(id?: string): UseBacktestTaskResult {
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: async () => {
-      await query.refetch();
-    },
+    refresh: () =>
+      id
+        ? queryClient.invalidateQueries({
+            queryKey: queryKeys.backtestTasks.detail(id),
+          })
+        : Promise.resolve(),
   };
 }
 
@@ -79,8 +83,9 @@ export function useBacktestTaskPolling(
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: async () => {
-      await query.refetch();
-    },
+    refresh: () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.backtestTasks.detail(id),
+      }),
   };
 }

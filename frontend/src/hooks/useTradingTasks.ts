@@ -11,14 +11,14 @@ interface UseTradingTasksResult {
   data: PaginatedResponse<TradingTask> | null;
   isLoading: boolean;
   error: Error | null;
-  refetch: () => Promise<void>;
+  refresh: () => Promise<unknown>;
 }
 
 interface UseTradingTaskResult {
   data: TradingTask | null;
   isLoading: boolean;
   error: Error | null;
-  refetch: () => Promise<void>;
+  refresh: () => Promise<unknown>;
 }
 
 export function invalidateTradingTasksCache(): void {
@@ -38,9 +38,10 @@ export function useTradingTasks(
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: async () => {
-      await query.refetch();
-    },
+    refresh: () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.tradingTasks.list(params),
+      }),
   };
 }
 
@@ -60,9 +61,12 @@ export function useTradingTask(
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: async () => {
-      await query.refetch();
-    },
+    refresh: () =>
+      id
+        ? queryClient.invalidateQueries({
+            queryKey: queryKeys.tradingTasks.detail(id),
+          })
+        : Promise.resolve(),
   };
 }
 
@@ -82,8 +86,9 @@ export function useTradingTaskPolling(
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: async () => {
-      await query.refetch();
-    },
+    refresh: () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.tradingTasks.detail(id),
+      }),
   };
 }
