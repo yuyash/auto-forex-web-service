@@ -115,7 +115,8 @@ python -c "from cryptography.fernet import Fernet; print('OANDA_TOKEN_ENCRYPTION
 
 If you rotate `OANDA_TOKEN_ENCRYPTION_KEY`, keep the previous key in
 `OANDA_TOKEN_ENCRYPTION_FALLBACK_KEYS` until all saved OANDA account tokens have
-been re-encrypted.
+been re-encrypted. The production rollout sequence is documented in
+[docs/oanda-key-rotation.md](docs/oanda-key-rotation.md).
 
 Existing environments that still have plaintext `refresh_tokens.token` rows must
 run `uv run python manage.py migrate` before deploying the new auth code. The

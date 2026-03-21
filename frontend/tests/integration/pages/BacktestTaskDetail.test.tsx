@@ -11,8 +11,18 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BacktestTaskDetail } from '../../../src/components/backtest/BacktestTaskDetail';
 import { TaskStatus } from '../../../src/types/common';
 
-const { mockBacktestStop } = vi.hoisted(() => ({
+const {
+  mockBacktestStart,
+  mockBacktestStop,
+  mockBacktestPause,
+  mockBacktestResume,
+  mockBacktestRestart,
+} = vi.hoisted(() => ({
+  mockBacktestStart: vi.fn(),
   mockBacktestStop: vi.fn(),
+  mockBacktestPause: vi.fn(),
+  mockBacktestResume: vi.fn(),
+  mockBacktestRestart: vi.fn(),
 }));
 
 // Mock API services
@@ -100,7 +110,11 @@ vi.mock('../../../src/hooks/useBacktestTaskMutations', () => ({
 
 vi.mock('../../../src/services/api/backtestTasks', () => ({
   backtestTasksApi: {
+    start: mockBacktestStart,
     stop: mockBacktestStop,
+    pause: mockBacktestPause,
+    resume: mockBacktestResume,
+    restart: mockBacktestRestart,
   },
 }));
 
@@ -117,13 +131,33 @@ vi.mock('../../../src/contexts/AuthContext', () => ({
 }));
 vi.mock('../../../src/components/common/TaskControlButtons', () => ({
   TaskControlButtons: ({
+    onStart,
     onStop,
+    onPause,
+    onResume,
+    onRestart,
   }: {
+    onStart?: (taskId: string) => void | Promise<void>;
     onStop?: (taskId: string) => void | Promise<void>;
+    onPause?: (taskId: string) => void | Promise<void>;
+    onResume?: (taskId: string) => void | Promise<void>;
+    onRestart?: (taskId: string) => void | Promise<void>;
   }) => (
     <div data-testid="task-controls">
+      <button type="button" onClick={() => onStart?.('1')}>
+        Start
+      </button>
       <button type="button" onClick={() => onStop?.('1')}>
         Stop
+      </button>
+      <button type="button" onClick={() => onPause?.('1')}>
+        Pause
+      </button>
+      <button type="button" onClick={() => onResume?.('1')}>
+        Resume
+      </button>
+      <button type="button" onClick={() => onRestart?.('1')}>
+        Restart
       </button>
     </div>
   ),
@@ -168,7 +202,23 @@ function createWrapper() {
 describe('BacktestTaskDetail', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockBacktestStart.mockResolvedValue({
+      ...mockTaskData,
+      status: TaskStatus.STARTING,
+    });
     mockBacktestStop.mockResolvedValue({});
+    mockBacktestPause.mockResolvedValue({
+      ...mockTaskData,
+      status: TaskStatus.PAUSED,
+    });
+    mockBacktestResume.mockResolvedValue({
+      ...mockTaskData,
+      status: TaskStatus.RUNNING,
+    });
+    mockBacktestRestart.mockResolvedValue({
+      ...mockTaskData,
+      status: TaskStatus.STARTING,
+    });
   });
 
   it('renders task name and status', async () => {
@@ -273,6 +323,25 @@ describe('BacktestTaskDetail', () => {
     });
   });
 
+  it('starts created backtest tasks from the detail header', async () => {
+    const mod = await import('../../../src/hooks/useBacktestTasks');
+    vi.mocked(mod.useBacktestTask).mockReturnValueOnce({
+      data: { ...mockTaskData, status: TaskStatus.CREATED },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    const user = userEvent.setup();
+
+    render(<BacktestTaskDetail />, { wrapper: createWrapper() });
+
+    await user.click(screen.getByRole('button', { name: 'Start' }));
+
+    await waitFor(() => {
+      expect(mockBacktestStart).toHaveBeenCalledWith('1');
+    });
+  });
+
   it('confirms before stopping a backtest task', async () => {
     const user = userEvent.setup();
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
@@ -288,6 +357,55 @@ describe('BacktestTaskDetail', () => {
 
     await waitFor(() => {
       expect(mockBacktestStop).toHaveBeenCalledWith('1');
+    });
+  });
+
+  it('pauses running backtest tasks from the detail header', async () => {
+    const user = userEvent.setup();
+    render(<BacktestTaskDetail />, { wrapper: createWrapper() });
+
+    await user.click(screen.getByRole('button', { name: 'Pause' }));
+
+    await waitFor(() => {
+      expect(mockBacktestPause).toHaveBeenCalledWith('1');
+    });
+  });
+
+  it('resumes paused backtest tasks from the detail header', async () => {
+    const mod = await import('../../../src/hooks/useBacktestTasks');
+    vi.mocked(mod.useBacktestTask).mockReturnValueOnce({
+      data: { ...mockTaskData, status: TaskStatus.PAUSED },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    const user = userEvent.setup();
+
+    render(<BacktestTaskDetail />, { wrapper: createWrapper() });
+
+    await user.click(screen.getByRole('button', { name: 'Resume' }));
+
+    await waitFor(() => {
+      expect(mockBacktestResume).toHaveBeenCalledWith('1');
+    });
+  });
+
+  it('restarts stopped backtest tasks from the detail header', async () => {
+    const mod = await import('../../../src/hooks/useBacktestTasks');
+    vi.mocked(mod.useBacktestTask).mockReturnValueOnce({
+      data: { ...mockTaskData, status: TaskStatus.STOPPED },
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    const user = userEvent.setup();
+
+    render(<BacktestTaskDetail />, { wrapper: createWrapper() });
+
+    await user.click(screen.getByRole('button', { name: 'Restart' }));
+
+    await waitFor(() => {
+      expect(mockBacktestRestart).toHaveBeenCalledWith('1');
     });
   });
 });
