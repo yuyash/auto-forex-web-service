@@ -28,6 +28,11 @@ class JWTService:
         """Return a deterministic digest for refresh-token storage and lookup."""
         return sha256(token.encode("utf-8")).hexdigest()
 
+    @staticmethod
+    def _is_sha256_digest(value: str) -> bool:
+        """Return True when the value matches the persisted digest format."""
+        return len(value) == 64 and all(ch in "0123456789abcdef" for ch in value)
+
     def __init__(
         self,
         *,
@@ -149,13 +154,23 @@ class JWTService:
         token_hash = self.hash_refresh_token(refresh_token_value)
 
         with transaction.atomic():
-            try:
+            rt = (
+                RefreshToken.objects.select_for_update()
+                .select_related("user")
+                .filter(token=token_hash)
+                .first()
+            )
+            if rt is None:
+                # Temporary rollout compatibility for rows created before the
+                # hashing migration. Once all environments are migrated, these
+                # rows should no longer exist.
                 rt = (
                     RefreshToken.objects.select_for_update()
                     .select_related("user")
-                    .get(token=token_hash)
+                    .filter(token=refresh_token_value)
+                    .first()
                 )
-            except RefreshToken.DoesNotExist:
+            if rt is None:
                 return None
 
             # --- Family revocation: detect reuse of a revoked token ----------

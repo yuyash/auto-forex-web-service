@@ -1,6 +1,7 @@
 """Integration tests for TokenRefreshView (refresh token rotation)."""
 
 import json
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from django.test import RequestFactory
@@ -116,3 +117,26 @@ class TestTokenRefreshView:
         )
         response2 = self.view(request2)
         assert response2.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_refresh_accepts_legacy_plaintext_refresh_token(self) -> None:
+        """Test rollout compatibility for legacy plaintext DB rows."""
+        user = self._create_user()
+        refresh_token = "legacy_plaintext_refresh_token"
+        legacy_row = RefreshToken.objects.create(
+            user=user,
+            token=refresh_token,
+            expires_at=datetime.now(UTC) + timedelta(days=7),
+        )
+
+        request = self.factory.post(
+            "/api/accounts/auth/refresh",
+            data=json.dumps({}),
+            content_type="application/json",
+            HTTP_COOKIE=f"refresh_token={refresh_token}",
+        )
+        response = self.view(request)
+
+        assert response.status_code == status.HTTP_200_OK
+        legacy_row.refresh_from_db()
+        assert legacy_row.revoked_at is not None
+        assert RefreshToken.objects.filter(user=user).count() == 2
