@@ -7,10 +7,12 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import axios from 'axios';
-import { apiConfig, resolveToken } from '../api/apiConfig';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
+import {
+  fetchTaskResourcePage,
+  isApiErrorWithStatus,
+} from '../services/api/taskResources';
 
 export interface TaskOrder {
   id: string;
@@ -56,15 +58,6 @@ interface UseTaskOrdersResult {
   isLoading: boolean;
   error: Error | null;
   refetch: () => Promise<void>;
-}
-
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  const token = await resolveToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
 }
 
 function getLatestUpdatedAt(orders: TaskOrder[]): string | null {
@@ -122,11 +115,6 @@ export const useTaskOrders = ({
         if (!incremental) setIsLoading(true);
         setError(null);
 
-        const prefix =
-          taskType === TaskType.BACKTEST
-            ? '/api/trading/tasks/backtest'
-            : '/api/trading/tasks/trading';
-
         const params: Record<string, string> = {
           page: String(page),
           page_size: String(pageSize),
@@ -140,19 +128,16 @@ export const useTaskOrders = ({
         const effectiveSince = since ?? (incremental ? sinceRef.current : null);
         if (effectiveSince) params.since = effectiveSince;
 
-        const url = `${apiConfig.BASE}${prefix}/${taskId}/orders/`;
-        const headers = await getAuthHeaders();
-
-        const response = await axios.get(url, {
-          params,
-          headers,
-          withCredentials: apiConfig.WITH_CREDENTIALS,
-        });
+        const data = await fetchTaskResourcePage<TaskOrder>(
+          taskType,
+          taskId,
+          'orders',
+          params
+        );
 
         if (requestId !== latestRequestRef.current) return;
 
-        const data = response.data;
-        const incoming = (data.results || []) as TaskOrder[];
+        const incoming = data.results;
 
         if (incremental && incoming.length > 0) {
           setOrders((prev) => {
@@ -178,10 +163,10 @@ export const useTaskOrders = ({
       } catch (err) {
         if (requestId !== latestRequestRef.current) return;
 
-        if (axios.isAxiosError(err) && err.response) {
-          handleAuthErrorStatus(err.response.status, {
+        if (isApiErrorWithStatus(err)) {
+          handleAuthErrorStatus(err.status, {
             source: 'http',
-            status: err.response.status,
+            status: err.status,
             context: 'task_orders',
           });
         }

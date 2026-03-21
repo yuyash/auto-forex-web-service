@@ -35,17 +35,17 @@ class TestTokenRefreshView:
 
         request = self.factory.post(
             "/api/accounts/auth/refresh",
-            data=json.dumps({"refresh_token": refresh_token}),
+            data=json.dumps({}),
             content_type="application/json",
+            HTTP_COOKIE=f"refresh_token={refresh_token}",
         )
         response = self.view(request)
 
         assert response.status_code == status.HTTP_200_OK
         assert "token" in response.data
-        assert "refresh_token" in response.data
+        assert "refresh_token" not in response.data
         assert "user" in response.data
-        # New refresh token should differ (rotation)
-        assert response.data["refresh_token"] != refresh_token
+        assert response.cookies["refresh_token"].value != refresh_token
 
     def test_refresh_missing_token(self) -> None:
         """Test token refresh without refresh_token in body."""
@@ -82,7 +82,7 @@ class TestTokenRefreshView:
         request.META["HTTP_AUTHORIZATION"] = f"Bearer {token}"
         response = self.view(request)
 
-        # Should fail because refresh_token is missing from body
+        # Should fail because refresh-token cookie is missing.
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_revoked_token_rejected(self) -> None:
@@ -93,8 +93,9 @@ class TestTokenRefreshView:
         # Use it once (rotates — old is revoked)
         request = self.factory.post(
             "/api/accounts/auth/refresh",
-            data=json.dumps({"refresh_token": refresh_token}),
+            data=json.dumps({}),
             content_type="application/json",
+            HTTP_COOKIE=f"refresh_token={refresh_token}",
         )
         response = self.view(request)
         assert response.status_code == status.HTTP_200_OK
@@ -102,8 +103,9 @@ class TestTokenRefreshView:
         # Try to reuse the old token (should fail + family revocation)
         request2 = self.factory.post(
             "/api/accounts/auth/refresh",
-            data=json.dumps({"refresh_token": refresh_token}),
+            data=json.dumps({}),
             content_type="application/json",
+            HTTP_COOKIE=f"refresh_token={refresh_token}",
         )
         response2 = self.view(request2)
         assert response2.status_code == status.HTTP_401_UNAUTHORIZED

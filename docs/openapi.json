@@ -5256,15 +5256,11 @@
                     "token": {
                         "type": "string"
                     },
-                    "refresh_token": {
-                        "type": "string"
-                    },
                     "user": {
                         "$ref": "#/components/schemas/LoginUser"
                     }
                 },
                 "required": [
-                    "refresh_token",
                     "token",
                     "user"
                 ]
@@ -7917,15 +7913,11 @@
                     "token": {
                         "type": "string"
                     },
-                    "refresh_token": {
-                        "type": "string"
-                    },
                     "user": {
                         "$ref": "#/components/schemas/TokenRefreshUser"
                     }
                 },
                 "required": [
-                    "refresh_token",
                     "token",
                     "user"
                 ]

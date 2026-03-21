@@ -1,5 +1,6 @@
 """Views for strategy configuration management."""
 
+from typing import cast
 from uuid import UUID
 
 from django.db import IntegrityError, models
@@ -28,10 +29,12 @@ class StrategyConfigView(generics.ListCreateAPIView):
     serializer_class = StrategyConfigListSerializer
 
     def get_queryset(self):
-        strategy_type = self.request.query_params.get("strategy_type")
-        search = self.request.query_params.get("search")
+        request = cast(Request, self.request)
 
-        queryset = StrategyConfiguration.objects.filter(user=self.request.user.pk)
+        strategy_type = request.query_params.get("strategy_type")
+        search = request.query_params.get("search")
+
+        queryset = StrategyConfiguration.objects.filter(user=request.user.pk)
         if strategy_type:
             queryset = queryset.filter(strategy_type=strategy_type)
         if search:

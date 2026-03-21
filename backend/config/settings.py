@@ -10,31 +10,33 @@ Configuration is done via environment variables and this settings file.
 
 import os
 from pathlib import Path
-from typing import Any
 
 from dotenv import load_dotenv
 
+from config.settings_parts.celery import build_celery_settings
+from config.settings_parts.logging import build_logging_settings
+from config.settings_parts.rest import build_rest_settings
+from config.settings_parts.security import build_secret_settings, build_security_settings
 from config.version import get_version
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables from .env file in project root.
-# override=True ensures .env values take precedence over shell environment variables.
-load_dotenv(BASE_DIR.parent / ".env", override=True)
+# Shell/container environment should take precedence over local .env values.
+load_dotenv(BASE_DIR.parent / ".env", override=False)
 
 # =============================================================================
 # Server Configuration
 # =============================================================================
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv(
-    "SECRET_KEY",
-    "django-insecure-*6sf5x8=a0@4y+y1wwckk&vlp+)nv5%gl+-az@tt*ahkx3zav0",
-)
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "yes")
+_secret_settings = build_secret_settings(debug=DEBUG)
+SECRET_KEY = _secret_settings["SECRET_KEY"]
+IS_TEST_ENV = _secret_settings["IS_TEST_ENV"]
+IS_LOCAL_ENV = _secret_settings["IS_LOCAL_ENV"]
+IS_NON_PRODUCTION_ENV = _secret_settings["IS_NON_PRODUCTION_ENV"]
 
 ALLOWED_HOSTS = [
     host.strip()
@@ -206,55 +208,7 @@ CHANNEL_LAYERS = {
 # Celery Configuration
 # =============================================================================
 
-CELERY_BROKER_URL = REDIS_URL.replace(f"/{REDIS_DB}", "/2")
-CELERY_RESULT_BACKEND = CELERY_BROKER_URL
-CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
-CELERY_TIMEZONE = "UTC"
-CELERY_ENABLE_UTC = True
-
-# Celery logging configuration
-CELERY_WORKER_LOG_FORMAT = "[%(asctime)s: %(levelname)s/%(processName)s] [%(name)s] %(message)s"
-CELERY_WORKER_TASK_LOG_FORMAT = (
-    "[%(asctime)s: %(levelname)s/%(processName)s] [%(task_name)s(%(task_id)s)] %(message)s"
-)
-
-# Queue strategy:
-# - market: live market data streaming
-# - trading: live trading task execution
-# - backtest: backtest task execution + backtest tick publishing
-# - system: maintenance/supervisor/recovery jobs
-CELERY_TASK_DEFAULT_QUEUE = os.getenv("CELERY_TASK_DEFAULT_QUEUE", "default")
-CELERY_TASK_ROUTES = {
-    # Market (live tick streaming)
-    "market.tasks.ensure_tick_pubsub_running": {"queue": "system"},
-    "market.tasks.publish_oanda_ticks": {"queue": "market"},
-    "market.tasks.subscribe_ticks_to_db": {"queue": "market"},
-    "market.tasks.publish_ticks_for_backtest": {"queue": "backtest"},
-    # Trading executions (live)
-    "trading.tasks.run_trading_task": {"queue": "trading"},
-    "trading.tasks.stop_trading_task": {"queue": "trading"},
-    # Backtest executions
-    "trading.tasks.run_backtest_task": {"queue": "backtest"},
-    "trading.tasks.stop_backtest_task": {"queue": "backtest"},
-    # System maintenance
-    "trading.tasks.recover_orphaned_tasks": {"queue": "system"},
-}
-
-# Celery Beat periodic task schedule
-CELERY_BEAT_SCHEDULE = {
-    "recover-orphaned-tasks": {
-        "task": "trading.tasks.recover_orphaned_tasks",
-        "schedule": 300,  # Every 5 minutes
-        "options": {"queue": "system"},
-    },
-    "cleanup-expired-refresh-tokens": {
-        "task": "accounts.tasks.cleanup_expired_refresh_tokens",
-        "schedule": 3600,  # Every hour
-        "options": {"queue": "default"},
-    },
-}
+globals().update(build_celery_settings(REDIS_URL, REDIS_DB))
 
 
 # =============================================================================
@@ -308,73 +262,7 @@ MARKET_BACKTEST_PUBLISH_BATCH_SIZE = int(os.getenv("MARKET_BACKTEST_PUBLISH_BATC
 # Django REST Framework Configuration
 # https://www.django-rest-framework.org/api-guide/settings/
 
-REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": [
-        "apps.accounts.auth.JWTAuthentication",
-    ],
-    "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticated",
-    ],
-    "DEFAULT_RENDERER_CLASSES": [
-        "rest_framework.renderers.JSONRenderer",
-    ],
-    "DEFAULT_PARSER_CLASSES": [
-        "rest_framework.parsers.JSONParser",
-    ],
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
-    "PAGE_SIZE": 50,
-    "DEFAULT_THROTTLE_CLASSES": [
-        "rest_framework.throttling.UserRateThrottle",
-        "rest_framework.throttling.AnonRateThrottle",
-    ],
-    "DEFAULT_THROTTLE_RATES": {
-        "user": "120/minute",
-        "anon": "30/minute",
-    },
-    "DEFAULT_FILTER_BACKENDS": [
-        "rest_framework.filters.SearchFilter",
-        "rest_framework.filters.OrderingFilter",
-    ],
-    "EXCEPTION_HANDLER": "apps.accounts.api_logging.custom_exception_handler",
-    "DATETIME_FORMAT": "%Y-%m-%dT%H:%M:%S.%fZ",
-    "DATE_FORMAT": "%Y-%m-%d",
-    "TIME_FORMAT": "%H:%M:%S",
-    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-}
-
-# =============================================================================
-# drf-spectacular (OpenAPI schema generation)
-# =============================================================================
-
-SPECTACULAR_SETTINGS = {
-    "TITLE": "Auto Forex Trader API",
-    "DESCRIPTION": (
-        "Auto Forex Trader Backend API.\n\n"
-        "## Authentication\n"
-        "Most endpoints require JWT authentication. "
-        "Include the token in the `Authorization: Bearer <token>` header.\n\n"
-        "## Rate Limiting\n"
-        "Authentication endpoints are rate-limited to prevent abuse."
-    ),
-    "VERSION": get_version(),
-    "SERVE_INCLUDE_SCHEMA": False,
-    # Only serve docs UI in DEBUG mode.
-    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"] if DEBUG else [],
-    "SCHEMA_PATH_PREFIX": "/api/",
-    "COMPONENT_SPLIT_REQUEST": True,
-    "TAGS": [
-        {"name": "Accounts", "description": "Authentication and user management"},
-        {"name": "Health", "description": "System health checks"},
-        {"name": "Market", "description": "Market data and OANDA integration"},
-        {"name": "Trading", "description": "Trading tasks and strategy management"},
-    ],
-    "EXTENSIONS": [
-        "apps.accounts.openapi.JWTAuthenticationExtension",
-    ],
-    "ENUM_NAME_OVERRIDES": {
-        "EventTypeEnum": "apps.trading.enums.EventType.choices",
-    },
-}
+REST_FRAMEWORK, SPECTACULAR_SETTINGS = build_rest_settings(debug=DEBUG, version=get_version())
 
 
 # Password validation
@@ -434,184 +322,7 @@ AUTH_USER_MODEL = "accounts.User"
 # Logging Configuration
 # =============================================================================
 
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-LOG_FILE = os.getenv("LOG_FILE", "logs/django.log")
-LOG_MAX_SIZE = int(os.getenv("LOG_MAX_SIZE", "10485760"))  # 10 MB
-LOG_BACKUP_COUNT = int(os.getenv("LOG_BACKUP_COUNT", "5"))
-
-LOG_FILE_PATH = BASE_DIR / LOG_FILE
-LOG_FILE_HANDLER: dict[str, Any] = {
-    "level": LOG_LEVEL,
-    "class": "logging.NullHandler",
-}
-
-if os.getenv("DJANGO_ENABLE_FILE_LOGGING", "True") == "True":
-    try:
-        LOG_FILE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with open(LOG_FILE_PATH, "a", encoding="utf-8"):
-            pass
-        LOG_FILE_HANDLER = {
-            "level": LOG_LEVEL,
-            "class": "logging.handlers.RotatingFileHandler",
-            "filename": LOG_FILE_PATH,
-            "maxBytes": LOG_MAX_SIZE,
-            "backupCount": LOG_BACKUP_COUNT,
-            "formatter": "verbose",
-        }
-    except OSError:
-        # Fall back to console-only logging when file access is restricted
-        LOG_FILE_HANDLER = {
-            "level": "INFO",
-            "class": "logging.NullHandler",
-        }
-
-CELERY_MARKET_LOG_FILE = os.getenv("CELERY_MARKET_LOG_FILE", "logs/celery_market.log")
-CELERY_TRADING_LOG_FILE = os.getenv("CELERY_TRADING_LOG_FILE", "logs/celery_trading.log")
-
-CELERY_MARKET_LOG_PATH = BASE_DIR / CELERY_MARKET_LOG_FILE
-CELERY_TRADING_LOG_PATH = BASE_DIR / CELERY_TRADING_LOG_FILE
-
-CELERY_MARKET_FILE_HANDLER: dict[str, Any] = {
-    "level": LOG_LEVEL,
-    "class": "logging.NullHandler",
-}
-
-CELERY_TRADING_FILE_HANDLER: dict[str, Any] = {
-    "level": LOG_LEVEL,
-    "class": "logging.NullHandler",
-}
-
-
-def _celery_rotating_file_handler(path: Path) -> dict[str, Any]:
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "a", encoding="utf-8"):
-            pass
-        return {
-            "level": LOG_LEVEL,
-            "class": "logging.handlers.RotatingFileHandler",
-            "filename": path,
-            "maxBytes": LOG_MAX_SIZE,
-            "backupCount": LOG_BACKUP_COUNT,
-            "formatter": "celery_task",
-        }
-    except OSError:
-        return {
-            "level": "INFO",
-            "class": "logging.NullHandler",
-        }
-
-
-if os.getenv("DJANGO_ENABLE_FILE_LOGGING", "True") == "True":
-    CELERY_MARKET_FILE_HANDLER = _celery_rotating_file_handler(CELERY_MARKET_LOG_PATH)
-    CELERY_TRADING_FILE_HANDLER = _celery_rotating_file_handler(CELERY_TRADING_LOG_PATH)
-
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "verbose": {
-            "format": "{asctime} {levelname:<8s} {name:<40s} {message}",
-            "style": "{",
-        },
-        "celery_task": {
-            "format": "{asctime} {levelname:<8s} {name:<40s} {pathname}:{lineno} {message}",
-            "style": "{",
-        },
-        "simple": {
-            "format": "{asctime} {levelname:<8s} {message}",
-            "style": "{",
-        },
-    },
-    "filters": {
-        "require_debug_true": {
-            "()": "django.utils.log.RequireDebugTrue",
-        },
-    },
-    "handlers": {
-        "console": {
-            "level": LOG_LEVEL,
-            "class": "logging.StreamHandler",
-            "formatter": "verbose",
-        },
-        "file": LOG_FILE_HANDLER,
-        "celery_market_file": CELERY_MARKET_FILE_HANDLER,
-        "celery_trading_file": CELERY_TRADING_FILE_HANDLER,
-    },
-    "root": {
-        "handlers": ["console", "file"],
-        "level": LOG_LEVEL,
-    },
-    "loggers": {
-        "django": {
-            "handlers": ["console", "file"],
-            "level": LOG_LEVEL,
-            "propagate": False,
-        },
-        # Django can emit very noisy DEBUG stack traces from template variable resolution
-        # (e.g. the technical 404 page iterating URL resolver structures). Keep these
-        # at INFO+ even when LOG_LEVEL=DEBUG so real application logs remain readable.
-        "django.template": {
-            "handlers": ["console", "file"],
-            "level": "INFO",
-            "propagate": False,
-        },
-        "django.template.base": {
-            "handlers": ["console", "file"],
-            "level": "INFO",
-            "propagate": False,
-        },
-        "django.db.backends": {
-            "handlers": ["console"],
-            "level": "WARNING",
-            "propagate": False,
-        },
-        "celery": {
-            "handlers": ["console", "file"],
-            "level": LOG_LEVEL,
-            "propagate": False,
-        },
-        # Per-app Celery task logs (also propagate to root)
-        "apps.market.tasks": {
-            "handlers": ["celery_market_file"],
-            "level": LOG_LEVEL,
-            "propagate": True,
-        },
-        "apps.market.services.oanda": {
-            "handlers": ["celery_market_file"],
-            "level": LOG_LEVEL,
-            "propagate": True,
-        },
-        "apps.market.services.celery": {
-            "handlers": ["celery_market_file"],
-            "level": LOG_LEVEL,
-            "propagate": True,
-        },
-        "apps.trading.tasks": {
-            "handlers": ["celery_trading_file"],
-            "level": LOG_LEVEL,
-            "propagate": True,
-        },
-        "channels": {
-            "handlers": ["console", "file"],
-            "level": LOG_LEVEL,
-            "propagate": False,
-        },
-        # HTTP access logs — always INFO+ so requests are visible in production.
-        "apps.accounts.middlewares.logging": {
-            "handlers": ["console", "file"],
-            "level": "INFO",
-            "propagate": False,
-        },
-        # Avoid noisy cancellation traces from asyncio when clients disconnect
-        # or requests are cancelled (common during local dev with hot reload).
-        "asyncio": {
-            "handlers": ["console", "file"],
-            "level": "WARNING",
-            "propagate": False,
-        },
-    },
-}
+globals().update(build_logging_settings(BASE_DIR))
 
 
 # =============================================================================
@@ -619,53 +330,24 @@ LOGGING = {
 # =============================================================================
 # https://docs.djangoproject.com/en/5.2/topics/security/
 
-if not DEBUG:
-    SECURE_SSL_REDIRECT = True
-    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-    SECURE_HSTS_SECONDS = 31536000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
-    SECURE_CONTENT_TYPE_NOSNIFF = True
-    SECURE_BROWSER_XSS_FILTER = True
-    X_FRAME_OPTIONS = "DENY"
-    CSRF_COOKIE_SECURE = True
-    SESSION_COOKIE_SECURE = True
-
-# Content Security Policy — mitigates XSS (protects localStorage tokens)
-# Applied in both DEBUG and production; override via env if needed.
-CSP_DEFAULT_SRC = os.getenv("CSP_DEFAULT_SRC", "'self'")
-CSP_SCRIPT_SRC = os.getenv("CSP_SCRIPT_SRC", "'self'")
-CSP_STYLE_SRC = os.getenv("CSP_STYLE_SRC", "'self' 'unsafe-inline'")
-CSP_IMG_SRC = os.getenv("CSP_IMG_SRC", "'self' data:")
-CSP_CONNECT_SRC = os.getenv("CSP_CONNECT_SRC", "'self'")
-
-
-# =============================================================================
-# CORS Configuration
-# =============================================================================
-
-CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(",")
-CORS_ALLOW_CREDENTIALS = True
+globals().update(build_security_settings(debug=DEBUG))
 
 
 # =============================================================================
 # JWT Configuration
 # =============================================================================
 
-_jwt_secret = os.getenv("JWT_SECRET_KEY", "")
-if not _jwt_secret:
-    import warnings
-
-    warnings.warn(
-        "JWT_SECRET_KEY is not set — falling back to SECRET_KEY. "
-        "Set a dedicated JWT_SECRET_KEY in production.",
-        stacklevel=1,
-    )
-    _jwt_secret = SECRET_KEY
-JWT_SECRET_KEY = _jwt_secret
-JWT_ALGORITHM = "HS256"
+JWT_SECRET_KEY = _secret_settings["JWT_SECRET_KEY"]
+JWT_ALGORITHM = _secret_settings["JWT_ALGORITHM"]
 JWT_EXPIRATION_DELTA = JWT_EXPIRATION
-REFRESH_TOKEN_EXPIRATION = int(os.getenv("REFRESH_TOKEN_EXPIRATION", "604800"))  # 7 days
+REFRESH_TOKEN_EXPIRATION = _secret_settings["REFRESH_TOKEN_EXPIRATION"]  # 7 days
+AUTH_REFRESH_COOKIE_NAME = _secret_settings["AUTH_REFRESH_COOKIE_NAME"]
+AUTH_REFRESH_COOKIE_HTTPONLY = _secret_settings["AUTH_REFRESH_COOKIE_HTTPONLY"]
+AUTH_REFRESH_COOKIE_SECURE = _secret_settings["AUTH_REFRESH_COOKIE_SECURE"]
+AUTH_REFRESH_COOKIE_SAMESITE = _secret_settings["AUTH_REFRESH_COOKIE_SAMESITE"]
+AUTH_REFRESH_COOKIE_PATH = _secret_settings["AUTH_REFRESH_COOKIE_PATH"]
+AUTH_REFRESH_COOKIE_DOMAIN = _secret_settings["AUTH_REFRESH_COOKIE_DOMAIN"]
+AUTH_REFRESH_COOKIE_MAX_AGE = _secret_settings["AUTH_REFRESH_COOKIE_MAX_AGE"]
 
 
 # =============================================================================

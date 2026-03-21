@@ -80,6 +80,10 @@ describe('Authentication Token Management', () => {
 });
 
 describe('Error Transformation', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   const cases: [number, string, ApiErrorType][] = [
     [401, 'Unauthorized', ApiErrorType.AUTHENTICATION_ERROR],
     [403, 'Forbidden', ApiErrorType.AUTHORIZATION_ERROR],
@@ -103,6 +107,15 @@ describe('Error Transformation', () => {
   it('transforms unknown errors', () => {
     const result = transformApiError('something');
     expect(result.type).toBe(ApiErrorType.UNKNOWN_ERROR);
+  });
+
+  it('clears persisted user data on 401', () => {
+    localStorage.setItem('user', JSON.stringify({ email: 'test@example.com' }));
+    const err = new ApiError('/api/test', 401, 'Unauthorized', {});
+
+    transformApiError(err);
+
+    expect(localStorage.getItem('user')).toBeNull();
   });
 });
 

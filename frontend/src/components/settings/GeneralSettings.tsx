@@ -21,6 +21,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useAccessibility } from '../../hooks/useAccessibility';
 import { useToast } from '../common/useToast';
 import type { ThemeMode } from '../../contexts/AccessibilityContextDefinition';
+import { authApi } from '../../services/api';
 
 const TIMEZONES = [
   'UTC',
@@ -64,7 +65,7 @@ interface UserSettings {
 
 const GeneralSettings = () => {
   const { t, i18n } = useTranslation(['settings', 'common']);
-  const { token, user, login } = useAuth();
+  const { user, token, login } = useAuth();
   const { themeMode, setThemeMode } = useAccessibility();
   const { showSuccess, showError } = useToast();
 
@@ -79,11 +80,7 @@ const GeneralSettings = () => {
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/accounts/settings/', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) throw new Error('Failed to fetch settings');
-      const data = await response.json();
+      const data = await authApi.getUserSettings();
       const userData =
         data && typeof data === 'object' && 'user' in data
           ? (data as { user?: Partial<UserSettings> }).user
@@ -122,22 +119,9 @@ const GeneralSettings = () => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const response = await fetch('/api/accounts/settings/', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(settings),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to save settings');
-      }
-      const data = await response.json();
+      const data = await authApi.updateUserSettings(settings);
       if (data.user && user && token) {
-        const currentRefreshToken = localStorage.getItem('refresh_token') || '';
-        login(token, currentRefreshToken, data.user);
+        login(token, data.user);
       }
       if (settings.language !== i18n.language) {
         await i18n.changeLanguage(settings.language);

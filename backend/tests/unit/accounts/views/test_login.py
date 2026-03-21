@@ -1,6 +1,6 @@
 """Unit tests for UserLoginView (mocked dependencies)."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
@@ -63,3 +63,46 @@ class TestUserLoginView:
         """Test view has no authentication classes."""
         view = UserLoginView()
         assert view.authentication_classes == []
+
+    def test_successful_login_sets_refresh_cookie(self) -> None:
+        """Test successful login returns access token and refresh cookie."""
+        request = self.factory.post(
+            "/api/auth/login",
+            {"email": "test@example.com", "password": "secret"},
+            format="json",
+        )
+        view = UserLoginView()
+
+        mock_user = MagicMock()
+        mock_user.id = 1
+        mock_user.email = "test@example.com"
+        mock_user.username = "testuser"
+        mock_user.is_staff = False
+        mock_user.timezone = "UTC"
+        mock_user.language = "en"
+        mock_user.reset_failed_login = MagicMock()
+
+        serializer_instance = MagicMock()
+        serializer_instance.is_valid.return_value = True
+        serializer_instance.validated_data = {"user": mock_user}
+        view.serializer_class = MagicMock(return_value=serializer_instance)
+
+        with (
+            patch("apps.accounts.views.login.PublicAccountSettings") as mock_settings,
+            patch("apps.accounts.views.login.RateLimiter") as mock_rate_limiter,
+            patch("apps.accounts.views.login.User") as mock_user_model,
+            patch("apps.accounts.views.login.JWTService") as mock_jwt,
+        ):
+            mock_settings.get_settings.return_value.login_enabled = True
+            mock_rate_limiter.is_ip_blocked.return_value = (False, None)
+            mock_user_model.DoesNotExist = Exception
+            mock_user_model.objects.get.side_effect = mock_user_model.DoesNotExist
+            mock_jwt.return_value.generate_token.return_value = "access-token"
+            mock_jwt.return_value.create_refresh_token.return_value = "refresh-token"
+
+            response = view.post(view.initialize_request(request))
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["token"] == "access-token"  # type: ignore[index]
+        assert "refresh_token" not in response.data  # type: ignore[operator]
+        assert response.cookies["refresh_token"].value == "refresh-token"

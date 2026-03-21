@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { accountsApi } from '../../services/api';
 
 interface AccountFormData {
   account_id: string;
@@ -28,14 +29,12 @@ interface AddAccountModalProps {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  token: string;
 }
 
 const AddAccountModal = ({
   open,
   onClose,
   onSuccess,
-  token,
 }: AddAccountModalProps) => {
   const { t } = useTranslation(['settings', 'common']);
 
@@ -109,21 +108,7 @@ const AddAccountModal = ({
     setError(null);
 
     try {
-      const response = await fetch('/api/market/accounts/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.message || errorData.error || 'Failed to add account'
-        );
-      }
+      await accountsApi.create(formData);
 
       // Success
       onSuccess();

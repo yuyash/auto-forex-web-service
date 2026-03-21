@@ -2,6 +2,7 @@
 
 from logging import Logger, getLogger
 
+from django.conf import settings
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny
@@ -10,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.services.jwt import JWTService
+from apps.accounts.utils.cookies import clear_refresh_cookie, set_refresh_cookie
 
 logger: Logger = getLogger(name=__name__)
 
@@ -45,7 +47,6 @@ class TokenRefreshView(APIView):
                 "TokenRefreshResponse",
                 fields={
                     "token": serializers.CharField(),
-                    "refresh_token": serializers.CharField(),
                     "user": inline_serializer(
                         "TokenRefreshUser",
                         fields={
@@ -68,12 +69,16 @@ class TokenRefreshView(APIView):
     )
     def post(self, request: Request) -> Response:
         """Handle token refresh via opaque refresh token."""
-        refresh_token_value = request.data.get("refresh_token", "").strip()
+        refresh_token_value = str(
+            request.data.get("refresh_token")
+            or request.COOKIES.get(settings.AUTH_REFRESH_COOKIE_NAME, "")
+        ).strip()
         if not refresh_token_value:
-            return Response(
+            response = Response(
                 {"error": "refresh_token is required."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+            return clear_refresh_cookie(response)
 
         ip_address = self.get_client_ip(request)
         user_agent = request.META.get("HTTP_USER_AGENT", "")
@@ -89,10 +94,11 @@ class TokenRefreshView(APIView):
                 "Refresh token rejected (invalid/expired/revoked) from %s",
                 ip_address,
             )
-            return Response(
+            response = Response(
                 {"error": "Invalid or expired refresh token."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+            return clear_refresh_cookie(response)
 
         new_access, new_refresh, user = result
 
@@ -102,10 +108,9 @@ class TokenRefreshView(APIView):
             extra={"user_id": user.id, "email": user.email},
         )
 
-        return Response(
+        response = Response(
             {
                 "token": new_access,
-                "refresh_token": new_refresh,
                 "user": {
                     "id": user.id,
                     "email": user.email,
@@ -117,3 +122,4 @@ class TokenRefreshView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+        return set_refresh_cookie(response, new_refresh)

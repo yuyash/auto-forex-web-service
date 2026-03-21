@@ -99,6 +99,12 @@ export const queryKeys = {
     detail: (id: number) => [...queryKeys.accounts.details(), id] as const,
   },
 
+  health: {
+    all: ['health'] as const,
+    backend: () => [...queryKeys.health.all, 'backend'] as const,
+    oanda: () => [...queryKeys.health.all, 'oanda'] as const,
+  },
+
   strategies: {
     all: ['strategies'] as const,
     list: () => [...queryKeys.strategies.all, 'list'] as const,

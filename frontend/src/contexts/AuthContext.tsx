@@ -11,6 +11,8 @@ import { AUTH_LOGOUT_EVENT, type AuthLogoutDetail } from '../utils/authEvents';
 import { setAuthToken, clearAuthToken } from '../api';
 import i18n from '../i18n/config';
 import { useIdleTimeout } from '../hooks/useIdleTimeout';
+import { authApi } from '../services/api';
+import { ApiError } from '../api/apiClient';
 
 // Persist context across HMR to prevent "useAuth must be used within AuthProvider" errors
 // during Vite hot module replacement
@@ -31,63 +33,51 @@ const AuthContext = globalWindow[AUTH_CONTEXT_KEY] as React.Context<
 >;
 
 const getInitialAuthState = (): {
-  token: string | null;
   user: User | null;
-  refreshToken: string | null;
 } => {
   try {
-    const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
-    const storedRefreshToken = localStorage.getItem('refresh_token');
 
-    if (storedToken && storedUser) {
+    if (storedUser) {
       const parsedUser = JSON.parse(storedUser);
       return {
-        token: storedToken,
         user: parsedUser,
-        refreshToken: storedRefreshToken,
       };
     }
   } catch (error) {
     console.error('Failed to parse stored user data:', error);
-    localStorage.removeItem('token');
     localStorage.removeItem('user');
-    localStorage.removeItem('refresh_token');
   }
 
-  return { token: null, user: null, refreshToken: null };
+  return { user: null };
 };
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const initialState = getInitialAuthState();
   const [user, setUser] = useState<User | null>(initialState.user);
-  const [token, setToken] = useState<string | null>(initialState.token);
-  const [refreshTokenValue, setRefreshTokenValue] = useState<string | null>(
-    initialState.refreshToken
-  );
+  const [token, setToken] = useState<string | null>(null);
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(
     null
   );
-  const [systemSettingsLoading, setSystemSettingsLoading] =
+  const [systemSettingsLoadingState, setSystemSettingsLoading] =
     useState<boolean>(true);
+  const [authBootstrapLoading, setAuthBootstrapLoading] = useState(true);
 
-  // Initialize OpenAPI client with stored token on mount
-  useEffect(() => {
-    if (initialState.token) {
-      setAuthToken(initialState.token);
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const clearPersistedAuth = useCallback(() => {
+    localStorage.removeItem('user');
+    clearAuthToken();
+  }, []);
+
+  const clearSessionState = useCallback(() => {
+    setToken(null);
+    setUser(null);
+    clearPersistedAuth();
+  }, [clearPersistedAuth]);
 
   const fetchSystemSettings = useCallback(async () => {
     setSystemSettingsLoading(true);
     try {
-      const response = await fetch('/api/accounts/settings/public');
-      if (response.ok) {
-        const data = await response.json();
-        setSystemSettings(data);
-      } else {
-        console.error('Failed to fetch system settings');
-      }
+      setSystemSettings(await authApi.getPublicSettings());
     } catch (error) {
       console.error('Error fetching system settings:', error);
     } finally {
@@ -101,98 +91,73 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const login = useCallback(
-    (newToken: string, newRefreshToken: string, newUser: User) => {
-      setToken(newToken);
-      setRefreshTokenValue(newRefreshToken);
-      setUser(newUser);
-      localStorage.setItem('token', newToken);
-      localStorage.setItem('refresh_token', newRefreshToken);
-      localStorage.setItem('user', JSON.stringify(newUser));
-      // Configure OpenAPI client with the new token
-      setAuthToken(newToken);
-      // Sync i18n language with user preference (unless user already chose locally)
-      if (newUser.language && !localStorage.getItem('i18nextLng')) {
-        i18n.changeLanguage(newUser.language);
-      }
-    },
-    []
-  );
+  const login = useCallback((newToken: string, newUser: User) => {
+    setToken(newToken);
+    setUser(newUser);
+    localStorage.setItem('user', JSON.stringify(newUser));
+    setAuthToken(newToken);
+    if (newUser.language && !localStorage.getItem('i18nextLng')) {
+      i18n.changeLanguage(newUser.language);
+    }
+  }, []);
 
   const logout = useCallback(async () => {
-    // Call logout API endpoint if token exists
     if (token) {
       try {
-        await fetch('/api/accounts/auth/logout', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        await authApi.logout();
       } catch (error) {
         console.error('Logout API call failed:', error);
-        // Continue with local logout even if API call fails
       }
     }
-
-    // Clear local state and storage
-    setToken(null);
-    setRefreshTokenValue(null);
-    setUser(null);
-    localStorage.removeItem('token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
-    // Clear OpenAPI client token
-    clearAuthToken();
-  }, [token]);
+    clearSessionState();
+  }, [clearSessionState, token]);
 
   const refreshToken = useCallback(async (): Promise<boolean> => {
-    if (!refreshTokenValue) {
-      return false;
-    }
-
     try {
-      const response = await fetch('/api/accounts/auth/refresh', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ refresh_token: refreshTokenValue }),
-      });
-
-      if (!response.ok) {
-        // Token refresh failed, logout user
-        await logout();
-        return false;
-      }
-
-      const data = await response.json();
-
-      if (data.token && data.refresh_token && data.user) {
-        // Update token and user
-        login(data.token, data.refresh_token, data.user);
+      const data = await authApi.refresh();
+      if (data.token && data.user) {
+        login(data.token, data.user);
         return true;
       }
-
       return false;
     } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        clearSessionState();
+        return false;
+      }
       console.error('Token refresh failed:', error);
-      await logout();
       return false;
     }
-  }, [refreshTokenValue, login, logout]);
+  }, [clearSessionState, login]);
 
-  // Set up token refresh interval (refresh every 20 hours, token expires in 24 hours)
+  useEffect(() => {
+    let isMounted = true;
+
+    const bootstrapAuth = async () => {
+      try {
+        await refreshToken();
+      } finally {
+        if (isMounted) {
+          setAuthBootstrapLoading(false);
+        }
+      }
+    };
+
+    void bootstrapAuth();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [refreshToken]);
+
   useEffect(() => {
     if (!token) {
       return;
     }
 
-    // Refresh token every 50 minutes (access token expires in 1 hour)
     const refreshInterval = setInterval(
       () => {
-        refreshToken();
+        void refreshToken();
       },
       50 * 60 * 1000
     );
@@ -251,7 +216,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     token,
     isAuthenticated: !!token && !!user,
     systemSettings,
-    systemSettingsLoading,
+    systemSettingsLoading: systemSettingsLoadingState || authBootstrapLoading,
+    authLoading: authBootstrapLoading,
+    appLoading: systemSettingsLoadingState,
     login,
     logout,
     refreshToken,

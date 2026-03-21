@@ -11,10 +11,12 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import axios from 'axios';
-import { apiConfig, resolveToken } from '../api/apiConfig';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
+import {
+  fetchTaskResourcePage,
+  isApiErrorWithStatus,
+} from '../services/api/taskResources';
 
 export interface TaskTrade {
   id: number | string;
@@ -55,15 +57,6 @@ interface UseTaskTradesResult {
   isLoading: boolean;
   error: Error | null;
   refetch: () => Promise<void>;
-}
-
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  const token = await resolveToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
 }
 
 function getLatestUpdatedAt(trades: TaskTrade[]): string | null {
@@ -146,11 +139,6 @@ export const useTaskTrades = ({
         if (!incremental) setIsLoading(true);
         setError(null);
 
-        const prefix =
-          taskType === TaskType.BACKTEST
-            ? '/api/trading/tasks/backtest'
-            : '/api/trading/tasks/trading';
-
         const apiDirection =
           direction === 'long'
             ? 'buy'
@@ -169,21 +157,16 @@ export const useTaskTrades = ({
         const effectiveSince = since ?? (incremental ? sinceRef.current : null);
         if (effectiveSince) params.since = effectiveSince;
 
-        const url = `${apiConfig.BASE}${prefix}/${taskId}/trades/`;
-        const headers = await getAuthHeaders();
-
-        const response = await axios.get(url, {
-          params,
-          headers,
-          withCredentials: apiConfig.WITH_CREDENTIALS,
-        });
+        const data = await fetchTaskResourcePage<Record<string, unknown>>(
+          taskType,
+          taskId,
+          'trades',
+          params
+        );
 
         if (requestId !== latestRequestRef.current) return;
 
-        const data = response.data;
-        const rawResults = (data.results || []) as Array<
-          Record<string, unknown>
-        >;
+        const rawResults = data.results;
         const incoming = mapTradeResults(rawResults, page, pageSize);
 
         if (incremental && incoming.length > 0) {
@@ -210,10 +193,10 @@ export const useTaskTrades = ({
       } catch (err) {
         if (requestId !== latestRequestRef.current) return;
 
-        if (axios.isAxiosError(err) && err.response) {
-          handleAuthErrorStatus(err.response.status, {
+        if (isApiErrorWithStatus(err)) {
+          handleAuthErrorStatus(err.status, {
             source: 'http',
-            status: err.response.status,
+            status: err.status,
             context: 'task_trades',
           });
         }

@@ -26,9 +26,19 @@ export interface TaskDetailsResponse {
   current_execution: ExecutionSummary | null;
 }
 
+export interface TaskLogsResponse {
+  logs: Array<{
+    id?: string;
+    timestamp: string;
+    level: string;
+    message: string;
+  }>;
+}
+
 export interface PollingCallbacks {
   onStatusUpdate?: (status: TaskStatusResponse) => void;
   onDetailsUpdate?: (details: TaskDetailsResponse) => void;
+  onLogsUpdate?: (logs: TaskLogsResponse) => void;
   onError?: (error: Error) => void;
 }
 
@@ -45,6 +55,8 @@ interface PollingState {
   retryCount: number;
   currentInterval: number;
   lastStatus: TaskStatus | null;
+  lastLogTimestamp: string | null;
+  cachedLogs: TaskLogsResponse['logs'];
 }
 
 /**
@@ -81,6 +93,8 @@ export class TaskPollingService {
       retryCount: 0,
       currentInterval: this.options.interval,
       lastStatus: null,
+      lastLogTimestamp: null,
+      cachedLogs: [],
     };
   }
 
@@ -89,8 +103,7 @@ export class TaskPollingService {
     this.state.isPolling = true;
     this.state.retryCount = 0;
     this.state.currentInterval = this.options.interval;
-    this.poll();
-    this.scheduleNextPoll();
+    void this.pollAndSchedule(false);
   }
 
   public stopPolling(): void {
@@ -121,6 +134,10 @@ export class TaskPollingService {
     this.options = { ...this.options, ...options };
     if (options.interval && this.state.isPolling) {
       this.state.currentInterval = options.interval;
+      if (this.state.intervalId !== null) {
+        window.clearTimeout(this.state.intervalId);
+        this.scheduleNextPoll();
+      }
     }
   }
 
@@ -129,9 +146,26 @@ export class TaskPollingService {
   private scheduleNextPoll(): void {
     if (!this.state.isPolling) return;
     this.state.intervalId = window.setTimeout(() => {
-      this.poll();
-      this.scheduleNextPoll();
+      this.state.intervalId = null;
+      void this.pollAndSchedule(true);
     }, this.state.currentInterval);
+  }
+
+  private async pollAndSchedule(fromTimer: boolean): Promise<void> {
+    if (!this.state.isPolling) {
+      return;
+    }
+
+    if (!fromTimer && this.state.intervalId !== null) {
+      window.clearTimeout(this.state.intervalId);
+      this.state.intervalId = null;
+    }
+
+    await this.poll();
+
+    if (this.state.isPolling) {
+      this.scheduleNextPoll();
+    }
   }
 
   /**
@@ -165,6 +199,56 @@ export class TaskPollingService {
         this.callbacks.onDetailsUpdate({
           task: task as unknown as BacktestTask | TradingTask,
           current_execution: null,
+        });
+      }
+
+      if (this.callbacks.onLogsUpdate) {
+        const logsUrl =
+          this.taskType === 'backtest'
+            ? `/api/trading/tasks/backtest/${this.taskId}/logs/`
+            : `/api/trading/tasks/trading/${this.taskId}/logs/`;
+
+        const logsResponse = await api.get<{
+          results?: TaskLogsResponse['logs'];
+        }>(logsUrl, {
+          page: 1,
+          page_size: 100,
+          since: this.state.lastLogTimestamp ?? undefined,
+        });
+
+        const incomingLogs = logsResponse.results ?? [];
+        if (incomingLogs.length > 0) {
+          const mergedLogs = new Map<
+            string,
+            TaskLogsResponse['logs'][number]
+          >();
+          for (const log of this.state.cachedLogs) {
+            mergedLogs.set(
+              log.id ?? `${log.timestamp}:${log.level}:${log.message}`,
+              log
+            );
+          }
+          for (const log of incomingLogs) {
+            mergedLogs.set(
+              log.id ?? `${log.timestamp}:${log.level}:${log.message}`,
+              log
+            );
+          }
+          this.state.cachedLogs = Array.from(mergedLogs.values())
+            .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+            .slice(0, 200);
+
+          const latestLogTimestamp = incomingLogs
+            .map((log) => log.timestamp)
+            .sort()
+            .at(-1);
+          if (latestLogTimestamp) {
+            this.state.lastLogTimestamp = latestLogTimestamp;
+          }
+        }
+
+        this.callbacks.onLogsUpdate({
+          logs: this.state.cachedLogs,
         });
       }
 

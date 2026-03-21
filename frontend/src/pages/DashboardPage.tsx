@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 import {
   Container,
@@ -21,6 +21,8 @@ import TimerIcon from '@mui/icons-material/Timer';
 import { useTranslation } from 'react-i18next';
 import { useOandaAccounts } from '../hooks/useOandaAccounts';
 import { useChartPreferences } from '../hooks/useChartPreferences';
+import { useAppSettings } from '../hooks/useAppSettings';
+import { useOandaHealthStatus } from '../hooks/useOandaHealthStatus';
 import { Breadcrumbs } from '../components/common';
 import ActiveTasksWidget from '../components/dashboard/ActiveTasksWidget';
 import RecentBacktestsWidget from '../components/dashboard/RecentBacktestsWidget';
@@ -35,6 +37,7 @@ import type { Granularity } from '../types/chart';
 
 const DashboardPage = () => {
   const { t } = useTranslation(['dashboard', 'common']);
+  const { settings: appSettings } = useAppSettings();
 
   // Chart preferences with localStorage persistence
   const { preferences, updatePreference } = useChartPreferences();
@@ -47,35 +50,19 @@ const DashboardPage = () => {
   );
 
   // OANDA account state - using shared hook with caching
-  const {
-    accounts: oandaAccounts,
-    hasAccounts: hasOandaAccount,
-    isLoading: accountsLoading,
-  } = useOandaAccounts();
+  const { accounts: oandaAccounts, hasAccounts: hasOandaAccount } =
+    useOandaAccounts();
 
-  // Log account state
-  useEffect(() => {
-    console.log('[DashboardPage] OANDA accounts state', {
-      accountCount: oandaAccounts.length,
-      hasOandaAccount,
-      isLoading: accountsLoading,
-      accounts: oandaAccounts.map((a) => ({
-        id: a.id,
-        account_id: a.account_id,
-        is_default: a.is_default,
-      })),
-    });
-  }, [oandaAccounts, hasOandaAccount, accountsLoading]);
+  useOandaHealthStatus({
+    enabled: hasOandaAccount,
+    refreshIntervalMs: appSettings.healthCheckIntervalSeconds * 1000,
+    activeCheck: true,
+  });
 
   // Use default account or first account
   const defaultAccount =
     oandaAccounts.find((acc) => acc.is_default) || oandaAccounts[0];
   const oandaAccountId = defaultAccount?.account_id;
-
-  console.log('[DashboardPage] Selected account', {
-    hasDefaultAccount: !!defaultAccount,
-    accountId: oandaAccountId,
-  });
 
   // Popover anchors
   const [instrumentAnchor, setInstrumentAnchor] =

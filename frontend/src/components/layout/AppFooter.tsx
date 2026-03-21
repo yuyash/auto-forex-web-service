@@ -6,8 +6,10 @@ import {
   Info as InfoIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../../contexts/AuthContext';
 import { useAppSettings } from '../../hooks/useAppSettings';
+import { healthApi } from '../../services/api';
+import { useOandaAccounts } from '../../hooks/useOandaAccounts';
+import { useOandaHealthStatus } from '../../hooks/useOandaHealthStatus';
 
 interface StrategyStatus {
   isActive: boolean;
@@ -24,23 +26,22 @@ interface OandaHealthStatus {
 
 const AppFooter = () => {
   const { t } = useTranslation('common');
-  const { token } = useAuth();
   const { settings: appSettings } = useAppSettings();
   const [backendVersion, setBackendVersion] = useState<string>('');
-  const [oandaHealth, setOandaHealth] = useState<OandaHealthStatus | null>(
-    null
-  );
+  const { hasAccounts } = useOandaAccounts();
+  const { data: oandaData } = useOandaHealthStatus({
+    enabled: hasAccounts,
+    refreshIntervalMs: appSettings.healthCheckIntervalSeconds * 1000,
+    activeCheck: false,
+  });
 
   // Fetch backend version from health endpoint
   useEffect(() => {
     const fetchBackendVersion = async () => {
       try {
-        const response = await fetch('/api/health/');
-        if (response.ok) {
-          const data = await response.json();
-          if (data?.version) {
-            setBackendVersion(data.version);
-          }
+        const data = await healthApi.backend();
+        if (data?.version) {
+          setBackendVersion(data.version);
         }
       } catch {
         // Silently ignore - version display is non-critical
@@ -49,231 +50,32 @@ const AppFooter = () => {
     fetchBackendVersion();
   }, []);
 
-  // Check OANDA API health periodically
-  useEffect(() => {
-    // Early return if no token - don't set state
-    if (!token) {
-      return;
-    }
-
-    const checkAccountExists = async (): Promise<boolean> => {
-      try {
-        const response = await fetch('/api/market/accounts/', {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          return false;
-        }
-
-        const data = await response.json().catch(() => null);
-
-        // Check if accounts array exists and has at least one account
-        if (data && typeof data === 'object' && 'results' in data) {
-          const results = (data as { results?: unknown }).results;
-          return Array.isArray(results) && results.length > 0;
-        }
-
-        // If response is an array directly
-        return Array.isArray(data) && data.length > 0;
-      } catch {
-        return false;
+  const oandaHealth: OandaHealthStatus | null = !hasAccounts
+    ? {
+        state: 'empty',
+        message: t('status.noOandaAccount'),
       }
-    };
+    : oandaData?.status && typeof oandaData.status === 'object'
+      ? (() => {
+          const status = oandaData.status as {
+            is_available?: unknown;
+            error_message?: unknown;
+            checked_at?: unknown;
+          };
+          const isAvailable = !!status.is_available;
 
-    const fetchLatest = async () => {
-      const response = await fetch('/api/market/health/oanda/', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json().catch(() => null as unknown);
-
-      return { response, data };
-    };
-
-    const runCheck = async () => {
-      const response = await fetch('/api/market/health/oanda/', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await response.json().catch(() => null as unknown);
-
-      return { response, data };
-    };
-
-    const checkHealth = async () => {
-      try {
-        // First check if any OANDA account exists
-        const hasAccount = await checkAccountExists();
-
-        if (!hasAccount) {
-          setOandaHealth({
-            state: 'empty',
-            message: t('status.noOandaAccount'),
-          });
-          return;
-        }
-
-        const { response: latestResp, data: latestData } = await fetchLatest();
-
-        if (!latestResp.ok) {
-          setOandaHealth({
-            state: 'disconnected',
-            message: 'Failed to check OANDA health',
-            lastChecked: new Date(),
-          });
-          return;
-        }
-
-        // Backend shape: { account: {...}, status: {...} | null }
-        const status =
-          latestData && typeof latestData === 'object' && 'status' in latestData
-            ? (latestData as { status?: unknown }).status
-            : null;
-
-        // If there's no prior status, trigger a live check via POST.
-        if (!status) {
-          const { response: checkResp, data: checkData } = await runCheck();
-          if (!checkResp.ok) {
-            setOandaHealth({
-              state: 'disconnected',
-              message: 'Failed to check OANDA health',
-              lastChecked: new Date(),
-            });
-            return;
-          }
-
-          const checkedStatus =
-            checkData && typeof checkData === 'object' && 'status' in checkData
-              ? (checkData as { status?: unknown }).status
-              : null;
-
-          if (!checkedStatus || typeof checkedStatus !== 'object') {
-            setOandaHealth({
-              state: 'disconnected',
-              message: 'Failed to check OANDA health',
-              lastChecked: new Date(),
-            });
-            return;
-          }
-
-          const isAvailable = Boolean(
-            (checkedStatus as { is_available?: unknown }).is_available
-          );
-          const checkedAtRaw = (checkedStatus as { checked_at?: unknown })
-            .checked_at;
-          const checkedAt =
-            typeof checkedAtRaw === 'string'
-              ? new Date(checkedAtRaw)
-              : new Date();
-          const errorMessage = String(
-            (checkedStatus as { error_message?: unknown }).error_message ?? ''
-          );
-
-          setOandaHealth({
+          return {
             state: isAvailable ? 'connected' : 'disconnected',
             message: isAvailable
               ? 'OANDA API is reachable'
-              : errorMessage || 'OANDA API is unavailable',
-            lastChecked: checkedAt,
-          });
-          return;
-        }
-
-        if (typeof status !== 'object') {
-          setOandaHealth({
-            state: 'disconnected',
-            message: 'Failed to check OANDA health',
-            lastChecked: new Date(),
-          });
-          return;
-        }
-
-        const checkedAtRaw = (status as { checked_at?: unknown }).checked_at;
-        const checkedAt =
-          typeof checkedAtRaw === 'string' ? new Date(checkedAtRaw) : undefined;
-        const isStale = checkedAt
-          ? Date.now() - checkedAt.getTime() >
-            appSettings.healthCheckIntervalSeconds * 1000
-          : true;
-
-        if (isStale) {
-          // Refresh via POST when the latest saved status is stale.
-          const { response: checkResp, data: checkData } = await runCheck();
-          if (
-            checkResp.ok &&
-            checkData &&
-            typeof checkData === 'object' &&
-            'status' in checkData
-          ) {
-            const refreshed = (checkData as { status?: unknown }).status;
-            if (refreshed && typeof refreshed === 'object') {
-              const isAvailable = Boolean(
-                (refreshed as { is_available?: unknown }).is_available
-              );
-              const refreshedAtRaw = (refreshed as { checked_at?: unknown })
-                .checked_at;
-              const refreshedAt =
-                typeof refreshedAtRaw === 'string'
-                  ? new Date(refreshedAtRaw)
-                  : new Date();
-              const errorMessage = String(
-                (refreshed as { error_message?: unknown }).error_message ?? ''
-              );
-              setOandaHealth({
-                state: isAvailable ? 'connected' : 'disconnected',
-                message: isAvailable
-                  ? 'OANDA API is reachable'
-                  : errorMessage || 'OANDA API is unavailable',
-                lastChecked: refreshedAt,
-              });
-              return;
-            }
-          }
-        }
-
-        const isAvailable = Boolean(
-          (status as { is_available?: unknown }).is_available
-        );
-        const errorMessage = String(
-          (status as { error_message?: unknown }).error_message ?? ''
-        );
-
-        setOandaHealth({
-          state: isAvailable ? 'connected' : 'disconnected',
-          message: isAvailable
-            ? 'OANDA API is reachable'
-            : errorMessage || 'OANDA API is unavailable',
-          lastChecked: checkedAt,
-        });
-      } catch (error) {
-        console.error('Error checking OANDA health:', error);
-        setOandaHealth({
-          state: 'disconnected',
-          message: 'Health check failed',
-          lastChecked: new Date(),
-        });
-      }
-    };
-
-    // Check immediately
-    checkHealth();
-
-    // Check every N seconds (configurable)
-    const interval = setInterval(
-      checkHealth,
-      appSettings.healthCheckIntervalSeconds * 1000
-    );
-
-    return () => clearInterval(interval);
-  }, [token, t, appSettings.healthCheckIntervalSeconds]);
+              : String(status.error_message ?? 'OANDA API is unavailable'),
+            lastChecked:
+              typeof status.checked_at === 'string'
+                ? new Date(status.checked_at)
+                : undefined,
+          };
+        })()
+      : null;
 
   // Derive connection status from OANDA health
   const derivedConnectionStatus: OandaConnectionState =
