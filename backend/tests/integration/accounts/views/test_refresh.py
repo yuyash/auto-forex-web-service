@@ -6,7 +6,7 @@ import pytest
 from django.test import RequestFactory
 from rest_framework import status
 
-from apps.accounts.models import User
+from apps.accounts.models import RefreshToken, User
 from apps.accounts.services.jwt import JWTService
 from apps.accounts.views.refresh import TokenRefreshView
 
@@ -32,6 +32,7 @@ class TestTokenRefreshView:
         """Test successful token refresh with rotation."""
         user = self._create_user()
         refresh_token = self.jwt.create_refresh_token(user)
+        stored_token = RefreshToken.objects.get(user=user)
 
         request = self.factory.post(
             "/api/accounts/auth/refresh",
@@ -46,6 +47,12 @@ class TestTokenRefreshView:
         assert "refresh_token" not in response.data
         assert "user" in response.data
         assert response.cookies["refresh_token"].value != refresh_token
+        assert stored_token.token == JWTService.hash_refresh_token(refresh_token)
+        assert stored_token.token != refresh_token
+
+        stored_token.refresh_from_db()
+        assert stored_token.revoked_at is not None
+        assert RefreshToken.objects.filter(user=user).count() == 2
 
     def test_refresh_missing_token(self) -> None:
         """Test token refresh without refresh_token in body."""

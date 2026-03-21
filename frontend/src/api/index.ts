@@ -11,7 +11,7 @@ export * from './types';
 export { api, ApiError } from './apiClient';
 
 // Export API config
-export { apiConfig, getAuthHeaders, resolveToken } from './apiConfig';
+export { apiConfig } from './apiConfig';
 
 // Export wrapper utilities
 export {

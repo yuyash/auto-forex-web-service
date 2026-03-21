@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { authApi } from '../services/api';
 import { ApiError } from '../api/apiClient';
+import { logger } from '../utils/logger';
 
 interface LoginFormData {
   email: string;
@@ -137,7 +138,9 @@ const LoginPage = () => {
         });
         return;
       }
-      console.error('Login error:', error);
+      logger.error('Login error', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       setErrors({
         general: t('errors.unexpectedError'),
       });

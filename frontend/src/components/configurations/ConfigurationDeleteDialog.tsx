@@ -26,6 +26,7 @@ import type {
 } from '../../types/configuration';
 import { configurationsApi } from '../../services/api/configurations';
 import { useTranslation } from 'react-i18next';
+import { logger } from '../../utils/logger';
 
 interface ConfigurationDeleteDialogProps {
   open: boolean;
@@ -54,7 +55,10 @@ const ConfigurationDeleteDialog = ({
           const tasks = await configurationsApi.getTasks(configuration.id);
           setTasks(tasks || []);
         } catch (error) {
-          console.error('Failed to fetch tasks:', error);
+          logger.error('Failed to fetch configuration tasks before delete', {
+            configurationId: configuration.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
           setTasks([]);
         } finally {
           setLoadingTasks(false);

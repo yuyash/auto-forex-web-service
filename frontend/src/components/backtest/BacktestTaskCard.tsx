@@ -192,6 +192,30 @@ export default function BacktestTaskCard({
     }
   };
 
+  const handlePause = async (taskId: string) => {
+    setIsLoading(true);
+    try {
+      await backtestTasksApi.pause(taskId);
+      setOptimisticStatus(TaskStatus.PAUSED);
+      showSuccess(t('backtest:toast.pausedSuccessfully'));
+      onRefresh?.();
+    } catch (error) {
+      logger.error('Failed to pause backtest task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      setOptimisticStatus(null);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to pause task';
+      showError(errorMessage, 8000, {
+        label: 'Retry',
+        onClick: () => handlePause(taskId),
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleRestart = async (taskId: string) => {
     setIsLoading(true);
     try {
@@ -342,6 +366,7 @@ export default function BacktestTaskCard({
             status={displayStatus}
             onStart={handleStart}
             onStop={handleStopRequest}
+            onPause={handlePause}
             onResume={handleResume}
             onRestart={handleRestart}
             onDelete={handleDelete}

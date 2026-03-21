@@ -4,6 +4,14 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+const { mockBroadcastAuthLogout } = vi.hoisted(() => ({
+  mockBroadcastAuthLogout: vi.fn(),
+}));
+
+vi.mock('../../../src/utils/authEvents', () => ({
+  broadcastAuthLogout: mockBroadcastAuthLogout,
+}));
+
 import {
   configureApiClient,
   setAuthToken,
@@ -82,6 +90,7 @@ describe('Authentication Token Management', () => {
 describe('Error Transformation', () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.clearAllMocks();
   });
 
   const cases: [number, string, ApiErrorType][] = [
@@ -109,13 +118,17 @@ describe('Error Transformation', () => {
     expect(result.type).toBe(ApiErrorType.UNKNOWN_ERROR);
   });
 
-  it('clears persisted user data on 401', () => {
-    localStorage.setItem('user', JSON.stringify({ email: 'test@example.com' }));
+  it('broadcasts forced logout on 401', () => {
     const err = new ApiError('/api/test', 401, 'Unauthorized', {});
 
     transformApiError(err);
 
-    expect(localStorage.getItem('user')).toBeNull();
+    expect(mockBroadcastAuthLogout).toHaveBeenCalledWith({
+      source: 'http',
+      status: 401,
+      message: 'Session expired',
+      context: 'api_client',
+    });
   });
 });
 

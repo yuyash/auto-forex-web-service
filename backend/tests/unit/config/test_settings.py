@@ -51,6 +51,7 @@ class TestSettings:
         assert hasattr(settings, "JWT_SECRET_KEY")
         assert hasattr(settings, "JWT_ALGORITHM")
         assert hasattr(settings, "JWT_EXPIRATION_DELTA")
+        assert hasattr(settings, "OANDA_TOKEN_ENCRYPTION_KEY")
 
     def test_celery_settings_configured(self):
         """Test Celery settings are configured."""
@@ -62,6 +63,8 @@ class TestSettings:
         assert hasattr(settings, "CORS_ALLOWED_ORIGINS") or hasattr(
             settings, "CORS_ALLOW_ALL_ORIGINS"
         )
+        assert "corsheaders" in settings.INSTALLED_APPS
+        assert "corsheaders.middleware.CorsMiddleware" in settings.MIDDLEWARE
 
     def test_rest_framework_configured(self):
         """Test REST framework is configured."""

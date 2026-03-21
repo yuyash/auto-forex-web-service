@@ -18,6 +18,7 @@ import {
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { accountsApi } from '../../services/api';
+import { logger } from '../../utils/logger';
 
 interface AccountFormData {
   account_id: string;
@@ -114,7 +115,9 @@ const AddAccountModal = ({
       onSuccess();
       handleClose();
     } catch (err) {
-      console.error('Error adding account:', err);
+      logger.error('Error adding account', {
+        error: err instanceof Error ? err.message : String(err),
+      });
       setError(
         err instanceof Error ? err.message : t('settings:messages.saveError')
       );

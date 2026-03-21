@@ -35,6 +35,7 @@ import ConfirmDialog from '../common/ConfirmDialog';
 import type { Account } from '../../types/strategy';
 import { accountsApi } from '../../services/api/accounts';
 import type { OandaAccounts, OandaAccountsRequest } from '../../api/types';
+import { logger } from '../../utils/logger';
 
 interface AccountFormData {
   account_id: string;
@@ -118,7 +119,12 @@ const AccountManagement = () => {
           })();
         }
       } catch (caughtError) {
-        console.error('Error fetching accounts:', caughtError);
+        logger.error('Error fetching accounts', {
+          error:
+            caughtError instanceof Error
+              ? caughtError.message
+              : String(caughtError),
+        });
         showError(t('common:errors.fetchFailed'));
       } finally {
         if (showLoading) {
@@ -235,7 +241,9 @@ const AccountManagement = () => {
       handleDialogClose();
       await fetchAccounts({ showLoading: false });
     } catch (error: unknown) {
-      console.error('Error saving account:', error);
+      logger.error('Error saving account', {
+        error: error instanceof Error ? error.message : String(error),
+      });
 
       // Extract validation details from TransformedApiError or ApiError
       let message = t('settings:messages.saveError');
@@ -291,7 +299,9 @@ const AccountManagement = () => {
       setAccountToDelete(null);
       await fetchAccounts({ showLoading: false });
     } catch (error) {
-      console.error('Error deleting account:', error);
+      logger.error('Error deleting account', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       showError(t('common:errors.deleteFailed'));
     }
   };

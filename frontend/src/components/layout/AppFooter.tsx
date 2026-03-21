@@ -10,6 +10,8 @@ import { useAppSettings } from '../../hooks/useAppSettings';
 import { healthApi } from '../../services/api';
 import { useOandaAccounts } from '../../hooks/useOandaAccounts';
 import { useOandaHealthStatus } from '../../hooks/useOandaHealthStatus';
+import { useTradingTasks } from '../../hooks/useTradingTasks';
+import { TaskStatus } from '../../types/common';
 
 interface StrategyStatus {
   isActive: boolean;
@@ -33,6 +35,11 @@ const AppFooter = () => {
     enabled: hasAccounts,
     refreshIntervalMs: appSettings.healthCheckIntervalSeconds * 1000,
     activeCheck: false,
+  });
+  const { data: activeTradingTasks } = useTradingTasks({
+    page: 1,
+    page_size: 3,
+    status: TaskStatus.RUNNING,
   });
 
   // Fetch backend version from health endpoint
@@ -97,9 +104,19 @@ const AppFooter = () => {
     ? `${oandaHealth.message}\nLast checked: ${formatLastChecked(oandaHealth.lastChecked)}`
     : 'Checking connection...';
 
-  // Strategy status - currently not tracking active strategies
-  // TODO: Implement by checking for running trading tasks
-  const derivedStrategyStatus: StrategyStatus = { isActive: false };
+  const derivedStrategyStatus: StrategyStatus =
+    activeTradingTasks && activeTradingTasks.count > 0
+      ? {
+          isActive: true,
+          strategyName:
+            activeTradingTasks.count === 1 && activeTradingTasks.results[0]
+              ? activeTradingTasks.results[0].name
+              : t('status.activeTasks', {
+                  count: activeTradingTasks.count,
+                  defaultValue: `${activeTradingTasks.count} active tasks`,
+                }),
+        }
+      : { isActive: false };
 
   return (
     <Box

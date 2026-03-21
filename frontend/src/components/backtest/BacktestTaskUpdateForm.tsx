@@ -31,6 +31,7 @@ import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
+import { logger } from '../../utils/logger';
 
 // Update schema - only editable fields
 const backtestTaskUpdateSchema = z
@@ -135,7 +136,10 @@ export default function BacktestTaskUpdateForm({
 
       navigate('/backtest-tasks');
     } catch (error: unknown) {
-      console.error('Failed to update task:', error);
+      logger.error('Failed to update backtest task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       const err = error as {
         details?: Record<string, string | string[]>;
         message?: string;

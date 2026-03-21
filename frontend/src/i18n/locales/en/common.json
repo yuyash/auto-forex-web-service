@@ -90,6 +90,7 @@
     "connected": "Connected",
     "disconnected": "Disconnected",
     "noOandaAccount": "No Account",
+    "activeTasks": "{{count}} active tasks",
     "loading": "Loading...",
     "updating": "Updating...",
     "checking": "Checking...",

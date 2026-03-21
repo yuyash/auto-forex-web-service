@@ -114,11 +114,8 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   ].includes(status);
   const canPause = status === TaskStatusEnum.RUNNING;
   const canResume = status === TaskStatusEnum.PAUSED;
-  // TODO: Pause/Resume are temporarily disabled. Set back to the computed values above to re-enable.
-  // eslint-disable-next-line no-constant-binary-expression
-  const pauseEnabled = false && canPause;
-  // eslint-disable-next-line no-constant-binary-expression
-  const resumeEnabled = false && canResume;
+  const pauseEnabled = canPause;
+  const resumeEnabled = canResume;
   const canRestart = [
     TaskStatusEnum.STOPPED,
     TaskStatusEnum.COMPLETED,

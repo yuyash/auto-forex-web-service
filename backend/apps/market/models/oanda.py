@@ -1,9 +1,8 @@
 """OANDA account model."""
 
-import base64
-import hashlib
+from collections.abc import Iterable
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
 from django.db import models
 
@@ -107,22 +106,31 @@ class OandaAccounts(models.Model):
     def __str__(self) -> str:
         return f"{self.user.email} - {self.account_id} ({self.api_type})"
 
-    @staticmethod
-    def _get_cipher() -> Fernet:
-        key = hashlib.sha256(settings.SECRET_KEY.encode()).digest()
-        fernet_key = base64.urlsafe_b64encode(key)
-        return Fernet(fernet_key)
+    @classmethod
+    def _get_encryption_cipher(cls) -> Fernet:
+        return Fernet(settings.OANDA_TOKEN_ENCRYPTION_KEY.encode("utf-8"))
+
+    @classmethod
+    def _get_decryption_ciphers(cls) -> Iterable[Fernet]:
+        keys = [settings.OANDA_TOKEN_ENCRYPTION_KEY, *settings.OANDA_TOKEN_ENCRYPTION_FALLBACK_KEYS]
+        for key in keys:
+            yield Fernet(key.encode("utf-8"))
 
     def set_api_token(self, token: str) -> None:
-        cipher = self._get_cipher()
+        cipher = self._get_encryption_cipher()
         token = token.strip()
         encrypted_token = cipher.encrypt(token.encode())
         self.api_token = encrypted_token.decode()
 
     def get_api_token(self) -> str:
-        cipher = self._get_cipher()
-        decrypted_token = cipher.decrypt(self.api_token.encode())
-        return decrypted_token.decode().strip()
+        encrypted = self.api_token.encode()
+        for cipher in self._get_decryption_ciphers():
+            try:
+                decrypted_token = cipher.decrypt(encrypted)
+                return decrypted_token.decode().strip()
+            except InvalidToken:
+                continue
+        raise ValueError("Unable to decrypt OANDA API token with configured keys.")
 
     @property
     def api_hostname(self) -> str:

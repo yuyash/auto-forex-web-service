@@ -28,6 +28,7 @@ import {
   useStopTradingTask,
 } from '../../hooks/useTradingTaskMutations';
 import { useToast } from '../common';
+import { logger } from '../../utils/logger';
 
 interface TradingTaskActionsProps {
   task: TradingTask;
@@ -70,7 +71,10 @@ export default function TradingTaskActions({
       // Trigger refresh after successful copy
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to copy task:', error);
+      logger.error('Failed to copy trading task', {
+        taskId: task.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to copy task';
       showError(errorMessage);
@@ -99,7 +103,10 @@ export default function TradingTaskActions({
       onRefresh?.();
       navigate('/trading-tasks', { state: { deleted: true } });
     } catch (error) {
-      console.error('Failed to delete task:', error);
+      logger.error('Failed to delete trading task from actions menu', {
+        taskId: task.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to delete task';
 
@@ -129,7 +136,10 @@ export default function TradingTaskActions({
       // Trigger refresh after successful stop
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to stop task:', error);
+      logger.error('Failed to stop trading task from actions menu', {
+        taskId: task.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to stop task';
       showError(errorMessage);

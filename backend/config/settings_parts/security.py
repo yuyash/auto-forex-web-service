@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import os
 import sys
 from typing import Any
 
+from cryptography.fernet import Fernet
 from django.core.exceptions import ImproperlyConfigured
 
 
@@ -64,12 +67,56 @@ def build_secret_settings(*, debug: bool) -> dict[str, Any]:
         )
 
     refresh_token_expiration = int(os.getenv("REFRESH_TOKEN_EXPIRATION", "604800"))
+    legacy_oanda_key = base64.urlsafe_b64encode(hashlib.sha256(secret_key.encode("utf-8")).digest())
+    oanda_key = os.getenv("OANDA_TOKEN_ENCRYPTION_KEY", "").strip()
+    if not oanda_key:
+        if is_non_production_env:
+            import warnings
+
+            warnings.warn(
+                "OANDA_TOKEN_ENCRYPTION_KEY is not set - falling back to a key derived from "
+                "SECRET_KEY. Set a dedicated Fernet key in production.",
+                stacklevel=1,
+            )
+            oanda_key = legacy_oanda_key.decode("utf-8")
+        else:
+            raise ImproperlyConfigured(
+                "OANDA_TOKEN_ENCRYPTION_KEY must be set to a valid Fernet key when DEBUG is False."
+            )
+
+    try:
+        Fernet(oanda_key.encode("utf-8"))
+    except Exception as exc:
+        raise ImproperlyConfigured(
+            "OANDA_TOKEN_ENCRYPTION_KEY must be a valid Fernet key."
+        ) from exc
+
+    oanda_fallback_keys = [
+        key.strip()
+        for key in os.getenv("OANDA_TOKEN_ENCRYPTION_FALLBACK_KEYS", "").split(",")
+        if key.strip()
+    ]
+    if legacy_oanda_key.decode("utf-8") != oanda_key:
+        oanda_fallback_keys.append(legacy_oanda_key.decode("utf-8"))
+
+    validated_fallback_keys: list[str] = []
+    for key in oanda_fallback_keys:
+        try:
+            Fernet(key.encode("utf-8"))
+        except Exception as exc:
+            raise ImproperlyConfigured(
+                "OANDA_TOKEN_ENCRYPTION_FALLBACK_KEYS must only contain valid Fernet keys."
+            ) from exc
+        if key not in validated_fallback_keys and key != oanda_key:
+            validated_fallback_keys.append(key)
 
     return {
         **runtime,
         "SECRET_KEY": secret_key,
         "JWT_SECRET_KEY": jwt_secret,
         "JWT_ALGORITHM": "HS256",
+        "OANDA_TOKEN_ENCRYPTION_KEY": oanda_key,
+        "OANDA_TOKEN_ENCRYPTION_FALLBACK_KEYS": validated_fallback_keys,
         "REFRESH_TOKEN_EXPIRATION": refresh_token_expiration,
         "AUTH_REFRESH_COOKIE_NAME": os.getenv("AUTH_REFRESH_COOKIE_NAME", "refresh_token"),
         "AUTH_REFRESH_COOKIE_HTTPONLY": True,

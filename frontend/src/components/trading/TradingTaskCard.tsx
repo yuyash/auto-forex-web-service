@@ -235,6 +235,30 @@ export default function TradingTaskCard({
     }
   };
 
+  const handlePause = async (taskId: string | number) => {
+    setIsLoading(true);
+    try {
+      await tradingTasksApi.pause(String(taskId));
+      setOptimisticStatus(TaskStatus.PAUSED);
+      showSuccess(t('trading:toast.pausedSuccessfully'));
+      onRefresh?.();
+    } catch (error) {
+      logger.error('Failed to pause trading task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      setOptimisticStatus(null);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to pause task';
+      showError(errorMessage, 8000, {
+        label: 'Retry',
+        onClick: () => handlePause(taskId),
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleRestart = async (taskId: string | number) => {
     setIsLoading(true);
     try {
@@ -406,6 +430,7 @@ export default function TradingTaskCard({
             status={displayStatus}
             onStart={handleStart}
             onStop={handleStop}
+            onPause={handlePause}
             onResume={handleResume}
             onRestart={handleRestart}
             onDelete={handleDelete}

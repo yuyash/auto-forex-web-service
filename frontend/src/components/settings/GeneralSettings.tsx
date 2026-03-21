@@ -22,6 +22,7 @@ import { useAccessibility } from '../../hooks/useAccessibility';
 import { useToast } from '../common/useToast';
 import type { ThemeMode } from '../../contexts/AccessibilityContextDefinition';
 import { authApi } from '../../services/api';
+import { logger } from '../../utils/logger';
 
 const TIMEZONES = [
   'UTC',
@@ -103,7 +104,9 @@ const GeneralSettings = () => {
             ?.notification_enabled ?? true,
       });
     } catch (error) {
-      console.error('Error fetching settings:', error);
+      logger.error('Error fetching settings', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       showError(t('common:errors.fetchFailed'));
     } finally {
       setLoading(false);
@@ -128,7 +131,9 @@ const GeneralSettings = () => {
       }
       showSuccess(t('settings:messages.saveSuccess'));
     } catch (error) {
-      console.error('Error saving settings:', error);
+      logger.error('Error saving settings', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       showError(
         error instanceof Error
           ? error.message

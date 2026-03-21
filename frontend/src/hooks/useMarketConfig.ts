@@ -1,10 +1,19 @@
 import { useState, useEffect } from 'react';
 import { api } from '../api/apiClient';
 import type { Granularity } from '../types/chart';
+import { logger } from '../utils/logger';
 
 interface GranularityOption {
   value: Granularity;
   label: string;
+}
+
+interface InstrumentsResponse {
+  instruments?: string[];
+}
+
+interface GranularitiesResponse {
+  granularities?: GranularityOption[];
 }
 
 /**
@@ -19,12 +28,15 @@ export const useSupportedInstruments = () => {
     const fetchInstruments = async () => {
       try {
         setIsLoading(true);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const response = await api.get<any>('/api/market/instruments/');
+        const response = await api.get<InstrumentsResponse>(
+          '/api/market/instruments/'
+        );
         setInstruments(response.instruments || []);
         setError(null);
       } catch (err) {
-        console.error('Failed to fetch instruments:', err);
+        logger.error('Failed to fetch instruments', {
+          error: err instanceof Error ? err.message : String(err),
+        });
         setError('Failed to load currency pairs');
         // Fallback to default list
         setInstruments([
@@ -67,8 +79,7 @@ export const useSupportedGranularities = () => {
     const fetchGranularities = async () => {
       try {
         setIsLoading(true);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const response = await api.get<any>(
+        const response = await api.get<GranularitiesResponse>(
           '/api/market/candles/granularities/'
         );
         // Filter out second-based granularities (S5, S10, S15, S30)
@@ -78,7 +89,9 @@ export const useSupportedGranularities = () => {
         setGranularities(filteredGranularities);
         setError(null);
       } catch (err) {
-        console.error('Failed to fetch granularities:', err);
+        logger.error('Failed to fetch granularities', {
+          error: err instanceof Error ? err.message : String(err),
+        });
         setError('Failed to load timeframes');
         // Fallback to default list
         setGranularities([

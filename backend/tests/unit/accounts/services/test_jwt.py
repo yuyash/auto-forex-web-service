@@ -1,5 +1,6 @@
 """Unit tests for JWTService (mocked dependencies)."""
 
+from hashlib import sha256
 from unittest.mock import MagicMock, patch
 
 from apps.accounts.services.jwt import JWTService
@@ -143,3 +144,26 @@ class TestJWTService:
             new_token = service.refresh_token("token")
 
         assert new_token is None
+
+    def test_hash_refresh_token_is_deterministic(self) -> None:
+        """Test refresh-token hashing is stable."""
+        token = "refresh-token-value"
+
+        hashed = JWTService.hash_refresh_token(token)
+
+        assert hashed == sha256(token.encode("utf-8")).hexdigest()
+
+    def test_create_refresh_token_stores_hashed_value(self) -> None:
+        """Test DB storage uses a digest instead of the raw token."""
+        service = JWTService()
+        mock_user = MagicMock()
+        mock_user.id = 1
+
+        with patch("apps.accounts.models.RefreshToken.objects.create") as mock_create:
+            refresh_token = service.create_refresh_token(mock_user)
+
+        assert isinstance(refresh_token, str)
+        assert refresh_token
+        mock_create.assert_called_once()
+        assert mock_create.call_args.kwargs["token"] == JWTService.hash_refresh_token(refresh_token)
+        assert mock_create.call_args.kwargs["token"] != refresh_token

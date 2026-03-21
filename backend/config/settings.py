@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     # Third-party apps
+    "corsheaders",
     "rest_framework",
     "drf_spectacular",
     "channels",
@@ -70,6 +71,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "apps.accounts.middlewares.csp.CSPMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -340,6 +342,8 @@ globals().update(build_security_settings(debug=DEBUG))
 JWT_SECRET_KEY = _secret_settings["JWT_SECRET_KEY"]
 JWT_ALGORITHM = _secret_settings["JWT_ALGORITHM"]
 JWT_EXPIRATION_DELTA = JWT_EXPIRATION
+OANDA_TOKEN_ENCRYPTION_KEY = _secret_settings["OANDA_TOKEN_ENCRYPTION_KEY"]
+OANDA_TOKEN_ENCRYPTION_FALLBACK_KEYS = _secret_settings["OANDA_TOKEN_ENCRYPTION_FALLBACK_KEYS"]
 REFRESH_TOKEN_EXPIRATION = _secret_settings["REFRESH_TOKEN_EXPIRATION"]  # 7 days
 AUTH_REFRESH_COOKIE_NAME = _secret_settings["AUTH_REFRESH_COOKIE_NAME"]
 AUTH_REFRESH_COOKIE_HTTPONLY = _secret_settings["AUTH_REFRESH_COOKIE_HTTPONLY"]
