@@ -131,6 +131,14 @@ class TaskService:
 
         return "trading"
 
+    @staticmethod
+    def _dispatch_task(task: BacktestTask | TradingTask, task_type: str) -> None:
+        celery_task = run_backtest_task if task_type == "backtest" else run_trading_task
+        celery_task.apply_async(
+            args=[task.pk],
+            task_id=str(task.execution_id),
+        )
+
     def start_task(self, task: BacktestTask | TradingTask) -> BacktestTask | TradingTask:
         """Submit a task to Celery for execution.
 
@@ -371,11 +379,7 @@ class TaskService:
             raise TaskSubmissionError(f"Failed to submit task to Celery: {str(e)}") from e
 
     def recover_trading_task(self, task: TradingTask) -> TradingTask:
-        """Requeue an orphaned trading task with a new execution_id.
-
-        Unlike ``start_task``, this method preserves the current run so the
-        executor can load persisted state and resume execution from the same run.
-        """
+        """Requeue an orphaned trading task in the same execution run."""
 
         previous_status = task.status
         previous_execution_id = task.execution_id
@@ -388,16 +392,16 @@ class TaskService:
                     "Orphan recovery requires task in STARTING/RUNNING state; "
                     f"got {locked_task.status}"
                 )
+            if not locked_task.execution_id:
+                raise ValueError("Cannot recover trading task without an execution_id")
 
             locked_task.status = TaskStatus.STARTING
-            locked_task.execution_id = uuid4()
             locked_task.completed_at = None
             locked_task.error_message = None
             locked_task.error_traceback = None
             locked_task.save(
                 update_fields=[
                     "status",
-                    "execution_id",
                     "completed_at",
                     "error_message",
                     "error_traceback",
@@ -407,10 +411,7 @@ class TaskService:
             task = locked_task
 
         try:
-            run_trading_task.apply_async(
-                args=[task.pk],
-                task_id=str(task.execution_id),
-            )
+            self._dispatch_task(task, "trading")
             return task
         except Exception as exc:
             TradingTask.objects.filter(pk=task.pk).update(
@@ -897,8 +898,8 @@ class TaskService:
     ) -> BacktestTask | TradingTask:
         """Resume a paused task, preserving execution context.
 
-        Preserves existing execution data (started_at, logs, metrics) but clears
-        execution_id. Resets status to CREATED, then resubmits.
+        Preserves existing execution data (started_at, logs, metrics) and
+        resubmits the same execution run so persisted state can be loaded.
 
         Args:
             task_id: UUID of the task to resume
@@ -929,27 +930,31 @@ class TaskService:
                     )
                     raise ValueError(f"Task with id {task_id} does not exist") from e
 
-            # Validate task is paused
-            if task.status != TaskStatus.PAUSED:
-                raise ValueError(
-                    f"Task cannot be resumed from {task.status} state. "
-                    "Only PAUSED tasks can be resumed."
-                )
+            model_class = BacktestTask if task_type == "backtest" else TradingTask
 
-            # Check for status mismatch: task is PAUSED in DB but Celery task is still running
-            if task.execution_id:
-                result = self.get_celery_result(str(task.execution_id))
+            with transaction.atomic():
+                locked_task = model_class.objects.select_for_update().get(pk=task.pk)
+
+                if locked_task.status != TaskStatus.PAUSED:
+                    raise ValueError(
+                        f"Task cannot be resumed from {locked_task.status} state. "
+                        "Only PAUSED tasks can be resumed."
+                    )
+
+                if not locked_task.execution_id:
+                    raise ValueError("Cannot resume task without an execution_id")
+
+                result = self.get_celery_result(str(locked_task.execution_id))
                 if result:
                     celery_state = result.state
-                    # Check if Celery task is in an active state
                     if celery_state in ["PENDING", "STARTED", "RETRY"]:
                         logger.warning(
                             "Task status mismatch detected",
                             extra={
                                 "task_id": str(task_id),
-                                "db_status": task.status,
+                                "db_status": locked_task.status,
                                 "celery_state": celery_state,
-                                "execution_id": str(task.execution_id),
+                                "execution_id": str(locked_task.execution_id),
                             },
                         )
                         raise ValueError(
@@ -958,10 +963,9 @@ class TaskService:
                             "Please wait for the task to fully stop before resuming."
                         )
 
-            # Keep existing execution data, just clear execution_id and reset status
-            task.execution_id = None
-            task.status = TaskStatus.CREATED
-            task.save(update_fields=["execution_id", "status", "updated_at"])
+                locked_task.status = TaskStatus.STARTING
+                locked_task.save(update_fields=["status", "updated_at"])
+                task = locked_task
             self._emit_task_lifecycle_event(
                 task=task,
                 task_type=task_type,
@@ -974,8 +978,8 @@ class TaskService:
                 extra={"task_id": str(task_id)},
             )
 
-            # Resubmit the task
-            return self.start_task(task)
+            self._dispatch_task(task, task_type)
+            return task
 
         except ValueError:
             raise

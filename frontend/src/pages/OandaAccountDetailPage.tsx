@@ -98,8 +98,7 @@ export default function OandaAccountDetailPage() {
         setError(null);
         const detail = await accountsApi.get(accountId);
         if (!mounted) return;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setAccount(detail as any as Account);
+        setAccount(detail);
       } catch (caughtError) {
         if (!mounted) return;
         setError(

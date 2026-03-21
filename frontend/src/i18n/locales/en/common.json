@@ -430,7 +430,8 @@
       "exit": "Exit",
       "pips": "Pips",
       "pnl": "PnL",
-      "noOandaAccount": "Register an OANDA account to display market candles in the Trend tab."
+      "noOandaAccount": "Register an OANDA account to display market candles in the Trend tab.",
+      "replayRefreshFailed": "Failed to refresh replay data. Showing the latest available trades."
     }
   },
   "columnConfig": {

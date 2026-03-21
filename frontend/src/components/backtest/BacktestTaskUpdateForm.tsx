@@ -13,7 +13,7 @@ import {
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
@@ -94,8 +94,9 @@ export default function BacktestTaskUpdateForm({
     watch,
     formState: { errors },
   } = useForm<BacktestTaskUpdateData>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(backtestTaskUpdateSchema) as any,
+    resolver: zodResolver(
+      backtestTaskUpdateSchema
+    ) as Resolver<BacktestTaskUpdateData>,
     defaultValues: { ...initialData, data_source: DataSource.POSTGRESQL },
   });
 

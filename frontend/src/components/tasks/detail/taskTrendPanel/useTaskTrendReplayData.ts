@@ -97,6 +97,13 @@ function getLatestTradeUpdatedAt(
   return latest;
 }
 
+function toReplayErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return 'Failed to refresh replay data. Showing the latest available trades.';
+}
+
 export function useTaskTrendReplayData({
   taskId,
   taskType,
@@ -110,6 +117,7 @@ export function useTaskTrendReplayData({
 }: UseTaskTrendReplayDataParams) {
   const [trades, setTrades] = useState<ReplayTrade[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const hasLoadedOnce = useRef(false);
   const tradeSinceRef = useRef<string | null>(null);
   const lastCandleFetchRef = useRef<number>(0);
@@ -209,11 +217,12 @@ export function useTaskTrendReplayData({
             return fullTrades;
           });
         }
+        setErrorMessage(null);
       } catch (tradeError) {
-        console.warn('Failed to refresh trade data:', tradeError);
+        setErrorMessage(toReplayErrorMessage(tradeError));
       }
     } catch (error) {
-      console.warn('Failed to load replay data:', error);
+      setErrorMessage(toReplayErrorMessage(error));
     } finally {
       hasLoadedOnce.current = true;
       setIsRefreshing(false);
@@ -235,6 +244,7 @@ export function useTaskTrendReplayData({
   useEffect(() => {
     setTrades([]);
     setIsRefreshing(false);
+    setErrorMessage(null);
     hasLoadedOnce.current = false;
     tradeSinceRef.current = null;
     lastCandleFetchRef.current = 0;
@@ -243,6 +253,7 @@ export function useTaskTrendReplayData({
   return {
     trades,
     isRefreshing,
+    errorMessage,
     replaySummary,
     fetchReplayData,
   };

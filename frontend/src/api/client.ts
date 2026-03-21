@@ -7,7 +7,10 @@
 
 import { apiConfig } from './apiConfig';
 import { ApiError } from './apiClient';
-import { broadcastAuthLogout } from '../utils/authEvents';
+import {
+  broadcastAuthLogout,
+  shouldBroadcastAuthLogoutForHttp,
+} from '../utils/authEvents';
 import { logger } from '../utils/logger';
 
 /**
@@ -153,7 +156,14 @@ export function transformApiError(error: unknown): TransformedApiError {
 
     // Handle 401 globally by notifying the auth layer.
     // Session cleanup stays in AuthContext to avoid split ownership.
-    if (statusCode === 401) {
+    if (
+      shouldBroadcastAuthLogoutForHttp({
+        source: 'http',
+        status: statusCode,
+        url: error.url,
+        context: 'api_client',
+      })
+    ) {
       logger.warn('401 Unauthorized received from API client', {
         statusCode,
         url: error.url,
@@ -163,6 +173,7 @@ export function transformApiError(error: unknown): TransformedApiError {
         status: 401,
         message: 'Session expired',
         context: 'api_client',
+        url: error.url,
       });
     }
 

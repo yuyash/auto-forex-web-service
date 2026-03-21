@@ -1,14 +1,21 @@
 import { api } from '../../api/apiClient';
 import { withRetry } from '../../api/client';
-import type { OandaAccounts, OandaAccountsRequest } from '../../api/types';
+import type { OandaAccountsRequest } from '../../api/types';
 import type { BackendAccount } from './contracts';
+import type { Account } from '../../types/strategy';
 
-function toAccount(account: BackendAccount): OandaAccounts {
+function toAccount(account: BackendAccount): Account {
   return {
     ...account,
-    id: account.id,
-    api_type: account.api_type,
-    jurisdiction: account.jurisdiction as OandaAccounts['jurisdiction'],
+    id: account.id ?? 0,
+    account_id: account.account_id,
+    api_type: account.api_type ?? 'practice',
+    currency: account.currency ?? 'USD',
+    balance: account.balance ?? '0',
+    margin_used: account.margin_used ?? '0',
+    margin_available: account.margin_available ?? '0',
+    unrealized_pnl: account.unrealized_pnl ?? '0',
+    is_active: account.is_active ?? false,
   };
 }
 

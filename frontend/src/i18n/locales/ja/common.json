@@ -430,7 +430,8 @@
       "exit": "決済価格",
       "pips": "Pips",
       "pnl": "損益",
-      "noOandaAccount": "Trend タブで市場ローソク足を表示するには OANDA アカウントの登録が必要です。"
+      "noOandaAccount": "Trend タブで市場ローソク足を表示するには OANDA アカウントの登録が必要です。",
+      "replayRefreshFailed": "リプレイデータの更新に失敗しました。直近で取得できた取引を表示しています。"
     }
   },
   "columnConfig": {

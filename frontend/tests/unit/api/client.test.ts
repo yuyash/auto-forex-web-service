@@ -10,6 +10,10 @@ const { mockBroadcastAuthLogout } = vi.hoisted(() => ({
 
 vi.mock('../../../src/utils/authEvents', () => ({
   broadcastAuthLogout: mockBroadcastAuthLogout,
+  shouldBroadcastAuthLogoutForHttp: (detail?: {
+    url?: string;
+    status?: number;
+  }) => detail?.status === 401 && detail?.url === '/api/accounts/auth/refresh',
 }));
 
 import {
@@ -119,7 +123,12 @@ describe('Error Transformation', () => {
   });
 
   it('broadcasts forced logout on 401', () => {
-    const err = new ApiError('/api/test', 401, 'Unauthorized', {});
+    const err = new ApiError(
+      '/api/accounts/auth/refresh',
+      401,
+      'Unauthorized',
+      {}
+    );
 
     transformApiError(err);
 
@@ -128,7 +137,16 @@ describe('Error Transformation', () => {
       status: 401,
       message: 'Session expired',
       context: 'api_client',
+      url: '/api/accounts/auth/refresh',
     });
+  });
+
+  it('does not broadcast logout for unrelated 401 responses', () => {
+    const err = new ApiError('/api/test', 401, 'Unauthorized', {});
+
+    transformApiError(err);
+
+    expect(mockBroadcastAuthLogout).not.toHaveBeenCalled();
   });
 });
 

@@ -287,7 +287,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
 
   const currentPrice =
     currentTick?.price != null ? parseFloat(currentTick.price) : null;
-  const { trades, isRefreshing, replaySummary, fetchReplayData } =
+  const { trades, isRefreshing, errorMessage, replaySummary, fetchReplayData } =
     useTaskTrendReplayData({
       taskId,
       taskType,
@@ -1009,6 +1009,13 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           sx={{ mb: 1 }}
         >
           {candleErrorMessage}
+        </Alert>
+      )}
+      {errorMessage && (
+        <Alert severity="warning" sx={{ mb: 1 }}>
+          {t('tables.trend.replayRefreshFailed', {
+            defaultValue: errorMessage,
+          })}
         </Alert>
       )}
       <TaskTrendToolbar
