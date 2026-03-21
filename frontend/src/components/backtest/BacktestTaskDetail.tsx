@@ -39,7 +39,14 @@ import { TaskStatus, TaskType } from '../../types/common';
 import type { BacktestTask } from '../../types';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
 import { BacktestStopDialog } from '../tasks/actions/BacktestStopDialog';
-import { useDeleteBacktestTask } from '../../hooks/useBacktestTaskMutations';
+import {
+  useDeleteBacktestTask,
+  usePauseBacktestTask,
+  useResumeBacktestTask,
+  useRerunBacktestTask,
+  useStartBacktestTask,
+  useStopBacktestTask,
+} from '../../hooks/useBacktestTaskMutations';
 import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
 import { LazyTabPanel } from '../common/LazyTabPanel';
 import { TabConfigDialog } from '../common/TabConfigDialog';
@@ -61,6 +68,11 @@ export const BacktestTaskDetail: React.FC = () => {
   const [isStopping, setIsStopping] = useState(false);
   const [tabConfigOpen, setTabConfigOpen] = useState(false);
   const deleteTask = useDeleteBacktestTask();
+  const startTask = useStartBacktestTask();
+  const restartTask = useRerunBacktestTask();
+  const resumeTask = useResumeBacktestTask();
+  const pauseTask = usePauseBacktestTask();
+  const stopTask = useStopBacktestTask();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { user } = useAuth();
@@ -180,10 +192,7 @@ export const BacktestTaskDetail: React.FC = () => {
   const handleStopConfirm = async () => {
     setIsStopping(true);
     try {
-      const { backtestTasksApi } = await import(
-        '../../services/api/backtestTasks'
-      );
-      await backtestTasksApi.stop(taskId);
+      await stopTask.mutate(taskId);
       applyOptimisticStatus(TaskStatus.STOPPING, [
         TaskStatus.STOPPING,
         TaskStatus.STOPPED,
@@ -283,10 +292,7 @@ export const BacktestTaskDetail: React.FC = () => {
         editLabel={t('common:actions.edit')}
         deleteLabel={t('common:actions.delete')}
         onStart={async (id) => {
-          const { backtestTasksApi } = await import(
-            '../../services/api/backtestTasks'
-          );
-          const updatedTask = await backtestTasksApi.start(id);
+          const updatedTask = await startTask.mutate(id);
           applyOptimisticStatus(updatedTask.status, [
             TaskStatus.STARTING,
             TaskStatus.RUNNING,
@@ -299,10 +305,7 @@ export const BacktestTaskDetail: React.FC = () => {
           setStopDialogOpen(true);
         }}
         onRestart={async (id) => {
-          const { backtestTasksApi } = await import(
-            '../../services/api/backtestTasks'
-          );
-          const updatedTask = await backtestTasksApi.restart(id);
+          const updatedTask = await restartTask.mutate(id);
           applyOptimisticStatus(updatedTask.status, [
             TaskStatus.STARTING,
             TaskStatus.RUNNING,
@@ -312,10 +315,7 @@ export const BacktestTaskDetail: React.FC = () => {
           triggerPolledRefetch();
         }}
         onResume={async (id) => {
-          const { backtestTasksApi } = await import(
-            '../../services/api/backtestTasks'
-          );
-          const updatedTask = await backtestTasksApi.resume(id);
+          const updatedTask = await resumeTask.mutate(id);
           applyOptimisticStatus(updatedTask.status, [
             TaskStatus.RUNNING,
             TaskStatus.PAUSED,
@@ -325,10 +325,7 @@ export const BacktestTaskDetail: React.FC = () => {
           triggerPolledRefetch();
         }}
         onPause={async (id) => {
-          const { backtestTasksApi } = await import(
-            '../../services/api/backtestTasks'
-          );
-          const updatedTask = await backtestTasksApi.pause(id);
+          const updatedTask = await pauseTask.mutate(id);
           applyOptimisticStatus(updatedTask.status, [
             TaskStatus.PAUSED,
             TaskStatus.RUNNING,

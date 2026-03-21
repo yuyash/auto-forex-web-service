@@ -110,8 +110,8 @@ class BacktestTaskViewSet(TaskViewSetBase):
                     {
                         "error": "Cannot submit a stopped task",
                         "detail": (
-                            "Use 'restart' to clear execution data and start fresh, "
-                            "or 'resume' to continue from where it stopped"
+                            "Use 'restart' to clear execution data and start fresh. "
+                            "Resume is only available while the task is paused."
                         ),
                     },
                     status=status.HTTP_400_BAD_REQUEST,

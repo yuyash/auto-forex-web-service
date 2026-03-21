@@ -31,8 +31,15 @@ import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
+import {
+  useDeleteTradingTask,
+  usePauseTradingTask,
+  useRestartTradingTask,
+  useResumeTradingTask,
+  useStartTradingTask,
+  useStopTradingTask,
+} from '../../hooks/useTradingTaskMutations';
 import { invalidateTradingTasksCache } from '../../hooks/useTradingTasks';
-import { tradingTasksApi } from '../../services/api';
 import { logger } from '../../utils/logger';
 
 interface TradingTaskCardProps {
@@ -53,6 +60,12 @@ export default function TradingTaskCard({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const prevTaskRef = useRef<TradingTask>(task);
+  const startTask = useStartTradingTask();
+  const stopTask = useStopTradingTask();
+  const resumeTask = useResumeTradingTask();
+  const pauseTask = usePauseTradingTask();
+  const restartTask = useRestartTradingTask();
+  const deleteTask = useDeleteTradingTask();
 
   const { t } = useTranslation(['trading', 'common']);
   const { showError, showSuccess, showWarning, showInfo } = useToast();
@@ -169,7 +182,7 @@ export default function TradingTaskCard({
   const handleStart = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await tradingTasksApi.start(String(taskId));
+      await startTask.mutate(String(taskId));
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess(t('trading:toast.startedSuccessfully'));
       onRefresh?.();
@@ -193,7 +206,7 @@ export default function TradingTaskCard({
   const handleStop = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await tradingTasksApi.stop(String(taskId));
+      await stopTask.mutate({ id: String(taskId) });
       setOptimisticStatus(TaskStatus.STOPPED);
       showSuccess(t('trading:toast.stoppedSuccessfully'));
       onRefresh?.();
@@ -214,7 +227,7 @@ export default function TradingTaskCard({
   const handleResume = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await tradingTasksApi.resume(String(taskId));
+      await resumeTask.mutate(String(taskId));
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess(t('trading:toast.resumedSuccessfully'));
       onRefresh?.();
@@ -238,7 +251,7 @@ export default function TradingTaskCard({
   const handlePause = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await tradingTasksApi.pause(String(taskId));
+      await pauseTask.mutate(String(taskId));
       setOptimisticStatus(TaskStatus.PAUSED);
       showSuccess(t('trading:toast.pausedSuccessfully'));
       onRefresh?.();
@@ -262,7 +275,7 @@ export default function TradingTaskCard({
   const handleRestart = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await tradingTasksApi.restart(String(taskId));
+      await restartTask.mutate(String(taskId));
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess(t('trading:toast.restartedSuccessfully'));
       onRefresh?.();
@@ -290,7 +303,7 @@ export default function TradingTaskCard({
   const handleDeleteConfirm = async () => {
     setIsDeleting(true);
     try {
-      await tradingTasksApi.delete(String(task.id));
+      await deleteTask.mutate(String(task.id));
       invalidateTradingTasksCache();
       showSuccess(t('trading:toast.deletedSuccessfully'));
       setDeleteDialogOpen(false);

@@ -17,7 +17,7 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import { accountsApi } from '../../services/api';
+import { useCreateAccount } from '../../hooks/useAccountMutations';
 import { logger } from '../../utils/logger';
 
 interface AccountFormData {
@@ -38,6 +38,7 @@ const AddAccountModal = ({
   onSuccess,
 }: AddAccountModalProps) => {
   const { t } = useTranslation(['settings', 'common']);
+  const createAccount = useCreateAccount();
 
   const [formData, setFormData] = useState<AccountFormData>({
     account_id: '',
@@ -109,7 +110,7 @@ const AddAccountModal = ({
     setError(null);
 
     try {
-      await accountsApi.create(formData);
+      await createAccount.mutate(formData);
 
       // Success
       onSuccess();

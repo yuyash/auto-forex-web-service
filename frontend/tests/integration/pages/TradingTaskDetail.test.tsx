@@ -47,16 +47,6 @@ const mockTaskData = {
   hedging_enabled: false,
 };
 
-vi.mock('../../../src/services/api/tradingTasks', () => ({
-  tradingTasksApi: {
-    start: mockTradingStart,
-    stop: mockTradingStop,
-    pause: mockTradingPause,
-    resume: mockTradingResume,
-    restart: mockTradingRestart,
-  },
-}));
-
 vi.mock('../../../src/hooks/useTradingTasks', () => ({
   useTradingTask: vi.fn(() => ({
     data: mockTaskData,
@@ -113,6 +103,26 @@ vi.mock('../../../src/hooks/useTaskSummary', () => ({
 }));
 
 vi.mock('../../../src/hooks/useTradingTaskMutations', () => ({
+  useStartTradingTask: vi.fn(() => ({
+    mutate: mockTradingStart,
+    isLoading: false,
+  })),
+  useStopTradingTask: vi.fn(() => ({
+    mutate: mockTradingStop,
+    isLoading: false,
+  })),
+  usePauseTradingTask: vi.fn(() => ({
+    mutate: mockTradingPause,
+    isLoading: false,
+  })),
+  useResumeTradingTask: vi.fn(() => ({
+    mutate: mockTradingResume,
+    isLoading: false,
+  })),
+  useRestartTradingTask: vi.fn(() => ({
+    mutate: mockTradingRestart,
+    isLoading: false,
+  })),
   useDeleteTradingTask: vi.fn(() => ({ mutate: vi.fn(), isLoading: false })),
 }));
 
@@ -258,7 +268,7 @@ describe('TradingTaskDetail', () => {
     await user.click(screen.getByRole('button', { name: 'Stop' }));
 
     await waitFor(() => {
-      expect(mockTradingStop).toHaveBeenCalledWith('1');
+      expect(mockTradingStop).toHaveBeenCalledWith({ id: '1' });
     });
   });
 

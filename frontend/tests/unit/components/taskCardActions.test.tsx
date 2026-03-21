@@ -91,6 +91,42 @@ vi.mock('../../../src/hooks/useTradingTasks', () => ({
   invalidateTradingTasksCache: vi.fn(),
 }));
 
+vi.mock('../../../src/hooks/useTradingTaskMutations', () => ({
+  useStartTradingTask: () => ({ mutate: mockTradingStart, isLoading: false }),
+  useStopTradingTask: () => ({ mutate: mockTradingStop, isLoading: false }),
+  usePauseTradingTask: () => ({ mutate: mockTradingPause, isLoading: false }),
+  useResumeTradingTask: () => ({
+    mutate: mockTradingResume,
+    isLoading: false,
+  }),
+  useRestartTradingTask: () => ({
+    mutate: mockTradingRestart,
+    isLoading: false,
+  }),
+  useDeleteTradingTask: () => ({ mutate: vi.fn(), isLoading: false }),
+}));
+
+vi.mock('../../../src/hooks/useBacktestTaskMutations', () => ({
+  useStartBacktestTask: () => ({
+    mutate: mockBacktestStart,
+    isLoading: false,
+  }),
+  useStopBacktestTask: () => ({ mutate: mockBacktestStop, isLoading: false }),
+  usePauseBacktestTask: () => ({
+    mutate: mockBacktestPause,
+    isLoading: false,
+  }),
+  useResumeBacktestTask: () => ({
+    mutate: mockBacktestResume,
+    isLoading: false,
+  }),
+  useRerunBacktestTask: () => ({
+    mutate: mockBacktestRestart,
+    isLoading: false,
+  }),
+  useDeleteBacktestTask: () => ({ mutate: vi.fn(), isLoading: false }),
+}));
+
 vi.mock('../../../src/components/tasks/display/StatusBadge', () => ({
   StatusBadge: ({ status }: { status: string }) => <span>{status}</span>,
 }));
@@ -148,25 +184,6 @@ vi.mock('../../../src/components/common', async () => {
     }),
   };
 });
-
-vi.mock('../../../src/services/api', () => ({
-  tradingTasksApi: {
-    start: mockTradingStart,
-    stop: mockTradingStop,
-    pause: mockTradingPause,
-    resume: mockTradingResume,
-    restart: mockTradingRestart,
-    delete: vi.fn(),
-  },
-  backtestTasksApi: {
-    start: mockBacktestStart,
-    stop: mockBacktestStop,
-    pause: mockBacktestPause,
-    resume: mockBacktestResume,
-    restart: mockBacktestRestart,
-    delete: vi.fn(),
-  },
-}));
 
 const tradingTaskBase = {
   id: 'trading-1',
@@ -250,7 +267,7 @@ describe('Task card control actions', () => {
 
     await user.click(screen.getByRole('button', { name: 'Stop' }));
 
-    expect(mockTradingStop).toHaveBeenCalledWith('trading-1');
+    expect(mockTradingStop).toHaveBeenCalledWith({ id: 'trading-1' });
     expect(mockShowSuccess).toHaveBeenCalledWith(
       'Trading stopped successfully'
     );

@@ -37,7 +37,14 @@ import { useTaskSummary } from '../../hooks/useTaskSummary';
 import { TaskStatus, TaskType } from '../../types/common';
 import type { TradingTask } from '../../types';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
-import { useDeleteTradingTask } from '../../hooks/useTradingTaskMutations';
+import {
+  useDeleteTradingTask,
+  usePauseTradingTask,
+  useRestartTradingTask,
+  useResumeTradingTask,
+  useStartTradingTask,
+  useStopTradingTask,
+} from '../../hooks/useTradingTaskMutations';
 import { invalidateTradingTasksCache } from '../../hooks/useTradingTasks';
 import { LazyTabPanel } from '../common/LazyTabPanel';
 import { TabConfigDialog } from '../common/TabConfigDialog';
@@ -57,6 +64,11 @@ export const TradingTaskDetail: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [tabConfigOpen, setTabConfigOpen] = useState(false);
   const deleteTask = useDeleteTradingTask();
+  const startTask = useStartTradingTask();
+  const stopTask = useStopTradingTask();
+  const restartTask = useRestartTradingTask();
+  const resumeTask = useResumeTradingTask();
+  const pauseTask = usePauseTradingTask();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { user } = useAuth();
@@ -232,10 +244,7 @@ export const TradingTaskDetail: React.FC = () => {
         editLabel={t('common:actions.edit')}
         deleteLabel={t('common:actions.delete')}
         onStart={async (id) => {
-          const { tradingTasksApi } = await import(
-            '../../services/api/tradingTasks'
-          );
-          const updatedTask = await tradingTasksApi.start(id);
+          const updatedTask = await startTask.mutate(id);
           applyOptimisticStatus(updatedTask.status, [
             TaskStatus.STARTING,
             TaskStatus.RUNNING,
@@ -245,10 +254,7 @@ export const TradingTaskDetail: React.FC = () => {
           triggerPolledRefetch();
         }}
         onStop={async (id) => {
-          const { tradingTasksApi } = await import(
-            '../../services/api/tradingTasks'
-          );
-          await tradingTasksApi.stop(id);
+          await stopTask.mutate({ id });
           applyOptimisticStatus(TaskStatus.STOPPING, [
             TaskStatus.STOPPING,
             TaskStatus.STOPPED,
@@ -259,10 +265,7 @@ export const TradingTaskDetail: React.FC = () => {
           triggerPolledRefetch();
         }}
         onRestart={async (id) => {
-          const { tradingTasksApi } = await import(
-            '../../services/api/tradingTasks'
-          );
-          const updatedTask = await tradingTasksApi.restart(id);
+          const updatedTask = await restartTask.mutate(id);
           applyOptimisticStatus(updatedTask.status, [
             TaskStatus.STARTING,
             TaskStatus.RUNNING,
@@ -272,10 +275,7 @@ export const TradingTaskDetail: React.FC = () => {
           triggerPolledRefetch();
         }}
         onResume={async (id) => {
-          const { tradingTasksApi } = await import(
-            '../../services/api/tradingTasks'
-          );
-          const updatedTask = await tradingTasksApi.resume(id);
+          const updatedTask = await resumeTask.mutate(id);
           applyOptimisticStatus(updatedTask.status, [
             TaskStatus.RUNNING,
             TaskStatus.PAUSED,
@@ -285,10 +285,7 @@ export const TradingTaskDetail: React.FC = () => {
           triggerPolledRefetch();
         }}
         onPause={async (id) => {
-          const { tradingTasksApi } = await import(
-            '../../services/api/tradingTasks'
-          );
-          const updatedTask = await tradingTasksApi.pause(id);
+          const updatedTask = await pauseTask.mutate(id);
           applyOptimisticStatus(updatedTask.status, [
             TaskStatus.PAUSED,
             TaskStatus.RUNNING,

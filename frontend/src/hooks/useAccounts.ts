@@ -1,21 +1,12 @@
 // React Query hooks for accounts
 import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '../config/reactQuery';
 import { accountsApi, type AccountListParams } from '../services/api/accounts';
-
-// Query keys
-export const accountKeys = {
-  all: ['accounts'] as const,
-  lists: () => [...accountKeys.all, 'list'] as const,
-  list: (params?: AccountListParams) =>
-    [...accountKeys.lists(), params] as const,
-  details: () => [...accountKeys.all, 'detail'] as const,
-  detail: (id: number) => [...accountKeys.details(), id] as const,
-};
 
 // List accounts
 export function useAccounts(params?: AccountListParams) {
   return useQuery({
-    queryKey: accountKeys.list(params),
+    queryKey: queryKeys.accounts.list(params),
     queryFn: () => accountsApi.list(params),
   });
 }
@@ -23,7 +14,7 @@ export function useAccounts(params?: AccountListParams) {
 // Get single account
 export function useAccount(id: number, options?: { enabled?: boolean }) {
   return useQuery({
-    queryKey: accountKeys.detail(id),
+    queryKey: queryKeys.accounts.detail(id),
     queryFn: () => accountsApi.get(id),
     enabled: options?.enabled !== false && id > 0,
   });

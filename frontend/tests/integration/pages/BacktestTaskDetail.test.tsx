@@ -105,17 +105,27 @@ vi.mock('../../../src/hooks/useTaskSummary', () => ({
 }));
 
 vi.mock('../../../src/hooks/useBacktestTaskMutations', () => ({
+  useStartBacktestTask: vi.fn(() => ({
+    mutate: mockBacktestStart,
+    isLoading: false,
+  })),
+  useStopBacktestTask: vi.fn(() => ({
+    mutate: mockBacktestStop,
+    isLoading: false,
+  })),
+  usePauseBacktestTask: vi.fn(() => ({
+    mutate: mockBacktestPause,
+    isLoading: false,
+  })),
+  useResumeBacktestTask: vi.fn(() => ({
+    mutate: mockBacktestResume,
+    isLoading: false,
+  })),
+  useRerunBacktestTask: vi.fn(() => ({
+    mutate: mockBacktestRestart,
+    isLoading: false,
+  })),
   useDeleteBacktestTask: vi.fn(() => ({ mutate: vi.fn(), isLoading: false })),
-}));
-
-vi.mock('../../../src/services/api/backtestTasks', () => ({
-  backtestTasksApi: {
-    start: mockBacktestStart,
-    stop: mockBacktestStop,
-    pause: mockBacktestPause,
-    resume: mockBacktestResume,
-    restart: mockBacktestRestart,
-  },
 }));
 
 // Mock child components to isolate page-level behavior

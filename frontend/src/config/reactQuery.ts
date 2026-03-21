@@ -97,7 +97,8 @@ export const queryKeys = {
   accounts: {
     all: ['accounts'] as const,
     lists: () => [...queryKeys.accounts.all, 'list'] as const,
-    list: () => [...queryKeys.accounts.lists()] as const,
+    list: (params?: Record<string, unknown>) =>
+      [...queryKeys.accounts.lists(), params] as const,
     details: () => [...queryKeys.accounts.all, 'detail'] as const,
     detail: (id: number) => [...queryKeys.accounts.details(), id] as const,
   },
@@ -206,6 +207,18 @@ export const cacheInvalidation = {
   invalidateExecutions: (taskType: string, taskId: string) => {
     return queryClient.invalidateQueries({
       queryKey: queryKeys.executions.list(taskType, taskId),
+    });
+  },
+
+  invalidateAccounts: () => {
+    return queryClient.invalidateQueries({
+      queryKey: queryKeys.accounts.all,
+    });
+  },
+
+  invalidateAccount: (id: number) => {
+    return queryClient.invalidateQueries({
+      queryKey: queryKeys.accounts.detail(id),
     });
   },
 };

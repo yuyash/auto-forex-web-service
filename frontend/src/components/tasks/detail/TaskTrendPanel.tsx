@@ -92,6 +92,13 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   const [granularity, setGranularity] = useState<string>('M1');
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
   const [pollingIntervalMs, setPollingIntervalMs] = useState(10_000);
+  const [chartWarningState, setChartWarningState] = useState<{
+    contextKey: string;
+    message: string | null;
+  }>({
+    contextKey: '',
+    message: null,
+  });
   const isPageVisible = useDocumentVisibility();
   const realTimeUpdatesEnabled = enableRealTimeUpdates && isPageVisible;
   const { granularities } = useSupportedGranularities();
@@ -577,6 +584,29 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     });
   }, [candleTimestampsMemo, ensureMarkerRange, realTimeUpdatesEnabled]);
 
+  const chartWarningContextKey = `${taskType}:${taskId}:${executionRunId ?? 'none'}:${granularity}`;
+  const chartWarning = useMemo(
+    () =>
+      chartWarningState.contextKey === chartWarningContextKey
+        ? chartWarningState.message
+        : null,
+    [chartWarningContextKey, chartWarningState]
+  );
+  const reportChartWarning = useCallback(
+    (message: string | null) => {
+      setChartWarningState((prev) => {
+        if (
+          prev.contextKey === chartWarningContextKey &&
+          prev.message === message
+        ) {
+          return prev;
+        }
+        return { contextKey: chartWarningContextKey, message };
+      });
+    },
+    [chartWarningContextKey]
+  );
+
   const {
     chartContainerRef,
     chartInstance,
@@ -606,6 +636,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     ensureCandleRange,
     ensureMarkerRange,
     setAutoFollow,
+    onChartError: reportChartWarning,
     onTradeMarkerClick: (tradeId) => {
       setSelectedTradeId((prev) => {
         if (!tradeId || prev === tradeId) {
@@ -811,8 +842,13 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         (a, b) => Number(a.time) - Number(b.time)
       );
       markersRef.current.setMarkers(allMarkers);
-    } catch (e) {
-      console.warn('Failed to set trade markers:', e);
+      requestAnimationFrame(() => {
+        reportChartWarning(null);
+      });
+    } catch {
+      requestAnimationFrame(() => {
+        reportChartWarning('Failed to render trade markers.');
+      });
     }
   }, [
     trades,
@@ -823,6 +859,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     markerDisplayCutoffSec,
     markersRef,
     programmaticScrollRef,
+    reportChartWarning,
   ]);
 
   const handleGranularityChange = (e: SelectChangeEvent) => {
@@ -873,8 +910,11 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         from: (target - half) as Time,
         to: (target + half) as Time,
       });
-    } catch (e) {
-      console.warn('Failed to set visible range on row select:', e);
+      reportChartWarning(null);
+    } catch {
+      reportChartWarning(
+        'Failed to update the chart range for the selected row.'
+      );
     }
   };
 
@@ -1015,6 +1055,13 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         <Alert severity="warning" sx={{ mb: 1 }}>
           {t('tables.trend.replayRefreshFailed', {
             defaultValue: errorMessage,
+          })}
+        </Alert>
+      )}
+      {chartWarning && (
+        <Alert severity="warning" sx={{ mb: 1 }}>
+          {t('tables.trend.chartRenderFailed', {
+            defaultValue: chartWarning,
           })}
         </Alert>
       )}

@@ -31,8 +31,15 @@ import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
+import {
+  useDeleteBacktestTask,
+  usePauseBacktestTask,
+  useResumeBacktestTask,
+  useRerunBacktestTask,
+  useStartBacktestTask,
+  useStopBacktestTask,
+} from '../../hooks/useBacktestTaskMutations';
 import { useToast } from '../common';
-import { backtestTasksApi } from '../../services/api';
 import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
 import { logger } from '../../utils/logger';
 
@@ -56,6 +63,12 @@ export default function BacktestTaskCard({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const startTask = useStartBacktestTask();
+  const stopTask = useStopBacktestTask();
+  const resumeTask = useResumeBacktestTask();
+  const pauseTask = usePauseBacktestTask();
+  const restartTask = useRerunBacktestTask();
+  const deleteTask = useDeleteBacktestTask();
 
   // Fetch strategies for display names
   const { strategies } = useStrategies();
@@ -118,7 +131,7 @@ export default function BacktestTaskCard({
   const handleStart = async (taskId: string) => {
     setIsLoading(true);
     try {
-      await backtestTasksApi.start(taskId);
+      await startTask.mutate(taskId);
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess(t('backtest:toast.startedSuccessfully'));
       onRefresh?.();
@@ -143,7 +156,7 @@ export default function BacktestTaskCard({
     setStopDialogOpen(false);
     setIsLoading(true);
     try {
-      await backtestTasksApi.stop(taskId);
+      await stopTask.mutate(taskId);
       setOptimisticStatus(TaskStatus.STOPPED);
       showSuccess(t('backtest:toast.stoppedSuccessfully'));
       onRefresh?.();
@@ -171,7 +184,7 @@ export default function BacktestTaskCard({
   const handleResume = async (taskId: string) => {
     setIsLoading(true);
     try {
-      await backtestTasksApi.resume(taskId);
+      await resumeTask.mutate(taskId);
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess(t('backtest:toast.resumedSuccessfully'));
       onRefresh?.();
@@ -195,7 +208,7 @@ export default function BacktestTaskCard({
   const handlePause = async (taskId: string) => {
     setIsLoading(true);
     try {
-      await backtestTasksApi.pause(taskId);
+      await pauseTask.mutate(taskId);
       setOptimisticStatus(TaskStatus.PAUSED);
       showSuccess(t('backtest:toast.pausedSuccessfully'));
       onRefresh?.();
@@ -219,7 +232,7 @@ export default function BacktestTaskCard({
   const handleRestart = async (taskId: string) => {
     setIsLoading(true);
     try {
-      await backtestTasksApi.restart(taskId);
+      await restartTask.mutate(taskId);
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess(t('backtest:toast.restartedSuccessfully'));
       onRefresh?.();
@@ -247,7 +260,7 @@ export default function BacktestTaskCard({
   const handleDeleteConfirm = async () => {
     setIsDeleting(true);
     try {
-      await backtestTasksApi.delete(String(task.id));
+      await deleteTask.mutate(String(task.id));
       invalidateBacktestTasksCache();
       showSuccess(t('backtest:toast.deletedSuccessfully'));
       setDeleteDialogOpen(false);
