@@ -9,6 +9,7 @@ import {
   type TaskLogsResponse,
   type PollingOptions,
 } from '../services/polling/TaskPollingService';
+import { logger } from '../utils/logger';
 
 export interface UseTaskPollingOptions extends PollingOptions {
   enabled?: boolean; // Whether to start polling immediately
@@ -128,9 +129,7 @@ export function useTaskPolling(
    * Start polling
    */
   const startPolling = useCallback(() => {
-    console.log(
-      `[useTaskPolling:START] Starting polling - taskId=${taskId}, taskType=${taskType}`
-    );
+    logger.debug('Starting task polling', { taskId, taskType });
     if (!pollingServiceRef.current) {
       pollingServiceRef.current = initializeService();
     }
@@ -146,9 +145,7 @@ export function useTaskPolling(
    * Stop polling
    */
   const stopPolling = useCallback(() => {
-    console.log(
-      `[useTaskPolling:STOP] Stopping polling - taskId=${taskId}, taskType=${taskType}`
-    );
+    logger.debug('Stopping task polling', { taskId, taskType });
     if (pollingServiceRef.current) {
       pollingServiceRef.current.stopPolling();
       setIsPolling(false);
@@ -159,9 +156,10 @@ export function useTaskPolling(
    * Manually trigger a refetch
    */
   const refetch = useCallback(() => {
-    console.log(
-      `[useTaskPolling:REFETCH] Manual refetch - taskId=${taskId}, taskType=${taskType}`
-    );
+    logger.debug('Manually refetching task polling state', {
+      taskId,
+      taskType,
+    });
     if (pollingServiceRef.current) {
       // Stop and restart to trigger immediate fetch
       pollingServiceRef.current.stopPolling();

@@ -1,6 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import axios, { type AxiosResponse } from 'axios';
-import { apiConfig, resolveToken } from '../api/apiConfig';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { TaskType } from '../types/common';
 import { type TaskEvent } from './useTaskEvents';
 import {
@@ -11,6 +9,8 @@ import {
   subtractLoadedRanges,
 } from '../utils/windowedRanges';
 import { getRetryAfterMsFromError } from '../utils/retryAfter';
+import { fetchAllTaskResourcePages } from '../services/api/taskResources';
+import { useSequentialPolling } from './useSequentialPolling';
 
 export interface WindowedTradeMarker {
   id: string;
@@ -45,47 +45,11 @@ type MarkerState<T> = {
   items: T[];
 };
 
-async function getHeaders(): Promise<Record<string, string>> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  const token = await resolveToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-  return headers;
-}
-
 function mergeById<T extends { id: string }>(current: T[], incoming: T[]): T[] {
   const byId = new Map<string, T>();
   for (const item of current) byId.set(item.id, item);
   for (const item of incoming) byId.set(item.id, item);
   return Array.from(byId.values());
-}
-
-async function fetchAllPages<
-  T extends { next?: string | null; results?: U[] },
-  U,
->(
-  url: string,
-  params: Record<string, string>,
-  headers: Record<string, string>
-): Promise<U[]> {
-  const items: U[] = [];
-  let nextUrl: string | null = url;
-  let nextParams: Record<string, string> | undefined = params;
-
-  while (nextUrl) {
-    const response: AxiosResponse<T> = await axios.get<T>(nextUrl, {
-      params: nextParams,
-      headers,
-      withCredentials: apiConfig.WITH_CREDENTIALS,
-    });
-    const data: T = response.data;
-    if (Array.isArray(data?.results)) {
-      items.push(...data.results);
-    }
-    nextUrl = data?.next ?? null;
-    nextParams = undefined;
-  }
-
-  return items;
 }
 
 export function useWindowedTaskMarkers({
@@ -113,37 +77,31 @@ export function useWindowedTaskMarkers({
   const tradeLoadedRangesRef = useRef<TimeRange[]>([]);
   const backoffUntilRef = useRef<number>(0);
 
-  const prefix = useMemo(
-    () =>
-      taskType === TaskType.BACKTEST
-        ? `${apiConfig.BASE}/api/trading/tasks/backtest/${taskId}`
-        : `${apiConfig.BASE}/api/trading/tasks/trading/${taskId}`,
-    [taskId, taskType]
-  );
-
   const fetchEventsInRange = useCallback(
     async (
       endpoint: 'events' | 'strategy-events',
       params: Record<string, string>
     ) => {
-      const headers = await getHeaders();
-      return fetchAllPages<
-        { next?: string | null; results?: TaskEvent[] },
-        TaskEvent
-      >(`${prefix}/${endpoint}/`, params, headers);
+      return fetchAllTaskResourcePages<TaskEvent>(
+        taskType,
+        taskId,
+        endpoint,
+        params
+      );
     },
-    [prefix]
+    [taskId, taskType]
   );
 
   const fetchTradesInRange = useCallback(
     async (params: Record<string, string>) => {
-      const headers = await getHeaders();
-      return fetchAllPages<
-        { next?: string | null; results?: WindowedTradeMarker[] },
-        WindowedTradeMarker
-      >(`${prefix}/trades/`, params, headers);
+      return fetchAllTaskResourcePages<WindowedTradeMarker>(
+        taskType,
+        taskId,
+        'trades',
+        params
+      );
     },
-    [prefix]
+    [taskId, taskType]
   );
 
   const ensureRange = useCallback(
@@ -222,83 +180,74 @@ export function useWindowedTaskMarkers({
     tradeLoadedRangesRef.current = [];
   }, [executionRunId, taskId, taskType]);
 
-  useEffect(() => {
-    if (!enableRealTimeUpdates) return;
-    const id = window.setInterval(async () => {
-      if (document.visibilityState !== 'visible') return;
-      if (Date.now() < backoffUntilRef.current) return;
-      const headers = await getHeaders();
-      const commonParams: Record<string, string> = executionRunId
-        ? { execution_id: executionRunId }
-        : {};
-      try {
-        const [taskItems, tradeItems] = await Promise.all([
-          fetchAllPages<
-            { next?: string | null; results?: TaskEvent[] },
-            TaskEvent
-          >(
-            `${prefix}/events/`,
-            {
-              ...commonParams,
-              scope: 'task',
-              page_size: '5000',
-              ...(latestTaskCreatedAtRef.current
-                ? { since: latestTaskCreatedAtRef.current }
-                : {}),
-            },
-            headers
-          ),
-          pollTrades
-            ? fetchAllPages<
-                { next?: string | null; results?: WindowedTradeMarker[] },
-                WindowedTradeMarker
-              >(
-                `${prefix}/trades/`,
-                {
-                  ...commonParams,
-                  page_size: '5000',
-                  ...(latestTradeUpdatedAtRef.current
-                    ? { since: latestTradeUpdatedAtRef.current }
-                    : {}),
-                },
-                headers
-              )
-            : Promise.resolve([]),
-        ]);
+  const refreshLatestMarkers = useCallback(async () => {
+    if (document.visibilityState !== 'visible') return;
+    if (Date.now() < backoffUntilRef.current) return;
+    const commonParams: Record<string, string> = executionRunId
+      ? { execution_id: executionRunId }
+      : {};
+    try {
+      const [taskItems, tradeItems] = await Promise.all([
+        fetchAllTaskResourcePages<TaskEvent>(taskType, taskId, 'events', {
+          ...commonParams,
+          scope: 'task',
+          page_size: '5000',
+          ...(latestTaskCreatedAtRef.current
+            ? { since: latestTaskCreatedAtRef.current }
+            : {}),
+        }),
+        pollTrades
+          ? fetchAllTaskResourcePages<WindowedTradeMarker>(
+              taskType,
+              taskId,
+              'trades',
+              {
+                ...commonParams,
+                page_size: '5000',
+                ...(latestTradeUpdatedAtRef.current
+                  ? { since: latestTradeUpdatedAtRef.current }
+                  : {}),
+              }
+            )
+          : Promise.resolve([]),
+      ]);
 
-        if (taskItems.length > 0) {
-          latestTaskCreatedAtRef.current = taskItems.reduce<string | null>(
-            (latest, item) =>
-              !latest || item.created_at > latest ? item.created_at : latest,
-            latestTaskCreatedAtRef.current
-          );
-          setTaskState((prev) => ({
-            ...prev,
-            items: mergeById(prev.items, taskItems),
-          }));
-        }
-        if (tradeItems.length > 0) {
-          latestTradeUpdatedAtRef.current = tradeItems.reduce<string | null>(
-            (latest, item) =>
-              !latest || (item.updated_at ?? '') > latest
-                ? (item.updated_at ?? latest)
-                : latest,
-            latestTradeUpdatedAtRef.current
-          );
-          setTradeState((prev) => ({
-            ...prev,
-            items: mergeById(prev.items, tradeItems),
-          }));
-        }
-      } catch (error) {
-        const retryAfterMs = getRetryAfterMsFromError(error);
-        if (retryAfterMs != null) {
-          backoffUntilRef.current = Date.now() + retryAfterMs;
-        }
+      if (taskItems.length > 0) {
+        latestTaskCreatedAtRef.current = taskItems.reduce<string | null>(
+          (latest, item) =>
+            !latest || item.created_at > latest ? item.created_at : latest,
+          latestTaskCreatedAtRef.current
+        );
+        setTaskState((prev) => ({
+          ...prev,
+          items: mergeById(prev.items, taskItems),
+        }));
       }
-    }, 10000);
-    return () => window.clearInterval(id);
-  }, [enableRealTimeUpdates, executionRunId, pollTrades, prefix]);
+      if (tradeItems.length > 0) {
+        latestTradeUpdatedAtRef.current = tradeItems.reduce<string | null>(
+          (latest, item) =>
+            !latest || (item.updated_at ?? '') > latest
+              ? (item.updated_at ?? latest)
+              : latest,
+          latestTradeUpdatedAtRef.current
+        );
+        setTradeState((prev) => ({
+          ...prev,
+          items: mergeById(prev.items, tradeItems),
+        }));
+      }
+    } catch (error) {
+      const retryAfterMs = getRetryAfterMsFromError(error);
+      if (retryAfterMs != null) {
+        backoffUntilRef.current = Date.now() + retryAfterMs;
+      }
+    }
+  }, [executionRunId, pollTrades, taskId, taskType]);
+
+  useSequentialPolling(refreshLatestMarkers, {
+    enabled: enableRealTimeUpdates,
+    intervalMs: 10000,
+  });
 
   useEffect(() => {
     if (taskState.items.length > 0) {

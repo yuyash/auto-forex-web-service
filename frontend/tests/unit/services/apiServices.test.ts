@@ -21,6 +21,11 @@ vi.mock('../../../src/api/client', () => ({
 
 import { backtestTasksApi } from '../../../src/services/api/backtestTasks';
 import { configurationsApi } from '../../../src/services/api/configurations';
+import {
+  fetchAllTaskResourcePages,
+  fetchTaskResourceObject,
+  fetchTaskResourcePage,
+} from '../../../src/services/api/taskResources';
 import { tradingTasksApi } from '../../../src/services/api/tradingTasks';
 
 describe('API service contracts', () => {
@@ -142,6 +147,75 @@ describe('API service contracts', () => {
     expect(mockApi.post).toHaveBeenCalledWith(
       '/api/trading/tasks/backtest/bt-1/start/',
       {}
+    );
+  });
+
+  it('loads task resource pages through the shared task resource service', async () => {
+    mockApi.get.mockResolvedValueOnce({
+      count: 1,
+      next: null,
+      previous: null,
+      results: [{ id: 'log-1', message: 'hello' }],
+    });
+
+    await expect(
+      fetchTaskResourcePage('backtest', 'task-1', 'logs', { page: '1' })
+    ).resolves.toEqual({
+      count: 1,
+      next: null,
+      previous: null,
+      results: [{ id: 'log-1', message: 'hello' }],
+    });
+
+    expect(mockApi.get).toHaveBeenCalledWith(
+      '/api/trading/tasks/backtest/task-1/logs/',
+      { page: '1' }
+    );
+  });
+
+  it('follows pagination links when loading all task resource pages', async () => {
+    mockApi.get
+      .mockResolvedValueOnce({
+        count: 2,
+        next: 'http://localhost/api/trading/tasks/backtest/task-1/trades/?page=2',
+        previous: null,
+        results: [{ id: 'trade-1' }],
+      })
+      .mockResolvedValueOnce({
+        count: 2,
+        next: null,
+        previous:
+          'http://localhost/api/trading/tasks/backtest/task-1/trades/?page=1',
+        results: [{ id: 'trade-2' }],
+      });
+
+    await expect(
+      fetchAllTaskResourcePages('backtest', 'task-1', 'trades', {
+        page: 1,
+      })
+    ).resolves.toEqual([{ id: 'trade-1' }, { id: 'trade-2' }]);
+
+    expect(mockApi.get).toHaveBeenNthCalledWith(
+      2,
+      '/api/trading/tasks/backtest/task-1/trades/',
+      { page: '2' }
+    );
+  });
+
+  it('loads task resource objects through the shared task resource service', async () => {
+    mockApi.get.mockResolvedValue({
+      components: ['engine', 'strategy'],
+    });
+
+    await expect(
+      fetchTaskResourceObject('trading', 'task-9', 'log-components')
+    ).resolves.toEqual({
+      components: ['engine', 'strategy'],
+    });
+
+    expect(mockApi.get).toHaveBeenCalledWith(
+      '/api/trading/tasks/trading/task-9/log-components/',
+      undefined
     );
   });
 });

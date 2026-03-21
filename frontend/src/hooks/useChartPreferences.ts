@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Granularity } from '../types/chart';
+import { logger } from '../utils/logger';
 
 interface ChartPreferences {
   instrument: string;
@@ -95,12 +96,11 @@ export function useChartPreferences() {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
-      console.log(
-        '[useChartPreferences] Saved preferences to localStorage',
-        preferences
-      );
+      logger.debug('Saved chart preferences to localStorage', { preferences });
     } catch (err) {
-      console.error('[useChartPreferences] Failed to save preferences', err);
+      logger.error('Failed to save chart preferences', {
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }, [preferences]);
 

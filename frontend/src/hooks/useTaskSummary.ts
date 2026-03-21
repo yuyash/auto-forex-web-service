@@ -11,11 +11,16 @@
  * Supports optional polling for real-time updates.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import axios from 'axios';
-import { apiConfig, resolveToken } from '../api/apiConfig';
+import { useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '../config/reactQuery';
+import { useSequentialPolling } from './useSequentialPolling';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
+import {
+  fetchTaskResourceObject,
+  isApiErrorWithStatus,
+} from '../services/api/taskResources';
 
 export interface TickInfo {
   timestamp: string | null;
@@ -72,6 +77,39 @@ export interface UseTaskSummaryResult {
   refetch: () => Promise<void>;
 }
 
+interface TaskSummaryResponse {
+  timestamp?: string | null;
+  pnl?: {
+    realized?: string | number | null;
+    unrealized?: string | number | null;
+  };
+  counts?: {
+    total_trades?: number;
+    open_positions?: number;
+    closed_positions?: number;
+  };
+  execution?: {
+    current_balance?: string | number | null;
+    ticks_processed?: number;
+    account_currency?: string | null;
+    current_balance_display?: string | number | null;
+    display_currency?: string | null;
+  };
+  tick?: {
+    timestamp?: string | null;
+    bid?: string | number | null;
+    ask?: string | number | null;
+    mid?: string | number | null;
+  };
+  task?: {
+    status?: string;
+    started_at?: string | null;
+    completed_at?: string | null;
+    error_message?: string | null;
+    progress?: number;
+  };
+}
+
 const INITIAL_SUMMARY: TaskSummary = {
   timestamp: null,
   pnl: { realized: 0, unrealized: 0 },
@@ -101,48 +139,22 @@ export function useTaskSummary(
 ): UseTaskSummaryResult {
   const { polling = false, interval = 10_000 } = options;
 
-  const [data, setData] = useState<TaskSummary>(INITIAL_SUMMARY);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  const timerRef = useRef<number | null>(null);
-
   const fetchSummary = useCallback(async () => {
     if (!taskId) {
-      setIsLoading(false);
-      return;
+      return INITIAL_SUMMARY;
     }
+
     try {
-      setIsLoading(true);
-      setError(null);
+      const d = await fetchTaskResourceObject<TaskSummaryResponse>(
+        taskType,
+        taskId,
+        'summary',
+        executionRunId != null
+          ? { execution_id: String(executionRunId) }
+          : undefined
+      );
 
-      const prefix =
-        taskType === TaskType.BACKTEST
-          ? '/api/trading/tasks/backtest'
-          : '/api/trading/tasks/trading';
-
-      const url = `${apiConfig.BASE}${prefix}/${taskId}/summary/`;
-
-      const headers: Record<string, string> = {
-        Accept: 'application/json',
-      };
-      const token = await resolveToken();
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-
-      const params: Record<string, string> = {};
-      if (executionRunId != null) {
-        params.execution_id = String(executionRunId);
-      }
-
-      const response = await axios.get(url, {
-        params,
-        headers,
-        withCredentials: apiConfig.WITH_CREDENTIALS,
-      });
-
-      const d = response.data;
-      setData({
+      return {
         timestamp: d.timestamp ?? null,
         pnl: {
           realized: parseFloat(d.pnl?.realized) || 0,
@@ -179,48 +191,45 @@ export function useTaskSummary(
           errorMessage: d.task?.error_message ?? null,
           progress: d.task?.progress ?? 0,
         },
-      });
+      } satisfies TaskSummary;
     } catch (err) {
-      if (axios.isAxiosError(err) && err.response) {
-        handleAuthErrorStatus(err.response.status, {
+      if (isApiErrorWithStatus(err)) {
+        handleAuthErrorStatus(err.status, {
           source: 'http',
-          status: err.response.status,
+          status: err.status,
           context: 'task_summary',
         });
       }
-      setError(
-        new Error(
-          err instanceof Error ? err.message : 'Failed to load task summary'
-        )
+      throw new Error(
+        err instanceof Error ? err.message : 'Failed to load task summary'
       );
-    } finally {
-      setIsLoading(false);
     }
   }, [taskId, taskType, executionRunId]);
 
-  useEffect(() => {
-    fetchSummary();
-  }, [fetchSummary]);
+  const query = useQuery({
+    queryKey: queryKeys.taskResources.summary(taskType, taskId, executionRunId),
+    queryFn: fetchSummary,
+    enabled: Boolean(taskId),
+  });
 
-  useEffect(() => {
-    if (!polling || !taskId) return;
-
-    timerRef.current = window.setInterval(() => {
-      fetchSummary();
-    }, interval);
-
-    return () => {
-      if (timerRef.current !== null) {
-        window.clearInterval(timerRef.current);
-        timerRef.current = null;
+  useSequentialPolling(
+    async () => {
+      if (!query.isFetching) {
+        await query.refetch();
       }
-    };
-  }, [polling, interval, taskId, fetchSummary]);
+    },
+    {
+      enabled: polling && Boolean(taskId),
+      intervalMs: interval,
+    }
+  );
 
   return {
-    summary: data,
-    isLoading,
-    error,
-    refetch: fetchSummary,
+    summary: query.data ?? INITIAL_SUMMARY,
+    isLoading: query.isLoading,
+    error: (query.error as Error | null) ?? null,
+    refetch: async () => {
+      await query.refetch();
+    },
   };
 }

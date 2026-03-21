@@ -8,14 +8,14 @@
  * Includes automatic retry with exponential backoff for 429 responses.
  */
 
-import { api } from '../api/apiClient';
-import { apiConfig, resolveToken } from '../api/apiConfig';
 import { TaskType } from '../types/common';
-import axios, { AxiosError } from 'axios';
-import type { PaginatedApiResponse } from '../api/types';
+import { ApiError } from '../api/apiClient';
+import {
+  fetchAllTaskResourcePages,
+  isApiErrorWithStatus,
+} from '../services/api/taskResources';
 
 const MAX_PAGE_SIZE = 5000;
-const MAX_PAGES = 50; // safety limit
 
 /** Retry config for 429 Too Many Requests */
 const MAX_RETRIES = 3;
@@ -53,63 +53,11 @@ export async function fetchAllTrades(
   taskType: TaskType,
   executionRunId?: string
 ): Promise<Array<Record<string, unknown>>> {
-  const prefix =
-    taskType === TaskType.BACKTEST
-      ? '/api/trading/tasks/backtest'
-      : '/api/trading/tasks/trading';
-
-  let allResults: Array<Record<string, unknown>> = [];
-  let page = 1;
-
-  while (page <= MAX_PAGES) {
-    let response: PaginatedApiResponse<unknown> | null = null;
-
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        response = await api.get<PaginatedApiResponse<any>>(
-          `${prefix}/${taskId}/trades/`,
-          {
-            execution_id: executionRunId,
-            page,
-            page_size: MAX_PAGE_SIZE,
-          }
-        );
-        break; // success
-      } catch (err: unknown) {
-        const status =
-          err instanceof AxiosError ? err.response?.status : undefined;
-        if (status === 429 && attempt < MAX_RETRIES) {
-          const retryAfter =
-            err instanceof AxiosError
-              ? err.response?.headers?.['retry-after']
-              : undefined;
-          await sleep(getBackoffMs(retryAfter, attempt));
-          continue;
-        }
-        throw err;
-      }
-    }
-
-    if (!response) break;
-
-    const results = (response.results || []) as Array<Record<string, unknown>>;
-    allResults = allResults.concat(results);
-
-    if (!response.next) break;
-    page++;
-  }
-
-  return allResults;
-}
-
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  const token = await resolveToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
+  return fetchWithRetry(taskId, taskType, {
+    execution_id: executionRunId,
+    page: 1,
+    page_size: MAX_PAGE_SIZE,
+  });
 }
 
 /**
@@ -123,63 +71,56 @@ export async function fetchTradesSince(
   since: string,
   executionRunId?: string
 ): Promise<Array<Record<string, unknown>>> {
-  const prefix =
-    taskType === TaskType.BACKTEST
-      ? '/api/trading/tasks/backtest'
-      : '/api/trading/tasks/trading';
+  return fetchWithRetry(taskId, taskType, {
+    execution_id: executionRunId,
+    since,
+    page: 1,
+    page_size: MAX_PAGE_SIZE,
+  });
+}
 
-  const url = `${apiConfig.BASE}${prefix}/${taskId}/trades/`;
-  const headers = await getAuthHeaders();
-
-  let allResults: Array<Record<string, unknown>> = [];
-  let page = 1;
-
-  while (page <= MAX_PAGES) {
-    const params: Record<string, string> = {
-      since,
-      page: String(page),
-      page_size: String(MAX_PAGE_SIZE),
-    };
-    if (executionRunId != null) {
-      params.execution_id = String(executionRunId);
-    }
-
-    let responseData: Record<string, unknown> | null = null;
-
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        const response = await axios.get(url, {
-          params,
-          headers,
-          withCredentials: apiConfig.WITH_CREDENTIALS,
-        });
-        responseData = response.data as Record<string, unknown>;
-        break; // success
-      } catch (err: unknown) {
-        const status =
-          err instanceof AxiosError ? err.response?.status : undefined;
-        if (status === 429 && attempt < MAX_RETRIES) {
-          const retryAfter =
-            err instanceof AxiosError
-              ? err.response?.headers?.['retry-after']
-              : undefined;
-          await sleep(getBackoffMs(retryAfter, attempt));
-          continue;
-        }
-        throw err;
+async function fetchWithRetry(
+  taskId: string,
+  taskType: TaskType,
+  params: Record<string, string | number | undefined>
+): Promise<Array<Record<string, unknown>>> {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await fetchAllTaskResourcePages<Record<string, unknown>>(
+        taskType,
+        taskId,
+        'trades',
+        params
+      );
+    } catch (err) {
+      const status = isApiErrorWithStatus(err) ? err.status : undefined;
+      if (status === 429 && attempt < MAX_RETRIES) {
+        const retryAfter = getRetryAfterHeader(err);
+        await sleep(getBackoffMs(retryAfter, attempt));
+        continue;
       }
+      throw err;
     }
-
-    if (!responseData) break;
-
-    const results = (responseData.results || []) as Array<
-      Record<string, unknown>
-    >;
-    allResults = allResults.concat(results);
-
-    if (!responseData.next) break;
-    page++;
   }
 
-  return allResults;
+  return [];
+}
+
+function getRetryAfterHeader(error: unknown): string | null | undefined {
+  if (
+    !(error instanceof ApiError) ||
+    !error.body ||
+    typeof error.body !== 'object'
+  ) {
+    return undefined;
+  }
+
+  const maybeRetryAfter = (error.body as { retry_after?: unknown }).retry_after;
+  if (typeof maybeRetryAfter === 'number') {
+    return String(maybeRetryAfter);
+  }
+  if (typeof maybeRetryAfter === 'string') {
+    return maybeRetryAfter;
+  }
+  return undefined;
 }

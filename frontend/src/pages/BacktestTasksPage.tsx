@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
 import {
   Box,
@@ -32,6 +32,8 @@ import {
 import { TaskStatus } from '../types/common';
 import BacktestTaskCard from '../components/backtest/BacktestTaskCard';
 import { LoadingSpinner, Breadcrumbs } from '../components/common';
+import { useSequentialPolling } from '../hooks/useSequentialPolling';
+import { logger } from '../utils/logger';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -103,37 +105,20 @@ export default function BacktestTasksPage() {
     ordering: sortBy,
   });
 
-  // Auto-refresh every 10 seconds when there are running tasks
-  // This ensures status changes are detected across all pages
-  const autoRefreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null
+  const hasRunningTasks = !!data?.results.some(
+    (task) => task.status === TaskStatus.RUNNING
   );
 
-  useEffect(() => {
-    const hasRunningTasks = data?.results.some(
-      (task) => task.status === TaskStatus.RUNNING
-    );
-
-    // Clear existing interval
-    if (autoRefreshIntervalRef.current) {
-      clearInterval(autoRefreshIntervalRef.current);
-      autoRefreshIntervalRef.current = null;
+  useSequentialPolling(
+    async () => {
+      logger.debug('Auto-refreshing backtest task list');
+      await refetch();
+    },
+    {
+      enabled: hasRunningTasks,
+      intervalMs: 10000,
     }
-
-    // Set up auto-refresh if there are running tasks
-    if (hasRunningTasks) {
-      autoRefreshIntervalRef.current = setInterval(() => {
-        console.log('[BacktestTasksPage] Auto-refreshing task list');
-        refetch();
-      }, 10000); // 10 seconds
-    }
-
-    return () => {
-      if (autoRefreshIntervalRef.current) {
-        clearInterval(autoRefreshIntervalRef.current);
-      }
-    };
-  }, [data?.results, refetch]);
+  );
 
   const handleRefresh = () => {
     refetch();

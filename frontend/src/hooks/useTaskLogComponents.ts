@@ -4,11 +4,15 @@
  * Fetches distinct logger/component names for a task's logs.
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
-import { apiConfig, resolveToken } from '../api/apiConfig';
+import { useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '../config/reactQuery';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
+import {
+  fetchTaskResourceObject,
+  isApiErrorWithStatus,
+} from '../services/api/taskResources';
 
 interface UseTaskLogComponentsOptions {
   taskId: string;
@@ -27,62 +31,49 @@ export const useTaskLogComponents = ({
   taskType,
   executionRunId,
 }: UseTaskLogComponentsOptions): UseTaskLogComponentsResult => {
-  const [components, setComponents] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
   const fetchComponents = useCallback(async () => {
     if (!taskId) {
-      setIsLoading(false);
-      return;
+      return [];
     }
     try {
-      setIsLoading(true);
-      setError(null);
-
-      const prefix =
-        taskType === TaskType.BACKTEST
-          ? '/api/trading/tasks/backtest'
-          : '/api/trading/tasks/trading';
-
-      const params: Record<string, string> = {};
-      if (executionRunId != null) {
-        params.execution_id = String(executionRunId);
-      }
-
-      const token = await resolveToken();
-      const headers: Record<string, string> = { Accept: 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const url = `${apiConfig.BASE}${prefix}/${taskId}/log-components/`;
-      const response = await axios.get(url, {
-        params,
-        headers,
-        withCredentials: apiConfig.WITH_CREDENTIALS,
-      });
-
-      setComponents(response.data.components || []);
+      const response = await fetchTaskResourceObject<{
+        components?: string[];
+      }>(
+        taskType,
+        taskId,
+        'log-components',
+        executionRunId != null
+          ? { execution_id: String(executionRunId) }
+          : undefined
+      );
+      return response.components ?? [];
     } catch (err) {
-      if (axios.isAxiosError(err) && err.response) {
-        handleAuthErrorStatus(err.response.status, {
+      if (isApiErrorWithStatus(err)) {
+        handleAuthErrorStatus(err.status, {
           source: 'http',
-          status: err.response.status,
+          status: err.status,
           context: 'task_log_components',
         });
       }
-      setError(
-        new Error(
-          err instanceof Error ? err.message : 'Failed to load components'
-        )
+      throw new Error(
+        err instanceof Error ? err.message : 'Failed to load components'
       );
-    } finally {
-      setIsLoading(false);
     }
   }, [taskId, taskType, executionRunId]);
 
-  useEffect(() => {
-    fetchComponents();
-  }, [fetchComponents]);
+  const query = useQuery({
+    queryKey: queryKeys.taskResources.logComponents(
+      taskType,
+      taskId,
+      executionRunId
+    ),
+    queryFn: fetchComponents,
+    enabled: Boolean(taskId),
+  });
 
-  return { components, isLoading, error };
+  return {
+    components: query.data ?? [],
+    isLoading: query.isLoading,
+    error: (query.error as Error | null) ?? null,
+  };
 };

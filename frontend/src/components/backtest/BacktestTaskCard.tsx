@@ -34,7 +34,7 @@ import {
 import { useToast } from '../common';
 import { backtestTasksApi } from '../../services/api';
 import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
-import { api } from '../../api/apiClient';
+import { logger } from '../../utils/logger';
 
 interface BacktestTaskCardProps {
   task: BacktestTask;
@@ -84,7 +84,7 @@ export default function BacktestTaskCard({
   // This ensures parent component gets updated data
   useEffect(() => {
     if (polledStatus && polledStatus.status !== task.status) {
-      console.log('[BacktestTaskCard] Status changed via polling:', {
+      logger.debug('Backtest task status changed via polling', {
         taskId: task.id,
         propStatus: task.status,
         polledStatus: polledStatus.status,
@@ -123,7 +123,10 @@ export default function BacktestTaskCard({
       showSuccess(t('backtest:toast.startedSuccessfully'));
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to start task:', error);
+      logger.error('Failed to start backtest task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       setOptimisticStatus(null);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to start task';
@@ -145,7 +148,10 @@ export default function BacktestTaskCard({
       showSuccess(t('backtest:toast.stoppedSuccessfully'));
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to stop task:', error);
+      logger.error('Failed to stop backtest task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       setOptimisticStatus(null);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to stop task';
@@ -170,7 +176,10 @@ export default function BacktestTaskCard({
       showSuccess(t('backtest:toast.resumedSuccessfully'));
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to resume task:', error);
+      logger.error('Failed to resume backtest task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       setOptimisticStatus(null);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to resume task';
@@ -191,7 +200,10 @@ export default function BacktestTaskCard({
       showSuccess(t('backtest:toast.restartedSuccessfully'));
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to restart task:', error);
+      logger.error('Failed to restart backtest task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       setOptimisticStatus(null);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to restart task';
@@ -211,13 +223,16 @@ export default function BacktestTaskCard({
   const handleDeleteConfirm = async () => {
     setIsDeleting(true);
     try {
-      await api.delete(`/api/trading/tasks/backtest/${String(task.id)}/`);
+      await backtestTasksApi.delete(String(task.id));
       invalidateBacktestTasksCache();
       showSuccess(t('backtest:toast.deletedSuccessfully'));
       setDeleteDialogOpen(false);
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to delete task:', error);
+      logger.error('Failed to delete backtest task', {
+        taskId: task.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to delete task';
       showError(errorMessage);

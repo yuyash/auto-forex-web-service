@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
 import {
   Box,
@@ -38,6 +38,8 @@ import TradingTaskCard from '../components/trading/TradingTaskCard';
 import { Breadcrumbs } from '../components/common';
 import { LoadingSpinner } from '../components/common';
 import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
+import { useSequentialPolling } from '../hooks/useSequentialPolling';
+import { logger } from '../utils/logger';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -111,38 +113,21 @@ export default function TradingTasksPage() {
     ordering: sortBy,
   });
 
-  // Auto-refresh every 10 seconds when there are running tasks
-  // This ensures status changes are detected across all pages
-  const autoRefreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null
+  const hasRunningTasks = !!data?.results.some(
+    (task) =>
+      task.status === TaskStatus.RUNNING || task.status === TaskStatus.PAUSED
   );
 
-  useEffect(() => {
-    const hasRunningTasks = data?.results.some(
-      (task) =>
-        task.status === TaskStatus.RUNNING || task.status === TaskStatus.PAUSED
-    );
-
-    // Clear existing interval
-    if (autoRefreshIntervalRef.current) {
-      clearInterval(autoRefreshIntervalRef.current);
-      autoRefreshIntervalRef.current = null;
+  useSequentialPolling(
+    async () => {
+      logger.debug('Auto-refreshing trading task list');
+      await refetch();
+    },
+    {
+      enabled: hasRunningTasks,
+      intervalMs: 10000,
     }
-
-    // Set up auto-refresh if there are running tasks
-    if (hasRunningTasks) {
-      autoRefreshIntervalRef.current = setInterval(() => {
-        console.log('[TradingTasksPage] Auto-refreshing task list');
-        refetch();
-      }, 10000); // 10 seconds
-    }
-
-    return () => {
-      if (autoRefreshIntervalRef.current) {
-        clearInterval(autoRefreshIntervalRef.current);
-      }
-    };
-  }, [data?.results, refetch]);
+  );
 
   const handleRefresh = () => {
     refetch();

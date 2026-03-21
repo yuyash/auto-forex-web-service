@@ -32,7 +32,8 @@ import {
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
 import { invalidateTradingTasksCache } from '../../hooks/useTradingTasks';
-import { api } from '../../api/apiClient';
+import { tradingTasksApi } from '../../services/api';
+import { logger } from '../../utils/logger';
 
 interface TradingTaskCardProps {
   task: TradingTask;
@@ -88,7 +89,7 @@ export default function TradingTaskCard({
   // This ensures parent component gets updated data
   useEffect(() => {
     if (polledStatus && polledStatus.status !== task.status) {
-      console.log('[TradingTaskCard] Status changed via polling:', {
+      logger.debug('Trading task status changed via polling', {
         taskId: task.id,
         propStatus: task.status,
         polledStatus: polledStatus.status,
@@ -168,12 +169,15 @@ export default function TradingTaskCard({
   const handleStart = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await api.post(`/api/trading/tasks/trading/${String(taskId)}/start/`, {});
+      await tradingTasksApi.start(String(taskId));
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess(t('trading:toast.startedSuccessfully'));
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to start task:', error);
+      logger.error('Failed to start trading task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       setOptimisticStatus(null);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to start task';
@@ -189,12 +193,15 @@ export default function TradingTaskCard({
   const handleStop = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await api.post(`/api/trading/tasks/trading/${String(taskId)}/stop/`, {});
+      await tradingTasksApi.stop(String(taskId));
       setOptimisticStatus(TaskStatus.STOPPED);
       showSuccess(t('trading:toast.stoppedSuccessfully'));
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to stop task:', error);
+      logger.error('Failed to stop trading task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       setOptimisticStatus(null);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to stop task';
@@ -207,15 +214,15 @@ export default function TradingTaskCard({
   const handleResume = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await api.post(
-        `/api/trading/tasks/trading/${String(taskId)}/resume/`,
-        {}
-      );
+      await tradingTasksApi.resume(String(taskId));
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess(t('trading:toast.resumedSuccessfully'));
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to resume task:', error);
+      logger.error('Failed to resume trading task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       setOptimisticStatus(null);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to resume task';
@@ -231,15 +238,15 @@ export default function TradingTaskCard({
   const handleRestart = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await api.post(
-        `/api/trading/tasks/trading/${String(taskId)}/restart/`,
-        {}
-      );
+      await tradingTasksApi.restart(String(taskId));
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess(t('trading:toast.restartedSuccessfully'));
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to restart task:', error);
+      logger.error('Failed to restart trading task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       setOptimisticStatus(null);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to restart task';
@@ -259,13 +266,16 @@ export default function TradingTaskCard({
   const handleDeleteConfirm = async () => {
     setIsDeleting(true);
     try {
-      await api.delete(`/api/trading/tasks/trading/${String(task.id)}/`);
+      await tradingTasksApi.delete(String(task.id));
       invalidateTradingTasksCache();
       showSuccess(t('trading:toast.deletedSuccessfully'));
       setDeleteDialogOpen(false);
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to delete task:', error);
+      logger.error('Failed to delete trading task', {
+        taskId: task.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to delete task';
       showError(errorMessage);

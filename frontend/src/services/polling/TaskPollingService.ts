@@ -8,6 +8,7 @@ import { api } from '../../api/apiClient';
 import type { BacktestTask, TradingTask } from '../../types';
 import type { ExecutionSummary } from '../../types/execution';
 import { TaskStatus } from '../../types/common';
+import { logger } from '../../utils/logger';
 
 export type TaskType = 'backtest' | 'trading';
 
@@ -262,13 +263,21 @@ export class TaskPollingService {
 
   private handleError(error: Error): void {
     this.state.retryCount++;
+    logger.error('Task polling failed', {
+      taskId: this.taskId,
+      taskType: this.taskType,
+      error: error.message,
+      retryCount: this.state.retryCount,
+    });
     if (this.callbacks.onError) {
       this.callbacks.onError(error);
     }
     if (this.state.retryCount >= this.options.maxRetries) {
-      console.error(
-        `Max retries (${this.options.maxRetries}) exceeded. Stopping polling.`
-      );
+      logger.warn('Max task polling retries reached; stopping polling', {
+        taskId: this.taskId,
+        taskType: this.taskType,
+        maxRetries: this.options.maxRetries,
+      });
       this.stopPolling();
       return;
     }
@@ -276,9 +285,12 @@ export class TaskPollingService {
       this.state.currentInterval * this.options.backoffMultiplier,
       this.options.maxBackoff
     );
-    console.warn(
-      `Polling error (retry ${this.state.retryCount}/${this.options.maxRetries}). ` +
-        `Next attempt in ${this.state.currentInterval}ms`
-    );
+    logger.warn('Scheduling next polling retry with backoff', {
+      taskId: this.taskId,
+      taskType: this.taskType,
+      retryCount: this.state.retryCount,
+      maxRetries: this.options.maxRetries,
+      nextAttemptInMs: this.state.currentInterval,
+    });
   }
 }

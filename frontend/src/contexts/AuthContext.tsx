@@ -13,6 +13,7 @@ import i18n from '../i18n/config';
 import { useIdleTimeout } from '../hooks/useIdleTimeout';
 import { authApi } from '../services/api';
 import { ApiError } from '../api/apiClient';
+import { logger } from '../utils/logger';
 
 // Persist context across HMR to prevent "useAuth must be used within AuthProvider" errors
 // during Vite hot module replacement
@@ -32,29 +33,8 @@ const AuthContext = globalWindow[AUTH_CONTEXT_KEY] as React.Context<
   AuthContextType | undefined
 >;
 
-const getInitialAuthState = (): {
-  user: User | null;
-} => {
-  try {
-    const storedUser = localStorage.getItem('user');
-
-    if (storedUser) {
-      const parsedUser = JSON.parse(storedUser);
-      return {
-        user: parsedUser,
-      };
-    }
-  } catch (error) {
-    console.error('Failed to parse stored user data:', error);
-    localStorage.removeItem('user');
-  }
-
-  return { user: null };
-};
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const initialState = getInitialAuthState();
-  const [user, setUser] = useState<User | null>(initialState.user);
+  const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(
     null
@@ -62,6 +42,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [systemSettingsLoadingState, setSystemSettingsLoading] =
     useState<boolean>(true);
   const [authBootstrapLoading, setAuthBootstrapLoading] = useState(true);
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (!storedUser) {
+      return;
+    }
+
+    try {
+      JSON.parse(storedUser);
+    } catch (error) {
+      logger.warn('Removing invalid persisted user payload', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      localStorage.removeItem('user');
+    }
+  }, []);
 
   const clearPersistedAuth = useCallback(() => {
     localStorage.removeItem('user');
@@ -79,7 +75,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       setSystemSettings(await authApi.getPublicSettings());
     } catch (error) {
-      console.error('Error fetching system settings:', error);
+      logger.error('Error fetching system settings', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       setSystemSettingsLoading(false);
     }
@@ -106,7 +104,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         await authApi.logout();
       } catch (error) {
-        console.error('Logout API call failed:', error);
+        logger.warn('Logout API call failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
     clearSessionState();
@@ -125,7 +125,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         clearSessionState();
         return false;
       }
-      console.error('Token refresh failed:', error);
+      logger.warn('Token refresh failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       return false;
     }
   }, [clearSessionState, login]);
@@ -175,7 +177,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const handleForcedLogout = (event: Event) => {
       const detail = (event as CustomEvent<AuthLogoutDetail>).detail;
       if (detail?.message) {
-        console.warn('Authentication error:', detail.message);
+        logger.warn('Authentication error', { message: detail.message });
       }
       void logout();
     };
@@ -206,7 +208,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useIdleTimeout(
     token ? sessionTimeoutMinutes : 0,
     useCallback(() => {
-      console.warn('Session timed out due to inactivity');
+      logger.warn('Session timed out due to inactivity');
       void logout();
     }, [logout])
   );

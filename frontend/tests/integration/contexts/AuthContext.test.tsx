@@ -208,6 +208,8 @@ describe('AuthContext', () => {
 
     renderWithAuth();
 
+    expect(screen.getByTestId('user').textContent).toBe('none');
+
     await waitFor(() => {
       expect(screen.getByTestId('authenticated').textContent).toBe('true');
     });

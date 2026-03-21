@@ -1,5 +1,8 @@
 // React Query configuration with optimized caching settings
 import { QueryClient } from '@tanstack/react-query';
+import { backtestTasksApi } from '../services/api/backtestTasks';
+import { configurationsApi } from '../services/api/configurations';
+import { tradingTasksApi } from '../services/api/tradingTasks';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -112,6 +115,42 @@ export const queryKeys = {
       [...queryKeys.strategies.all, 'defaults', id] as const,
   },
 
+  taskResources: {
+    all: ['task-resources'] as const,
+    summary: (taskType: string, taskId: string, executionRunId?: string) =>
+      [
+        ...queryKeys.taskResources.all,
+        taskType,
+        taskId,
+        'summary',
+        executionRunId ?? null,
+      ] as const,
+    strategyEvents: (
+      taskType: string,
+      taskId: string,
+      executionRunId?: string
+    ) =>
+      [
+        ...queryKeys.taskResources.all,
+        taskType,
+        taskId,
+        'strategy-events',
+        executionRunId ?? null,
+      ] as const,
+    logComponents: (
+      taskType: string,
+      taskId: string,
+      executionRunId?: string
+    ) =>
+      [
+        ...queryKeys.taskResources.all,
+        taskType,
+        taskId,
+        'log-components',
+        executionRunId ?? null,
+      ] as const,
+  },
+
   // System settings keys
   systemSettings: {
     all: ['system-settings'] as const,
@@ -171,23 +210,24 @@ export const cacheInvalidation = {
   },
 };
 
-// Prefetch helpers for optimistic loading
-// These will be implemented when converting hooks to React Query
 export const prefetchHelpers = {
-  // Prefetch configuration details
-  prefetchConfiguration: () => {
-    // TODO: Implementation when we convert hooks to React Query
-  },
+  prefetchConfiguration: (id: string) =>
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.configurations.detail(id),
+      queryFn: () => configurationsApi.get(id),
+    }),
 
-  // Prefetch backtest task details
-  prefetchBacktestTask: () => {
-    // TODO: Implementation when we convert hooks to React Query
-  },
+  prefetchBacktestTask: (id: string) =>
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.backtestTasks.detail(id),
+      queryFn: () => backtestTasksApi.get(id),
+    }),
 
-  // Prefetch trading task details
-  prefetchTradingTask: () => {
-    // TODO: Implementation when we convert hooks to React Query
-  },
+  prefetchTradingTask: (id: string) =>
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.tradingTasks.detail(id),
+      queryFn: () => tradingTasksApi.get(id),
+    }),
 };
 
 export default queryClient;
