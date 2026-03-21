@@ -44,6 +44,41 @@ def _tick(ts: datetime, bid: str, ask: str) -> Tick:
     )
 
 
+def _normalize_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    """Normalize strategy-state entries for stable comparisons."""
+    normalized = {
+        key: entry.get(key)
+        for key in (
+            "step",
+            "direction",
+            "entry_price",
+            "close_price",
+            "units",
+            "layer_number",
+            "retracement_count",
+            "basket",
+            "root_entry_id",
+            "parent_entry_id",
+            "visual_group_id",
+            "expected_interval_pips",
+            "actual_interval_pips",
+            "expected_tp_pips",
+            "validation_status",
+        )
+    }
+    for key in (
+        "entry_price",
+        "close_price",
+        "expected_interval_pips",
+        "actual_interval_pips",
+        "expected_tp_pips",
+    ):
+        value = normalized.get(key)
+        if value not in (None, ""):
+            normalized[key] = str(Decimal(str(value)).normalize())
+    return normalized
+
+
 def _run_snowball_backtest(
     *,
     parameters: dict[str, Any],
@@ -87,6 +122,33 @@ def _run_snowball_backtest(
         execution_id=task.execution_id,
     )
     return task, state
+
+
+def _execute_existing_backtest_task(
+    *,
+    task: Any,
+    ticks: list[Tick],
+) -> ExecutionState:
+    """Execute additional ticks for an existing backtest task/execution."""
+    engine = TradingEngine(task.instrument, task.pip_size, task.config)
+    data_source = StaticTickDataSource(ticks)
+
+    with patch("apps.trading.tasks.executor.StateManager") as mock_state_manager_cls:
+        state_manager = MagicMock()
+        state_manager.check_control.return_value = MagicMock(should_stop=False)
+        mock_state_manager_cls.return_value = state_manager
+
+        BacktestExecutor(
+            task=task,
+            engine=engine,
+            data_source=data_source,
+        ).execute()
+
+    return ExecutionState.objects.get(
+        task_type="backtest",
+        task_id=task.pk,
+        execution_id=task.execution_id,
+    )
 
 
 @pytest.mark.django_db
@@ -257,3 +319,167 @@ class TestSnowballBacktestSimulation:
         assert Position.objects.filter(task_id=task.pk, execution_id=task.execution_id).count() == 0
         assert Trade.objects.filter(task_id=task.pk, execution_id=task.execution_id).count() == 0
         assert events == ["strategy_started", "strategy_stopped"]
+
+    def test_resume_run_matches_continuous_run_for_same_tick_sequence(self) -> None:
+        base = datetime(2026, 1, 1, tzinfo=UTC)
+        parameters = {
+            "base_units": 1000,
+            "m_pips": "20",
+            "r_max": 4,
+            "f_max": 3,
+            "n_pips_head": "10",
+            "n_pips_tail": "10",
+            "n_pips_flat_steps": 1,
+            "interval_mode": "constant",
+            "counter_tp_mode": "fixed",
+            "counter_tp_pips": "8",
+            "spread_guard_enabled": False,
+            "shrink_enabled": False,
+            "lock_enabled": False,
+            "rebalance_enabled": False,
+            "m_pips_max": "55",
+        }
+        all_ticks = [
+            _tick(base, "150.00", "150.02"),
+            _tick(base + timedelta(seconds=60), "149.89", "149.91"),
+            _tick(base + timedelta(seconds=120), "149.79", "149.81"),
+            _tick(base + timedelta(seconds=180), "149.90", "149.92"),
+            _tick(base + timedelta(seconds=240), "149.68", "149.70"),
+        ]
+
+        full_task, full_state = _run_snowball_backtest(
+            parameters=parameters,
+            ticks=all_ticks,
+        )
+
+        user = UserFactory()
+        config = StrategyConfigurationFactory(
+            user=user,
+            strategy_type="snowball",
+            parameters=parameters,
+        )
+        resumed_task = BacktestTaskFactory(
+            user=user,
+            config=config,
+            instrument="USD_JPY",
+            initial_balance=Decimal("100000"),
+            status="running",
+        )
+        resumed_task.execution_id = uuid4()
+        resumed_task.save(update_fields=["execution_id"])
+
+        _execute_existing_backtest_task(
+            task=resumed_task,
+            ticks=all_ticks[:3],
+        )
+        resumed_state = _execute_existing_backtest_task(
+            task=resumed_task,
+            ticks=all_ticks[3:],
+        )
+
+        assert resumed_state.ticks_processed == full_state.ticks_processed
+        assert resumed_state.current_balance == full_state.current_balance
+        assert resumed_state.strategy_state["add_count"] == full_state.strategy_state["add_count"]
+        assert (
+            resumed_state.strategy_state["freeze_count"]
+            == full_state.strategy_state["freeze_count"]
+        )
+        assert (
+            resumed_state.strategy_state["cycle_base_units"]
+            == full_state.strategy_state["cycle_base_units"]
+        )
+        assert resumed_state.strategy_state["metrics"] == full_state.strategy_state["metrics"]
+        assert [
+            _normalize_entry(entry) for entry in resumed_state.strategy_state["trend_basket"]
+        ] == [_normalize_entry(entry) for entry in full_state.strategy_state["trend_basket"]]
+        assert [
+            _normalize_entry(entry) for entry in resumed_state.strategy_state["counter_basket"]
+        ] == [_normalize_entry(entry) for entry in full_state.strategy_state["counter_basket"]]
+        assert (
+            Position.objects.filter(
+                task_id=resumed_task.pk,
+                execution_id=resumed_task.execution_id,
+                is_open=True,
+            ).count()
+            == Position.objects.filter(
+                task_id=full_task.pk,
+                execution_id=full_task.execution_id,
+                is_open=True,
+            ).count()
+        )
+        assert (
+            Trade.objects.filter(
+                task_id=resumed_task.pk,
+                execution_id=resumed_task.execution_id,
+            ).count()
+            == Trade.objects.filter(
+                task_id=full_task.pk,
+                execution_id=full_task.execution_id,
+            ).count()
+        )
+        resumed_lifecycle = list(
+            TradingEvent.objects.filter(
+                task_id=resumed_task.pk,
+                execution_id=resumed_task.execution_id,
+            )
+            .filter(event_type__in=["strategy_started", "strategy_resumed", "strategy_stopped"])
+            .order_by("created_at", "id")
+            .values_list("event_type", flat=True)
+        )
+        assert resumed_lifecycle == [
+            "strategy_started",
+            "strategy_stopped",
+            "strategy_resumed",
+            "strategy_stopped",
+        ]
+
+    def test_manual_intervals_control_adverse_pip_gap_for_counter_adds(self) -> None:
+        base = datetime(2026, 1, 1, tzinfo=UTC)
+        task, state = _run_snowball_backtest(
+            parameters={
+                "base_units": 1000,
+                "m_pips": "50",
+                "r_max": 4,
+                "f_max": 3,
+                "n_pips_head": "30",
+                "n_pips_tail": "14",
+                "n_pips_flat_steps": 2,
+                "interval_mode": "manual",
+                "manual_intervals": ["5", "10", "15", "20"],
+                "counter_tp_mode": "fixed",
+                "counter_tp_pips": "25",
+                "spread_guard_enabled": False,
+                "shrink_enabled": False,
+                "lock_enabled": False,
+                "rebalance_enabled": False,
+                "m_pips_max": "55",
+            },
+            ticks=[
+                _tick(base, "150.00", "150.02"),
+                _tick(base + timedelta(seconds=60), "149.94", "149.96"),
+                _tick(base + timedelta(seconds=120), "149.86", "149.88"),
+                _tick(base + timedelta(seconds=180), "149.84", "149.86"),
+            ],
+        )
+
+        counter_adds = list(
+            TradingEvent.objects.filter(
+                task_id=task.pk,
+                execution_id=task.execution_id,
+                event_type="open_position",
+                details__strategy_event_type="snowball_counter",
+            )
+            .order_by("created_at", "id")
+            .values_list(
+                "details__retracement_count",
+                "details__actual_interval_pips",
+                "details__expected_interval_pips",
+            )
+        )
+
+        assert state.ticks_processed == 4
+        assert state.strategy_state["add_count"] == 2
+        assert counter_adds == [
+            (2, 7, 5.0),
+            (3, 11, 10.0),
+        ]
