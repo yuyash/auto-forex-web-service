@@ -40,6 +40,7 @@ import { useTaskTrendTradesTable } from './taskTrendPanel/useTaskTrendTradesTabl
 import { useTaskTrendPositionsTable } from './taskTrendPanel/useTaskTrendPositionsTable';
 import { useTaskTrendPanelState } from './taskTrendPanel/useTaskTrendPanelState';
 import { useTaskTrendMarkers } from './taskTrendPanel/useTaskTrendMarkers';
+import { useTaskTrendTableState } from './taskTrendPanel/useTaskTrendTableState';
 import { useTaskSelectionNavigation } from '../../../hooks/useTaskSelectionNavigation';
 
 interface TaskTrendPanelProps {
@@ -509,6 +510,17 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     setShortPosPage,
     reportChartWarning,
   });
+  const trendTableState = useTaskTrendTableState({
+    setTradePage,
+    setLongPosPage,
+    setShortPosPage,
+    setTradeRowsPerPage,
+    setLongPosRowsPerPage,
+    setShortPosRowsPerPage,
+    setTradeConfigOpen,
+    setLongPosConfigOpen,
+    setShortPosConfigOpen,
+  });
 
   const handleGranularityChange = (e: SelectChangeEvent) => {
     storeVisibleRange();
@@ -723,7 +735,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
             rowsPerPage={tradeRowsPerPage}
             timezone={timezone}
             selectedRowRef={tradeSelectedRowRef}
-            onConfigureColumns={() => setTradeConfigOpen(true)}
+            onConfigureColumns={trendTableState.openTradeColumns}
             onCopySelected={copySelectedRows}
             onSelectAllOnPage={selectAllTradeRowsOnPage}
             onResetSelection={resetTradeSelection}
@@ -733,15 +745,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
             onTogglePageSelection={toggleTradePageSelection}
             onSort={handleTradeSort}
             onPageChange={(_e, newPage) => setTradePage(newPage)}
-            onRowsPerPageChange={(e) => {
-              const newVal = parseInt(e.target.value, 10);
-              setTradeRowsPerPage(newVal);
-              setTradePage(0);
-              setLongPosRowsPerPage(newVal);
-              setLongPosPage(0);
-              setShortPosRowsPerPage(newVal);
-              setShortPosPage(0);
-            }}
+            onRowsPerPageChange={trendTableState.handleRowsPerPageChange}
             resizeHandle={createTradeResizeHandle}
           />
         </Box>
@@ -766,7 +770,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           rowsPerPage={longPosRowsPerPage}
           timezone={timezone}
           selectedPosRowRef={selectedPosRowRef}
-          onConfigureColumns={() => setLongPosConfigOpen(true)}
+          onConfigureColumns={trendTableState.openLongColumns}
           onCopySelected={() => copySelectedLongPositions(false)}
           onSelectAllOnPage={selectAllLongPosOnPage}
           onResetSelection={resetLongPosSelection}
@@ -777,15 +781,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           onSelectPosition={selectPosition}
           onToggleSelection={toggleLongPosSelection}
           onPageChange={(_e, newPage) => setLongPosPage(newPage)}
-          onRowsPerPageChange={(e) => {
-            const newVal = parseInt(e.target.value, 10);
-            setLongPosRowsPerPage(newVal);
-            setLongPosPage(0);
-            setTradeRowsPerPage(newVal);
-            setTradePage(0);
-            setShortPosRowsPerPage(newVal);
-            setShortPosPage(0);
-          }}
+          onRowsPerPageChange={trendTableState.handleRowsPerPageChange}
           resizeHandle={createLongPosResizeHandle}
         />
 
@@ -809,7 +805,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           rowsPerPage={shortPosRowsPerPage}
           timezone={timezone}
           selectedPosRowRef={selectedPosRowRef}
-          onConfigureColumns={() => setShortPosConfigOpen(true)}
+          onConfigureColumns={trendTableState.openShortColumns}
           onCopySelected={() => copySelectedShortPositions(true)}
           onSelectAllOnPage={selectAllShortPosOnPage}
           onResetSelection={resetShortPosSelection}
@@ -820,15 +816,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           onSelectPosition={selectPosition}
           onToggleSelection={toggleShortPosSelection}
           onPageChange={(_e, newPage) => setShortPosPage(newPage)}
-          onRowsPerPageChange={(e) => {
-            const newVal = parseInt(e.target.value, 10);
-            setShortPosRowsPerPage(newVal);
-            setShortPosPage(0);
-            setTradeRowsPerPage(newVal);
-            setTradePage(0);
-            setLongPosRowsPerPage(newVal);
-            setLongPosPage(0);
-          }}
+          onRowsPerPageChange={trendTableState.handleRowsPerPageChange}
           resizeHandle={createShortPosResizeHandle}
         />
       </Box>
@@ -836,21 +824,21 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       <ColumnConfigDialog
         open={tradeConfigOpen}
         columns={tradeColumnConfig}
-        onClose={() => setTradeConfigOpen(false)}
+        onClose={trendTableState.closeTradeColumns}
         onSave={updateTradeColumns}
         onReset={resetTradeDefaults}
       />
       <ColumnConfigDialog
         open={longPosConfigOpen}
         columns={longPosColumnConfig}
-        onClose={() => setLongPosConfigOpen(false)}
+        onClose={trendTableState.closeLongColumns}
         onSave={updateLongPosColumns}
         onReset={resetLongPosDefaults}
       />
       <ColumnConfigDialog
         open={shortPosConfigOpen}
         columns={shortPosColumnConfig}
-        onClose={() => setShortPosConfigOpen(false)}
+        onClose={trendTableState.closeShortColumns}
         onSave={updateShortPosColumns}
         onReset={resetShortPosDefaults}
       />

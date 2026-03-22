@@ -1,5 +1,3 @@
-// Task Execution hooks for data fetching
-import { useQuery } from '@tanstack/react-query';
 import { TaskType } from '../types';
 import type { TaskExecution, PaginatedResponse } from '../types';
 import {
@@ -10,6 +8,7 @@ import {
   refreshTaskExecution,
   refreshTaskExecutions,
 } from './taskResourceCache';
+import { useTaskDetail, useTaskList } from './useTaskCollections';
 
 interface UseTaskExecutionsResult {
   data: PaginatedResponse<TaskExecution> | undefined;
@@ -35,16 +34,14 @@ export function useTaskExecutions(
   params?: { page?: number; page_size?: number; include_metrics?: boolean },
   options?: { enablePolling?: boolean; pollingInterval?: number }
 ): UseTaskExecutionsResult {
-  const { data, isLoading, error } = useQuery(
-    createTaskExecutionsQuery(taskId, taskType, params, options)
+  const resource = useTaskList(
+    createTaskExecutionsQuery(taskId, taskType, params, options),
+    () => refreshTaskExecutions(taskId, taskType, params)
   );
 
   return {
-    data,
-    isLoading,
-    error: error as Error | null,
-    refresh: () => refreshTaskExecutions(taskId, taskType, params),
-    refetch: () => refreshTaskExecutions(taskId, taskType, params),
+    ...resource,
+    data: resource.data ?? undefined,
   };
 }
 
@@ -64,16 +61,14 @@ export function useTaskExecution(
   executionId: string,
   taskType: TaskType
 ): UseTaskExecutionResult {
-  const { data, isLoading, error } = useQuery(
-    createTaskExecutionQuery(taskId, executionId, taskType)
+  const resource = useTaskDetail(
+    createTaskExecutionQuery(taskId, executionId, taskType),
+    () => refreshTaskExecution(taskId, executionId, taskType)
   );
 
   return {
-    data,
-    isLoading,
-    error: error as Error | null,
-    refresh: () => refreshTaskExecution(taskId, executionId, taskType),
-    refetch: () => refreshTaskExecution(taskId, executionId, taskType),
+    ...resource,
+    data: resource.data ?? undefined,
   };
 }
 

@@ -7,12 +7,16 @@ from datetime import datetime
 from uuid import UUID
 
 from django.utils.dateparse import parse_datetime
+from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 
 
 def _parse_datetime_value(value: str | None) -> datetime | None:
     if value:
-        return parse_datetime(value)
+        parsed = parse_datetime(value)
+        if parsed is None:
+            raise ValidationError({"detail": f"Invalid datetime value: {value}"})
+        return parsed
     return None
 
 
@@ -22,7 +26,7 @@ def _parse_execution_id_value(value: str | None) -> UUID | None:
     try:
         return UUID(value)
     except (TypeError, ValueError):
-        return None
+        raise ValidationError({"detail": f"Invalid execution_id: {value}"})
 
 
 @dataclass(frozen=True)
@@ -43,14 +47,14 @@ class PaginationParams:
         try:
             page = max(1, int(request.query_params.get("page", 1)))
         except (TypeError, ValueError):
-            page = 1
+            raise ValidationError({"detail": "Invalid page parameter"})
         try:
             page_size = max(
                 1,
                 min(int(request.query_params.get("page_size", default_page_size)), max_page_size),
             )
         except (TypeError, ValueError):
-            page_size = default_page_size
+            raise ValidationError({"detail": "Invalid page_size parameter"})
         return cls(page=page, page_size=page_size)
 
 

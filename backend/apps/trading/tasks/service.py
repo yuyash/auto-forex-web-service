@@ -51,6 +51,10 @@ class TaskSubmissionError(TaskServiceError, RuntimeError):
     """Raised when dispatching a task to workers fails."""
 
 
+class TaskLookupError(TaskValidationError):
+    """Raised when a task cannot be found."""
+
+
 class TaskService:
     """Service for managing task lifecycle.
 
@@ -139,6 +143,30 @@ class TaskService:
             args=[task.pk],
             task_id=str(task.execution_id),
         )
+
+    @staticmethod
+    def _get_task_and_type(task_id: UUID) -> tuple[BacktestTask | TradingTask, str]:
+        try:
+            return BacktestTask.objects.get(pk=task_id), "backtest"
+        except BacktestTask.DoesNotExist:
+            try:
+                return TradingTask.objects.get(pk=task_id), "trading"
+            except TradingTask.DoesNotExist as exc:
+                raise TaskLookupError(f"Task with id {task_id} does not exist") from exc
+
+    @staticmethod
+    def _get_task_model(task_type: str):
+        return BacktestTask if task_type == "backtest" else TradingTask
+
+    @staticmethod
+    def _ensure_task_status(
+        task: BacktestTask | TradingTask,
+        *,
+        allowed: tuple[TaskStatus, ...],
+        message: str,
+    ) -> None:
+        if task.status not in allowed:
+            raise TaskValidationError(message)
 
     def start_task(self, task: BacktestTask | TradingTask) -> BacktestTask | TradingTask:
         """Submit a task to Celery for execution.
@@ -450,23 +478,13 @@ class TaskService:
             except ValueError as e:
                 raise ValueError(f"Invalid stop mode: {mode}") from e
 
-            # Try to find the task in either BacktestTask or TradingTask
-            task = None
-            is_backtest = False
-            task_name = None
-            try:
-                task = BacktestTask.objects.get(pk=task_id)
-                is_backtest = True
-                task_name = "trading.tasks.run_backtest_task"
-                logger.info(f"[SERVICE:STOP] Found backtest task - task_id={task_id}")
-            except BacktestTask.DoesNotExist:
-                try:
-                    task = TradingTask.objects.get(pk=task_id)
-                    task_name = "trading.tasks.run_trading_task"
-                    logger.info(f"[SERVICE:STOP] Found trading task - task_id={task_id}")
-                except TradingTask.DoesNotExist as e:
-                    logger.error(f"[SERVICE:STOP] TASK_NOT_FOUND - task_id={task_id}")
-                    raise ValueError(f"Task with id {task_id} does not exist") from e
+            task, task_type = self._get_task_and_type(task_id)
+            is_backtest = task_type == "backtest"
+            task_name = (
+                "trading.tasks.run_backtest_task"
+                if is_backtest
+                else "trading.tasks.run_trading_task"
+            )
 
             logger.info(
                 f"[SERVICE:STOP] Current task state - task_id={task_id}, status={task.status}, "
@@ -482,7 +500,6 @@ class TaskService:
                 return True
 
             # Update task status to STOPPING in database
-            task_type = "backtest" if is_backtest else "trading"
             logger.info(
                 f"[SERVICE:STOP] Transitioning: {task.status} -> STOPPING - task_id={task_id}, "
                 f"task_type={task_type}"
@@ -562,7 +579,7 @@ class TaskService:
             )
 
             return True
-        except ValueError:
+        except TaskValidationError:
             # Re-raise ValueError as-is (already logged)
             raise
         except Exception as e:
@@ -590,32 +607,16 @@ class TaskService:
         logger.info("Pausing task", extra={"task_id": str(task_id)})
 
         try:
-            # Try to find the task in either BacktestTask or TradingTask
-            task = None
-            task_type = "backtest"
-            try:
-                task = BacktestTask.objects.get(pk=task_id)
-            except BacktestTask.DoesNotExist:
-                try:
-                    task = TradingTask.objects.get(pk=task_id)
-                    task_type = "trading"
-                except TradingTask.DoesNotExist as e:
-                    logger.error(
-                        "Task not found",
-                        extra={"task_id": str(task_id)},
-                    )
-                    raise ValueError(f"Task with id {task_id} does not exist") from e
+            task, task_type = self._get_task_and_type(task_id)
 
-            # Validate task is running
-            if task.status != TaskStatus.RUNNING:
-                logger.warning(
-                    "Task not in RUNNING state",
-                    extra={"task_id": str(task_id), "status": task.status},
-                )
-                raise ValueError(
+            self._ensure_task_status(
+                task,
+                allowed=(TaskStatus.RUNNING,),
+                message=(
                     f"Task cannot be paused in {task.status} state. "
                     "Only RUNNING tasks can be paused."
-                )
+                ),
+            )
 
             # Update task status to PAUSED
             task.status = TaskStatus.PAUSED
@@ -633,7 +634,7 @@ class TaskService:
             )
             return True
 
-        except ValueError:
+        except TaskValidationError:
             raise
         except Exception as e:
             logger.error(
@@ -662,21 +663,7 @@ class TaskService:
         logger.info("Cancelling task", extra={"task_id": str(task_id)})
 
         try:
-            # Try to find the task in either BacktestTask or TradingTask
-            task = None
-            task_type = "backtest"
-            try:
-                task = BacktestTask.objects.get(pk=task_id)
-            except BacktestTask.DoesNotExist:
-                try:
-                    task = TradingTask.objects.get(pk=task_id)
-                    task_type = "trading"
-                except TradingTask.DoesNotExist as e:
-                    logger.error(
-                        "Task not found",
-                        extra={"task_id": str(task_id)},
-                    )
-                    raise ValueError(f"Task with id {task_id} does not exist") from e
+            task, task_type = self._get_task_and_type(task_id)
 
             # Only cancel if task is in an active state
             if task.status not in [TaskStatus.STARTING, TaskStatus.RUNNING, TaskStatus.PAUSED]:
@@ -709,7 +696,7 @@ class TaskService:
             )
             return True
 
-        except ValueError:
+        except TaskValidationError:
             raise
         except Exception as e:
             logger.error(
@@ -741,21 +728,8 @@ class TaskService:
         logger.info(f"[SERVICE:RESTART] Restarting task - task_id={task_id}")
 
         try:
-            # Try to find the task in either BacktestTask or TradingTask
-            task = None
-            task_type = None
-            try:
-                task = BacktestTask.objects.get(pk=task_id)
-                task_type = "backtest"
-                logger.info(f"[SERVICE:RESTART] Found backtest task - task_id={task_id}")
-            except BacktestTask.DoesNotExist:
-                try:
-                    task = TradingTask.objects.get(pk=task_id)
-                    task_type = "trading"
-                    logger.info(f"[SERVICE:RESTART] Found trading task - task_id={task_id}")
-                except TradingTask.DoesNotExist as e:
-                    logger.error(f"[SERVICE:RESTART] TASK_NOT_FOUND - task_id={task_id}")
-                    raise ValueError(f"Task with id {task_id} does not exist") from e
+            task, task_type = self._get_task_and_type(task_id)
+            logger.info(f"[SERVICE:RESTART] Found {task_type} task - task_id={task_id}")
 
             logger.info(
                 f"[SERVICE:RESTART] Current task state - task_id={task_id}, status={task.status}, "
@@ -885,7 +859,7 @@ class TaskService:
             logger.info(f"[SERVICE:RESTART] Resubmitting task - task_id={task_id}")
             return self.start_task(task)
 
-        except ValueError:
+        except TaskValidationError:
             raise
         except Exception as e:
             logger.error(
@@ -916,35 +890,21 @@ class TaskService:
         logger.info("Resuming task", extra={"task_id": str(task_id)})
 
         try:
-            # Try to find the task in either BacktestTask or TradingTask
-            task = None
-            task_type = "backtest"
-            try:
-                task = BacktestTask.objects.get(pk=task_id)
-            except BacktestTask.DoesNotExist:
-                try:
-                    task = TradingTask.objects.get(pk=task_id)
-                    task_type = "trading"
-                except TradingTask.DoesNotExist as e:
-                    logger.error(
-                        "Task not found",
-                        extra={"task_id": str(task_id)},
-                    )
-                    raise ValueError(f"Task with id {task_id} does not exist") from e
+            task, task_type = self._get_task_and_type(task_id)
 
-            model_class = BacktestTask if task_type == "backtest" else TradingTask
+            model_class = self._get_task_model(task_type)
 
             with transaction.atomic():
                 locked_task = model_class.objects.select_for_update().get(pk=task.pk)
 
                 if locked_task.status != TaskStatus.PAUSED:
-                    raise ValueError(
+                    raise TaskValidationError(
                         f"Task cannot be resumed from {locked_task.status} state. "
                         "Only PAUSED tasks can be resumed."
                     )
 
                 if not locked_task.execution_id:
-                    raise ValueError("Cannot resume task without an execution_id")
+                    raise TaskValidationError("Cannot resume task without an execution_id")
 
                 result = self.get_celery_result(str(locked_task.execution_id))
                 if result:
@@ -959,7 +919,7 @@ class TaskService:
                                 "execution_id": str(locked_task.execution_id),
                             },
                         )
-                        raise ValueError(
+                        raise TaskValidationError(
                             f"Task status mismatch: task is marked as PAUSED in database "
                             f"but Celery task is still {celery_state}. "
                             "Please wait for the task to fully stop before resuming."
@@ -983,7 +943,7 @@ class TaskService:
             self._dispatch_task(task, task_type)
             return task
 
-        except ValueError:
+        except TaskValidationError:
             raise
         except Exception as e:
             logger.error(

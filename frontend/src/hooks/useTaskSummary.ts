@@ -11,12 +11,11 @@
  * Supports optional polling for real-time updates.
  */
 
-import { useQuery } from '@tanstack/react-query';
-import { useSequentialPolling } from './useSequentialPolling';
 import { TaskType } from '../types/common';
 import { refreshTaskSummary } from './taskResourceCache';
 import { createTaskSummaryQuery } from './taskResourceQueries';
 import { usePollingActivity } from './usePollingActivity';
+import { usePolledTaskResource } from './useTaskCollections';
 
 export interface TickInfo {
   timestamp: string | null;
@@ -103,32 +102,17 @@ export function useTaskSummary(
   options: UseTaskSummaryOptions = {}
 ): UseTaskSummaryResult {
   const { polling = false, interval = 10_000 } = options;
-  const query = useQuery(
-    createTaskSummaryQuery(taskId, taskType, executionRunId, INITIAL_SUMMARY)
-  );
   const pollingEnabled = usePollingActivity(polling && Boolean(taskId));
-
-  useSequentialPolling(
-    () => {
-      if (!query.isFetching) {
-        return query.refetch();
-      }
-      return Promise.resolve();
-    },
-    {
-      enabled: pollingEnabled,
-      intervalMs: interval,
-    }
-  );
-
   const refresh = () => refreshTaskSummary(taskId, taskType, executionRunId);
+  const resource = usePolledTaskResource(
+    createTaskSummaryQuery(taskId, taskType, executionRunId, INITIAL_SUMMARY),
+    refresh,
+    { pollingEnabled, intervalMs: interval }
+  );
 
   return {
-    data: query.data ?? INITIAL_SUMMARY,
-    summary: query.data ?? INITIAL_SUMMARY,
-    isLoading: query.isLoading,
-    error: (query.error as Error | null) ?? null,
-    refresh,
-    refetch: refresh,
+    ...resource,
+    data: resource.data ?? INITIAL_SUMMARY,
+    summary: resource.data ?? INITIAL_SUMMARY,
   };
 }
