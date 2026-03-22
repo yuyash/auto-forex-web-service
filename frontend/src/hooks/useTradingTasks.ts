@@ -1,4 +1,3 @@
-import { queryClient, queryKeys } from '../config/reactQuery';
 import type {
   PaginatedResponse,
   TradingTask,
@@ -36,11 +35,7 @@ export function useTradingTasks(
   params?: TradingTaskListParams
 ): UseTradingTasksResult {
   return useTaskList<TradingTask, TradingTaskListParams>(
-    createTaskListQuery<TradingTask>(TaskType.TRADING, params),
-    () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.tradingTasks.list(params),
-      })
+    createTaskListQuery<TradingTask>(TaskType.TRADING, params)
   );
 }
 
@@ -55,12 +50,6 @@ export function useTradingTask(
     createTaskDetailQuery<TradingTask>(TaskType.TRADING, id, {
       ...options,
       enablePolling: pollingEnabled,
-    }),
-    () =>
-      id
-        ? queryClient.invalidateQueries({
-            queryKey: queryKeys.tradingTasks.detail(id),
-          })
-        : Promise.resolve()
+    })
   );
 }

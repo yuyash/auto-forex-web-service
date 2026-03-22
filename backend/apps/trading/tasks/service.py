@@ -15,16 +15,15 @@ from uuid import UUID, uuid4
 
 from celery.result import AsyncResult
 from django.db import transaction
-from django.utils import timezone
 
 from apps.trading.enums import StopMode, TaskStatus
 from apps.trading.models import (
     BacktestTask,
-    StrategyEventRecord,
     TradingEvent,
     TradingTask,
 )
 from apps.trading.services.execution_lifecycle import sync_terminal_execution_artifacts
+from apps.trading.tasks.lifecycle_writes import TaskLifecycleWriter
 from apps.trading.tasks import (
     run_backtest_task,
     run_trading_task,
@@ -63,6 +62,8 @@ class TaskService:
     - Task stopping with STOPPING state
     - Task restart and resume operations
     """
+
+    writer = TaskLifecycleWriter(logger=logger)
 
     @staticmethod
     def get_celery_result(celery_task_id: str | None) -> AsyncResult | None:
@@ -237,19 +238,6 @@ class TaskService:
             task.save()
         return task
 
-    @staticmethod
-    def _persist_task_state(
-        task: BacktestTask | TradingTask,
-        *,
-        status: TaskStatus,
-        extra_updates: dict[str, object] | None = None,
-    ) -> None:
-        extra_updates = extra_updates or {}
-        for field, value in extra_updates.items():
-            setattr(task, field, value)
-        task.status = status
-        task.save(update_fields=["status", "updated_at", *extra_updates.keys()])
-
     def _finalize_terminal_task(
         self,
         *,
@@ -260,38 +248,19 @@ class TaskService:
         kind: str,
         extra_updates: dict[str, object] | None = None,
     ) -> None:
-        terminal_updates = {"completed_at": timezone.now(), **(extra_updates or {})}
-        self._persist_task_state(task, status=status, extra_updates=terminal_updates)
-        sync_terminal_execution_artifacts(task=task, task_type=task_type)
+        self.writer.finalize_terminal_task(
+            task=task,
+            task_type=task_type,
+            status=status,
+            extra_updates=extra_updates,
+            sync_artifacts=sync_terminal_execution_artifacts,
+        )
         self._emit_task_lifecycle_event(
             task=task,
             task_type=task_type,
             kind=kind,
             description=description,
         )
-
-    @staticmethod
-    def _clear_task_execution_history(
-        *,
-        task: BacktestTask | TradingTask,
-        task_type: str,
-    ) -> None:
-        from apps.trading.models.state import ExecutionState
-
-        for model, label in (
-            (TradingEvent, "trading events"),
-            (StrategyEventRecord, "strategy events"),
-            (ExecutionState, "execution state"),
-        ):
-            try:
-                model.objects.filter(task_type=task_type, task_id=task.pk).delete()
-            except Exception as exc:  # pragma: no cover - defensive logging path
-                logger.warning(
-                    "[SERVICE:RESTART] Failed to clear %s - task_id=%s, error=%s",
-                    label,
-                    task.pk,
-                    exc,
-                )
 
     def start_task(self, task: BacktestTask | TradingTask) -> BacktestTask | TradingTask:
         """Submit a task to Celery for execution.
@@ -610,7 +579,7 @@ class TaskService:
             )
 
             # Update task status to PAUSED
-            self._persist_task_state(task, status=TaskStatus.PAUSED)
+            self.writer.persist_state(task, status=TaskStatus.PAUSED)
             self._emit_task_lifecycle_event(
                 task=task,
                 task_type=task_type,
@@ -766,7 +735,7 @@ class TaskService:
             logger.info(
                 f"[SERVICE:RESTART] Clearing execution history - task_id={task_id}, task_type={task_type}"
             )
-            self._clear_task_execution_history(task=task, task_type=task_type)
+            self.writer.clear_execution_history(task=task, task_type=task_type)
 
             # Clear all execution data using QuerySet.update() for an atomic,
             # single-statement reset.  This avoids the race where a full-model

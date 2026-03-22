@@ -1,4 +1,3 @@
-import { queryClient, queryKeys } from '../config/reactQuery';
 import { TaskType } from '../types/common';
 import type {
   BacktestTask,
@@ -36,11 +35,7 @@ export function useBacktestTasks(
   params?: BacktestTaskListParams
 ): UseBacktestTasksResult {
   return useTaskList<BacktestTask, BacktestTaskListParams>(
-    createTaskListQuery<BacktestTask>(TaskType.BACKTEST, params),
-    () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.backtestTasks.list(params),
-      })
+    createTaskListQuery<BacktestTask>(TaskType.BACKTEST, params)
   );
 }
 
@@ -55,12 +50,6 @@ export function useBacktestTask(
     createTaskDetailQuery<BacktestTask>(TaskType.BACKTEST, id, {
       ...options,
       enablePolling: pollingEnabled,
-    }),
-    () =>
-      id
-        ? queryClient.invalidateQueries({
-            queryKey: queryKeys.backtestTasks.detail(id),
-          })
-        : Promise.resolve()
+    })
   );
 }

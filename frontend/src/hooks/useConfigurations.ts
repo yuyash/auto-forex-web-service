@@ -47,10 +47,7 @@ export function useConfigurations(
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.configurations.list(params),
-      }),
+    refetch: () => query.refetch(),
   };
 }
 
@@ -67,12 +64,7 @@ export function useConfiguration(id?: string): UseConfigurationResult {
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: () =>
-      id
-        ? queryClient.invalidateQueries({
-            queryKey: queryKeys.configurations.detail(id),
-          })
-        : Promise.resolve(),
+    refetch: () => (id ? query.refetch() : Promise.resolve()),
   };
 }
 
@@ -90,9 +82,6 @@ export function useConfigurationTasks(
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.configurations.tasks(id),
-      }),
+    refetch: () => query.refetch(),
   };
 }

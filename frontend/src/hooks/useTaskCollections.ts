@@ -10,30 +10,28 @@ export interface QueryStateResult<TData> {
 }
 
 export function useTaskList<TData>(
-  queryOptions: UseQueryOptions<TData>,
-  refresh: () => Promise<unknown>
+  queryOptions: UseQueryOptions<TData>
 ): QueryStateResult<TData> {
   const query = useQuery(queryOptions);
   return {
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refresh,
-    refetch: refresh,
+    refresh: () => query.refetch(),
+    refetch: () => query.refetch(),
   };
 }
 
 export function useTaskDetail<TData>(
-  queryOptions: UseQueryOptions<TData>,
-  refresh: () => Promise<unknown>
+  queryOptions: UseQueryOptions<TData>
 ): QueryStateResult<TData> {
   const query = useQuery(queryOptions);
   return {
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refresh,
-    refetch: refresh,
+    refresh: () => query.refetch(),
+    refetch: () => query.refetch(),
   };
 }
 
