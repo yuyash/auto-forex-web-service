@@ -14,6 +14,7 @@ from apps.trading.tasks.lifecycle_commands import (
 
 def _make_commands(service: MagicMock) -> tuple[TaskLifecycleCommands, MagicMock]:
     logger = MagicMock()
+    events = MagicMock()
     adapters = LifecycleCommandAdapters(
         inspect_workers=MagicMock(return_value={"worker1": {}}),
         signal_stop=MagicMock(),
@@ -21,7 +22,15 @@ def _make_commands(service: MagicMock) -> tuple[TaskLifecycleCommands, MagicMock
         dispatch_stop=MagicMock(),
         sleep=MagicMock(),
     )
-    return TaskLifecycleCommands(service=service, logger=logger, adapters=adapters), adapters
+    return (
+        TaskLifecycleCommands(
+            service=service,
+            logger=logger,
+            events=events,
+            adapters=adapters,
+        ),
+        adapters,
+    )
 
 
 def test_stop_uses_injected_adapters() -> None:

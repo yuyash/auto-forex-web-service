@@ -13,6 +13,7 @@ from django.db import transaction
 
 from apps.trading.enums import StopMode, TaskStatus
 from apps.trading.models import BacktestTask, TradingTask
+from apps.trading.tasks.lifecycle_events import TaskLifecycleEventPublisher
 
 if TYPE_CHECKING:
     from apps.trading.tasks.service import TaskService
@@ -70,10 +71,12 @@ class TaskLifecycleCommands:
         *,
         service: TaskService,
         logger: Logger,
+        events: TaskLifecycleEventPublisher | None = None,
         adapters: LifecycleCommandAdapters | None = None,
     ) -> None:
         self.service = service
         self.logger = logger
+        self.events = events or TaskLifecycleEventPublisher(logger=logger)
         self.adapters = adapters or LifecycleCommandAdapters(
             inspect_workers=_default_inspect_workers,
             signal_stop=_default_signal_stop,
@@ -116,7 +119,7 @@ class TaskLifecycleCommands:
                 task.execution_id,
                 task.status,
             )
-            self.service._emit_task_lifecycle_event(
+            self.events.publish(
                 task=task,
                 task_type=task_type,
                 kind="task_start_requested",
@@ -170,7 +173,7 @@ class TaskLifecycleCommands:
             self._revoke_execution(task.execution_id)
         self._trigger_stop_task(task_id=task_id, is_backtest=is_backtest, stop_mode=stop_mode)
 
-        self.service._emit_task_lifecycle_event(
+        self.events.publish(
             task=task,
             task_type=task_type,
             kind="task_stop_requested",
@@ -189,7 +192,7 @@ class TaskLifecycleCommands:
             ),
         )
         self.service.writer.persist_state(task, status=TaskStatus.PAUSED)
-        self.service._emit_task_lifecycle_event(
+        self.events.publish(
             task=task,
             task_type=task_type,
             kind="task_paused",
@@ -250,7 +253,7 @@ class TaskLifecycleCommands:
         task.refresh_from_db()
         if task.status != TaskStatus.CREATED:
             raise RuntimeError(f"Failed to reset task status: expected CREATED, got {task.status}")
-        self.service._emit_task_lifecycle_event(
+        self.events.publish(
             task=task,
             task_type=task_type,
             kind="task_restart_requested",
@@ -283,7 +286,7 @@ class TaskLifecycleCommands:
             locked_task.save(update_fields=["status", "updated_at"])
             task = locked_task
 
-        self.service._emit_task_lifecycle_event(
+        self.events.publish(
             task=task,
             task_type=task_type,
             kind="task_resume_requested",

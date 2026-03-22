@@ -10,7 +10,7 @@ import json
 
 from django.db.models import Q
 from django.utils.dateparse import parse_datetime
-from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
 from rest_framework.decorators import action
 from rest_framework.request import Request
@@ -30,10 +30,22 @@ from apps.trading.serializers.task import TaskLogSerializer
 from apps.trading.serializers.trend_replay import TaskTrendReplaySerializer
 from apps.trading.views.query_params import (
     DateRangeQuery,
+    ExecutionDetailQueryParamsSchemaSerializer,
     ExecutionScopedQuery,
+    ExecutionsQueryParamsSchemaSerializer,
+    EventsQueryParamsSchemaSerializer,
+    LogComponentsQueryParamsSchemaSerializer,
+    LogsQueryParamsSchemaSerializer,
+    MetricsQueryParamsSchemaSerializer,
+    OrdersQueryParamsSchemaSerializer,
     PaginationParams,
     PositionQuery,
+    PositionsQueryParamsSchemaSerializer,
+    StrategyEventsQueryParamsSchemaSerializer,
+    SummaryQueryParamsSchemaSerializer,
+    TradesQueryParamsSchemaSerializer,
     TrendReplayQueryParams,
+    TrendReplayQueryParamsSchemaSerializer,
 )
 from apps.trading.views.pagination import (
     ActivityPagination,
@@ -93,21 +105,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
-            OpenApiParameter("until", str, description="RFC3339 upper-bound timestamp (exclusive)"),
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-            OpenApiParameter("page", int, description="Page number (1-based)"),
-            OpenApiParameter(
-                "page_size", int, description="Results per page (default 100, max 500)"
-            ),
-            OpenApiParameter(
-                "interval",
-                int,
-                description="Aggregation interval in minutes (default 1). "
-                "When > 1, returns one point per N-minute window.",
-            ),
-        ],
+        parameters=[MetricsQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
                 "TaskMetricsResponse",
@@ -253,30 +251,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
-            OpenApiParameter(
-                "level", str, description="Log level filter (comma-separated for multiple)"
-            ),
-            OpenApiParameter(
-                "component",
-                str,
-                description="Logger/component name filter (comma-separated for multiple)",
-            ),
-            OpenApiParameter(
-                "timestamp_from",
-                str,
-                description="Filter logs from this RFC3339 timestamp (inclusive)",
-            ),
-            OpenApiParameter(
-                "timestamp_to",
-                str,
-                description="Filter logs until this RFC3339 timestamp (inclusive)",
-            ),
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-            OpenApiParameter("page", int),
-            OpenApiParameter("page_size", int),
-        ],
+        parameters=[LogsQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
                 "TaskLogPaginatedResponse",
@@ -345,9 +320,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-        ],
+        parameters=[LogComponentsQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
                 "TaskLogComponentsResponse",
@@ -380,25 +353,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
-            OpenApiParameter("event_type", str, description="Event type filter"),
-            OpenApiParameter("severity", str, description="Severity filter"),
-            OpenApiParameter("scope", str, description="Event scope: all|trading|task"),
-            OpenApiParameter(
-                "created_from",
-                str,
-                description="Filter events created at or after this RFC3339 timestamp",
-            ),
-            OpenApiParameter(
-                "created_to",
-                str,
-                description="Filter events created at or before this RFC3339 timestamp",
-            ),
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-            OpenApiParameter("page", int),
-            OpenApiParameter("page_size", int),
-        ],
+        parameters=[EventsQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
                 "TaskEventPaginatedResponse",
@@ -461,12 +416,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-            OpenApiParameter("root_entry_id", int, description="Optional group filter"),
-            OpenApiParameter("page", int),
-            OpenApiParameter("page_size", int),
-        ],
+        parameters=[StrategyEventsQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
                 "TaskStrategyVisualizationResponse",
@@ -507,25 +457,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
-            OpenApiParameter(
-                "direction", str, description="Direction filter (buy/sell/long/short)"
-            ),
-            OpenApiParameter(
-                "timestamp_from",
-                str,
-                description="Filter trades executed at or after this RFC3339 timestamp",
-            ),
-            OpenApiParameter(
-                "timestamp_to",
-                str,
-                description="Filter trades executed at or before this RFC3339 timestamp",
-            ),
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-            OpenApiParameter("page", int),
-            OpenApiParameter("page_size", int),
-        ],
+        parameters=[TradesQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
                 "TaskTradePaginatedResponse",
@@ -604,31 +536,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
-            OpenApiParameter(
-                "position_status", str, description="Position status filter (open/closed)"
-            ),
-            OpenApiParameter("direction", str, description="Direction filter"),
-            OpenApiParameter(
-                "include_trade_ids",
-                bool,
-                description="Include position trade_ids in the response",
-            ),
-            OpenApiParameter(
-                "range_from",
-                str,
-                description="RFC3339 lower bound for positions overlapping a chart range",
-            ),
-            OpenApiParameter(
-                "range_to",
-                str,
-                description="RFC3339 upper bound for positions overlapping a chart range",
-            ),
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-            OpenApiParameter("page", int),
-            OpenApiParameter("page_size", int),
-        ],
+        parameters=[PositionsQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
                 "TaskPositionPaginatedResponse",
@@ -690,22 +598,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
-            OpenApiParameter(
-                "range_from",
-                str,
-                description="RFC3339 lower bound for the chart window",
-            ),
-            OpenApiParameter(
-                "range_to",
-                str,
-                description="RFC3339 upper bound for the chart window",
-            ),
-            OpenApiParameter("page", int),
-            OpenApiParameter("page_size", int),
-        ],
+        parameters=[TrendReplayQueryParamsSchemaSerializer],
         responses={200: TaskTrendReplaySerializer},
         description="Retrieve chart-oriented trades and positions for task trend replay.",
     )
@@ -750,15 +643,7 @@ class TaskSubResourceMixin:
     # ------------------------------------------------------------------
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
-            OpenApiParameter("status", str, description="Order status filter"),
-            OpenApiParameter("order_type", str, description="Order type filter"),
-            OpenApiParameter("direction", str, description="Direction filter"),
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-            OpenApiParameter("page", int),
-            OpenApiParameter("page_size", int),
-        ],
+        parameters=[OrdersQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
                 "TaskOrderPaginatedResponse",
@@ -811,9 +696,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-        ],
+        parameters=[SummaryQueryParamsSchemaSerializer],
         responses={200: TaskSummarySerializer},
         description=(
             "Retrieve structured task summary including PnL, "
@@ -844,11 +727,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("include_metrics", bool, description="Include aggregate metrics"),
-            OpenApiParameter("page", int),
-            OpenApiParameter("page_size", int),
-        ],
+        parameters=[ExecutionsQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
                 "TaskExecutionPaginatedResponse",
@@ -894,9 +773,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("include_metrics", bool, description="Include aggregate metrics"),
-        ],
+        parameters=[ExecutionDetailQueryParamsSchemaSerializer],
         responses={200: TaskExecutionSerializer},
         description="Retrieve a single execution record for a task.",
     )

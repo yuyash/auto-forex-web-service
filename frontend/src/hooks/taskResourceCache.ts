@@ -1,6 +1,7 @@
 import { queryClient, queryKeys } from '../config/reactQuery';
 import type { PaginatedResponse, TaskExecution } from '../types';
 import { TaskType } from '../types/common';
+import type { StrategyVisualizationResponse } from '../types/strategyVisualization';
 import type { TaskSummary } from './useTaskSummary';
 
 export function getTaskExecutionsKey(
@@ -85,6 +86,53 @@ export function invalidateTaskDerivedByKind(
   return invalidateTaskDerivedResources(
     taskId,
     taskKind === 'backtest' ? TaskType.BACKTEST : TaskType.TRADING
+  );
+}
+
+export function clearTaskStrategyEvents(
+  taskId: string,
+  taskType: TaskType,
+  executionRunId?: string
+): void {
+  queryClient.removeQueries({
+    queryKey: queryKeys.taskResources.strategyEvents(
+      taskType,
+      taskId,
+      executionRunId
+    ),
+  });
+}
+
+export function clearTaskLogComponents(
+  taskId: string,
+  taskType: TaskType,
+  executionRunId?: string
+): void {
+  queryClient.removeQueries({
+    queryKey: queryKeys.taskResources.logComponents(
+      taskType,
+      taskId,
+      executionRunId
+    ),
+  });
+}
+
+export function patchTaskStrategyEventsExecution(
+  taskId: string,
+  taskType: TaskType,
+  executionId: string | null
+): void {
+  queryClient.setQueriesData<StrategyVisualizationResponse | null | undefined>(
+    { queryKey: queryKeys.taskResources.strategyEvents(taskType, taskId) },
+    (cached) => {
+      if (!cached) {
+        return cached;
+      }
+      return {
+        ...cached,
+        execution_id: executionId,
+      };
+    }
   );
 }
 

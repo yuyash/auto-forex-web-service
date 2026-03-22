@@ -1,14 +1,40 @@
+import type { ComponentProps } from 'react';
 import type { TFunction } from 'i18next';
+import { TaskTrendAlerts } from './TaskTrendAlerts';
+import { TaskTrendChartSection } from './TaskTrendChartSection';
+import { TaskTrendTablesSection } from './TaskTrendTablesSection';
+import { TaskTrendToolbar } from './TaskTrendToolbar';
 import type { TaskTrendOrchestrationParams } from './useTaskTrendOrchestration';
 import { useTaskTrendOrchestration } from './useTaskTrendOrchestration';
 
+export interface TaskTrendViewModelParams extends TaskTrendOrchestrationParams {
+  timezone: string;
+  pipSize?: number | null;
+  t: TFunction<'common'>;
+}
+
+export type TaskTrendAlertsViewModel = ComponentProps<typeof TaskTrendAlerts>;
+export type TaskTrendToolbarViewModel = ComponentProps<typeof TaskTrendToolbar>;
+export type TaskTrendChartSectionViewModel = ComponentProps<
+  typeof TaskTrendChartSection
+>;
+export type TaskTrendTablesSectionViewModel = ComponentProps<
+  typeof TaskTrendTablesSection
+>;
+
+export interface TaskTrendViewModel {
+  panelState: ReturnType<typeof useTaskTrendOrchestration>['panelState'];
+  candleState: ReturnType<typeof useTaskTrendOrchestration>['candleState'];
+  replayData: ReturnType<typeof useTaskTrendOrchestration>['replayData'];
+  alertsProps: TaskTrendAlertsViewModel;
+  toolbarProps: TaskTrendToolbarViewModel;
+  chartSectionProps: TaskTrendChartSectionViewModel;
+  tablesSectionProps: TaskTrendTablesSectionViewModel;
+}
+
 export function useTaskTrendViewModel(
-  params: TaskTrendOrchestrationParams & {
-    timezone: string;
-    pipSize?: number | null;
-    t: TFunction<'common'>;
-  }
-) {
+  params: TaskTrendViewModelParams
+): TaskTrendViewModel {
   const orchestration = useTaskTrendOrchestration(params);
   const {
     panelState,

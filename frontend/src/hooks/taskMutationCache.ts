@@ -3,7 +3,10 @@ import type { BacktestTask, PaginatedResponse, TradingTask } from '../types';
 import { TaskType } from '../types/common';
 import {
   clearTaskExecutions,
+  clearTaskLogComponents,
+  clearTaskStrategyEvents,
   invalidateTaskDerivedByKind,
+  patchTaskStrategyEventsExecution,
   patchTaskSummaryStatus,
   prependTaskExecution,
 } from './taskResourceCache';
@@ -274,20 +277,18 @@ export function patchTaskDerivedCaches(
   const taskType =
     taskKind === 'backtest' ? TaskType.BACKTEST : TaskType.TRADING;
   patchTaskSummaryStatus(task.id, taskType, String(task.status));
-  queryClient.removeQueries({
-    queryKey: queryKeys.taskResources.strategyEvents(taskType, task.id),
-  });
-  queryClient.removeQueries({
-    queryKey: queryKeys.taskResources.logComponents(taskType, task.id),
-  });
+  clearTaskLogComponents(task.id, taskType);
 
   const latestExecution = task.latest_execution;
   if (!latestExecution?.id) {
+    clearTaskStrategyEvents(task.id, taskType);
     if (task.status === 'created') {
       clearTaskExecutions(task.id, taskType);
     }
     return;
   }
+
+  patchTaskStrategyEventsExecution(task.id, taskType, latestExecution.id);
 
   prependTaskExecution(task.id, taskType, {
     id: latestExecution.id,

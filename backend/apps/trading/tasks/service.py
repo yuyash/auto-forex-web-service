@@ -19,11 +19,12 @@ from django.utils import timezone as _timezone
 from apps.trading.enums import TaskStatus
 from apps.trading.models import (
     BacktestTask,
-    TradingEvent,
+    TradingEvent,  # noqa: F401 - kept for compatibility with existing test seams
     TradingTask,
 )
 from apps.trading.services.execution_lifecycle import sync_terminal_execution_artifacts
 from apps.trading.tasks.lifecycle_commands import TaskLifecycleCommands
+from apps.trading.tasks.lifecycle_events import TaskLifecycleEventPublisher
 from apps.trading.tasks.lifecycle_writes import TaskLifecycleWriter
 from apps.trading.tasks import (
     run_backtest_task,
@@ -69,10 +70,12 @@ class TaskService:
 
     writer = TaskLifecycleWriter(logger=logger)
     commands = TaskLifecycleCommands(service=None, logger=logger)  # type: ignore[arg-type]
+    events = TaskLifecycleEventPublisher(logger=logger)
 
     def __init__(self) -> None:
         self.writer = TaskLifecycleWriter(logger=logger)
-        self.commands = TaskLifecycleCommands(service=self, logger=logger)
+        self.events = TaskLifecycleEventPublisher(logger=logger)
+        self.commands = TaskLifecycleCommands(service=self, logger=logger, events=self.events)
 
     @staticmethod
     def get_celery_result(celery_task_id: str | None) -> AsyncResult | None:
@@ -98,34 +101,13 @@ class TaskService:
         extra_details: dict[str, object] | None = None,
     ) -> None:
         resolved_task_type = task_type or TaskService._resolve_task_type(task)
-        details = {
-            "kind": kind,
-            "status": str(task.status),
-            "task_name": str(getattr(task, "name", "")),
-        }
-        if extra_details:
-            details.update(extra_details)
-
-        try:
-            TradingEvent.objects.create(
-                event_type="status_changed",
-                severity="info",
-                description=description,
-                user=getattr(task, "user", None),
-                account=getattr(task, "oanda_account", None),
-                instrument=getattr(task, "instrument", None),
-                task_type=resolved_task_type,
-                task_id=task.pk,
-                execution_id=getattr(task, "execution_id", None),
-                details=details,
-            )
-        except Exception as exc:  # pragma: no cover - defensive logging path
-            logger.warning(
-                "[SERVICE:EVENT] Failed to persist lifecycle event - task_id=%s, kind=%s, error=%s",
-                task.pk,
-                kind,
-                exc,
-            )
+        TaskLifecycleEventPublisher(logger=logger).publish(
+            task=task,
+            task_type=resolved_task_type,
+            kind=kind,
+            description=description,
+            extra_details=extra_details,
+        )
 
     @staticmethod
     def _resolve_task_type(task: BacktestTask | TradingTask) -> str:
@@ -264,7 +246,7 @@ class TaskService:
             extra_updates=extra_updates,
             sync_artifacts=sync_terminal_execution_artifacts,
         )
-        self._emit_task_lifecycle_event(
+        self.events.publish(
             task=task,
             task_type=task_type,
             kind=kind,
