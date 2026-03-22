@@ -1,4 +1,3 @@
-import { queryClient, queryKeys } from '../config/reactQuery';
 import { backtestTasksApi } from '../services/api';
 import type {
   BacktestTask,
@@ -10,6 +9,7 @@ import {
   invalidateTaskDerivedCaches,
   patchTaskStatusCache,
   removeTaskCaches,
+  removeTaskListEntry,
   upsertTaskCaches,
 } from './taskMutationCache';
 import { useWrappedMutation } from './useWrappedMutation';
@@ -56,9 +56,7 @@ export function useDeleteBacktestTask(options?: {
   return useWrappedMutation((id: string) => backtestTasksApi.delete(id), {
     onSuccess: async (_, id) => {
       removeTaskCaches('backtest', id);
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.backtestTasks.lists(),
-      });
+      removeTaskListEntry('backtest', id);
       options?.onSuccess?.();
     },
     onError: (error) => options?.onError?.(error),

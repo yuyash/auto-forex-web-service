@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { queryClient, queryKeys } from '../config/reactQuery';
+import { queryKeys } from '../config/reactQuery';
 import { configurationsApi } from '../services/api';
 import type {
   ConfigurationTask,
@@ -27,12 +27,6 @@ interface UseConfigurationTasksResult {
   isLoading: boolean;
   error: Error | null;
   refetch: () => Promise<unknown>;
-}
-
-export function invalidateConfigurationsCache(): void {
-  void queryClient.invalidateQueries({
-    queryKey: queryKeys.configurations.all,
-  });
 }
 
 export function useConfigurations(

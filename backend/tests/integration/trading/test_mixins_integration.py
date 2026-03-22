@@ -102,7 +102,7 @@ class TestMetrics:
 
         response = client.get(
             f"/api/trading/tasks/backtest/{task.pk}/metrics/",
-            {"interval": 2, "page_size": 5000},
+            {"interval": 2, "page_size": 500},
         )
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 1
@@ -156,6 +156,56 @@ class TestStrictQueryValidation:
         assert response.data == {
             "code": "invalid_query_param",
             "detail": "Invalid page parameter",
+        }
+
+    def test_rejects_non_positive_page_size(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/trades/",
+            {"page_size": 0},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data == {
+            "code": "invalid_query_param",
+            "detail": "page_size must be greater than 0",
+        }
+
+    def test_rejects_page_size_above_maximum(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/positions/",
+            {"page_size": 2000},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data == {
+            "code": "invalid_query_param",
+            "detail": "page_size exceeds maximum allowed value of 200",
+        }
+
+    def test_rejects_inverted_range(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        start = datetime(2024, 6, 1, 12, 5, tzinfo=timezone.utc)
+        end = datetime(2024, 6, 1, 12, 0, tzinfo=timezone.utc)
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/positions/",
+            {
+                "range_from": start.isoformat(),
+                "range_to": end.isoformat(),
+            },
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data == {
+            "code": "invalid_query_param",
+            "detail": "range_from must be earlier than or equal to range_to",
         }
 
 

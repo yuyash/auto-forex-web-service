@@ -1,4 +1,3 @@
-import { queryClient, queryKeys } from '../config/reactQuery';
 import { tradingTasksApi } from '../services/api';
 import type {
   TradingTask,
@@ -10,6 +9,7 @@ import {
   invalidateTaskDerivedCaches,
   patchTaskStatusCache,
   removeTaskCaches,
+  removeTaskListEntry,
   upsertTaskCaches,
 } from './taskMutationCache';
 import { useWrappedMutation } from './useWrappedMutation';
@@ -71,9 +71,7 @@ export function useDeleteTradingTask(options?: {
   return useWrappedMutation((id: string) => tradingTasksApi.delete(id), {
     onSuccess: async (_, id) => {
       removeTaskCaches('trading', id);
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.tradingTasks.lists(),
-      });
+      removeTaskListEntry('trading', id);
       options?.onSuccess?.();
     },
     onError: (error) => options?.onError?.(error),

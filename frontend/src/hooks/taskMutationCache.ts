@@ -38,6 +38,60 @@ function getListParams(
     : undefined;
 }
 
+function compareValues(
+  left: string | number | boolean | undefined,
+  right: string | number | boolean | undefined,
+  ordering: string
+): number {
+  const direction = ordering.startsWith('-') ? -1 : 1;
+  const leftValue = left ?? '';
+  const rightValue = right ?? '';
+  if (leftValue < rightValue) {
+    return -1 * direction;
+  }
+  if (leftValue > rightValue) {
+    return 1 * direction;
+  }
+  return 0;
+}
+
+function sortTaskResults<T extends TaskEntity>(
+  results: T[],
+  ordering?: string
+): T[] {
+  if (!ordering) {
+    return results;
+  }
+
+  const field = ordering.replace(/^-/, '');
+  const sorted = [...results];
+  sorted.sort((left, right) => {
+    switch (field) {
+      case 'name':
+      case 'status':
+      case 'strategy_type':
+      case 'config_name':
+      case 'updated_at':
+      case 'created_at':
+      case 'instrument':
+        return compareValues(
+          left[field as keyof TaskEntity] as string | undefined,
+          right[field as keyof TaskEntity] as string | undefined,
+          ordering
+        );
+      case 'account_name':
+        return compareValues(
+          (left as TradingTask).account_name,
+          (right as TradingTask).account_name,
+          ordering
+        );
+      default:
+        return 0;
+    }
+  });
+  return sorted;
+}
+
 function matchesTaskListFilter(
   taskKind: TaskKind,
   task: TaskEntity,
@@ -121,7 +175,13 @@ function patchListEntry<T extends TaskEntity>(
     }
     const nextResults = [...cached.results];
     nextResults[index] = { ...nextResults[index], ...task };
-    return { ...cached, results: nextResults };
+    return {
+      ...cached,
+      results: sortTaskResults(
+        nextResults,
+        typeof params?.ordering === 'string' ? params.ordering : undefined
+      ),
+    };
   }
 
   const page = Number(params?.page ?? 1);
@@ -132,7 +192,10 @@ function patchListEntry<T extends TaskEntity>(
   return {
     ...cached,
     count: cached.count + 1,
-    results: [task, ...cached.results],
+    results: sortTaskResults(
+      [task, ...cached.results],
+      typeof params?.ordering === 'string' ? params.ordering : undefined
+    ),
   };
 }
 
@@ -220,4 +283,25 @@ export async function invalidateTaskDerivedCaches(
   taskId: string
 ): Promise<void> {
   await invalidateTaskDerivedByKind(taskId, taskKind);
+}
+
+export function removeTaskListEntry(taskKind: TaskKind, taskId: string): void {
+  const keys = getTaskKeys(taskKind);
+  queryClient.setQueriesData<PaginatedResponse<TaskEntity>>(
+    { queryKey: keys.lists },
+    (cached) => {
+      if (!cached) {
+        return cached;
+      }
+      const nextResults = cached.results.filter((entry) => entry.id !== taskId);
+      if (nextResults.length === cached.results.length) {
+        return cached;
+      }
+      return {
+        ...cached,
+        count: Math.max(0, cached.count - 1),
+        results: nextResults,
+      };
+    }
+  );
 }

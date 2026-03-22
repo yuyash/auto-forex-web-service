@@ -22,6 +22,35 @@ def _parse_datetime_value(value: str | None) -> datetime | None:
     return None
 
 
+def _parse_positive_int(
+    value: str | None,
+    *,
+    field_name: str,
+    default: int,
+    max_value: int | None = None,
+) -> int:
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        raise ValidationError(
+            {"code": "invalid_query_param", "detail": f"Invalid {field_name} parameter"}
+        )
+    if parsed < 1:
+        raise ValidationError(
+            {"code": "invalid_query_param", "detail": f"{field_name} must be greater than 0"}
+        )
+    if max_value is not None and parsed > max_value:
+        raise ValidationError(
+            {
+                "code": "invalid_query_param",
+                "detail": f"{field_name} exceeds maximum allowed value of {max_value}",
+            }
+        )
+    return parsed
+
+
 def _parse_execution_id_value(value: str | None) -> UUID | None:
     if value is None:
         return None
@@ -46,23 +75,13 @@ class PaginationParams:
         default_page_size: int = 100,
         max_page_size: int = 1000,
     ) -> PaginationParams:
-        page = 1
-        page_size = default_page_size
-        try:
-            page = max(1, int(request.query_params.get("page", 1)))
-        except (TypeError, ValueError):
-            raise ValidationError(
-                {"code": "invalid_query_param", "detail": "Invalid page parameter"}
-            )
-        try:
-            page_size = max(
-                1,
-                min(int(request.query_params.get("page_size", default_page_size)), max_page_size),
-            )
-        except (TypeError, ValueError):
-            raise ValidationError(
-                {"code": "invalid_query_param", "detail": "Invalid page_size parameter"}
-            )
+        page = _parse_positive_int(request.query_params.get("page"), field_name="page", default=1)
+        page_size = _parse_positive_int(
+            request.query_params.get("page_size"),
+            field_name="page_size",
+            default=default_page_size,
+            max_value=max_page_size,
+        )
         return cls(page=page, page_size=page_size)
 
 
@@ -106,10 +125,16 @@ class DateRangeQuery:
         start_key: str,
         end_key: str,
     ) -> DateRangeQuery:
-        return cls(
-            start=_parse_datetime_value(request.query_params.get(start_key)),
-            end=_parse_datetime_value(request.query_params.get(end_key)),
-        )
+        start = _parse_datetime_value(request.query_params.get(start_key))
+        end = _parse_datetime_value(request.query_params.get(end_key))
+        if start and end and start > end:
+            raise ValidationError(
+                {
+                    "code": "invalid_query_param",
+                    "detail": f"{start_key} must be earlier than or equal to {end_key}",
+                }
+            )
+        return cls(start=start, end=end)
 
 
 @dataclass(frozen=True)

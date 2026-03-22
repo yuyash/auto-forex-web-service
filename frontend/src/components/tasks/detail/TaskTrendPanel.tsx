@@ -1,19 +1,13 @@
 import React, { useRef } from 'react';
-import {
-  Alert,
-  Box,
-  CircularProgress,
-  LinearProgress,
-  Paper,
-} from '@mui/material';
+import { Alert, Box, CircularProgress } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { type TaskSummary } from '../../../hooks/useTaskSummary';
 import { useAuth } from '../../../contexts/AuthContext';
 import { TaskType } from '../../../types/common';
-import { getTimezoneAbbr } from '../../../utils/chartTimezone';
 import { POLLING_INTERVAL_OPTIONS } from './taskTrendPanel/shared';
 import { TaskTrendAlerts } from './taskTrendPanel/TaskTrendAlerts';
+import { TaskTrendChartSection } from './taskTrendPanel/TaskTrendChartSection';
 import { TaskTrendTablesSection } from './taskTrendPanel/TaskTrendTablesSection';
 import { TaskTrendToolbar } from './taskTrendPanel/TaskTrendToolbar';
 import { useTaskTrendOrchestration } from './taskTrendPanel/useTaskTrendOrchestration';
@@ -146,67 +140,15 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         onResetZoom={fitContent}
       />
 
-      <Paper
-        variant="outlined"
-        sx={{
-          mt: 0,
-          mb: 0,
-          height: panelState.chartHeight,
-          minHeight: panelState.minChartHeight,
-          display: 'flex',
-          position: 'relative',
-        }}
-      >
-        {(candleState.loadingOlder || candleState.loadingNewer) && (
-          <Box
-            sx={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              zIndex: 3,
-              display: 'flex',
-              gap: 1,
-              px: 1,
-              pt: 0.5,
-            }}
-          >
-            <Box
-              sx={{
-                flex: 1,
-                visibility: candleState.loadingOlder ? 'visible' : 'hidden',
-              }}
-            >
-              <LinearProgress color="inherit" />
-            </Box>
-            <Box
-              sx={{
-                flex: 1,
-                visibility: candleState.loadingNewer ? 'visible' : 'hidden',
-              }}
-            >
-              <LinearProgress color="inherit" />
-            </Box>
-          </Box>
-        )}
-        <Box ref={chartContainerRef} sx={{ width: '100%', flex: 1 }} />
-        <Box
-          sx={{
-            position: 'absolute',
-            bottom: 8,
-            right: 8,
-            zIndex: 2,
-            fontSize: '11px',
-            fontFamily:
-              '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            color: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(51,65,85,0.5)',
-            pointerEvents: 'none',
-            userSelect: 'none',
-          }}
-        >
-          TZ: {getTimezoneAbbr(timezone)}
-        </Box>
-      </Paper>
+      <TaskTrendChartSection
+        chartContainerRef={chartContainerRef}
+        chartHeight={panelState.chartHeight}
+        minChartHeight={panelState.minChartHeight}
+        isDark={isDark}
+        timezone={timezone}
+        loadingOlder={candleState.loadingOlder}
+        loadingNewer={candleState.loadingNewer}
+      />
 
       <Box
         onMouseDown={panelState.handleSeparatorMouseDown}
