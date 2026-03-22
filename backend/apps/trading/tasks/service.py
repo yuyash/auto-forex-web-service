@@ -168,6 +168,75 @@ class TaskService:
         if task.status not in allowed:
             raise TaskValidationError(message)
 
+    @staticmethod
+    def _ensure_trading_account_available(task: TradingTask) -> None:
+        active_statuses = [TaskStatus.STARTING, TaskStatus.RUNNING, TaskStatus.STOPPING]
+        active_task = (
+            TradingTask.objects.filter(
+                oanda_account=task.oanda_account,
+                status__in=active_statuses,
+            )
+            .exclude(pk=task.pk)
+            .first()
+        )
+        if active_task:
+            raise TaskConflictError(
+                f"Account already has an active task: '{active_task.name}' "
+                f"(status: {active_task.status}). "
+                f"Please stop the existing task before starting a new one."
+            )
+
+    def _prepare_locked_start_task(
+        self,
+        task: BacktestTask | TradingTask,
+        *,
+        model_class,
+    ) -> BacktestTask | TradingTask:
+        with transaction.atomic():
+            locked_task = model_class.objects.select_for_update().get(pk=task.pk)
+            self._ensure_task_status(
+                locked_task,
+                allowed=(TaskStatus.CREATED,),
+                message=(
+                    "Task must be in CREATED status to submit "
+                    f"(current status: {locked_task.status})"
+                ),
+            )
+            if isinstance(locked_task, TradingTask):
+                self._ensure_trading_account_available(locked_task)
+
+            is_valid, error_message = locked_task.validate_configuration()
+            if not is_valid:
+                raise TaskValidationError(f"Task configuration is invalid: {error_message}")
+
+            locked_task.execution_id = uuid4()
+            locked_task.status = TaskStatus.STARTING
+            locked_task.save(update_fields=["execution_id", "status", "updated_at"])
+            return locked_task
+
+    def _prepare_detached_start_task(
+        self, task: BacktestTask | TradingTask
+    ) -> BacktestTask | TradingTask:
+        self._ensure_task_status(
+            task,
+            allowed=(TaskStatus.CREATED,),
+            message=f"Task must be in CREATED status to submit (current status: {task.status})",
+        )
+        if isinstance(task, TradingTask):
+            self._ensure_trading_account_available(task)
+
+        is_valid, error_message = task.validate_configuration()
+        if not is_valid:
+            raise TaskValidationError(f"Task configuration is invalid: {error_message}")
+
+        task.execution_id = uuid4()
+        task.status = TaskStatus.STARTING
+        try:
+            task.save(update_fields=["execution_id", "status", "updated_at"])
+        except TypeError:
+            task.save()
+        return task
+
     def start_task(self, task: BacktestTask | TradingTask) -> BacktestTask | TradingTask:
         """Submit a task to Celery for execution.
 
@@ -196,142 +265,11 @@ class TaskService:
 
         try:
             if type(task) in (BacktestTask, TradingTask):
-                with transaction.atomic():
-                    locked_task = model_class.objects.select_for_update().get(pk=task.pk)
-
-                    if locked_task.status != TaskStatus.CREATED:
-                        logger.warning(
-                            "[SERVICE:START] INVALID_STATUS - task_id=%s, current_status=%s, expected=CREATED",
-                            locked_task.pk,
-                            locked_task.status,
-                        )
-                        raise TaskValidationError(
-                            f"Task must be in CREATED status to submit (current status: {locked_task.status})"
-                        )
-
-                    if isinstance(locked_task, TradingTask):
-                        active_statuses = [
-                            TaskStatus.STARTING,
-                            TaskStatus.RUNNING,
-                            TaskStatus.STOPPING,
-                        ]
-                        active_task = (
-                            TradingTask.objects.filter(
-                                oanda_account=locked_task.oanda_account,
-                                status__in=active_statuses,
-                            )
-                            .exclude(pk=locked_task.pk)
-                            .first()
-                        )
-                        if active_task:
-                            logger.warning(
-                                "[SERVICE:START] ACCOUNT_BUSY - task_id=%s, account=%s, active_task_id=%s, active_task_name=%s",
-                                locked_task.pk,
-                                locked_task.oanda_account.pk,
-                                active_task.pk,
-                                active_task.name,
-                            )
-                            raise TaskConflictError(
-                                f"Account already has an active task: '{active_task.name}' "
-                                f"(status: {active_task.status}). "
-                                f"Please stop the existing task before starting a new one."
-                            )
-
-                    logger.info(
-                        "[SERVICE:START] Validating configuration - task_id=%s", locked_task.pk
-                    )
-                    is_valid, error_message = locked_task.validate_configuration()
-                    if not is_valid:
-                        logger.error(
-                            "[SERVICE:START] CONFIG_INVALID - task_id=%s, error=%s",
-                            locked_task.pk,
-                            error_message,
-                        )
-                        raise TaskValidationError(f"Task configuration is invalid: {error_message}")
-
-                    new_execution_id = uuid4()
-                    logger.info(
-                        "[SERVICE:START] Generated execution ID - task_id=%s, execution_id=%s",
-                        locked_task.pk,
-                        new_execution_id,
-                    )
-
-                    locked_task.execution_id = new_execution_id
-                    locked_task.status = TaskStatus.STARTING
-                    locked_task.save(
-                        update_fields=[
-                            "execution_id",
-                            "status",
-                            "updated_at",
-                        ]
-                    )
-                    task = locked_task
+                task = self._prepare_locked_start_task(task, model_class=model_class)
             else:
-                if task.status != TaskStatus.CREATED:
-                    raise TaskValidationError(
-                        f"Task must be in CREATED status to submit (current status: {task.status})"
-                    )
-                if isinstance(task, TradingTask):
-                    active_statuses = [TaskStatus.STARTING, TaskStatus.RUNNING, TaskStatus.STOPPING]
-                    active_task = (
-                        TradingTask.objects.filter(
-                            oanda_account=task.oanda_account,
-                            status__in=active_statuses,
-                        )
-                        .exclude(pk=task.pk)
-                        .first()
-                    )
-                    if active_task:
-                        raise TaskConflictError(
-                            f"Account already has an active task: '{active_task.name}' "
-                            f"(status: {active_task.status}). "
-                            f"Please stop the existing task before starting a new one."
-                        )
-                elif not is_backtest_task:
-                    oanda_account = getattr(task, "oanda_account", None)
-                    if oanda_account is not None:
-                        active_statuses = [
-                            TaskStatus.STARTING,
-                            TaskStatus.RUNNING,
-                            TaskStatus.STOPPING,
-                        ]
-                        active_task = (
-                            TradingTask.objects.filter(
-                                oanda_account=oanda_account,
-                                status__in=active_statuses,
-                            )
-                            .exclude(pk=task.pk)
-                            .first()
-                        )
-                        if active_task:
-                            raise TaskConflictError(
-                                f"Account already has an active task: '{active_task.name}' "
-                                f"(status: {active_task.status}). "
-                                f"Please stop the existing task before starting a new one."
-                            )
-                is_valid, error_message = task.validate_configuration()
-                if not is_valid:
-                    raise TaskValidationError(f"Task configuration is invalid: {error_message}")
+                task = self._prepare_detached_start_task(task)
 
-                task.execution_id = uuid4()
-                task.status = TaskStatus.STARTING
-                try:
-                    task.save(
-                        update_fields=[
-                            "execution_id",
-                            "status",
-                            "updated_at",
-                        ]
-                    )
-                except TypeError:
-                    task.save()
-
-            if is_backtest_task:
-                celery_task = run_backtest_task
-                task_type = "backtest"
-            else:
-                celery_task = run_trading_task
-                task_type = "trading"
+            task_type = "backtest" if is_backtest_task else "trading"
 
             logger.info(
                 "[SERVICE:START] Task type determined - task_id=%s, type=%s, execution_id=%s",
@@ -344,10 +282,7 @@ class TaskService:
                 task.pk,
                 task.execution_id,
             )
-            celery_task.apply_async(
-                args=[task.pk],
-                task_id=str(task.execution_id),
-            )
+            self._dispatch_task(task, task_type)
 
             logger.info(
                 "[SERVICE:START] Task submitted to Celery - task_id=%s, execution_id=%s, new_status=%s",

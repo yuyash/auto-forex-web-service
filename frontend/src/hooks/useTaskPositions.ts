@@ -15,6 +15,7 @@ import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
 import { useSequentialPolling } from './useSequentialPolling';
 import { usePollingActivity } from './usePollingActivity';
+import { toIncrementalCollectionState } from './useTaskCollections';
 import {
   fetchTaskResourcePage,
   isApiErrorWithStatus,
@@ -297,12 +298,17 @@ export const useTaskPositions = ({
   }, [enableRealTimeUpdates, fetchPositions]);
 
   return {
+    ...toIncrementalCollectionState({
+      items: positions,
+      totalCount,
+      hasNext,
+      hasPrevious,
+      isLoading,
+      error,
+      refresh: () => fetchPositions(false),
+      refetch: () => fetchPositions(false),
+    }),
     positions,
-    totalCount,
-    hasNext,
-    hasPrevious,
-    isLoading,
-    error,
     refetch: () => fetchPositions(false),
   };
 };

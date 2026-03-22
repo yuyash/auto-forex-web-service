@@ -22,12 +22,9 @@ import { useWindowedCandles } from '../../../hooks/useWindowedCandles';
 import { useWindowedTaskMarkers } from '../../../hooks/useWindowedTaskMarkers';
 import { clampRange, type TimeRange } from '../../../utils/windowedRanges';
 import {
-  ALLOWED_GRANULARITIES,
-  ALLOWED_VALUES,
   GRANULARITY_MINUTES,
   POLLING_INTERVAL_OPTIONS,
   isoToSec,
-  recommendGranularity,
 } from './taskTrendPanel/shared';
 import type { CandlePoint, ReplayTrade } from './taskTrendPanel/shared';
 import { TaskTrendToolbar } from './taskTrendPanel/TaskTrendToolbar';
@@ -41,6 +38,7 @@ import { useTaskTrendPositionsTable } from './taskTrendPanel/useTaskTrendPositio
 import { useTaskTrendPanelState } from './taskTrendPanel/useTaskTrendPanelState';
 import { useTaskTrendMarkers } from './taskTrendPanel/useTaskTrendMarkers';
 import { useTaskTrendTableState } from './taskTrendPanel/useTaskTrendTableState';
+import { useTaskTrendDerivedData } from './taskTrendPanel/useTaskTrendDerivedData';
 import { useTaskSelectionNavigation } from '../../../hooks/useTaskSelectionNavigation';
 
 interface TaskTrendPanelProps {
@@ -224,8 +222,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     pollTrades: false,
   });
 
-  const currentPrice =
-    currentTick?.price != null ? parseFloat(currentTick.price) : null;
   const {
     trades,
     positions: fetchedPositions,
@@ -247,33 +243,22 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     loadedTimeRange,
   });
 
-  // Merge open + closed positions for the Positions panel in the Trend tab
-  // Merge open + closed positions, de-duplicate by id, and derive _status
-  // from the actual `is_open` field rather than which query returned it.
-  // This prevents a position that was just closed from appearing as "open"
-  // when the open-positions poll returns stale data while the closed-
-  // positions poll already includes the updated record.
-  const allPositions = useMemo<TrendPosition[]>(() => {
-    return [...fetchedPositions]
-      .map((p) => ({
-        ...p,
-        _status: (p.is_open ? 'open' : 'closed') as 'open' | 'closed',
-      }))
-      .sort(
-        (a, b) =>
-          new Date(b.entry_time).getTime() - new Date(a.entry_time).getTime()
-      );
-  }, [fetchedPositions]);
-
-  // Filtered positions by direction for the split Long/Short tables
-  const longPositions = useMemo(
-    () => allPositions.filter((p) => p.direction === 'long'),
-    [allPositions]
-  );
-  const shortPositions = useMemo(
-    () => allPositions.filter((p) => p.direction === 'short'),
-    [allPositions]
-  );
+  const {
+    currentPrice,
+    allPositions,
+    longPositions,
+    shortPositions,
+    granularityOptions,
+    recommendedGranularity,
+    pnlCurrency,
+  } = useTaskTrendDerivedData({
+    fetchedPositions: fetchedPositions as TrendPosition[],
+    granularities,
+    instrument,
+    startTime,
+    endTime,
+    currentTickPrice: currentTick?.price ?? null,
+  });
   const tradeTable = useTaskTrendTradesTable(trades, timezone);
   const longPositionsTable = useTaskTrendPositionsTable({
     positions: longPositions,
@@ -370,24 +355,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     copySelectedRows,
     selectAllOnPage: selectAllTradeRowsOnPage,
   } = tradeTable;
-
-  const granularityOptions = useMemo(() => {
-    if (granularities.length > 0) {
-      return granularities.filter((g) => ALLOWED_VALUES.has(g.value));
-    }
-    return ALLOWED_GRANULARITIES;
-  }, [granularities]);
-
-  const recommendedGranularity = useMemo(() => {
-    const availableValues = granularityOptions
-      .map((g) => g.value)
-      .filter((v) => !!GRANULARITY_MINUTES[v]);
-    return recommendGranularity(startTime, endTime, availableValues);
-  }, [granularityOptions, startTime, endTime]);
-
-  const pnlCurrency = instrument?.includes('_')
-    ? instrument.split('_')[1]
-    : 'N/A';
 
   // Stable reference for candle timestamps passed to useMetricsOverlay
   const candleTimestampsMemo = useMemo(

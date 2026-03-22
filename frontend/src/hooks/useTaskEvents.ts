@@ -7,6 +7,7 @@
  */
 
 import { TaskType } from '../types/common';
+import { toIncrementalCollectionState } from './useTaskCollections';
 import { useIncrementalTaskResource } from './useIncrementalTaskResource';
 
 export interface TaskEvent {
@@ -108,13 +109,16 @@ export const useTaskEvents = ({
   });
 
   return {
+    ...toIncrementalCollectionState({
+      items: events,
+      totalCount,
+      hasNext,
+      hasPrevious,
+      isLoading,
+      error,
+      refresh,
+      refetch,
+    }),
     events,
-    totalCount,
-    hasNext,
-    hasPrevious,
-    isLoading,
-    error,
-    refresh,
-    refetch,
   };
 };

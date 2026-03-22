@@ -65,3 +65,34 @@ export function usePolledTaskResource<TData>(
     refetch: refresh,
   };
 }
+
+export interface IncrementalCollectionState<TItem>
+  extends QueryStateResult<TItem[]> {
+  items: TItem[];
+  totalCount: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+}
+
+export function toIncrementalCollectionState<TItem>(state: {
+  items: TItem[];
+  totalCount: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+  isLoading: boolean;
+  error: Error | null;
+  refresh: () => Promise<void>;
+  refetch: () => Promise<void>;
+}): IncrementalCollectionState<TItem> {
+  return {
+    data: state.items,
+    items: state.items,
+    totalCount: state.totalCount,
+    hasNext: state.hasNext,
+    hasPrevious: state.hasPrevious,
+    isLoading: state.isLoading,
+    error: state.error,
+    refresh: state.refresh,
+    refetch: state.refetch,
+  };
+}

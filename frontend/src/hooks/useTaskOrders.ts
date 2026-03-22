@@ -7,6 +7,7 @@
  */
 
 import { TaskType } from '../types/common';
+import { toIncrementalCollectionState } from './useTaskCollections';
 import { useIncrementalTaskResource } from './useIncrementalTaskResource';
 
 export interface TaskOrder {
@@ -116,13 +117,16 @@ export const useTaskOrders = ({
   });
 
   return {
+    ...toIncrementalCollectionState({
+      items: orders,
+      totalCount,
+      hasNext,
+      hasPrevious,
+      isLoading,
+      error,
+      refresh,
+      refetch,
+    }),
     orders,
-    totalCount,
-    hasNext,
-    hasPrevious,
-    isLoading,
-    error,
-    refresh,
-    refetch,
   };
 };

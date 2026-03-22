@@ -11,6 +11,7 @@
  */
 
 import { TaskType } from '../types/common';
+import { toIncrementalCollectionState } from './useTaskCollections';
 import { useIncrementalTaskResource } from './useIncrementalTaskResource';
 
 export interface TaskTrade {
@@ -139,13 +140,16 @@ export const useTaskTrades = ({
   });
 
   return {
+    ...toIncrementalCollectionState({
+      items: trades,
+      totalCount,
+      hasNext,
+      hasPrevious,
+      isLoading,
+      error,
+      refresh,
+      refetch,
+    }),
     trades,
-    totalCount,
-    hasNext,
-    hasPrevious,
-    isLoading,
-    error,
-    refresh,
-    refetch,
   };
 };
