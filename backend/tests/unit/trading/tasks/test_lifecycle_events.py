@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 from apps.trading.tasks.lifecycle_events import (
     CallbackLifecycleEventSink,
+    CeleryTaskStatusLifecycleSink,
     ExecutionArtifactsLifecycleSink,
     TaskLifecycleEventPublisher,
 )
@@ -82,3 +83,31 @@ def test_execution_artifacts_sink_only_handles_terminal_kinds() -> None:
     )
 
     sync_artifacts.assert_called_once_with(task=task, task_type="trading")
+
+
+def test_celery_status_sink_updates_terminal_status() -> None:
+    logger = MagicMock()
+    sink = CeleryTaskStatusLifecycleSink(logger=logger)
+    task = MagicMock(pk="task-1", execution_id="exec-1", status="failed", name="Task")
+
+    from apps.trading.tasks import lifecycle_events
+
+    original = lifecycle_events.CeleryTaskStatus
+    try:
+        lifecycle_events.CeleryTaskStatus = MagicMock()
+        lifecycle_events.CeleryTaskStatus.Status.FAILED = "failed"
+        lifecycle_events.CeleryTaskStatus.Status.STOPPED = "stopped"
+        lifecycle_events.CeleryTaskStatus.Status.COMPLETED = "completed"
+        publisher = TaskLifecycleEventPublisher(logger=logger, sinks=(sink,))
+        publisher.publish(
+            task=task,
+            task_type="trading",
+            kind="task_failed",
+            description="Trading task failed: RuntimeError: boom",
+        )
+        lifecycle_events.CeleryTaskStatus.objects.filter.assert_called_once_with(
+            task_name="trading.tasks.run_trading_task",
+            instance_key="task-1:exec-1",
+        )
+    finally:
+        lifecycle_events.CeleryTaskStatus = original

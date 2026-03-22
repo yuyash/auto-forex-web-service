@@ -8,12 +8,11 @@ from typing import Any
 from uuid import UUID
 
 from celery import shared_task
-from django.utils import timezone as dj_timezone
 
 from apps.trading.engine import TradingEngine
 from apps.trading.enums import LogLevel, StopMode, TaskStatus, TaskType
 from apps.trading.logging import TaskLoggingSession
-from apps.trading.models import CeleryTaskStatus, TaskLog, TradingTask
+from apps.trading.models import TaskLog, TradingTask
 from apps.trading.services.execution_lifecycle import transition_task_to_running
 from apps.trading.tasks.lifecycle_events import finalize_task_terminal_lifecycle
 from apps.trading.tasks.executor import TradingExecutor
@@ -196,19 +195,6 @@ def handle_exception(task_id: UUID, task: TradingTask | None, error: Exception) 
             error_traceback=error_traceback,
         )
 
-        # Update CeleryTaskStatus to maintain state consistency
-        from apps.trading.models.celery import CeleryTaskStatus
-
-        CeleryTaskStatus.objects.filter(
-            task_name="trading.tasks.run_trading_task",
-            instance_key=f"{task_id}:{task.execution_id}",
-        ).update(
-            status=CeleryTaskStatus.Status.FAILED,
-            status_message=f"Task failed: {type(error).__name__}: {error_message}",
-        )
-
-        logger.info(f"CeleryTaskStatus updated to FAILED - task_id={task_id}")
-
         # Log error
         TaskLog.objects.create(
             task_type=TaskType.TRADING,
@@ -267,15 +253,6 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
                 extra_details={"mode": stop_mode.value},
             )
             logger.info(f"Current: STOPPED - task_id={task_id}")
-
-            # Update CeleryTaskStatus
-            task_name = "trading.tasks.run_trading_task"
-            instance_key = f"{task_id}:{task.execution_id}"
-            CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=instance_key).update(
-                status=CeleryTaskStatus.Status.STOPPED,
-                stopped_at=dj_timezone.now(),
-                last_heartbeat_at=dj_timezone.now(),
-            )
 
             logger.info(f"Trading task {task_id} stopped successfully (mode={mode})")
 

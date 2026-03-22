@@ -15,6 +15,11 @@ import {
   removeFromListQueries,
   upsertFilteredPaginatedEntity,
 } from './listCacheUtils';
+import {
+  matchesExactFilter,
+  matchesSearchFilter,
+  readOrderingFilter,
+} from './listFilterUtils';
 
 type TaskEntity = BacktestTask | TradingTask;
 type TaskKind = 'backtest' | 'trading';
@@ -102,53 +107,37 @@ function matchesTaskListFilter(
   task: TaskEntity,
   params?: Record<string, unknown>
 ): boolean {
-  if (!params) {
-    return true;
-  }
-
-  const status = params.status;
-  if (typeof status === 'string' && status && task.status !== status) {
+  if (!matchesExactFilter(params, 'status', task.status)) {
     return false;
   }
-
-  const configId = params.config_id;
-  if (typeof configId === 'string' && configId && task.config_id !== configId) {
+  if (!matchesExactFilter(params, 'config_id', task.config_id)) {
     return false;
   }
-
-  const strategyType = params.strategy_type;
-  if (
-    typeof strategyType === 'string' &&
-    strategyType &&
-    task.strategy_type !== strategyType
-  ) {
+  if (!matchesExactFilter(params, 'strategy_type', task.strategy_type)) {
     return false;
   }
 
   if (taskKind === 'trading') {
-    const accountId = params.account_id;
     if (
-      typeof accountId === 'string' &&
-      accountId &&
-      (task as TradingTask).account_id !== accountId
+      !matchesExactFilter(
+        params,
+        'account_id',
+        (task as TradingTask).account_id
+      )
     ) {
       return false;
     }
   }
 
-  const search = params.search;
-  if (typeof search === 'string' && search.trim()) {
-    const haystack = [
+  if (
+    !matchesSearchFilter(params, [
       task.name,
       task.description,
       task.config_name,
       task.strategy_type,
-    ]
-      .join(' ')
-      .toLowerCase();
-    if (!haystack.includes(search.trim().toLowerCase())) {
-      return false;
-    }
+    ])
+  ) {
+    return false;
   }
 
   return true;
@@ -165,12 +154,7 @@ export function upsertTaskCaches<T extends TaskEntity>(
       matches: (entity, queryParams) =>
         matchesTaskListFilter(taskKind, entity, queryParams),
       sort: (items, queryParams) =>
-        sortTaskResults(
-          items,
-          typeof queryParams?.ordering === 'string'
-            ? queryParams.ordering
-            : undefined
-        ),
+        sortTaskResults(items, readOrderingFilter(queryParams)),
     })
   );
 }
@@ -216,12 +200,7 @@ export function patchTaskStatusCache(
           matches: (entity, queryParams) =>
             matchesTaskListFilter(taskKind, entity, queryParams),
           sort: (items, queryParams) =>
-            sortTaskResults(
-              items,
-              typeof queryParams?.ordering === 'string'
-                ? queryParams.ordering
-                : undefined
-            ),
+            sortTaskResults(items, readOrderingFilter(queryParams)),
         }
       );
     }

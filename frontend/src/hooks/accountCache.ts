@@ -4,29 +4,19 @@ import {
   removeFromListQueries,
   upsertFilteredListEntity,
 } from './listCacheUtils';
+import { matchesSearchFilter } from './listFilterUtils';
 import type { Account } from '../types/strategy';
 
 function matchesAccountListFilter(
   account: Account,
   params?: Record<string, unknown>
 ): boolean {
-  if (!params) {
-    return true;
-  }
-  const search = params.search;
-  if (typeof search !== 'string' || !search.trim()) {
-    return true;
-  }
-  const normalized = search.trim().toLowerCase();
-  const haystack = [
+  return matchesSearchFilter(params, [
     account.account_id,
     account.api_type,
     account.currency,
     account.jurisdiction ?? '',
-  ]
-    .join(' ')
-    .toLowerCase();
-  return haystack.includes(normalized);
+  ]);
 }
 
 export function upsertAccountCaches(account: Account): void {

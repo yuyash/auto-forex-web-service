@@ -8,7 +8,6 @@ from typing import Any
 from uuid import UUID
 
 from celery import shared_task
-from django.utils import timezone as dj_timezone
 
 from apps.trading.engine import TradingEngine
 from apps.trading.enums import LogLevel, TaskStatus, TaskType
@@ -243,19 +242,6 @@ def handle_exception(task_id: UUID, task: BacktestTask | None, error: Exception)
 
         logger.info(f"Task marked as FAILED - task_id={task_id}, completed_at={task.completed_at}")
 
-        # Update CeleryTaskStatus to maintain state consistency
-        from apps.trading.models.celery import CeleryTaskStatus
-
-        CeleryTaskStatus.objects.filter(
-            task_name="trading.tasks.run_backtest_task",
-            instance_key=f"{task_id}:{task.execution_id}",
-        ).update(
-            status=CeleryTaskStatus.Status.FAILED,
-            status_message=f"Task failed: {type(error).__name__}: {error_message}",
-        )
-
-        logger.info(f"CeleryTaskStatus updated to FAILED - task_id={task_id}")
-
         # Log error
         TaskLog.objects.create(
             task_type=TaskType.BACKTEST,
@@ -452,17 +438,6 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
                 extra_details={"mode": "worker_stop"},
             )
             logger.info(f"[STOP:BACKTEST] Current: STOPPED - task_id={task_id}")
-
-            # Update CeleryTaskStatus
-            from apps.trading.models import CeleryTaskStatus
-
-            task_name = "trading.tasks.run_backtest_task"
-            instance_key = f"{task_id}:{task.execution_id}"
-            CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=instance_key).update(
-                status=CeleryTaskStatus.Status.STOPPED,
-                stopped_at=dj_timezone.now(),
-                last_heartbeat_at=dj_timezone.now(),
-            )
 
             logger.info(f"Backtest task {task_id} stopped successfully")
 

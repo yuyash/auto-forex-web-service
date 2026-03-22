@@ -88,7 +88,7 @@ vi.mock('../../../src/hooks/useTaskSummary', () => ({
     },
     isLoading: false,
     error: null,
-    refetch: vi.fn(),
+    refresh: vi.fn(),
   })),
 }));
 

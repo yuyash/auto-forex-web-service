@@ -6,7 +6,10 @@ from dataclasses import dataclass
 from logging import Logger
 from typing import Callable, Protocol
 
+from django.utils import timezone
+
 from apps.trading.enums import TaskStatus
+from apps.trading.models.celery import CeleryTaskStatus
 from apps.trading.models import BacktestTask, TradingEvent, TradingTask
 from apps.trading.services.execution_lifecycle import (
     sync_terminal_execution_artifacts,
@@ -99,6 +102,55 @@ class TradingEventLifecycleSink:
             )
 
 
+class CeleryTaskStatusLifecycleSink:
+    """Persist terminal trading task lifecycle status in CeleryTaskStatus."""
+
+    task_name_map = {
+        "backtest": "trading.tasks.run_backtest_task",
+        "trading": "trading.tasks.run_trading_task",
+    }
+    terminal_status_map = {
+        str(TaskStatus.STOPPED): CeleryTaskStatus.Status.STOPPED,
+        str(TaskStatus.COMPLETED): CeleryTaskStatus.Status.COMPLETED,
+        str(TaskStatus.FAILED): CeleryTaskStatus.Status.FAILED,
+    }
+
+    def __init__(self, *, logger: Logger) -> None:
+        self.logger = logger
+
+    def publish(self, event: TaskLifecycleEvent) -> None:
+        execution_id = getattr(event.task, "execution_id", None)
+        task_name = self.task_name_map.get(str(event.task_type))
+        if not execution_id or not task_name:
+            return
+
+        status = self.terminal_status_map.get(str(event.task.status))
+        if status is None:
+            return
+
+        now = timezone.now()
+        updates: dict[str, object] = {
+            "status": status,
+            "stopped_at": now,
+            "last_heartbeat_at": now,
+        }
+        if status == CeleryTaskStatus.Status.FAILED:
+            updates["status_message"] = event.description
+
+        try:
+            CeleryTaskStatus.objects.filter(
+                task_name=task_name,
+                instance_key=f"{event.task.pk}:{execution_id}",
+            ).update(**updates)
+        except Exception as exc:  # pragma: no cover - defensive logging path
+            self.logger.warning(
+                "[SERVICE:EVENT] Failed to persist CeleryTaskStatus - task_id=%s, kind=%s, error=%s",
+                event.task.pk,
+                event.kind,
+                exc,
+            )
+
+
 class ExecutionArtifactsLifecycleSink:
     """Refresh execution read models for terminal lifecycle events."""
 
@@ -139,6 +191,7 @@ class TaskLifecycleEventPublisher:
         self.logger = logger
         self.sinks = sinks or (
             LoggerLifecycleEventSink(logger=logger),
+            CeleryTaskStatusLifecycleSink(logger=logger),
             ExecutionArtifactsLifecycleSink(logger=logger),
             TradingEventLifecycleSink(logger=logger),
         )

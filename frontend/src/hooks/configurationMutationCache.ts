@@ -6,6 +6,7 @@ import {
   removeFromListQueries,
   upsertFilteredPaginatedEntity,
 } from './listCacheUtils';
+import { matchesExactFilter, matchesSearchFilter } from './listFilterUtils';
 
 type ConfigListParams = Record<string, unknown> | undefined;
 
@@ -13,27 +14,17 @@ function matchesConfigurationFilter(
   config: StrategyConfig,
   params?: ConfigListParams
 ): boolean {
-  if (!params) {
-    return true;
-  }
-
-  const strategyType = params.strategy_type;
-  if (
-    typeof strategyType === 'string' &&
-    strategyType &&
-    config.strategy_type !== strategyType
-  ) {
+  if (!matchesExactFilter(params, 'strategy_type', config.strategy_type)) {
     return false;
   }
-
-  const search = params.search;
-  if (typeof search === 'string' && search.trim()) {
-    const haystack = [config.name, config.description, config.strategy_type]
-      .join(' ')
-      .toLowerCase();
-    if (!haystack.includes(search.trim().toLowerCase())) {
-      return false;
-    }
+  if (
+    !matchesSearchFilter(params, [
+      config.name,
+      config.description,
+      config.strategy_type,
+    ])
+  ) {
+    return false;
   }
 
   return true;
