@@ -18,6 +18,16 @@ from apps.trading.services.execution_lifecycle import (
 )
 
 
+class TaskLifecycleKind:
+    """Canonical lifecycle event kinds."""
+
+    STARTED = "task_started"
+    COMPLETED = "task_completed"
+    FAILED = "task_failed"
+    STOPPED = "task_stopped"
+    CANCELLED = "task_cancelled"
+
+
 @dataclass(frozen=True)
 class TaskLifecycleEvent:
     """Lifecycle event payload shared by publishers."""
@@ -217,7 +227,7 @@ class CeleryTaskStatusLifecycleSink:
 class ExecutionArtifactsLifecycleSink:
     """Refresh execution read models for terminal lifecycle events."""
 
-    terminal_kinds = frozenset({"task_cancelled"})
+    terminal_kinds = frozenset({TaskLifecycleKind.CANCELLED})
 
     def __init__(
         self,

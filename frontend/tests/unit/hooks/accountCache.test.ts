@@ -69,4 +69,24 @@ describe('accountCache', () => {
       expect.objectContaining({ id: 2, account_id: 'ACC-002' }),
     ]);
   });
+
+  it('removes updated accounts from caches whose search no longer matches', () => {
+    const listKey = queryKeys.accounts.list({ search: 'acc-001' });
+    queryClient.setQueryData<Account[]>(listKey, [buildAccount()]);
+
+    upsertAccountCaches(buildAccount({ account_id: 'LIVE-002' }));
+
+    expect(queryClient.getQueryData<Account[]>(listKey)).toEqual([]);
+  });
+
+  it('re-inserts updated accounts into matching first-page caches', () => {
+    const listKey = queryKeys.accounts.list({ search: 'live-002' });
+    queryClient.setQueryData<Account[]>(listKey, []);
+
+    upsertAccountCaches(buildAccount({ account_id: 'LIVE-002' }));
+
+    expect(queryClient.getQueryData<Account[]>(listKey)).toEqual([
+      expect.objectContaining({ account_id: 'LIVE-002' }),
+    ]);
+  });
 });

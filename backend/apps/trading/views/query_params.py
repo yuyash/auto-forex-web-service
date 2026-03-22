@@ -369,10 +369,23 @@ EXECUTION_SCOPED_TRADE_POSITION_GROUP = _query_spec_group(
     SINCE_SPEC,
     *TRADE_POSITION_PAGINATION_GROUP,
 )
-DATE_RANGE_SPECS: dict[tuple[str, str], tuple[QueryFieldSpec, QueryFieldSpec]] = {
-    ("range_from", "range_to"): (RANGE_FROM_SPEC, RANGE_TO_SPEC),
-    ("timestamp_from", "timestamp_to"): (TIMESTAMP_FROM_SPEC, TIMESTAMP_TO_SPEC),
-    ("created_from", "created_to"): (CREATED_FROM_SPEC, CREATED_TO_SPEC),
+DATE_RANGE_GROUP_SPECS = {
+    "range": QueryGroupSpec(
+        name="RangeDateWindowQueryGroup",
+        specs=(RANGE_FROM_SPEC, RANGE_TO_SPEC),
+    ),
+    "timestamp": QueryGroupSpec(
+        name="TimestampDateWindowQueryGroup",
+        specs=(TIMESTAMP_FROM_SPEC, TIMESTAMP_TO_SPEC),
+    ),
+    "created": QueryGroupSpec(
+        name="CreatedDateWindowQueryGroup",
+        specs=(CREATED_FROM_SPEC, CREATED_TO_SPEC),
+    ),
+    "positions_range": QueryGroupSpec(
+        name="PositionsRangeDateWindowQueryGroup",
+        specs=(POSITIONS_RANGE_FROM_SPEC, POSITIONS_RANGE_TO_SPEC),
+    ),
 }
 
 
@@ -610,6 +623,40 @@ def _build_query_serializer_alias(endpoint: str) -> type[serializers.Serializer]
     return get_query_group_spec(endpoint).build_serializer()
 
 
+def _resolve_date_range_group(
+    start_key: str,
+    end_key: str,
+    group_name: str | None = None,
+) -> QueryGroupSpec:
+    if group_name is not None:
+        return DATE_RANGE_GROUP_SPECS[group_name]
+
+    key_map = {
+        ("range_from", "range_to"): "range",
+        ("timestamp_from", "timestamp_to"): "timestamp",
+        ("created_from", "created_to"): "created",
+    }
+    group_key = key_map.get((start_key, end_key))
+    if group_key is not None:
+        return DATE_RANGE_GROUP_SPECS[group_key]
+
+    return QueryGroupSpec(
+        name=f"{start_key.title()}{end_key.title()}DateWindowQueryGroup",
+        specs=(
+            QueryFieldSpec(
+                name=start_key,
+                kind="datetime",
+                help_text=f"RFC3339 lower bound for {start_key}.",
+            ),
+            QueryFieldSpec(
+                name=end_key,
+                kind="datetime",
+                help_text=f"RFC3339 upper bound for {end_key}.",
+            ),
+        ),
+    )
+
+
 def _parse_datetime_value(value: str | None) -> datetime | None:
     if value:
         parsed = parse_datetime(value)
@@ -730,23 +777,15 @@ class DateRangeQuery:
         *,
         start_key: str,
         end_key: str,
+        group_name: str | None = None,
     ) -> DateRangeQuery:
-        start_spec, end_spec = DATE_RANGE_SPECS.get((start_key, end_key), (None, None))
-        start_spec = start_spec or QueryFieldSpec(
-            name=start_key,
-            kind="datetime",
-            help_text=f"RFC3339 lower bound for {start_key}.",
-        )
-        end_spec = end_spec or QueryFieldSpec(
-            name=end_key,
-            kind="datetime",
-            help_text=f"RFC3339 upper bound for {end_key}.",
-        )
+        range_group = _resolve_date_range_group(start_key, end_key, group_name)
+        start_spec, end_spec = range_group.specs
         start, end = _parse_date_range_group(
             request,
             start_spec=start_spec,
             end_spec=end_spec,
-            serializer_name="DateRangeQueryRuntimeSerializer",
+            serializer_name=f"{range_group.name}RuntimeSerializer",
         )
         return cls(start=start, end=end)
 
@@ -783,6 +822,7 @@ class PositionQuery:
                 request,
                 start_key="range_from",
                 end_key="range_to",
+                group_name="positions_range",
             ),
         )
 

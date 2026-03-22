@@ -18,6 +18,7 @@ from apps.trading.tasks.lifecycle_events import (
     build_lifecycle_event_spec,
     finalize_task_terminal_lifecycle,
     publish_task_lifecycle_event,
+    TaskLifecycleKind,
 )
 from apps.trading.tasks.executor import TradingExecutor
 from apps.trading.tasks.source import LiveTickDataSource
@@ -78,7 +79,7 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
             task=task,
             task_type=TaskType.TRADING,
             event=build_lifecycle_event_spec(
-                kind="task_started",
+                kind=TaskLifecycleKind.STARTED,
                 description="Trading task execution started",
                 log_level=LogLevel.INFO,
                 log_component=__name__,
@@ -103,7 +104,7 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
                 task_type=TaskType.TRADING,
                 status=TaskStatus.STOPPED,
                 event=build_lifecycle_event_spec(
-                    kind="task_stopped",
+                    kind=TaskLifecycleKind.STOPPED,
                     description="Trading task stopped after execution completed",
                     log_level=LogLevel.INFO,
                     log_message="Trading task stopped successfully",
@@ -193,7 +194,7 @@ def handle_exception(task_id: UUID, task: TradingTask | None, error: Exception) 
             task_type=TaskType.TRADING,
             status=TaskStatus.FAILED,
             event=build_lifecycle_event_spec(
-                kind="task_failed",
+                kind=TaskLifecycleKind.FAILED,
                 description=f"Trading task failed: {type(error).__name__}: {error_message}",
                 log_level=LogLevel.ERROR,
                 log_message=(
@@ -248,7 +249,7 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
                 task_type=TaskType.TRADING,
                 status=TaskStatus.STOPPED,
                 event=build_lifecycle_event_spec(
-                    kind="task_stopped",
+                    kind=TaskLifecycleKind.STOPPED,
                     description="Trading task stopped",
                     log_level=LogLevel.INFO,
                     log_message="Trading task stopped",
