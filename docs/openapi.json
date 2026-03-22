@@ -119,7 +119,7 @@
         "/api/accounts/auth/refresh": {
             "post": {
                 "operationId": "auth_token_refresh",
-                "description": "Exchange a refresh token for a new access + refresh token pair.",
+                "description": "Exchange a refresh token for a new access + refresh token pair. The refresh token is normally read from the HTTP-only cookie; the `refresh_token` request field is accepted only as a legacy fallback.",
                 "tags": [
                     "Accounts"
                 ],
@@ -130,8 +130,7 @@
                                 "$ref": "#/components/schemas/TokenRefreshRequestRequest"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "security": [
                     {}
@@ -8507,13 +8506,9 @@
                 "type": "object",
                 "properties": {
                     "refresh_token": {
-                        "type": "string",
-                        "minLength": 1
+                        "type": "string"
                     }
-                },
-                "required": [
-                    "refresh_token"
-                ]
+                }
             },
             "TokenRefreshResponse": {
                 "type": "object",

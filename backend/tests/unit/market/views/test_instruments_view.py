@@ -43,6 +43,7 @@ class TestSupportedInstrumentsViewGet:
         assert response.data["source"] == "oanda"
         assert response.data["count"] == 3
         assert "EUR_USD" in response.data["instruments"]
+        mock_fetch.assert_called_once_with(request)
 
     @patch.object(SupportedInstrumentsView, "_fetch_instruments_from_oanda")
     def test_returns_fallback_when_oanda_fails(self, mock_fetch):
@@ -68,18 +69,22 @@ class TestFetchInstrumentsFromOanda:
         MockAccounts.objects.filter.return_value.first.return_value = None
 
         view = SupportedInstrumentsView()
-        result = view._fetch_instruments_from_oanda()
+        request = factory.get("/")
+        request.user = MagicMock(id=123)
+        result = view._fetch_instruments_from_oanda(request)
 
         assert result is None
 
     @patch("apps.market.views.instruments.v20")
     @patch("apps.market.views.instruments.OandaAccounts")
-    def test_successful_fetch(self, MockAccounts, mock_v20):
+    @patch("apps.market.views.instruments.cache")
+    def test_successful_fetch(self, mock_cache, MockAccounts, mock_v20):
         account = MagicMock()
         account.api_hostname = "api-fxpractice.oanda.com"
         account.get_api_token.return_value = "token"
         account.account_id = "001"
         MockAccounts.objects.filter.return_value.first.return_value = account
+        mock_cache.get.return_value = None
 
         instr1 = MagicMock()
         instr1.name = "EUR_USD"
@@ -97,21 +102,42 @@ class TestFetchInstrumentsFromOanda:
         mock_v20.Context.return_value = mock_context
 
         view = SupportedInstrumentsView()
-        result = view._fetch_instruments_from_oanda()
+        request = factory.get("/")
+        request.user = MagicMock(id=1)
+        result = view._fetch_instruments_from_oanda(request)
 
         assert result is not None
         assert "EUR_USD" in result
         assert "GBP_USD" in result
         assert "CORN_USD_LONG_NAME" not in result
+        mock_cache.set.assert_called_once()
+
+    @patch("apps.market.views.instruments.OandaAccounts")
+    @patch("apps.market.views.instruments.cache")
+    def test_cached_fetch_skips_oanda(self, mock_cache, MockAccounts):
+        account = MagicMock()
+        account.api_hostname = "api-fxpractice.oanda.com"
+        MockAccounts.objects.filter.return_value.first.return_value = account
+        mock_cache.get.return_value = ["EUR_USD"]
+
+        view = SupportedInstrumentsView()
+        request = factory.get("/")
+        request.user = MagicMock(id=1)
+
+        result = view._fetch_instruments_from_oanda(request)
+
+        assert result == ["EUR_USD"]
 
     @patch("apps.market.views.instruments.v20")
     @patch("apps.market.views.instruments.OandaAccounts")
-    def test_api_error_returns_none(self, MockAccounts, mock_v20):
+    @patch("apps.market.views.instruments.cache")
+    def test_api_error_returns_none(self, mock_cache, MockAccounts, mock_v20):
         account = MagicMock()
         account.api_hostname = "api-fxpractice.oanda.com"
         account.get_api_token.return_value = "token"
         account.account_id = "001"
         MockAccounts.objects.filter.return_value.first.return_value = account
+        mock_cache.get.return_value = None
 
         mock_response = MagicMock()
         mock_response.status = 500
@@ -122,7 +148,9 @@ class TestFetchInstrumentsFromOanda:
         mock_v20.Context.return_value = mock_context
 
         view = SupportedInstrumentsView()
-        result = view._fetch_instruments_from_oanda()
+        request = factory.get("/")
+        request.user = MagicMock(id=1)
+        result = view._fetch_instruments_from_oanda(request)
 
         assert result is None
 
@@ -138,7 +166,9 @@ class TestFetchInstrumentsFromOanda:
         mock_v20.Context.side_effect = Exception("connection error")
 
         view = SupportedInstrumentsView()
-        result = view._fetch_instruments_from_oanda()
+        request = factory.get("/")
+        request.user = MagicMock(id=1)
+        result = view._fetch_instruments_from_oanda(request)
 
         assert result is None
 
@@ -274,12 +304,14 @@ class TestFetchInstrumentDetails:
 
     @patch("apps.market.views.instruments.v20")
     @patch("apps.market.views.instruments.OandaAccounts")
-    def test_api_error_returns_none(self, MockAccounts, mock_v20):
+    @patch("apps.market.views.instruments.cache")
+    def test_api_error_returns_none(self, mock_cache, MockAccounts, mock_v20):
         account = MagicMock()
         account.api_hostname = "api-fxpractice.oanda.com"
         account.get_api_token.return_value = "token"
         account.account_id = "001"
         MockAccounts.objects.filter.return_value.first.return_value = account
+        mock_cache.get.return_value = None
 
         mock_response = MagicMock()
         mock_response.status = 500

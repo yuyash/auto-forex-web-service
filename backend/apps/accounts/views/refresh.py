@@ -40,7 +40,7 @@ class TokenRefreshView(APIView):
         tags=["Accounts"],
         request=inline_serializer(
             "TokenRefreshRequest",
-            fields={"refresh_token": serializers.CharField()},
+            fields={"refresh_token": serializers.CharField(required=False, allow_blank=True)},
         ),
         responses={
             200: inline_serializer(
@@ -65,7 +65,11 @@ class TokenRefreshView(APIView):
                 fields={"error": serializers.CharField()},
             ),
         },
-        description="Exchange a refresh token for a new access + refresh token pair.",
+        description=(
+            "Exchange a refresh token for a new access + refresh token pair. "
+            "The refresh token is normally read from the HTTP-only cookie; the "
+            "`refresh_token` request field is accepted only as a legacy fallback."
+        ),
     )
     def post(self, request: Request) -> Response:
         """Handle token refresh via opaque refresh token."""

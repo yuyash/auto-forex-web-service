@@ -36,6 +36,7 @@ import { LoadingSpinner } from '../components/common';
 import { ConfigurationSelector } from '../components/tasks/forms/ConfigurationSelector';
 import { useSequentialPolling } from '../hooks/useSequentialPolling';
 import { usePollingActivity } from '../hooks/usePollingActivity';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { logger } from '../utils/logger';
 
 interface TabPanelProps {
@@ -77,6 +78,7 @@ export default function TradingTasksPage() {
   const [configFilter, setConfigFilter] = useState<string | ''>('');
   const [page, setPage] = useState(1);
   const pageSize = 20;
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, 400);
 
   // Determine status filter based on active tab
   const getStatusFilter = (): TaskStatus | undefined => {
@@ -95,7 +97,7 @@ export default function TradingTasksPage() {
   const { data, isLoading, error, refresh } = useTradingTasks({
     page,
     page_size: pageSize,
-    search: searchQuery || undefined,
+    search: debouncedSearchQuery || undefined,
     status: getStatusFilter(),
     config_id: configFilter || undefined,
     ordering: sortBy,
@@ -122,6 +124,11 @@ export default function TradingTasksPage() {
     {
       enabled: pollingEnabled,
       intervalMs: 10000,
+      onError: (error) => {
+        logger.warn('Trading task auto-refresh failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
     }
   );
 

@@ -31,6 +31,7 @@ import BacktestTaskCard from '../components/backtest/BacktestTaskCard';
 import { LoadingSpinner, Breadcrumbs } from '../components/common';
 import { useSequentialPolling } from '../hooks/useSequentialPolling';
 import { usePollingActivity } from '../hooks/usePollingActivity';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { logger } from '../utils/logger';
 
 interface TabPanelProps {
@@ -71,6 +72,7 @@ export default function BacktestTasksPage() {
   const [sortBy, setSortBy] = useState('-created_at');
   const [page, setPage] = useState(1);
   const pageSize = 20;
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, 400);
 
   // Determine status filter based on active tab
   const getStatusFilter = (): TaskStatus | undefined => {
@@ -89,7 +91,7 @@ export default function BacktestTasksPage() {
   const { data, isLoading, error, refresh } = useBacktestTasks({
     page,
     page_size: pageSize,
-    search: searchQuery || undefined,
+    search: debouncedSearchQuery || undefined,
     status: getStatusFilter(),
     ordering: sortBy,
   });
@@ -114,6 +116,11 @@ export default function BacktestTasksPage() {
     {
       enabled: pollingEnabled,
       intervalMs: 10000,
+      onError: (error) => {
+        logger.warn('Backtest task auto-refresh failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
     }
   );
 

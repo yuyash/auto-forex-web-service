@@ -1,23 +1,7 @@
 import { useState } from 'react';
 
-import {
-  Container,
-  Typography,
-  Box,
-  Paper,
-  Alert,
-  MenuItem,
-  Switch,
-  IconButton,
-  Popover,
-  MenuList,
-  ListItemText,
-  Tooltip,
-} from '@mui/material';
+import { Container, Box, Paper, Alert, Typography } from '@mui/material';
 import Grid from '@mui/material/Grid';
-import CurrencyExchangeIcon from '@mui/icons-material/CurrencyExchange';
-import BarChartIcon from '@mui/icons-material/BarChart';
-import TimerIcon from '@mui/icons-material/Timer';
 import { useTranslation } from 'react-i18next';
 import { useDefaultOandaAccount } from '../hooks/useOandaAccounts';
 import { useChartPreferences } from '../hooks/useChartPreferences';
@@ -31,8 +15,8 @@ import { Breadcrumbs } from '../components/common';
 import ActiveTasksWidget from '../components/dashboard/ActiveTasksWidget';
 import RecentBacktestsWidget from '../components/dashboard/RecentBacktestsWidget';
 import QuickActionsWidget from '../components/dashboard/QuickActionsWidget';
+import DashboardChartToolbar from '../components/dashboard/DashboardChartToolbar';
 import MarketChart from '../components/dashboard/MarketChart';
-import ChartOverlayControls from '../components/dashboard/ChartOverlayControls';
 import {
   DEFAULT_OVERLAY_SETTINGS,
   type OverlaySettings,
@@ -70,13 +54,6 @@ const DashboardPage = () => {
   // Use default account or first account
   const oandaAccountId = defaultAccount?.account_id;
 
-  // Popover anchors
-  const [instrumentAnchor, setInstrumentAnchor] =
-    useState<HTMLButtonElement | null>(null);
-  const [granularityAnchor, setGranularityAnchor] =
-    useState<HTMLButtonElement | null>(null);
-  const [intervalAnchor, setIntervalAnchor] =
-    useState<HTMLButtonElement | null>(null);
   const instrumentOptions = Array.from(
     new Set([preferences.instrument, ...instruments].filter(Boolean))
   );
@@ -92,26 +69,21 @@ const DashboardPage = () => {
   // Handle refresh interval change
   const handleRefreshIntervalChange = (val: number) => {
     updatePreference('refreshInterval', val);
-    setIntervalAnchor(null);
   };
 
   // Handle auto-refresh toggle
-  const handleAutoRefreshToggle = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    updatePreference('autoRefreshEnabled', event.target.checked);
+  const handleAutoRefreshToggle = (checked: boolean) => {
+    updatePreference('autoRefreshEnabled', checked);
   };
 
   // Handle instrument change
   const handleInstrumentChange = (val: string) => {
     updatePreference('instrument', val);
-    setInstrumentAnchor(null);
   };
 
   // Handle granularity change
   const handleGranularityChange = (val: string) => {
     updatePreference('granularity', val as Granularity);
-    setGranularityAnchor(null);
   };
 
   return (
@@ -161,141 +133,29 @@ const DashboardPage = () => {
           overflow: 'hidden',
         }}
       >
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 1.5,
-            flexWrap: 'wrap',
-            mb: 1,
-            flexShrink: 0,
-          }}
-        >
-          {usingInstrumentFallback && (
-            <Alert severity="warning" sx={{ width: '100%' }}>
-              {t('common:tables.trend.instrumentFallbackWarning')}
-            </Alert>
-          )}
-          {usingGranularityFallback && (
-            <Alert severity="warning" sx={{ width: '100%' }}>
-              {t('common:tables.trend.granularityFallbackWarning')}
-            </Alert>
-          )}
-          <Typography variant="subtitle1" sx={{ fontWeight: 600, mr: 'auto' }}>
-            {t('dashboard:chart.title')}
-          </Typography>
-
-          <ChartOverlayControls settings={overlays} onChange={setOverlays} />
-
-          {/* Instrument */}
-          <Tooltip
-            title={`${t('dashboard:chart.currencyPair')}: ${preferences.instrument.replace('_', '/')}`}
-          >
-            <IconButton
-              size="small"
-              onClick={(e) => setInstrumentAnchor(e.currentTarget)}
-              aria-label={t('common:accessibility.selectInstrument')}
-            >
-              <CurrencyExchangeIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Popover
-            open={Boolean(instrumentAnchor)}
-            anchorEl={instrumentAnchor}
-            onClose={() => setInstrumentAnchor(null)}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-          >
-            <MenuList dense>
-              {instrumentOptions.map((v) => (
-                <MenuItem
-                  key={v}
-                  selected={v === preferences.instrument}
-                  onClick={() => handleInstrumentChange(v)}
-                >
-                  <ListItemText>{v.replace('_', '/')}</ListItemText>
-                </MenuItem>
-              ))}
-            </MenuList>
-          </Popover>
-
-          {/* Granularity */}
-          <Tooltip
-            title={`${t('dashboard:chart.granularity')}: ${preferences.granularity}`}
-          >
-            <IconButton
-              size="small"
-              onClick={(e) => setGranularityAnchor(e.currentTarget)}
-              aria-label={t('common:accessibility.selectGranularity')}
-            >
-              <BarChartIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Popover
-            open={Boolean(granularityAnchor)}
-            anchorEl={granularityAnchor}
-            onClose={() => setGranularityAnchor(null)}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-          >
-            <MenuList dense>
-              {granularityOptions.map((option) => (
-                <MenuItem
-                  key={option.value}
-                  selected={option.value === preferences.granularity}
-                  onClick={() => handleGranularityChange(option.value)}
-                >
-                  <ListItemText>{option.value}</ListItemText>
-                </MenuItem>
-              ))}
-            </MenuList>
-          </Popover>
-
-          {/* Auto-refresh toggle */}
-          <Switch
-            size="small"
-            checked={autoRefreshEnabled}
-            onChange={handleAutoRefreshToggle}
-            inputProps={{ 'aria-label': t('common:accessibility.autoRefresh') }}
-          />
-
-          {/* Refresh interval */}
-          <Tooltip title={`Interval: ${refreshInterval}s`}>
-            <span>
-              <IconButton
-                size="small"
-                onClick={(e) => setIntervalAnchor(e.currentTarget)}
-                disabled={!autoRefreshEnabled}
-                aria-label={t('common:accessibility.selectRefreshInterval')}
-              >
-                <TimerIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Popover
-            open={Boolean(intervalAnchor)}
-            anchorEl={intervalAnchor}
-            onClose={() => setIntervalAnchor(null)}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-          >
-            <MenuList dense>
-              {[
-                { v: 10, l: '10s' },
-                { v: 30, l: '30s' },
-                { v: 60, l: '1min' },
-                { v: 120, l: '2min' },
-                { v: 300, l: '5min' },
-              ].map(({ v, l }) => (
-                <MenuItem
-                  key={v}
-                  selected={v === refreshInterval}
-                  onClick={() => handleRefreshIntervalChange(v)}
-                >
-                  <ListItemText>{l}</ListItemText>
-                </MenuItem>
-              ))}
-            </MenuList>
-          </Popover>
-        </Box>
+        <DashboardChartToolbar
+          instrument={preferences.instrument}
+          granularity={preferences.granularity}
+          autoRefreshEnabled={autoRefreshEnabled}
+          refreshInterval={refreshInterval}
+          instruments={instrumentOptions}
+          granularities={granularityOptions}
+          intervals={[
+            { value: 10, label: '10s' },
+            { value: 30, label: '30s' },
+            { value: 60, label: '1min' },
+            { value: 120, label: '2min' },
+            { value: 300, label: '5min' },
+          ]}
+          usingInstrumentFallback={usingInstrumentFallback}
+          usingGranularityFallback={usingGranularityFallback}
+          overlays={overlays}
+          onOverlaysChange={setOverlays}
+          onInstrumentChange={handleInstrumentChange}
+          onGranularityChange={handleGranularityChange}
+          onAutoRefreshToggle={handleAutoRefreshToggle}
+          onRefreshIntervalChange={handleRefreshIntervalChange}
+        />
 
         <Box
           sx={{
