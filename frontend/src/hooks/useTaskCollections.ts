@@ -1,6 +1,6 @@
 import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
 import { usePollingPolicy, type PollingPolicyState } from './usePollingPolicy';
-import { useSequentialPolling } from './useSequentialPolling';
+import { useTaskQueryPolling } from './useTaskQueryPolling';
 
 export interface QueryStateResult<TData> {
   data: TData | null;
@@ -21,27 +21,7 @@ export function useTaskList<TData>(
   polling?: QueryPollingOptions<TData>
 ): QueryStateResult<TData> {
   const query = useQuery(queryOptions);
-
-  useSequentialPolling(
-    async () => {
-      if (query.isFetching) {
-        return Promise.resolve();
-      }
-      const result = await query.refetch();
-      if (result.error) {
-        polling?.policy.registerFailure();
-      } else {
-        polling?.policy.resetFailures();
-      }
-      return result;
-    },
-    {
-      enabled:
-        polling?.policy.isActive === true &&
-        (polling.shouldPoll?.(query.data ?? null) ?? true),
-      intervalMs: polling?.policy.intervalMs ?? 10_000,
-    }
-  );
+  useTaskQueryPolling(query, polling);
 
   return {
     data: query.data ?? null,
@@ -58,27 +38,7 @@ export function useTaskDetail<TData>(
   polling?: QueryPollingOptions<TData>
 ): QueryStateResult<TData> {
   const query = useQuery(queryOptions);
-
-  useSequentialPolling(
-    async () => {
-      if (query.isFetching) {
-        return Promise.resolve();
-      }
-      const result = await query.refetch();
-      if (result.error) {
-        polling?.policy.registerFailure();
-      } else {
-        polling?.policy.resetFailures();
-      }
-      return result;
-    },
-    {
-      enabled:
-        polling?.policy.isActive === true &&
-        (polling.shouldPoll?.(query.data ?? null) ?? true),
-      intervalMs: polling?.policy.intervalMs ?? 10_000,
-    }
-  );
+  useTaskQueryPolling(query, polling);
 
   return {
     data: query.data ?? null,
@@ -99,25 +59,7 @@ export function usePolledTaskResource<TData>(
     enabled: options?.pollingEnabled === true,
     baseIntervalMs: options?.intervalMs ?? 10_000,
   });
-
-  useSequentialPolling(
-    async () => {
-      if (!query.isFetching) {
-        const result = await query.refetch();
-        if (result.error) {
-          pollingPolicy.registerFailure();
-        } else {
-          pollingPolicy.resetFailures();
-        }
-        return result;
-      }
-      return Promise.resolve();
-    },
-    {
-      enabled: pollingPolicy.isActive,
-      intervalMs: pollingPolicy.intervalMs,
-    }
-  );
+  useTaskQueryPolling(query, { policy: pollingPolicy });
 
   return {
     data: query.data ?? null,
