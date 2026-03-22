@@ -1,5 +1,4 @@
-import { useDocumentVisibility } from './useDocumentVisibility';
-import { useOnlineStatus } from './useOnlineStatus';
+import { usePollingPolicy } from './usePollingPolicy';
 
 interface UsePollingActivityOptions {
   requireVisible?: boolean;
@@ -11,10 +10,10 @@ export function usePollingActivity(
   options: UsePollingActivityOptions = {}
 ): boolean {
   const { requireVisible = true, requireOnline = true } = options;
-  const isVisible = useDocumentVisibility();
-  const isOnline = useOnlineStatus();
-
-  return (
-    enabled && (!requireVisible || isVisible) && (!requireOnline || isOnline)
-  );
+  return usePollingPolicy({
+    enabled,
+    baseIntervalMs: 10_000,
+    requireVisible,
+    requireOnline,
+  }).isActive;
 }

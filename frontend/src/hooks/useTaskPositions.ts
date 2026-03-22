@@ -13,8 +13,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
+import { logger } from '../utils/logger';
+import { usePollingPolicy } from './usePollingPolicy';
 import { useSequentialPolling } from './useSequentialPolling';
-import { usePollingActivity } from './usePollingActivity';
 import { toIncrementalCollectionState } from './useTaskCollections';
 import {
   fetchTaskResourcePage,
@@ -130,7 +131,7 @@ export const useTaskPositions = ({
     async (incremental = false) => {
       if (!taskId) {
         setIsLoading(false);
-        return;
+        return false;
       }
 
       const requestId = ++latestRequestRef.current;
@@ -186,7 +187,7 @@ export const useTaskPositions = ({
             // Use setTimeout to avoid calling fetchPositions recursively
             // inside the current execution.
             setTimeout(() => fetchPositions(false), 0);
-            return;
+            return false;
           }
 
           // Incremental poll: merge new/updated records into the cache.
@@ -231,6 +232,7 @@ export const useTaskPositions = ({
           sinceRef.current = latestTs;
         }
         hasInitialFetchRef.current = true;
+        return true;
       } catch (err) {
         if (requestId !== latestRequestRef.current) return;
 
@@ -244,6 +246,7 @@ export const useTaskPositions = ({
         const msg =
           err instanceof Error ? err.message : 'Failed to load positions';
         setError(new Error(msg));
+        return false;
       } finally {
         if (requestId === latestRequestRef.current) {
           setIsLoading(false);
@@ -271,18 +274,32 @@ export const useTaskPositions = ({
     fetchPositions(false);
   }, [fetchPositions]);
 
-  const pollingEnabled = usePollingActivity(enableRealTimeUpdates);
+  const pollingPolicy = usePollingPolicy({
+    enabled: enableRealTimeUpdates,
+    baseIntervalMs: refreshInterval,
+  });
 
   useSequentialPolling(
-    () => {
+    async () => {
       if (hasInitialFetchRef.current) {
-        return fetchPositions(canUseIncrementalPolling);
+        const ok = await fetchPositions(canUseIncrementalPolling);
+        if (ok) {
+          pollingPolicy.resetFailures();
+        } else {
+          pollingPolicy.registerFailure();
+        }
+        return ok;
       }
       return Promise.resolve();
     },
     {
-      enabled: pollingEnabled,
-      intervalMs: refreshInterval,
+      enabled: pollingPolicy.isActive,
+      intervalMs: pollingPolicy.intervalMs,
+      onError: (error) => {
+        logger.warn('Task positions polling failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
     }
   );
 

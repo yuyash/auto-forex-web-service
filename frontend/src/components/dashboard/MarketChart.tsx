@@ -9,16 +9,11 @@ import {
 import { getCandleColors } from '../../utils/candleColors';
 import {
   CandlestickSeries,
-  LineSeries,
-  HistogramSeries,
   createChart,
-  createSeriesMarkers,
   type IChartApi,
   type ISeriesApi,
-  type ISeriesMarkersPluginApi,
   type Time,
   type UTCTimestamp,
-  type SeriesMarker,
 } from 'lightweight-charts';
 import type { Granularity } from '../../types/chart';
 import { detectMarketGaps } from '../../utils/marketClosedMarkers';
@@ -32,16 +27,12 @@ import { getTimezoneAbbr } from '../../utils/chartTimezone';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '@mui/material/styles';
 import {
-  calcSMA,
-  calcEMA,
-  calcBollinger,
-  detectSupportResistance,
-} from '../../utils/technicalIndicators';
-import {
   DEFAULT_OVERLAY_SETTINGS,
   type OverlaySettings,
 } from './chartOverlaySettings';
 import { useWindowedCandles } from '../../hooks/useWindowedCandles';
+import { useMarketChartOverlays } from './useMarketChartOverlays';
+import { useMarketChartViewportLoading } from './useMarketChartViewportLoading';
 
 /** Granularities where showing seconds on the crosshair makes sense */
 const SECONDS_GRANULARITIES = new Set<string>(['M1', 'M2', 'M4', 'M5']);
@@ -69,57 +60,6 @@ interface CandlePoint {
   volume?: number;
 }
 
-/** Overlay series color palette */
-const COLORS = {
-  sma20: '#2196F3',
-  sma50: '#FF9800',
-  ema12: '#9C27B0',
-  ema26: '#00BCD4',
-  bbMiddle: '#607D8B',
-  bbBand: 'rgba(96,125,139,0.18)',
-  volumeUp: 'rgba(22,163,74,0.35)',
-  volumeDown: 'rgba(239,68,68,0.35)',
-  support: '#16a34a',
-  resistance: '#ef4444',
-};
-
-/** Detect simple crossover markers between two line series */
-function detectCrossovers(
-  fast: { time: number; value: number }[],
-  slow: { time: number; value: number }[]
-): SeriesMarker<Time>[] {
-  const markers: SeriesMarker<Time>[] = [];
-  const slowMap = new Map(slow.map((p) => [p.time, p.value]));
-  let prevDiff: number | null = null;
-
-  for (const fp of fast) {
-    const sv = slowMap.get(fp.time);
-    if (sv === undefined) continue;
-    const diff = fp.value - sv;
-    if (prevDiff !== null) {
-      if (prevDiff <= 0 && diff > 0) {
-        markers.push({
-          time: fp.time as UTCTimestamp as Time,
-          position: 'belowBar',
-          color: '#16a34a',
-          shape: 'arrowUp',
-          text: 'Buy',
-        });
-      } else if (prevDiff >= 0 && diff < 0) {
-        markers.push({
-          time: fp.time as UTCTimestamp as Time,
-          position: 'aboveBar',
-          color: '#ef4444',
-          shape: 'arrowDown',
-          text: 'Sell',
-        });
-      }
-    }
-    prevDiff = diff;
-  }
-  return markers;
-}
-
 export default function MarketChart({
   instrument,
   granularity,
@@ -137,16 +77,6 @@ export default function MarketChart({
   const highlightRef = useRef<MarketClosedHighlight | null>(null);
   const adaptiveRef = useRef<AdaptiveTimeScale | null>(null);
 
-  // Overlay series refs
-  const sma20Ref = useRef<ISeriesApi<'Line', Time> | null>(null);
-  const sma50Ref = useRef<ISeriesApi<'Line', Time> | null>(null);
-  const ema12Ref = useRef<ISeriesApi<'Line', Time> | null>(null);
-  const ema26Ref = useRef<ISeriesApi<'Line', Time> | null>(null);
-  const bbMiddleRef = useRef<ISeriesApi<'Line', Time> | null>(null);
-  const bbUpperRef = useRef<ISeriesApi<'Line', Time> | null>(null);
-  const bbLowerRef = useRef<ISeriesApi<'Line', Time> | null>(null);
-  const volumeRef = useRef<ISeriesApi<'Histogram', Time> | null>(null);
-  const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const candlesRef = useRef<CandlePoint[]>([]);
   const initialLoadDoneRef = useRef(false);
   const [overlaysInternal, setOverlaysInternal] = useState<OverlaySettings>(
@@ -160,6 +90,8 @@ export default function MarketChart({
   const isDark = muiTheme.palette.mode === 'dark';
   const timezone = user?.timezone || 'UTC';
   const previousFirstCandleTimeRef = useRef<number | null>(null);
+  const { applyOverlays, clear: clearOverlays } =
+    useMarketChartOverlays(containerRef);
   const {
     candles,
     isInitialLoading,
@@ -187,214 +119,6 @@ export default function MarketChart({
     }));
   }, [candles]);
 
-  // ── Apply overlays whenever settings or data change ──────────────
-  const applyOverlays = useCallback(() => {
-    const chart = chartRef.current;
-    const mainSeries = seriesRef.current;
-    const candles = candlesRef.current;
-    if (!chart || !mainSeries || candles.length === 0) return;
-
-    const asTime = (pts: { time: number; value: number }[]) =>
-      pts.map((p) => ({
-        time: p.time as UTCTimestamp as Time,
-        value: p.value,
-      }));
-
-    // ── SMA 20 ──
-    if (overlays.sma20) {
-      if (!sma20Ref.current) {
-        sma20Ref.current = chart.addSeries(LineSeries, {
-          color: COLORS.sma20,
-          lineWidth: 1,
-          priceLineVisible: false,
-          lastValueVisible: false,
-          crosshairMarkerVisible: false,
-        });
-      }
-      sma20Ref.current.setData(asTime(calcSMA(candles, 20)));
-    } else if (sma20Ref.current) {
-      chart.removeSeries(sma20Ref.current);
-      sma20Ref.current = null;
-    }
-
-    // ── SMA 50 ──
-    if (overlays.sma50) {
-      if (!sma50Ref.current) {
-        sma50Ref.current = chart.addSeries(LineSeries, {
-          color: COLORS.sma50,
-          lineWidth: 1,
-          priceLineVisible: false,
-          lastValueVisible: false,
-          crosshairMarkerVisible: false,
-        });
-      }
-      sma50Ref.current.setData(asTime(calcSMA(candles, 50)));
-    } else if (sma50Ref.current) {
-      chart.removeSeries(sma50Ref.current);
-      sma50Ref.current = null;
-    }
-
-    // ── EMA 12 ──
-    if (overlays.ema12) {
-      if (!ema12Ref.current) {
-        ema12Ref.current = chart.addSeries(LineSeries, {
-          color: COLORS.ema12,
-          lineWidth: 1,
-          priceLineVisible: false,
-          lastValueVisible: false,
-          crosshairMarkerVisible: false,
-        });
-      }
-      ema12Ref.current.setData(asTime(calcEMA(candles, 12)));
-    } else if (ema12Ref.current) {
-      chart.removeSeries(ema12Ref.current);
-      ema12Ref.current = null;
-    }
-
-    // ── EMA 26 ──
-    if (overlays.ema26) {
-      if (!ema26Ref.current) {
-        ema26Ref.current = chart.addSeries(LineSeries, {
-          color: COLORS.ema26,
-          lineWidth: 1,
-          priceLineVisible: false,
-          lastValueVisible: false,
-          crosshairMarkerVisible: false,
-        });
-      }
-      ema26Ref.current.setData(asTime(calcEMA(candles, 26)));
-    } else if (ema26Ref.current) {
-      chart.removeSeries(ema26Ref.current);
-      ema26Ref.current = null;
-    }
-
-    // ── Bollinger Bands ──
-    if (overlays.bollinger) {
-      const bb = calcBollinger(candles, 20, 2);
-      if (!bbMiddleRef.current) {
-        bbMiddleRef.current = chart.addSeries(LineSeries, {
-          color: COLORS.bbMiddle,
-          lineWidth: 1,
-          lineStyle: 2,
-          priceLineVisible: false,
-          lastValueVisible: false,
-          crosshairMarkerVisible: false,
-        });
-        bbUpperRef.current = chart.addSeries(LineSeries, {
-          color: COLORS.bbMiddle,
-          lineWidth: 1,
-          lineStyle: 2,
-          priceLineVisible: false,
-          lastValueVisible: false,
-          crosshairMarkerVisible: false,
-        });
-        bbLowerRef.current = chart.addSeries(LineSeries, {
-          color: COLORS.bbMiddle,
-          lineWidth: 1,
-          lineStyle: 2,
-          priceLineVisible: false,
-          lastValueVisible: false,
-          crosshairMarkerVisible: false,
-        });
-      }
-      bbMiddleRef.current.setData(asTime(bb.middle));
-      bbUpperRef.current!.setData(asTime(bb.upper));
-      bbLowerRef.current!.setData(asTime(bb.lower));
-    } else {
-      for (const ref of [bbMiddleRef, bbUpperRef, bbLowerRef]) {
-        if (ref.current) {
-          chart.removeSeries(ref.current);
-          ref.current = null;
-        }
-      }
-    }
-
-    // ── Volume ──
-    if (overlays.volume) {
-      if (!volumeRef.current) {
-        volumeRef.current = chart.addSeries(HistogramSeries, {
-          priceFormat: { type: 'volume' },
-          priceScaleId: 'volume',
-          priceLineVisible: false,
-          lastValueVisible: false,
-        });
-        chart.priceScale('volume').applyOptions({
-          scaleMargins: { top: 0.8, bottom: 0 },
-        });
-      }
-      volumeRef.current.setData(
-        candles
-          .filter((c) => c.volume !== undefined)
-          .map((c) => ({
-            time: c.time as Time,
-            value: c.volume!,
-            color: c.close >= c.open ? COLORS.volumeUp : COLORS.volumeDown,
-          }))
-      );
-    } else if (volumeRef.current) {
-      chart.removeSeries(volumeRef.current);
-      volumeRef.current = null;
-    }
-
-    // ── Support / Resistance price lines ──
-    // Remove old lines first (lightweight-charts doesn't expose a list, so we recreate)
-    // We tag custom lines via the title field
-    const existingLines = (mainSeries as unknown as { _priceLines?: unknown[] })
-      ._priceLines;
-    if (existingLines) {
-      // Not accessible — use public API workaround: remove by reference stored in a ref
-    }
-    // Simpler approach: always recreate
-    // We'll store references in a data attribute on the container
-    const prevLines = (
-      containerRef.current as unknown as {
-        __srLines?: ReturnType<typeof mainSeries.createPriceLine>[];
-      }
-    )?.__srLines;
-    if (prevLines) {
-      for (const line of prevLines) {
-        try {
-          mainSeries.removePriceLine(line);
-        } catch {
-          /* already removed */
-        }
-      }
-    }
-    if (overlays.supportResistance) {
-      const levels = detectSupportResistance(candles);
-      const lines = levels.map((lv) =>
-        mainSeries.createPriceLine({
-          price: lv.price,
-          color: lv.type === 'support' ? COLORS.support : COLORS.resistance,
-          lineWidth: 1,
-          lineStyle: 2,
-          axisLabelVisible: true,
-          title: lv.type === 'support' ? 'S' : 'R',
-        })
-      );
-      if (containerRef.current) {
-        (
-          containerRef.current as unknown as { __srLines: typeof lines }
-        ).__srLines = lines;
-      }
-    }
-
-    // ── Signal markers (EMA crossover) ──
-    if (overlays.markers) {
-      const fast = calcEMA(candles, 12);
-      const slow = calcEMA(candles, 26);
-      const markers = detectCrossovers(fast, slow);
-      if (!markersRef.current) {
-        markersRef.current = createSeriesMarkers(mainSeries, markers);
-      } else {
-        markersRef.current.setMarkers(markers);
-      }
-    } else if (markersRef.current) {
-      markersRef.current.detach();
-      markersRef.current = null;
-    }
-  }, [overlays]);
-
   const restoreVisibleLogicalRange = useCallback(
     (saved: { from: number; to: number } | null, prependCount = 0) => {
       if (!saved || !chartRef.current) return;
@@ -410,59 +134,22 @@ export default function MarketChart({
     []
   );
 
-  const maybeFetchEdgeData = useCallback(async () => {
-    const chart = chartRef.current;
-    const series = seriesRef.current;
-    if (!chart || !series) return;
-    const visibleTimeRange = chart.timeScale().getVisibleRange();
-    if (
-      visibleTimeRange &&
-      typeof visibleTimeRange.from === 'number' &&
-      typeof visibleTimeRange.to === 'number'
-    ) {
-      await ensureRange({
-        from: Number(visibleTimeRange.from),
-        to: Number(visibleTimeRange.to),
-      });
-    }
-    const logicalRange = chart.timeScale().getVisibleLogicalRange();
-    const data = series.data();
-    if (!logicalRange || !data || data.length === 0) return;
-
-    const EDGE_THRESHOLD = 5;
-    const firstTime = Number(candlesRef.current[0]?.time ?? 0);
-    const lastTime = Number(
-      candlesRef.current[candlesRef.current.length - 1]?.time ?? 0
-    );
-    const spanSeconds =
-      visibleTimeRange &&
-      typeof visibleTimeRange.from === 'number' &&
-      typeof visibleTimeRange.to === 'number'
-        ? Math.max(
-            60,
-            Number(visibleTimeRange.to) - Number(visibleTimeRange.from)
-          )
-        : Math.max(60, lastTime - firstTime);
-
-    if (logicalRange.from < EDGE_THRESHOLD) {
-      await ensureRange({
-        from: firstTime - spanSeconds,
-        to: firstTime,
-      });
-      return;
-    }
-    if (logicalRange.to > data.length - EDGE_THRESHOLD) {
-      await ensureRange({
-        from: lastTime,
-        to: lastTime + spanSeconds,
-      });
-    }
-  }, [ensureRange]);
+  const maybeFetchEdgeData = useMarketChartViewportLoading({
+    chartRef,
+    seriesRef,
+    candlesRef,
+    ensureRange,
+  });
 
   // Re-apply overlays when toggle changes
   useEffect(() => {
-    applyOverlays();
-  }, [applyOverlays]);
+    applyOverlays(
+      chartRef.current,
+      seriesRef.current,
+      candlesRef.current,
+      overlays
+    );
+  }, [applyOverlays, overlays]);
 
   // Create chart once
   useEffect(() => {
@@ -526,7 +213,7 @@ export default function MarketChart({
     // Restore cached data after theme-triggered re-creation
     if (candlesRef.current.length > 0) {
       series.setData(candlesRef.current);
-      applyOverlays();
+      applyOverlays(chart, series, candlesRef.current, overlays);
     }
 
     let scrollDebounce: ReturnType<typeof setTimeout> | null = null;
@@ -607,23 +294,19 @@ export default function MarketChart({
       seriesRef.current = null;
       highlightRef.current = null;
       adaptiveRef.current = null;
-      sma20Ref.current = null;
-      sma50Ref.current = null;
-      ema12Ref.current = null;
-      ema26Ref.current = null;
-      bbMiddleRef.current = null;
-      bbUpperRef.current = null;
-      bbLowerRef.current = null;
-      volumeRef.current = null;
-      if (markersRef.current) {
-        markersRef.current.detach();
-        markersRef.current = null;
-      }
+      clearOverlays();
     };
-    // applyOverlays is intentionally excluded — overlay changes are handled
-    // by a dedicated useEffect to avoid recreating the chart on every toggle.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [height, fillHeight, granularity, timezone, isDark, maybeFetchEdgeData]);
+  }, [
+    height,
+    fillHeight,
+    granularity,
+    timezone,
+    isDark,
+    maybeFetchEdgeData,
+    applyOverlays,
+    overlays,
+    clearOverlays,
+  ]);
 
   useEffect(() => {
     if (!seriesRef.current) return;
@@ -661,13 +344,19 @@ export default function MarketChart({
     previousFirstCandleTimeRef.current = candlesRef.current[0]
       ? Number(candlesRef.current[0].time)
       : null;
-    applyOverlays();
+    applyOverlays(
+      chartRef.current,
+      seriesRef.current,
+      candlesRef.current,
+      overlays
+    );
   }, [
     candles,
     granularity,
     dataRanges,
     timezone,
     applyOverlays,
+    overlays,
     restoreVisibleLogicalRange,
   ]);
 
@@ -680,7 +369,7 @@ export default function MarketChart({
     void refreshTail();
   }, [autoRefresh, refreshTail]);
 
-  if (error && !seriesRef.current && candles.length === 0) {
+  if (error && candles.length === 0) {
     return (
       <Box
         sx={{

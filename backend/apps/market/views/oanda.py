@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from apps.market.models import OandaAccounts
 from apps.market.serializers import OandaAccountsSerializer
+from apps.market.services.cache import invalidate_market_metadata_cache
 from apps.market.services.oanda import OandaService
 
 logger: Logger = getLogger(name=__name__)
@@ -113,6 +114,7 @@ class OandaAccountView(APIView):
         serializer = self.serializer_class(data=request.data, context={"request": request})
         if serializer.is_valid():
             account = serializer.save()
+            invalidate_market_metadata_cache([account.api_hostname])
             logger.info(
                 "User %s created OANDA account %s",
                 request.user.email,
@@ -244,7 +246,9 @@ class OandaAccountDetailView(APIView):
             account, data=request.data, partial=True, context={"request": request}
         )
         if serializer.is_valid():
+            previous_hostname = account.api_hostname
             updated_account = serializer.save()
+            invalidate_market_metadata_cache([previous_hostname, updated_account.api_hostname])
             logger.info(
                 "User %s updated OANDA account %s",
                 request.user.email,
@@ -298,8 +302,10 @@ class OandaAccountDetailView(APIView):
                 },
             )
             return Response({"error": error_message}, status=status.HTTP_400_BAD_REQUEST)
+        hostname = account.api_hostname
         account_id_str = account.account_id
         account.delete()
+        invalidate_market_metadata_cache([hostname])
         logger.info(
             "User %s deleted OANDA account %s",
             request.user.email,

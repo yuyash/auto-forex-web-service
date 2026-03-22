@@ -30,7 +30,7 @@ import { TaskStatus } from '../types/common';
 import BacktestTaskCard from '../components/backtest/BacktestTaskCard';
 import { LoadingSpinner, Breadcrumbs } from '../components/common';
 import { useSequentialPolling } from '../hooks/useSequentialPolling';
-import { usePollingActivity } from '../hooks/usePollingActivity';
+import { usePollingPolicy } from '../hooks/usePollingPolicy';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { logger } from '../utils/logger';
 
@@ -106,16 +106,30 @@ export default function BacktestTasksPage() {
   const hasRunningTasks = !!data?.results.some(
     (task) => task.status === TaskStatus.RUNNING
   );
-  const pollingEnabled = usePollingActivity(hasRunningTasks);
+  const pollingPolicy = usePollingPolicy({
+    enabled: hasRunningTasks,
+    baseIntervalMs: 10000,
+  });
 
   useSequentialPolling(
-    () => {
+    async () => {
       logger.debug('Auto-refreshing backtest task list');
-      return refresh();
+      const result = await refresh();
+      if (
+        result &&
+        typeof result === 'object' &&
+        'error' in result &&
+        (result as { error?: unknown }).error
+      ) {
+        pollingPolicy.registerFailure();
+      } else {
+        pollingPolicy.resetFailures();
+      }
+      return result;
     },
     {
-      enabled: pollingEnabled,
-      intervalMs: 10000,
+      enabled: pollingPolicy.isActive,
+      intervalMs: pollingPolicy.intervalMs,
       onError: (error) => {
         logger.warn('Backtest task auto-refresh failed', {
           error: error instanceof Error ? error.message : String(error),

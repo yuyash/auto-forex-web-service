@@ -13,6 +13,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.market.models import OandaAccounts
+from apps.market.services.cache import (
+    build_instrument_detail_cache_key,
+    build_supported_instruments_cache_key,
+)
 
 logger: Logger = getLogger(name=__name__)
 
@@ -108,14 +112,14 @@ class SupportedInstrumentsView(APIView):
         )
 
     def _get_cached_instruments(self, account: OandaAccounts) -> list[str] | None:
-        cache_key = f"market:supported_instruments:{account.api_hostname}"
+        cache_key = build_supported_instruments_cache_key(account.api_hostname)
         cached = cache.get(cache_key)
         if isinstance(cached, list) and all(isinstance(item, str) for item in cached):
             return cached
         return None
 
     def _set_cached_instruments(self, account: OandaAccounts, instruments: list[str]) -> None:
-        cache_key = f"market:supported_instruments:{account.api_hostname}"
+        cache_key = build_supported_instruments_cache_key(account.api_hostname)
         cache.set(cache_key, instruments, INSTRUMENTS_CACHE_TTL_SECONDS)
 
     def _fetch_instruments_from_oanda(self, request: Request) -> list[str] | None:
@@ -285,7 +289,7 @@ class InstrumentDetailView(APIView):
     def _get_cached_instrument_detail(
         self, account: OandaAccounts, instrument: str
     ) -> dict[str, Any] | None:
-        cache_key = f"market:instrument_detail:{account.api_hostname}:{instrument}"
+        cache_key = build_instrument_detail_cache_key(account.api_hostname, instrument)
         cached = cache.get(cache_key)
         return cached if isinstance(cached, dict) else None
 
@@ -336,7 +340,7 @@ class InstrumentDetailView(APIView):
                 else None
             ),
         }
-        cache_key = f"market:instrument_detail:{account.api_hostname}:{instrument}"
+        cache_key = build_instrument_detail_cache_key(account.api_hostname, instrument)
         cache.set(cache_key, detail, INSTRUMENT_DETAIL_CACHE_TTL_SECONDS)
         return detail
 

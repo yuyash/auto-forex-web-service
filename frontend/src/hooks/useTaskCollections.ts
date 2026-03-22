@@ -1,4 +1,5 @@
 import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
+import { usePollingPolicy } from './usePollingPolicy';
 import { useSequentialPolling } from './useSequentialPolling';
 
 export interface QueryStateResult<TData> {
@@ -41,17 +42,27 @@ export function usePolledTaskResource<TData>(
   options?: { pollingEnabled?: boolean; intervalMs?: number }
 ): QueryStateResult<TData> {
   const query = useQuery(queryOptions);
+  const pollingPolicy = usePollingPolicy({
+    enabled: options?.pollingEnabled === true,
+    baseIntervalMs: options?.intervalMs ?? 10_000,
+  });
 
   useSequentialPolling(
-    () => {
+    async () => {
       if (!query.isFetching) {
-        return query.refetch();
+        const result = await query.refetch();
+        if (result.error) {
+          pollingPolicy.registerFailure();
+        } else {
+          pollingPolicy.resetFailures();
+        }
+        return result;
       }
       return Promise.resolve();
     },
     {
-      enabled: options?.pollingEnabled === true,
-      intervalMs: options?.intervalMs ?? 10_000,
+      enabled: pollingPolicy.isActive,
+      intervalMs: pollingPolicy.intervalMs,
     }
   );
 

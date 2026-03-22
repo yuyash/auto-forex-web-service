@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
+import { logger } from '../utils/logger';
+import { usePollingPolicy } from './usePollingPolicy';
 import { useSequentialPolling } from './useSequentialPolling';
-import { usePollingActivity } from './usePollingActivity';
 import {
   fetchTaskResourcePage,
   isApiErrorWithStatus,
@@ -99,7 +100,7 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
     async (incremental = false) => {
       if (!taskId) {
         setIsLoading(false);
-        return;
+        return false;
       }
 
       const requestId = ++latestRequestRef.current;
@@ -158,9 +159,10 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
           sinceRef.current = latestCursor;
         }
         hasInitialFetchRef.current = true;
+        return true;
       } catch (err) {
         if (requestId !== latestRequestRef.current) {
-          return;
+          return false;
         }
 
         if (isApiErrorWithStatus(err)) {
@@ -173,6 +175,7 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
         const message =
           err instanceof Error ? err.message : fallbackErrorMessage;
         setError(new Error(message));
+        return false;
       } finally {
         if (requestId === latestRequestRef.current) {
           setIsLoading(false);
@@ -195,18 +198,33 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
     void fetchItems(false);
   }, [fetchItems]);
 
-  const pollingEnabled = usePollingActivity(enableRealTimeUpdates);
+  const pollingPolicy = usePollingPolicy({
+    enabled: enableRealTimeUpdates,
+    baseIntervalMs: refreshInterval,
+  });
 
   useSequentialPolling(
-    () => {
+    async () => {
       if (hasInitialFetchRef.current) {
-        return fetchItems(true);
+        const ok = await fetchItems(true);
+        if (ok) {
+          pollingPolicy.resetFailures();
+        } else {
+          pollingPolicy.registerFailure();
+        }
+        return ok;
       }
       return Promise.resolve();
     },
     {
-      enabled: pollingEnabled,
-      intervalMs: refreshInterval,
+      enabled: pollingPolicy.isActive,
+      intervalMs: pollingPolicy.intervalMs,
+      onError: (error) => {
+        logger.warn('Incremental task resource polling failed', {
+          context: errorContext,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
     }
   );
 

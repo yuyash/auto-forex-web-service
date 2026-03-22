@@ -35,7 +35,7 @@ import { Breadcrumbs } from '../components/common';
 import { LoadingSpinner } from '../components/common';
 import { ConfigurationSelector } from '../components/tasks/forms/ConfigurationSelector';
 import { useSequentialPolling } from '../hooks/useSequentialPolling';
-import { usePollingActivity } from '../hooks/usePollingActivity';
+import { usePollingPolicy } from '../hooks/usePollingPolicy';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { logger } from '../utils/logger';
 
@@ -114,16 +114,30 @@ export default function TradingTasksPage() {
     (task) =>
       task.status === TaskStatus.RUNNING || task.status === TaskStatus.PAUSED
   );
-  const pollingEnabled = usePollingActivity(hasRunningTasks);
+  const pollingPolicy = usePollingPolicy({
+    enabled: hasRunningTasks,
+    baseIntervalMs: 10000,
+  });
 
   useSequentialPolling(
-    () => {
+    async () => {
       logger.debug('Auto-refreshing trading task list');
-      return refresh();
+      const result = await refresh();
+      if (
+        result &&
+        typeof result === 'object' &&
+        'error' in result &&
+        (result as { error?: unknown }).error
+      ) {
+        pollingPolicy.registerFailure();
+      } else {
+        pollingPolicy.resetFailures();
+      }
+      return result;
     },
     {
-      enabled: pollingEnabled,
-      intervalMs: 10000,
+      enabled: pollingPolicy.isActive,
+      intervalMs: pollingPolicy.intervalMs,
       onError: (error) => {
         logger.warn('Trading task auto-refresh failed', {
           error: error instanceof Error ? error.message : String(error),

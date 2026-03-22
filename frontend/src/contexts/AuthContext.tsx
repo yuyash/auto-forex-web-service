@@ -11,6 +11,7 @@ import { AUTH_LOGOUT_EVENT, type AuthLogoutDetail } from '../utils/authEvents';
 import { setAuthToken, clearAuthToken } from '../api';
 import i18n from '../i18n/config';
 import { useIdleTimeout } from '../hooks/useIdleTimeout';
+import { usePollingPolicy } from '../hooks/usePollingPolicy';
 import { useSequentialPolling } from '../hooks/useSequentialPolling';
 import { authApi } from '../services/api';
 import { ApiError } from '../api/apiClient';
@@ -161,16 +162,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [refreshToken]);
 
+  const authRefreshPolicy = usePollingPolicy({
+    enabled: Boolean(token),
+    baseIntervalMs: 50 * 60 * 1000,
+    requireVisible: false,
+  });
+
   useSequentialPolling(
-    () => {
+    async () => {
       if (!token) {
         return Promise.resolve();
       }
-      return refreshToken();
+      const refreshed = await refreshToken();
+      if (refreshed) {
+        authRefreshPolicy.resetFailures();
+      } else {
+        authRefreshPolicy.registerFailure();
+      }
+      return refreshed;
     },
     {
-      enabled: Boolean(token),
-      intervalMs: 50 * 60 * 1000,
+      enabled: authRefreshPolicy.isActive,
+      intervalMs: authRefreshPolicy.intervalMs,
     }
   );
 
