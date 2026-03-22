@@ -32,16 +32,6 @@ describe('useTaskTrendReplayData', () => {
           },
         ],
         positions: [],
-        trade_markers: [
-          {
-            trade_id: 'trade-1',
-            timestamp: '2026-03-20T00:00:00Z',
-            direction: 'long',
-            action: 'open',
-            lots: 1,
-            label: 'OPEN LONG 1L',
-          },
-        ],
         meta: {
           mode: 'latest',
           page: 1,
@@ -57,7 +47,6 @@ describe('useTaskTrendReplayData', () => {
       .mockResolvedValueOnce({
         trades: [],
         positions: [],
-        trade_markers: [],
         meta: {
           mode: 'latest',
           page: 1,

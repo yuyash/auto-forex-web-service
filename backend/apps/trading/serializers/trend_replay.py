@@ -19,21 +19,9 @@ class TaskTrendReplayMetaSerializer(serializers.Serializer):
     range_to = serializers.DateTimeField(allow_null=True)
 
 
-class TaskTrendReplayTradeMarkerSerializer(serializers.Serializer):
-    """Semantic trade marker for chart rendering."""
-
-    trade_id = serializers.UUIDField()
-    timestamp = serializers.DateTimeField()
-    direction = serializers.CharField()
-    action = serializers.CharField()
-    lots = serializers.IntegerField(allow_null=True)
-    label = serializers.CharField()
-
-
 class TaskTrendReplaySerializer(serializers.Serializer):
     """Combined trend replay payload for the chart view."""
 
     trades = TradeSerializer(many=True)
     positions = PositionSerializer(many=True)
-    trade_markers = TaskTrendReplayTradeMarkerSerializer(many=True)
     meta = TaskTrendReplayMetaSerializer()

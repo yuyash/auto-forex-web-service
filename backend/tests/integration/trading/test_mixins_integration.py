@@ -699,6 +699,5 @@ class TestTrendReplay:
         assert response.data["meta"]["returned_trades"] == 1
         assert len(response.data["trades"]) == 1
         assert len(response.data["positions"]) == 1
-        assert len(response.data["trade_markers"]) == 1
         assert response.data["trades"][0]["id"] == str(trade.id)
         assert response.data["positions"][0]["trade_ids"] == [str(trade.id)]

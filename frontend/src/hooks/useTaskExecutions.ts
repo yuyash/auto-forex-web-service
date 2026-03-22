@@ -1,11 +1,12 @@
 // Task Execution hooks for data fetching
 import { useQuery } from '@tanstack/react-query';
-import { backtestTasksApi, tradingTasksApi } from '../services/api';
 import { TaskType } from '../types';
 import type { TaskExecution, PaginatedResponse } from '../types';
 import {
-  getTaskExecutionKey,
-  getTaskExecutionsKey,
+  createTaskExecutionQuery,
+  createTaskExecutionsQuery,
+} from './taskResourceQueries';
+import {
   refreshTaskExecution,
   refreshTaskExecutions,
 } from './taskResourceCache';
@@ -33,43 +34,9 @@ export function useTaskExecutions(
   params?: { page?: number; page_size?: number; include_metrics?: boolean },
   options?: { enablePolling?: boolean; pollingInterval?: number }
 ): UseTaskExecutionsResult {
-  const queryKey = getTaskExecutionsKey(taskId, taskType, params);
-
-  const { data, isLoading, error } = useQuery({
-    queryKey,
-    queryFn: async () => {
-      const fetchParams =
-        params?.page || params?.page_size
-          ? {
-              page: params.page,
-              page_size: params.page_size,
-              include_metrics: params.include_metrics,
-            }
-          : undefined;
-
-      return taskType === TaskType.BACKTEST
-        ? await backtestTasksApi.getExecutions(taskId, fetchParams)
-        : await tradingTasksApi.getExecutions(taskId, fetchParams);
-    },
-    staleTime: 2000, // Consider data fresh for 2 seconds
-    refetchOnWindowFocus: true,
-    // Enable automatic polling for running executions to get live logs
-    // The callback receives the current query data as parameter
-    refetchInterval: (query) => {
-      // Check if any execution is running
-      const queryData = query.state.data as
-        | PaginatedResponse<TaskExecution>
-        | undefined;
-      const hasRunningExecution = queryData?.results?.some(
-        (exec) => exec.status === 'running'
-      );
-      // If polling is enabled and there's a running execution, poll every 3 seconds
-      if (options?.enablePolling !== false && hasRunningExecution) {
-        return options?.pollingInterval ?? 3000;
-      }
-      return false; // Disable polling when no running executions
-    },
-  });
+  const { data, isLoading, error } = useQuery(
+    createTaskExecutionsQuery(taskId, taskType, params, options)
+  );
 
   return {
     data,
@@ -94,16 +61,9 @@ export function useTaskExecution(
   executionId: string,
   taskType: TaskType
 ): UseTaskExecutionResult {
-  const queryKey = getTaskExecutionKey(taskId, executionId, taskType);
-
-  const { data, isLoading, error } = useQuery({
-    queryKey,
-    queryFn: () =>
-      taskType === TaskType.BACKTEST
-        ? backtestTasksApi.getExecution(taskId, executionId)
-        : tradingTasksApi.getExecution(taskId, executionId),
-    staleTime: 10000, // Consider data fresh for 10 seconds
-  });
+  const { data, isLoading, error } = useQuery(
+    createTaskExecutionQuery(taskId, executionId, taskType)
+  );
 
   return {
     data,

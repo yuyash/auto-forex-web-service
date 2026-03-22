@@ -294,7 +294,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   const {
     trades,
     positions: fetchedPositions,
-    tradeMarkers,
     isRefreshing,
     errorMessage,
     warningMessage,
@@ -775,12 +774,30 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     if (!markersRef.current) return;
     const candleTimes = candles.map((c) => Number(c.time));
 
-    const renderedTradeMarkers = tradeMarkers
-      .map((marker) => {
+    const renderedTradeMarkers = trades
+      .map((trade) => {
         const selected =
-          marker.trade_id === selectedTradeId ||
-          highlightedTradeIds.has(marker.trade_id);
-        const rawTradeTime = parseUtcTimestamp(marker.timestamp);
+          trade.id === selectedTradeId || highlightedTradeIds.has(trade.id);
+        const units = Number(trade.units);
+        const lots = Number.isFinite(units) ? Math.abs(units) / 1000 : null;
+        const executionMethod = String(
+          trade.execution_method || ''
+        ).toLowerCase();
+        const isClose =
+          executionMethod === 'take_profit' ||
+          executionMethod === 'margin_protection' ||
+          executionMethod === 'volatility_lock' ||
+          executionMethod === 'close_position' ||
+          executionMethod === 'volatility_hedge_neutralize';
+        const direction: 'long' | 'short' =
+          trade.direction === 'long' || trade.direction === 'short'
+            ? trade.direction
+            : Number.isFinite(units) && units < 0
+              ? 'short'
+              : 'long';
+        const lotLabel = lots === null ? '' : `${Math.round(lots)}L`;
+        const dirLabel = direction.toUpperCase();
+        const rawTradeTime = parseUtcTimestamp(trade.timestamp);
         const markerTime =
           rawTradeTime != null
             ? snapToCandleTimeInLoadedRange(Number(rawTradeTime), candleTimes)
@@ -789,21 +806,23 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         return {
           time: (markerTime ?? 0) as UTCTimestamp,
           position:
-            marker.direction === 'short'
+            direction === 'short'
               ? ('aboveBar' as const)
               : ('belowBar' as const),
           shape:
-            marker.direction === 'short'
+            direction === 'short'
               ? ('arrowDown' as const)
               : ('arrowUp' as const),
           color: selected
             ? '#f59e0b'
-            : marker.action === 'close'
+            : isClose
               ? '#9ca3af'
-              : marker.direction === 'long'
+              : direction === 'long'
                 ? '#16a34a'
                 : '#ef4444',
-          text: marker.label,
+          text: isClose
+            ? `CLOSE ${dirLabel} ${lotLabel}`.trim()
+            : `OPEN ${dirLabel} ${lotLabel}`.trim(),
         };
       })
       .filter((marker) => {
@@ -831,7 +850,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       });
     }
   }, [
-    tradeMarkers,
+    trades,
     candles,
     selectedTradeId,
     highlightedTradeIds,

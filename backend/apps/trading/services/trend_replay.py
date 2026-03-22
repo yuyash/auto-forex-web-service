@@ -57,7 +57,6 @@ def build_trend_replay_payload(query: TrendReplayQuery) -> dict[str, Any]:
     return {
         "trades": [_serialize_trade(trade) for trade in paged_trades],
         "positions": [_serialize_position(position) for position in positions_qs],
-        "trade_markers": [_serialize_trade_marker(trade) for trade in paged_trades],
         "meta": {
             "mode": mode,
             "page": query.page,
@@ -146,36 +145,4 @@ def _serialize_position(position: Position) -> dict[str, Any]:
         "planned_exit_price_formula": position.planned_exit_price_formula,
         "trade_ids": list(Trade.objects.filter(position=position).values_list("id", flat=True)),
         "updated_at": position.updated_at,
-    }
-
-
-def _serialize_trade_marker(trade: Trade) -> dict[str, Any]:
-    units = int(trade.units)
-    execution_method = str(trade.execution_method or "").lower()
-    is_close = execution_method in {
-        "take_profit",
-        "margin_protection",
-        "volatility_lock",
-        "close_position",
-        "volatility_hedge_neutralize",
-    }
-    if trade.direction in {"long", "short"}:
-        direction = trade.direction
-    else:
-        direction = "short" if units < 0 else "long"
-    lots = abs(units) // 1000 if units else None
-    lot_label = "" if lots is None else f"{lots}L"
-    direction_label = direction.upper()
-    label = (
-        f"CLOSE {direction_label} {lot_label}".strip()
-        if is_close
-        else f"OPEN {direction_label} {lot_label}".strip()
-    )
-    return {
-        "trade_id": trade.id,
-        "timestamp": trade.timestamp,
-        "direction": direction,
-        "action": "close" if is_close else "open",
-        "lots": lots,
-        "label": label,
     }
