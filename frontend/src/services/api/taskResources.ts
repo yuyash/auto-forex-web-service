@@ -85,9 +85,19 @@ export interface TaskTrendReplayTrade {
   updated_at?: string | null;
 }
 
+export interface TaskTrendReplayTradeMarker {
+  trade_id: string;
+  timestamp: string;
+  direction: 'long' | 'short';
+  action: 'open' | 'close';
+  lots: number | null;
+  label: string;
+}
+
 export interface TaskTrendReplayResponse {
   trades: TaskTrendReplayTrade[];
   positions: TaskTrendReplayPosition[];
+  trade_markers: TaskTrendReplayTradeMarker[];
   meta: {
     mode: 'latest' | 'windowed';
     page: number;

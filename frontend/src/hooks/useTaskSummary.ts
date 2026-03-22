@@ -16,6 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../config/reactQuery';
 import { useSequentialPolling } from './useSequentialPolling';
 import { TaskType } from '../types/common';
+import { refreshTaskSummary } from './taskResourceCache';
 import { handleAuthErrorStatus } from '../utils/authEvents';
 import {
   fetchTaskResourceObject,
@@ -229,6 +230,6 @@ export function useTaskSummary(
     summary: query.data ?? INITIAL_SUMMARY,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: query.refetch,
+    refetch: () => refreshTaskSummary(taskId, taskType, executionRunId),
   };
 }

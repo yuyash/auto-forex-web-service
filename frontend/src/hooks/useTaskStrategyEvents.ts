@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../config/reactQuery';
 import { useSequentialPolling } from './useSequentialPolling';
+import { refreshTaskStrategyEvents } from './taskResourceCache';
 import { TaskType } from '../types/common';
 import type { StrategyVisualizationResponse } from '../types/strategyVisualization';
 import { handleAuthErrorStatus } from '../utils/authEvents';
@@ -87,6 +88,7 @@ export function useTaskStrategyEvents({
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: query.refetch,
+    refetch: () =>
+      refreshTaskStrategyEvents(String(taskId), taskType, executionRunId),
   };
 }

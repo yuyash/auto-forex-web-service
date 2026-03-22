@@ -311,6 +311,7 @@ def _get_cached_execution_metrics(
     fallback_mid_rate: Decimal | None = None,
 ) -> dict[str, Any]:
     persisted_metrics = get_metrics_snapshot(
+        task=task,
         task_type=task_type,
         task_id=task_id,
         execution_id=run_id,

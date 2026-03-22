@@ -1,6 +1,6 @@
-import type { QueryKey } from '@tanstack/react-query';
 import { queryClient, queryKeys } from '../config/reactQuery';
 import type { BacktestTask, PaginatedResponse, TradingTask } from '../types';
+import { invalidateTaskDerivedByKind } from './taskResourceCache';
 
 type TaskEntity = BacktestTask | TradingTask;
 type TaskKind = 'backtest' | 'trading';
@@ -98,13 +98,5 @@ export async function invalidateTaskDerivedCaches(
   taskKind: TaskKind,
   taskId: string
 ): Promise<void> {
-  const keys = getTaskKeys(taskKind);
-  await Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: keys.executions(taskId) as QueryKey,
-    }),
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.taskResources.summary(taskKind, taskId) as QueryKey,
-    }),
-  ]);
+  await invalidateTaskDerivedByKind(taskId, taskKind);
 }

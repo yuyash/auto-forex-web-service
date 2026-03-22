@@ -14,7 +14,7 @@ from apps.trading.engine import TradingEngine
 from apps.trading.enums import LogLevel, TaskStatus, TaskType
 from apps.trading.logging import TaskLoggingSession
 from apps.trading.models import BacktestTask, TaskLog
-from apps.trading.services.execution_snapshots import persist_execution_snapshot
+from apps.trading.services.execution_snapshots import sync_execution_snapshot
 from apps.trading.tasks.executor import BacktestExecutor
 from apps.trading.tasks.source import RedisTickDataSource
 from apps.trading.utils import pip_size_for_instrument
@@ -138,7 +138,7 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
 
         task.refresh_from_db()
         logger.info(f"Current: {task.status} - task_id={task_id}, completed_at={task.completed_at}")
-        persist_execution_snapshot(task=task, task_type=TaskType.BACKTEST)
+        sync_execution_snapshot(task=task, task_type=TaskType.BACKTEST)
 
         # Log task completion
         TaskLog.objects.create(
@@ -250,7 +250,7 @@ def handle_exception(task_id: UUID, task: BacktestTask | None, error: Exception)
                 "error_traceback",
             ]
         )
-        persist_execution_snapshot(task=task, task_type=TaskType.BACKTEST)
+        sync_execution_snapshot(task=task, task_type=TaskType.BACKTEST)
 
         logger.info(f"Task marked as FAILED - task_id={task_id}, completed_at={task.completed_at}")
 
@@ -456,7 +456,7 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
             task.status = TaskStatus.STOPPED
             task.completed_at = None
             task.save(update_fields=["status", "completed_at", "updated_at"])
-            persist_execution_snapshot(task=task, task_type=TaskType.BACKTEST)
+            sync_execution_snapshot(task=task, task_type=TaskType.BACKTEST)
             logger.info(f"[STOP:BACKTEST] Current: STOPPED - task_id={task_id}")
 
             # Update CeleryTaskStatus
@@ -481,7 +481,7 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
             task.status = TaskStatus.STOPPED
             task.completed_at = None  # Remove completed_at since it was stopped
             task.save(update_fields=["status", "completed_at", "updated_at"])
-            persist_execution_snapshot(task=task, task_type=TaskType.BACKTEST)
+            sync_execution_snapshot(task=task, task_type=TaskType.BACKTEST)
             logger.info(f"[STOP:BACKTEST] Current: STOPPED - task_id={task_id}")
 
         else:

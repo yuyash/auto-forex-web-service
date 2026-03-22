@@ -3,6 +3,7 @@ import type { TaskSummary } from '../../../../hooks/useTaskSummary';
 import { useSequentialPolling } from '../../../../hooks/useSequentialPolling';
 import {
   fetchTaskTrendReplay,
+  type TaskTrendReplayTradeMarker,
   type TaskTrendReplayPosition,
 } from '../../../../services/api/taskResources';
 import { parseUtcTimestamp } from './shared';
@@ -124,6 +125,9 @@ export function useTaskTrendReplayData({
 }: UseTaskTrendReplayDataParams) {
   const [trades, setTrades] = useState<ReplayTrade[]>([]);
   const [positions, setPositions] = useState<TaskTrendReplayPosition[]>([]);
+  const [tradeMarkers, setTradeMarkers] = useState<
+    TaskTrendReplayTradeMarker[]
+  >([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [warningMessage, setWarningMessage] = useState<string | null>(null);
@@ -180,6 +184,7 @@ export function useTaskTrendReplayData({
         if (isInitialLoad && expectedTotalTrades === 0) {
           setTrades([]);
           setPositions([]);
+          setTradeMarkers([]);
           setErrorMessage(null);
           setWarningMessage(null);
           return;
@@ -202,6 +207,7 @@ export function useTaskTrendReplayData({
         );
         const rawTrades = replayPayload.trades;
         const incomingPositions = replayPayload.positions;
+        const incomingTradeMarkers = replayPayload.trade_markers;
 
         const latestUpdatedAt = getLatestTradeUpdatedAt(rawTrades);
         if (
@@ -241,6 +247,19 @@ export function useTaskTrendReplayData({
                 new Date(a.entry_time).getTime()
             );
           });
+          setTradeMarkers((prev) => {
+            const mergedById = new Map(
+              prev.map((marker) => [marker.trade_id, marker])
+            );
+            for (const marker of incomingTradeMarkers) {
+              mergedById.set(marker.trade_id, marker);
+            }
+            return Array.from(mergedById.values()).sort(
+              (a, b) =>
+                new Date(a.timestamp).getTime() -
+                new Date(b.timestamp).getTime()
+            );
+          });
         } else if (!useIncrementalTrades) {
           const fullTrades = mapRawTrades(rawTrades, instrument).sort(
             (a, b) =>
@@ -265,6 +284,13 @@ export function useTaskTrendReplayData({
               (a, b) =>
                 new Date(b.entry_time).getTime() -
                 new Date(a.entry_time).getTime()
+            )
+          );
+          setTradeMarkers(
+            [...incomingTradeMarkers].sort(
+              (a, b) =>
+                new Date(a.timestamp).getTime() -
+                new Date(b.timestamp).getTime()
             )
           );
         }
@@ -312,6 +338,7 @@ export function useTaskTrendReplayData({
   useEffect(() => {
     setTrades([]);
     setPositions([]);
+    setTradeMarkers([]);
     setIsRefreshing(false);
     setErrorMessage(null);
     setWarningMessage(null);
@@ -323,6 +350,7 @@ export function useTaskTrendReplayData({
   return {
     trades,
     positions,
+    tradeMarkers,
     isRefreshing,
     errorMessage,
     warningMessage,

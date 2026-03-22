@@ -1,9 +1,14 @@
 // Task Execution hooks for data fetching
 import { useQuery } from '@tanstack/react-query';
-import { queryClient, queryKeys } from '../config/reactQuery';
 import { backtestTasksApi, tradingTasksApi } from '../services/api';
 import { TaskType } from '../types';
 import type { TaskExecution, PaginatedResponse } from '../types';
+import {
+  getTaskExecutionKey,
+  getTaskExecutionsKey,
+  refreshTaskExecution,
+  refreshTaskExecutions,
+} from './taskResourceCache';
 
 interface UseTaskExecutionsResult {
   data: PaginatedResponse<TaskExecution> | undefined;
@@ -28,10 +33,7 @@ export function useTaskExecutions(
   params?: { page?: number; page_size?: number; include_metrics?: boolean },
   options?: { enablePolling?: boolean; pollingInterval?: number }
 ): UseTaskExecutionsResult {
-  const queryKey =
-    taskType === TaskType.BACKTEST
-      ? queryKeys.backtestTasks.executions(taskId, params)
-      : queryKeys.tradingTasks.executions(taskId, params);
+  const queryKey = getTaskExecutionsKey(taskId, taskType, params);
 
   const { data, isLoading, error } = useQuery({
     queryKey,
@@ -73,7 +75,7 @@ export function useTaskExecutions(
     data,
     isLoading,
     error: error as Error | null,
-    refresh: () => queryClient.invalidateQueries({ queryKey }),
+    refresh: () => refreshTaskExecutions(taskId, taskType, params),
   };
 }
 
@@ -92,10 +94,7 @@ export function useTaskExecution(
   executionId: string,
   taskType: TaskType
 ): UseTaskExecutionResult {
-  const queryKey =
-    taskType === TaskType.BACKTEST
-      ? queryKeys.backtestTasks.execution(taskId, executionId)
-      : queryKeys.tradingTasks.execution(taskId, executionId);
+  const queryKey = getTaskExecutionKey(taskId, executionId, taskType);
 
   const { data, isLoading, error } = useQuery({
     queryKey,
@@ -110,7 +109,7 @@ export function useTaskExecution(
     data,
     isLoading,
     error: error as Error | null,
-    refresh: () => queryClient.invalidateQueries({ queryKey }),
+    refresh: () => refreshTaskExecution(taskId, executionId, taskType),
   };
 }
 
@@ -119,15 +118,9 @@ export function useTaskExecution(
  */
 export function useInvalidateExecutions() {
   return {
-    invalidateBacktestExecutions: (taskId: string) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.backtestTasks.executions(taskId),
-      });
-    },
-    invalidateTradingExecutions: (taskId: string) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.tradingTasks.executions(taskId),
-      });
-    },
+    invalidateBacktestExecutions: (taskId: string) =>
+      refreshTaskExecutions(taskId, TaskType.BACKTEST),
+    invalidateTradingExecutions: (taskId: string) =>
+      refreshTaskExecutions(taskId, TaskType.TRADING),
   };
 }

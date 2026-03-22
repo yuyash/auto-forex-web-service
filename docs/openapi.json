@@ -8159,6 +8159,12 @@
                             "$ref": "#/components/schemas/Position"
                         }
                     },
+                    "trade_markers": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TaskTrendReplayTradeMarker"
+                        }
+                    },
                     "meta": {
                         "$ref": "#/components/schemas/TaskTrendReplayMeta"
                     }
@@ -8166,6 +8172,7 @@
                 "required": [
                     "meta",
                     "positions",
+                    "trade_markers",
                     "trades"
                 ]
             },
@@ -8217,6 +8224,41 @@
                     "range_to",
                     "returned_trades",
                     "total_trades"
+                ]
+            },
+            "TaskTrendReplayTradeMarker": {
+                "type": "object",
+                "description": "Semantic trade marker for chart rendering.",
+                "properties": {
+                    "trade_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "direction": {
+                        "type": "string"
+                    },
+                    "action": {
+                        "type": "string"
+                    },
+                    "lots": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "label": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "action",
+                    "direction",
+                    "label",
+                    "lots",
+                    "timestamp",
+                    "trade_id"
                 ]
             },
             "TaskTypeEnum": {

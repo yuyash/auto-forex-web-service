@@ -24,7 +24,7 @@ from apps.trading.models import (
     TradingEvent,
     TradingTask,
 )
-from apps.trading.services.execution_snapshots import persist_execution_snapshot
+from apps.trading.services.execution_snapshots import sync_execution_snapshot
 from apps.trading.tasks import (
     run_backtest_task,
     run_trading_task,
@@ -695,7 +695,7 @@ class TaskService:
             task.status = TaskStatus.STOPPED
             task.completed_at = timezone.now()
             task.save(update_fields=["status", "completed_at", "updated_at"])
-            persist_execution_snapshot(task=task, task_type=task_type)
+            sync_execution_snapshot(task=task, task_type=task_type)
             self._emit_task_lifecycle_event(
                 task=task,
                 task_type=task_type,

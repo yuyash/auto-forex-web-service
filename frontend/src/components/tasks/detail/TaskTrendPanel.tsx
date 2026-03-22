@@ -31,7 +31,6 @@ import {
   ALLOWED_GRANULARITIES,
   ALLOWED_VALUES,
   GRANULARITY_MINUTES,
-  LOT_UNITS,
   POLLING_INTERVAL_OPTIONS,
   findFirstCandleAtOrAfter,
   findLastCandleAtOrBefore,
@@ -295,6 +294,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   const {
     trades,
     positions: fetchedPositions,
+    tradeMarkers,
     isRefreshing,
     errorMessage,
     warningMessage,
@@ -775,38 +775,12 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     if (!markersRef.current) return;
     const candleTimes = candles.map((c) => Number(c.time));
 
-    const tradeMarkers = trades
-      .map((t) => {
+    const renderedTradeMarkers = tradeMarkers
+      .map((marker) => {
         const selected =
-          t.id === selectedTradeId || highlightedTradeIds.has(t.id);
-        const units = Number(t.units);
-        const lots = Number.isFinite(units)
-          ? Math.abs(units) / LOT_UNITS
-          : null;
-        const executionMethod = String(t.execution_method || '').toLowerCase();
-        const isClose =
-          executionMethod === 'take_profit' ||
-          executionMethod === 'margin_protection' ||
-          executionMethod === 'volatility_lock' ||
-          executionMethod === 'close_position' ||
-          executionMethod === 'volatility_hedge_neutralize';
-
-        // Resolve direction: use explicit field first, then infer from units sign
-        const direction: 'long' | 'short' =
-          t.direction === 'long' || t.direction === 'short'
-            ? t.direction
-            : Number.isFinite(units) && units < 0
-              ? 'short'
-              : 'long';
-
-        const lotLabel = lots === null ? '' : `${Math.round(lots)}L`;
-        const dirLabel = direction.toUpperCase();
-        // Open: "OPEN LONG 1L" / "OPEN SHORT 1L", Close: "CLOSE LONG 1L" / "CLOSE SHORT 1L" (grey)
-        const text = isClose
-          ? `CLOSE ${dirLabel} ${lotLabel}`.trim()
-          : `OPEN ${dirLabel} ${lotLabel}`.trim();
-
-        const rawTradeTime = parseUtcTimestamp(t.timestamp);
+          marker.trade_id === selectedTradeId ||
+          highlightedTradeIds.has(marker.trade_id);
+        const rawTradeTime = parseUtcTimestamp(marker.timestamp);
         const markerTime =
           rawTradeTime != null
             ? snapToCandleTimeInLoadedRange(Number(rawTradeTime), candleTimes)
@@ -815,21 +789,21 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         return {
           time: (markerTime ?? 0) as UTCTimestamp,
           position:
-            direction === 'short'
+            marker.direction === 'short'
               ? ('aboveBar' as const)
               : ('belowBar' as const),
           shape:
-            direction === 'short'
+            marker.direction === 'short'
               ? ('arrowDown' as const)
               : ('arrowUp' as const),
           color: selected
             ? '#f59e0b'
-            : isClose
+            : marker.action === 'close'
               ? '#9ca3af'
-              : direction === 'long'
+              : marker.direction === 'long'
                 ? '#16a34a'
                 : '#ef4444',
-          text,
+          text: marker.label,
         };
       })
       .filter((marker) => {
@@ -844,7 +818,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
 
     try {
       programmaticScrollRef.current = true;
-      const allMarkers = [...eventMarkers, ...tradeMarkers].sort(
+      const allMarkers = [...eventMarkers, ...renderedTradeMarkers].sort(
         (a, b) => Number(a.time) - Number(b.time)
       );
       markersRef.current.setMarkers(allMarkers);
@@ -857,7 +831,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       });
     }
   }, [
-    trades,
+    tradeMarkers,
     candles,
     selectedTradeId,
     highlightedTradeIds,

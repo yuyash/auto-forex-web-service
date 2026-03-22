@@ -18,18 +18,60 @@ from apps.trading.services.summary import (
     compute_task_summary,
 )
 
+TERMINAL_SNAPSHOT_STATUSES = frozenset({"completed", "stopped", "failed"})
+
+
+def should_persist_snapshot(*, task) -> bool:
+    """Whether the task is in a state that should persist a terminal snapshot."""
+    execution_id = getattr(task, "execution_id", None)
+    status = str(getattr(task, "status", "") or "").lower()
+    return execution_id is not None and status in TERMINAL_SNAPSHOT_STATUSES
+
+
+def sync_execution_snapshot(*, task, task_type: str) -> TaskExecutionSnapshot | None:
+    """Persist a snapshot when the task is terminal, otherwise no-op."""
+    if not should_persist_snapshot(task=task):
+        return None
+    return persist_execution_snapshot(task=task, task_type=task_type)
+
+
+def ensure_execution_snapshot(
+    *,
+    task,
+    task_type: str,
+    execution_id: str | None,
+) -> TaskExecutionSnapshot | None:
+    """Return an existing snapshot or create one for the current terminal run."""
+    snapshot = _get_snapshot(
+        task_type=task_type,
+        task_id=str(task.pk),
+        execution_id=execution_id,
+    )
+    if snapshot is not None:
+        return snapshot
+
+    current_execution_id = getattr(task, "execution_id", None)
+    if execution_id is None or str(current_execution_id or "") != str(execution_id):
+        return None
+    return sync_execution_snapshot(task=task, task_type=task_type)
+
 
 def get_summary_snapshot(
     *,
+    task=None,
     task_type: str,
     task_id: str,
     execution_id: str | None,
 ) -> TaskSummary | None:
     """Return a persisted summary snapshot when it exists."""
-    snapshot = _get_snapshot(
-        task_type=task_type,
-        task_id=task_id,
-        execution_id=execution_id,
+    snapshot = (
+        ensure_execution_snapshot(task=task, task_type=task_type, execution_id=execution_id)
+        if task is not None
+        else _get_snapshot(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+        )
     )
     if snapshot is None or not isinstance(snapshot.summary, dict) or not snapshot.summary:
         return None
@@ -38,15 +80,20 @@ def get_summary_snapshot(
 
 def get_metrics_snapshot(
     *,
+    task=None,
     task_type: str,
     task_id: str,
     execution_id: str | None,
 ) -> dict[str, Any] | None:
     """Return persisted metrics snapshot when it exists."""
-    snapshot = _get_snapshot(
-        task_type=task_type,
-        task_id=task_id,
-        execution_id=execution_id,
+    snapshot = (
+        ensure_execution_snapshot(task=task, task_type=task_type, execution_id=execution_id)
+        if task is not None
+        else _get_snapshot(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+        )
     )
     if snapshot is None or not isinstance(snapshot.metrics, dict) or not snapshot.metrics:
         return None

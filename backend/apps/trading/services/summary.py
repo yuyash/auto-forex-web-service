@@ -242,7 +242,9 @@ def compute_cached_task_summary(
     """Compute a cached task summary keyed by task/state freshness."""
     from apps.trading.services.execution_snapshots import get_summary_snapshot
 
+    task_obj = _get_task(task_type, task_id)
     persisted_snapshot = get_summary_snapshot(
+        task=task_obj,
         task_type=task_type,
         task_id=task_id,
         execution_id=str(execution_id) if execution_id is not None else None,
@@ -250,7 +252,6 @@ def compute_cached_task_summary(
     if persisted_snapshot is not None:
         return persisted_snapshot
 
-    task_obj = _get_task(task_type, task_id)
     state = _get_state(task_type, task_id, execution_id)
     snapshot_cache_key = _build_task_summary_snapshot_cache_key(
         task_type=task_type,
