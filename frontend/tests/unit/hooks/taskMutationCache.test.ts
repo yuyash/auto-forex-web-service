@@ -3,6 +3,7 @@ import { queryClient, queryKeys } from '../../../src/config/reactQuery';
 import {
   patchTaskDerivedCaches,
   patchTaskStatusCache,
+  removeTaskCaches,
   upsertTaskCaches,
 } from '../../../src/hooks/taskMutationCache';
 import { TaskStatus, TaskType } from '../../../src/types/common';
@@ -141,12 +142,17 @@ describe('taskMutationCache', () => {
 
   it('re-sorts cached task lists when an updated task changes ordering', () => {
     const listKey = queryKeys.tradingTasks.list({ ordering: 'name' });
+    const detailKey = queryKeys.tradingTasks.detail('task-1');
     queryClient.setQueryData<PaginatedResponse<TradingTask>>(
       listKey,
       buildTradingPage([
         buildTradingTask({ id: 'task-2', name: 'Zulu' }),
         buildTradingTask({ id: 'task-1', name: 'Task' }),
       ])
+    );
+    queryClient.setQueryData<TradingTask | null>(
+      detailKey,
+      buildTradingTask({ id: 'task-1', name: 'Task' })
     );
 
     upsertTaskCaches(
@@ -159,15 +165,23 @@ describe('taskMutationCache', () => {
         .getQueryData<PaginatedResponse<TradingTask>>(listKey)
         ?.results.map((task) => task.name)
     ).toEqual(['Alpha', 'Zulu']);
+    expect(queryClient.getQueryData<TradingTask>(detailKey)).toEqual(
+      expect.objectContaining({ name: 'Alpha' })
+    );
   });
 
   it('removes cached tasks that stop matching a filtered status list', () => {
     const listKey = queryKeys.tradingTasks.list({ status: TaskStatus.RUNNING });
+    const detailKey = queryKeys.tradingTasks.detail('task-1');
     queryClient.setQueryData<PaginatedResponse<TradingTask>>(
       listKey,
       buildTradingPage([
         buildTradingTask({ id: 'task-1', status: TaskStatus.RUNNING }),
       ])
+    );
+    queryClient.setQueryData<TradingTask | null>(
+      detailKey,
+      buildTradingTask({ id: 'task-1', status: TaskStatus.RUNNING })
     );
 
     patchTaskStatusCache('trading', 'task-1', TaskStatus.STOPPED);
@@ -175,6 +189,9 @@ describe('taskMutationCache', () => {
     expect(
       queryClient.getQueryData<PaginatedResponse<TradingTask>>(listKey)
     ).toEqual(buildTradingPage([], 0));
+    expect(queryClient.getQueryData<TradingTask>(detailKey)).toEqual(
+      expect.objectContaining({ status: TaskStatus.STOPPED })
+    );
   });
 
   it('re-inserts matching tasks into first-page filtered caches', () => {
@@ -201,5 +218,20 @@ describe('taskMutationCache', () => {
         .getQueryData<PaginatedResponse<TradingTask>>(listKey)
         ?.results.map((task) => task.name)
     ).toEqual(['Alpha', 'Zulu']);
+  });
+
+  it('removes detail and derived caches when a task is removed', () => {
+    const detailKey = queryKeys.tradingTasks.detail('task-1');
+    const summaryKey = queryKeys.taskResources.summary(
+      TaskType.TRADING,
+      'task-1'
+    );
+    queryClient.setQueryData<TradingTask | null>(detailKey, buildTradingTask());
+    queryClient.setQueryData(summaryKey, { status: TaskStatus.RUNNING });
+
+    removeTaskCaches('trading', 'task-1');
+
+    expect(queryClient.getQueryData(detailKey)).toBeUndefined();
+    expect(queryClient.getQueryData(summaryKey)).toBeUndefined();
   });
 });

@@ -29,6 +29,44 @@ class TaskLifecycleKind:
 
 
 @dataclass(frozen=True)
+class TaskLifecycleTemplate:
+    """Canonical defaults for a lifecycle event kind."""
+
+    default_description: str
+    default_log_message: str
+    default_log_level: LogLevel
+
+
+LIFECYCLE_EVENT_TEMPLATES = {
+    TaskLifecycleKind.STARTED: TaskLifecycleTemplate(
+        default_description="Task execution started",
+        default_log_message="Task execution started",
+        default_log_level=LogLevel.INFO,
+    ),
+    TaskLifecycleKind.COMPLETED: TaskLifecycleTemplate(
+        default_description="Task completed successfully",
+        default_log_message="Task completed successfully",
+        default_log_level=LogLevel.INFO,
+    ),
+    TaskLifecycleKind.FAILED: TaskLifecycleTemplate(
+        default_description="Task execution failed",
+        default_log_message="Task execution failed",
+        default_log_level=LogLevel.ERROR,
+    ),
+    TaskLifecycleKind.STOPPED: TaskLifecycleTemplate(
+        default_description="Task stopped",
+        default_log_message="Task stopped",
+        default_log_level=LogLevel.INFO,
+    ),
+    TaskLifecycleKind.CANCELLED: TaskLifecycleTemplate(
+        default_description="Task cancelled",
+        default_log_message="Task cancelled",
+        default_log_level=LogLevel.INFO,
+    ),
+}
+
+
+@dataclass(frozen=True)
 class TaskLifecycleEvent:
     """Lifecycle event payload shared by publishers."""
 
@@ -68,7 +106,7 @@ class TaskLifecycleEventSpec:
 def build_lifecycle_event_spec(
     *,
     kind: str,
-    description: str,
+    description: str | None = None,
     extra_details: dict[str, object] | None = None,
     log_level: LogLevel | None = None,
     log_message: str | None = None,
@@ -76,12 +114,13 @@ def build_lifecycle_event_spec(
 ) -> TaskLifecycleEventSpec:
     """Build a typed lifecycle event payload definition."""
 
+    template = LIFECYCLE_EVENT_TEMPLATES.get(kind)
     return TaskLifecycleEventSpec(
         kind=kind,
-        description=description,
+        description=description or (template.default_description if template else ""),
         extra_details=extra_details,
-        log_level=log_level,
-        log_message=log_message,
+        log_level=log_level or (template.default_log_level if template else None),
+        log_message=log_message or (template.default_log_message if template else None),
         log_component=log_component,
     )
 

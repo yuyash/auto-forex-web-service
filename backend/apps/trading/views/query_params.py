@@ -657,6 +657,36 @@ def _resolve_date_range_group(
     )
 
 
+def _build_execution_scoped_query(
+    request: Request,
+    *,
+    default_execution_id: UUID | None,
+    default_page_size: int,
+    max_page_size: int,
+) -> ExecutionScopedQuery:
+    return ExecutionScopedQuery.from_request(
+        request,
+        default_execution_id=default_execution_id,
+        default_page_size=default_page_size,
+        max_page_size=max_page_size,
+    )
+
+
+def _build_date_range_query(
+    request: Request,
+    *,
+    start_key: str,
+    end_key: str,
+    group_name: str | None = None,
+) -> DateRangeQuery:
+    return DateRangeQuery.from_request(
+        request,
+        start_key=start_key,
+        end_key=end_key,
+        group_name=group_name,
+    )
+
+
 def _parse_datetime_value(value: str | None) -> datetime | None:
     if value:
         parsed = parse_datetime(value)
@@ -809,7 +839,7 @@ class PositionQuery:
     ) -> PositionQuery:
         parsed = RUNTIME_QUERY_GROUP_REGISTRY["position_filters"]().parse(request)
         return cls(
-            execution=ExecutionScopedQuery.from_request(
+            execution=_build_execution_scoped_query(
                 request,
                 default_execution_id=default_execution_id,
                 default_page_size=default_page_size,
@@ -818,7 +848,7 @@ class PositionQuery:
             position_status=cast(str, parsed["position_status"]),
             direction=cast(str, parsed["direction"]),
             include_trade_ids=cast(bool, parsed["include_trade_ids"]),
-            range=DateRangeQuery.from_request(
+            range=_build_date_range_query(
                 request,
                 start_key="range_from",
                 end_key="range_to",
@@ -842,13 +872,13 @@ class TrendReplayQueryParams:
         max_page_size: int,
     ) -> TrendReplayQueryParams:
         return cls(
-            execution=ExecutionScopedQuery.from_request(
+            execution=_build_execution_scoped_query(
                 request,
                 default_execution_id=default_execution_id,
                 default_page_size=default_page_size,
                 max_page_size=max_page_size,
             ),
-            range=DateRangeQuery.from_request(
+            range=_build_date_range_query(
                 request,
                 start_key="range_from",
                 end_key="range_to",

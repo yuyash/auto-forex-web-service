@@ -6,7 +6,7 @@
 
 import { TaskType } from '../types/common';
 import { createTaskLogComponentsQuery } from './taskLogComponentQueries';
-import { useSimpleQueryState } from './useTaskCollections';
+import { mapQueryStateFields, useSimpleQueryState } from './useTaskCollections';
 
 interface UseTaskLogComponentsOptions {
   taskId: string;
@@ -29,9 +29,7 @@ export const useTaskLogComponents = ({
     createTaskLogComponentsQuery(taskId, taskType, executionRunId)
   );
 
-  return {
-    components: query.data ?? [],
-    isLoading: query.isLoading,
-    error: query.error,
-  };
+  return mapQueryStateFields(query, (data) => ({
+    components: data ?? [],
+  }));
 };

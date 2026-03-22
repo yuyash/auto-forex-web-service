@@ -29,8 +29,10 @@ describe('accountCache', () => {
   it('patches matching list caches and leaves non-matching search caches untouched', () => {
     const matchingKey = queryKeys.accounts.list({ search: 'acc' });
     const nonMatchingKey = queryKeys.accounts.list({ search: 'live only' });
+    const detailKey = queryKeys.accounts.detail(1);
     queryClient.setQueryData<Account[]>(matchingKey, []);
     queryClient.setQueryData<Account[]>(nonMatchingKey, []);
+    queryClient.setQueryData<Account | null>(detailKey, null);
 
     upsertAccountCaches(buildAccount());
 
@@ -38,6 +40,9 @@ describe('accountCache', () => {
       expect.objectContaining({ account_id: 'ACC-001' }),
     ]);
     expect(queryClient.getQueryData<Account[]>(nonMatchingKey)).toEqual([]);
+    expect(queryClient.getQueryData<Account>(detailKey)).toEqual(
+      expect.objectContaining({ account_id: 'ACC-001' })
+    );
   });
 
   it('removes deleted accounts from cached lists and detail cache', () => {

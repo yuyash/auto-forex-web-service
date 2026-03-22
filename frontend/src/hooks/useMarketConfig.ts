@@ -8,7 +8,7 @@ import {
   createSupportedInstrumentsQuery,
   createTickDataRangeQuery,
 } from './miscQueries';
-import { useSimpleQueryState } from './useTaskCollections';
+import { mapQueryStateFields, useSimpleQueryState } from './useTaskCollections';
 
 const FALLBACK_INSTRUMENTS = [
   'EUR_USD',
@@ -63,12 +63,11 @@ export const useSupportedInstruments = () => {
     });
   }
 
-  return {
-    instruments: query.data ?? FALLBACK_INSTRUMENTS,
-    isLoading: query.isLoading,
-    error: query.error instanceof Error ? query.error.message : null,
-    usingFallback: !query.isLoading && !query.data && !!query.error,
-  };
+  return mapQueryStateFields(query, (data, state) => ({
+    instruments: data ?? FALLBACK_INSTRUMENTS,
+    error: state.error instanceof Error ? state.error.message : null,
+    usingFallback: !state.isLoading && !data && !!state.error,
+  }));
 };
 
 /**
@@ -86,12 +85,11 @@ export const useSupportedGranularities = () => {
     });
   }
 
-  return {
-    granularities: query.data ?? FALLBACK_GRANULARITIES,
-    isLoading: query.isLoading,
-    error: query.error instanceof Error ? query.error.message : null,
-    usingFallback: !query.isLoading && !query.data && !!query.error,
-  };
+  return mapQueryStateFields(query, (data, state) => ({
+    granularities: data ?? FALLBACK_GRANULARITIES,
+    error: state.error instanceof Error ? state.error.message : null,
+    usingFallback: !state.isLoading && !data && !!state.error,
+  }));
 };
 
 /**
@@ -110,9 +108,8 @@ export const useTickDataRange = (instrument?: string) => {
     });
   }
 
-  return {
-    dataRange: (query.data as TickDataRange | undefined) ?? null,
-    isLoading: query.isLoading,
-    error: query.error instanceof Error ? query.error.message : null,
-  };
+  return mapQueryStateFields(query, (data, state) => ({
+    dataRange: (data as TickDataRange | undefined) ?? null,
+    error: state.error instanceof Error ? state.error.message : null,
+  }));
 };

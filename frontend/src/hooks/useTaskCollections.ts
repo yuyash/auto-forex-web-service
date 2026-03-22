@@ -40,6 +40,16 @@ export function mapQueryStateResult<TData, TMapped>(
   };
 }
 
+export function mapQueryStateFields<TData, TFields>(
+  state: QueryStateResult<TData>,
+  map: (data: TData | null, state: QueryStateResult<TData>) => TFields
+): QueryStateResult<TData> & TFields {
+  return {
+    ...state,
+    ...map(state.data, state),
+  };
+}
+
 export function useSimpleQueryState<TData>(
   queryOptions: UseQueryOptions<TData>,
   options?: { refresh?: () => Promise<unknown> }

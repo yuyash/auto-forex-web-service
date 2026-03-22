@@ -55,10 +55,12 @@ describe('configurationMutationCache', () => {
       search: 'beta',
       strategy_type: 'snowball',
     });
+    const detailKey = queryKeys.configurations.detail('config-1');
     queryClient.setQueryData<PaginatedResponse<StrategyConfig>>(
       listKey,
       buildPage([], 0)
     );
+    queryClient.setQueryData<StrategyConfig | null>(detailKey, null);
 
     upsertConfigurationCaches(buildConfig({ name: 'Snowball Beta' }));
 
@@ -67,6 +69,9 @@ describe('configurationMutationCache', () => {
         .getQueryData<PaginatedResponse<StrategyConfig>>(listKey)
         ?.results.map((config) => config.name)
     ).toEqual(['Snowball Beta']);
+    expect(queryClient.getQueryData<StrategyConfig>(detailKey)).toEqual(
+      expect.objectContaining({ name: 'Snowball Beta' })
+    );
   });
 
   it('removes deleted configs from list, detail, and linked-task caches', () => {

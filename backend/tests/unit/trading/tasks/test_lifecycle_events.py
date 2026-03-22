@@ -9,6 +9,8 @@ from apps.trading.tasks.lifecycle_events import (
     CeleryTaskStatusLifecycleSink,
     ExecutionArtifactsLifecycleSink,
     TaskLifecycleEventPublisher,
+    TaskLifecycleKind,
+    build_lifecycle_event_spec,
 )
 
 
@@ -111,3 +113,11 @@ def test_celery_status_sink_updates_terminal_status() -> None:
         )
     finally:
         lifecycle_events.CeleryTaskStatus = original
+
+
+def test_build_lifecycle_event_spec_applies_template_defaults() -> None:
+    spec = build_lifecycle_event_spec(kind=TaskLifecycleKind.STOPPED)
+
+    assert spec.kind == TaskLifecycleKind.STOPPED
+    assert spec.description == "Task stopped"
+    assert spec.log_message == "Task stopped"
