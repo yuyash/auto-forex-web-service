@@ -237,6 +237,62 @@ class TaskService:
             task.save()
         return task
 
+    @staticmethod
+    def _persist_task_state(
+        task: BacktestTask | TradingTask,
+        *,
+        status: TaskStatus,
+        extra_updates: dict[str, object] | None = None,
+    ) -> None:
+        extra_updates = extra_updates or {}
+        for field, value in extra_updates.items():
+            setattr(task, field, value)
+        task.status = status
+        task.save(update_fields=["status", "updated_at", *extra_updates.keys()])
+
+    def _finalize_terminal_task(
+        self,
+        *,
+        task: BacktestTask | TradingTask,
+        task_type: str,
+        status: TaskStatus,
+        description: str,
+        kind: str,
+        extra_updates: dict[str, object] | None = None,
+    ) -> None:
+        terminal_updates = {"completed_at": timezone.now(), **(extra_updates or {})}
+        self._persist_task_state(task, status=status, extra_updates=terminal_updates)
+        sync_terminal_execution_artifacts(task=task, task_type=task_type)
+        self._emit_task_lifecycle_event(
+            task=task,
+            task_type=task_type,
+            kind=kind,
+            description=description,
+        )
+
+    @staticmethod
+    def _clear_task_execution_history(
+        *,
+        task: BacktestTask | TradingTask,
+        task_type: str,
+    ) -> None:
+        from apps.trading.models.state import ExecutionState
+
+        for model, label in (
+            (TradingEvent, "trading events"),
+            (StrategyEventRecord, "strategy events"),
+            (ExecutionState, "execution state"),
+        ):
+            try:
+                model.objects.filter(task_type=task_type, task_id=task.pk).delete()
+            except Exception as exc:  # pragma: no cover - defensive logging path
+                logger.warning(
+                    "[SERVICE:RESTART] Failed to clear %s - task_id=%s, error=%s",
+                    label,
+                    task.pk,
+                    exc,
+                )
+
     def start_task(self, task: BacktestTask | TradingTask) -> BacktestTask | TradingTask:
         """Submit a task to Celery for execution.
 
@@ -554,8 +610,7 @@ class TaskService:
             )
 
             # Update task status to PAUSED
-            task.status = TaskStatus.PAUSED
-            task.save(update_fields=["status", "updated_at"])
+            self._persist_task_state(task, status=TaskStatus.PAUSED)
             self._emit_task_lifecycle_event(
                 task=task,
                 task_type=task_type,
@@ -613,16 +668,12 @@ class TaskService:
             if result:
                 result.revoke(terminate=True)
 
-            # Update task status
-            task.status = TaskStatus.STOPPED
-            task.completed_at = timezone.now()
-            task.save(update_fields=["status", "completed_at", "updated_at"])
-            sync_terminal_execution_artifacts(task=task, task_type=task_type)
-            self._emit_task_lifecycle_event(
+            self._finalize_terminal_task(
                 task=task,
                 task_type=task_type,
-                kind="task_cancelled",
+                status=TaskStatus.STOPPED,
                 description="Task cancelled",
+                kind="task_cancelled",
             )
 
             logger.info(
@@ -712,46 +763,10 @@ class TaskService:
                         f"error={str(e)}"
                     )
 
-            # Clear all events associated with this task
             logger.info(
-                f"[SERVICE:RESTART] Clearing events - task_id={task_id}, task_type={task_type}"
+                f"[SERVICE:RESTART] Clearing execution history - task_id={task_id}, task_type={task_type}"
             )
-            events_deleted_count = 0
-            strategy_events_deleted_count = 0
-            try:
-                events_deleted = TradingEvent.objects.filter(
-                    task_type=task_type, task_id=task.pk
-                ).delete()
-                events_deleted_count = int(events_deleted[0])
-            except Exception as e:
-                logger.warning(
-                    "[SERVICE:RESTART] Failed to clear trading events - task_id=%s, error=%s",
-                    task_id,
-                    e,
-                )
-
-            try:
-                strategy_events_deleted = StrategyEventRecord.objects.filter(
-                    task_type=task_type, task_id=task.pk
-                ).delete()
-                strategy_events_deleted_count = int(strategy_events_deleted[0])
-            except Exception as e:
-                logger.warning(
-                    "[SERVICE:RESTART] Failed to clear strategy events - task_id=%s, error=%s",
-                    task_id,
-                    e,
-                )
-
-            logger.info(
-                f"[SERVICE:RESTART] Events cleared - task_id={task_id}, trading_count={events_deleted_count}, "
-                f"strategy_count={strategy_events_deleted_count}"
-            )
-
-            # Clear execution state
-            logger.info(f"[SERVICE:RESTART] Clearing execution state - task_id={task_id}")
-            from apps.trading.models.state import ExecutionState
-
-            ExecutionState.objects.filter(task_type=task_type, task_id=task.pk).delete()
+            self._clear_task_execution_history(task=task, task_type=task_type)
 
             # Clear all execution data using QuerySet.update() for an atomic,
             # single-statement reset.  This avoids the race where a full-model

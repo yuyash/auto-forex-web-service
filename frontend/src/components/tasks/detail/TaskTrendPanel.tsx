@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useRef } from 'react';
 import {
   Alert,
   Box,
@@ -6,39 +6,17 @@ import {
   LinearProgress,
   Paper,
 } from '@mui/material';
-import type { SelectChangeEvent } from '@mui/material/Select';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
-import { type UTCTimestamp } from 'lightweight-charts';
 import { type TaskSummary } from '../../../hooks/useTaskSummary';
-import { usePollingActivity } from '../../../hooks/usePollingActivity';
-import { useSupportedGranularities } from '../../../hooks/useMarketConfig';
+import { useAuth } from '../../../contexts/AuthContext';
 import { TaskType } from '../../../types/common';
 import { getTimezoneAbbr } from '../../../utils/chartTimezone';
-import { useAuth } from '../../../contexts/AuthContext';
-import { useMetricsOverlay } from './MetricsOverlayChart';
-import { useWindowedCandles } from '../../../hooks/useWindowedCandles';
-import { useWindowedTaskMarkers } from '../../../hooks/useWindowedTaskMarkers';
-import { clampRange, type TimeRange } from '../../../utils/windowedRanges';
-import {
-  GRANULARITY_MINUTES,
-  POLLING_INTERVAL_OPTIONS,
-  isoToSec,
-} from './taskTrendPanel/shared';
-import type { CandlePoint, ReplayTrade } from './taskTrendPanel/shared';
-import { TaskTrendToolbar } from './taskTrendPanel/TaskTrendToolbar';
-import type { TrendPosition } from './taskTrendPanel/shared';
-import { useTaskTrendChart } from './taskTrendPanel/useTaskTrendChart';
-import { useTaskTrendReplayData } from './taskTrendPanel/useTaskTrendReplayData';
-import { useTaskTrendTradesTable } from './taskTrendPanel/useTaskTrendTradesTable';
-import { useTaskTrendPositionsTable } from './taskTrendPanel/useTaskTrendPositionsTable';
-import { useTaskTrendPanelState } from './taskTrendPanel/useTaskTrendPanelState';
-import { useTaskTrendMarkers } from './taskTrendPanel/useTaskTrendMarkers';
-import { useTaskTrendTableState } from './taskTrendPanel/useTaskTrendTableState';
-import { useTaskTrendDerivedData } from './taskTrendPanel/useTaskTrendDerivedData';
-import { useTaskSelectionNavigation } from '../../../hooks/useTaskSelectionNavigation';
+import { POLLING_INTERVAL_OPTIONS } from './taskTrendPanel/shared';
 import { TaskTrendAlerts } from './taskTrendPanel/TaskTrendAlerts';
 import { TaskTrendTablesSection } from './taskTrendPanel/TaskTrendTablesSection';
+import { TaskTrendToolbar } from './taskTrendPanel/TaskTrendToolbar';
+import { useTaskTrendOrchestration } from './taskTrendPanel/useTaskTrendOrchestration';
 
 interface TaskTrendPanelProps {
   taskId: string | number;
@@ -71,429 +49,42 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   pipSize,
 }) => {
   const panelRootRef = useRef<HTMLDivElement | null>(null);
-  const tradesRef = useRef<ReplayTrade[]>([]);
   const { user } = useAuth();
   const { t } = useTranslation('common');
   const muiTheme = useTheme();
   const isDark = muiTheme.palette.mode === 'dark';
   const timezone = user?.timezone || 'UTC';
+
   const {
-    granularity,
-    setGranularity,
-    selectedTradeId,
-    setSelectedTradeId,
-    pollingIntervalMs,
-    setPollingIntervalMs,
-    autoFollow,
-    setAutoFollow,
-    selectedPosId,
-    setSelectedPosId,
-    highlightedTradeIds,
-    setHighlightedTradeIds,
-    chartClickedRef,
-    selectedPosRowRef,
-    chartHeight,
-    minChartHeight: MIN_CHART_HEIGHT,
-    handleSeparatorMouseDown,
-    chartWarning,
-    reportChartWarning,
-  } = useTaskTrendPanelState({
-    taskType,
+    panelState,
+    candleState,
+    replayData,
+    derivedData,
+    tradeTable,
+    longPositionsTable,
+    shortPositionsTable,
+    chartState,
+    tableState,
+    selectionNavigation,
+  } = useTaskTrendOrchestration({
     taskId,
-    executionRunId,
-  });
-  const realTimeUpdatesEnabled = usePollingActivity(enableRealTimeUpdates);
-  const { granularities, usingFallback: usingGranularityFallback } =
-    useSupportedGranularities();
-  const {
-    candles: windowedCandles,
-    isInitialLoading: isLoading,
-    isRefreshing: isCandleRefreshing,
-    loadingOlder: loadingOlderCandles,
-    loadingNewer: loadingNewerCandles,
-    error,
-    errorCode,
-    dataRanges: candleDataRanges,
-    ensureRange: ensureCandleRange,
-    refreshTail: refreshTailCandles,
-  } = useWindowedCandles({
+    taskType,
     instrument,
-    granularity,
+    executionRunId,
     startTime,
     endTime,
-    initialFocusTime: realTimeUpdatesEnabled
-      ? currentTick?.timestamp
-      : undefined,
-    initialCount: 800,
-    edgeCount: 800,
-    autoRefresh: false,
-    refreshIntervalSeconds: Math.max(10, Math.floor(pollingIntervalMs / 1000)),
-  });
-  const candleErrorMessage = useMemo(() => {
-    if (errorCode === 'NO_OANDA_ACCOUNT') {
-      return t('trend.noOandaAccount');
-    }
-    return error;
-  }, [error, errorCode, t]);
-  const candleErrorSeverity: 'info' | 'error' =
-    errorCode === 'NO_OANDA_ACCOUNT' ? 'info' : 'error';
-  const startTimeSec = useMemo(() => isoToSec(startTime), [startTime]);
-  const endTimeSec = useMemo(() => isoToSec(endTime), [endTime]);
-  const currentTickSec = useMemo(
-    () => isoToSec(currentTick?.timestamp ?? null),
-    [currentTick?.timestamp]
-  );
-  const liveRangeUpperBound = useMemo(() => {
-    if (!realTimeUpdatesEnabled) {
-      return endTimeSec ?? undefined;
-    }
-    if (taskType === TaskType.BACKTEST) {
-      return endTimeSec ?? currentTickSec ?? undefined;
-    }
-    return currentTickSec ?? undefined;
-  }, [currentTickSec, endTimeSec, realTimeUpdatesEnabled, taskType]);
-  const taskDataBounds = useMemo<Partial<TimeRange> | null>(() => {
-    const from = startTimeSec ?? undefined;
-    const to = liveRangeUpperBound;
-    if (from == null && to == null) {
-      return null;
-    }
-    return { from, to };
-  }, [liveRangeUpperBound, startTimeSec]);
-  const markerDisplayCutoffSec = useMemo(() => {
-    if (!realTimeUpdatesEnabled) {
-      return null;
-    }
-    return currentTickSec;
-  }, [currentTickSec, realTimeUpdatesEnabled]);
-  const candles = useMemo(
-    () =>
-      windowedCandles
-        .filter((c) => {
-          if (startTimeSec != null && c.time < startTimeSec) return false;
-          if (liveRangeUpperBound != null && c.time > liveRangeUpperBound)
-            return false;
-          return true;
-        })
-        .map((c) => ({
-          ...c,
-          time: c.time as UTCTimestamp,
-        })) as CandlePoint[],
-    [liveRangeUpperBound, startTimeSec, windowedCandles]
-  );
-  const loadedTimeRange = useMemo(() => {
-    if (candles.length === 0) {
-      return undefined;
-    }
-    return {
-      from: new Date(Number(candles[0].time) * 1000).toISOString(),
-      to: new Date(
-        Number(candles[candles.length - 1].time) * 1000
-      ).toISOString(),
-    };
-  }, [candles]);
-  const granularitySeconds = useMemo(
-    () => (GRANULARITY_MINUTES[granularity] ?? 1) * 60,
-    [granularity]
-  );
-
-  const clampTaskRange = useCallback(
-    (range: TimeRange): TimeRange | null => {
-      if (!taskDataBounds) {
-        return range;
-      }
-      const clamped = clampRange(range, taskDataBounds);
-      return clamped.to >= clamped.from ? clamped : null;
-    },
-    [taskDataBounds]
-  );
-
-  const {
-    taskEvents: taskLifecycleEvents,
-    strategyEvents,
-    ensureRange: ensureMarkerRange,
-  } = useWindowedTaskMarkers({
-    taskId: String(taskId),
-    taskType,
-    executionRunId,
-    enableRealTimeUpdates: realTimeUpdatesEnabled,
-    bounds: taskDataBounds,
-    pollTrades: false,
-  });
-
-  const {
-    trades,
-    positions: fetchedPositions,
-    isRefreshing,
-    errorMessage,
-    warningMessage,
-    replaySummary,
-    fetchReplayData,
-  } = useTaskTrendReplayData({
-    taskId,
-    taskType,
-    executionRunId,
-    instrument,
+    enableRealTimeUpdates,
+    currentTick,
     latestExecution,
-    enableRealTimeUpdates: realTimeUpdatesEnabled,
-    pollingIntervalMs,
-    refreshTailCandles,
     summary,
-    loadedTimeRange,
-  });
-
-  const {
-    currentPrice,
-    allPositions,
-    longPositions,
-    shortPositions,
-    granularityOptions,
-    recommendedGranularity,
-    pnlCurrency,
-  } = useTaskTrendDerivedData({
-    fetchedPositions: fetchedPositions as TrendPosition[],
-    granularities,
-    instrument,
-    startTime,
-    endTime,
-    currentTickPrice: currentTick?.price ?? null,
-  });
-  const tradeTable = useTaskTrendTradesTable(trades, timezone);
-  const longPositionsTable = useTaskTrendPositionsTable({
-    positions: longPositions,
-    currentPrice,
     pipSize,
-    storageKey: 'trend_long_positions',
     timezone,
-  });
-  const shortPositionsTable = useTaskTrendPositionsTable({
-    positions: shortPositions,
-    currentPrice,
-    pipSize,
-    storageKey: 'trend_short_positions',
-    timezone,
-  });
-  const {
-    showOpenOnly: showOpenLongOnly,
-    page: longPosPage,
-    rowsPerPage: longPosRowsPerPage,
-    orderBy: longPosOrderBy,
-    order: longPosOrder,
-    selectedIds: selectedLongPosIds,
-    setPage: setLongPosPage,
-    setRowsPerPage: setLongPosRowsPerPage,
-    sortedPositions: sortedLongPositions,
-    paginatedPositions: paginatedLongPositions,
-    isAllPageSelected: isAllLongPosPageSelected,
-    colWidths: longPosColWidths,
-    createResizeHandle: createLongPosResizeHandle,
-    columnConfig: longPosColumnConfig,
-    updateColumns: updateLongPosColumns,
-    resetToDefaults: resetLongPosDefaults,
-    configOpen: longPosConfigOpen,
-    setConfigOpen: setLongPosConfigOpen,
-    handleSort: handleLongPosSort,
-    toggleSelection: toggleLongPosSelection,
-    selectAllOnPage: selectAllLongPosOnPage,
-    togglePageSelection: toggleLongPosPageSelection,
-    resetSelection: resetLongPosSelection,
-    copySelectedPositions: copySelectedLongPositions,
-    toggleOpenOnly: toggleOpenLongOnly,
-  } = longPositionsTable;
-  const {
-    showOpenOnly: showOpenShortOnly,
-    page: shortPosPage,
-    rowsPerPage: shortPosRowsPerPage,
-    orderBy: shortPosOrderBy,
-    order: shortPosOrder,
-    selectedIds: selectedShortPosIds,
-    setPage: setShortPosPage,
-    setRowsPerPage: setShortPosRowsPerPage,
-    sortedPositions: sortedShortPositions,
-    paginatedPositions: paginatedShortPositions,
-    isAllPageSelected: isAllShortPosPageSelected,
-    colWidths: shortPosColWidths,
-    createResizeHandle: createShortPosResizeHandle,
-    columnConfig: shortPosColumnConfig,
-    updateColumns: updateShortPosColumns,
-    resetToDefaults: resetShortPosDefaults,
-    configOpen: shortPosConfigOpen,
-    setConfigOpen: setShortPosConfigOpen,
-    handleSort: handleShortPosSort,
-    toggleSelection: toggleShortPosSelection,
-    selectAllOnPage: selectAllShortPosOnPage,
-    togglePageSelection: toggleShortPosPageSelection,
-    resetSelection: resetShortPosSelection,
-    copySelectedPositions: copySelectedShortPositions,
-    toggleOpenOnly: toggleOpenShortOnly,
-  } = shortPositionsTable;
-  const {
-    orderBy: tradeOrderBy,
-    order: tradeOrder,
-    page: tradePage,
-    rowsPerPage: tradeRowsPerPage,
-    setPage: setTradePage,
-    setRowsPerPage: setTradeRowsPerPage,
-    selectedRowIds: tradeSelectedRowIds,
-    setSelectedRowIds: setTradeSelectedRowIds,
-    selectedRowRef: tradeSelectedRowRef,
-    sortedTrades,
-    paginatedTrades,
-    isAllPageSelected: isAllTradePageSelected,
-    colWidths: tradeColWidths,
-    createResizeHandle: createTradeResizeHandle,
-    columnConfig: tradeColumnConfig,
-    updateColumns: updateTradeColumns,
-    resetToDefaults: resetTradeDefaults,
-    configOpen: tradeConfigOpen,
-    setConfigOpen: setTradeConfigOpen,
-    handleSort: handleTradeSort,
-    toggleRowSelection: toggleTradeRowSelection,
-    togglePageSelection: toggleTradePageSelection,
-    resetSelection: resetTradeSelection,
-    copySelectedRows,
-    selectAllOnPage: selectAllTradeRowsOnPage,
-  } = tradeTable;
-
-  // Stable reference for candle timestamps passed to useMetricsOverlay
-  const candleTimestampsMemo = useMemo(
-    () => candles.map((c) => Number(c.time)),
-    [candles]
-  );
-
-  useEffect(() => {
-    if (realTimeUpdatesEnabled || candleTimestampsMemo.length === 0) return;
-    void ensureMarkerRange({
-      from: candleTimestampsMemo[0],
-      to: candleTimestampsMemo[candleTimestampsMemo.length - 1],
-    });
-  }, [candleTimestampsMemo, ensureMarkerRange, realTimeUpdatesEnabled]);
-
-  const {
-    chartContainerRef,
-    chartInstance,
-    chartRef,
-    markersRef,
-    programmaticScrollRef,
-    storeVisibleRange,
-    fitContent,
-  } = useTaskTrendChart({
-    isLoading,
-    chartHeight,
     isDark,
-    timezone,
-    candles,
-    granularity,
-    granularitySeconds,
-    candleDataRanges,
-    startTimeSec,
-    endTimeSec,
-    currentTick: currentTick ?? null,
-    currentTickSec,
-    enableRealTimeUpdates: realTimeUpdatesEnabled,
-    autoFollow,
-    taskType,
-    tradesRef,
-    clampTaskRange,
-    ensureCandleRange,
-    ensureMarkerRange,
-    setAutoFollow,
-    onChartError: reportChartWarning,
-    onTradeMarkerClick: (tradeId) => {
-      setSelectedTradeId((prev) => {
-        if (!tradeId || prev === tradeId) {
-          setSelectedPosId(null);
-          setHighlightedTradeIds(new Set());
-          return null;
-        }
-        chartClickedRef.current = true;
-        return tradeId;
-      });
-    },
+    t,
   });
+  const { chartContainerRef, fitContent } = chartState;
 
-  // Attach metric overlay series (Margin Ratio, ATR, thresholds) to the
-  // candlestick chart so they share the exact same X-axis.
-  useMetricsOverlay({
-    taskId: String(taskId),
-    taskType,
-    executionRunId,
-    enableRealTimeUpdates: realTimeUpdatesEnabled,
-    pollingIntervalMs,
-    chart: chartInstance,
-    candleTimestamps: candleTimestampsMemo,
-    currentTickTimestamp: realTimeUpdatesEnabled
-      ? currentTick?.timestamp
-      : null,
-    programmaticScrollRef,
-  });
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => {
-      setGranularity(recommendedGranularity);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [recommendedGranularity, instrument, setGranularity, startTime, endTime]);
-
-  useEffect(() => {
-    tradesRef.current = trades;
-  }, [trades]);
-  useTaskTrendMarkers({
-    candles,
-    taskLifecycleEvents,
-    strategyEvents,
-    trades,
-    selectedTradeId,
-    highlightedTradeIds,
-    startTimeSec,
-    endTimeSec,
-    markerDisplayCutoffSec,
-    markersRef,
-    programmaticScrollRef,
-    reportChartWarning,
-  });
-
-  const { selectTrade, selectPosition } = useTaskSelectionNavigation({
-    trades,
-    positions: allPositions,
-    selectedTradeId,
-    selectedPosId,
-    highlightedTradeIds,
-    sortedTrades,
-    sortedLongPositions,
-    sortedShortPositions,
-    tradeRowsPerPage,
-    longPosRowsPerPage,
-    shortPosRowsPerPage,
-    chartClickedRef,
-    chartRef,
-    programmaticScrollRef,
-    setSelectedTradeId,
-    setSelectedPosId,
-    setHighlightedTradeIds,
-    setAutoFollow,
-    setTradePage,
-    setLongPosPage,
-    setShortPosPage,
-    reportChartWarning,
-  });
-  const trendTableState = useTaskTrendTableState({
-    setTradePage,
-    setLongPosPage,
-    setShortPosPage,
-    setTradeRowsPerPage,
-    setLongPosRowsPerPage,
-    setShortPosRowsPerPage,
-    setTradeConfigOpen,
-    setLongPosConfigOpen,
-    setShortPosConfigOpen,
-  });
-
-  const handleGranularityChange = (e: SelectChangeEvent) => {
-    storeVisibleRange();
-    setGranularity(String(e.target.value));
-  };
-
-  if (isLoading) {
+  if (candleState.isInitialLoading) {
     return (
       <Box
         ref={panelRootRef}
@@ -504,10 +95,12 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     );
   }
 
-  if (candleErrorMessage && candles.length === 0) {
+  if (panelState.candleErrorMessage && candleState.candles.length === 0) {
     return (
       <Box ref={panelRootRef} sx={{ p: 3 }}>
-        <Alert severity={candleErrorSeverity}>{candleErrorMessage}</Alert>
+        <Alert severity={panelState.candleErrorSeverity}>
+          {panelState.candleErrorMessage}
+        </Alert>
       </Box>
     );
   }
@@ -515,48 +108,42 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   return (
     <Box
       ref={panelRootRef}
-      sx={{
-        p: 2,
-        pt: 0,
-        pb: 2,
-        boxSizing: 'border-box',
-      }}
+      sx={{ p: 2, pt: 0, pb: 2, boxSizing: 'border-box' }}
     >
       <TaskTrendAlerts
-        candleErrorMessage={candleErrorMessage}
-        candleErrorSeverity={candleErrorSeverity}
-        errorCode={errorCode}
-        usingGranularityFallback={usingGranularityFallback}
-        errorMessage={errorMessage}
-        warningMessage={warningMessage}
-        chartWarning={chartWarning}
+        candleErrorMessage={panelState.candleErrorMessage}
+        candleErrorSeverity={panelState.candleErrorSeverity}
+        errorCode={panelState.errorCode}
+        usingGranularityFallback={panelState.usingGranularityFallback}
+        errorMessage={replayData.errorMessage}
+        warningMessage={replayData.warningMessage}
+        chartWarning={panelState.chartWarning}
         t={t}
       />
+
       <TaskTrendToolbar
-        replaySummary={replaySummary}
-        pnlCurrency={pnlCurrency}
+        replaySummary={replayData.replaySummary}
+        pnlCurrency={derivedData.pnlCurrency}
         executionRunId={executionRunId}
-        isRefreshing={isRefreshing}
-        isCandleRefreshing={isCandleRefreshing}
-        pollingIntervalMs={pollingIntervalMs}
-        granularity={granularity}
-        granularityOptions={granularityOptions}
+        isRefreshing={replayData.isRefreshing}
+        isCandleRefreshing={candleState.isRefreshing}
+        pollingIntervalMs={panelState.pollingIntervalMs}
+        granularity={panelState.granularity}
+        granularityOptions={derivedData.granularityOptions}
         pollingIntervalOptions={POLLING_INTERVAL_OPTIONS}
         enableRealTimeUpdates={enableRealTimeUpdates}
-        autoFollow={autoFollow}
-        onPollingIntervalChange={setPollingIntervalMs}
-        onGranularityChange={handleGranularityChange}
+        autoFollow={panelState.autoFollow}
+        onPollingIntervalChange={panelState.setPollingIntervalMs}
+        onGranularityChange={panelState.handleGranularityChange}
         onFollow={() => {
-          setAutoFollow(true);
-          setSelectedTradeId(null);
-          setTradeSelectedRowIds(new Set());
-          setSelectedPosId(null);
-          setHighlightedTradeIds(new Set());
-          setTradePage(0);
+          panelState.setAutoFollow(true);
+          panelState.setSelectedTradeId(null);
+          tradeTable.setSelectedRowIds(new Set());
+          panelState.setSelectedPosId(null);
+          panelState.setHighlightedTradeIds(new Set());
+          tradeTable.setPage(0);
         }}
-        onResetZoom={() => {
-          fitContent();
-        }}
+        onResetZoom={fitContent}
       />
 
       <Paper
@@ -564,13 +151,13 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         sx={{
           mt: 0,
           mb: 0,
-          height: chartHeight,
-          minHeight: MIN_CHART_HEIGHT,
+          height: panelState.chartHeight,
+          minHeight: panelState.minChartHeight,
           display: 'flex',
           position: 'relative',
         }}
       >
-        {(loadingOlderCandles || loadingNewerCandles) && (
+        {(candleState.loadingOlder || candleState.loadingNewer) && (
           <Box
             sx={{
               position: 'absolute',
@@ -587,7 +174,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
             <Box
               sx={{
                 flex: 1,
-                visibility: loadingOlderCandles ? 'visible' : 'hidden',
+                visibility: candleState.loadingOlder ? 'visible' : 'hidden',
               }}
             >
               <LinearProgress color="inherit" />
@@ -595,7 +182,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
             <Box
               sx={{
                 flex: 1,
-                visibility: loadingNewerCandles ? 'visible' : 'hidden',
+                visibility: candleState.loadingNewer ? 'visible' : 'hidden',
               }}
             >
               <LinearProgress color="inherit" />
@@ -603,7 +190,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           </Box>
         )}
         <Box ref={chartContainerRef} sx={{ width: '100%', flex: 1 }} />
-        {/* Timezone indicator (bottom-right) */}
         <Box
           sx={{
             position: 'absolute',
@@ -622,10 +208,9 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         </Box>
       </Paper>
 
-      {/* Draggable separator */}
       <Box
-        onMouseDown={handleSeparatorMouseDown}
-        onTouchStart={handleSeparatorMouseDown}
+        onMouseDown={panelState.handleSeparatorMouseDown}
+        onTouchStart={panelState.handleSeparatorMouseDown}
         sx={{
           height: 8,
           cursor: 'row-resize',
@@ -648,121 +233,121 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
 
       <TaskTrendTablesSection
         tradesTableProps={{
-          trades: sortedTrades,
-          paginatedTrades,
-          selectedTradeId,
-          highlightedTradeIds,
-          selectedRowIds: tradeSelectedRowIds,
-          isAllPageSelected: isAllTradePageSelected,
-          isRefreshing,
-          orderBy: tradeOrderBy,
-          order: tradeOrder,
-          replayColWidths: tradeColWidths,
-          page: tradePage,
-          rowsPerPage: tradeRowsPerPage,
+          trades: tradeTable.sortedTrades,
+          paginatedTrades: tradeTable.paginatedTrades,
+          selectedTradeId: panelState.selectedTradeId,
+          highlightedTradeIds: panelState.highlightedTradeIds,
+          selectedRowIds: tradeTable.selectedRowIds,
+          isAllPageSelected: tradeTable.isAllPageSelected,
+          isRefreshing: replayData.isRefreshing,
+          orderBy: tradeTable.orderBy,
+          order: tradeTable.order,
+          replayColWidths: tradeTable.colWidths,
+          page: tradeTable.page,
+          rowsPerPage: tradeTable.rowsPerPage,
           timezone,
-          selectedRowRef: tradeSelectedRowRef,
-          onConfigureColumns: trendTableState.openTradeColumns,
-          onCopySelected: copySelectedRows,
-          onSelectAllOnPage: selectAllTradeRowsOnPage,
-          onResetSelection: resetTradeSelection,
-          onReload: fetchReplayData,
-          onSelectTrade: selectTrade,
-          onToggleRowSelection: toggleTradeRowSelection,
-          onTogglePageSelection: toggleTradePageSelection,
-          onSort: handleTradeSort,
-          onPageChange: (_e, newPage) => setTradePage(newPage),
-          onRowsPerPageChange: trendTableState.handleRowsPerPageChange,
-          resizeHandle: createTradeResizeHandle,
+          selectedRowRef: tradeTable.selectedRowRef,
+          onConfigureColumns: tableState.openTradeColumns,
+          onCopySelected: tradeTable.copySelectedRows,
+          onSelectAllOnPage: tradeTable.selectAllOnPage,
+          onResetSelection: tradeTable.resetSelection,
+          onReload: replayData.fetchReplayData,
+          onSelectTrade: selectionNavigation.selectTrade,
+          onToggleRowSelection: tradeTable.toggleRowSelection,
+          onTogglePageSelection: tradeTable.togglePageSelection,
+          onSort: tradeTable.handleSort,
+          onPageChange: (_e, newPage) => tradeTable.setPage(newPage),
+          onRowsPerPageChange: tableState.handleRowsPerPageChange,
+          resizeHandle: tradeTable.createResizeHandle,
         }}
         longPositionsTableProps={{
           title: t('tables.trend.longPositions'),
-          count: longPositions.length,
-          positions: sortedLongPositions,
-          paginatedPositions: paginatedLongPositions,
-          selectedPosId,
-          selectedIds: selectedLongPosIds,
-          isAllPageSelected: isAllLongPosPageSelected,
-          isRefreshing,
-          showOpenOnly: showOpenLongOnly,
-          orderBy: longPosOrderBy,
-          order: longPosOrder,
-          colWidths: longPosColWidths,
-          currentPrice,
+          count: derivedData.longPositions.length,
+          positions: longPositionsTable.sortedPositions,
+          paginatedPositions: longPositionsTable.paginatedPositions,
+          selectedPosId: panelState.selectedPosId,
+          selectedIds: longPositionsTable.selectedIds,
+          isAllPageSelected: longPositionsTable.isAllPageSelected,
+          isRefreshing: replayData.isRefreshing,
+          showOpenOnly: longPositionsTable.showOpenOnly,
+          orderBy: longPositionsTable.orderBy,
+          order: longPositionsTable.order,
+          colWidths: longPositionsTable.colWidths,
+          currentPrice: derivedData.currentPrice,
           pipSize,
           isShort: false,
-          page: longPosPage,
-          rowsPerPage: longPosRowsPerPage,
+          page: longPositionsTable.page,
+          rowsPerPage: longPositionsTable.rowsPerPage,
           timezone,
-          selectedPosRowRef,
-          onConfigureColumns: trendTableState.openLongColumns,
-          onCopySelected: () => copySelectedLongPositions(false),
-          onSelectAllOnPage: selectAllLongPosOnPage,
-          onResetSelection: resetLongPosSelection,
-          onReload: fetchReplayData,
-          onToggleOpenOnly: toggleOpenLongOnly,
-          onTogglePageSelection: toggleLongPosPageSelection,
-          onSort: handleLongPosSort,
-          onSelectPosition: selectPosition,
-          onToggleSelection: toggleLongPosSelection,
-          onPageChange: (_e, newPage) => setLongPosPage(newPage),
-          onRowsPerPageChange: trendTableState.handleRowsPerPageChange,
-          resizeHandle: createLongPosResizeHandle,
+          selectedPosRowRef: panelState.selectedPosRowRef,
+          onConfigureColumns: tableState.openLongColumns,
+          onCopySelected: () => longPositionsTable.copySelectedPositions(false),
+          onSelectAllOnPage: longPositionsTable.selectAllOnPage,
+          onResetSelection: longPositionsTable.resetSelection,
+          onReload: replayData.fetchReplayData,
+          onToggleOpenOnly: longPositionsTable.toggleOpenOnly,
+          onTogglePageSelection: longPositionsTable.togglePageSelection,
+          onSort: longPositionsTable.handleSort,
+          onSelectPosition: selectionNavigation.selectPosition,
+          onToggleSelection: longPositionsTable.toggleSelection,
+          onPageChange: (_e, newPage) => longPositionsTable.setPage(newPage),
+          onRowsPerPageChange: tableState.handleRowsPerPageChange,
+          resizeHandle: longPositionsTable.createResizeHandle,
         }}
         shortPositionsTableProps={{
           title: t('tables.trend.shortPositions'),
-          count: shortPositions.length,
-          positions: sortedShortPositions,
-          paginatedPositions: paginatedShortPositions,
-          selectedPosId,
-          selectedIds: selectedShortPosIds,
-          isAllPageSelected: isAllShortPosPageSelected,
-          isRefreshing,
-          showOpenOnly: showOpenShortOnly,
-          orderBy: shortPosOrderBy,
-          order: shortPosOrder,
-          colWidths: shortPosColWidths,
-          currentPrice,
+          count: derivedData.shortPositions.length,
+          positions: shortPositionsTable.sortedPositions,
+          paginatedPositions: shortPositionsTable.paginatedPositions,
+          selectedPosId: panelState.selectedPosId,
+          selectedIds: shortPositionsTable.selectedIds,
+          isAllPageSelected: shortPositionsTable.isAllPageSelected,
+          isRefreshing: replayData.isRefreshing,
+          showOpenOnly: shortPositionsTable.showOpenOnly,
+          orderBy: shortPositionsTable.orderBy,
+          order: shortPositionsTable.order,
+          colWidths: shortPositionsTable.colWidths,
+          currentPrice: derivedData.currentPrice,
           pipSize,
           isShort: true,
-          page: shortPosPage,
-          rowsPerPage: shortPosRowsPerPage,
+          page: shortPositionsTable.page,
+          rowsPerPage: shortPositionsTable.rowsPerPage,
           timezone,
-          selectedPosRowRef,
-          onConfigureColumns: trendTableState.openShortColumns,
-          onCopySelected: () => copySelectedShortPositions(true),
-          onSelectAllOnPage: selectAllShortPosOnPage,
-          onResetSelection: resetShortPosSelection,
-          onReload: fetchReplayData,
-          onToggleOpenOnly: toggleOpenShortOnly,
-          onTogglePageSelection: toggleShortPosPageSelection,
-          onSort: handleShortPosSort,
-          onSelectPosition: selectPosition,
-          onToggleSelection: toggleShortPosSelection,
-          onPageChange: (_e, newPage) => setShortPosPage(newPage),
-          onRowsPerPageChange: trendTableState.handleRowsPerPageChange,
-          resizeHandle: createShortPosResizeHandle,
+          selectedPosRowRef: panelState.selectedPosRowRef,
+          onConfigureColumns: tableState.openShortColumns,
+          onCopySelected: () => shortPositionsTable.copySelectedPositions(true),
+          onSelectAllOnPage: shortPositionsTable.selectAllOnPage,
+          onResetSelection: shortPositionsTable.resetSelection,
+          onReload: replayData.fetchReplayData,
+          onToggleOpenOnly: shortPositionsTable.toggleOpenOnly,
+          onTogglePageSelection: shortPositionsTable.togglePageSelection,
+          onSort: shortPositionsTable.handleSort,
+          onSelectPosition: selectionNavigation.selectPosition,
+          onToggleSelection: shortPositionsTable.toggleSelection,
+          onPageChange: (_e, newPage) => shortPositionsTable.setPage(newPage),
+          onRowsPerPageChange: tableState.handleRowsPerPageChange,
+          resizeHandle: shortPositionsTable.createResizeHandle,
         }}
         tradeDialogProps={{
-          open: tradeConfigOpen,
-          columns: tradeColumnConfig,
-          onClose: trendTableState.closeTradeColumns,
-          onSave: updateTradeColumns,
-          onReset: resetTradeDefaults,
+          open: tradeTable.configOpen,
+          columns: tradeTable.columnConfig,
+          onClose: tableState.closeTradeColumns,
+          onSave: tradeTable.updateColumns,
+          onReset: tradeTable.resetToDefaults,
         }}
         longDialogProps={{
-          open: longPosConfigOpen,
-          columns: longPosColumnConfig,
-          onClose: trendTableState.closeLongColumns,
-          onSave: updateLongPosColumns,
-          onReset: resetLongPosDefaults,
+          open: longPositionsTable.configOpen,
+          columns: longPositionsTable.columnConfig,
+          onClose: tableState.closeLongColumns,
+          onSave: longPositionsTable.updateColumns,
+          onReset: longPositionsTable.resetToDefaults,
         }}
         shortDialogProps={{
-          open: shortPosConfigOpen,
-          columns: shortPosColumnConfig,
-          onClose: trendTableState.closeShortColumns,
-          onSave: updateShortPosColumns,
-          onReset: resetShortPosDefaults,
+          open: shortPositionsTable.configOpen,
+          columns: shortPositionsTable.columnConfig,
+          onClose: tableState.closeShortColumns,
+          onSave: shortPositionsTable.updateColumns,
+          onReset: shortPositionsTable.resetToDefaults,
         }}
       />
     </Box>

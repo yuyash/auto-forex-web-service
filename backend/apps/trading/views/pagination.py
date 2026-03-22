@@ -22,3 +22,27 @@ class TaskSubResourcePagination(PageNumberPagination):
     page_size = 100
     page_size_query_param = "page_size"
     max_page_size = 1000
+
+
+class MetricsPagination(PageNumberPagination):
+    """Pagination for metrics and compact time-series payloads."""
+
+    page_size = 100
+    page_size_query_param = "page_size"
+    max_page_size = 500
+
+
+class ActivityPagination(PageNumberPagination):
+    """Pagination for logs and event activity streams."""
+
+    page_size = 100
+    page_size_query_param = "page_size"
+    max_page_size = 1000
+
+
+class TradePositionPagination(PageNumberPagination):
+    """Pagination for heavier trade, order, and position payloads."""
+
+    page_size = 100
+    page_size_query_param = "page_size"
+    max_page_size = 200

@@ -126,11 +126,15 @@ class PositionQuery:
         request: Request,
         *,
         default_execution_id: UUID | None,
+        default_page_size: int = 100,
+        max_page_size: int = 1000,
     ) -> PositionQuery:
         return cls(
             execution=ExecutionScopedQuery.from_request(
                 request,
                 default_execution_id=default_execution_id,
+                default_page_size=default_page_size,
+                max_page_size=max_page_size,
             ),
             position_status=(request.query_params.get("position_status") or "").lower(),
             direction=(request.query_params.get("direction") or "").lower(),

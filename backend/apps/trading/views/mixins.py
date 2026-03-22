@@ -35,7 +35,11 @@ from apps.trading.views.query_params import (
     PositionQuery,
     TrendReplayQueryParams,
 )
-from apps.trading.views.pagination import TaskSubResourcePagination
+from apps.trading.views.pagination import (
+    ActivityPagination,
+    MetricsPagination,
+    TradePositionPagination,
+)
 
 
 def _ensure_dict(value) -> dict:
@@ -95,7 +99,7 @@ class TaskSubResourceMixin:
             OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
             OpenApiParameter("page", int, description="Page number (1-based)"),
             OpenApiParameter(
-                "page_size", int, description="Results per page (default 100, max 1000)"
+                "page_size", int, description="Results per page (default 100, max 500)"
             ),
             OpenApiParameter(
                 "interval",
@@ -133,6 +137,8 @@ class TaskSubResourceMixin:
         query = ExecutionScopedQuery.from_request(
             request,
             default_execution_id=task.execution_id,
+            default_page_size=MetricsPagination.page_size,
+            max_page_size=MetricsPagination.max_page_size,
         )
 
         queryset = Metrics.objects.filter(
@@ -290,6 +296,8 @@ class TaskSubResourceMixin:
         query = ExecutionScopedQuery.from_request(
             request,
             default_execution_id=task.execution_id,
+            default_page_size=ActivityPagination.page_size,
+            max_page_size=ActivityPagination.max_page_size,
         )
         level_param = request.query_params.get("level")
         level_values = (
@@ -330,7 +338,7 @@ class TaskSubResourceMixin:
             queryset = queryset.filter(timestamp__gt=query.since)
 
         queryset = queryset.order_by("-timestamp")
-        paginator = TaskSubResourcePagination()
+        paginator = ActivityPagination()
         page = paginator.paginate_queryset(queryset, request)
         serializer = TaskLogSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
@@ -355,6 +363,8 @@ class TaskSubResourceMixin:
         query = ExecutionScopedQuery.from_request(
             request,
             default_execution_id=task.execution_id,
+            default_page_size=ActivityPagination.page_size,
+            max_page_size=ActivityPagination.max_page_size,
         )
         components = list(
             TaskLog.objects.filter(
@@ -444,7 +454,7 @@ class TaskSubResourceMixin:
         if created_range.end:
             queryset = queryset.filter(created_at__lte=created_range.end)
 
-        paginator = TaskSubResourcePagination()
+        paginator = ActivityPagination()
         page = paginator.paginate_queryset(queryset, request)
         serializer = TradingEventSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
@@ -483,6 +493,8 @@ class TaskSubResourceMixin:
         query = ExecutionScopedQuery.from_request(
             request,
             default_execution_id=task.execution_id,
+            default_page_size=TradePositionPagination.page_size,
+            max_page_size=TradePositionPagination.max_page_size,
         )
         root_entry_id = request.query_params.get("root_entry_id")
         response = StrategyVisualizationService().build(
@@ -585,7 +597,7 @@ class TaskSubResourceMixin:
                     "buy" if side == "long" else "sell" if side == "short" else side
                 )
             normalized.append(trade)
-        paginator = TaskSubResourcePagination()
+        paginator = TradePositionPagination()
         page = paginator.paginate_queryset(normalized, request)
         serializer = TradeSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
@@ -638,6 +650,8 @@ class TaskSubResourceMixin:
         query = PositionQuery.from_request(
             request,
             default_execution_id=task.execution_id,
+            default_page_size=TradePositionPagination.page_size,
+            max_page_size=TradePositionPagination.max_page_size,
         )
         queryset = Position.objects.filter(
             task_type=self.task_type_label,
@@ -665,7 +679,7 @@ class TaskSubResourceMixin:
                 Q(exit_time__isnull=True) | Q(exit_time__gte=query.range.start)
             )
 
-        paginator = TaskSubResourcePagination()
+        paginator = TradePositionPagination()
         page = paginator.paginate_queryset(queryset, request)
         serializer = PositionSerializer(
             page,
@@ -766,6 +780,8 @@ class TaskSubResourceMixin:
         query = ExecutionScopedQuery.from_request(
             request,
             default_execution_id=task.execution_id,
+            default_page_size=TradePositionPagination.page_size,
+            max_page_size=TradePositionPagination.max_page_size,
         )
         queryset = Order.objects.filter(
             task_type=self.task_type_label,
@@ -788,7 +804,7 @@ class TaskSubResourceMixin:
         if query.since:
             queryset = queryset.filter(updated_at__gt=query.since)
 
-        paginator = TaskSubResourcePagination()
+        paginator = TradePositionPagination()
         page = paginator.paginate_queryset(queryset, request)
         serializer = OrderSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
