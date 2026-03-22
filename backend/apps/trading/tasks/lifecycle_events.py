@@ -27,6 +27,9 @@ class TaskLifecycleEvent:
     kind: str
     description: str
     extra_details: dict[str, object] | None = None
+    log_level: LogLevel | None = None
+    log_message: str | None = None
+    log_component: str | None = None
 
     @property
     def details(self) -> dict[str, object]:
@@ -45,26 +48,6 @@ class TaskLifecycleEventSink(Protocol):
 
     def publish(self, event: TaskLifecycleEvent) -> None:
         """Handle a lifecycle event."""
-
-
-def record_task_lifecycle_log(
-    *,
-    task: BacktestTask | TradingTask,
-    task_type: str,
-    level: LogLevel,
-    message: str,
-    component: str,
-) -> None:
-    """Persist a lifecycle-oriented TaskLog entry."""
-
-    TaskLog.objects.create(
-        task_type=task_type,
-        task_id=task.pk,
-        execution_id=getattr(task, "execution_id", None),
-        level=level,
-        component=component,
-        message=message,
-    )
 
 
 class LoggerLifecycleEventSink:
@@ -91,6 +74,33 @@ class CallbackLifecycleEventSink:
 
     def publish(self, event: TaskLifecycleEvent) -> None:
         self.callback(event)
+
+
+class TaskLogLifecycleSink:
+    """Persist lifecycle logs through the same event pipeline."""
+
+    def __init__(self, *, logger: Logger) -> None:
+        self.logger = logger
+
+    def publish(self, event: TaskLifecycleEvent) -> None:
+        if event.log_level is None or not event.log_message or not event.log_component:
+            return
+        try:
+            TaskLog.objects.create(
+                task_type=event.task_type,
+                task_id=event.task.pk,
+                execution_id=getattr(event.task, "execution_id", None),
+                level=event.log_level,
+                component=event.log_component,
+                message=event.log_message,
+            )
+        except Exception as exc:  # pragma: no cover - defensive logging path
+            self.logger.warning(
+                "[SERVICE:EVENT] Failed to persist task lifecycle log - task_id=%s, kind=%s, error=%s",
+                event.task.pk,
+                event.kind,
+                exc,
+            )
 
 
 class TradingEventLifecycleSink:
@@ -211,6 +221,7 @@ class TaskLifecycleEventPublisher:
         self.logger = logger
         self.sinks = sinks or (
             LoggerLifecycleEventSink(logger=logger),
+            TaskLogLifecycleSink(logger=logger),
             CeleryTaskStatusLifecycleSink(logger=logger),
             ExecutionArtifactsLifecycleSink(logger=logger),
             TradingEventLifecycleSink(logger=logger),
@@ -224,6 +235,9 @@ class TaskLifecycleEventPublisher:
         kind: str,
         description: str,
         extra_details: dict[str, object] | None = None,
+        log_level: LogLevel | None = None,
+        log_message: str | None = None,
+        log_component: str | None = None,
     ) -> None:
         event = TaskLifecycleEvent(
             task=task,
@@ -231,6 +245,9 @@ class TaskLifecycleEventPublisher:
             kind=kind,
             description=description,
             extra_details=extra_details,
+            log_level=log_level,
+            log_message=log_message,
+            log_component=log_component,
         )
         for sink in self.sinks:
             sink.publish(event)
@@ -244,6 +261,9 @@ def publish_task_lifecycle_event(
     kind: str,
     description: str,
     extra_details: dict[str, object] | None = None,
+    log_level: LogLevel | None = None,
+    log_message: str | None = None,
+    log_component: str | None = None,
 ) -> None:
     """Publish a lifecycle event through the default sink pipeline."""
 
@@ -253,6 +273,9 @@ def publish_task_lifecycle_event(
         kind=kind,
         description=description,
         extra_details=extra_details,
+        log_level=log_level,
+        log_message=log_message,
+        log_component=log_component,
     )
 
 
@@ -291,14 +314,6 @@ def finalize_task_terminal_lifecycle(
         )
 
     if rows_updated > 0:
-        if log_level is not None and log_message and log_component:
-            record_task_lifecycle_log(
-                task=task,
-                task_type=task_type,
-                level=log_level,
-                message=log_message,
-                component=log_component,
-            )
         publish_task_lifecycle_event(
             logger=logger,
             task=task,
@@ -306,5 +321,8 @@ def finalize_task_terminal_lifecycle(
             kind=kind,
             description=description,
             extra_details=extra_details,
+            log_level=log_level,
+            log_message=log_message,
+            log_component=log_component,
         )
     return rows_updated

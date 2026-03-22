@@ -23,6 +23,8 @@ import {
 
 type TaskEntity = BacktestTask | TradingTask;
 type TaskKind = 'backtest' | 'trading';
+type SortValue = string | number | boolean | undefined;
+type TaskSortAccessor = (task: TaskEntity) => SortValue;
 
 function getTaskKeys(taskKind: TaskKind) {
   if (taskKind === 'backtest') {
@@ -48,9 +50,20 @@ function getTaskDerivedKeys(taskKind: TaskKind, taskId: string) {
   };
 }
 
+const TASK_SORT_SPECS: Record<string, TaskSortAccessor> = {
+  name: (task) => task.name,
+  status: (task) => task.status,
+  strategy_type: (task) => task.strategy_type,
+  config_name: (task) => task.config_name,
+  updated_at: (task) => task.updated_at,
+  created_at: (task) => task.created_at,
+  instrument: (task) => task.instrument,
+  account_name: (task) => (task as TradingTask).account_name,
+};
+
 function compareValues(
-  left: string | number | boolean | undefined,
-  right: string | number | boolean | undefined,
+  left: SortValue,
+  right: SortValue,
   ordering: string
 ): number {
   const direction = ordering.startsWith('-') ? -1 : 1;
@@ -74,31 +87,14 @@ function sortTaskResults<T extends TaskEntity>(
   }
 
   const field = ordering.replace(/^-/, '');
+  const accessor = TASK_SORT_SPECS[field];
+  if (!accessor) {
+    return results;
+  }
   const sorted = [...results];
-  sorted.sort((left, right) => {
-    switch (field) {
-      case 'name':
-      case 'status':
-      case 'strategy_type':
-      case 'config_name':
-      case 'updated_at':
-      case 'created_at':
-      case 'instrument':
-        return compareValues(
-          left[field as keyof TaskEntity] as string | undefined,
-          right[field as keyof TaskEntity] as string | undefined,
-          ordering
-        );
-      case 'account_name':
-        return compareValues(
-          (left as TradingTask).account_name,
-          (right as TradingTask).account_name,
-          ordering
-        );
-      default:
-        return 0;
-    }
-  });
+  sorted.sort((left, right) =>
+    compareValues(accessor(left), accessor(right), ordering)
+  );
   return sorted;
 }
 

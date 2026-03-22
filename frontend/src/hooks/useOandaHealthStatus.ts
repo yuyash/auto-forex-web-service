@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../config/reactQuery';
 import { healthApi } from '../services/api';
+import { createOandaHealthStatusQuery } from './miscQueries';
 
 interface UseOandaHealthStatusOptions {
   enabled: boolean;
@@ -16,13 +17,12 @@ export function useOandaHealthStatus({
 }: UseOandaHealthStatusOptions) {
   const queryClient = useQueryClient();
 
-  const query = useQuery({
-    queryKey: queryKeys.health.oanda(),
-    queryFn: () => healthApi.getOandaStatus(),
-    enabled,
-    staleTime: refreshIntervalMs,
-    retry: false,
-  });
+  const query = useQuery(
+    createOandaHealthStatusQuery({
+      enabled,
+      staleTime: refreshIntervalMs,
+    })
+  );
 
   useEffect(() => {
     if (!enabled || !activeCheck) {

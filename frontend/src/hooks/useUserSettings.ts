@@ -1,14 +1,11 @@
 import { queryClient, queryKeys } from '../config/reactQuery';
 import { authApi, type UserSettingsResponse } from '../services/api/auth';
 import { useQuery } from '@tanstack/react-query';
+import { createUserSettingsQuery } from './miscQueries';
 import { useWrappedMutation } from './useWrappedMutation';
 
 export function useUserSettings(options?: { enabled?: boolean }) {
-  return useQuery({
-    queryKey: queryKeys.userSettings.detail(),
-    queryFn: () => authApi.getUserSettings(),
-    enabled: options?.enabled !== false,
-  });
+  return useQuery(createUserSettingsQuery(options));
 }
 
 export function useUpdateUserSettings(options?: {

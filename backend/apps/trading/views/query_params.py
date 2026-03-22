@@ -93,12 +93,12 @@ class QueryFieldSpec:
 
 
 @dataclass(frozen=True)
-class QuerySchemaSpec:
-    """Serializer schema definition derived from query field specs."""
+class QueryGroupSpec:
+    """Shared schema/runtime definition for a query field group."""
 
     name: str
     specs: tuple[QueryFieldSpec, ...]
-    description: str
+    description: str | None = None
     base: type[serializers.Serializer] = serializers.Serializer
 
     def build_serializer(self) -> type[serializers.Serializer]:
@@ -107,6 +107,13 @@ class QuerySchemaSpec:
             *self.specs,
             base=self.base,
             docstring=self.description,
+        )
+
+    def parse(self, request: Request) -> dict[str, object]:
+        return _parse_query_group(
+            request,
+            *self.specs,
+            serializer_name=f"{self.name}RuntimeSerializer",
         )
 
 
@@ -369,10 +376,13 @@ DATE_RANGE_SPECS: dict[tuple[str, str], tuple[QueryFieldSpec, QueryFieldSpec]] =
 }
 
 
-def _pagination_group(*, default_page_size: int, max_page_size: int) -> tuple[QueryFieldSpec, ...]:
-    return _query_spec_group(
-        PAGE_SPEC,
-        _page_size_spec(default=default_page_size, max_value=max_page_size),
+def _pagination_group(*, default_page_size: int, max_page_size: int) -> QueryGroupSpec:
+    return QueryGroupSpec(
+        name="PaginationRuntimeQueryGroup",
+        specs=_query_spec_group(
+            PAGE_SPEC,
+            _page_size_spec(default=default_page_size, max_value=max_page_size),
+        ),
     )
 
 
@@ -380,13 +390,17 @@ def _execution_scoped_group(
     *,
     default_page_size: int,
     max_page_size: int,
-) -> tuple[QueryFieldSpec, ...]:
-    return _query_spec_group(
-        EXECUTION_ID_SPEC,
-        SINCE_SPEC,
-        *_pagination_group(
-            default_page_size=default_page_size,
-            max_page_size=max_page_size,
+) -> QueryGroupSpec:
+    pagination_group = _pagination_group(
+        default_page_size=default_page_size,
+        max_page_size=max_page_size,
+    )
+    return QueryGroupSpec(
+        name="ExecutionScopedRuntimeQueryGroup",
+        specs=_query_spec_group(
+            EXECUTION_ID_SPEC,
+            SINCE_SPEC,
+            *pagination_group.specs,
         ),
     )
 
@@ -429,18 +443,18 @@ class QueryParamsSerializer(serializers.Serializer):
         return serializer
 
 
-QUERY_SCHEMA_SPECS = {
-    "execution_scoped": QuerySchemaSpec(
+QUERY_GROUP_SPECS = {
+    "execution_scoped": QueryGroupSpec(
         name="ExecutionScopedQueryParamsSchemaSerializer",
         specs=EXECUTION_SCOPED_ACTIVITY_GROUP,
         description="OpenAPI serializer for execution-scoped task query parameters.",
     ),
-    "metrics": QuerySchemaSpec(
+    "metrics": QueryGroupSpec(
         name="MetricsQueryParamsSchemaSerializer",
         specs=(*EXECUTION_SCOPED_METRICS_GROUP, UNTIL_SPEC, INTERVAL_SPEC),
         description="OpenAPI serializer for metrics query parameters.",
     ),
-    "logs": QuerySchemaSpec(
+    "logs": QueryGroupSpec(
         name="LogsQueryParamsSchemaSerializer",
         specs=(
             *EXECUTION_SCOPED_ACTIVITY_GROUP,
@@ -452,13 +466,13 @@ QUERY_SCHEMA_SPECS = {
         ),
         description="OpenAPI serializer for logs query parameters.",
     ),
-    "log_components": QuerySchemaSpec(
+    "log_components": QueryGroupSpec(
         name="LogComponentsQueryParamsSchemaSerializer",
         specs=(EXECUTION_ID_SPEC,),
         description="OpenAPI serializer for log component query parameters.",
         base=QueryParamsSerializer,
     ),
-    "events": QuerySchemaSpec(
+    "events": QueryGroupSpec(
         name="EventsQueryParamsSchemaSerializer",
         specs=(
             *EXECUTION_SCOPED_ACTIVITY_GROUP,
@@ -470,13 +484,13 @@ QUERY_SCHEMA_SPECS = {
         ),
         description="OpenAPI serializer for task events query parameters.",
     ),
-    "strategy_events": QuerySchemaSpec(
+    "strategy_events": QueryGroupSpec(
         name="StrategyEventsQueryParamsSchemaSerializer",
         specs=(EXECUTION_ID_SPEC, ROOT_ENTRY_ID_SPEC),
         description="OpenAPI serializer for strategy event visualization parameters.",
         base=QueryParamsSerializer,
     ),
-    "trades": QuerySchemaSpec(
+    "trades": QueryGroupSpec(
         name="TradesQueryParamsSchemaSerializer",
         specs=(
             *EXECUTION_SCOPED_TRADE_POSITION_GROUP,
@@ -486,7 +500,7 @@ QUERY_SCHEMA_SPECS = {
         ),
         description="OpenAPI serializer for trades query parameters.",
     ),
-    "positions": QuerySchemaSpec(
+    "positions": QueryGroupSpec(
         name="PositionsQueryParamsSchemaSerializer",
         specs=(
             *EXECUTION_SCOPED_TRADE_POSITION_GROUP,
@@ -498,12 +512,12 @@ QUERY_SCHEMA_SPECS = {
         ),
         description="OpenAPI serializer for positions query parameters.",
     ),
-    "trend_replay": QuerySchemaSpec(
+    "trend_replay": QueryGroupSpec(
         name="TrendReplayQueryParamsSchemaSerializer",
         specs=(*EXECUTION_SCOPED_TRADE_POSITION_GROUP, RANGE_FROM_SPEC, RANGE_TO_SPEC),
         description="OpenAPI serializer for trend replay parameters.",
     ),
-    "orders": QuerySchemaSpec(
+    "orders": QueryGroupSpec(
         name="OrdersQueryParamsSchemaSerializer",
         specs=(
             *EXECUTION_SCOPED_TRADE_POSITION_GROUP,
@@ -513,24 +527,24 @@ QUERY_SCHEMA_SPECS = {
         ),
         description="OpenAPI serializer for orders query parameters.",
     ),
-    "summary": QuerySchemaSpec(
+    "summary": QueryGroupSpec(
         name="SummaryQueryParamsSchemaSerializer",
         specs=(EXECUTION_ID_SPEC,),
         description="OpenAPI serializer for summary query parameters.",
         base=QueryParamsSerializer,
     ),
-    "executions": QuerySchemaSpec(
+    "executions": QueryGroupSpec(
         name="ExecutionsQueryParamsSchemaSerializer",
         specs=(*ACTIVITY_PAGINATION_GROUP, INCLUDE_METRICS_SPEC),
         description="OpenAPI serializer for execution list query parameters.",
     ),
-    "execution_detail": QuerySchemaSpec(
+    "execution_detail": QueryGroupSpec(
         name="ExecutionDetailQueryParamsSchemaSerializer",
         specs=(INCLUDE_METRICS_SPEC,),
         description="OpenAPI serializer for execution detail query parameters.",
         base=QueryParamsSerializer,
     ),
-    "pagination": QuerySchemaSpec(
+    "pagination": QueryGroupSpec(
         name="PaginationSchemaSerializer",
         specs=ACTIVITY_PAGINATION_GROUP,
         description="OpenAPI serializer for plain pagination parameters.",
@@ -576,24 +590,24 @@ def _parse_execution_id_value(value: str | None) -> UUID | None:
         raise _invalid_query_param(f"Invalid execution_id: {value}") from exc
 
 
-ExecutionScopedQueryParamsSchemaSerializer = QUERY_SCHEMA_SPECS[
+ExecutionScopedQueryParamsSchemaSerializer = QUERY_GROUP_SPECS[
     "execution_scoped"
 ].build_serializer()
-MetricsQueryParamsSchemaSerializer = QUERY_SCHEMA_SPECS["metrics"].build_serializer()
-LogsQueryParamsSchemaSerializer = QUERY_SCHEMA_SPECS["logs"].build_serializer()
-LogComponentsQueryParamsSchemaSerializer = QUERY_SCHEMA_SPECS["log_components"].build_serializer()
-EventsQueryParamsSchemaSerializer = QUERY_SCHEMA_SPECS["events"].build_serializer()
-StrategyEventsQueryParamsSchemaSerializer = QUERY_SCHEMA_SPECS["strategy_events"].build_serializer()
-TradesQueryParamsSchemaSerializer = QUERY_SCHEMA_SPECS["trades"].build_serializer()
-PositionsQueryParamsSchemaSerializer = QUERY_SCHEMA_SPECS["positions"].build_serializer()
-TrendReplayQueryParamsSchemaSerializer = QUERY_SCHEMA_SPECS["trend_replay"].build_serializer()
-OrdersQueryParamsSchemaSerializer = QUERY_SCHEMA_SPECS["orders"].build_serializer()
-SummaryQueryParamsSchemaSerializer = QUERY_SCHEMA_SPECS["summary"].build_serializer()
-ExecutionsQueryParamsSchemaSerializer = QUERY_SCHEMA_SPECS["executions"].build_serializer()
-ExecutionDetailQueryParamsSchemaSerializer = QUERY_SCHEMA_SPECS[
+MetricsQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["metrics"].build_serializer()
+LogsQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["logs"].build_serializer()
+LogComponentsQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["log_components"].build_serializer()
+EventsQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["events"].build_serializer()
+StrategyEventsQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["strategy_events"].build_serializer()
+TradesQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["trades"].build_serializer()
+PositionsQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["positions"].build_serializer()
+TrendReplayQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["trend_replay"].build_serializer()
+OrdersQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["orders"].build_serializer()
+SummaryQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["summary"].build_serializer()
+ExecutionsQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["executions"].build_serializer()
+ExecutionDetailQueryParamsSchemaSerializer = QUERY_GROUP_SPECS[
     "execution_detail"
 ].build_serializer()
-PaginationSchemaSerializer = QUERY_SCHEMA_SPECS["pagination"].build_serializer()
+PaginationSchemaSerializer = QUERY_GROUP_SPECS["pagination"].build_serializer()
 
 
 @dataclass(frozen=True)
@@ -613,11 +627,7 @@ class PaginationParams:
             default_page_size=default_page_size,
             max_page_size=max_page_size,
         )
-        parsed = _parse_query_group(
-            request,
-            *pagination_group,
-            serializer_name="PaginationParamsRuntimeSerializer",
-        )
+        parsed = pagination_group.parse(request)
         return cls(
             page=cast(int, parsed["page"]),
             page_size=cast(int, parsed["page_size"]),
@@ -643,11 +653,7 @@ class ExecutionScopedQuery:
             default_page_size=default_page_size,
             max_page_size=max_page_size,
         )
-        parsed = _parse_query_group(
-            request,
-            *execution_group,
-            serializer_name="ExecutionScopedQueryRuntimeSerializer",
-        )
+        parsed = execution_group.parse(request)
         return cls(
             execution_id=cast(UUID | None, parsed["execution_id"]) or default_execution_id,
             since=cast(datetime | None, parsed["since"]),

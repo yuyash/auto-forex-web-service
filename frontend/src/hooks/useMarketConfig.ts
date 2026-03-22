@@ -1,11 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
-import { queryKeys } from '../config/reactQuery';
 import { logger } from '../utils/logger';
 import {
-  marketApi,
   type GranularityOption,
   type TickDataRange,
 } from '../services/api/market';
+import {
+  createSupportedGranularitiesQuery,
+  createSupportedInstrumentsQuery,
+  createTickDataRangeQuery,
+} from './miscQueries';
 
 const FALLBACK_INSTRUMENTS = [
   'EUR_USD',
@@ -49,13 +52,7 @@ const FALLBACK_GRANULARITIES: GranularityOption[] = [
  * Hook to fetch supported currency pairs from backend
  */
 export const useSupportedInstruments = () => {
-  const query = useQuery({
-    queryKey: queryKeys.marketConfig.instruments(),
-    queryFn: async () => {
-      const response = await marketApi.getSupportedInstruments();
-      return response.instruments ?? [];
-    },
-  });
+  const query = useQuery(createSupportedInstrumentsQuery());
 
   if (query.error) {
     logger.error('Failed to fetch instruments', {
@@ -78,15 +75,7 @@ export const useSupportedInstruments = () => {
  * Hook to fetch supported granularities from backend
  */
 export const useSupportedGranularities = () => {
-  const query = useQuery({
-    queryKey: queryKeys.marketConfig.granularities(),
-    queryFn: async () => {
-      const response = await marketApi.getSupportedGranularities();
-      return (response.granularities ?? []).filter(
-        (granularity) => !granularity.value.startsWith('S')
-      );
-    },
-  });
+  const query = useQuery(createSupportedGranularitiesQuery());
 
   if (query.error) {
     logger.error('Failed to fetch granularities', {
@@ -109,11 +98,7 @@ export const useSupportedGranularities = () => {
  * Hook to fetch the available tick data range for a given instrument.
  */
 export const useTickDataRange = (instrument?: string) => {
-  const query = useQuery({
-    queryKey: queryKeys.marketConfig.tickDataRange(instrument ?? ''),
-    queryFn: async () => marketApi.getTickDataRange(instrument!),
-    enabled: Boolean(instrument),
-  });
+  const query = useQuery(createTickDataRangeQuery(instrument));
 
   if (query.error) {
     logger.error('Failed to fetch tick data range', {

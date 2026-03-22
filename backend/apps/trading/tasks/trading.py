@@ -16,7 +16,7 @@ from apps.trading.models import TradingTask
 from apps.trading.services.execution_lifecycle import transition_task_to_running
 from apps.trading.tasks.lifecycle_events import (
     finalize_task_terminal_lifecycle,
-    record_task_lifecycle_log,
+    publish_task_lifecycle_event,
 )
 from apps.trading.tasks.executor import TradingExecutor
 from apps.trading.tasks.source import LiveTickDataSource
@@ -72,12 +72,15 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
         logger.info(f"Transitioning: STARTING -> RUNNING - task_id={task_id}")
         logger.info(f"Current: RUNNING - task_id={task_id}, started_at={task.started_at}")
 
-        record_task_lifecycle_log(
+        publish_task_lifecycle_event(
+            logger=logger,
             task=task,
             task_type=TaskType.TRADING,
-            level=LogLevel.INFO,
-            component=__name__,
-            message="Trading task execution started",
+            kind="task_started",
+            description="Trading task execution started",
+            log_level=LogLevel.INFO,
+            log_component=__name__,
+            log_message="Trading task execution started",
         )
 
         # Execute the trading task
