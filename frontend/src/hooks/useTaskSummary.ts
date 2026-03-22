@@ -13,7 +13,7 @@
 
 import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { queryClient, queryKeys } from '../config/reactQuery';
+import { queryKeys } from '../config/reactQuery';
 import { useSequentialPolling } from './useSequentialPolling';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
@@ -215,13 +215,7 @@ export function useTaskSummary(
   useSequentialPolling(
     () => {
       if (!query.isFetching) {
-        return queryClient.invalidateQueries({
-          queryKey: queryKeys.taskResources.summary(
-            taskType,
-            taskId,
-            executionRunId
-          ),
-        });
+        return query.refetch();
       }
       return Promise.resolve();
     },
@@ -235,13 +229,6 @@ export function useTaskSummary(
     summary: query.data ?? INITIAL_SUMMARY,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.taskResources.summary(
-          taskType,
-          taskId,
-          executionRunId
-        ),
-      }),
+    refetch: query.refetch,
   };
 }

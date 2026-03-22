@@ -2698,6 +2698,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "include_trade_ids",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Include position trade_ids in the response"
+                    },
+                    {
+                        "in": "query",
                         "name": "page",
                         "schema": {
                             "type": "integer"
@@ -4034,6 +4042,14 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_trade_ids",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Include position trade_ids in the response"
                     },
                     {
                         "in": "query",

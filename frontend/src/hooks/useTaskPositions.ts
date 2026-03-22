@@ -13,6 +13,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
+import { useSequentialPolling } from './useSequentialPolling';
 import {
   fetchTaskResourcePage,
   isApiErrorWithStatus,
@@ -48,6 +49,7 @@ interface UseTaskPositionsOptions {
   pageSize?: number;
   rangeFrom?: string;
   rangeTo?: string;
+  includeTradeIds?: boolean;
   /** ISO 8601 timestamp — only return records updated after this time. */
   since?: string;
   enableRealTimeUpdates?: boolean;
@@ -85,6 +87,7 @@ export const useTaskPositions = ({
   pageSize = 100,
   rangeFrom,
   rangeTo,
+  includeTradeIds = false,
   since,
   enableRealTimeUpdates = false,
   refreshInterval = 10_000,
@@ -113,7 +116,7 @@ export const useTaskPositions = ({
   const canUseIncrementalPolling = page === 1;
 
   // Reset incremental state when key params change.
-  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${status}-${direction}-${page}-${pageSize}-${rangeFrom ?? ''}-${rangeTo ?? ''}-${since ?? ''}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${status}-${direction}-${page}-${pageSize}-${rangeFrom ?? ''}-${rangeTo ?? ''}-${includeTradeIds}-${since ?? ''}`;
   const prevParamsKeyRef = useRef(paramsKey);
   if (paramsKey !== prevParamsKeyRef.current) {
     prevParamsKeyRef.current = paramsKey;
@@ -145,6 +148,7 @@ export const useTaskPositions = ({
         if (direction) params.direction = direction;
         if (rangeFrom) params.range_from = rangeFrom;
         if (rangeTo) params.range_to = rangeTo;
+        if (includeTradeIds) params.include_trade_ids = 'true';
         // Use caller-provided `since` OR our tracked incremental timestamp.
         const effectiveSince =
           since ??
@@ -254,6 +258,7 @@ export const useTaskPositions = ({
       pageSize,
       rangeFrom,
       rangeTo,
+      includeTradeIds,
       since,
       canUseIncrementalPolling,
     ]
@@ -264,21 +269,18 @@ export const useTaskPositions = ({
     fetchPositions(false);
   }, [fetchPositions]);
 
-  // Incremental polling while task is running.
-  useEffect(() => {
-    if (!enableRealTimeUpdates) return;
-    const interval = setInterval(() => {
+  useSequentialPolling(
+    () => {
       if (hasInitialFetchRef.current) {
-        fetchPositions(canUseIncrementalPolling);
+        return fetchPositions(canUseIncrementalPolling);
       }
-    }, refreshInterval);
-    return () => clearInterval(interval);
-  }, [
-    enableRealTimeUpdates,
-    refreshInterval,
-    fetchPositions,
-    canUseIncrementalPolling,
-  ]);
+      return Promise.resolve();
+    },
+    {
+      enabled: enableRealTimeUpdates,
+      intervalMs: refreshInterval,
+    }
+  );
 
   // When real-time updates stop (task finished), do one final full refetch.
   const prevRealTimeRef = useRef(enableRealTimeUpdates);

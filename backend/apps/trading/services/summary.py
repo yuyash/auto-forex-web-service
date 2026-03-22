@@ -242,6 +242,17 @@ def compute_cached_task_summary(
     """Compute a cached task summary keyed by task/state freshness."""
     task_obj = _get_task(task_type, task_id)
     state = _get_state(task_type, task_id, execution_id)
+    snapshot_cache_key = _build_task_summary_snapshot_cache_key(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=execution_id,
+        task_obj=task_obj,
+    )
+    if snapshot_cache_key:
+        cached_snapshot = cache.get(snapshot_cache_key)
+        if isinstance(cached_snapshot, TaskSummary):
+            return cached_snapshot
+
     cache_key = _build_task_summary_cache_key(
         task_type=task_type,
         task_id=task_id,
@@ -259,6 +270,8 @@ def compute_cached_task_summary(
         execution_id=execution_id,
     )
     cache.set(cache_key, summary, TASK_SUMMARY_CACHE_TTL_SECONDS)
+    if snapshot_cache_key:
+        cache.set(snapshot_cache_key, summary, TASK_SUMMARY_SNAPSHOT_CACHE_TTL_SECONDS)
     return summary
 
 
@@ -298,6 +311,19 @@ def _build_task_summary_cache_key(
         f"task-summary:{task_type}:{task_id}:{execution_key}:"
         f"{task_updated_at_key}:{state_updated_at_key}"
     )
+
+
+def _build_task_summary_snapshot_cache_key(
+    *, task_type: str, task_id: str, execution_id, task_obj
+) -> str | None:
+    if execution_id is None or not task_obj:
+        return None
+    current_execution_id = getattr(task_obj, "execution_id", None)
+    if str(current_execution_id or "") != str(execution_id):
+        return None
+    if not _is_terminal_status(getattr(task_obj, "status", None)):
+        return None
+    return f"task-summary-snapshot:{task_type}:{task_id}:{execution_id}"
 
 
 def _compute_progress(task_type: str, task_obj, state) -> int:
@@ -352,3 +378,8 @@ def _abs_units():
 
 
 TASK_SUMMARY_CACHE_TTL_SECONDS = 30
+TASK_SUMMARY_SNAPSHOT_CACHE_TTL_SECONDS = 60 * 60 * 24
+
+
+def _is_terminal_status(status: str | None) -> bool:
+    return status in {"completed", "stopped", "failed"}

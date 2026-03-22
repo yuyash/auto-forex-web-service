@@ -631,6 +631,11 @@ class TaskSubResourceMixin:
             ),
             OpenApiParameter("direction", str, description="Direction filter"),
             OpenApiParameter(
+                "include_trade_ids",
+                bool,
+                description="Include position trade_ids in the response",
+            ),
+            OpenApiParameter(
                 "range_from",
                 str,
                 description="RFC3339 lower bound for positions overlapping a chart range",
@@ -665,15 +670,19 @@ class TaskSubResourceMixin:
         execution_id = _parse_execution_id(request)
         if execution_id is None:
             execution_id = task.execution_id
-        queryset = (
-            Position.objects.filter(
-                task_type=self.task_type_label,
-                task_id=task.pk,
-                execution_id=execution_id,
-            )
-            .prefetch_related("trades")
-            .order_by("-entry_time")
-        )
+        include_trade_ids = str(request.query_params.get("include_trade_ids", "false")).lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        queryset = Position.objects.filter(
+            task_type=self.task_type_label,
+            task_id=task.pk,
+            execution_id=execution_id,
+        ).order_by("-entry_time")
+        if include_trade_ids:
+            queryset = queryset.prefetch_related("trades")
 
         status_param = (request.query_params.get("position_status") or "").lower()
         if status_param == "open":
@@ -698,7 +707,11 @@ class TaskSubResourceMixin:
 
         paginator = TaskSubResourcePagination()
         page = paginator.paginate_queryset(queryset, request)
-        serializer = PositionSerializer(page, many=True)
+        serializer = PositionSerializer(
+            page,
+            many=True,
+            context={"include_trade_ids": include_trade_ids},
+        )
         return paginator.get_paginated_response(serializer.data)
 
     # ------------------------------------------------------------------

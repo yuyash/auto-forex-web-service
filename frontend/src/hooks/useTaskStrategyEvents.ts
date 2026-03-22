@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { queryClient, queryKeys } from '../config/reactQuery';
+import { queryKeys } from '../config/reactQuery';
 import { useSequentialPolling } from './useSequentialPolling';
 import { TaskType } from '../types/common';
 import type { StrategyVisualizationResponse } from '../types/strategyVisualization';
@@ -73,13 +73,7 @@ export function useTaskStrategyEvents({
   useSequentialPolling(
     () => {
       if (!query.isFetching) {
-        return queryClient.invalidateQueries({
-          queryKey: queryKeys.taskResources.strategyEvents(
-            taskType,
-            String(taskId),
-            executionRunId
-          ),
-        });
+        return query.refetch();
       }
       return Promise.resolve();
     },
@@ -93,13 +87,6 @@ export function useTaskStrategyEvents({
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.taskResources.strategyEvents(
-          taskType,
-          String(taskId),
-          executionRunId
-        ),
-      }),
+    refetch: query.refetch,
   };
 }

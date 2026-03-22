@@ -23,6 +23,7 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts';
 import { useDocumentVisibility } from '../../../hooks/useDocumentVisibility';
+import { useSequentialPolling } from '../../../hooks/useSequentialPolling';
 import {
   fetchPaginatedMetrics,
   fetchMetrics,
@@ -150,7 +151,6 @@ export function useMetricsOverlay({
   const [isLoading, setIsLoading] = useState(false);
   const fetchedRangeRef = useRef<{ from: number; to: number } | null>(null);
   const latestTsRef = useRef<number | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const attachGenerationRef = useRef(0);
   const backoffUntilRef = useRef<number>(0);
 
@@ -281,9 +281,8 @@ export function useMetricsOverlay({
   }, [chart, fetchWindow, isCovered, expandRange, isPageVisible]);
 
   // Real-time incremental polling
-  useEffect(() => {
-    if (!enableRealTimeUpdates || !isPageVisible) return;
-    const poll = async () => {
+  useSequentialPolling(
+    async () => {
       if (Date.now() < backoffUntilRef.current) return;
       try {
         const ts = latestTsRef.current;
@@ -310,20 +309,12 @@ export function useMetricsOverlay({
           backoffUntilRef.current = Date.now() + retryAfterMs;
         }
       }
-    };
-    intervalRef.current = setInterval(poll, pollingIntervalMs);
-    return () => {
-      if (intervalRef.current !== null) clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    };
-  }, [
-    enableRealTimeUpdates,
-    executionRunId,
-    isPageVisible,
-    pollingIntervalMs,
-    taskId,
-    taskType,
-  ]);
+    },
+    {
+      enabled: enableRealTimeUpdates && isPageVisible,
+      intervalMs: pollingIntervalMs,
+    }
+  );
 
   // Attach series once per chart instance
   useLayoutEffect(() => {

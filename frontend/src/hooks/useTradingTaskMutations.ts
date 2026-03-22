@@ -11,10 +11,18 @@ import { useWrappedMutation } from './useWrappedMutation';
 export type StopMode = 'immediate' | 'graceful' | 'graceful_close';
 
 async function invalidateTradingQueries(taskId?: string): Promise<void> {
-  await queryClient.invalidateQueries({ queryKey: queryKeys.tradingTasks.all });
+  await queryClient.invalidateQueries({
+    queryKey: queryKeys.tradingTasks.lists(),
+  });
   if (taskId) {
     await queryClient.invalidateQueries({
       queryKey: queryKeys.tradingTasks.detail(taskId),
+    });
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.tradingTasks.executions(taskId),
+    });
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.taskResources.summary('trading', taskId),
     });
   }
 }
@@ -34,6 +42,7 @@ export function useCreateTradingTask(options?: {
       }),
     {
       onSuccess: async (data) => {
+        queryClient.setQueryData(queryKeys.tradingTasks.detail(data.id), data);
         await invalidateTradingQueries(data.id);
         options?.onSuccess?.(data);
       },
@@ -57,6 +66,7 @@ export function useUpdateTradingTask(options?: {
       }),
     {
       onSuccess: async (data) => {
+        queryClient.setQueryData(queryKeys.tradingTasks.detail(data.id), data);
         await invalidateTradingQueries(data.id);
         options?.onSuccess?.(data);
       },
@@ -87,6 +97,7 @@ export function useCopyTradingTask(options?: {
       tradingTasksApi.copy(variables.id, variables.data),
     {
       onSuccess: async (data) => {
+        queryClient.setQueryData(queryKeys.tradingTasks.detail(data.id), data);
         await invalidateTradingQueries(data.id);
         options?.onSuccess?.(data);
       },
@@ -101,6 +112,7 @@ export function useStartTradingTask(options?: {
 }) {
   return useWrappedMutation((id: string) => tradingTasksApi.start(id), {
     onSuccess: async (data) => {
+      queryClient.setQueryData(queryKeys.tradingTasks.detail(data.id), data);
       await invalidateTradingQueries(data.id);
       options?.onSuccess?.(data);
     },
@@ -116,8 +128,8 @@ export function useStopTradingTask(options?: {
     (variables: { id: string; mode?: StopMode }) =>
       tradingTasksApi.stop(variables.id, variables.mode ?? 'graceful'),
     {
-      onSuccess: async (data) => {
-        await invalidateTradingQueries();
+      onSuccess: async (data, variables) => {
+        await invalidateTradingQueries(variables.id);
         options?.onSuccess?.(data);
       },
       onError: (error) => options?.onError?.(error),
@@ -131,6 +143,7 @@ export function usePauseTradingTask(options?: {
 }) {
   return useWrappedMutation((id: string) => tradingTasksApi.pause(id), {
     onSuccess: async (data) => {
+      queryClient.setQueryData(queryKeys.tradingTasks.detail(data.id), data);
       await invalidateTradingQueries(data.id);
       options?.onSuccess?.(data);
     },
@@ -144,6 +157,7 @@ export function useResumeTradingTask(options?: {
 }) {
   return useWrappedMutation((id: string) => tradingTasksApi.resume(id), {
     onSuccess: async (data) => {
+      queryClient.setQueryData(queryKeys.tradingTasks.detail(data.id), data);
       await invalidateTradingQueries(data.id);
       options?.onSuccess?.(data);
     },
@@ -157,6 +171,7 @@ export function useRestartTradingTask(options?: {
 }) {
   return useWrappedMutation((id: string) => tradingTasksApi.restart(id), {
     onSuccess: async (data) => {
+      queryClient.setQueryData(queryKeys.tradingTasks.detail(data.id), data);
       await invalidateTradingQueries(data.id);
       options?.onSuccess?.(data);
     },

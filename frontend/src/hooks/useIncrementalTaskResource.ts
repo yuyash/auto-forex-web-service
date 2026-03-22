@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
+import { useSequentialPolling } from './useSequentialPolling';
 import {
   fetchTaskResourcePage,
   isApiErrorWithStatus,
@@ -193,19 +194,18 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
     void fetchItems(false);
   }, [fetchItems]);
 
-  useEffect(() => {
-    if (!enableRealTimeUpdates) {
-      return;
-    }
-
-    const intervalId = window.setInterval(() => {
+  useSequentialPolling(
+    () => {
       if (hasInitialFetchRef.current) {
-        void fetchItems(true);
+        return fetchItems(true);
       }
-    }, refreshInterval);
-
-    return () => window.clearInterval(intervalId);
-  }, [enableRealTimeUpdates, fetchItems, refreshInterval]);
+      return Promise.resolve();
+    },
+    {
+      enabled: enableRealTimeUpdates,
+      intervalMs: refreshInterval,
+    }
+  );
 
   const prevRealTimeRef = useRef(enableRealTimeUpdates);
   useEffect(() => {

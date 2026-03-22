@@ -295,6 +295,7 @@ def _serialize_execution_row(
             task_type=task_type,
             task_id=task_id,
             run_id=run_id,
+            meta=meta,
             fallback_mid_rate=fallback_mid_rate,
         )
 
@@ -307,6 +308,7 @@ def _get_cached_execution_metrics(
     task_type: str,
     task_id: str,
     run_id: str,
+    meta: dict[str, Any],
     fallback_mid_rate: Decimal | None = None,
 ) -> dict[str, Any]:
     cache_key = _build_execution_metrics_cache_key(
@@ -314,6 +316,7 @@ def _get_cached_execution_metrics(
         task_type=task_type,
         task_id=task_id,
         run_id=run_id,
+        meta=meta,
     )
     cached_metrics = cache.get(cache_key)
     if isinstance(cached_metrics, dict):
@@ -330,7 +333,16 @@ def _get_cached_execution_metrics(
     return metrics
 
 
-def _build_execution_metrics_cache_key(*, task, task_type: str, task_id: str, run_id: str) -> str:
+def _build_execution_metrics_cache_key(
+    *, task, task_type: str, task_id: str, run_id: str, meta: dict[str, Any]
+) -> str:
+    status = str(meta.get("status") or "")
+    completed_at = meta.get("completed_at")
+    if status in {TaskStatus.COMPLETED, TaskStatus.STOPPED, TaskStatus.FAILED} and completed_at:
+        return (
+            f"task-execution-metrics-snapshot:{task_type}:{task_id}:{run_id}:"
+            f"{completed_at.isoformat()}"
+        )
     updated_at = getattr(task, "updated_at", None)
     updated_at_key = updated_at.isoformat() if updated_at else "na"
     return f"task-execution-metrics:{task_type}:{task_id}:{run_id}:{updated_at_key}"

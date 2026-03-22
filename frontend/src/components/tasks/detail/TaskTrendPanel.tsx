@@ -219,6 +219,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     executionRunId,
     rangeFrom: loadedTimeRange?.from,
     rangeTo: loadedTimeRange?.to,
+    includeTradeIds: true,
     enableRealTimeUpdates: realTimeUpdatesEnabled,
   });
   const {
