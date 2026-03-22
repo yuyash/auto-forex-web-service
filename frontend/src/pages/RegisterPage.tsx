@@ -14,7 +14,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { authApi } from '../services/api';
+import { useRegister } from '../hooks/useAuthMutations';
 import { ApiError } from '../api/apiClient';
 import { logger } from '../utils/logger';
 
@@ -42,6 +42,7 @@ const RegisterPage = () => {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
   const { systemSettings, systemSettingsLoading } = useAuth();
+  const registerMutation = useRegister();
 
   const [formData, setFormData] = useState<RegisterFormData>({
     username: '',
@@ -175,7 +176,7 @@ const RegisterPage = () => {
     setIsLoading(true);
 
     try {
-      const registerData = await authApi.register({
+      const registerData = await registerMutation.mutate({
         username: formData.username,
         email: formData.email,
         password: formData.password,

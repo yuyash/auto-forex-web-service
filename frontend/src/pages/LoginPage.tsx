@@ -13,7 +13,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { authApi } from '../services/api';
+import { useLogin } from '../hooks/useAuthMutations';
 import { ApiError } from '../api/apiClient';
 import { logger } from '../utils/logger';
 
@@ -34,6 +34,7 @@ const LoginPage = () => {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
   const { login, systemSettings, systemSettingsLoading } = useAuth();
+  const loginMutation = useLogin();
 
   const [formData, setFormData] = useState<LoginFormData>({
     email: '',
@@ -85,7 +86,7 @@ const LoginPage = () => {
     setIsLoading(true);
 
     try {
-      const loginData = await authApi.login(formData);
+      const loginData = await loginMutation.mutate(formData);
 
       if (!loginData.token || !loginData.user) {
         setErrors({

@@ -6,13 +6,8 @@
  * cycles only new records are fetched and merged into the local cache.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
 import { TaskType } from '../types/common';
-import { handleAuthErrorStatus } from '../utils/authEvents';
-import {
-  fetchTaskResourcePage,
-  isApiErrorWithStatus,
-} from '../services/api/taskResources';
+import { useIncrementalTaskResource } from './useIncrementalTaskResource';
 
 export interface TaskEvent {
   id: string;
@@ -73,141 +68,42 @@ export const useTaskEvents = ({
   enableRealTimeUpdates = false,
   refreshInterval = 10_000,
 }: UseTaskEventsOptions): UseTaskEventsResult => {
-  const [events, setEvents] = useState<TaskEvent[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [hasNext, setHasNext] = useState(false);
-  const [hasPrevious, setHasPrevious] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
-  const latestRequestRef = useRef(0);
-  const sinceRef = useRef<string | null>(null);
-  const hasInitialFetchRef = useRef(false);
-
   const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${source}-${eventType}-${severity}-${page}-${pageSize}`;
-  const prevParamsKeyRef = useRef(paramsKey);
-  if (paramsKey !== prevParamsKeyRef.current) {
-    prevParamsKeyRef.current = paramsKey;
-    sinceRef.current = null;
-    hasInitialFetchRef.current = false;
-  }
-
-  const fetchEvents = useCallback(
-    async (incremental = false) => {
-      if (!taskId) {
-        setIsLoading(false);
-        return;
+  const endpoint = source === 'strategy' ? 'strategy-events' : 'events';
+  const {
+    items: events,
+    totalCount,
+    hasNext,
+    hasPrevious,
+    isLoading,
+    error,
+    refetch,
+  } = useIncrementalTaskResource<TaskEvent>({
+    taskId,
+    taskType,
+    endpoint,
+    paramsKey,
+    page,
+    pageSize,
+    enableRealTimeUpdates,
+    refreshInterval,
+    errorContext: 'task_events',
+    fallbackErrorMessage: 'Failed to load events',
+    buildParams: () => {
+      const params: Record<string, string> = {};
+      if (executionRunId != null) {
+        params.execution_id = String(executionRunId);
       }
-
-      const requestId = ++latestRequestRef.current;
-
-      try {
-        if (!incremental) setIsLoading(true);
-        setError(null);
-
-        const params: Record<string, string> = {
-          page: String(page),
-          page_size: String(pageSize),
-        };
-        if (executionRunId != null) {
-          params.execution_id = String(executionRunId);
-        }
-        if (eventType) params.event_type = eventType;
-        if (severity) params.severity = severity;
-        if (source !== 'strategy') {
-          params.scope = source;
-        }
-        const effectiveSince = incremental ? sinceRef.current : null;
-        if (effectiveSince) params.since = effectiveSince;
-
-        const endpoint = source === 'strategy' ? 'strategy-events' : 'events';
-        const data = await fetchTaskResourcePage<TaskEvent>(
-          taskType,
-          taskId,
-          endpoint,
-          params
-        );
-
-        if (requestId !== latestRequestRef.current) return;
-
-        const incoming = data.results;
-
-        if (incremental && incoming.length > 0) {
-          setEvents((prev) => {
-            const map = new Map(prev.map((e) => [e.id, e]));
-            for (const e of incoming) {
-              map.set(e.id, e);
-            }
-            return Array.from(map.values());
-          });
-          setTotalCount(data.count ?? totalCount);
-        } else if (!incremental) {
-          setEvents(incoming);
-          setTotalCount(data.count ?? 0);
-          setHasNext(Boolean(data.next));
-          setHasPrevious(Boolean(data.previous));
-        }
-
-        const latestTs = getLatestCreatedAt(incoming);
-        if (latestTs && (!sinceRef.current || latestTs > sinceRef.current)) {
-          sinceRef.current = latestTs;
-        }
-        hasInitialFetchRef.current = true;
-      } catch (err) {
-        if (requestId !== latestRequestRef.current) return;
-
-        if (isApiErrorWithStatus(err)) {
-          handleAuthErrorStatus(err.status, {
-            source: 'http',
-            status: err.status,
-            context: 'task_events',
-          });
-        }
-        const msg =
-          err instanceof Error ? err.message : 'Failed to load events';
-        setError(new Error(msg));
-      } finally {
-        if (requestId === latestRequestRef.current) {
-          setIsLoading(false);
-        }
+      if (eventType) params.event_type = eventType;
+      if (severity) params.severity = severity;
+      if (source !== 'strategy') {
+        params.scope = source;
       }
+      return params;
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      taskId,
-      taskType,
-      executionRunId,
-      source,
-      eventType,
-      severity,
-      page,
-      pageSize,
-    ]
-  );
-
-  useEffect(() => {
-    fetchEvents(false);
-  }, [fetchEvents]);
-
-  useEffect(() => {
-    if (!enableRealTimeUpdates) return;
-    const interval = setInterval(() => {
-      if (hasInitialFetchRef.current) {
-        fetchEvents(true);
-      }
-    }, refreshInterval);
-    return () => clearInterval(interval);
-  }, [enableRealTimeUpdates, refreshInterval, fetchEvents]);
-
-  const prevRealTimeRef = useRef(enableRealTimeUpdates);
-  useEffect(() => {
-    if (prevRealTimeRef.current && !enableRealTimeUpdates) {
-      sinceRef.current = null;
-      hasInitialFetchRef.current = false;
-      fetchEvents(false);
-    }
-    prevRealTimeRef.current = enableRealTimeUpdates;
-  }, [enableRealTimeUpdates, fetchEvents]);
+    getLatestCursor: getLatestCreatedAt,
+    getItemId: (event) => event.id,
+  });
 
   return {
     events,
@@ -216,6 +112,6 @@ export const useTaskEvents = ({
     hasPrevious,
     isLoading,
     error,
-    refetch: () => fetchEvents(false),
+    refetch,
   };
 };

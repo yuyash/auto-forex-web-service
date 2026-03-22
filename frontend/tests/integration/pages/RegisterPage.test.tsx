@@ -6,56 +6,94 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { AuthProvider } from '../../../src/contexts/AuthContext';
 import { I18nextProvider } from 'react-i18next';
 import i18n from '../../../src/i18n/config';
+import { ApiError } from '../../../src/api/apiClient';
+import { authApi } from '../../../src/services/api';
+import { useRegister } from '../../../src/hooks/useAuthMutations';
 import RegisterPage from '../../../src/pages/RegisterPage';
 
-let fetchSpy: ReturnType<typeof vi.spyOn>;
+vi.mock('../../../src/api', () => ({
+  setAuthToken: vi.fn(),
+  clearAuthToken: vi.fn(),
+}));
 
-function mockFetch(overrides: Record<string, () => Response> = {}) {
-  fetchSpy.mockImplementation(async (input: RequestInfo | URL) => {
-    const url = typeof input === 'string' ? input : input.toString();
-    if (overrides[url]) return overrides[url]();
-    if (url === '/api/accounts/settings/public') {
-      return new Response(
-        JSON.stringify({ login_enabled: true, registration_enabled: true }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-    return new Response('{}', {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+vi.mock('../../../src/services/api', () => ({
+  authApi: {
+    getPublicSettings: vi.fn(),
+    refresh: vi.fn(),
+    logout: vi.fn(),
+  },
+}));
+
+vi.mock('../../../src/hooks/useAuthMutations', () => ({
+  useRegister: vi.fn(),
+}));
+
+async function getEnabledSubmitButton() {
+  const button = await screen.findByRole('button', {
+    name: /register|sign up/i,
   });
+  await waitFor(() => {
+    expect(button).toBeEnabled();
+  });
+  return button;
 }
 
-function renderRegisterPage() {
-  return render(
-    <I18nextProvider i18n={i18n}>
-      <MemoryRouter initialEntries={['/register']}>
-        <AuthProvider>
-          <RegisterPage />
-        </AuthProvider>
-      </MemoryRouter>
-    </I18nextProvider>
+async function renderRegisterPage() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  const rendered = render(
+    <QueryClientProvider client={queryClient}>
+      <I18nextProvider i18n={i18n}>
+        <MemoryRouter initialEntries={['/register']}>
+          <AuthProvider>
+            <RegisterPage />
+          </AuthProvider>
+        </MemoryRouter>
+      </I18nextProvider>
+    </QueryClientProvider>
   );
+  await waitFor(() => {
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+  return rendered;
 }
 
 describe('RegisterPage', () => {
+  const authApiMock = vi.mocked(authApi);
+  const useRegisterMock = vi.mocked(useRegister);
+  let registerMutateMock: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     localStorage.clear();
-    fetchSpy = vi.spyOn(globalThis, 'fetch');
-    mockFetch();
+    authApiMock.getPublicSettings.mockResolvedValue({
+      login_enabled: true,
+      registration_enabled: true,
+    });
+    authApiMock.refresh.mockRejectedValue(
+      new ApiError('/api/accounts/auth/refresh', 401, 'Unauthorized', null)
+    );
+    authApiMock.logout.mockResolvedValue({
+      message: 'Logged out successfully.',
+      sessions_terminated: 0,
+    });
+    registerMutateMock = vi.fn();
+    useRegisterMock.mockReturnValue({
+      mutate: registerMutateMock,
+    } as never);
   });
 
   afterEach(() => {
-    fetchSpy.mockRestore();
+    vi.clearAllMocks();
   });
 
   it('renders all form fields', async () => {
-    renderRegisterPage();
+    await renderRegisterPage();
     await waitFor(() => {
       expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
     });
@@ -66,11 +104,9 @@ describe('RegisterPage', () => {
 
   it('shows validation error for empty username', async () => {
     const user = userEvent.setup();
-    renderRegisterPage();
+    await renderRegisterPage();
 
-    const btn = await screen.findByRole('button', {
-      name: /register|sign up/i,
-    });
+    const btn = await getEnabledSubmitButton();
     await user.click(btn);
 
     await waitFor(() => {
@@ -80,12 +116,12 @@ describe('RegisterPage', () => {
 
   it('shows validation error for short username', async () => {
     const user = userEvent.setup();
-    renderRegisterPage();
+    await renderRegisterPage();
 
     const usernameField = await screen.findByLabelText(/username/i);
     await user.type(usernameField, 'ab');
 
-    const btn = screen.getByRole('button', { name: /register|sign up/i });
+    const btn = await getEnabledSubmitButton();
     await user.click(btn);
 
     await waitFor(() => {
@@ -95,7 +131,7 @@ describe('RegisterPage', () => {
 
   it('shows validation error for invalid email', async () => {
     const user = userEvent.setup();
-    renderRegisterPage();
+    await renderRegisterPage();
 
     const usernameField = await screen.findByLabelText(/username/i);
     const emailField = screen.getByLabelText(/email/i);
@@ -103,7 +139,7 @@ describe('RegisterPage', () => {
     await user.type(usernameField, 'testuser');
     await user.type(emailField, 'notanemail');
 
-    const btn = screen.getByRole('button', { name: /register|sign up/i });
+    const btn = await getEnabledSubmitButton();
     await user.click(btn);
 
     await waitFor(() => {
@@ -113,7 +149,7 @@ describe('RegisterPage', () => {
 
   it('shows validation error for short password', async () => {
     const user = userEvent.setup();
-    renderRegisterPage();
+    await renderRegisterPage();
 
     const usernameField = await screen.findByLabelText(/username/i);
     const emailField = screen.getByLabelText(/email/i);
@@ -123,7 +159,7 @@ describe('RegisterPage', () => {
     await user.type(emailField, 'test@example.com');
     await user.type(passwordField, 'short');
 
-    const btn = screen.getByRole('button', { name: /register|sign up/i });
+    const btn = await getEnabledSubmitButton();
     await user.click(btn);
 
     await waitFor(() => {
@@ -133,7 +169,7 @@ describe('RegisterPage', () => {
 
   it('shows validation error for password mismatch', async () => {
     const user = userEvent.setup();
-    renderRegisterPage();
+    await renderRegisterPage();
 
     const usernameField = await screen.findByLabelText(/username/i);
     const emailField = screen.getByLabelText(/email/i);
@@ -145,7 +181,7 @@ describe('RegisterPage', () => {
     await user.type(passwordField, 'StrongPass1');
     await user.type(confirmField, 'DifferentPass1');
 
-    const btn = screen.getByRole('button', { name: /register|sign up/i });
+    const btn = await getEnabledSubmitButton();
     await user.click(btn);
 
     await waitFor(() => {
@@ -155,7 +191,7 @@ describe('RegisterPage', () => {
 
   it('shows password strength indicator', async () => {
     const user = userEvent.setup();
-    renderRegisterPage();
+    await renderRegisterPage();
 
     const passwordField = await screen.findByLabelText(/^password/i);
     await user.type(passwordField, 'StrongP@ss1');
@@ -166,24 +202,13 @@ describe('RegisterPage', () => {
   });
 
   it('shows success message on successful registration', async () => {
-    mockFetch({
-      '/api/accounts/settings/public': () =>
-        new Response(
-          JSON.stringify({ login_enabled: true, registration_enabled: true }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        ),
-      '/api/accounts/auth/register': () =>
-        new Response(
-          JSON.stringify({
-            message: 'Registration successful!',
-            user: { id: 1, email: 'test@example.com', username: 'testuser' },
-          }),
-          { status: 201, headers: { 'Content-Type': 'application/json' } }
-        ),
+    registerMutateMock.mockResolvedValueOnce({
+      message: 'Registration successful!',
+      user: { id: 1, email: 'test@example.com', username: 'testuser' },
     });
 
     const user = userEvent.setup();
-    renderRegisterPage();
+    await renderRegisterPage();
 
     const usernameField = await screen.findByLabelText(/username/i);
     const emailField = screen.getByLabelText(/email/i);
@@ -195,7 +220,7 @@ describe('RegisterPage', () => {
     await user.type(passwordField, 'StrongP@ss1');
     await user.type(confirmField, 'StrongP@ss1');
 
-    const btn = screen.getByRole('button', { name: /register|sign up/i });
+    const btn = await getEnabledSubmitButton();
     await user.click(btn);
 
     await waitFor(() => {
@@ -204,21 +229,14 @@ describe('RegisterPage', () => {
   });
 
   it('shows server error on failed registration', async () => {
-    mockFetch({
-      '/api/accounts/settings/public': () =>
-        new Response(
-          JSON.stringify({ login_enabled: true, registration_enabled: true }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        ),
-      '/api/accounts/auth/register': () =>
-        new Response(JSON.stringify({ error: 'Email already exists' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        }),
-    });
+    registerMutateMock.mockRejectedValueOnce(
+      new ApiError('/api/accounts/auth/register', 400, 'Bad Request', {
+        error: 'Email already exists',
+      })
+    );
 
     const user = userEvent.setup();
-    renderRegisterPage();
+    await renderRegisterPage();
 
     const usernameField = await screen.findByLabelText(/username/i);
     const emailField = screen.getByLabelText(/email/i);
@@ -230,7 +248,7 @@ describe('RegisterPage', () => {
     await user.type(passwordField, 'StrongP@ss1');
     await user.type(confirmField, 'StrongP@ss1');
 
-    const btn = screen.getByRole('button', { name: /register|sign up/i });
+    const btn = await getEnabledSubmitButton();
     await user.click(btn);
 
     await waitFor(() => {
@@ -239,15 +257,12 @@ describe('RegisterPage', () => {
   });
 
   it('disables form when registration is disabled', async () => {
-    mockFetch({
-      '/api/accounts/settings/public': () =>
-        new Response(
-          JSON.stringify({ login_enabled: true, registration_enabled: false }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        ),
+    authApiMock.getPublicSettings.mockResolvedValueOnce({
+      login_enabled: true,
+      registration_enabled: false,
     });
 
-    renderRegisterPage();
+    await renderRegisterPage();
 
     await waitFor(() => {
       const btn = screen.getByRole('button', { name: /register|sign up/i });
@@ -257,11 +272,9 @@ describe('RegisterPage', () => {
 
   it('clears field error when user starts typing', async () => {
     const user = userEvent.setup();
-    renderRegisterPage();
+    await renderRegisterPage();
 
-    const btn = await screen.findByRole('button', {
-      name: /register|sign up/i,
-    });
+    const btn = await getEnabledSubmitButton();
     await user.click(btn);
 
     await waitFor(() => {

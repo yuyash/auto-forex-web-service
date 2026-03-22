@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, getApiErrorCode, getApiErrorMessage } from '../api/apiClient';
+import { getApiErrorCode, getApiErrorMessage } from '../api/apiClient';
+import { marketApi } from '../services/api/market';
 import type { Granularity } from '../types/chart';
 import {
   clampRange,
@@ -226,15 +227,12 @@ export function useWindowedCandles({
 
   const requestCandles = useCallback(
     async (query: Record<string, string | number | undefined>) => {
-      const response = await api.get<{ candles?: unknown[] }>(
-        '/api/market/candles/',
-        {
-          instrument,
-          granularity,
-          account_id: accountId,
-          ...query,
-        }
-      );
+      const response = await marketApi.getCandles({
+        instrument,
+        granularity,
+        account_id: accountId,
+        ...query,
+      });
       return parseCandles(response?.candles);
     },
     [accountId, granularity, instrument]

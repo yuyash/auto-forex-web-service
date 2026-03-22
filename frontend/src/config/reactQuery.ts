@@ -162,6 +162,13 @@ export const queryKeys = {
     all: ['user-settings'] as const,
     detail: () => [...queryKeys.userSettings.all, 'detail'] as const,
   },
+
+  marketConfig: {
+    all: ['market-config'] as const,
+    instruments: () => [...queryKeys.marketConfig.all, 'instruments'] as const,
+    granularities: () =>
+      [...queryKeys.marketConfig.all, 'granularities'] as const,
+  },
 };
 
 // Cache invalidation helpers
