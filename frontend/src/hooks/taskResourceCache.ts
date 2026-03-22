@@ -117,6 +117,17 @@ export function clearTaskLogComponents(
   });
 }
 
+export function patchTaskLogComponents(
+  taskId: string,
+  taskType: TaskType,
+  components: string[]
+): void {
+  queryClient.setQueriesData<string[] | undefined>(
+    { queryKey: queryKeys.taskResources.logComponents(taskType, taskId) },
+    () => components
+  );
+}
+
 export function patchTaskStrategyEventsExecution(
   taskId: string,
   taskType: TaskType,
@@ -131,6 +142,43 @@ export function patchTaskStrategyEventsExecution(
       return {
         ...cached,
         execution_id: executionId,
+        generated_at: executionId ? cached.generated_at : null,
+      };
+    }
+  );
+}
+
+export function patchTaskStrategyEventsLifecycle(
+  taskId: string,
+  taskType: TaskType,
+  options: {
+    executionId: string | null;
+    clearVisualization?: boolean;
+  }
+): void {
+  queryClient.setQueriesData<StrategyVisualizationResponse | null | undefined>(
+    { queryKey: queryKeys.taskResources.strategyEvents(taskType, taskId) },
+    (cached) => {
+      if (!cached) {
+        return cached;
+      }
+      if (options.clearVisualization) {
+        return {
+          ...cached,
+          execution_id: options.executionId,
+          generated_at: null,
+          message: undefined,
+          summary: {},
+          view_model: {
+            kind: 'unsupported',
+            groups: [],
+          },
+        };
+      }
+      return {
+        ...cached,
+        execution_id: options.executionId,
+        generated_at: null,
       };
     }
   );

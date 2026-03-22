@@ -1,4 +1,4 @@
-import type { ComponentProps } from 'react';
+import type { ComponentProps, MouseEvent, TouchEvent } from 'react';
 import type { TFunction } from 'i18next';
 import { TaskTrendAlerts } from './TaskTrendAlerts';
 import { TaskTrendChartSection } from './TaskTrendChartSection';
@@ -22,10 +22,28 @@ export type TaskTrendTablesSectionViewModel = ComponentProps<
   typeof TaskTrendTablesSection
 >;
 
+export interface TaskTrendPanelStateViewModel {
+  candleErrorMessage: string | null;
+  candleErrorSeverity: 'info' | 'error';
+  handleSeparatorMouseDown: (
+    event: MouseEvent<HTMLElement> | TouchEvent<HTMLElement>
+  ) => void;
+}
+
+export interface TaskTrendCandleStateViewModel {
+  isInitialLoading: boolean;
+  candles: Array<unknown>;
+}
+
+export interface TaskTrendReplayStateViewModel {
+  errorMessage: string | null;
+  warningMessage: string | null;
+}
+
 export interface TaskTrendViewModel {
-  panelState: ReturnType<typeof useTaskTrendOrchestration>['panelState'];
-  candleState: ReturnType<typeof useTaskTrendOrchestration>['candleState'];
-  replayData: ReturnType<typeof useTaskTrendOrchestration>['replayData'];
+  panelState: TaskTrendPanelStateViewModel;
+  candleState: TaskTrendCandleStateViewModel;
+  replayData: TaskTrendReplayStateViewModel;
   alertsProps: TaskTrendAlertsViewModel;
   toolbarProps: TaskTrendToolbarViewModel;
   chartSectionProps: TaskTrendChartSectionViewModel;

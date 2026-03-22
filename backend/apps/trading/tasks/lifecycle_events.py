@@ -2,16 +2,101 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from logging import Logger
+from typing import Protocol
 
 from apps.trading.models import BacktestTask, TradingEvent, TradingTask
 
 
-class TaskLifecycleEventPublisher:
-    """Persist lifecycle events emitted by task lifecycle commands."""
+@dataclass(frozen=True)
+class TaskLifecycleEvent:
+    """Lifecycle event payload shared by publishers."""
+
+    task: BacktestTask | TradingTask
+    task_type: str
+    kind: str
+    description: str
+    extra_details: dict[str, object] | None = None
+
+    @property
+    def details(self) -> dict[str, object]:
+        details = {
+            "kind": self.kind,
+            "status": str(self.task.status),
+            "task_name": str(getattr(self.task, "name", "")),
+        }
+        if self.extra_details:
+            details.update(self.extra_details)
+        return details
+
+
+class TaskLifecycleEventSink(Protocol):
+    """Sink for lifecycle event side effects."""
+
+    def publish(self, event: TaskLifecycleEvent) -> None:
+        """Handle a lifecycle event."""
+
+
+class LoggerLifecycleEventSink:
+    """Emit lifecycle events to structured application logs."""
 
     def __init__(self, *, logger: Logger) -> None:
         self.logger = logger
+
+    def publish(self, event: TaskLifecycleEvent) -> None:
+        self.logger.info(
+            "[SERVICE:EVENT] Lifecycle event published - task_id=%s, task_type=%s, kind=%s, status=%s",
+            event.task.pk,
+            event.task_type,
+            event.kind,
+            event.task.status,
+        )
+
+
+class TradingEventLifecycleSink:
+    """Persist lifecycle events as TradingEvent rows."""
+
+    def __init__(self, *, logger: Logger) -> None:
+        self.logger = logger
+
+    def publish(self, event: TaskLifecycleEvent) -> None:
+        try:
+            TradingEvent.objects.create(
+                event_type="status_changed",
+                severity="info",
+                description=event.description,
+                user=getattr(event.task, "user", None),
+                account=getattr(event.task, "oanda_account", None),
+                instrument=getattr(event.task, "instrument", None),
+                task_type=event.task_type,
+                task_id=event.task.pk,
+                execution_id=getattr(event.task, "execution_id", None),
+                details=event.details,
+            )
+        except Exception as exc:  # pragma: no cover - defensive logging path
+            self.logger.warning(
+                "[SERVICE:EVENT] Failed to persist lifecycle event - task_id=%s, kind=%s, error=%s",
+                event.task.pk,
+                event.kind,
+                exc,
+            )
+
+
+class TaskLifecycleEventPublisher:
+    """Dispatch lifecycle events to configured sinks."""
+
+    def __init__(
+        self,
+        *,
+        logger: Logger,
+        sinks: tuple[TaskLifecycleEventSink, ...] | None = None,
+    ) -> None:
+        self.logger = logger
+        self.sinks = sinks or (
+            LoggerLifecycleEventSink(logger=logger),
+            TradingEventLifecycleSink(logger=logger),
+        )
 
     def publish(
         self,
@@ -22,31 +107,12 @@ class TaskLifecycleEventPublisher:
         description: str,
         extra_details: dict[str, object] | None = None,
     ) -> None:
-        details = {
-            "kind": kind,
-            "status": str(task.status),
-            "task_name": str(getattr(task, "name", "")),
-        }
-        if extra_details:
-            details.update(extra_details)
-
-        try:
-            TradingEvent.objects.create(
-                event_type="status_changed",
-                severity="info",
-                description=description,
-                user=getattr(task, "user", None),
-                account=getattr(task, "oanda_account", None),
-                instrument=getattr(task, "instrument", None),
-                task_type=task_type,
-                task_id=task.pk,
-                execution_id=getattr(task, "execution_id", None),
-                details=details,
-            )
-        except Exception as exc:  # pragma: no cover - defensive logging path
-            self.logger.warning(
-                "[SERVICE:EVENT] Failed to persist lifecycle event - task_id=%s, kind=%s, error=%s",
-                task.pk,
-                kind,
-                exc,
-            )
+        event = TaskLifecycleEvent(
+            task=task,
+            task_type=task_type,
+            kind=kind,
+            description=description,
+            extra_details=extra_details,
+        )
+        for sink in self.sinks:
+            sink.publish(event)

@@ -12,6 +12,41 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 
+from apps.trading.views.pagination import (
+    ActivityPagination,
+    MetricsPagination,
+    TradePositionPagination,
+)
+
+
+def _schema_datetime_field(help_text: str) -> serializers.DateTimeField:
+    return serializers.DateTimeField(required=False, allow_null=True, help_text=help_text)
+
+
+def _schema_string_field(help_text: str) -> serializers.CharField:
+    return serializers.CharField(required=False, allow_blank=True, help_text=help_text)
+
+
+def _schema_uuid_field(help_text: str) -> serializers.UUIDField:
+    return serializers.UUIDField(required=False, allow_null=True, help_text=help_text)
+
+
+def _schema_page_field() -> serializers.IntegerField:
+    return serializers.IntegerField(required=False, min_value=1, help_text="Page number (1-based).")
+
+
+def _schema_page_size_field(*, default: int, max_value: int) -> serializers.IntegerField:
+    return serializers.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=max_value,
+        help_text=f"Results per page. Default {default}, maximum {max_value}.",
+    )
+
+
+def _schema_bool_field(help_text: str) -> serializers.BooleanField:
+    return serializers.BooleanField(required=False, help_text=help_text)
+
 
 def _invalid_query_param(detail: str) -> ValidationError:
     return ValidationError({"code": "invalid_query_param", "detail": detail})
@@ -174,116 +209,171 @@ class DateRangeQuerySerializer(QueryParamsSerializer):
 class ExecutionScopedQueryParamsSchemaSerializer(serializers.Serializer):
     """OpenAPI serializer for execution-scoped task query parameters."""
 
-    execution_id = serializers.UUIDField(required=False, allow_null=True)
-    since = serializers.DateTimeField(required=False, allow_null=True)
-    page = serializers.IntegerField(required=False, min_value=1)
-    page_size = serializers.IntegerField(required=False, min_value=1, max_value=1000)
+    execution_id = _schema_uuid_field("Filter by execution ID (UUID).")
+    since = _schema_datetime_field("RFC3339 timestamp for incremental fetch.")
+    page = _schema_page_field()
+    page_size = _schema_page_size_field(
+        default=ActivityPagination.page_size,
+        max_value=ActivityPagination.max_page_size,
+    )
 
 
 class MetricsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for metrics query parameters."""
 
-    until = serializers.DateTimeField(required=False, allow_null=True)
-    interval = serializers.IntegerField(required=False, min_value=1, max_value=1440)
+    page_size = _schema_page_size_field(
+        default=MetricsPagination.page_size,
+        max_value=MetricsPagination.max_page_size,
+    )
+    until = _schema_datetime_field("RFC3339 upper-bound timestamp (exclusive).")
+    interval = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=1440,
+        help_text=(
+            "Aggregation interval in minutes. Default 1. When greater than 1, "
+            "returns one point per N-minute window."
+        ),
+    )
 
 
 class LogsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for logs query parameters."""
 
-    level = serializers.CharField(required=False, allow_blank=True)
-    component = serializers.CharField(required=False, allow_blank=True)
-    position_id = serializers.CharField(required=False, allow_blank=True)
-    timestamp_from = serializers.DateTimeField(required=False, allow_null=True)
-    timestamp_to = serializers.DateTimeField(required=False, allow_null=True)
+    level = _schema_string_field("Log level filter (comma-separated for multiple).")
+    component = _schema_string_field("Logger/component name filter (comma-separated for multiple).")
+    position_id = _schema_string_field("Optional position ID prefix filter.")
+    timestamp_from = _schema_datetime_field("Filter logs from this RFC3339 timestamp (inclusive).")
+    timestamp_to = _schema_datetime_field("Filter logs until this RFC3339 timestamp (inclusive).")
 
 
 class LogComponentsQueryParamsSchemaSerializer(QueryParamsSerializer):
     """OpenAPI serializer for log component query parameters."""
 
-    execution_id = serializers.UUIDField(required=False, allow_null=True)
+    execution_id = _schema_uuid_field("Filter by execution ID (UUID).")
 
 
 class EventsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for task events query parameters."""
 
-    event_type = serializers.CharField(required=False, allow_blank=True)
-    severity = serializers.CharField(required=False, allow_blank=True)
+    event_type = _schema_string_field("Event type filter.")
+    severity = _schema_string_field("Severity filter.")
     scope = serializers.ChoiceField(
         required=False,
         choices=("all", "trading", "task"),
+        help_text="Event scope filter.",
     )
-    created_from = serializers.DateTimeField(required=False, allow_null=True)
-    created_to = serializers.DateTimeField(required=False, allow_null=True)
+    created_from = _schema_datetime_field(
+        "Filter events created at or after this RFC3339 timestamp."
+    )
+    created_to = _schema_datetime_field(
+        "Filter events created at or before this RFC3339 timestamp."
+    )
 
 
 class StrategyEventsQueryParamsSchemaSerializer(QueryParamsSerializer):
     """OpenAPI serializer for strategy event visualization parameters."""
 
-    execution_id = serializers.UUIDField(required=False, allow_null=True)
-    root_entry_id = serializers.IntegerField(required=False, min_value=1)
+    execution_id = _schema_uuid_field("Filter by execution ID (UUID).")
+    root_entry_id = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        help_text="Optional root entry group filter.",
+    )
 
 
 class TradesQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for trades query parameters."""
 
-    direction = serializers.CharField(required=False, allow_blank=True)
-    timestamp_from = serializers.DateTimeField(required=False, allow_null=True)
-    timestamp_to = serializers.DateTimeField(required=False, allow_null=True)
+    page_size = _schema_page_size_field(
+        default=TradePositionPagination.page_size,
+        max_value=TradePositionPagination.max_page_size,
+    )
+    direction = _schema_string_field("Direction filter (buy/sell/long/short).")
+    timestamp_from = _schema_datetime_field(
+        "Filter trades executed at or after this RFC3339 timestamp."
+    )
+    timestamp_to = _schema_datetime_field(
+        "Filter trades executed at or before this RFC3339 timestamp."
+    )
 
 
 class PositionsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for positions query parameters."""
 
+    page_size = _schema_page_size_field(
+        default=TradePositionPagination.page_size,
+        max_value=TradePositionPagination.max_page_size,
+    )
     position_status = serializers.ChoiceField(
         required=False,
         choices=("open", "closed"),
+        help_text="Position status filter.",
     )
-    direction = serializers.CharField(required=False, allow_blank=True)
-    include_trade_ids = serializers.BooleanField(required=False)
-    range_from = serializers.DateTimeField(required=False, allow_null=True)
-    range_to = serializers.DateTimeField(required=False, allow_null=True)
+    direction = _schema_string_field("Direction filter.")
+    include_trade_ids = _schema_bool_field("Include position trade_ids in the response.")
+    range_from = _schema_datetime_field(
+        "RFC3339 lower bound for positions overlapping a chart range."
+    )
+    range_to = _schema_datetime_field(
+        "RFC3339 upper bound for positions overlapping a chart range."
+    )
 
 
 class TrendReplayQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for trend replay parameters."""
 
-    range_from = serializers.DateTimeField(required=False, allow_null=True)
-    range_to = serializers.DateTimeField(required=False, allow_null=True)
+    page_size = _schema_page_size_field(
+        default=TradePositionPagination.page_size,
+        max_value=TradePositionPagination.max_page_size,
+    )
+    range_from = _schema_datetime_field("RFC3339 lower bound for the chart window.")
+    range_to = _schema_datetime_field("RFC3339 upper bound for the chart window.")
 
 
 class OrdersQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for orders query parameters."""
 
-    status = serializers.CharField(required=False, allow_blank=True)
-    order_type = serializers.CharField(required=False, allow_blank=True)
-    direction = serializers.CharField(required=False, allow_blank=True)
+    page_size = _schema_page_size_field(
+        default=TradePositionPagination.page_size,
+        max_value=TradePositionPagination.max_page_size,
+    )
+    status = _schema_string_field("Order status filter.")
+    order_type = _schema_string_field("Order type filter.")
+    direction = _schema_string_field("Direction filter.")
 
 
 class SummaryQueryParamsSchemaSerializer(QueryParamsSerializer):
     """OpenAPI serializer for summary query parameters."""
 
-    execution_id = serializers.UUIDField(required=False, allow_null=True)
+    execution_id = _schema_uuid_field("Filter by execution ID (UUID).")
 
 
 class ExecutionsQueryParamsSchemaSerializer(serializers.Serializer):
     """OpenAPI serializer for execution list query parameters."""
 
-    page = serializers.IntegerField(required=False, min_value=1)
-    page_size = serializers.IntegerField(required=False, min_value=1, max_value=1000)
-    include_metrics = serializers.BooleanField(required=False)
+    page = _schema_page_field()
+    page_size = _schema_page_size_field(
+        default=ActivityPagination.page_size,
+        max_value=ActivityPagination.max_page_size,
+    )
+    include_metrics = _schema_bool_field("Include aggregate execution metrics.")
 
 
 class ExecutionDetailQueryParamsSchemaSerializer(QueryParamsSerializer):
     """OpenAPI serializer for execution detail query parameters."""
 
-    include_metrics = serializers.BooleanField(required=False)
+    include_metrics = _schema_bool_field("Include aggregate execution metrics.")
 
 
 class PaginationSchemaSerializer(serializers.Serializer):
     """OpenAPI serializer for plain pagination parameters."""
 
-    page = serializers.IntegerField(required=False, min_value=1)
-    page_size = serializers.IntegerField(required=False, min_value=1, max_value=1000)
+    page = _schema_page_field()
+    page_size = _schema_page_size_field(
+        default=ActivityPagination.page_size,
+        max_value=ActivityPagination.max_page_size,
+    )
 
 
 @dataclass(frozen=True)

@@ -2081,7 +2081,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter events created at or after this RFC3339 timestamp."
                     },
                     {
                         "in": "query",
@@ -2090,14 +2091,16 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter events created at or before this RFC3339 timestamp."
                     },
                     {
                         "in": "query",
                         "name": "event_type",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Event type filter."
                     },
                     {
                         "in": "query",
@@ -2106,7 +2109,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -2124,7 +2128,8 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
-                        }
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
@@ -2133,7 +2138,8 @@
                             "type": "integer",
                             "maximum": 1000,
                             "minimum": 1
-                        }
+                        },
+                        "description": "Results per page. Default 100, maximum 1000."
                     },
                     {
                         "in": "query",
@@ -2147,14 +2153,15 @@
                             "type": "string",
                             "minLength": 1
                         },
-                        "description": "* `all` - all\n* `trading` - trading\n* `task` - task"
+                        "description": "Event scope filter.\n\n* `all` - all\n* `trading` - trading\n* `task` - task"
                     },
                     {
                         "in": "query",
                         "name": "severity",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Severity filter."
                     },
                     {
                         "in": "query",
@@ -2163,7 +2170,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
                     }
                 ],
                 "tags": [
@@ -2208,7 +2216,8 @@
                         "name": "include_metrics",
                         "schema": {
                             "type": "boolean"
-                        }
+                        },
+                        "description": "Include aggregate execution metrics."
                     },
                     {
                         "in": "query",
@@ -2216,7 +2225,8 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
-                        }
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
@@ -2225,7 +2235,8 @@
                             "type": "integer",
                             "maximum": 1000,
                             "minimum": 1
-                        }
+                        },
+                        "description": "Results per page. Default 100, maximum 1000."
                     }
                 ],
                 "tags": [
@@ -2280,7 +2291,8 @@
                         "name": "include_metrics",
                         "schema": {
                             "type": "boolean"
-                        }
+                        },
+                        "description": "Include aggregate execution metrics."
                     }
                 ],
                 "tags": [
@@ -2317,7 +2329,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -2362,7 +2375,8 @@
                         "name": "component",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Logger/component name filter (comma-separated for multiple)."
                     },
                     {
                         "in": "query",
@@ -2371,7 +2385,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -2388,7 +2403,8 @@
                         "name": "level",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Log level filter (comma-separated for multiple)."
                     },
                     {
                         "in": "query",
@@ -2396,7 +2412,8 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
-                        }
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
@@ -2405,14 +2422,16 @@
                             "type": "integer",
                             "maximum": 1000,
                             "minimum": 1
-                        }
+                        },
+                        "description": "Results per page. Default 100, maximum 1000."
                     },
                     {
                         "in": "query",
                         "name": "position_id",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Optional position ID prefix filter."
                     },
                     {
                         "in": "query",
@@ -2421,7 +2440,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
                     },
                     {
                         "in": "query",
@@ -2430,7 +2450,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter logs from this RFC3339 timestamp (inclusive)."
                     },
                     {
                         "in": "query",
@@ -2439,7 +2460,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter logs until this RFC3339 timestamp (inclusive)."
                     }
                 ],
                 "tags": [
@@ -2476,7 +2498,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -2495,7 +2518,8 @@
                             "type": "integer",
                             "maximum": 1440,
                             "minimum": 1
-                        }
+                        },
+                        "description": "Aggregation interval in minutes. Default 1. When greater than 1, returns one point per N-minute window."
                     },
                     {
                         "in": "query",
@@ -2503,16 +2527,18 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
-                        }
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
                             "type": "integer",
-                            "maximum": 1000,
+                            "maximum": 500,
                             "minimum": 1
-                        }
+                        },
+                        "description": "Results per page. Default 100, maximum 500."
                     },
                     {
                         "in": "query",
@@ -2521,7 +2547,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
                     },
                     {
                         "in": "query",
@@ -2530,7 +2557,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 upper-bound timestamp (exclusive)."
                     }
                 ],
                 "tags": [
@@ -2565,7 +2593,8 @@
                         "name": "direction",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Direction filter."
                     },
                     {
                         "in": "query",
@@ -2574,7 +2603,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -2591,7 +2621,8 @@
                         "name": "order_type",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Order type filter."
                     },
                     {
                         "in": "query",
@@ -2599,16 +2630,18 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
-                        }
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
                             "type": "integer",
-                            "maximum": 1000,
+                            "maximum": 200,
                             "minimum": 1
-                        }
+                        },
+                        "description": "Results per page. Default 100, maximum 200."
                     },
                     {
                         "in": "query",
@@ -2617,14 +2650,16 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
                     },
                     {
                         "in": "query",
                         "name": "status",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Order status filter."
                     }
                 ],
                 "tags": [
@@ -2707,7 +2742,8 @@
                         "name": "direction",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Direction filter."
                     },
                     {
                         "in": "query",
@@ -2716,7 +2752,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -2733,7 +2770,8 @@
                         "name": "include_trade_ids",
                         "schema": {
                             "type": "boolean"
-                        }
+                        },
+                        "description": "Include position trade_ids in the response."
                     },
                     {
                         "in": "query",
@@ -2741,16 +2779,18 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
-                        }
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
                             "type": "integer",
-                            "maximum": 1000,
+                            "maximum": 200,
                             "minimum": 1
-                        }
+                        },
+                        "description": "Results per page. Default 100, maximum 200."
                     },
                     {
                         "in": "query",
@@ -2763,7 +2803,7 @@
                             "type": "string",
                             "minLength": 1
                         },
-                        "description": "* `open` - open\n* `closed` - closed"
+                        "description": "Position status filter.\n\n* `open` - open\n* `closed` - closed"
                     },
                     {
                         "in": "query",
@@ -2772,7 +2812,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 lower bound for positions overlapping a chart range."
                     },
                     {
                         "in": "query",
@@ -2781,7 +2822,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 upper bound for positions overlapping a chart range."
                     },
                     {
                         "in": "query",
@@ -2790,7 +2832,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
                     }
                 ],
                 "tags": [
@@ -3019,7 +3062,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -3037,7 +3081,8 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
-                        }
+                        },
+                        "description": "Optional root entry group filter."
                     }
                 ],
                 "tags": [
@@ -3074,7 +3119,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -3119,7 +3165,8 @@
                         "name": "direction",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Direction filter (buy/sell/long/short)."
                     },
                     {
                         "in": "query",
@@ -3128,7 +3175,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -3146,16 +3194,18 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
-                        }
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
                             "type": "integer",
-                            "maximum": 1000,
+                            "maximum": 200,
                             "minimum": 1
-                        }
+                        },
+                        "description": "Results per page. Default 100, maximum 200."
                     },
                     {
                         "in": "query",
@@ -3164,7 +3214,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
                     },
                     {
                         "in": "query",
@@ -3173,7 +3224,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter trades executed at or after this RFC3339 timestamp."
                     },
                     {
                         "in": "query",
@@ -3182,7 +3234,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter trades executed at or before this RFC3339 timestamp."
                     }
                 ],
                 "tags": [
@@ -3219,7 +3272,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -3237,16 +3291,18 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
-                        }
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
                             "type": "integer",
-                            "maximum": 1000,
+                            "maximum": 200,
                             "minimum": 1
-                        }
+                        },
+                        "description": "Results per page. Default 100, maximum 200."
                     },
                     {
                         "in": "query",
@@ -3255,7 +3311,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 lower bound for the chart window."
                     },
                     {
                         "in": "query",
@@ -3264,7 +3321,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 upper bound for the chart window."
                     },
                     {
                         "in": "query",
@@ -3273,7 +3331,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
                     }
                 ],
                 "tags": [
@@ -3555,7 +3614,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter events created at or after this RFC3339 timestamp."
                     },
                     {
                         "in": "query",
@@ -3564,14 +3624,16 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter events created at or before this RFC3339 timestamp."
                     },
                     {
                         "in": "query",
                         "name": "event_type",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Event type filter."
                     },
                     {
                         "in": "query",
@@ -3580,7 +3642,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -3598,7 +3661,8 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
-                        }
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
@@ -3607,7 +3671,8 @@
                             "type": "integer",
                             "maximum": 1000,
                             "minimum": 1
-                        }
+                        },
+                        "description": "Results per page. Default 100, maximum 1000."
                     },
                     {
                         "in": "query",
@@ -3621,14 +3686,15 @@
                             "type": "string",
                             "minLength": 1
                         },
-                        "description": "* `all` - all\n* `trading` - trading\n* `task` - task"
+                        "description": "Event scope filter.\n\n* `all` - all\n* `trading` - trading\n* `task` - task"
                     },
                     {
                         "in": "query",
                         "name": "severity",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Severity filter."
                     },
                     {
                         "in": "query",
@@ -3637,7 +3703,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
                     }
                 ],
                 "tags": [
@@ -3682,7 +3749,8 @@
                         "name": "include_metrics",
                         "schema": {
                             "type": "boolean"
-                        }
+                        },
+                        "description": "Include aggregate execution metrics."
                     },
                     {
                         "in": "query",
@@ -3690,7 +3758,8 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
-                        }
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
@@ -3699,7 +3768,8 @@
                             "type": "integer",
                             "maximum": 1000,
                             "minimum": 1
-                        }
+                        },
+                        "description": "Results per page. Default 100, maximum 1000."
                     }
                 ],
                 "tags": [
@@ -3754,7 +3824,8 @@
                         "name": "include_metrics",
                         "schema": {
                             "type": "boolean"
-                        }
+                        },
+                        "description": "Include aggregate execution metrics."
                     }
                 ],
                 "tags": [
@@ -3791,7 +3862,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -3836,7 +3908,8 @@
                         "name": "component",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Logger/component name filter (comma-separated for multiple)."
                     },
                     {
                         "in": "query",
@@ -3845,7 +3918,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -3862,7 +3936,8 @@
                         "name": "level",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Log level filter (comma-separated for multiple)."
                     },
                     {
                         "in": "query",
@@ -3870,7 +3945,8 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
-                        }
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
@@ -3879,14 +3955,16 @@
                             "type": "integer",
                             "maximum": 1000,
                             "minimum": 1
-                        }
+                        },
+                        "description": "Results per page. Default 100, maximum 1000."
                     },
                     {
                         "in": "query",
                         "name": "position_id",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Optional position ID prefix filter."
                     },
                     {
                         "in": "query",
@@ -3895,7 +3973,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
                     },
                     {
                         "in": "query",
@@ -3904,7 +3983,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter logs from this RFC3339 timestamp (inclusive)."
                     },
                     {
                         "in": "query",
@@ -3913,7 +3993,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter logs until this RFC3339 timestamp (inclusive)."
                     }
                 ],
                 "tags": [
@@ -3950,7 +4031,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -3969,7 +4051,8 @@
                             "type": "integer",
                             "maximum": 1440,
                             "minimum": 1
-                        }
+                        },
+                        "description": "Aggregation interval in minutes. Default 1. When greater than 1, returns one point per N-minute window."
                     },
                     {
                         "in": "query",
@@ -3977,16 +4060,18 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
-                        }
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
                             "type": "integer",
-                            "maximum": 1000,
+                            "maximum": 500,
                             "minimum": 1
-                        }
+                        },
+                        "description": "Results per page. Default 100, maximum 500."
                     },
                     {
                         "in": "query",
@@ -3995,7 +4080,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
                     },
                     {
                         "in": "query",
@@ -4004,7 +4090,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 upper-bound timestamp (exclusive)."
                     }
                 ],
                 "tags": [
@@ -4039,7 +4126,8 @@
                         "name": "direction",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Direction filter."
                     },
                     {
                         "in": "query",
@@ -4048,7 +4136,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -4065,7 +4154,8 @@
                         "name": "order_type",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Order type filter."
                     },
                     {
                         "in": "query",
@@ -4073,16 +4163,18 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
-                        }
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
                             "type": "integer",
-                            "maximum": 1000,
+                            "maximum": 200,
                             "minimum": 1
-                        }
+                        },
+                        "description": "Results per page. Default 100, maximum 200."
                     },
                     {
                         "in": "query",
@@ -4091,14 +4183,16 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
                     },
                     {
                         "in": "query",
                         "name": "status",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Order status filter."
                     }
                 ],
                 "tags": [
@@ -4181,7 +4275,8 @@
                         "name": "direction",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Direction filter."
                     },
                     {
                         "in": "query",
@@ -4190,7 +4285,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -4207,7 +4303,8 @@
                         "name": "include_trade_ids",
                         "schema": {
                             "type": "boolean"
-                        }
+                        },
+                        "description": "Include position trade_ids in the response."
                     },
                     {
                         "in": "query",
@@ -4215,16 +4312,18 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
-                        }
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
                             "type": "integer",
-                            "maximum": 1000,
+                            "maximum": 200,
                             "minimum": 1
-                        }
+                        },
+                        "description": "Results per page. Default 100, maximum 200."
                     },
                     {
                         "in": "query",
@@ -4237,7 +4336,7 @@
                             "type": "string",
                             "minLength": 1
                         },
-                        "description": "* `open` - open\n* `closed` - closed"
+                        "description": "Position status filter.\n\n* `open` - open\n* `closed` - closed"
                     },
                     {
                         "in": "query",
@@ -4246,7 +4345,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 lower bound for positions overlapping a chart range."
                     },
                     {
                         "in": "query",
@@ -4255,7 +4355,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 upper bound for positions overlapping a chart range."
                     },
                     {
                         "in": "query",
@@ -4264,7 +4365,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
                     }
                 ],
                 "tags": [
@@ -4492,7 +4594,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -4510,7 +4613,8 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
-                        }
+                        },
+                        "description": "Optional root entry group filter."
                     }
                 ],
                 "tags": [
@@ -4547,7 +4651,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -4592,7 +4697,8 @@
                         "name": "direction",
                         "schema": {
                             "type": "string"
-                        }
+                        },
+                        "description": "Direction filter (buy/sell/long/short)."
                     },
                     {
                         "in": "query",
@@ -4601,7 +4707,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -4619,16 +4726,18 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
-                        }
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
                             "type": "integer",
-                            "maximum": 1000,
+                            "maximum": 200,
                             "minimum": 1
-                        }
+                        },
+                        "description": "Results per page. Default 100, maximum 200."
                     },
                     {
                         "in": "query",
@@ -4637,7 +4746,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
                     },
                     {
                         "in": "query",
@@ -4646,7 +4756,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter trades executed at or after this RFC3339 timestamp."
                     },
                     {
                         "in": "query",
@@ -4655,7 +4766,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter trades executed at or before this RFC3339 timestamp."
                     }
                 ],
                 "tags": [
@@ -4692,7 +4804,8 @@
                             "type": "string",
                             "format": "uuid",
                             "nullable": true
-                        }
+                        },
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -4710,16 +4823,18 @@
                         "schema": {
                             "type": "integer",
                             "minimum": 1
-                        }
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
                             "type": "integer",
-                            "maximum": 1000,
+                            "maximum": 200,
                             "minimum": 1
-                        }
+                        },
+                        "description": "Results per page. Default 100, maximum 200."
                     },
                     {
                         "in": "query",
@@ -4728,7 +4843,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 lower bound for the chart window."
                     },
                     {
                         "in": "query",
@@ -4737,7 +4853,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 upper bound for the chart window."
                     },
                     {
                         "in": "query",
@@ -4746,7 +4863,8 @@
                             "type": "string",
                             "format": "date-time",
                             "nullable": true
-                        }
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
                     }
                 ],
                 "tags": [
