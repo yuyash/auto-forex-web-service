@@ -141,6 +141,7 @@ export function useTaskTrendReplayData({
       openPositions: serverOpenPositionCount,
     };
   }, [latestExecution, summary, trades.length]);
+  const expectedTotalTrades = replaySummary.totalTrades;
 
   const fetchReplayData = useCallback(async () => {
     const isInitialLoad = !hasLoadedOnce.current;
@@ -162,6 +163,12 @@ export function useTaskTrendReplayData({
       try {
         const useIncrementalTrades =
           !isInitialLoad && tradeSinceRef.current !== null;
+
+        if (isInitialLoad && expectedTotalTrades === 0) {
+          setTrades([]);
+          setErrorMessage(null);
+          return;
+        }
 
         const rawTrades = useIncrementalTrades
           ? await fetchTradesSince(
@@ -227,7 +234,14 @@ export function useTaskTrendReplayData({
       hasLoadedOnce.current = true;
       setIsRefreshing(false);
     }
-  }, [executionRunId, instrument, refreshTailCandles, taskId, taskType]);
+  }, [
+    executionRunId,
+    expectedTotalTrades,
+    instrument,
+    refreshTailCandles,
+    taskId,
+    taskType,
+  ]);
 
   useEffect(() => {
     void fetchReplayData();

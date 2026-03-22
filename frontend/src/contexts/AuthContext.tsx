@@ -14,6 +14,12 @@ import { useIdleTimeout } from '../hooks/useIdleTimeout';
 import { authApi } from '../services/api';
 import { ApiError } from '../api/apiClient';
 import { logger } from '../utils/logger';
+import {
+  readStoredValue,
+  removeStoredValue,
+  writeStoredValue,
+} from '../utils/persistentState';
+import { z } from 'zod';
 
 // Persist context across HMR to prevent "useAuth must be used within AuthProvider" errors
 // during Vite hot module replacement
@@ -32,6 +38,12 @@ if (!globalWindow[AUTH_CONTEXT_KEY]) {
 const AuthContext = globalWindow[AUTH_CONTEXT_KEY] as React.Context<
   AuthContextType | undefined
 >;
+const persistedUserSchema = z.custom<User>(
+  (value) => value !== null && typeof value === 'object'
+);
+const appSettingsSchema = z.object({
+  sessionTimeoutMinutes: z.number().optional(),
+});
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -44,23 +56,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [authBootstrapLoading, setAuthBootstrapLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (!storedUser) {
-      return;
-    }
-
-    try {
-      JSON.parse(storedUser);
-    } catch (error) {
-      logger.warn('Removing invalid persisted user payload', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      localStorage.removeItem('user');
+    const storedUser = readStoredValue('user', persistedUserSchema, null);
+    if (storedUser === null) {
+      const rawUser = window.localStorage.getItem('user');
+      if (rawUser) {
+        logger.warn('Removing invalid persisted user payload');
+        removeStoredValue('user');
+      }
     }
   }, []);
 
   const clearPersistedAuth = useCallback(() => {
-    localStorage.removeItem('user');
+    removeStoredValue('user');
     clearAuthToken();
   }, []);
 
@@ -92,7 +99,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const login = useCallback((newToken: string, newUser: User) => {
     setToken(newToken);
     setUser(newUser);
-    localStorage.setItem('user', JSON.stringify(newUser));
+    writeStoredValue('user', newUser);
     setAuthToken(newToken);
     if (newUser.language && !localStorage.getItem('i18nextLng')) {
       i18n.changeLanguage(newUser.language);
@@ -191,16 +198,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Idle session timeout — read from app settings in localStorage
   const sessionTimeoutMinutes = (() => {
-    try {
-      const raw = localStorage.getItem('app_settings');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (typeof parsed.sessionTimeoutMinutes === 'number') {
-          return parsed.sessionTimeoutMinutes;
-        }
-      }
-    } catch {
-      // ignore
+    const settings = readStoredValue('app_settings', appSettingsSchema, {});
+    if (typeof settings.sessionTimeoutMinutes === 'number') {
+      return settings.sessionTimeoutMinutes;
     }
     return 30; // default 30 minutes
   })();

@@ -29,7 +29,7 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTradingTasks } from '../hooks/useTradingTasks';
-import { useConfigurations } from '../hooks/useConfigurations';
+import { useAllConfigurations } from '../hooks/useConfigurations';
 import { TaskStatus } from '../types/common';
 import TradingTaskCard from '../components/trading/TradingTaskCard';
 import { Breadcrumbs } from '../components/common';
@@ -129,10 +129,7 @@ export default function TradingTasksPage() {
   };
 
   // Fetch configurations for filter dropdown and strategies
-  const { data: configurationsData } = useConfigurations({
-    page: 1,
-    page_size: 100, // Get enough for dropdown
-  });
+  const { data: configurationsData } = useAllConfigurations();
   const { strategies } = useStrategies();
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {

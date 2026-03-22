@@ -6,7 +6,13 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
+import { z } from 'zod';
 import type { Column } from '../components/common/DataTable';
+import {
+  readStoredValue,
+  removeStoredValue,
+  writeStoredValue,
+} from '../utils/persistentState';
 
 export interface ColumnItem {
   id: string;
@@ -19,37 +25,42 @@ interface ColumnConfig {
 }
 
 const STORAGE_PREFIX = 'col_config_';
+const columnConfigSchema = z.object({
+  columns: z.array(
+    z.object({
+      id: z.string(),
+      label: z.string(),
+      visible: z.boolean(),
+    })
+  ),
+});
 
 function loadConfig(storageKey: string, defaults: ColumnItem[]): ColumnItem[] {
-  try {
-    const raw = localStorage.getItem(`${STORAGE_PREFIX}${storageKey}`);
-    if (raw) {
-      const saved: ColumnConfig = JSON.parse(raw);
-      const savedMap = new Map(saved.columns.map((c) => [c.id, c]));
-      const merged: ColumnItem[] = [];
-      for (const col of saved.columns) {
-        if (defaults.find((d) => d.id === col.id)) {
-          merged.push(col);
-        }
+  const saved = readStoredValue<ColumnConfig | null>(
+    `${STORAGE_PREFIX}${storageKey}`,
+    columnConfigSchema.nullable(),
+    null
+  );
+  if (saved) {
+    const savedMap = new Map(saved.columns.map((c) => [c.id, c]));
+    const merged: ColumnItem[] = [];
+    for (const col of saved.columns) {
+      if (defaults.find((d) => d.id === col.id)) {
+        merged.push(col);
       }
-      for (const def of defaults) {
-        if (!savedMap.has(def.id)) {
-          merged.push(def);
-        }
-      }
-      return merged;
     }
-  } catch {
-    // ignore
+    for (const def of defaults) {
+      if (!savedMap.has(def.id)) {
+        merged.push(def);
+      }
+    }
+    return merged;
   }
   return defaults;
 }
 
 function saveConfig(storageKey: string, columns: ColumnItem[]) {
-  localStorage.setItem(
-    `${STORAGE_PREFIX}${storageKey}`,
-    JSON.stringify({ columns })
-  );
+  writeStoredValue(`${STORAGE_PREFIX}${storageKey}`, { columns });
 }
 
 /**
@@ -99,7 +110,7 @@ export function useColumnConfig(
 
   const resetToDefaults = useCallback(() => {
     setColumns(defaultColumns);
-    localStorage.removeItem(`${STORAGE_PREFIX}${storageKey}`);
+    removeStoredValue(`${STORAGE_PREFIX}${storageKey}`);
   }, [storageKey, defaultColumns]);
 
   const visibleColumns = useMemo(

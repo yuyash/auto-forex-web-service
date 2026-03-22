@@ -11,6 +11,7 @@ import {
 } from '@mui/icons-material';
 import { TaskStatus } from '../../../types/common';
 import { getStatusAriaLabel } from '../../../utils/ariaUtils';
+import { logger } from '../../../utils/logger';
 
 interface StatusBadgeProps {
   status: TaskStatus;
@@ -75,7 +76,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = React.memo(
 
     // Safety check for invalid status
     if (!config) {
-      console.warn(`Invalid status received: ${status}`);
+      logger.warn('Invalid status received', { status });
       return (
         <Chip
           label="Unknown"

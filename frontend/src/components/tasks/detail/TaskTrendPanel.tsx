@@ -51,6 +51,11 @@ import { useTaskTrendChart } from './taskTrendPanel/useTaskTrendChart';
 import { useTaskTrendReplayData } from './taskTrendPanel/useTaskTrendReplayData';
 import { useTaskTrendTradesTable } from './taskTrendPanel/useTaskTrendTradesTable';
 import { useTaskTrendPositionsTable } from './taskTrendPanel/useTaskTrendPositionsTable';
+import { logger } from '../../../utils/logger';
+import {
+  readRawStoredValue,
+  writeRawStoredValue,
+} from '../../../utils/persistentState';
 
 interface TaskTrendPanelProps {
   taskId: string | number;
@@ -231,15 +236,10 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   const MIN_CHART_HEIGHT = 200;
   const CHART_HEIGHT_STORAGE_KEY = 'replay-chart-height';
   const [chartHeight, setChartHeight] = useState(() => {
-    try {
-      const saved = localStorage.getItem(CHART_HEIGHT_STORAGE_KEY);
-      if (saved) {
-        const parsed = parseInt(saved, 10);
-        if (Number.isFinite(parsed) && parsed >= MIN_CHART_HEIGHT)
-          return parsed;
-      }
-    } catch {
-      /* ignore */
+    const saved = readRawStoredValue(CHART_HEIGHT_STORAGE_KEY);
+    if (saved) {
+      const parsed = parseInt(saved, 10);
+      if (Number.isFinite(parsed) && parsed >= MIN_CHART_HEIGHT) return parsed;
     }
     return 400;
   });
@@ -274,11 +274,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         document.body.style.userSelect = '';
         // Persist final height
         setChartHeight((h) => {
-          try {
-            localStorage.setItem(CHART_HEIGHT_STORAGE_KEY, String(h));
-          } catch {
-            /* ignore */
-          }
+          writeRawStoredValue(CHART_HEIGHT_STORAGE_KEY, String(h));
           return h;
         });
       };
@@ -1002,9 +998,11 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
                 });
               }
             } catch (e) {
-              console.warn(
-                'Failed to set visible range on position select:',
-                e
+              logger.warn('Failed to set visible range on position select', {
+                error: e instanceof Error ? e.message : String(e),
+              });
+              reportChartWarning(
+                'Failed to update the visible chart range after selecting a position.'
               );
             }
           }

@@ -46,17 +46,19 @@ import {
   buildCopyHandler,
   type CopyValueExtractors,
 } from '../../../utils/tableCopyUtils';
+import {
+  readRawStoredValue,
+  writeRawStoredValue,
+} from '../../../utils/persistentState';
 
 type ViewMode = 'all' | 'byDirection' | 'byStatus';
 
 const VIEW_MODE_STORAGE_KEY = 'positions_view_mode';
 
 function loadViewMode(): ViewMode {
-  try {
-    const v = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
-    if (v === 'all' || v === 'byDirection' || v === 'byStatus') return v;
-  } catch {
-    /* ignore */
+  const v = readRawStoredValue(VIEW_MODE_STORAGE_KEY);
+  if (v === 'all' || v === 'byDirection' || v === 'byStatus') {
+    return v;
   }
   return 'all';
 }
@@ -86,7 +88,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     (_: React.MouseEvent<HTMLElement>, v: ViewMode | null) => {
       if (v) {
         setViewMode(v);
-        localStorage.setItem(VIEW_MODE_STORAGE_KEY, v);
+        writeRawStoredValue(VIEW_MODE_STORAGE_KEY, v);
       }
     },
     []
