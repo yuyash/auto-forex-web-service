@@ -10,8 +10,9 @@ import {
   prependTaskExecution,
 } from './taskResourceCache';
 import {
-  getListParams,
+  patchListQueries,
   removePaginatedEntity,
+  removeFromListQueries,
   upsertPaginatedEntity,
 } from './listCacheUtils';
 
@@ -176,15 +177,9 @@ export function upsertTaskCaches<T extends TaskEntity>(
 ): void {
   const keys = getTaskKeys(taskKind);
   queryClient.setQueryData(keys.detail(task.id), task);
-  for (const query of queryClient
-    .getQueryCache()
-    .findAll({ queryKey: keys.lists })) {
-    const params = getListParams(query.queryKey);
-    queryClient.setQueryData<PaginatedResponse<T> | undefined>(
-      query.queryKey,
-      (cached) => patchListEntry(taskKind, cached, task, params)
-    );
-  }
+  patchListQueries<PaginatedResponse<T>>(keys.lists, (cached, params) =>
+    patchListEntry(taskKind, cached, task, params)
+  );
 }
 
 export function removeTaskCaches(taskKind: TaskKind, taskId: string): void {
@@ -195,9 +190,8 @@ export function removeTaskCaches(taskKind: TaskKind, taskId: string): void {
   queryClient.removeQueries({ queryKey: derivedKeys.summaries });
   queryClient.removeQueries({ queryKey: derivedKeys.strategyEvents });
   queryClient.removeQueries({ queryKey: derivedKeys.logComponents });
-  queryClient.setQueriesData<PaginatedResponse<TaskEntity>>(
-    { queryKey: keys.lists },
-    (cached) => removePaginatedEntity(cached, taskId)
+  removeFromListQueries<PaginatedResponse<TaskEntity>>(keys.lists, (cached) =>
+    removePaginatedEntity(cached, taskId)
   );
 }
 
@@ -211,29 +205,24 @@ export function patchTaskStatusCache(
     keys.detail(taskId),
     (cached) => (cached ? { ...cached, status } : cached)
   );
-  for (const query of queryClient
-    .getQueryCache()
-    .findAll({ queryKey: keys.lists })) {
-    const params = getListParams(query.queryKey);
-    queryClient.setQueryData<PaginatedResponse<TaskEntity> | undefined>(
-      query.queryKey,
-      (cached) => {
-        if (!cached) {
-          return cached;
-        }
-        const current = cached.results.find((entry) => entry.id === taskId);
-        if (!current) {
-          return cached;
-        }
-        return patchListEntry(
-          taskKind,
-          cached,
-          { ...current, status } as TaskEntity,
-          params
-        );
+  patchListQueries<PaginatedResponse<TaskEntity>>(
+    keys.lists,
+    (cached, params) => {
+      if (!cached) {
+        return cached;
       }
-    );
-  }
+      const current = cached.results.find((entry) => entry.id === taskId);
+      if (!current) {
+        return cached;
+      }
+      return patchListEntry(
+        taskKind,
+        cached,
+        { ...current, status } as TaskEntity,
+        params
+      );
+    }
+  );
   patchTaskSummaryStatus(
     taskId,
     taskKind === 'backtest' ? TaskType.BACKTEST : TaskType.TRADING,
@@ -250,23 +239,20 @@ export async function invalidateTaskDerivedCaches(
 
 export function removeTaskListEntry(taskKind: TaskKind, taskId: string): void {
   const keys = getTaskKeys(taskKind);
-  queryClient.setQueriesData<PaginatedResponse<TaskEntity>>(
-    { queryKey: keys.lists },
-    (cached) => {
-      if (!cached) {
-        return cached;
-      }
-      const nextResults = cached.results.filter((entry) => entry.id !== taskId);
-      if (nextResults.length === cached.results.length) {
-        return cached;
-      }
-      return {
-        ...cached,
-        count: Math.max(0, cached.count - 1),
-        results: nextResults,
-      };
+  removeFromListQueries<PaginatedResponse<TaskEntity>>(keys.lists, (cached) => {
+    if (!cached) {
+      return cached;
     }
-  );
+    const nextResults = cached.results.filter((entry) => entry.id !== taskId);
+    if (nextResults.length === cached.results.length) {
+      return cached;
+    }
+    return {
+      ...cached,
+      count: Math.max(0, cached.count - 1),
+      results: nextResults,
+    };
+  });
 }
 
 export function patchTaskDerivedCaches(

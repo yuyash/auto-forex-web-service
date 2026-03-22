@@ -19,6 +19,7 @@ from apps.trading.services.execution_lifecycle import (
     transition_task_to_running,
     transition_task_to_terminal,
 )
+from apps.trading.tasks.lifecycle_events import publish_task_lifecycle_event
 from apps.trading.tasks.executor import TradingExecutor
 from apps.trading.tasks.source import LiveTickDataSource
 from apps.trading.utils import pip_size_for_instrument
@@ -107,6 +108,13 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
                 )
                 return
             task.refresh_from_db()
+            publish_task_lifecycle_event(
+                logger=logger,
+                task=task,
+                task_type=TaskType.TRADING,
+                kind="task_stopped",
+                description="Trading task stopped after execution completed",
+            )
             logger.info(f"Current: {task.status} - task_id={task_id}")
         else:
             logger.info(f"Already in terminal state: {task.status} - task_id={task_id}")
@@ -193,6 +201,13 @@ def handle_exception(task_id: UUID, task: TradingTask | None, error: Exception) 
             error_message=error_message,
             error_traceback=error_traceback,
         )
+        publish_task_lifecycle_event(
+            logger=logger,
+            task=task,
+            task_type=TaskType.TRADING,
+            kind="task_failed",
+            description=f"Trading task failed: {type(error).__name__}: {error_message}",
+        )
 
         # Update CeleryTaskStatus to maintain state consistency
         from apps.trading.models.celery import CeleryTaskStatus
@@ -254,9 +269,24 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
 
             # Update task status to STOPPED (without completed_at since it didn't complete)
             logger.info(f"Transitioning: {task.status} -> STOPPED - task_id={task_id}")
-            task.status = TaskStatus.STOPPED
-            task.save(update_fields=["status", "updated_at"])
+            transition_task_to_terminal(
+                task=task,
+                task_type=TaskType.TRADING,
+                status=TaskStatus.STOPPED,
+                expected_current_status=TaskStatus.STOPPING,
+            )
+            task.refresh_from_db()
+            task.completed_at = None
+            task.save(update_fields=["completed_at", "updated_at"])
             sync_terminal_execution_artifacts(task=task, task_type=TaskType.TRADING)
+            publish_task_lifecycle_event(
+                logger=logger,
+                task=task,
+                task_type=TaskType.TRADING,
+                kind="task_stopped",
+                description="Trading task stopped",
+                extra_details={"mode": stop_mode.value},
+            )
             logger.info(f"Current: STOPPED - task_id={task_id}")
 
             # Update CeleryTaskStatus

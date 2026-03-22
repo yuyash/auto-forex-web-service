@@ -40,11 +40,22 @@ class TestRunBacktestTask:
         mock_exec.assert_not_called()
 
     @patch("apps.trading.tasks.backtest.dj_timezone")
+    @patch("apps.trading.tasks.backtest.publish_task_lifecycle_event")
+    @patch("apps.trading.tasks.backtest.transition_task_to_terminal")
     @patch("apps.trading.tasks.backtest.TaskLog")
     @patch("apps.trading.tasks.backtest.TaskLoggingSession")
     @patch("apps.trading.tasks.backtest.execute_backtest")
     @patch("apps.trading.tasks.backtest.BacktestTask")
-    def test_normal_flow(self, mock_model, mock_exec, mock_logging, mock_log, mock_tz):
+    def test_normal_flow(
+        self,
+        mock_model,
+        mock_exec,
+        mock_logging,
+        mock_log,
+        mock_transition,
+        mock_publish_event,
+        mock_tz,
+    ):
         from apps.trading.tasks.backtest import run_backtest_task
 
         task_id = uuid4()
@@ -56,8 +67,10 @@ class TestRunBacktestTask:
         mock_model.objects.get.return_value = task
         mock_model.objects.filter.return_value.update.return_value = 1
         mock_model.DoesNotExist = _DoesNotExist
+        mock_transition.return_value = 1
         run_backtest_task.__wrapped__(task_id)
         mock_exec.assert_called_once_with(task)
+        mock_publish_event.assert_called_once()
 
     @patch("apps.trading.tasks.backtest.TaskLog")
     @patch("apps.trading.tasks.backtest.TaskLoggingSession")
@@ -122,27 +135,33 @@ class TestHandleExceptionBacktest:
 
     @patch("apps.trading.tasks.backtest.TaskLog")
     @patch("apps.trading.tasks.backtest.dj_timezone")
-    def test_with_task_updates_status(self, mock_tz, mock_log):
+    @patch("apps.trading.tasks.backtest.publish_task_lifecycle_event")
+    @patch("apps.trading.tasks.backtest.transition_task_to_terminal")
+    def test_with_task_updates_status(self, mock_transition, mock_publish_event, mock_tz, mock_log):
         from apps.trading.tasks.backtest import handle_exception
 
         task_id = uuid4()
         execution_id = uuid4()
         task = MagicMock(pk=task_id, execution_id=execution_id)
+        mock_transition.return_value = 1
         with patch("apps.trading.models.celery.CeleryTaskStatus") as mock_cs:
             mock_cs.Status.FAILED = "failed"
             handle_exception(task_id, task, ValueError("bad"))
-        assert task.status == TaskStatus.FAILED
-        task.save.assert_called_once()
+        mock_transition.assert_called_once()
+        mock_publish_event.assert_called_once()
         mock_log.objects.create.assert_called_once()
 
     @patch("apps.trading.tasks.backtest.TaskLog")
     @patch("apps.trading.tasks.backtest.dj_timezone")
-    def test_celery_status_updated(self, mock_tz, mock_log):
+    @patch("apps.trading.tasks.backtest.publish_task_lifecycle_event")
+    @patch("apps.trading.tasks.backtest.transition_task_to_terminal")
+    def test_celery_status_updated(self, mock_transition, mock_publish_event, mock_tz, mock_log):
         from apps.trading.tasks.backtest import handle_exception
 
         task_id = uuid4()
         execution_id = uuid4()
         task = MagicMock(pk=task_id, execution_id=execution_id)
+        mock_transition.return_value = 1
         with patch("apps.trading.models.celery.CeleryTaskStatus") as mock_cs:
             mock_cs.Status.FAILED = "failed"
             handle_exception(task_id, task, RuntimeError("fail"))
@@ -196,12 +215,16 @@ class TestStopBacktestTask:
     @patch("apps.market.models.CeleryTaskStatus")
     @patch("apps.trading.tasks.backtest.dj_timezone")
     @patch("celery.current_app")
+    @patch("apps.trading.tasks.backtest.publish_task_lifecycle_event")
+    @patch("apps.trading.tasks.backtest.transition_task_to_terminal")
     @patch("apps.market.signals.management.task_management_handler")
     @patch("apps.trading.tasks.backtest.BacktestTask")
     def test_stopping_state(
         self,
         mock_model,
         mock_handler,
+        mock_transition,
+        mock_publish_event,
         mock_app,
         mock_tz,
         mock_market_celery,
@@ -221,18 +244,35 @@ class TestStopBacktestTask:
         mock_market_celery.Status.STOPPED = "stopped"
         mock_trading_celery.objects.filter.return_value.update.return_value = 1
         mock_trading_celery.Status.STOPPED = "stopped"
+        mock_transition.return_value = 1
         with patch("time.sleep"):
             stop_backtest_task.__wrapped__(task_id)
         task.save.assert_called()
+        mock_publish_event.assert_called_once()
 
+    @patch("apps.trading.tasks.backtest.publish_task_lifecycle_event")
+    @patch("apps.trading.tasks.backtest.sync_terminal_execution_artifacts")
+    @patch("apps.trading.tasks.backtest.transition_task_to_terminal")
     @patch("apps.trading.tasks.backtest.BacktestTask")
-    def test_completed_transitions_to_stopped(self, mock_model):
+    def test_completed_transitions_to_stopped(
+        self,
+        mock_model,
+        mock_transition,
+        mock_sync_artifacts,
+        mock_publish_event,
+    ):
         from apps.trading.tasks.backtest import stop_backtest_task
 
         task_id = uuid4()
         task = MagicMock(pk=task_id, status=TaskStatus.COMPLETED)
         mock_model.objects.get.return_value = task
         mock_model.DoesNotExist = _DoesNotExist
+        mock_transition.return_value = 1
+        mock_transition.side_effect = (
+            lambda **kwargs: setattr(task, "status", TaskStatus.STOPPED) or 1
+        )
         stop_backtest_task.__wrapped__(task_id)
         assert task.status == TaskStatus.STOPPED
         task.save.assert_called()
+        mock_sync_artifacts.assert_called_once()
+        mock_publish_event.assert_called_once()

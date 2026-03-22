@@ -19,6 +19,7 @@ from apps.trading.services.execution_lifecycle import (
     transition_task_to_running,
     transition_task_to_terminal,
 )
+from apps.trading.tasks.lifecycle_events import publish_task_lifecycle_event
 from apps.trading.tasks.executor import BacktestExecutor
 from apps.trading.tasks.source import RedisTickDataSource
 from apps.trading.utils import pip_size_for_instrument
@@ -132,6 +133,13 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
             return
 
         logger.info(f"Current: {task.status} - task_id={task_id}, completed_at={task.completed_at}")
+        publish_task_lifecycle_event(
+            logger=logger,
+            task=task,
+            task_type=TaskType.BACKTEST,
+            kind="task_completed",
+            description="Backtest task completed successfully",
+        )
 
         # Log task completion
         TaskLog.objects.create(
@@ -237,6 +245,13 @@ def handle_exception(task_id: UUID, task: BacktestTask | None, error: Exception)
             status=TaskStatus.FAILED,
             error_message=error_message,
             error_traceback=error_traceback,
+        )
+        publish_task_lifecycle_event(
+            logger=logger,
+            task=task,
+            task_type=TaskType.BACKTEST,
+            kind="task_failed",
+            description=f"Backtest task failed: {type(error).__name__}: {error_message}",
         )
 
         logger.info(f"Task marked as FAILED - task_id={task_id}, completed_at={task.completed_at}")
@@ -439,11 +454,24 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
             logger.info(
                 f"[STOP:BACKTEST] Transitioning: {task.status} -> STOPPED - task_id={task_id}"
             )
+            transition_task_to_terminal(
+                task=task,
+                task_type=TaskType.BACKTEST,
+                status=TaskStatus.STOPPED,
+                expected_current_status=TaskStatus.STOPPING,
+            )
             task.refresh_from_db()
-            task.status = TaskStatus.STOPPED
             task.completed_at = None
-            task.save(update_fields=["status", "completed_at", "updated_at"])
+            task.save(update_fields=["completed_at", "updated_at"])
             sync_terminal_execution_artifacts(task=task, task_type=TaskType.BACKTEST)
+            publish_task_lifecycle_event(
+                logger=logger,
+                task=task,
+                task_type=TaskType.BACKTEST,
+                kind="task_stopped",
+                description="Backtest task stopped",
+                extra_details={"mode": "worker_stop"},
+            )
             logger.info(f"[STOP:BACKTEST] Current: STOPPED - task_id={task_id}")
 
             # Update CeleryTaskStatus
@@ -465,10 +493,24 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
                 f"[STOP:BACKTEST] Race condition detected: COMPLETED -> STOPPED - task_id={task_id}"
             )
             # Change from COMPLETED to STOPPED since user requested stop
-            task.status = TaskStatus.STOPPED
+            transition_task_to_terminal(
+                task=task,
+                task_type=TaskType.BACKTEST,
+                status=TaskStatus.STOPPED,
+                expected_current_status=TaskStatus.COMPLETED,
+            )
+            task.refresh_from_db()
             task.completed_at = None  # Remove completed_at since it was stopped
-            task.save(update_fields=["status", "completed_at", "updated_at"])
+            task.save(update_fields=["completed_at", "updated_at"])
             sync_terminal_execution_artifacts(task=task, task_type=TaskType.BACKTEST)
+            publish_task_lifecycle_event(
+                logger=logger,
+                task=task,
+                task_type=TaskType.BACKTEST,
+                kind="task_stopped",
+                description="Backtest task stopped after completion race",
+                extra_details={"mode": "worker_stop"},
+            )
             logger.info(f"[STOP:BACKTEST] Current: STOPPED - task_id={task_id}")
 
         else:

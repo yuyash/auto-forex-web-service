@@ -1,8 +1,9 @@
 import { queryClient, queryKeys } from '../config/reactQuery';
 import type { PaginatedResponse, StrategyConfig } from '../types';
 import {
-  getListParams,
+  patchListQueries,
   removePaginatedEntity,
+  removeFromListQueries,
   upsertPaginatedEntity,
 } from './listCacheUtils';
 
@@ -51,22 +52,17 @@ function patchListEntry(
 
 export function upsertConfigurationCaches(config: StrategyConfig): void {
   queryClient.setQueryData(queryKeys.configurations.detail(config.id), config);
-  for (const query of queryClient
-    .getQueryCache()
-    .findAll({ queryKey: queryKeys.configurations.lists() })) {
-    const params = getListParams(query.queryKey);
-    queryClient.setQueryData<PaginatedResponse<StrategyConfig> | undefined>(
-      query.queryKey,
-      (cached) => patchListEntry(cached, config, params)
-    );
-  }
+  patchListQueries<PaginatedResponse<StrategyConfig>>(
+    queryKeys.configurations.lists(),
+    (cached, params) => patchListEntry(cached, config, params)
+  );
 }
 
 export function removeConfigurationCaches(id: string): void {
   queryClient.removeQueries({ queryKey: queryKeys.configurations.detail(id) });
   queryClient.removeQueries({ queryKey: queryKeys.configurations.tasks(id) });
-  queryClient.setQueriesData<PaginatedResponse<StrategyConfig>>(
-    { queryKey: queryKeys.configurations.lists() },
+  removeFromListQueries<PaginatedResponse<StrategyConfig>>(
+    queryKeys.configurations.lists(),
     (cached) => removePaginatedEntity(cached, id)
   );
 }

@@ -71,7 +71,6 @@ export interface UseTaskSummaryResult {
   isLoading: boolean;
   error: Error | null;
   refresh: () => Promise<unknown>;
-  refetch: () => Promise<unknown>;
 }
 
 const INITIAL_SUMMARY: TaskSummary = {

@@ -18,7 +18,6 @@ interface UseTaskStrategyEventsResult {
   isLoading: boolean;
   error: Error | null;
   refresh: () => Promise<unknown>;
-  refetch: () => Promise<unknown>;
 }
 
 export function useTaskStrategyEvents({

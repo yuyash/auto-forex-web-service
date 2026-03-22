@@ -156,3 +156,23 @@ class TaskLifecycleEventPublisher:
         )
         for sink in self.sinks:
             sink.publish(event)
+
+
+def publish_task_lifecycle_event(
+    *,
+    logger: Logger,
+    task: BacktestTask | TradingTask,
+    task_type: str,
+    kind: str,
+    description: str,
+    extra_details: dict[str, object] | None = None,
+) -> None:
+    """Publish a lifecycle event through the default sink pipeline."""
+
+    TaskLifecycleEventPublisher(logger=logger).publish(
+        task=task,
+        task_type=task_type,
+        kind=kind,
+        description=description,
+        extra_details=extra_details,
+    )

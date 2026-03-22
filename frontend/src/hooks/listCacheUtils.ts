@@ -1,3 +1,4 @@
+import { queryClient } from '../config/reactQuery';
 import type { PaginatedResponse } from '../types';
 
 export type CacheListParams = Record<string, unknown> | undefined;
@@ -7,6 +8,33 @@ export function getListParams(queryKey: readonly unknown[]): CacheListParams {
   return candidate && typeof candidate === 'object'
     ? (candidate as Record<string, unknown>)
     : undefined;
+}
+
+export function patchListQueries<TCached>(
+  listQueryKey: readonly unknown[],
+  updater: (
+    cached: TCached | undefined,
+    params: CacheListParams
+  ) => TCached | undefined
+): void {
+  for (const query of queryClient
+    .getQueryCache()
+    .findAll({ queryKey: listQueryKey })) {
+    const params = getListParams(query.queryKey);
+    queryClient.setQueryData<TCached | undefined>(query.queryKey, (cached) =>
+      updater(cached, params)
+    );
+  }
+}
+
+export function removeFromListQueries<TCached>(
+  listQueryKey: readonly unknown[],
+  updater: (cached: TCached | undefined) => TCached | undefined
+): void {
+  queryClient.setQueriesData<TCached | undefined>(
+    { queryKey: listQueryKey },
+    updater
+  );
 }
 
 export function upsertPaginatedEntity<T extends { id: string }>(

@@ -1,5 +1,5 @@
 import { queryClient, queryKeys } from '../config/reactQuery';
-import { getListParams } from './listCacheUtils';
+import { patchListQueries, removeFromListQueries } from './listCacheUtils';
 import type { Account } from '../types/strategy';
 
 function matchesAccountListFilter(
@@ -55,20 +55,15 @@ function mergeAccountListEntry(
 
 export function upsertAccountCaches(account: Account): void {
   queryClient.setQueryData(queryKeys.accounts.detail(account.id), account);
-  for (const query of queryClient
-    .getQueryCache()
-    .findAll({ queryKey: queryKeys.accounts.lists() })) {
-    const params = getListParams(query.queryKey);
-    queryClient.setQueryData<Account[] | undefined>(query.queryKey, (cached) =>
-      mergeAccountListEntry(cached, account, params)
-    );
-  }
+  patchListQueries<Account[]>(queryKeys.accounts.lists(), (cached, params) =>
+    mergeAccountListEntry(cached, account, params)
+  );
 }
 
 export function removeAccountCaches(accountId: number): void {
   queryClient.removeQueries({ queryKey: queryKeys.accounts.detail(accountId) });
-  queryClient.setQueriesData<Account[] | undefined>(
-    { queryKey: queryKeys.accounts.lists() },
+  removeFromListQueries<Account[]>(
+    queryKeys.accounts.lists(),
     (cached) => cached?.filter((entry) => entry.id !== accountId) ?? cached
   );
 }

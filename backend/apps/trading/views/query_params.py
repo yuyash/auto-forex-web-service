@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from django.utils.dateparse import parse_datetime
@@ -100,6 +100,18 @@ def _page_size_spec(*, default: int, max_value: int) -> QueryFieldSpec:
         max_value=max_value,
         help_text=f"Results per page. Default {default}, maximum {max_value}.",
     )
+
+
+def _build_query_schema_serializer(
+    name: str,
+    *specs: QueryFieldSpec,
+    base: type[serializers.Serializer] = serializers.Serializer,
+    docstring: str | None = None,
+) -> type[serializers.Serializer]:
+    attrs = {spec.name: spec.schema_field() for spec in specs}
+    if docstring:
+        attrs["__doc__"] = docstring
+    return cast(type[serializers.Serializer], type(name, (base,), attrs))
 
 
 PAGE_SPEC = QueryFieldSpec(
@@ -431,118 +443,146 @@ class DateRangeQuerySerializer(QueryParamsSerializer):
         return DateRangeQuery(start=start, end=end)
 
 
-class ExecutionScopedQueryParamsSchemaSerializer(serializers.Serializer):
-    """OpenAPI serializer for execution-scoped task query parameters."""
+ExecutionScopedQueryParamsSchemaSerializer = _build_query_schema_serializer(
+    "ExecutionScopedQueryParamsSchemaSerializer",
+    EXECUTION_ID_SPEC,
+    SINCE_SPEC,
+    PAGE_SPEC,
+    ACTIVITY_PAGE_SIZE_SPEC,
+    docstring="OpenAPI serializer for execution-scoped task query parameters.",
+)
 
-    execution_id = EXECUTION_ID_SPEC.schema_field()
-    since = SINCE_SPEC.schema_field()
-    page = PAGE_SPEC.schema_field()
-    page_size = ACTIVITY_PAGE_SIZE_SPEC.schema_field()
+MetricsQueryParamsSchemaSerializer = _build_query_schema_serializer(
+    "MetricsQueryParamsSchemaSerializer",
+    EXECUTION_ID_SPEC,
+    SINCE_SPEC,
+    PAGE_SPEC,
+    METRICS_PAGE_SIZE_SPEC,
+    UNTIL_SPEC,
+    INTERVAL_SPEC,
+    docstring="OpenAPI serializer for metrics query parameters.",
+)
 
+LogsQueryParamsSchemaSerializer = _build_query_schema_serializer(
+    "LogsQueryParamsSchemaSerializer",
+    EXECUTION_ID_SPEC,
+    SINCE_SPEC,
+    PAGE_SPEC,
+    ACTIVITY_PAGE_SIZE_SPEC,
+    LEVEL_SPEC,
+    COMPONENT_SPEC,
+    POSITION_ID_SPEC,
+    TIMESTAMP_FROM_SPEC,
+    TIMESTAMP_TO_SPEC,
+    docstring="OpenAPI serializer for logs query parameters.",
+)
 
-class MetricsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
-    """OpenAPI serializer for metrics query parameters."""
+LogComponentsQueryParamsSchemaSerializer = _build_query_schema_serializer(
+    "LogComponentsQueryParamsSchemaSerializer",
+    EXECUTION_ID_SPEC,
+    base=QueryParamsSerializer,
+    docstring="OpenAPI serializer for log component query parameters.",
+)
 
-    page_size = METRICS_PAGE_SIZE_SPEC.schema_field()
-    until = UNTIL_SPEC.schema_field()
-    interval = INTERVAL_SPEC.schema_field()
+EventsQueryParamsSchemaSerializer = _build_query_schema_serializer(
+    "EventsQueryParamsSchemaSerializer",
+    EXECUTION_ID_SPEC,
+    SINCE_SPEC,
+    PAGE_SPEC,
+    ACTIVITY_PAGE_SIZE_SPEC,
+    EVENT_TYPE_SPEC,
+    SEVERITY_SPEC,
+    SCOPE_SPEC,
+    CREATED_FROM_SPEC,
+    CREATED_TO_SPEC,
+    docstring="OpenAPI serializer for task events query parameters.",
+)
 
+StrategyEventsQueryParamsSchemaSerializer = _build_query_schema_serializer(
+    "StrategyEventsQueryParamsSchemaSerializer",
+    EXECUTION_ID_SPEC,
+    ROOT_ENTRY_ID_SPEC,
+    base=QueryParamsSerializer,
+    docstring="OpenAPI serializer for strategy event visualization parameters.",
+)
 
-class LogsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
-    """OpenAPI serializer for logs query parameters."""
+TradesQueryParamsSchemaSerializer = _build_query_schema_serializer(
+    "TradesQueryParamsSchemaSerializer",
+    EXECUTION_ID_SPEC,
+    SINCE_SPEC,
+    PAGE_SPEC,
+    TRADE_POSITION_PAGE_SIZE_SPEC,
+    TRADES_DIRECTION_SPEC,
+    TRADE_TIMESTAMP_FROM_SPEC,
+    TRADE_TIMESTAMP_TO_SPEC,
+    docstring="OpenAPI serializer for trades query parameters.",
+)
 
-    level = LEVEL_SPEC.schema_field()
-    component = COMPONENT_SPEC.schema_field()
-    position_id = POSITION_ID_SPEC.schema_field()
-    timestamp_from = TIMESTAMP_FROM_SPEC.schema_field()
-    timestamp_to = TIMESTAMP_TO_SPEC.schema_field()
+PositionsQueryParamsSchemaSerializer = _build_query_schema_serializer(
+    "PositionsQueryParamsSchemaSerializer",
+    EXECUTION_ID_SPEC,
+    SINCE_SPEC,
+    PAGE_SPEC,
+    TRADE_POSITION_PAGE_SIZE_SPEC,
+    POSITION_STATUS_SPEC,
+    DIRECTION_SPEC,
+    INCLUDE_TRADE_IDS_SPEC,
+    POSITIONS_RANGE_FROM_SPEC,
+    POSITIONS_RANGE_TO_SPEC,
+    docstring="OpenAPI serializer for positions query parameters.",
+)
 
+TrendReplayQueryParamsSchemaSerializer = _build_query_schema_serializer(
+    "TrendReplayQueryParamsSchemaSerializer",
+    EXECUTION_ID_SPEC,
+    SINCE_SPEC,
+    PAGE_SPEC,
+    TRADE_POSITION_PAGE_SIZE_SPEC,
+    RANGE_FROM_SPEC,
+    RANGE_TO_SPEC,
+    docstring="OpenAPI serializer for trend replay parameters.",
+)
 
-class LogComponentsQueryParamsSchemaSerializer(QueryParamsSerializer):
-    """OpenAPI serializer for log component query parameters."""
+OrdersQueryParamsSchemaSerializer = _build_query_schema_serializer(
+    "OrdersQueryParamsSchemaSerializer",
+    EXECUTION_ID_SPEC,
+    SINCE_SPEC,
+    PAGE_SPEC,
+    TRADE_POSITION_PAGE_SIZE_SPEC,
+    ORDER_STATUS_SPEC,
+    ORDER_TYPE_SPEC,
+    DIRECTION_SPEC,
+    docstring="OpenAPI serializer for orders query parameters.",
+)
 
-    execution_id = EXECUTION_ID_SPEC.schema_field()
+SummaryQueryParamsSchemaSerializer = _build_query_schema_serializer(
+    "SummaryQueryParamsSchemaSerializer",
+    EXECUTION_ID_SPEC,
+    base=QueryParamsSerializer,
+    docstring="OpenAPI serializer for summary query parameters.",
+)
 
+ExecutionsQueryParamsSchemaSerializer = _build_query_schema_serializer(
+    "ExecutionsQueryParamsSchemaSerializer",
+    PAGE_SPEC,
+    ACTIVITY_PAGE_SIZE_SPEC,
+    INCLUDE_METRICS_SPEC,
+    docstring="OpenAPI serializer for execution list query parameters.",
+)
 
-class EventsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
-    """OpenAPI serializer for task events query parameters."""
+ExecutionDetailQueryParamsSchemaSerializer = _build_query_schema_serializer(
+    "ExecutionDetailQueryParamsSchemaSerializer",
+    INCLUDE_METRICS_SPEC,
+    base=QueryParamsSerializer,
+    docstring="OpenAPI serializer for execution detail query parameters.",
+)
 
-    event_type = EVENT_TYPE_SPEC.schema_field()
-    severity = SEVERITY_SPEC.schema_field()
-    scope = SCOPE_SPEC.schema_field()
-    created_from = CREATED_FROM_SPEC.schema_field()
-    created_to = CREATED_TO_SPEC.schema_field()
-
-
-class StrategyEventsQueryParamsSchemaSerializer(QueryParamsSerializer):
-    """OpenAPI serializer for strategy event visualization parameters."""
-
-    execution_id = EXECUTION_ID_SPEC.schema_field()
-    root_entry_id = ROOT_ENTRY_ID_SPEC.schema_field()
-
-
-class TradesQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
-    """OpenAPI serializer for trades query parameters."""
-
-    page_size = TRADE_POSITION_PAGE_SIZE_SPEC.schema_field()
-    direction = TRADES_DIRECTION_SPEC.schema_field()
-    timestamp_from = TRADE_TIMESTAMP_FROM_SPEC.schema_field()
-    timestamp_to = TRADE_TIMESTAMP_TO_SPEC.schema_field()
-
-
-class PositionsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
-    """OpenAPI serializer for positions query parameters."""
-
-    page_size = TRADE_POSITION_PAGE_SIZE_SPEC.schema_field()
-    position_status = POSITION_STATUS_SPEC.schema_field()
-    direction = DIRECTION_SPEC.schema_field()
-    include_trade_ids = INCLUDE_TRADE_IDS_SPEC.schema_field()
-    range_from = POSITIONS_RANGE_FROM_SPEC.schema_field()
-    range_to = POSITIONS_RANGE_TO_SPEC.schema_field()
-
-
-class TrendReplayQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
-    """OpenAPI serializer for trend replay parameters."""
-
-    page_size = TRADE_POSITION_PAGE_SIZE_SPEC.schema_field()
-    range_from = RANGE_FROM_SPEC.schema_field()
-    range_to = RANGE_TO_SPEC.schema_field()
-
-
-class OrdersQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
-    """OpenAPI serializer for orders query parameters."""
-
-    page_size = TRADE_POSITION_PAGE_SIZE_SPEC.schema_field()
-    status = ORDER_STATUS_SPEC.schema_field()
-    order_type = ORDER_TYPE_SPEC.schema_field()
-    direction = DIRECTION_SPEC.schema_field()
-
-
-class SummaryQueryParamsSchemaSerializer(QueryParamsSerializer):
-    """OpenAPI serializer for summary query parameters."""
-
-    execution_id = EXECUTION_ID_SPEC.schema_field()
-
-
-class ExecutionsQueryParamsSchemaSerializer(serializers.Serializer):
-    """OpenAPI serializer for execution list query parameters."""
-
-    page = PAGE_SPEC.schema_field()
-    page_size = ACTIVITY_PAGE_SIZE_SPEC.schema_field()
-    include_metrics = INCLUDE_METRICS_SPEC.schema_field()
-
-
-class ExecutionDetailQueryParamsSchemaSerializer(QueryParamsSerializer):
-    """OpenAPI serializer for execution detail query parameters."""
-
-    include_metrics = INCLUDE_METRICS_SPEC.schema_field()
-
-
-class PaginationSchemaSerializer(serializers.Serializer):
-    """OpenAPI serializer for plain pagination parameters."""
-
-    page = PAGE_SPEC.schema_field()
-    page_size = ACTIVITY_PAGE_SIZE_SPEC.schema_field()
+PaginationSchemaSerializer = _build_query_schema_serializer(
+    "PaginationSchemaSerializer",
+    PAGE_SPEC,
+    ACTIVITY_PAGE_SIZE_SPEC,
+    docstring="OpenAPI serializer for plain pagination parameters.",
+)
 
 
 @dataclass(frozen=True)

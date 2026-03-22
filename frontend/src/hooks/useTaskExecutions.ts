@@ -16,7 +16,6 @@ interface UseTaskExecutionsResult {
   isLoading: boolean;
   error: Error | null;
   refresh: () => Promise<unknown>;
-  refetch: () => Promise<unknown>;
 }
 
 /**
@@ -62,7 +61,6 @@ interface UseTaskExecutionResult {
   isLoading: boolean;
   error: Error | null;
   refresh: () => Promise<unknown>;
-  refetch: () => Promise<unknown>;
 }
 
 /**
