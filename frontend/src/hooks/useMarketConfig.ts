@@ -1,7 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../config/reactQuery';
 import { logger } from '../utils/logger';
-import { marketApi, type GranularityOption } from '../services/api/market';
+import {
+  marketApi,
+  type GranularityOption,
+  type TickDataRange,
+} from '../services/api/market';
 
 const FALLBACK_INSTRUMENTS = [
   'EUR_USD',
@@ -98,5 +102,32 @@ export const useSupportedGranularities = () => {
     isLoading: query.isLoading,
     error: query.error instanceof Error ? query.error.message : null,
     usingFallback: !query.isLoading && !query.data && !!query.error,
+  };
+};
+
+/**
+ * Hook to fetch the available tick data range for a given instrument.
+ */
+export const useTickDataRange = (instrument?: string) => {
+  const query = useQuery({
+    queryKey: queryKeys.marketConfig.tickDataRange(instrument ?? ''),
+    queryFn: async () => marketApi.getTickDataRange(instrument!),
+    enabled: Boolean(instrument),
+  });
+
+  if (query.error) {
+    logger.error('Failed to fetch tick data range', {
+      instrument,
+      error:
+        query.error instanceof Error
+          ? query.error.message
+          : String(query.error),
+    });
+  }
+
+  return {
+    dataRange: (query.data as TickDataRange | undefined) ?? null,
+    isLoading: query.isLoading,
+    error: query.error instanceof Error ? query.error.message : null,
   };
 };

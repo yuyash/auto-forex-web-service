@@ -17,7 +17,7 @@ from apps.trading.models.trades import Trade
 from apps.trading.services.summary import compute_task_summary
 
 
-EXECUTION_METRICS_CACHE_TTL_SECONDS = 5
+EXECUTION_METRICS_CACHE_TTL_SECONDS = 60 * 60
 
 
 @dataclass(frozen=True)

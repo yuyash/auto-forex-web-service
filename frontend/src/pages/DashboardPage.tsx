@@ -23,6 +23,10 @@ import { useDefaultOandaAccount } from '../hooks/useOandaAccounts';
 import { useChartPreferences } from '../hooks/useChartPreferences';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { useOandaHealthStatus } from '../hooks/useOandaHealthStatus';
+import {
+  useSupportedGranularities,
+  useSupportedInstruments,
+} from '../hooks/useMarketConfig';
 import { Breadcrumbs } from '../components/common';
 import ActiveTasksWidget from '../components/dashboard/ActiveTasksWidget';
 import RecentBacktestsWidget from '../components/dashboard/RecentBacktestsWidget';
@@ -38,6 +42,10 @@ import type { Granularity } from '../types/chart';
 const DashboardPage = () => {
   const { t } = useTranslation(['dashboard', 'common']);
   const { settings: appSettings } = useAppSettings();
+  const { instruments, usingFallback: usingInstrumentFallback } =
+    useSupportedInstruments();
+  const { granularities, usingFallback: usingGranularityFallback } =
+    useSupportedGranularities();
 
   // Chart preferences with localStorage persistence
   const { preferences, updatePreference } = useChartPreferences();
@@ -69,6 +77,17 @@ const DashboardPage = () => {
     useState<HTMLButtonElement | null>(null);
   const [intervalAnchor, setIntervalAnchor] =
     useState<HTMLButtonElement | null>(null);
+  const instrumentOptions = Array.from(
+    new Set([preferences.instrument, ...instruments].filter(Boolean))
+  );
+  const granularityOptions = Array.from(
+    new Map(
+      [
+        { value: preferences.granularity, label: preferences.granularity },
+        ...granularities,
+      ].map((granularity) => [granularity.value, granularity])
+    ).values()
+  );
 
   // Handle refresh interval change
   const handleRefreshIntervalChange = (val: number) => {
@@ -153,6 +172,16 @@ const DashboardPage = () => {
             flexShrink: 0,
           }}
         >
+          {usingInstrumentFallback && (
+            <Alert severity="warning" sx={{ width: '100%' }}>
+              {t('common:tables.trend.instrumentFallbackWarning')}
+            </Alert>
+          )}
+          {usingGranularityFallback && (
+            <Alert severity="warning" sx={{ width: '100%' }}>
+              {t('common:tables.trend.granularityFallbackWarning')}
+            </Alert>
+          )}
           <Typography variant="subtitle1" sx={{ fontWeight: 600, mr: 'auto' }}>
             {t('dashboard:chart.title')}
           </Typography>
@@ -178,14 +207,7 @@ const DashboardPage = () => {
             anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
           >
             <MenuList dense>
-              {[
-                'USD_JPY',
-                'EUR_USD',
-                'GBP_USD',
-                'AUD_USD',
-                'EUR_JPY',
-                'GBP_JPY',
-              ].map((v) => (
+              {instrumentOptions.map((v) => (
                 <MenuItem
                   key={v}
                   selected={v === preferences.instrument}
@@ -216,24 +238,13 @@ const DashboardPage = () => {
             anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
           >
             <MenuList dense>
-              {(
-                [
-                  'M1',
-                  'M5',
-                  'M15',
-                  'M30',
-                  'H1',
-                  'H4',
-                  'D',
-                  'W',
-                ] as Granularity[]
-              ).map((v) => (
+              {granularityOptions.map((option) => (
                 <MenuItem
-                  key={v}
-                  selected={v === preferences.granularity}
-                  onClick={() => handleGranularityChange(v)}
+                  key={option.value}
+                  selected={option.value === preferences.granularity}
+                  onClick={() => handleGranularityChange(option.value)}
                 >
-                  <ListItemText>{v}</ListItemText>
+                  <ListItemText>{option.value}</ListItemText>
                 </MenuItem>
               ))}
             </MenuList>

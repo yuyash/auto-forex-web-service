@@ -156,6 +156,8 @@ export const queryKeys = {
     instruments: () => [...queryKeys.marketConfig.all, 'instruments'] as const,
     granularities: () =>
       [...queryKeys.marketConfig.all, 'granularities'] as const,
+    tickDataRange: (instrument: string) =>
+      [...queryKeys.marketConfig.all, 'tick-data-range', instrument] as const,
   },
 };
 

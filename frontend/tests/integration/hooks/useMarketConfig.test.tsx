@@ -5,6 +5,7 @@ import { vi } from 'vitest';
 import {
   useSupportedGranularities,
   useSupportedInstruments,
+  useTickDataRange,
 } from '../../../src/hooks/useMarketConfig';
 import { marketApi } from '../../../src/services/api/market';
 
@@ -12,6 +13,7 @@ vi.mock('../../../src/services/api/market', () => ({
   marketApi: {
     getSupportedInstruments: vi.fn(),
     getSupportedGranularities: vi.fn(),
+    getTickDataRange: vi.fn(),
   },
 }));
 
@@ -63,5 +65,23 @@ describe('useMarketConfig', () => {
     expect(result.current.granularities).toEqual([
       { value: 'M1', label: '1 Minute' },
     ]);
+  });
+
+  it('fetches tick data ranges through react-query', async () => {
+    vi.mocked(marketApi.getTickDataRange).mockResolvedValueOnce({
+      instrument: 'USD_JPY',
+      has_data: true,
+      min_timestamp: '2026-01-01T00:00:00Z',
+      max_timestamp: '2026-01-02T00:00:00Z',
+    });
+
+    const { result } = renderHook(() => useTickDataRange('USD_JPY'), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.dataRange?.instrument).toBe('USD_JPY');
+    expect(result.current.error).toBeNull();
   });
 });

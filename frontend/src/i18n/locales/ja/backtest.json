@@ -193,7 +193,10 @@
     "dateRangeHelperText": "バックテストには過去のデータが必要です。未来の日付は使用できません。",
     "checkingTickDataRange": "ティックデータ範囲を確認中...",
     "noTickDataFound": "データベースに{{instrument}}のティックデータが見つかりません。",
+    "tickDataRangeFetchFailed": "ティックデータ範囲の取得に失敗しました。",
     "dataRange": "{{instrument}}のデータ範囲：",
+    "startTimeBeforeMinData": "開始日時が最古のデータ時刻（{{timestamp}}）より前です。",
+    "endTimeAfterMaxData": "終了日時が最新のデータ時刻（{{timestamp}}）より後です。",
     "steps": {
       "configuration": "設定構成",
       "parameters": "パラメータ",

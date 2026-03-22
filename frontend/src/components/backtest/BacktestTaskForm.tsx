@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -40,11 +40,10 @@ import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
-import { useSupportedInstruments } from '../../hooks/useMarketConfig';
 import {
-  fetchTickDataRange,
-  type TickDataRange,
-} from '../../services/api/market';
+  useSupportedInstruments,
+  useTickDataRange,
+} from '../../hooks/useMarketConfig';
 
 const DEFAULT_DATE_RANGE_DAYS = 30;
 
@@ -265,11 +264,6 @@ export default function BacktestTaskForm({
   const createTask = useCreateBacktestTask();
   const updateTask = useUpdateBacktestTask();
 
-  // Tick data availability state
-  const [dataRange, setDataRange] = useState<TickDataRange | null>(null);
-  const [dataRangeError, setDataRangeError] = useState<string | null>(null);
-  const [dataRangeLoading, setDataRangeLoading] = useState(false);
-
   const {
     control,
     handleSubmit,
@@ -319,39 +313,22 @@ export default function BacktestTaskForm({
 
   const { data: selectedConfig } = useConfiguration(configIdString);
 
-  // Fetch tick data range when instrument changes
-  const checkDataRange = useCallback(async (instrument: string) => {
-    if (!instrument) {
-      setDataRange(null);
-      setDataRangeError(null);
-      return;
-    }
-    setDataRangeLoading(true);
-    setDataRangeError(null);
-    try {
-      const range = await fetchTickDataRange(instrument);
-      setDataRange(range);
-    } catch {
-      setDataRangeError('Failed to fetch tick data range');
-      setDataRange(null);
-    } finally {
-      setDataRangeLoading(false);
-    }
-  }, []);
-
   const watchedInstrument = watch('instrument');
   const watchedStartTime = watch('start_time');
   const watchedEndTime = watch('end_time');
-
-  useEffect(() => {
-    checkDataRange(watchedInstrument);
-  }, [watchedInstrument, checkDataRange]);
+  const {
+    dataRange,
+    error: dataRangeError,
+    isLoading: dataRangeLoading,
+  } = useTickDataRange(watchedInstrument);
 
   // Compute data coverage warning
   const dataCoverageWarning = useMemo<string | null>(() => {
     if (!dataRange || !dataRange.has_data) {
       if (dataRange && !dataRange.has_data && watchedInstrument) {
-        return `No tick data found for ${watchedInstrument} in the database.`;
+        return t('backtest:form.noTickDataFound', {
+          instrument: watchedInstrument,
+        });
       }
       return null;
     }
@@ -361,7 +338,9 @@ export default function BacktestTaskForm({
       const minTs = new Date(dataRange.min_timestamp);
       if (start < minTs) {
         warnings.push(
-          `Start time is before the earliest data timestamp (${minTs.toLocaleString()}).`
+          t('backtest:form.startTimeBeforeMinData', {
+            timestamp: minTs.toLocaleString(),
+          })
         );
       }
     }
@@ -370,12 +349,14 @@ export default function BacktestTaskForm({
       const maxTs = new Date(dataRange.max_timestamp);
       if (end > maxTs) {
         warnings.push(
-          `End time is after the latest data timestamp (${maxTs.toLocaleString()}).`
+          t('backtest:form.endTimeAfterMaxData', {
+            timestamp: maxTs.toLocaleString(),
+          })
         );
       }
     }
     return warnings.length > 0 ? warnings.join(' ') : null;
-  }, [dataRange, watchedInstrument, watchedStartTime, watchedEndTime]);
+  }, [dataRange, t, watchedInstrument, watchedStartTime, watchedEndTime]);
 
   const handleNext = async () => {
     // Save current form values to state BEFORE validation
@@ -634,13 +615,17 @@ export default function BacktestTaskForm({
               )}
               {dataRangeError && (
                 <Grid size={{ xs: 12 }}>
-                  <Alert severity="warning">{dataRangeError}</Alert>
+                  <Alert severity="warning">
+                    {t('backtest:form.tickDataRangeFetchFailed')}
+                  </Alert>
                 </Grid>
               )}
               {dataRange && dataRange.has_data && (
                 <Grid size={{ xs: 12 }}>
                   <Alert severity="info">
-                    {dataRange.instrument} data range:{' '}
+                    {t('backtest:form.dataRange', {
+                      instrument: dataRange.instrument,
+                    })}{' '}
                     {new Date(dataRange.min_timestamp!).toLocaleString()} –{' '}
                     {new Date(dataRange.max_timestamp!).toLocaleString()}
                   </Alert>
@@ -654,7 +639,7 @@ export default function BacktestTaskForm({
               {usingInstrumentFallback && (
                 <Grid size={{ xs: 12 }}>
                   <Alert severity="warning">
-                    {t('tables.trend.instrumentFallbackWarning')}
+                    {t('common:tables.trend.instrumentFallbackWarning')}
                   </Alert>
                 </Grid>
               )}
