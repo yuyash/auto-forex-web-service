@@ -291,18 +291,36 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
 
   const currentPrice =
     currentTick?.price != null ? parseFloat(currentTick.price) : null;
-  const { trades, isRefreshing, errorMessage, replaySummary, fetchReplayData } =
-    useTaskTrendReplayData({
-      taskId,
-      taskType,
-      executionRunId,
-      instrument,
-      latestExecution,
-      enableRealTimeUpdates: realTimeUpdatesEnabled,
-      pollingIntervalMs,
-      refreshTailCandles,
-      summary,
-    });
+  const loadedTimeRange = useMemo(() => {
+    if (candles.length === 0) {
+      return undefined;
+    }
+    return {
+      from: new Date(Number(candles[0].time) * 1000).toISOString(),
+      to: new Date(
+        Number(candles[candles.length - 1].time) * 1000
+      ).toISOString(),
+    };
+  }, [candles]);
+  const {
+    trades,
+    isRefreshing,
+    errorMessage,
+    warningMessage,
+    replaySummary,
+    fetchReplayData,
+  } = useTaskTrendReplayData({
+    taskId,
+    taskType,
+    executionRunId,
+    instrument,
+    latestExecution,
+    enableRealTimeUpdates: realTimeUpdatesEnabled,
+    pollingIntervalMs,
+    refreshTailCandles,
+    summary,
+    loadedTimeRange,
+  });
 
   // Merge open + closed positions for the Positions panel in the Trend tab
   // Merge open + closed positions, de-duplicate by id, and derive _status
@@ -1060,6 +1078,11 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           {t('tables.trend.replayRefreshFailed', {
             defaultValue: errorMessage,
           })}
+        </Alert>
+      )}
+      {warningMessage && (
+        <Alert severity="info" sx={{ mb: 1 }}>
+          {warningMessage}
         </Alert>
       )}
       {chartWarning && (

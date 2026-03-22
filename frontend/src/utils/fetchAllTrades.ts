@@ -11,6 +11,7 @@
 import { TaskType } from '../types/common';
 import { ApiError } from '../api/apiClient';
 import {
+  fetchTaskResourcePage,
   fetchAllTaskResourcePages,
   isApiErrorWithStatus,
 } from '../services/api/taskResources';
@@ -79,6 +80,50 @@ export async function fetchTradesSince(
   });
 }
 
+export async function fetchTradesInRange(
+  taskId: string,
+  taskType: TaskType,
+  params: {
+    executionRunId?: string;
+    timestampFrom?: string;
+    timestampTo?: string;
+    since?: string;
+  }
+): Promise<Array<Record<string, unknown>>> {
+  return fetchWithRetry(taskId, taskType, {
+    execution_id: params.executionRunId,
+    timestamp_from: params.timestampFrom,
+    timestamp_to: params.timestampTo,
+    since: params.since,
+    page: 1,
+    page_size: MAX_PAGE_SIZE,
+  });
+}
+
+export async function fetchLatestTradesPage(
+  taskId: string,
+  taskType: TaskType,
+  executionRunId?: string
+): Promise<Array<Record<string, unknown>>> {
+  const firstPage = await fetchPageWithRetry(taskId, taskType, {
+    execution_id: executionRunId,
+    page: '1',
+    page_size: String(MAX_PAGE_SIZE),
+  });
+  const totalCount = firstPage.count ?? firstPage.results.length;
+  if (totalCount <= MAX_PAGE_SIZE || !firstPage.next) {
+    return firstPage.results ?? [];
+  }
+
+  const lastPage = Math.max(1, Math.ceil(totalCount / MAX_PAGE_SIZE));
+  const finalPage = await fetchPageWithRetry(taskId, taskType, {
+    execution_id: executionRunId,
+    page: String(lastPage),
+    page_size: String(MAX_PAGE_SIZE),
+  });
+  return finalPage.results ?? [];
+}
+
 async function fetchWithRetry(
   taskId: string,
   taskType: TaskType,
@@ -104,6 +149,38 @@ async function fetchWithRetry(
   }
 
   return [];
+}
+
+async function fetchPageWithRetry(
+  taskId: string,
+  taskType: TaskType,
+  params: Record<string, string>
+): Promise<{
+  count?: number;
+  next?: string | null;
+  previous?: string | null;
+  results: Array<Record<string, unknown>>;
+}> {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await fetchTaskResourcePage<Record<string, unknown>>(
+        taskType,
+        taskId,
+        'trades',
+        params
+      );
+    } catch (err) {
+      const status = isApiErrorWithStatus(err) ? err.status : undefined;
+      if (status === 429 && attempt < MAX_RETRIES) {
+        const retryAfter = getRetryAfterHeader(err);
+        await sleep(getBackoffMs(retryAfter, attempt));
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  return { results: [] };
 }
 
 function getRetryAfterHeader(error: unknown): string | null | undefined {

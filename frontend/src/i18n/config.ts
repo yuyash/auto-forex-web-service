@@ -14,9 +14,13 @@ import tradingEN from './locales/en/trading.json';
 import tradingJA from './locales/ja/trading.json';
 import configurationEN from './locales/en/configuration.json';
 import configurationJA from './locales/ja/configuration.json';
+import {
+  readRawStoredValue,
+  writeRawStoredValue,
+} from '../utils/persistentState';
 
 // Restore saved language preference from localStorage
-const savedLanguage = localStorage.getItem('i18nextLng') || 'en';
+const savedLanguage = readRawStoredValue('i18nextLng') || 'en';
 
 // Initialize i18next
 i18n
@@ -66,5 +70,5 @@ export default i18n;
 
 // Persist language choice to localStorage on every change
 i18n.on('languageChanged', (lng: string) => {
-  localStorage.setItem('i18nextLng', lng);
+  writeRawStoredValue('i18nextLng', lng);
 });

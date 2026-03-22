@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchAllTrades,
+  fetchLatestTradesPage,
+  fetchTradesInRange,
   fetchTradesSince,
 } from '../../../../utils/fetchAllTrades';
 import type { TaskSummary } from '../../../../hooks/useTaskSummary';
@@ -20,9 +22,14 @@ interface UseTaskTrendReplayDataParams {
   pollingIntervalMs: number;
   refreshTailCandles: () => Promise<number>;
   summary?: TaskSummary;
+  loadedTimeRange?: {
+    from?: string | null;
+    to?: string | null;
+  };
 }
 
 const CANDLE_REFRESH_INTERVAL_MS = 60_000;
+const MAX_EAGER_REPLAY_TRADE_COUNT = 1_000;
 
 function mapRawTrades(
   rawTrades: Array<Record<string, unknown>>,
@@ -114,10 +121,12 @@ export function useTaskTrendReplayData({
   pollingIntervalMs,
   refreshTailCandles,
   summary,
+  loadedTimeRange,
 }: UseTaskTrendReplayDataParams) {
   const [trades, setTrades] = useState<ReplayTrade[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const hasLoadedOnce = useRef(false);
   const tradeSinceRef = useRef<string | null>(null);
   const lastCandleFetchRef = useRef<number>(0);
@@ -142,6 +151,10 @@ export function useTaskTrendReplayData({
     };
   }, [latestExecution, summary, trades.length]);
   const expectedTotalTrades = replaySummary.totalTrades;
+  const shouldUseWindowedInitialFetch =
+    expectedTotalTrades > MAX_EAGER_REPLAY_TRADE_COUNT &&
+    !!loadedTimeRange?.from &&
+    !!loadedTimeRange?.to;
 
   const fetchReplayData = useCallback(async () => {
     const isInitialLoad = !hasLoadedOnce.current;
@@ -167,17 +180,41 @@ export function useTaskTrendReplayData({
         if (isInitialLoad && expectedTotalTrades === 0) {
           setTrades([]);
           setErrorMessage(null);
+          setWarningMessage(null);
           return;
         }
 
         const rawTrades = useIncrementalTrades
-          ? await fetchTradesSince(
-              String(taskId),
-              taskType,
-              tradeSinceRef.current!,
-              executionRunId
-            )
-          : await fetchAllTrades(String(taskId), taskType, executionRunId);
+          ? shouldUseWindowedInitialFetch &&
+            loadedTimeRange?.from &&
+            loadedTimeRange?.to
+            ? await fetchTradesInRange(String(taskId), taskType, {
+                executionRunId,
+                since: tradeSinceRef.current!,
+                timestampFrom: loadedTimeRange.from,
+                timestampTo: loadedTimeRange.to,
+              })
+            : await fetchTradesSince(
+                String(taskId),
+                taskType,
+                tradeSinceRef.current!,
+                executionRunId
+              )
+          : shouldUseWindowedInitialFetch &&
+              loadedTimeRange?.from &&
+              loadedTimeRange?.to
+            ? await fetchTradesInRange(String(taskId), taskType, {
+                executionRunId,
+                timestampFrom: loadedTimeRange.from,
+                timestampTo: loadedTimeRange.to,
+              })
+            : expectedTotalTrades > MAX_EAGER_REPLAY_TRADE_COUNT
+              ? await fetchLatestTradesPage(
+                  String(taskId),
+                  taskType,
+                  executionRunId
+                )
+              : await fetchAllTrades(String(taskId), taskType, executionRunId);
 
         const latestUpdatedAt = getLatestTradeUpdatedAt(rawTrades);
         if (
@@ -225,6 +262,17 @@ export function useTaskTrendReplayData({
           });
         }
         setErrorMessage(null);
+        if (shouldUseWindowedInitialFetch) {
+          setWarningMessage(
+            'Showing replay trades for the loaded chart range to avoid fetching the full execution history.'
+          );
+        } else if (expectedTotalTrades > MAX_EAGER_REPLAY_TRADE_COUNT) {
+          setWarningMessage(
+            'Showing the latest replay trades first because this execution has a large trade history.'
+          );
+        } else {
+          setWarningMessage(null);
+        }
       } catch (tradeError) {
         setErrorMessage(toReplayErrorMessage(tradeError));
       }
@@ -238,7 +286,10 @@ export function useTaskTrendReplayData({
     executionRunId,
     expectedTotalTrades,
     instrument,
+    loadedTimeRange?.from,
+    loadedTimeRange?.to,
     refreshTailCandles,
+    shouldUseWindowedInitialFetch,
     taskId,
     taskType,
   ]);
@@ -259,6 +310,7 @@ export function useTaskTrendReplayData({
     setTrades([]);
     setIsRefreshing(false);
     setErrorMessage(null);
+    setWarningMessage(null);
     hasLoadedOnce.current = false;
     tradeSinceRef.current = null;
     lastCandleFetchRef.current = 0;
@@ -268,6 +320,7 @@ export function useTaskTrendReplayData({
     trades,
     isRefreshing,
     errorMessage,
+    warningMessage,
     replaySummary,
     fetchReplayData,
   };

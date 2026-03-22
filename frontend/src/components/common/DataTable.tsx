@@ -17,6 +17,10 @@ import {
   Skeleton,
   Checkbox,
 } from '@mui/material';
+import {
+  readRawStoredValue,
+  writeRawStoredValue,
+} from '../../utils/persistentState';
 
 export interface Column<T> {
   id: keyof T | string;
@@ -122,7 +126,7 @@ function DataTable<T extends object>({
       // Restore from localStorage if storageKey is provided
       if (storageKey) {
         try {
-          const saved = localStorage.getItem(`datatable-widths-${storageKey}`);
+          const saved = readRawStoredValue(`datatable-widths-${storageKey}`);
           if (saved) return JSON.parse(saved) as Record<string, number>;
         } catch {
           // ignore parse errors
@@ -185,7 +189,7 @@ function DataTable<T extends object>({
         if (storageKey) {
           setColumnWidths((current) => {
             try {
-              localStorage.setItem(
+              writeRawStoredValue(
                 `datatable-widths-${storageKey}`,
                 JSON.stringify(current)
               );

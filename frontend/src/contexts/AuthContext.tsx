@@ -15,6 +15,7 @@ import { authApi } from '../services/api';
 import { ApiError } from '../api/apiClient';
 import { logger } from '../utils/logger';
 import {
+  readRawStoredValue,
   readStoredValue,
   removeStoredValue,
   writeStoredValue,
@@ -58,7 +59,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const storedUser = readStoredValue('user', persistedUserSchema, null);
     if (storedUser === null) {
-      const rawUser = window.localStorage.getItem('user');
+      const rawUser = readRawStoredValue('user');
       if (rawUser) {
         logger.warn('Removing invalid persisted user payload');
         removeStoredValue('user');
@@ -101,7 +102,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(newUser);
     writeStoredValue('user', newUser);
     setAuthToken(newToken);
-    if (newUser.language && !localStorage.getItem('i18nextLng')) {
+    if (newUser.language && !readRawStoredValue('i18nextLng')) {
       i18n.changeLanguage(newUser.language);
     }
   }, []);
