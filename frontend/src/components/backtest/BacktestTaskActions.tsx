@@ -21,7 +21,6 @@ import {
   useCopyBacktestTask,
   useDeleteBacktestTask,
 } from '../../hooks/useBacktestTaskMutations';
-import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
 import { useToast } from '../common';
 import { logger } from '../../utils/logger';
 
@@ -60,9 +59,7 @@ export default function BacktestTaskActions({
   const handleCopyConfirm = async (newName: string) => {
     try {
       await copyTask.mutate({ id: task.id, data: { new_name: newName } });
-      invalidateBacktestTasksCache(); // Refresh task list
       setCopyDialogOpen(false);
-      // Trigger refresh after successful copy
       onRefresh?.();
     } catch (error) {
       logger.error('Failed to copy backtest task', {
@@ -89,9 +86,7 @@ export default function BacktestTaskActions({
   const handleDeleteConfirm = async () => {
     try {
       await deleteTask.mutate(task.id);
-      invalidateBacktestTasksCache(); // Refresh task list
       setDeleteDialogOpen(false);
-      // Trigger refresh after successful delete
       onRefresh?.();
       navigate('/backtest-tasks', { state: { deleted: true } });
     } catch (error) {

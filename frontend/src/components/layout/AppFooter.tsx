@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { Box, Chip, Stack, Tooltip } from '@mui/material';
 import {
   Circle as CircleIcon,
@@ -7,7 +6,7 @@ import {
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAppSettings } from '../../hooks/useAppSettings';
-import { healthApi } from '../../services/api';
+import { useBackendHealth } from '../../hooks/useBackendHealth';
 import { useOandaAccounts } from '../../hooks/useOandaAccounts';
 import { useOandaHealthStatus } from '../../hooks/useOandaHealthStatus';
 import { useTradingTasks } from '../../hooks/useTradingTasks';
@@ -29,8 +28,8 @@ interface OandaHealthStatus {
 const AppFooter = () => {
   const { t } = useTranslation('common');
   const { settings: appSettings } = useAppSettings();
-  const [backendVersion, setBackendVersion] = useState<string>('');
   const { hasAccounts } = useOandaAccounts();
+  const { data: backendHealth } = useBackendHealth();
   const { data: oandaData } = useOandaHealthStatus({
     enabled: hasAccounts,
     refreshIntervalMs: appSettings.healthCheckIntervalSeconds * 1000,
@@ -42,20 +41,7 @@ const AppFooter = () => {
     status: TaskStatus.RUNNING,
   });
 
-  // Fetch backend version from health endpoint
-  useEffect(() => {
-    const fetchBackendVersion = async () => {
-      try {
-        const data = await healthApi.backend();
-        if (data?.version) {
-          setBackendVersion(data.version);
-        }
-      } catch {
-        // Silently ignore - version display is non-critical
-      }
-    };
-    fetchBackendVersion();
-  }, []);
+  const backendVersion = backendHealth?.version ?? '';
 
   const oandaHealth: OandaHealthStatus | null = !hasAccounts
     ? {

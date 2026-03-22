@@ -13,7 +13,7 @@
 
 import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { queryKeys } from '../config/reactQuery';
+import { queryClient, queryKeys } from '../config/reactQuery';
 import { useSequentialPolling } from './useSequentialPolling';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
@@ -74,7 +74,7 @@ export interface UseTaskSummaryResult {
   summary: TaskSummary;
   isLoading: boolean;
   error: Error | null;
-  refetch: () => Promise<void>;
+  refetch: () => Promise<unknown>;
 }
 
 interface TaskSummaryResponse {
@@ -213,10 +213,17 @@ export function useTaskSummary(
   });
 
   useSequentialPolling(
-    async () => {
+    () => {
       if (!query.isFetching) {
-        await query.refetch();
+        return queryClient.invalidateQueries({
+          queryKey: queryKeys.taskResources.summary(
+            taskType,
+            taskId,
+            executionRunId
+          ),
+        });
       }
+      return Promise.resolve();
     },
     {
       enabled: polling && Boolean(taskId),
@@ -228,8 +235,13 @@ export function useTaskSummary(
     summary: query.data ?? INITIAL_SUMMARY,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: async () => {
-      await query.refetch();
-    },
+    refetch: () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.taskResources.summary(
+          taskType,
+          taskId,
+          executionRunId
+        ),
+      }),
   };
 }

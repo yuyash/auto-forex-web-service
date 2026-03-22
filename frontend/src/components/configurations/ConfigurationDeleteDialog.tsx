@@ -24,8 +24,8 @@ import type {
   StrategyConfig,
   ConfigurationTask,
 } from '../../types/configuration';
-import { configurationsApi } from '../../services/api/configurations';
 import { useTranslation } from 'react-i18next';
+import { useConfigurationTasks } from '../../hooks/useConfigurations';
 import { logger } from '../../utils/logger';
 
 interface ConfigurationDeleteDialogProps {
@@ -41,44 +41,40 @@ const ConfigurationDeleteDialog = ({
 }: ConfigurationDeleteDialogProps) => {
   const { t } = useTranslation(['configuration', 'common']);
   const [confirmed, setConfirmed] = useState(false);
-  const [tasks, setTasks] = useState<ConfigurationTask[]>([]);
-  const [loadingTasks, setLoadingTasks] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const { deleteConfiguration, isDeleting } = useConfigurationMutations();
+  const {
+    data: tasksData,
+    isLoading: loadingTasks,
+    error: tasksError,
+  } = useConfigurationTasks(configuration.id, {
+    enabled: open && configuration.is_in_use,
+  });
+  const tasks: ConfigurationTask[] =
+    open && configuration.is_in_use ? (tasksData ?? []) : [];
 
-  // Fetch tasks using this configuration when dialog opens
   useEffect(() => {
-    const fetchTasks = async () => {
-      if (open && configuration.is_in_use) {
-        setLoadingTasks(true);
-        try {
-          const tasks = await configurationsApi.getTasks(configuration.id);
-          setTasks(tasks || []);
-        } catch (error) {
-          logger.error('Failed to fetch configuration tasks before delete', {
-            configurationId: configuration.id,
-            error: error instanceof Error ? error.message : String(error),
-          });
-          setTasks([]);
-        } finally {
-          setLoadingTasks(false);
-        }
-      } else if (!open) {
-        // Reset state when dialog closes
-        setConfirmed(false);
-        setTasks([]);
-        setDeleteError(null);
-      }
-    };
+    if (!tasksError) {
+      return;
+    }
+    logger.error('Failed to fetch configuration tasks before delete', {
+      configurationId: configuration.id,
+      error:
+        tasksError instanceof Error ? tasksError.message : String(tasksError),
+    });
+  }, [configuration.id, tasksError]);
 
-    fetchTasks();
-  }, [open, configuration.id, configuration.is_in_use]);
+  const handleClose = () => {
+    setConfirmed(false);
+    setDeleteError(null);
+    onClose();
+  };
 
   const handleDelete = async () => {
     try {
       setDeleteError(null);
       await deleteConfiguration(configuration.id);
-      onClose();
+      handleClose();
     } catch (error) {
       // Extract error message from API response
       const err = error as { body?: { error?: string; detail?: string } };
@@ -97,7 +93,7 @@ const ConfigurationDeleteDialog = ({
   const hasActiveTasks = activeTasks.length > 0;
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
       <DialogTitle>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <WarningIcon color="warning" />
@@ -224,7 +220,7 @@ const ConfigurationDeleteDialog = ({
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={onClose} disabled={isDeleting}>
+        <Button onClick={handleClose} disabled={isDeleting}>
           {t('common:actions.cancel')}
         </Button>
         <Button

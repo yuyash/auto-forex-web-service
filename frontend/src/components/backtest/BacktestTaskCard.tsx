@@ -40,7 +40,6 @@ import {
   useStopBacktestTask,
 } from '../../hooks/useBacktestTaskMutations';
 import { useToast } from '../common';
-import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
 import { logger } from '../../utils/logger';
 
 interface BacktestTaskCardProps {
@@ -104,9 +103,6 @@ export default function BacktestTaskCard({
       });
       // Clear optimistic status since we have real status now
       setOptimisticStatus(null);
-
-      // Invalidate cache to force fresh data fetch
-      invalidateBacktestTasksCache();
 
       // Notify parent to refetch task list
       onRefresh?.();
@@ -261,7 +257,6 @@ export default function BacktestTaskCard({
     setIsDeleting(true);
     try {
       await deleteTask.mutate(String(task.id));
-      invalidateBacktestTasksCache();
       showSuccess(t('backtest:toast.deletedSuccessfully'));
       setDeleteDialogOpen(false);
       onRefresh?.();

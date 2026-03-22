@@ -22,8 +22,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import StrategyConfigForm from '../strategy/StrategyConfigForm';
-import { useStrategies } from '../../hooks/useStrategies';
-import { strategiesApi } from '../../services/api';
+import { useStrategies, useStrategyDefaults } from '../../hooks/useStrategies';
 import type { StrategyConfigCreateData } from '../../types/configuration';
 import type {
   StrategyConfig,
@@ -163,8 +162,6 @@ const ConfigurationForm = ({
   const [activeStep, setActiveStep] = useState(0);
   const [parameters, setParameters] =
     useState<StrategyConfig>(initialParameters);
-  const [strategyDefaults, setStrategyDefaults] =
-    useState<StrategyConfig | null>(null);
 
   const hasUserEditedParamsRef = useRef(false);
   const lastDefaultsStrategyRef = useRef<string>('');
@@ -193,6 +190,10 @@ const ConfigurationForm = ({
   const selectedStrategy = useMemo(() => {
     return strategies.find((s) => s.id === selectedStrategyType);
   }, [strategies, selectedStrategyType]);
+  const { data: strategyDefaults } = useStrategyDefaults(
+    selectedStrategyType || undefined,
+    { enabled: Boolean(selectedStrategyType) }
+  );
 
   const strategySchema = useMemo<ConfigSchema | undefined>(() => {
     if (!selectedStrategyType) return undefined;
@@ -219,34 +220,9 @@ const ConfigurationForm = ({
   const previousInitialDataRef =
     useRef<ConfigurationFormProps['initialData']>(initialData);
 
-  // Fetch defaults for selected strategy from backend.
   useEffect(() => {
-    const strategyType = selectedStrategyType || '';
-    if (!strategyType) {
-      setStrategyDefaults(null);
-      lastDefaultsStrategyRef.current = '';
-      return;
-    }
-
-    let isCancelled = false;
-
-    (async () => {
-      try {
-        const resp = await strategiesApi.defaults(strategyType);
-        if (isCancelled) return;
-        setStrategyDefaults((resp.defaults ?? {}) as StrategyConfig);
-        lastDefaultsStrategyRef.current = strategyType;
-      } catch {
-        if (isCancelled) return;
-        setStrategyDefaults(null);
-        lastDefaultsStrategyRef.current = strategyType;
-      }
-    })();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [selectedStrategyType]);
+    lastDefaultsStrategyRef.current = selectedStrategyType || '';
+  }, [selectedStrategyType, strategyDefaults]);
 
   // Update parameters when strategy type or initial data changes
   useEffect(() => {

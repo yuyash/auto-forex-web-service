@@ -25,10 +25,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import {
-  useBacktestTasks,
-  invalidateBacktestTasksCache,
-} from '../hooks/useBacktestTasks';
+import { useBacktestTasks } from '../hooks/useBacktestTasks';
 import { TaskStatus } from '../types/common';
 import BacktestTaskCard from '../components/backtest/BacktestTaskCard';
 import { LoadingSpinner, Breadcrumbs } from '../components/common';
@@ -74,15 +71,6 @@ export default function BacktestTasksPage() {
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
-  // Force refetch when navigating back after a deletion
-  useEffect(() => {
-    if (location.state?.deleted) {
-      invalidateBacktestTasksCache();
-      // Clear the state so it doesn't re-trigger on subsequent renders
-      navigate(location.pathname, { replace: true, state: {} });
-    }
-  }, [location.state?.deleted, navigate, location.pathname]);
-
   // Determine status filter based on active tab
   const getStatusFilter = (): TaskStatus | undefined => {
     switch (tabValue) {
@@ -104,6 +92,13 @@ export default function BacktestTasksPage() {
     status: getStatusFilter(),
     ordering: sortBy,
   });
+
+  useEffect(() => {
+    if (location.state?.deleted) {
+      void refresh();
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.pathname, location.state?.deleted, navigate, refresh]);
 
   const hasRunningTasks = !!data?.results.some(
     (task) => task.status === TaskStatus.RUNNING

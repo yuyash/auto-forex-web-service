@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { queryKeys } from '../config/reactQuery';
+import { queryClient, queryKeys } from '../config/reactQuery';
 import { useSequentialPolling } from './useSequentialPolling';
 import { TaskType } from '../types/common';
 import type { StrategyVisualizationResponse } from '../types/strategyVisualization';
@@ -22,7 +22,7 @@ interface UseTaskStrategyEventsResult {
   data: StrategyVisualizationResponse | null;
   isLoading: boolean;
   error: Error | null;
-  refetch: () => Promise<void>;
+  refetch: () => Promise<unknown>;
 }
 
 export function useTaskStrategyEvents({
@@ -71,10 +71,17 @@ export function useTaskStrategyEvents({
   });
 
   useSequentialPolling(
-    async () => {
+    () => {
       if (!query.isFetching) {
-        await query.refetch();
+        return queryClient.invalidateQueries({
+          queryKey: queryKeys.taskResources.strategyEvents(
+            taskType,
+            String(taskId),
+            executionRunId
+          ),
+        });
       }
+      return Promise.resolve();
     },
     {
       enabled: enableRealTimeUpdates && Boolean(taskId),
@@ -86,8 +93,13 @@ export function useTaskStrategyEvents({
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: async () => {
-      await query.refetch();
-    },
+    refetch: () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.taskResources.strategyEvents(
+          taskType,
+          String(taskId),
+          executionRunId
+        ),
+      }),
   };
 }

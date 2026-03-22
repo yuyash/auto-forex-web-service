@@ -47,7 +47,6 @@ import {
   useStartBacktestTask,
   useStopBacktestTask,
 } from '../../hooks/useBacktestTaskMutations';
-import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
 import { LazyTabPanel } from '../common/LazyTabPanel';
 import { TabConfigDialog } from '../common/TabConfigDialog';
 import { useTabConfig, type TabItem } from '../../hooks/useTabConfig';
@@ -540,7 +539,6 @@ export const BacktestTaskDetail: React.FC = () => {
           try {
             await deleteTask.mutate(taskId);
             setDeleteDialogOpen(false);
-            invalidateBacktestTasksCache();
             navigate('/backtest-tasks', { state: { deleted: true } });
           } catch {
             // Error handled by mutation hook

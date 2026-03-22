@@ -12,21 +12,21 @@ interface UseConfigurationsResult {
   data: PaginatedResponse<StrategyConfig> | null;
   isLoading: boolean;
   error: Error | null;
-  refetch: () => Promise<void>;
+  refetch: () => Promise<unknown>;
 }
 
 interface UseConfigurationResult {
   data: StrategyConfig | null;
   isLoading: boolean;
   error: Error | null;
-  refetch: () => Promise<void>;
+  refetch: () => Promise<unknown>;
 }
 
 interface UseConfigurationTasksResult {
   data: ConfigurationTask[] | null;
   isLoading: boolean;
   error: Error | null;
-  refetch: () => Promise<void>;
+  refetch: () => Promise<unknown>;
 }
 
 export function invalidateConfigurationsCache(): void {
@@ -47,9 +47,10 @@ export function useConfigurations(
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: async () => {
-      await query.refetch();
-    },
+    refetch: () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.configurations.list(params),
+      }),
   };
 }
 
@@ -66,25 +67,32 @@ export function useConfiguration(id?: string): UseConfigurationResult {
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: async () => {
-      await query.refetch();
-    },
+    refetch: () =>
+      id
+        ? queryClient.invalidateQueries({
+            queryKey: queryKeys.configurations.detail(id),
+          })
+        : Promise.resolve(),
   };
 }
 
-export function useConfigurationTasks(id: string): UseConfigurationTasksResult {
+export function useConfigurationTasks(
+  id: string,
+  options?: { enabled?: boolean }
+): UseConfigurationTasksResult {
   const query = useQuery({
     queryKey: queryKeys.configurations.tasks(id),
     queryFn: () => configurationsApi.getTasks(String(id)),
-    enabled: Boolean(id),
+    enabled: Boolean(id) && options?.enabled !== false,
   });
 
   return {
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: async () => {
-      await query.refetch();
-    },
+    refetch: () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.configurations.tasks(id),
+      }),
   };
 }

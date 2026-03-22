@@ -21,7 +21,10 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useAccessibility } from '../../hooks/useAccessibility';
 import { useToast } from '../common/useToast';
 import type { ThemeMode } from '../../contexts/AccessibilityContextDefinition';
-import { authApi } from '../../services/api';
+import {
+  useUpdateUserSettings,
+  useUserSettings,
+} from '../../hooks/useUserSettings';
 import { logger } from '../../utils/logger';
 
 const TIMEZONES = [
@@ -69,8 +72,15 @@ const GeneralSettings = () => {
   const { user, token, login } = useAuth();
   const { themeMode, setThemeMode } = useAccessibility();
   const { showSuccess, showError } = useToast();
+  const {
+    data,
+    error: settingsError,
+    isLoading: settingsLoading,
+  } = useUserSettings({
+    enabled: Boolean(token),
+  });
+  const updateUserSettings = useUpdateUserSettings();
 
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [settings, setSettings] = useState<UserSettings>({
     timezone: user?.timezone || 'UTC',
@@ -78,51 +88,53 @@ const GeneralSettings = () => {
     notification_enabled: true,
   });
 
-  const fetchSettings = async () => {
-    try {
-      setLoading(true);
-      const data = await authApi.getUserSettings();
-      const userData =
-        data && typeof data === 'object' && 'user' in data
-          ? (data as { user?: Partial<UserSettings> }).user
-          : undefined;
-      const settingsData =
-        data && typeof data === 'object' && 'settings' in data
-          ? (data as { settings?: Partial<UserSettings> }).settings
-          : undefined;
-      setSettings({
-        timezone:
-          (userData as { timezone?: string } | undefined)?.timezone ||
-          user?.timezone ||
-          'UTC',
-        language:
-          (userData as { language?: string } | undefined)?.language ||
-          user?.language ||
-          'en',
-        notification_enabled:
-          (settingsData as { notification_enabled?: boolean } | undefined)
-            ?.notification_enabled ?? true,
-      });
-    } catch (error) {
-      logger.error('Error fetching settings', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      showError(t('common:errors.fetchFailed'));
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (!data) {
+      return;
     }
-  };
+
+    const userData =
+      data && typeof data === 'object' && 'user' in data
+        ? (data as { user?: Partial<UserSettings> }).user
+        : undefined;
+    const settingsData =
+      data && typeof data === 'object' && 'settings' in data
+        ? (data as { settings?: Partial<UserSettings> }).settings
+        : undefined;
+    setSettings({
+      timezone:
+        (userData as { timezone?: string } | undefined)?.timezone ||
+        user?.timezone ||
+        'UTC',
+      language:
+        (userData as { language?: string } | undefined)?.language ||
+        user?.language ||
+        'en',
+      notification_enabled:
+        (settingsData as { notification_enabled?: boolean } | undefined)
+          ?.notification_enabled ?? true,
+    });
+  }, [data, user?.language, user?.timezone]);
 
   useEffect(() => {
-    fetchSettings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+    if (!token || settingsLoading || !settingsError) {
+      return;
+    }
+
+    logger.error('Error fetching settings', {
+      error:
+        settingsError instanceof Error
+          ? settingsError.message
+          : 'Failed to load user settings',
+    });
+    showError(t('common:errors.fetchFailed'));
+  }, [settingsError, settingsLoading, showError, t, token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const data = await authApi.updateUserSettings(settings);
+      const data = await updateUserSettings.mutate(settings);
       if (data.user && user && token) {
         login(token, data.user);
       }
@@ -153,7 +165,7 @@ const GeneralSettings = () => {
     }
   };
 
-  if (loading) {
+  if (settingsLoading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" py={4}>
         <CircularProgress />

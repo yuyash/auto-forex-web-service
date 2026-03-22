@@ -21,10 +21,6 @@ interface UseTradingTaskResult {
   refresh: () => Promise<unknown>;
 }
 
-export function invalidateTradingTasksCache(): void {
-  void queryClient.invalidateQueries({ queryKey: queryKeys.tradingTasks.all });
-}
-
 export function useTradingTasks(
   params?: TradingTaskListParams
 ): UseTradingTasksResult {

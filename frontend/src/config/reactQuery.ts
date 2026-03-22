@@ -157,6 +157,11 @@ export const queryKeys = {
     all: ['system-settings'] as const,
     detail: () => [...queryKeys.systemSettings.all, 'detail'] as const,
   },
+
+  userSettings: {
+    all: ['user-settings'] as const,
+    detail: () => [...queryKeys.userSettings.all, 'detail'] as const,
+  },
 };
 
 // Cache invalidation helpers

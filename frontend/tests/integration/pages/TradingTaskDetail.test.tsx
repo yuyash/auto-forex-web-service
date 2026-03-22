@@ -53,7 +53,6 @@ vi.mock('../../../src/hooks/useTradingTasks', () => ({
     isLoading: false,
     error: null,
   })),
-  invalidateTradingTasksCache: vi.fn(),
 }));
 
 vi.mock('../../../src/hooks/useTaskPolling', () => ({

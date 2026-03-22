@@ -39,7 +39,6 @@ import {
   useStartTradingTask,
   useStopTradingTask,
 } from '../../hooks/useTradingTaskMutations';
-import { invalidateTradingTasksCache } from '../../hooks/useTradingTasks';
 import { logger } from '../../utils/logger';
 
 interface TradingTaskCardProps {
@@ -109,9 +108,6 @@ export default function TradingTaskCard({
       });
       // Clear optimistic status since we have real status now
       setOptimisticStatus(null);
-
-      // Invalidate cache to force fresh data fetch
-      invalidateTradingTasksCache();
 
       // Notify parent to refetch task list
       onRefresh?.();
@@ -304,7 +300,6 @@ export default function TradingTaskCard({
     setIsDeleting(true);
     try {
       await deleteTask.mutate(String(task.id));
-      invalidateTradingTasksCache();
       showSuccess(t('trading:toast.deletedSuccessfully'));
       setDeleteDialogOpen(false);
       onRefresh?.();

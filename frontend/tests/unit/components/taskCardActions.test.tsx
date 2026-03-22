@@ -83,13 +83,9 @@ vi.mock('../../../src/hooks/useTaskSummary', () => ({
   }),
 }));
 
-vi.mock('../../../src/hooks/useBacktestTasks', () => ({
-  invalidateBacktestTasksCache: vi.fn(),
-}));
+vi.mock('../../../src/hooks/useBacktestTasks', () => ({}));
 
-vi.mock('../../../src/hooks/useTradingTasks', () => ({
-  invalidateTradingTasksCache: vi.fn(),
-}));
+vi.mock('../../../src/hooks/useTradingTasks', () => ({}));
 
 vi.mock('../../../src/hooks/useTradingTaskMutations', () => ({
   useStartTradingTask: () => ({ mutate: mockTradingStart, isLoading: false }),

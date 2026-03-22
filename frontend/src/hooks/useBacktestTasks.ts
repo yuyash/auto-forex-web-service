@@ -21,10 +21,6 @@ interface UseBacktestTaskResult {
   refresh: () => Promise<unknown>;
 }
 
-export function invalidateBacktestTasksCache(): void {
-  void queryClient.invalidateQueries({ queryKey: queryKeys.backtestTasks.all });
-}
-
 export function useBacktestTasks(
   params?: BacktestTaskListParams
 ): UseBacktestTasksResult {

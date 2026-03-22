@@ -45,7 +45,6 @@ import {
   useStartTradingTask,
   useStopTradingTask,
 } from '../../hooks/useTradingTaskMutations';
-import { invalidateTradingTasksCache } from '../../hooks/useTradingTasks';
 import { LazyTabPanel } from '../common/LazyTabPanel';
 import { TabConfigDialog } from '../common/TabConfigDialog';
 import { useTabConfig, type TabItem } from '../../hooks/useTabConfig';
@@ -485,7 +484,6 @@ export const TradingTaskDetail: React.FC = () => {
           try {
             await deleteTask.mutate(taskId);
             setDeleteDialogOpen(false);
-            invalidateTradingTasksCache();
             navigate('/trading-tasks', { state: { deleted: true } });
           } catch {
             /* handled */

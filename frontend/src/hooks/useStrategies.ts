@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../config/reactQuery';
 import { strategiesApi, type Strategy } from '../services/api';
+import type { StrategyConfig } from '../types/strategy';
 
 interface UseStrategiesResult {
   strategies: Strategy[];
@@ -24,6 +25,23 @@ export function useStrategies(): UseStrategiesResult {
     isLoading,
     error: error as Error | null,
   };
+}
+
+export function useStrategyDefaults(
+  strategyId?: string,
+  options?: { enabled?: boolean }
+) {
+  return useQuery({
+    queryKey: strategyId
+      ? queryKeys.strategies.defaults(strategyId)
+      : [...queryKeys.strategies.all, 'defaults', 'empty'],
+    queryFn: async (): Promise<StrategyConfig> => {
+      const response = await strategiesApi.defaults(strategyId!);
+      return (response.defaults ?? {}) as StrategyConfig;
+    },
+    enabled: Boolean(strategyId) && options?.enabled !== false,
+    staleTime: 5 * 60 * 1000,
+  });
 }
 
 /**

@@ -64,3 +64,14 @@ export function useOandaAccounts(): UseOandaAccountsResult {
     hasAccounts: accounts.length > 0,
   };
 }
+
+export function useDefaultOandaAccount() {
+  const { accounts, ...rest } = useOandaAccounts();
+  const defaultAccount = accounts.find((account) => account.is_default);
+
+  return {
+    ...rest,
+    accounts,
+    defaultAccount: defaultAccount ?? accounts[0] ?? null,
+  };
+}

@@ -35,7 +35,6 @@ import {
   useConfiguration,
   useConfigurations,
 } from '../../hooks/useConfigurations';
-import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
 import {
   useStrategies,
   getStrategyDisplayName,
@@ -452,9 +451,6 @@ export default function BacktestTaskForm({
       } else {
         await createTask.mutate(apiData);
       }
-
-      // Invalidate cache so the task list refreshes
-      invalidateBacktestTasksCache();
 
       navigate('/backtest-tasks');
     } catch (error: unknown) {

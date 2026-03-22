@@ -19,7 +19,7 @@ import CurrencyExchangeIcon from '@mui/icons-material/CurrencyExchange';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import TimerIcon from '@mui/icons-material/Timer';
 import { useTranslation } from 'react-i18next';
-import { useOandaAccounts } from '../hooks/useOandaAccounts';
+import { useDefaultOandaAccount } from '../hooks/useOandaAccounts';
 import { useChartPreferences } from '../hooks/useChartPreferences';
 import { useAppSettings } from '../hooks/useAppSettings';
 import { useOandaHealthStatus } from '../hooks/useOandaHealthStatus';
@@ -50,8 +50,8 @@ const DashboardPage = () => {
   );
 
   // OANDA account state - using shared hook with caching
-  const { accounts: oandaAccounts, hasAccounts: hasOandaAccount } =
-    useOandaAccounts();
+  const { defaultAccount, hasAccounts: hasOandaAccount } =
+    useDefaultOandaAccount();
 
   useOandaHealthStatus({
     enabled: hasOandaAccount,
@@ -60,8 +60,6 @@ const DashboardPage = () => {
   });
 
   // Use default account or first account
-  const defaultAccount =
-    oandaAccounts.find((acc) => acc.is_default) || oandaAccounts[0];
   const oandaAccountId = defaultAccount?.account_id;
 
   // Popover anchors

@@ -26,7 +26,6 @@ import {
   useConfiguration,
   useConfigurations,
 } from '../../hooks/useConfigurations';
-import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
 import {
   useStrategies,
   getStrategyDisplayName,
@@ -131,9 +130,6 @@ export default function BacktestTaskUpdateForm({
           sell_at_completion: data.sell_at_completion,
         },
       });
-
-      // Invalidate cache so the task list refreshes
-      invalidateBacktestTasksCache();
 
       navigate('/backtest-tasks');
     } catch (error: unknown) {
