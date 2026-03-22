@@ -1,5 +1,7 @@
 import { queryClient, queryKeys } from '../config/reactQuery';
+import type { PaginatedResponse, TaskExecution } from '../types';
 import { TaskType } from '../types/common';
+import type { TaskSummary } from './useTaskSummary';
 
 export function getTaskExecutionsKey(
   taskId: string,
@@ -83,5 +85,69 @@ export function invalidateTaskDerivedByKind(
   return invalidateTaskDerivedResources(
     taskId,
     taskKind === 'backtest' ? TaskType.BACKTEST : TaskType.TRADING
+  );
+}
+
+export function patchTaskSummaryStatus(
+  taskId: string,
+  taskType: TaskType,
+  status: string
+): void {
+  queryClient.setQueriesData<TaskSummary | undefined>(
+    { queryKey: queryKeys.taskResources.summary(taskType, taskId) },
+    (cached) =>
+      cached
+        ? {
+            ...cached,
+            task: {
+              ...cached.task,
+              status,
+            },
+          }
+        : cached
+  );
+}
+
+export function clearTaskExecutions(taskId: string, taskType: TaskType): void {
+  queryClient.removeQueries({
+    queryKey:
+      taskType === TaskType.BACKTEST
+        ? queryKeys.backtestTasks.executions(taskId)
+        : queryKeys.tradingTasks.executions(taskId),
+  });
+}
+
+export function prependTaskExecution(
+  taskId: string,
+  taskType: TaskType,
+  execution: TaskExecution
+): void {
+  const executionsKey =
+    taskType === TaskType.BACKTEST
+      ? queryKeys.backtestTasks.executions(taskId)
+      : queryKeys.tradingTasks.executions(taskId);
+  queryClient.setQueriesData<PaginatedResponse<TaskExecution> | undefined>(
+    { queryKey: executionsKey },
+    (cached) => {
+      if (!cached) {
+        return cached;
+      }
+      const existing = cached.results.find(
+        (entry) => entry.id === execution.id
+      );
+      if (existing) {
+        return {
+          ...cached,
+          results: cached.results.map((entry) =>
+            entry.id === execution.id ? { ...entry, ...execution } : entry
+          ),
+        };
+      }
+      return {
+        ...cached,
+        count: cached.count + 1,
+        results: [execution, ...cached.results],
+      };
+    }
   );
 }

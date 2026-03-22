@@ -3,7 +3,7 @@ import { TaskType } from '../../../../types/common';
 import { useTaskTrendChartModel } from './useTaskTrendChartModel';
 import { useTaskTrendTableModel } from './useTaskTrendTableModel';
 
-interface TaskTrendOrchestrationParams {
+export interface TaskTrendOrchestrationParams {
   taskId: string | number;
   taskType: TaskType;
   instrument: string;

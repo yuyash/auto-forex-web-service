@@ -5,6 +5,7 @@ import type {
   StrategyConfigUpdateData,
 } from '../types';
 import {
+  clearConfigurationTasksCache,
   removeConfigurationCaches,
   upsertConfigurationCaches,
 } from './configurationMutationCache';
@@ -37,6 +38,7 @@ export function useUpdateConfiguration(options?: {
     {
       onSuccess: async (data, variables) => {
         upsertConfigurationCaches({ ...data, id: variables.id });
+        clearConfigurationTasksCache(variables.id);
         options?.onSuccess?.(data);
       },
       onError: (error) => options?.onError?.(error),

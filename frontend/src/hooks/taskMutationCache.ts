@@ -1,6 +1,12 @@
 import { queryClient, queryKeys } from '../config/reactQuery';
 import type { BacktestTask, PaginatedResponse, TradingTask } from '../types';
-import { invalidateTaskDerivedByKind } from './taskResourceCache';
+import { TaskType } from '../types/common';
+import {
+  clearTaskExecutions,
+  invalidateTaskDerivedByKind,
+  patchTaskSummaryStatus,
+  prependTaskExecution,
+} from './taskResourceCache';
 
 type TaskEntity = BacktestTask | TradingTask;
 type TaskKind = 'backtest' | 'trading';
@@ -276,6 +282,11 @@ export function patchTaskStatusCache(
       }
     );
   }
+  patchTaskSummaryStatus(
+    taskId,
+    taskKind === 'backtest' ? TaskType.BACKTEST : TaskType.TRADING,
+    status
+  );
 }
 
 export async function invalidateTaskDerivedCaches(
@@ -304,4 +315,42 @@ export function removeTaskListEntry(taskKind: TaskKind, taskId: string): void {
       };
     }
   );
+}
+
+export function patchTaskDerivedCaches(
+  taskKind: TaskKind,
+  task: TaskEntity
+): void {
+  const taskType =
+    taskKind === 'backtest' ? TaskType.BACKTEST : TaskType.TRADING;
+  patchTaskSummaryStatus(task.id, taskType, String(task.status));
+
+  const latestExecution = task.latest_execution;
+  if (!latestExecution?.id) {
+    if (task.status === 'created') {
+      clearTaskExecutions(task.id, taskType);
+    }
+    return;
+  }
+
+  prependTaskExecution(task.id, taskType, {
+    id: latestExecution.id,
+    task_type: taskType,
+    task_id: task.id,
+    execution_number: latestExecution.execution_number,
+    status: latestExecution.status,
+    progress: latestExecution.progress,
+    started_at: latestExecution.started_at,
+    completed_at: latestExecution.completed_at,
+    error_message: latestExecution.error_message,
+    created_at: latestExecution.started_at,
+    metrics: {
+      total_return: latestExecution.total_return,
+      total_pnl: latestExecution.total_pnl,
+      total_trades: latestExecution.total_trades,
+      winning_trades: latestExecution.winning_trades,
+      losing_trades: latestExecution.losing_trades,
+      win_rate: latestExecution.win_rate,
+    },
+  });
 }

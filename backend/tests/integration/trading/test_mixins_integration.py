@@ -208,6 +208,36 @@ class TestStrictQueryValidation:
             "detail": "range_from must be earlier than or equal to range_to",
         }
 
+    @pytest.mark.parametrize(
+        ("path", "params", "detail"),
+        [
+            ("logs", {"execution_id": "invalid"}, "Invalid execution_id: invalid"),
+            ("events", {"page_size": -1}, "page_size must be greater than 0"),
+            ("trades", {"page_size": 9999}, "page_size exceeds maximum allowed value of 1000"),
+            (
+                "orders",
+                {"execution_id": "invalid"},
+                "Invalid execution_id: invalid",
+            ),
+            (
+                "positions",
+                {"range_from": "bad-date"},
+                "Invalid datetime value: bad-date",
+            ),
+        ],
+    )
+    def test_rejects_invalid_subresource_query_params(self, path, params, detail):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/{path}/", params)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data == {
+            "code": "invalid_query_param",
+            "detail": detail,
+        }
+
 
 @pytest.mark.django_db
 class TestLogs:

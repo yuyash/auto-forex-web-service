@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 from logging import Logger
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Callable, cast
 from uuid import UUID
 
 from celery.result import AsyncResult
@@ -17,12 +18,69 @@ if TYPE_CHECKING:
     from apps.trading.tasks.service import TaskService
 
 
+@dataclass(frozen=True)
+class LifecycleCommandAdapters:
+    """External side effects used by lifecycle commands."""
+
+    inspect_workers: Callable[[], dict[str, object] | None]
+    signal_stop: Callable[[UUID, str, object], None]
+    revoke_execution: Callable[[object], None]
+    dispatch_stop: Callable[[UUID, bool, StopMode], None]
+    sleep: Callable[[float], None]
+
+
+def _default_inspect_workers() -> dict[str, object] | None:
+    from celery import current_app
+
+    return current_app.control.inspect(timeout=3.0).active()
+
+
+def _default_signal_stop(task_id: UUID, task_name: str, execution_id: object) -> None:
+    import redis
+    from django.conf import settings
+
+    redis_client = redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
+    redis_instance_key = f"{task_id}:{execution_id}"
+    redis_key = f"task:coord:{task_name}:{redis_instance_key}"
+    redis_client.hset(redis_key, "status", "stopping")
+    redis_client.expire(redis_key, 3600)
+    redis_client.close()
+
+
+def _default_revoke_execution(execution_id: object) -> None:
+    from celery import current_app
+
+    current_app.control.revoke(str(execution_id), terminate=True, signal="SIGKILL")
+
+
+def _default_dispatch_stop(task_id: UUID, is_backtest: bool, stop_mode: StopMode) -> None:
+    from apps.trading.tasks import service as service_module
+
+    if is_backtest:
+        service_module.stop_backtest_task.delay(task_id)
+    else:
+        service_module.stop_trading_task.delay(task_id, stop_mode.value)
+
+
 class TaskLifecycleCommands:
     """Encapsulate task lifecycle command flows behind explicit operations."""
 
-    def __init__(self, *, service: TaskService, logger: Logger) -> None:
+    def __init__(
+        self,
+        *,
+        service: TaskService,
+        logger: Logger,
+        adapters: LifecycleCommandAdapters | None = None,
+    ) -> None:
         self.service = service
         self.logger = logger
+        self.adapters = adapters or LifecycleCommandAdapters(
+            inspect_workers=_default_inspect_workers,
+            signal_stop=_default_signal_stop,
+            revoke_execution=_default_revoke_execution,
+            dispatch_stop=_default_dispatch_stop,
+            sleep=time.sleep,
+        )
 
     def start(self, task: BacktestTask | TradingTask) -> BacktestTask | TradingTask:
         self.logger.info(
@@ -168,7 +226,7 @@ class TaskLifecycleCommands:
         if task.status in [TaskStatus.STARTING, TaskStatus.RUNNING, TaskStatus.STOPPING]:
             try:
                 self.service.stop_task(task_id)
-                time.sleep(1)
+                self.adapters.sleep(1)
                 task.refresh_from_db()
             except Exception as exc:  # pragma: no cover - defensive logging path
                 self.logger.warning(
@@ -266,10 +324,7 @@ class TaskLifecycleCommands:
             task.save()
 
     def _log_worker_state(self, task: BacktestTask | TradingTask) -> None:
-        from celery import current_app
-
-        inspect = current_app.control.inspect(timeout=3.0)
-        active_workers = inspect.active()
+        active_workers = self.adapters.inspect_workers()
         if not active_workers:
             self.logger.warning(
                 "[SERVICE:START] NO_WORKERS - No active Celery workers detected. task_id=%s, execution_id=%s",
@@ -290,16 +345,8 @@ class TaskLifecycleCommands:
         task_name: str,
         execution_id: object,
     ) -> None:
-        import redis
-        from django.conf import settings
-
         try:
-            redis_client = redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
-            redis_instance_key = f"{task_id}:{execution_id}"
-            redis_key = f"task:coord:{task_name}:{redis_instance_key}"
-            redis_client.hset(redis_key, "status", "stopping")
-            redis_client.expire(redis_key, 3600)
-            redis_client.close()
+            self.adapters.signal_stop(task_id, task_name, execution_id)
         except Exception as exc:  # pragma: no cover - defensive logging path
             self.logger.warning(
                 "[SERVICE:STOP] Redis signal failed (non-fatal) - task_id=%s, error=%s",
@@ -308,10 +355,8 @@ class TaskLifecycleCommands:
             )
 
     def _revoke_execution(self, execution_id: object) -> None:
-        from celery import current_app
-
         try:
-            current_app.control.revoke(str(execution_id), terminate=True, signal="SIGKILL")
+            self.adapters.revoke_execution(execution_id)
         except Exception as exc:  # pragma: no cover - defensive logging path
             self.logger.warning(
                 "[SERVICE:LIFECYCLE] Celery revoke failed (non-fatal) - execution_id=%s, error=%s",
@@ -326,13 +371,8 @@ class TaskLifecycleCommands:
         is_backtest: bool,
         stop_mode: StopMode,
     ) -> None:
-        from apps.trading.tasks import service as service_module
-
         try:
-            if is_backtest:
-                service_module.stop_backtest_task.delay(task_id)
-            else:
-                service_module.stop_trading_task.delay(task_id, stop_mode.value)
+            self.adapters.dispatch_stop(task_id, is_backtest, stop_mode)
         except Exception as exc:  # pragma: no cover - defensive logging path
             self.logger.warning(
                 "[SERVICE:STOP] Stop task trigger failed (non-fatal) - task_id=%s, error=%s",

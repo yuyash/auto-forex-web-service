@@ -111,3 +111,7 @@ export function removeConfigurationCaches(id: string): void {
     }
   );
 }
+
+export function clearConfigurationTasksCache(id: string): void {
+  queryClient.removeQueries({ queryKey: queryKeys.configurations.tasks(id) });
+}

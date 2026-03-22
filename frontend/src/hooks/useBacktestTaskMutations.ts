@@ -7,6 +7,7 @@ import type {
 } from '../types';
 import {
   invalidateTaskDerivedCaches,
+  patchTaskDerivedCaches,
   patchTaskStatusCache,
   removeTaskCaches,
   removeTaskListEntry,
@@ -23,6 +24,7 @@ export function useCreateBacktestTask(options?: {
     {
       onSuccess: async (data) => {
         upsertTaskCaches('backtest', data);
+        patchTaskDerivedCaches('backtest', data);
         await invalidateTaskDerivedCaches('backtest', data.id);
         options?.onSuccess?.(data);
       },
@@ -41,6 +43,7 @@ export function useUpdateBacktestTask(options?: {
     {
       onSuccess: async (data) => {
         upsertTaskCaches('backtest', data);
+        patchTaskDerivedCaches('backtest', data);
         await invalidateTaskDerivedCaches('backtest', data.id);
         options?.onSuccess?.(data);
       },
@@ -73,6 +76,7 @@ export function useCopyBacktestTask(options?: {
     {
       onSuccess: async (data) => {
         upsertTaskCaches('backtest', data);
+        patchTaskDerivedCaches('backtest', data);
         await invalidateTaskDerivedCaches('backtest', data.id);
         options?.onSuccess?.(data);
       },
@@ -88,6 +92,7 @@ export function useStartBacktestTask(options?: {
   return useWrappedMutation((id: string) => backtestTasksApi.start(id), {
     onSuccess: async (data) => {
       upsertTaskCaches('backtest', data);
+      patchTaskDerivedCaches('backtest', data);
       await invalidateTaskDerivedCaches('backtest', data.id);
       options?.onSuccess?.(data);
     },
@@ -116,6 +121,7 @@ export function useRerunBacktestTask(options?: {
   return useWrappedMutation((id: string) => backtestTasksApi.restart(id), {
     onSuccess: async (data) => {
       upsertTaskCaches('backtest', data);
+      patchTaskDerivedCaches('backtest', data);
       await invalidateTaskDerivedCaches('backtest', data.id);
       options?.onSuccess?.(data);
     },
@@ -130,6 +136,7 @@ export function usePauseBacktestTask(options?: {
   return useWrappedMutation((id: string) => backtestTasksApi.pause(id), {
     onSuccess: async (data) => {
       upsertTaskCaches('backtest', data);
+      patchTaskDerivedCaches('backtest', data);
       await invalidateTaskDerivedCaches('backtest', data.id);
       options?.onSuccess?.(data);
     },

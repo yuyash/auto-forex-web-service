@@ -7,6 +7,7 @@ import type {
 } from '../types';
 import {
   invalidateTaskDerivedCaches,
+  patchTaskDerivedCaches,
   patchTaskStatusCache,
   removeTaskCaches,
   removeTaskListEntry,
@@ -32,6 +33,7 @@ export function useCreateTradingTask(options?: {
     {
       onSuccess: async (data) => {
         upsertTaskCaches('trading', data);
+        patchTaskDerivedCaches('trading', data);
         await invalidateTaskDerivedCaches('trading', data.id);
         options?.onSuccess?.(data);
       },
@@ -56,6 +58,7 @@ export function useUpdateTradingTask(options?: {
     {
       onSuccess: async (data) => {
         upsertTaskCaches('trading', data);
+        patchTaskDerivedCaches('trading', data);
         await invalidateTaskDerivedCaches('trading', data.id);
         options?.onSuccess?.(data);
       },
@@ -88,6 +91,7 @@ export function useCopyTradingTask(options?: {
     {
       onSuccess: async (data) => {
         upsertTaskCaches('trading', data);
+        patchTaskDerivedCaches('trading', data);
         await invalidateTaskDerivedCaches('trading', data.id);
         options?.onSuccess?.(data);
       },
@@ -103,6 +107,7 @@ export function useStartTradingTask(options?: {
   return useWrappedMutation((id: string) => tradingTasksApi.start(id), {
     onSuccess: async (data) => {
       upsertTaskCaches('trading', data);
+      patchTaskDerivedCaches('trading', data);
       await invalidateTaskDerivedCaches('trading', data.id);
       options?.onSuccess?.(data);
     },
@@ -135,6 +140,7 @@ export function usePauseTradingTask(options?: {
   return useWrappedMutation((id: string) => tradingTasksApi.pause(id), {
     onSuccess: async (data) => {
       upsertTaskCaches('trading', data);
+      patchTaskDerivedCaches('trading', data);
       await invalidateTaskDerivedCaches('trading', data.id);
       options?.onSuccess?.(data);
     },
@@ -149,6 +155,7 @@ export function useResumeTradingTask(options?: {
   return useWrappedMutation((id: string) => tradingTasksApi.resume(id), {
     onSuccess: async (data) => {
       upsertTaskCaches('trading', data);
+      patchTaskDerivedCaches('trading', data);
       await invalidateTaskDerivedCaches('trading', data.id);
       options?.onSuccess?.(data);
     },
