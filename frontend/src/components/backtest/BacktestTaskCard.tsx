@@ -25,7 +25,7 @@ import { TaskControlButtons } from '../common/TaskControlButtons';
 import BacktestTaskActions from './BacktestTaskActions';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
 import { BacktestStopDialog } from '../tasks/actions/BacktestStopDialog';
-import { useTaskPolling } from '../../hooks/useTaskPolling';
+import { useBacktestTask } from '../../hooks/useBacktestTasks';
 import { useTaskSummary } from '../../hooks/useTaskSummary';
 import {
   useStrategies,
@@ -77,14 +77,14 @@ export default function BacktestTaskCard({
     task.status === TaskStatus.RUNNING ||
     optimisticStatus === TaskStatus.RUNNING;
 
-  const { status: polledStatus } = useTaskPolling(task.id, 'backtest', {
+  const { data: polledTask } = useBacktestTask(task.id, {
     enabled: pollingEnabled,
-    pollStatus: true,
-    interval: 5000, // Poll every 5 seconds for running tasks
+    enablePolling: pollingEnabled,
+    pollingInterval: 5000,
   });
 
   // Use polled status if available, otherwise use task status
-  const currentStatus = polledStatus?.status || task.status;
+  const currentStatus = polledTask?.status || task.status;
 
   // Clear optimistic status when actual status matches (derived state pattern)
   const displayStatus: TaskStatus =
@@ -95,11 +95,11 @@ export default function BacktestTaskCard({
   // Trigger refresh when polled status differs from task prop status
   // This ensures parent component gets updated data
   useEffect(() => {
-    if (polledStatus && polledStatus.status !== task.status) {
+    if (polledTask && polledTask.status !== task.status) {
       logger.debug('Backtest task status changed via polling', {
         taskId: task.id,
         propStatus: task.status,
-        polledStatus: polledStatus.status,
+        polledStatus: polledTask.status,
       });
       // Clear optimistic status since we have real status now
       setOptimisticStatus(null);
@@ -107,7 +107,7 @@ export default function BacktestTaskCard({
       // Notify parent to refetch task list
       onRefresh?.();
     }
-  }, [polledStatus, task.status, task.id, onRefresh]);
+  }, [polledTask, task.status, task.id, onRefresh]);
 
   // Use original task data (polledStatus only provides status, not full task details)
   const currentTask = task;

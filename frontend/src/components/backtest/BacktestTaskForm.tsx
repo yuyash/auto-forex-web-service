@@ -21,6 +21,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
 import { DateRangePicker } from '../tasks/forms/DateRangePicker';
 import { BalanceInput } from '../tasks/forms/BalanceInput';
+import { InstrumentSelector } from '../tasks/forms/InstrumentSelector';
 import {
   backtestTaskSchema,
   type BacktestTaskSchemaOutput,
@@ -39,6 +40,7 @@ import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
+import { useSupportedInstruments } from '../../hooks/useMarketConfig';
 import {
   fetchTickDataRange,
   type TickDataRange,
@@ -307,6 +309,10 @@ export default function BacktestTaskForm({
   const { data: configurationsData } = useConfigurations({ page_size: 100 });
   const configurations = configurationsData?.results || [];
   const { strategies } = useStrategies();
+  const {
+    instruments: availableInstruments,
+    usingFallback: usingInstrumentFallback,
+  } = useSupportedInstruments();
 
   // config_id is now a UUID string
   const configIdString = selectedConfigId || '';
@@ -645,6 +651,13 @@ export default function BacktestTaskForm({
                   <Alert severity="warning">{dataCoverageWarning}</Alert>
                 </Grid>
               )}
+              {usingInstrumentFallback && (
+                <Grid size={{ xs: 12 }}>
+                  <Alert severity="warning">
+                    {t('tables.trend.instrumentFallbackWarning')}
+                  </Alert>
+                </Grid>
+              )}
 
               <Grid size={{ xs: 12, md: 6 }}>
                 <Controller
@@ -686,16 +699,17 @@ export default function BacktestTaskForm({
                   name="instrument"
                   control={control}
                   render={({ field }) => (
-                    <TextField
-                      {...field}
-                      fullWidth
+                    <InstrumentSelector
+                      value={field.value}
+                      onChange={field.onChange}
+                      availableInstrument={availableInstruments}
                       label={t('common:labels.instrument')}
-                      placeholder={t('backtest:form.instrumentPlaceholder')}
-                      error={!!errors.instrument}
+                      error={errors.instrument?.message}
                       helperText={
                         errors.instrument?.message ||
                         t('backtest:form.instrumentHelperText')
                       }
+                      required
                     />
                   )}
                 />

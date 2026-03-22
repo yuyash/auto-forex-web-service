@@ -81,18 +81,6 @@ export const queryKeys = {
       [...queryKeys.tradingTasks.executions(taskId), executionId] as const,
   },
 
-  // Task execution keys
-  executions: {
-    all: ['executions'] as const,
-    lists: () => [...queryKeys.executions.all, 'list'] as const,
-    list: (taskType: string, taskId: string) =>
-      [...queryKeys.executions.lists(), taskType, taskId] as const,
-    details: () => [...queryKeys.executions.all, 'detail'] as const,
-    detail: (id: string) => [...queryKeys.executions.details(), id] as const,
-    metrics: (id: string) =>
-      [...queryKeys.executions.detail(id), 'metrics'] as const,
-  },
-
   // Account keys
   accounts: {
     all: ['accounts'] as const,
@@ -217,9 +205,22 @@ export const cacheInvalidation = {
 
   // Invalidate task executions
   invalidateExecutions: (taskType: string, taskId: string) => {
-    return queryClient.invalidateQueries({
-      queryKey: queryKeys.executions.list(taskType, taskId),
-    });
+    return Promise.all([
+      taskType === 'backtest'
+        ? queryClient.invalidateQueries({
+            queryKey: queryKeys.backtestTasks.executions(taskId),
+          })
+        : queryClient.invalidateQueries({
+            queryKey: queryKeys.tradingTasks.executions(taskId),
+          }),
+      taskType === 'backtest'
+        ? queryClient.invalidateQueries({
+            queryKey: queryKeys.backtestTasks.detail(taskId),
+          })
+        : queryClient.invalidateQueries({
+            queryKey: queryKeys.tradingTasks.detail(taskId),
+          }),
+    ]);
   },
 
   invalidateAccounts: () => {

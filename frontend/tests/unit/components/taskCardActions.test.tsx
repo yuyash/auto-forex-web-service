@@ -66,10 +66,6 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('../../../src/hooks/useTaskPolling', () => ({
-  useTaskPolling: () => ({ status: null }),
-}));
-
 vi.mock('../../../src/hooks/useStrategies', () => ({
   useStrategies: () => ({ strategies: [] }),
   getStrategyDisplayName: () => 'Strategy',
@@ -83,9 +79,13 @@ vi.mock('../../../src/hooks/useTaskSummary', () => ({
   }),
 }));
 
-vi.mock('../../../src/hooks/useBacktestTasks', () => ({}));
+vi.mock('../../../src/hooks/useBacktestTasks', () => ({
+  useBacktestTask: () => ({ data: null }),
+}));
 
-vi.mock('../../../src/hooks/useTradingTasks', () => ({}));
+vi.mock('../../../src/hooks/useTradingTasks', () => ({
+  useTradingTask: () => ({ data: null }),
+}));
 
 vi.mock('../../../src/hooks/useTradingTaskMutations', () => ({
   useStartTradingTask: () => ({ mutate: mockTradingStart, isLoading: false }),

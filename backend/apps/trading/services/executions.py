@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Any, overload
 from uuid import UUID
 
+from django.core.cache import cache
 from django.db.models import Case, DecimalField, F, IntegerField, Sum, Value, When
 
 from apps.trading.enums import TaskStatus
@@ -14,6 +15,9 @@ from apps.trading.models import CeleryTaskStatus
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
 from apps.trading.services.summary import compute_task_summary
+
+
+EXECUTION_METRICS_CACHE_TTL_SECONDS = 5
 
 
 @dataclass(frozen=True)
@@ -228,7 +232,7 @@ def _serialize_execution_row(
     )
 
     if include_metrics:
-        row["metrics"] = _compute_execution_metrics(
+        row["metrics"] = _get_cached_execution_metrics(
             task=task,
             task_type=task_type,
             task_id=task_id,
@@ -237,6 +241,41 @@ def _serialize_execution_row(
         )
 
     return row
+
+
+def _get_cached_execution_metrics(
+    *,
+    task,
+    task_type: str,
+    task_id: str,
+    run_id: str,
+    fallback_mid_rate: Decimal | None = None,
+) -> dict[str, Any]:
+    cache_key = _build_execution_metrics_cache_key(
+        task=task,
+        task_type=task_type,
+        task_id=task_id,
+        run_id=run_id,
+    )
+    cached_metrics = cache.get(cache_key)
+    if isinstance(cached_metrics, dict):
+        return cached_metrics
+
+    metrics = _compute_execution_metrics(
+        task=task,
+        task_type=task_type,
+        task_id=task_id,
+        run_id=run_id,
+        fallback_mid_rate=fallback_mid_rate,
+    )
+    cache.set(cache_key, metrics, EXECUTION_METRICS_CACHE_TTL_SECONDS)
+    return metrics
+
+
+def _build_execution_metrics_cache_key(*, task, task_type: str, task_id: str, run_id: str) -> str:
+    updated_at = getattr(task, "updated_at", None)
+    updated_at_key = updated_at.isoformat() if updated_at else "na"
+    return f"task-execution-metrics:{task_type}:{task_id}:{run_id}:{updated_at_key}"
 
 
 def _compute_execution_metrics(

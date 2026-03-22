@@ -25,8 +25,8 @@ import { StatCard } from '../tasks/display/StatCard';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import TradingTaskActions from './TradingTaskActions';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
-import { useTaskPolling } from '../../hooks/useTaskPolling';
 import { useToast } from '../common';
+import { useTradingTask } from '../../hooks/useTradingTasks';
 import {
   useStrategies,
   getStrategyDisplayName,
@@ -79,14 +79,14 @@ export default function TradingTaskCard({
     optimisticStatus === TaskStatus.RUNNING ||
     optimisticStatus === TaskStatus.PAUSED;
 
-  const { status: polledStatus } = useTaskPolling(task.id, 'trading', {
+  const { data: polledTask } = useTradingTask(task.id, {
     enabled: pollingEnabled,
-    pollStatus: true,
-    interval: 3000, // Poll every 3 seconds for live trading (more frequent)
+    enablePolling: pollingEnabled,
+    pollingInterval: 3000,
   });
 
   // Use polled status if available, otherwise use task status
-  const currentStatus = polledStatus?.status || task.status;
+  const currentStatus = polledTask?.status || task.status;
 
   // Clear optimistic status when actual status matches (derived state pattern)
   const displayStatus: TaskStatus =
@@ -100,11 +100,11 @@ export default function TradingTaskCard({
   // Trigger refresh when polled status differs from task prop status
   // This ensures parent component gets updated data
   useEffect(() => {
-    if (polledStatus && polledStatus.status !== task.status) {
+    if (polledTask && polledTask.status !== task.status) {
       logger.debug('Trading task status changed via polling', {
         taskId: task.id,
         propStatus: task.status,
-        polledStatus: polledStatus.status,
+        polledStatus: polledTask.status,
       });
       // Clear optimistic status since we have real status now
       setOptimisticStatus(null);
@@ -112,7 +112,7 @@ export default function TradingTaskCard({
       // Notify parent to refetch task list
       onRefresh?.();
     }
-  }, [polledStatus, task.status, task.id, onRefresh]);
+  }, [polledTask, task.status, task.id, onRefresh]);
 
   // Show toast notifications for status changes and trades
   useEffect(() => {
