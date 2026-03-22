@@ -43,8 +43,8 @@ class PaginationParams:
         cls,
         request: Request,
         *,
-        default_page_size: int = 1000,
-        max_page_size: int = 5000,
+        default_page_size: int = 100,
+        max_page_size: int = 1000,
     ) -> PaginationParams:
         page = 1
         page_size = default_page_size
@@ -78,8 +78,8 @@ class ExecutionScopedQuery:
         request: Request,
         *,
         default_execution_id: UUID | None,
-        default_page_size: int = 1000,
-        max_page_size: int = 5000,
+        default_page_size: int = 100,
+        max_page_size: int = 1000,
     ) -> ExecutionScopedQuery:
         return cls(
             execution_id=_parse_execution_id_value(request.query_params.get("execution_id"))

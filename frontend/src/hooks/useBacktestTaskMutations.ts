@@ -14,15 +14,6 @@ import {
 } from './taskMutationCache';
 import { useWrappedMutation } from './useWrappedMutation';
 
-async function invalidateBacktestQueries(taskId?: string): Promise<void> {
-  await queryClient.invalidateQueries({
-    queryKey: queryKeys.backtestTasks.lists(),
-  });
-  if (taskId) {
-    await invalidateTaskDerivedCaches('backtest', taskId);
-  }
-}
-
 export function useCreateBacktestTask(options?: {
   onSuccess?: (data: BacktestTask) => void;
   onError?: (error: Error) => void;
@@ -32,7 +23,7 @@ export function useCreateBacktestTask(options?: {
     {
       onSuccess: async (data) => {
         upsertTaskCaches('backtest', data);
-        await invalidateBacktestQueries(data.id);
+        await invalidateTaskDerivedCaches('backtest', data.id);
         options?.onSuccess?.(data);
       },
       onError: (error) => options?.onError?.(error),
@@ -84,7 +75,7 @@ export function useCopyBacktestTask(options?: {
     {
       onSuccess: async (data) => {
         upsertTaskCaches('backtest', data);
-        await invalidateBacktestQueries(data.id);
+        await invalidateTaskDerivedCaches('backtest', data.id);
         options?.onSuccess?.(data);
       },
       onError: (error) => options?.onError?.(error),

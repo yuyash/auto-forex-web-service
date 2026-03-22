@@ -2484,7 +2484,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "Results per page (default 1000, max 5000)"
+                        "description": "Results per page (default 100, max 1000)"
                     },
                     {
                         "in": "query",
@@ -3915,7 +3915,7 @@
                         "schema": {
                             "type": "integer"
                         },
-                        "description": "Results per page (default 1000, max 5000)"
+                        "description": "Results per page (default 100, max 1000)"
                     },
                     {
                         "in": "query",

@@ -17,7 +17,6 @@ import { TaskType } from '../../../types/common';
 import { getTimezoneAbbr } from '../../../utils/chartTimezone';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useMetricsOverlay } from './MetricsOverlayChart';
-import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
 import { useWindowedCandles } from '../../../hooks/useWindowedCandles';
 import { useWindowedTaskMarkers } from '../../../hooks/useWindowedTaskMarkers';
 import { clampRange, type TimeRange } from '../../../utils/windowedRanges';
@@ -28,8 +27,6 @@ import {
 } from './taskTrendPanel/shared';
 import type { CandlePoint, ReplayTrade } from './taskTrendPanel/shared';
 import { TaskTrendToolbar } from './taskTrendPanel/TaskTrendToolbar';
-import { TaskTrendTradesTable } from './taskTrendPanel/TaskTrendTradesTable';
-import { TaskTrendPositionsTable } from './taskTrendPanel/TaskTrendPositionsTable';
 import type { TrendPosition } from './taskTrendPanel/shared';
 import { useTaskTrendChart } from './taskTrendPanel/useTaskTrendChart';
 import { useTaskTrendReplayData } from './taskTrendPanel/useTaskTrendReplayData';
@@ -40,6 +37,8 @@ import { useTaskTrendMarkers } from './taskTrendPanel/useTaskTrendMarkers';
 import { useTaskTrendTableState } from './taskTrendPanel/useTaskTrendTableState';
 import { useTaskTrendDerivedData } from './taskTrendPanel/useTaskTrendDerivedData';
 import { useTaskSelectionNavigation } from '../../../hooks/useTaskSelectionNavigation';
+import { TaskTrendAlerts } from './taskTrendPanel/TaskTrendAlerts';
+import { TaskTrendTablesSection } from './taskTrendPanel/TaskTrendTablesSection';
 
 interface TaskTrendPanelProps {
   taskId: string | number;
@@ -523,38 +522,16 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         boxSizing: 'border-box',
       }}
     >
-      {candleErrorMessage && (
-        <Alert
-          severity={errorCode === 'NO_OANDA_ACCOUNT' ? 'info' : 'warning'}
-          sx={{ mb: 1 }}
-        >
-          {candleErrorMessage}
-        </Alert>
-      )}
-      {usingGranularityFallback && (
-        <Alert severity="warning" sx={{ mb: 1 }}>
-          {t('tables.trend.granularityFallbackWarning')}
-        </Alert>
-      )}
-      {errorMessage && (
-        <Alert severity="warning" sx={{ mb: 1 }}>
-          {t('tables.trend.replayRefreshFailed', {
-            defaultValue: errorMessage,
-          })}
-        </Alert>
-      )}
-      {warningMessage && (
-        <Alert severity="info" sx={{ mb: 1 }}>
-          {warningMessage}
-        </Alert>
-      )}
-      {chartWarning && (
-        <Alert severity="warning" sx={{ mb: 1 }}>
-          {t('tables.trend.chartRenderFailed', {
-            defaultValue: chartWarning,
-          })}
-        </Alert>
-      )}
+      <TaskTrendAlerts
+        candleErrorMessage={candleErrorMessage}
+        candleErrorSeverity={candleErrorSeverity}
+        errorCode={errorCode}
+        usingGranularityFallback={usingGranularityFallback}
+        errorMessage={errorMessage}
+        warningMessage={warningMessage}
+        chartWarning={chartWarning}
+        t={t}
+      />
       <TaskTrendToolbar
         replaySummary={replaySummary}
         pnlCurrency={pnlCurrency}
@@ -669,145 +646,124 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         />
       </Box>
 
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: { xs: 'column', lg: 'row' },
-          gap: 2,
-          mt: 0.5,
-          alignItems: 'flex-start',
+      <TaskTrendTablesSection
+        tradesTableProps={{
+          trades: sortedTrades,
+          paginatedTrades,
+          selectedTradeId,
+          highlightedTradeIds,
+          selectedRowIds: tradeSelectedRowIds,
+          isAllPageSelected: isAllTradePageSelected,
+          isRefreshing,
+          orderBy: tradeOrderBy,
+          order: tradeOrder,
+          replayColWidths: tradeColWidths,
+          page: tradePage,
+          rowsPerPage: tradeRowsPerPage,
+          timezone,
+          selectedRowRef: tradeSelectedRowRef,
+          onConfigureColumns: trendTableState.openTradeColumns,
+          onCopySelected: copySelectedRows,
+          onSelectAllOnPage: selectAllTradeRowsOnPage,
+          onResetSelection: resetTradeSelection,
+          onReload: fetchReplayData,
+          onSelectTrade: selectTrade,
+          onToggleRowSelection: toggleTradeRowSelection,
+          onTogglePageSelection: toggleTradePageSelection,
+          onSort: handleTradeSort,
+          onPageChange: (_e, newPage) => setTradePage(newPage),
+          onRowsPerPageChange: trendTableState.handleRowsPerPageChange,
+          resizeHandle: createTradeResizeHandle,
         }}
-      >
-        {/* Left column: Trades */}
-        <Box
-          sx={{
-            flex: 1,
-            minWidth: 0,
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          <TaskTrendTradesTable
-            trades={sortedTrades}
-            paginatedTrades={paginatedTrades}
-            selectedTradeId={selectedTradeId}
-            highlightedTradeIds={highlightedTradeIds}
-            selectedRowIds={tradeSelectedRowIds}
-            isAllPageSelected={isAllTradePageSelected}
-            isRefreshing={isRefreshing}
-            orderBy={tradeOrderBy}
-            order={tradeOrder}
-            replayColWidths={tradeColWidths}
-            page={tradePage}
-            rowsPerPage={tradeRowsPerPage}
-            timezone={timezone}
-            selectedRowRef={tradeSelectedRowRef}
-            onConfigureColumns={trendTableState.openTradeColumns}
-            onCopySelected={copySelectedRows}
-            onSelectAllOnPage={selectAllTradeRowsOnPage}
-            onResetSelection={resetTradeSelection}
-            onReload={fetchReplayData}
-            onSelectTrade={selectTrade}
-            onToggleRowSelection={toggleTradeRowSelection}
-            onTogglePageSelection={toggleTradePageSelection}
-            onSort={handleTradeSort}
-            onPageChange={(_e, newPage) => setTradePage(newPage)}
-            onRowsPerPageChange={trendTableState.handleRowsPerPageChange}
-            resizeHandle={createTradeResizeHandle}
-          />
-        </Box>
-
-        <TaskTrendPositionsTable
-          title={t('tables.trend.longPositions')}
-          count={longPositions.length}
-          positions={sortedLongPositions}
-          paginatedPositions={paginatedLongPositions}
-          selectedPosId={selectedPosId}
-          selectedIds={selectedLongPosIds}
-          isAllPageSelected={isAllLongPosPageSelected}
-          isRefreshing={isRefreshing}
-          showOpenOnly={showOpenLongOnly}
-          orderBy={longPosOrderBy}
-          order={longPosOrder}
-          colWidths={longPosColWidths}
-          currentPrice={currentPrice}
-          pipSize={pipSize}
-          isShort={false}
-          page={longPosPage}
-          rowsPerPage={longPosRowsPerPage}
-          timezone={timezone}
-          selectedPosRowRef={selectedPosRowRef}
-          onConfigureColumns={trendTableState.openLongColumns}
-          onCopySelected={() => copySelectedLongPositions(false)}
-          onSelectAllOnPage={selectAllLongPosOnPage}
-          onResetSelection={resetLongPosSelection}
-          onReload={fetchReplayData}
-          onToggleOpenOnly={toggleOpenLongOnly}
-          onTogglePageSelection={toggleLongPosPageSelection}
-          onSort={handleLongPosSort}
-          onSelectPosition={selectPosition}
-          onToggleSelection={toggleLongPosSelection}
-          onPageChange={(_e, newPage) => setLongPosPage(newPage)}
-          onRowsPerPageChange={trendTableState.handleRowsPerPageChange}
-          resizeHandle={createLongPosResizeHandle}
-        />
-
-        <TaskTrendPositionsTable
-          title={t('tables.trend.shortPositions')}
-          count={shortPositions.length}
-          positions={sortedShortPositions}
-          paginatedPositions={paginatedShortPositions}
-          selectedPosId={selectedPosId}
-          selectedIds={selectedShortPosIds}
-          isAllPageSelected={isAllShortPosPageSelected}
-          isRefreshing={isRefreshing}
-          showOpenOnly={showOpenShortOnly}
-          orderBy={shortPosOrderBy}
-          order={shortPosOrder}
-          colWidths={shortPosColWidths}
-          currentPrice={currentPrice}
-          pipSize={pipSize}
-          isShort={true}
-          page={shortPosPage}
-          rowsPerPage={shortPosRowsPerPage}
-          timezone={timezone}
-          selectedPosRowRef={selectedPosRowRef}
-          onConfigureColumns={trendTableState.openShortColumns}
-          onCopySelected={() => copySelectedShortPositions(true)}
-          onSelectAllOnPage={selectAllShortPosOnPage}
-          onResetSelection={resetShortPosSelection}
-          onReload={fetchReplayData}
-          onToggleOpenOnly={toggleOpenShortOnly}
-          onTogglePageSelection={toggleShortPosPageSelection}
-          onSort={handleShortPosSort}
-          onSelectPosition={selectPosition}
-          onToggleSelection={toggleShortPosSelection}
-          onPageChange={(_e, newPage) => setShortPosPage(newPage)}
-          onRowsPerPageChange={trendTableState.handleRowsPerPageChange}
-          resizeHandle={createShortPosResizeHandle}
-        />
-      </Box>
-
-      <ColumnConfigDialog
-        open={tradeConfigOpen}
-        columns={tradeColumnConfig}
-        onClose={trendTableState.closeTradeColumns}
-        onSave={updateTradeColumns}
-        onReset={resetTradeDefaults}
-      />
-      <ColumnConfigDialog
-        open={longPosConfigOpen}
-        columns={longPosColumnConfig}
-        onClose={trendTableState.closeLongColumns}
-        onSave={updateLongPosColumns}
-        onReset={resetLongPosDefaults}
-      />
-      <ColumnConfigDialog
-        open={shortPosConfigOpen}
-        columns={shortPosColumnConfig}
-        onClose={trendTableState.closeShortColumns}
-        onSave={updateShortPosColumns}
-        onReset={resetShortPosDefaults}
+        longPositionsTableProps={{
+          title: t('tables.trend.longPositions'),
+          count: longPositions.length,
+          positions: sortedLongPositions,
+          paginatedPositions: paginatedLongPositions,
+          selectedPosId,
+          selectedIds: selectedLongPosIds,
+          isAllPageSelected: isAllLongPosPageSelected,
+          isRefreshing,
+          showOpenOnly: showOpenLongOnly,
+          orderBy: longPosOrderBy,
+          order: longPosOrder,
+          colWidths: longPosColWidths,
+          currentPrice,
+          pipSize,
+          isShort: false,
+          page: longPosPage,
+          rowsPerPage: longPosRowsPerPage,
+          timezone,
+          selectedPosRowRef,
+          onConfigureColumns: trendTableState.openLongColumns,
+          onCopySelected: () => copySelectedLongPositions(false),
+          onSelectAllOnPage: selectAllLongPosOnPage,
+          onResetSelection: resetLongPosSelection,
+          onReload: fetchReplayData,
+          onToggleOpenOnly: toggleOpenLongOnly,
+          onTogglePageSelection: toggleLongPosPageSelection,
+          onSort: handleLongPosSort,
+          onSelectPosition: selectPosition,
+          onToggleSelection: toggleLongPosSelection,
+          onPageChange: (_e, newPage) => setLongPosPage(newPage),
+          onRowsPerPageChange: trendTableState.handleRowsPerPageChange,
+          resizeHandle: createLongPosResizeHandle,
+        }}
+        shortPositionsTableProps={{
+          title: t('tables.trend.shortPositions'),
+          count: shortPositions.length,
+          positions: sortedShortPositions,
+          paginatedPositions: paginatedShortPositions,
+          selectedPosId,
+          selectedIds: selectedShortPosIds,
+          isAllPageSelected: isAllShortPosPageSelected,
+          isRefreshing,
+          showOpenOnly: showOpenShortOnly,
+          orderBy: shortPosOrderBy,
+          order: shortPosOrder,
+          colWidths: shortPosColWidths,
+          currentPrice,
+          pipSize,
+          isShort: true,
+          page: shortPosPage,
+          rowsPerPage: shortPosRowsPerPage,
+          timezone,
+          selectedPosRowRef,
+          onConfigureColumns: trendTableState.openShortColumns,
+          onCopySelected: () => copySelectedShortPositions(true),
+          onSelectAllOnPage: selectAllShortPosOnPage,
+          onResetSelection: resetShortPosSelection,
+          onReload: fetchReplayData,
+          onToggleOpenOnly: toggleOpenShortOnly,
+          onTogglePageSelection: toggleShortPosPageSelection,
+          onSort: handleShortPosSort,
+          onSelectPosition: selectPosition,
+          onToggleSelection: toggleShortPosSelection,
+          onPageChange: (_e, newPage) => setShortPosPage(newPage),
+          onRowsPerPageChange: trendTableState.handleRowsPerPageChange,
+          resizeHandle: createShortPosResizeHandle,
+        }}
+        tradeDialogProps={{
+          open: tradeConfigOpen,
+          columns: tradeColumnConfig,
+          onClose: trendTableState.closeTradeColumns,
+          onSave: updateTradeColumns,
+          onReset: resetTradeDefaults,
+        }}
+        longDialogProps={{
+          open: longPosConfigOpen,
+          columns: longPosColumnConfig,
+          onClose: trendTableState.closeLongColumns,
+          onSave: updateLongPosColumns,
+          onReset: resetLongPosDefaults,
+        }}
+        shortDialogProps={{
+          open: shortPosConfigOpen,
+          columns: shortPosColumnConfig,
+          onClose: trendTableState.closeShortColumns,
+          onSave: updateShortPosColumns,
+          onReset: resetShortPosDefaults,
+        }}
       />
     </Box>
   );

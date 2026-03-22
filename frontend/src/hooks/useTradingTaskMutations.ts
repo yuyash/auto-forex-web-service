@@ -16,15 +16,6 @@ import { useWrappedMutation } from './useWrappedMutation';
 
 export type StopMode = 'immediate' | 'graceful' | 'graceful_close';
 
-async function invalidateTradingQueries(taskId?: string): Promise<void> {
-  await queryClient.invalidateQueries({
-    queryKey: queryKeys.tradingTasks.lists(),
-  });
-  if (taskId) {
-    await invalidateTaskDerivedCaches('trading', taskId);
-  }
-}
-
 export function useCreateTradingTask(options?: {
   onSuccess?: (data: TradingTask) => void;
   onError?: (error: Error) => void;
@@ -41,7 +32,7 @@ export function useCreateTradingTask(options?: {
     {
       onSuccess: async (data) => {
         upsertTaskCaches('trading', data);
-        await invalidateTradingQueries(data.id);
+        await invalidateTaskDerivedCaches('trading', data.id);
         options?.onSuccess?.(data);
       },
       onError: (error) => options?.onError?.(error),
@@ -99,7 +90,7 @@ export function useCopyTradingTask(options?: {
     {
       onSuccess: async (data) => {
         upsertTaskCaches('trading', data);
-        await invalidateTradingQueries(data.id);
+        await invalidateTaskDerivedCaches('trading', data.id);
         options?.onSuccess?.(data);
       },
       onError: (error) => options?.onError?.(error),

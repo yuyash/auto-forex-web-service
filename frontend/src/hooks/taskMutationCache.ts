@@ -20,6 +20,15 @@ function getTaskKeys(taskKind: TaskKind) {
   };
 }
 
+function getTaskDerivedKeys(taskKind: TaskKind, taskId: string) {
+  const taskType = taskKind === 'backtest' ? 'backtest' : 'trading';
+  return {
+    summaries: queryKeys.taskResources.summary(taskType, taskId),
+    strategyEvents: queryKeys.taskResources.strategyEvents(taskType, taskId),
+    logComponents: queryKeys.taskResources.logComponents(taskType, taskId),
+  };
+}
+
 function getListParams(
   queryKey: readonly unknown[]
 ): Record<string, unknown> | undefined {
@@ -146,7 +155,12 @@ export function upsertTaskCaches<T extends TaskEntity>(
 
 export function removeTaskCaches(taskKind: TaskKind, taskId: string): void {
   const keys = getTaskKeys(taskKind);
+  const derivedKeys = getTaskDerivedKeys(taskKind, taskId);
   queryClient.removeQueries({ queryKey: keys.detail(taskId) });
+  queryClient.removeQueries({ queryKey: keys.executions(taskId) });
+  queryClient.removeQueries({ queryKey: derivedKeys.summaries });
+  queryClient.removeQueries({ queryKey: derivedKeys.strategyEvents });
+  queryClient.removeQueries({ queryKey: derivedKeys.logComponents });
   queryClient.setQueriesData<PaginatedResponse<TaskEntity>>(
     { queryKey: keys.lists },
     (cached) => {

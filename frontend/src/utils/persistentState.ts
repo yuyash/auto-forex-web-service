@@ -17,9 +17,37 @@ export function readStoredValue<T>(
   }
 }
 
+export function readStoredStringValue<T extends string>(
+  key: string,
+  schema: z.ZodType<T>,
+  fallback: T
+): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+      return fallback;
+    }
+    try {
+      return schema.parse(JSON.parse(raw));
+    } catch {
+      return schema.parse(raw);
+    }
+  } catch {
+    return fallback;
+  }
+}
+
 export function writeStoredValue<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // ignore storage write failures
+  }
+}
+
+export function writeStoredStringValue(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
   } catch {
     // ignore storage write failures
   }
@@ -30,21 +58,5 @@ export function removeStoredValue(key: string): void {
     localStorage.removeItem(key);
   } catch {
     // ignore storage removal failures
-  }
-}
-
-export function readRawStoredValue(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-export function writeRawStoredValue(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // ignore storage write failures
   }
 }

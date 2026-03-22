@@ -38,41 +38,6 @@ from apps.trading.views.query_params import (
 from apps.trading.views.pagination import TaskSubResourcePagination
 
 
-def _parse_since(request: Request):
-    """Return a datetime from the ``since`` query-param, or *None*."""
-    raw = request.query_params.get("since")
-    if raw:
-        return parse_datetime(raw)
-    return None
-
-
-def _parse_datetime_param(request: Request, key: str):
-    """Return a datetime from an arbitrary query param, or *None*."""
-    raw = request.query_params.get(key)
-    if raw:
-        return parse_datetime(raw)
-    return None
-
-
-def _parse_execution_id(request: Request):
-    """Return execution_id (UUID) from query param when valid."""
-    raw = request.query_params.get("execution_id")
-    if raw is None:
-        return None
-    try:
-        from uuid import UUID
-
-        return UUID(raw)
-    except (TypeError, ValueError):
-        return None
-
-
-def _parse_page_params(request: Request) -> tuple[int, int]:
-    """Return ``(page, page_size)`` from query params with defaults."""
-    pagination = PaginationParams.from_request(request)
-    return pagination.page, pagination.page_size
-
-
 def _ensure_dict(value) -> dict:
     """Ensure a metrics value is a dict (handles double-encoded JSON strings)."""
     if isinstance(value, dict):
@@ -130,7 +95,7 @@ class TaskSubResourceMixin:
             OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
             OpenApiParameter("page", int, description="Page number (1-based)"),
             OpenApiParameter(
-                "page_size", int, description="Results per page (default 1000, max 5000)"
+                "page_size", int, description="Results per page (default 100, max 1000)"
             ),
             OpenApiParameter(
                 "interval",

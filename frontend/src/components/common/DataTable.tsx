@@ -17,10 +17,8 @@ import {
   Skeleton,
   Checkbox,
 } from '@mui/material';
-import {
-  readRawStoredValue,
-  writeRawStoredValue,
-} from '../../utils/persistentState';
+import { readStoredValue, writeStoredValue } from '../../utils/persistentState';
+import { z } from 'zod';
 
 export interface Column<T> {
   id: keyof T | string;
@@ -123,14 +121,12 @@ function DataTable<T extends object>({
   // Column widths state for resizing
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(
     () => {
-      // Restore from localStorage if storageKey is provided
       if (storageKey) {
-        try {
-          const saved = readRawStoredValue(`datatable-widths-${storageKey}`);
-          if (saved) return JSON.parse(saved) as Record<string, number>;
-        } catch {
-          // ignore parse errors
-        }
+        return readStoredValue(
+          `datatable-widths-${storageKey}`,
+          z.record(z.string(), z.number()),
+          {}
+        );
       }
       const widths: Record<string, number> = {};
       columns.forEach((col) => {
@@ -188,14 +184,7 @@ function DataTable<T extends object>({
         // Persist widths to localStorage
         if (storageKey) {
           setColumnWidths((current) => {
-            try {
-              writeRawStoredValue(
-                `datatable-widths-${storageKey}`,
-                JSON.stringify(current)
-              );
-            } catch {
-              // ignore quota errors
-            }
+            writeStoredValue(`datatable-widths-${storageKey}`, current);
             return current;
           });
         }

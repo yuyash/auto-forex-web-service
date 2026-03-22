@@ -110,6 +110,56 @@ class TestMetrics:
 
 
 @pytest.mark.django_db
+class TestStrictQueryValidation:
+    """Sub-resource endpoints reject malformed query parameters."""
+
+    def test_rejects_invalid_execution_id(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/trades/",
+            {"execution_id": "not-a-uuid"},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data == {
+            "code": "invalid_query_param",
+            "detail": "Invalid execution_id: not-a-uuid",
+        }
+
+    def test_rejects_invalid_since(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/events/",
+            {"since": "bad-date"},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data == {
+            "code": "invalid_query_param",
+            "detail": "Invalid datetime value: bad-date",
+        }
+
+    def test_rejects_invalid_page(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/logs/",
+            {"page": "zero"},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data == {
+            "code": "invalid_query_param",
+            "detail": "Invalid page parameter",
+        }
+
+
+@pytest.mark.django_db
 class TestLogs:
     """GET /api/trading/tasks/backtest/{id}/logs/"""
 
