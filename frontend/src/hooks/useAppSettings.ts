@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
+import { z } from 'zod';
 import type { Granularity } from '../types/chart';
+import { readStoredValue, writeStoredValue } from '../utils/persistentState';
 
 export interface AppSettings {
   // Display: date & number format
@@ -33,26 +35,34 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
 };
 
 const STORAGE_KEY = 'app_settings';
+const appSettingsSchema = z.object({
+  dateFormat: z.enum(['MM/DD/YYYY', 'DD/MM/YYYY', 'YYYY-MM-DD']),
+  decimalSeparator: z.enum(['.', ',']),
+  thousandsSeparator: z.enum([',', '.', ' ', '']),
+  defaultInstrument: z.string().min(1),
+  defaultGranularity: z.custom<Granularity>(
+    (value) => typeof value === 'string'
+  ),
+  candleUpColor: z.string().min(1),
+  candleDownColor: z.string().min(1),
+  sessionTimeoutMinutes: z.number(),
+  healthCheckIntervalSeconds: z.number(),
+});
 
 export function useAppSettings() {
-  const [settings, setSettings] = useState<AppSettings>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        return { ...DEFAULT_APP_SETTINGS, ...JSON.parse(stored) };
-      }
-    } catch {
-      // ignore
-    }
-    return DEFAULT_APP_SETTINGS;
-  });
+  const [settings, setSettings] = useState<AppSettings>(() =>
+    readStoredValue(
+      STORAGE_KEY,
+      appSettingsSchema.transform((value) => ({
+        ...DEFAULT_APP_SETTINGS,
+        ...value,
+      })),
+      DEFAULT_APP_SETTINGS
+    )
+  );
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-    } catch {
-      // ignore
-    }
+    writeStoredValue(STORAGE_KEY, settings);
   }, [settings]);
 
   const updateSetting = useCallback(

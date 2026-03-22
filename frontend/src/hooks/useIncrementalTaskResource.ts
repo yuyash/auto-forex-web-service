@@ -31,6 +31,7 @@ interface UseIncrementalTaskResourceResult<TItem> {
   hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
+  refresh: () => Promise<void>;
   refetch: () => Promise<void>;
 }
 
@@ -223,6 +224,7 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
     hasPrevious,
     isLoading,
     error,
+    refresh: () => fetchItems(false),
     refetch: () => fetchItems(false),
   };
 }

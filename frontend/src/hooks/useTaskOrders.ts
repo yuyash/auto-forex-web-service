@@ -52,6 +52,7 @@ interface UseTaskOrdersResult {
   hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
+  refresh: () => Promise<void>;
   refetch: () => Promise<void>;
 }
 
@@ -86,6 +87,7 @@ export const useTaskOrders = ({
     hasPrevious,
     isLoading,
     error,
+    refresh,
     refetch,
   } = useIncrementalTaskResource<TaskOrder>({
     taskId,
@@ -120,6 +122,7 @@ export const useTaskOrders = ({
     hasPrevious,
     isLoading,
     error,
+    refresh,
     refetch,
   };
 };

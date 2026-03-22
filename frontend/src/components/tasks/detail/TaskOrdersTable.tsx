@@ -48,7 +48,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
   const [isReloading, setIsReloading] = useState(false);
   const selection = useTableRowSelection();
 
-  const { orders, totalCount, isLoading, error, refetch } = useTaskOrders({
+  const { orders, totalCount, isLoading, error, refresh } = useTaskOrders({
     taskId,
     taskType,
     executionRunId,
@@ -70,9 +70,9 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
 
   const handleReload = useCallback(async () => {
     setIsReloading(true);
-    await refetch();
+    await refresh();
     setIsReloading(false);
-  }, [refetch]);
+  }, [refresh]);
 
   const formatTimestamp = (timestamp: string): string => {
     return new Date(timestamp).toLocaleString('en-US', {

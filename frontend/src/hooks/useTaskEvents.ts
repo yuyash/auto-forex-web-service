@@ -43,6 +43,7 @@ interface UseTaskEventsResult {
   hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
+  refresh: () => Promise<void>;
   refetch: () => Promise<void>;
 }
 
@@ -77,6 +78,7 @@ export const useTaskEvents = ({
     hasPrevious,
     isLoading,
     error,
+    refresh,
     refetch,
   } = useIncrementalTaskResource<TaskEvent>({
     taskId,
@@ -112,6 +114,7 @@ export const useTaskEvents = ({
     hasPrevious,
     isLoading,
     error,
+    refresh,
     refetch,
   };
 };

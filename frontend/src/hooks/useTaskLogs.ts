@@ -42,6 +42,7 @@ interface UseTaskLogsResult {
   hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
+  refresh: () => Promise<void>;
   refetch: () => Promise<void>;
 }
 
@@ -77,6 +78,7 @@ export const useTaskLogs = ({
     hasPrevious,
     isLoading,
     error,
+    refresh,
     refetch,
   } = useIncrementalTaskResource<TaskLog>({
     taskId,
@@ -114,6 +116,7 @@ export const useTaskLogs = ({
     hasPrevious,
     isLoading,
     error,
+    refresh,
     refetch,
   };
 };

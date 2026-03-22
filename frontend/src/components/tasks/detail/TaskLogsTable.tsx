@@ -65,7 +65,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     executionRunId,
   });
 
-  const { logs, totalCount, isLoading, error, refetch } = useTaskLogs({
+  const { logs, totalCount, isLoading, error, refresh } = useTaskLogs({
     taskId,
     taskType,
     executionRunId,
@@ -96,9 +96,9 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
 
   const handleReload = useCallback(async () => {
     setIsReloading(true);
-    await refetch();
+    await refresh();
     setIsReloading(false);
-  }, [refetch]);
+  }, [refresh]);
 
   const handleLevelFilterChange = (event: SelectChangeEvent<string[]>) => {
     const value = event.target.value;

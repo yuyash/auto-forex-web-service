@@ -44,6 +44,7 @@ import {
   useSupportedInstruments,
   useTickDataRange,
 } from '../../hooks/useMarketConfig';
+import { useToast } from '../common/useToast';
 
 const DEFAULT_DATE_RANGE_DAYS = 30;
 
@@ -219,6 +220,7 @@ export default function BacktestTaskForm({
 }: BacktestTaskFormProps) {
   const { t } = useTranslation(['backtest', 'common']);
   const navigate = useNavigate();
+  const { showError } = useToast();
   const steps = [
     t('backtest:form.steps.configuration'),
     t('backtest:form.steps.parameters'),
@@ -476,7 +478,7 @@ export default function BacktestTaskForm({
         errorMessage = err.message;
       }
 
-      alert(errorMessage);
+      showError(errorMessage, 8000);
     }
   };
 

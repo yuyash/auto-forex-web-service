@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import { z } from 'zod';
 import type { Granularity } from '../types/chart';
 import { logger } from '../utils/logger';
+import { readStoredValue, writeStoredValue } from '../utils/persistentState';
 
 interface ChartPreferences {
   instrument: string;
@@ -17,34 +19,40 @@ interface DefaultsSnapshot {
   granularity: string;
 }
 
+const defaultsSnapshotSchema = z.object({
+  instrument: z.string().min(1),
+  granularity: z.string().min(1),
+});
+
+const storedAppSettingsSchema = z.object({
+  defaultInstrument: z.string().min(1).optional(),
+  defaultGranularity: z.string().min(1).optional(),
+});
+
+const chartPreferencesSchema = z.object({
+  instrument: z.string().min(1),
+  granularity: z.custom<Granularity>((value) => typeof value === 'string'),
+  autoRefreshEnabled: z.boolean(),
+  refreshInterval: z.number(),
+});
+
 function readAppDefaults(): DefaultsSnapshot {
-  try {
-    const raw = localStorage.getItem('app_settings');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        instrument: parsed.defaultInstrument || 'USD_JPY',
-        granularity: parsed.defaultGranularity || 'H1',
-      };
-    }
-  } catch {
-    // ignore
+  const parsed = readStoredValue('app_settings', storedAppSettingsSchema, {});
+  if (parsed.defaultInstrument || parsed.defaultGranularity) {
+    return {
+      instrument: parsed.defaultInstrument || 'USD_JPY',
+      granularity: parsed.defaultGranularity || 'H1',
+    };
   }
   return { instrument: 'USD_JPY', granularity: 'H1' };
 }
 
 function readPreviousSnapshot(): DefaultsSnapshot | null {
-  try {
-    const raw = localStorage.getItem(DEFAULTS_SNAPSHOT_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // ignore
-  }
-  return null;
+  return readStoredValue(DEFAULTS_SNAPSHOT_KEY, defaultsSnapshotSchema, null);
 }
 
 function saveSnapshot(snapshot: DefaultsSnapshot) {
-  localStorage.setItem(DEFAULTS_SNAPSHOT_KEY, JSON.stringify(snapshot));
+  writeStoredValue(DEFAULTS_SNAPSHOT_KEY, snapshot);
 }
 
 /**
@@ -67,13 +75,9 @@ export function useChartPreferences() {
       refreshInterval: 60,
     };
 
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        base = { ...base, ...JSON.parse(stored) };
-      }
-    } catch {
-      // ignore
+    const stored = readStoredValue(STORAGE_KEY, chartPreferencesSchema, null);
+    if (stored) {
+      base = { ...base, ...stored };
     }
 
     // Detect if app-settings defaults changed since last snapshot
@@ -95,7 +99,7 @@ export function useChartPreferences() {
   // Save preferences to localStorage whenever they change
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences));
+      writeStoredValue(STORAGE_KEY, preferences);
       logger.debug('Saved chart preferences to localStorage', { preferences });
     } catch (err) {
       logger.error('Failed to save chart preferences', {

@@ -51,6 +51,7 @@ interface UseTaskTradesResult {
   hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
+  refresh: () => Promise<void>;
   refetch: () => Promise<void>;
 }
 
@@ -109,6 +110,7 @@ export const useTaskTrades = ({
     hasPrevious,
     isLoading,
     error,
+    refresh,
     refetch,
   } = useIncrementalTaskResource<Record<string, unknown>, TaskTrade>({
     taskId,
@@ -143,6 +145,7 @@ export const useTaskTrades = ({
     hasPrevious,
     isLoading,
     error,
+    refresh,
     refetch,
   };
 };
