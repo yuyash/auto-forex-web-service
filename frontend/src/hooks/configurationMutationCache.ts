@@ -1,14 +1,12 @@
 import { queryClient, queryKeys } from '../config/reactQuery';
 import type { PaginatedResponse, StrategyConfig } from '../types';
+import {
+  getListParams,
+  removePaginatedEntity,
+  upsertPaginatedEntity,
+} from './listCacheUtils';
 
 type ConfigListParams = Record<string, unknown> | undefined;
-
-function getListParams(queryKey: readonly unknown[]): ConfigListParams {
-  const candidate = queryKey[2];
-  return candidate && typeof candidate === 'object'
-    ? (candidate as Record<string, unknown>)
-    : undefined;
-}
 
 function matchesConfigurationFilter(
   config: StrategyConfig,
@@ -45,36 +43,10 @@ function patchListEntry(
   config: StrategyConfig,
   params?: ConfigListParams
 ): PaginatedResponse<StrategyConfig> | undefined {
-  if (!cached) {
-    return cached;
-  }
-
-  const matches = matchesConfigurationFilter(config, params);
-  const index = cached.results.findIndex((entry) => entry.id === config.id);
-
-  if (index >= 0) {
-    if (!matches) {
-      return {
-        ...cached,
-        count: Math.max(0, cached.count - 1),
-        results: cached.results.filter((entry) => entry.id !== config.id),
-      };
-    }
-    const nextResults = [...cached.results];
-    nextResults[index] = { ...nextResults[index], ...config };
-    return { ...cached, results: nextResults };
-  }
-
-  const page = Number(params?.page ?? 1);
-  if (!matches || page > 1) {
-    return cached;
-  }
-
-  return {
-    ...cached,
-    count: cached.count + 1,
-    results: [config, ...cached.results],
-  };
+  return upsertPaginatedEntity(cached, config, {
+    matches: matchesConfigurationFilter(config, params),
+    page: Number(params?.page ?? 1),
+  });
 }
 
 export function upsertConfigurationCaches(config: StrategyConfig): void {
@@ -95,20 +67,7 @@ export function removeConfigurationCaches(id: string): void {
   queryClient.removeQueries({ queryKey: queryKeys.configurations.tasks(id) });
   queryClient.setQueriesData<PaginatedResponse<StrategyConfig>>(
     { queryKey: queryKeys.configurations.lists() },
-    (cached) => {
-      if (!cached) {
-        return cached;
-      }
-      const nextResults = cached.results.filter((entry) => entry.id !== id);
-      if (nextResults.length === cached.results.length) {
-        return cached;
-      }
-      return {
-        ...cached,
-        count: Math.max(0, cached.count - 1),
-        results: nextResults,
-      };
-    }
+    (cached) => removePaginatedEntity(cached, id)
   );
 }
 

@@ -7,6 +7,7 @@ from datetime import datetime
 from uuid import UUID
 
 from django.utils.dateparse import parse_datetime
+from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 
@@ -62,6 +63,96 @@ def _parse_execution_id_value(value: str | None) -> UUID | None:
         )
 
 
+class QueryParamsSerializer(serializers.Serializer):
+    """Base serializer for sub-resource query validation."""
+
+    def validate_datetime_field(self, field_name: str, value: str | None) -> datetime | None:
+        return _parse_datetime_value(value)
+
+    def validate_execution_id_field(self, value: str | None) -> UUID | None:
+        return _parse_execution_id_value(value)
+
+    def validate_positive_int_field(
+        self,
+        field_name: str,
+        value: str | None,
+        *,
+        default: int,
+        max_value: int | None = None,
+    ) -> int:
+        return _parse_positive_int(
+            value, field_name=field_name, default=default, max_value=max_value
+        )
+
+
+class PaginationParamsSerializer(QueryParamsSerializer):
+    """Serializer for page/page_size validation."""
+
+    def parse(
+        self,
+        request: Request,
+        *,
+        default_page_size: int = 100,
+        max_page_size: int = 1000,
+    ) -> PaginationParams:
+        return PaginationParams(
+            page=self.validate_positive_int_field(
+                "page", request.query_params.get("page"), default=1
+            ),
+            page_size=self.validate_positive_int_field(
+                "page_size",
+                request.query_params.get("page_size"),
+                default=default_page_size,
+                max_value=max_page_size,
+            ),
+        )
+
+
+class ExecutionScopedQuerySerializer(QueryParamsSerializer):
+    """Serializer for execution-scoped query params."""
+
+    def parse(
+        self,
+        request: Request,
+        *,
+        default_execution_id: UUID | None,
+        default_page_size: int = 100,
+        max_page_size: int = 1000,
+    ) -> ExecutionScopedQuery:
+        return ExecutionScopedQuery(
+            execution_id=self.validate_execution_id_field(request.query_params.get("execution_id"))
+            or default_execution_id,
+            since=self.validate_datetime_field("since", request.query_params.get("since")),
+            pagination=PaginationParamsSerializer().parse(
+                request,
+                default_page_size=default_page_size,
+                max_page_size=max_page_size,
+            ),
+        )
+
+
+class DateRangeQuerySerializer(QueryParamsSerializer):
+    """Serializer for datetime range validation."""
+
+    def parse(
+        self,
+        request: Request,
+        *,
+        start_key: str,
+        end_key: str,
+    ) -> DateRangeQuery:
+        start = self.validate_datetime_field(start_key, request.query_params.get(start_key))
+        end = self.validate_datetime_field(end_key, request.query_params.get(end_key))
+        if start and end and start > end:
+            raise ValidationError(
+                {
+                    "code": "invalid_query_param",
+                    "detail": f"{start_key} must be earlier than or equal to {end_key}",
+                }
+            )
+        return DateRangeQuery(start=start, end=end)
+
+
 @dataclass(frozen=True)
 class PaginationParams:
     page: int
@@ -75,14 +166,11 @@ class PaginationParams:
         default_page_size: int = 100,
         max_page_size: int = 1000,
     ) -> PaginationParams:
-        page = _parse_positive_int(request.query_params.get("page"), field_name="page", default=1)
-        page_size = _parse_positive_int(
-            request.query_params.get("page_size"),
-            field_name="page_size",
-            default=default_page_size,
-            max_value=max_page_size,
+        return PaginationParamsSerializer().parse(
+            request,
+            default_page_size=default_page_size,
+            max_page_size=max_page_size,
         )
-        return cls(page=page, page_size=page_size)
 
 
 @dataclass(frozen=True)
@@ -100,15 +188,11 @@ class ExecutionScopedQuery:
         default_page_size: int = 100,
         max_page_size: int = 1000,
     ) -> ExecutionScopedQuery:
-        return cls(
-            execution_id=_parse_execution_id_value(request.query_params.get("execution_id"))
-            or default_execution_id,
-            since=_parse_datetime_value(request.query_params.get("since")),
-            pagination=PaginationParams.from_request(
-                request,
-                default_page_size=default_page_size,
-                max_page_size=max_page_size,
-            ),
+        return ExecutionScopedQuerySerializer().parse(
+            request,
+            default_execution_id=default_execution_id,
+            default_page_size=default_page_size,
+            max_page_size=max_page_size,
         )
 
 
@@ -125,16 +209,11 @@ class DateRangeQuery:
         start_key: str,
         end_key: str,
     ) -> DateRangeQuery:
-        start = _parse_datetime_value(request.query_params.get(start_key))
-        end = _parse_datetime_value(request.query_params.get(end_key))
-        if start and end and start > end:
-            raise ValidationError(
-                {
-                    "code": "invalid_query_param",
-                    "detail": f"{start_key} must be earlier than or equal to {end_key}",
-                }
-            )
-        return cls(start=start, end=end)
+        return DateRangeQuerySerializer().parse(
+            request,
+            start_key=start_key,
+            end_key=end_key,
+        )
 
 
 @dataclass(frozen=True)
