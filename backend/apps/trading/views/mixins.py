@@ -762,14 +762,14 @@ class TaskSubResourceMixin:
         """Retrieve comprehensive task summary."""
         from dataclasses import asdict
 
-        from apps.trading.services.summary import compute_task_summary
+        from apps.trading.services.summary import compute_cached_task_summary
 
         task = self.get_object()  # type: ignore[attr-defined]
         execution_id = _parse_execution_id(request)
         if execution_id is None:
             execution_id = task.execution_id
 
-        result = compute_task_summary(
+        result = compute_cached_task_summary(
             task_type=self.task_type_label,
             task_id=str(task.pk),
             execution_id=execution_id,

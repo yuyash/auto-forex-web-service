@@ -1,4 +1,4 @@
-import type { PaginatedApiResponse } from '../../api/types';
+import type { PaginatedApiResponse } from './pagination';
 
 export interface BackendExecutionMetrics {
   total_return?: string;

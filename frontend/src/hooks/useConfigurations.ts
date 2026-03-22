@@ -29,6 +29,13 @@ interface UseConfigurationTasksResult {
   refetch: () => Promise<unknown>;
 }
 
+interface UseAllConfigurationsResult {
+  data: StrategyConfig[] | null;
+  isLoading: boolean;
+  error: Error | null;
+  refresh: () => Promise<unknown>;
+}
+
 export function invalidateConfigurationsCache(): void {
   void queryClient.invalidateQueries({
     queryKey: queryKeys.configurations.all,
@@ -94,5 +101,26 @@ export function useConfigurationTasks(
       queryClient.invalidateQueries({
         queryKey: queryKeys.configurations.tasks(id),
       }),
+  };
+}
+
+export function useAllConfigurations(
+  params?: Omit<StrategyConfigListParams, 'page' | 'page_size'>
+): UseAllConfigurationsResult {
+  const queryKey = [
+    ...queryKeys.configurations.lists(),
+    'all',
+    params,
+  ] as const;
+  const query = useQuery({
+    queryKey,
+    queryFn: () => configurationsApi.listAll(params),
+  });
+
+  return {
+    data: query.data ?? null,
+    isLoading: query.isLoading,
+    error: (query.error as Error | null) ?? null,
+    refresh: () => queryClient.invalidateQueries({ queryKey }),
   };
 }

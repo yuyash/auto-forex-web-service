@@ -2,19 +2,17 @@ import { api } from '../../api/apiClient';
 import { withRetry } from '../../api/client';
 import type {
   BacktestTask,
+  BacktestTaskCreateData,
   BacktestTaskListParams,
+  BacktestTaskUpdateData,
   PaginatedResponse,
   TaskExecution,
 } from '../../types';
 import type {
-  BacktestTaskRequest,
-  PatchedBacktestTaskCreateRequest,
-  PaginatedApiResponse,
-} from '../../api/types';
-import type {
   BackendBacktestTask,
   BackendPaginatedBacktestTasks,
 } from './contracts';
+import type { PaginatedApiResponse } from './pagination';
 
 const BASE = '/api/trading/tasks/backtest';
 
@@ -65,7 +63,7 @@ export const backtestTasksApi = {
     return toBacktestTask(result);
   },
 
-  create: async (data: BacktestTaskRequest): Promise<BacktestTask> => {
+  create: async (data: BacktestTaskCreateData): Promise<BacktestTask> => {
     const result = await withRetry(() =>
       api.post<BackendBacktestTask>(`${BASE}/`, data)
     );
@@ -74,7 +72,7 @@ export const backtestTasksApi = {
 
   update: async (
     id: string,
-    data: BacktestTaskRequest
+    data: BacktestTaskCreateData
   ): Promise<BacktestTask> => {
     const result = await withRetry(() =>
       api.put<BackendBacktestTask>(`${BASE}/${id}/`, data)
@@ -84,7 +82,7 @@ export const backtestTasksApi = {
 
   partialUpdate: async (
     id: string,
-    data: PatchedBacktestTaskCreateRequest
+    data: BacktestTaskUpdateData
   ): Promise<BacktestTask> => {
     const result = await withRetry(() =>
       api.patch<BackendBacktestTask>(`${BASE}/${id}/`, data)

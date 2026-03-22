@@ -1,8 +1,7 @@
 import { api } from '../../api/apiClient';
 import { withRetry } from '../../api/client';
-import type { OandaAccountsRequest } from '../../api/types';
 import type { BackendAccount } from './contracts';
-import type { Account } from '../../types/strategy';
+import type { Account, AccountUpsertData } from '../../types/strategy';
 
 export interface AccountListParams {
   page?: number;
@@ -42,7 +41,7 @@ export const accountsApi = {
     );
   },
 
-  create: async (data: OandaAccountsRequest) => {
+  create: async (data: AccountUpsertData) => {
     return toAccount(
       await withRetry(() =>
         api.post<BackendAccount>('/api/market/accounts/', data)
@@ -50,7 +49,7 @@ export const accountsApi = {
     );
   },
 
-  update: async (id: number, data: OandaAccountsRequest) => {
+  update: async (id: number, data: AccountUpsertData) => {
     return toAccount(
       await withRetry(() =>
         api.put<BackendAccount>(`/api/market/accounts/${id}/`, data)

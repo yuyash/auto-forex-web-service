@@ -1,7 +1,6 @@
 import { queryClient, queryKeys } from '../config/reactQuery';
 import { accountsApi } from '../services/api';
-import type { OandaAccountsRequest } from '../api/types';
-import type { Account } from '../types/strategy';
+import type { Account, AccountUpsertData } from '../types/strategy';
 import { useWrappedMutation } from './useWrappedMutation';
 
 async function invalidateAccountQueries(accountId?: number): Promise<void> {
@@ -18,7 +17,7 @@ export function useCreateAccount(options?: {
   onError?: (error: Error) => void;
 }) {
   return useWrappedMutation(
-    (variables: OandaAccountsRequest) => accountsApi.create(variables),
+    (variables: AccountUpsertData) => accountsApi.create(variables),
     {
       onSuccess: async (data) => {
         await invalidateAccountQueries(data.id);
@@ -34,7 +33,7 @@ export function useUpdateAccount(options?: {
   onError?: (error: Error) => void;
 }) {
   return useWrappedMutation(
-    (variables: { id: number; data: OandaAccountsRequest }) =>
+    (variables: { id: number; data: AccountUpsertData }) =>
       accountsApi.update(variables.id, variables.data),
     {
       onSuccess: async (data) => {

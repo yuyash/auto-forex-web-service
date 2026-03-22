@@ -1,8 +1,21 @@
 // Common types and enums for task-based strategy configuration
-// Re-export generated types for consistency
 
-export { StatusEnum as TaskStatus } from '../api/types';
-export { DataSourceEnum as DataSource } from '../api/types';
+export enum TaskStatus {
+  CREATED = 'created',
+  STARTING = 'starting',
+  RUNNING = 'running',
+  PAUSED = 'paused',
+  STOPPING = 'stopping',
+  STOPPED = 'stopped',
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+}
+
+export enum DataSource {
+  POSTGRESQL = 'postgresql',
+  ATHENA = 'athena',
+  S3 = 's3',
+}
 
 export enum TaskType {
   BACKTEST = 'backtest',

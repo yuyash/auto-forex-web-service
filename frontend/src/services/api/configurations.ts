@@ -13,6 +13,7 @@ import type {
   BackendPaginatedConfigurations,
   BackendStrategyConfig,
 } from './contracts';
+import { fetchAllPaginatedResults } from './pagination';
 
 function toStrategyConfig(config: BackendStrategyConfig): StrategyConfig {
   return {
@@ -48,6 +49,22 @@ export const configurationsApi = {
       )
     );
     return toPaginatedResponse(result);
+  },
+
+  listAll: async (
+    params?: Omit<StrategyConfigListParams, 'page' | 'page_size'>
+  ): Promise<StrategyConfig[]> => {
+    const results = await withRetry(() =>
+      fetchAllPaginatedResults<BackendStrategyConfig>(
+        '/api/trading/strategy-configs/',
+        {
+          search: params?.search,
+          strategy_type: params?.strategy_type,
+          page_size: 250,
+        }
+      )
+    );
+    return results.map(toStrategyConfig);
   },
 
   get: async (id: string): Promise<StrategyConfig> => {

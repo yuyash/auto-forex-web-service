@@ -6,10 +6,7 @@ import type {
   BacktestTaskCreateData,
   BacktestTaskUpdateData,
 } from '../types';
-import type { PatchedBacktestTaskCreateRequest } from '../api/types';
 import { useWrappedMutation } from './useWrappedMutation';
-
-type PatchedBacktestTaskRequest = PatchedBacktestTaskCreateRequest;
 
 async function invalidateBacktestQueries(taskId?: string): Promise<void> {
   await queryClient.invalidateQueries({
@@ -27,8 +24,7 @@ export function useCreateBacktestTask(options?: {
   onError?: (error: Error) => void;
 }) {
   return useWrappedMutation(
-    (variables: BacktestTaskCreateData) =>
-      backtestTasksApi.create(variables as PatchedBacktestTaskRequest),
+    (variables: BacktestTaskCreateData) => backtestTasksApi.create(variables),
     {
       onSuccess: async (data) => {
         await invalidateBacktestQueries(data.id);
@@ -45,10 +41,7 @@ export function useUpdateBacktestTask(options?: {
 }) {
   return useWrappedMutation(
     (variables: { id: string; data: BacktestTaskUpdateData }) =>
-      backtestTasksApi.partialUpdate(
-        variables.id,
-        variables.data as PatchedBacktestTaskRequest
-      ),
+      backtestTasksApi.partialUpdate(variables.id, variables.data),
     {
       onSuccess: async (data) => {
         await invalidateBacktestQueries(data.id);

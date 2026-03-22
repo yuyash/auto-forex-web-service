@@ -24,7 +24,7 @@ import { DataSource } from '../../types/common';
 import { useUpdateBacktestTask } from '../../hooks/useBacktestTaskMutations';
 import {
   useConfiguration,
-  useConfigurations,
+  useAllConfigurations,
 } from '../../hooks/useConfigurations';
 import {
   useStrategies,
@@ -100,9 +100,8 @@ export default function BacktestTaskUpdateForm({
   });
 
   // Fetch all configurations and strategies
-  const { data: configurationsData, isLoading: configurationsLoading } =
-    useConfigurations({ page_size: 100 });
-  const configurations = configurationsData?.results || [];
+  const { data: configurations = [], isLoading: configurationsLoading } =
+    useAllConfigurations();
   const { strategies } = useStrategies();
 
   // Watch selected config

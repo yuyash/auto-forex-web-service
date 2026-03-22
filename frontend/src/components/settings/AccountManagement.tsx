@@ -32,8 +32,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useToast } from '../common/useToast';
 import ConfirmDialog from '../common/ConfirmDialog';
-import type { Account } from '../../types/strategy';
-import type { OandaAccountsRequest } from '../../api/types';
+import type { Account, AccountUpsertData } from '../../types/strategy';
 import {
   useCreateAccount,
   useDeleteAccount,
@@ -164,10 +163,10 @@ const AccountManagement = () => {
       if (editingAccount) {
         await updateAccount.mutate({
           id: editingAccount.id,
-          data: payload as OandaAccountsRequest,
+          data: payload as AccountUpsertData,
         });
       } else {
-        await createAccount.mutate(payload as OandaAccountsRequest);
+        await createAccount.mutate(payload as AccountUpsertData);
       }
 
       showSuccess(t('settings:messages.accountAdded'));

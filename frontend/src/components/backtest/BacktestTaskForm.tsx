@@ -34,7 +34,7 @@ import {
 } from '../../hooks/useBacktestTaskMutations';
 import {
   useConfiguration,
-  useConfigurations,
+  useAllConfigurations,
 } from '../../hooks/useConfigurations';
 import {
   useStrategies,
@@ -284,6 +284,7 @@ export default function BacktestTaskForm({
     defaultValues: resolvedDefaultValues,
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const selectedConfigId = watch('config_id');
 
   // Sync saved formData back into React Hook Form when changing steps
@@ -302,8 +303,7 @@ export default function BacktestTaskForm({
   }, [formData, setValue]); // Removed activeStep dependency so it runs on initial render too
 
   // Fetch all configurations and strategies
-  const { data: configurationsData } = useConfigurations({ page_size: 100 });
-  const configurations = configurationsData?.results || [];
+  const { data: configurations = [] } = useAllConfigurations();
   const { strategies } = useStrategies();
   const {
     instruments: availableInstruments,
@@ -315,8 +315,11 @@ export default function BacktestTaskForm({
 
   const { data: selectedConfig } = useConfiguration(configIdString);
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const watchedInstrument = watch('instrument');
+  // eslint-disable-next-line react-hooks/incompatible-library
   const watchedStartTime = watch('start_time');
+  // eslint-disable-next-line react-hooks/incompatible-library
   const watchedEndTime = watch('end_time');
   const {
     dataRange,

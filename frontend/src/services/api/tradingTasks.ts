@@ -7,11 +7,6 @@ import type {
   TradingTaskListParams,
 } from '../../types';
 import type {
-  TradingTaskRequest,
-  PatchedTradingTaskCreateRequest,
-  PaginatedApiResponse,
-} from '../../api/types';
-import type {
   ExecutionMetricsCheckpoint,
   EquityPoint,
   Trade,
@@ -21,8 +16,25 @@ import type {
   BackendPaginatedTradingTasks,
   BackendTradingTask,
 } from './contracts';
+import type { PaginatedApiResponse } from './pagination';
 
 const BASE = '/api/trading/tasks/trading';
+
+interface TradingTaskCreateRequest {
+  config: string;
+  oanda_account: string;
+  name: string;
+  description?: string;
+  sell_on_stop?: boolean;
+}
+
+interface TradingTaskUpdateRequest {
+  config?: string;
+  oanda_account?: string;
+  name?: string;
+  description?: string;
+  sell_on_stop?: boolean;
+}
 
 function toTradingTask(task: BackendTradingTask): TradingTask {
   return {
@@ -71,7 +83,7 @@ export const tradingTasksApi = {
     );
   },
 
-  create: async (data: TradingTaskRequest): Promise<TradingTask> => {
+  create: async (data: TradingTaskCreateRequest): Promise<TradingTask> => {
     return toTradingTask(
       await withRetry(() => api.post<BackendTradingTask>(`${BASE}/`, data))
     );
@@ -79,7 +91,7 @@ export const tradingTasksApi = {
 
   update: async (
     id: string,
-    data: TradingTaskRequest
+    data: TradingTaskCreateRequest
   ): Promise<TradingTask> => {
     return toTradingTask(
       await withRetry(() => api.put<BackendTradingTask>(`${BASE}/${id}/`, data))
@@ -88,7 +100,7 @@ export const tradingTasksApi = {
 
   partialUpdate: async (
     id: string,
-    data: PatchedTradingTaskCreateRequest
+    data: TradingTaskUpdateRequest
   ): Promise<TradingTask> => {
     return toTradingTask(
       await withRetry(() =>

@@ -14,7 +14,7 @@ from apps.trading.enums import TaskStatus
 from apps.trading.models import CeleryTaskStatus
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
-from apps.trading.services.summary import compute_task_summary
+from apps.trading.services.summary import compute_cached_task_summary
 
 
 EXECUTION_METRICS_CACHE_TTL_SECONDS = 60 * 60
@@ -110,17 +110,15 @@ def get_task_execution(
     include_metrics: bool = False,
 ) -> dict[str, Any] | None:
     """Return a single execution row when it exists for the task."""
-    ordered_run_ids, by_run_id, fallback_mid_rate = _load_execution_index(
-        task=task,
-        task_type=task_type,
-    )
-    if execution_id not in by_run_id or execution_id not in ordered_run_ids:
+    meta = _load_execution_meta(task=task, task_type=task_type, run_id=execution_id)
+    if meta is None:
         return None
+    fallback_mid_rate = _load_latest_fallback_mid_rate(task_type=task_type, task_id=str(task.pk))
     return _serialize_execution_row(
         task=task,
         task_type=task_type,
         run_id=execution_id,
-        meta=by_run_id[execution_id],
+        meta=meta,
         include_metrics=include_metrics,
         fallback_mid_rate=fallback_mid_rate,
     )
@@ -183,16 +181,76 @@ def _load_execution_index(
 
     # Get the latest mid rate from the task's most recent ExecutionState
     # to use as fallback for past executions that no longer have state.
+    latest_state = _load_latest_fallback_mid_rate(task_type=task_type, task_id=task_id)
+    return sorted(by_run_id.keys(), reverse=True), by_run_id, latest_state
+
+
+def _load_execution_meta(*, task, task_type: str, run_id: str) -> dict[str, Any] | None:
+    task_id = str(task.pk)
+    current_run_id = str(getattr(task, "execution_id", None) or "")
+    current_meta: dict[str, Any] | None = None
+    if run_id == current_run_id:
+        current_meta = {
+            "status": str(task.status),
+            "error_message": task.error_message or None,
+            "error_traceback": task.error_traceback if task.status == TaskStatus.FAILED else None,
+            "started_at": task.started_at,
+            "completed_at": task.completed_at,
+            "created_at": task.created_at,
+        }
+
+    task_name = (
+        "trading.tasks.run_backtest_task"
+        if task_type == "backtest"
+        else "trading.tasks.run_trading_task"
+    )
+    row = (
+        CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=f"{task_id}:{run_id}")
+        .order_by("-created_at")
+        .values(
+            "status",
+            "status_message",
+            "started_at",
+            "stopped_at",
+            "created_at",
+        )
+        .first()
+    )
+    if row is None:
+        return current_meta
+
+    meta = {
+        "status": _map_celery_status(str(row["status"])),
+        "error_message": str(row["status_message"]) if row["status"] == "failed" else None,
+        "started_at": row["started_at"],
+        "completed_at": row["stopped_at"],
+        "created_at": row["created_at"],
+        "error_traceback": None,
+    }
+    if current_meta:
+        meta.update(
+            {
+                "status": current_meta["status"],
+                "error_message": current_meta["error_message"] or meta.get("error_message"),
+                "error_traceback": current_meta["error_traceback"],
+                "started_at": current_meta["started_at"] or meta.get("started_at"),
+                "completed_at": current_meta["completed_at"] or meta.get("completed_at"),
+                "created_at": meta.get("created_at") or current_meta["created_at"],
+            }
+        )
+    return meta
+
+
+def _load_latest_fallback_mid_rate(*, task_type: str, task_id: str) -> Decimal | None:
     from apps.trading.models.state import ExecutionState as _ES
 
-    latest_state = (
+    return (
         _ES.objects.filter(task_type=task_type, task_id=task_id)
         .exclude(last_tick_price__isnull=True)
         .order_by("-updated_at")
         .values_list("last_tick_price", flat=True)
         .first()
     )
-    return sorted(by_run_id.keys(), reverse=True), by_run_id, latest_state
 
 
 def _serialize_execution_row(
@@ -281,7 +339,7 @@ def _build_execution_metrics_cache_key(*, task, task_type: str, task_id: str, ru
 def _compute_execution_metrics(
     *, task, task_type: str, task_id: str, run_id: str, fallback_mid_rate: Decimal | None = None
 ) -> dict[str, Any]:
-    summary = compute_task_summary(
+    summary = compute_cached_task_summary(
         task_type=task_type,
         task_id=task_id,
         execution_id=run_id,
@@ -408,7 +466,7 @@ def _compute_total_return(
 def _compute_progress(*, task, task_type: str, run_id: str, status: str) -> int:
     current_run_id = str(getattr(task, "execution_id", None) or "")
     if run_id == current_run_id:
-        summary = compute_task_summary(
+        summary = compute_cached_task_summary(
             task_type=task_type,
             task_id=str(task.pk),
             execution_id=run_id,
