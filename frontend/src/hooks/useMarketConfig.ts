@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query';
 import { logger } from '../utils/logger';
 import {
   type GranularityOption,
@@ -9,6 +8,7 @@ import {
   createSupportedInstrumentsQuery,
   createTickDataRangeQuery,
 } from './miscQueries';
+import { useSimpleQueryState } from './useTaskCollections';
 
 const FALLBACK_INSTRUMENTS = [
   'EUR_USD',
@@ -52,7 +52,7 @@ const FALLBACK_GRANULARITIES: GranularityOption[] = [
  * Hook to fetch supported currency pairs from backend
  */
 export const useSupportedInstruments = () => {
-  const query = useQuery(createSupportedInstrumentsQuery());
+  const query = useSimpleQueryState(createSupportedInstrumentsQuery());
 
   if (query.error) {
     logger.error('Failed to fetch instruments', {
@@ -75,7 +75,7 @@ export const useSupportedInstruments = () => {
  * Hook to fetch supported granularities from backend
  */
 export const useSupportedGranularities = () => {
-  const query = useQuery(createSupportedGranularitiesQuery());
+  const query = useSimpleQueryState(createSupportedGranularitiesQuery());
 
   if (query.error) {
     logger.error('Failed to fetch granularities', {
@@ -98,7 +98,7 @@ export const useSupportedGranularities = () => {
  * Hook to fetch the available tick data range for a given instrument.
  */
 export const useTickDataRange = (instrument?: string) => {
-  const query = useQuery(createTickDataRangeQuery(instrument));
+  const query = useSimpleQueryState(createTickDataRangeQuery(instrument));
 
   if (query.error) {
     logger.error('Failed to fetch tick data range', {

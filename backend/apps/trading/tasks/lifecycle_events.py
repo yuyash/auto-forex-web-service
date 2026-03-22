@@ -43,6 +43,39 @@ class TaskLifecycleEvent:
         return details
 
 
+@dataclass(frozen=True)
+class TaskLifecycleEventSpec:
+    """Typed event definition used by worker/service callers."""
+
+    kind: str
+    description: str
+    extra_details: dict[str, object] | None = None
+    log_level: LogLevel | None = None
+    log_message: str | None = None
+    log_component: str | None = None
+
+
+def build_lifecycle_event_spec(
+    *,
+    kind: str,
+    description: str,
+    extra_details: dict[str, object] | None = None,
+    log_level: LogLevel | None = None,
+    log_message: str | None = None,
+    log_component: str | None = None,
+) -> TaskLifecycleEventSpec:
+    """Build a typed lifecycle event payload definition."""
+
+    return TaskLifecycleEventSpec(
+        kind=kind,
+        description=description,
+        extra_details=extra_details,
+        log_level=log_level,
+        log_message=log_message,
+        log_component=log_component,
+    )
+
+
 class TaskLifecycleEventSink(Protocol):
     """Sink for lifecycle event side effects."""
 
@@ -258,24 +291,19 @@ def publish_task_lifecycle_event(
     logger: Logger,
     task: BacktestTask | TradingTask,
     task_type: str,
-    kind: str,
-    description: str,
-    extra_details: dict[str, object] | None = None,
-    log_level: LogLevel | None = None,
-    log_message: str | None = None,
-    log_component: str | None = None,
+    event: TaskLifecycleEventSpec,
 ) -> None:
     """Publish a lifecycle event through the default sink pipeline."""
 
     TaskLifecycleEventPublisher(logger=logger).publish(
         task=task,
         task_type=task_type,
-        kind=kind,
-        description=description,
-        extra_details=extra_details,
-        log_level=log_level,
-        log_message=log_message,
-        log_component=log_component,
+        kind=event.kind,
+        description=event.description,
+        extra_details=event.extra_details,
+        log_level=event.log_level,
+        log_message=event.log_message,
+        log_component=event.log_component,
     )
 
 
@@ -285,15 +313,11 @@ def finalize_task_terminal_lifecycle(
     task: BacktestTask | TradingTask,
     task_type: str,
     status: TaskStatus,
-    kind: str,
-    description: str,
+    event: TaskLifecycleEventSpec,
     expected_current_status: TaskStatus | None = None,
     extra_details: dict[str, object] | None = None,
     error_message: str | None = None,
     error_traceback: str | None = None,
-    log_level: LogLevel | None = None,
-    log_message: str | None = None,
-    log_component: str | None = None,
 ) -> int:
     """Persist a terminal task transition and publish its lifecycle event."""
 
@@ -318,11 +342,15 @@ def finalize_task_terminal_lifecycle(
             logger=logger,
             task=task,
             task_type=task_type,
-            kind=kind,
-            description=description,
-            extra_details=extra_details,
-            log_level=log_level,
-            log_message=log_message,
-            log_component=log_component,
+            event=build_lifecycle_event_spec(
+                kind=event.kind,
+                description=event.description,
+                extra_details={**(event.extra_details or {}), **(extra_details or {})}
+                if extra_details
+                else event.extra_details,
+                log_level=event.log_level,
+                log_message=event.log_message,
+                log_component=event.log_component,
+            ),
         )
     return rows_updated

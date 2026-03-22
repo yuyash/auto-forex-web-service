@@ -28,6 +28,29 @@ export function toQueryStateResult<TData>(state: {
   };
 }
 
+export function mapQueryStateResult<TData, TMapped>(
+  state: QueryStateResult<TData>,
+  map: {
+    data: (data: TData | null) => TMapped;
+  }
+): QueryStateResult<TData> & { value: TMapped } {
+  return {
+    ...state,
+    value: map.data(state.data),
+  };
+}
+
+export function useSimpleQueryState<TData>(
+  queryOptions: UseQueryOptions<TData>,
+  options?: { refresh?: () => Promise<unknown> }
+): QueryStateResult<TData> {
+  const query = useQuery(queryOptions);
+  return toQueryStateResult({
+    ...query,
+    refresh: options?.refresh ?? (() => query.refetch()),
+  });
+}
+
 export function toRefreshActions<TValue>(refresh: () => Promise<TValue>): {
   refresh: () => Promise<TValue>;
 } {

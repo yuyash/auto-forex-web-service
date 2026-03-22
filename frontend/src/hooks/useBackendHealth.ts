@@ -1,6 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
 import { createBackendHealthQuery } from './miscQueries';
+import { useSimpleQueryState } from './useTaskCollections';
 
 export function useBackendHealth(options?: { enabled?: boolean }) {
-  return useQuery(createBackendHealthQuery(options));
+  return useSimpleQueryState(createBackendHealthQuery(options));
 }

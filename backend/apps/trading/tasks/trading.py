@@ -15,6 +15,7 @@ from apps.trading.logging import TaskLoggingSession
 from apps.trading.models import TradingTask
 from apps.trading.services.execution_lifecycle import transition_task_to_running
 from apps.trading.tasks.lifecycle_events import (
+    build_lifecycle_event_spec,
     finalize_task_terminal_lifecycle,
     publish_task_lifecycle_event,
 )
@@ -76,11 +77,13 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
             logger=logger,
             task=task,
             task_type=TaskType.TRADING,
-            kind="task_started",
-            description="Trading task execution started",
-            log_level=LogLevel.INFO,
-            log_component=__name__,
-            log_message="Trading task execution started",
+            event=build_lifecycle_event_spec(
+                kind="task_started",
+                description="Trading task execution started",
+                log_level=LogLevel.INFO,
+                log_component=__name__,
+                log_message="Trading task execution started",
+            ),
         )
 
         # Execute the trading task
@@ -99,12 +102,14 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
                 task=task,
                 task_type=TaskType.TRADING,
                 status=TaskStatus.STOPPED,
-                kind="task_stopped",
-                description="Trading task stopped after execution completed",
+                event=build_lifecycle_event_spec(
+                    kind="task_stopped",
+                    description="Trading task stopped after execution completed",
+                    log_level=LogLevel.INFO,
+                    log_message="Trading task stopped successfully",
+                    log_component=__name__,
+                ),
                 expected_current_status=TaskStatus.RUNNING,
-                log_level=LogLevel.INFO,
-                log_message="Trading task stopped successfully",
-                log_component=__name__,
             )
             if rows_updated == 0:
                 task.refresh_from_db()
@@ -187,13 +192,17 @@ def handle_exception(task_id: UUID, task: TradingTask | None, error: Exception) 
             task=task,
             task_type=TaskType.TRADING,
             status=TaskStatus.FAILED,
-            kind="task_failed",
-            description=f"Trading task failed: {type(error).__name__}: {error_message}",
+            event=build_lifecycle_event_spec(
+                kind="task_failed",
+                description=f"Trading task failed: {type(error).__name__}: {error_message}",
+                log_level=LogLevel.ERROR,
+                log_message=(
+                    f"Trading task execution failed: {type(error).__name__}: {error_message}"
+                ),
+                log_component=__name__,
+            ),
             error_message=error_message,
             error_traceback=error_traceback,
-            log_level=LogLevel.ERROR,
-            log_message=f"Trading task execution failed: {type(error).__name__}: {error_message}",
-            log_component=__name__,
         )
 
 
@@ -238,13 +247,15 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
                 task=task,
                 task_type=TaskType.TRADING,
                 status=TaskStatus.STOPPED,
-                kind="task_stopped",
-                description="Trading task stopped",
+                event=build_lifecycle_event_spec(
+                    kind="task_stopped",
+                    description="Trading task stopped",
+                    log_level=LogLevel.INFO,
+                    log_message="Trading task stopped",
+                    log_component=__name__,
+                ),
                 expected_current_status=TaskStatus.STOPPING,
                 extra_details={"mode": stop_mode.value},
-                log_level=LogLevel.INFO,
-                log_message="Trading task stopped",
-                log_component=__name__,
             )
             logger.info(f"Current: STOPPED - task_id={task_id}")
 

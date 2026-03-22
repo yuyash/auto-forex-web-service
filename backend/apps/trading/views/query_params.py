@@ -376,9 +376,14 @@ DATE_RANGE_SPECS: dict[tuple[str, str], tuple[QueryFieldSpec, QueryFieldSpec]] =
 }
 
 
-def _pagination_group(*, default_page_size: int, max_page_size: int) -> QueryGroupSpec:
+def _pagination_group(
+    *,
+    default_page_size: int,
+    max_page_size: int,
+    name: str = "PaginationRuntimeQueryGroup",
+) -> QueryGroupSpec:
     return QueryGroupSpec(
-        name="PaginationRuntimeQueryGroup",
+        name=name,
         specs=_query_spec_group(
             PAGE_SPEC,
             _page_size_spec(default=default_page_size, max_value=max_page_size),
@@ -390,13 +395,15 @@ def _execution_scoped_group(
     *,
     default_page_size: int,
     max_page_size: int,
+    name: str = "ExecutionScopedRuntimeQueryGroup",
 ) -> QueryGroupSpec:
     pagination_group = _pagination_group(
         default_page_size=default_page_size,
         max_page_size=max_page_size,
+        name=f"{name}Pagination",
     )
     return QueryGroupSpec(
-        name="ExecutionScopedRuntimeQueryGroup",
+        name=name,
         specs=_query_spec_group(
             EXECUTION_ID_SPEC,
             SINCE_SPEC,
@@ -405,9 +412,35 @@ def _execution_scoped_group(
     )
 
 
-RUNTIME_QUERY_GROUP_BUILDERS = {
-    "pagination": _pagination_group,
-    "execution_scoped": _execution_scoped_group,
+RUNTIME_QUERY_GROUP_REGISTRY = {
+    "activity_pagination": lambda: QueryGroupSpec(
+        name="ActivityPaginationRuntimeQueryGroup",
+        specs=ACTIVITY_PAGINATION_GROUP,
+    ),
+    "metrics_pagination": lambda: QueryGroupSpec(
+        name="MetricsPaginationRuntimeQueryGroup",
+        specs=METRICS_PAGINATION_GROUP,
+    ),
+    "trade_position_pagination": lambda: QueryGroupSpec(
+        name="TradePositionPaginationRuntimeQueryGroup",
+        specs=TRADE_POSITION_PAGINATION_GROUP,
+    ),
+    "position_filters": lambda: QueryGroupSpec(
+        name="PositionFiltersRuntimeQueryGroup",
+        specs=(POSITION_STATUS_SPEC, DIRECTION_SPEC, INCLUDE_TRADE_IDS_SPEC),
+    ),
+    "execution_scoped_activity": lambda: QueryGroupSpec(
+        name="ExecutionScopedActivityRuntimeQueryGroup",
+        specs=EXECUTION_SCOPED_ACTIVITY_GROUP,
+    ),
+    "execution_scoped_metrics": lambda: QueryGroupSpec(
+        name="ExecutionScopedMetricsRuntimeQueryGroup",
+        specs=EXECUTION_SCOPED_METRICS_GROUP,
+    ),
+    "execution_scoped_trade_position": lambda: QueryGroupSpec(
+        name="ExecutionScopedTradePositionRuntimeQueryGroup",
+        specs=EXECUTION_SCOPED_TRADE_POSITION_GROUP,
+    ),
 }
 
 
@@ -551,6 +584,31 @@ QUERY_GROUP_SPECS = {
     ),
 }
 
+ENDPOINT_QUERY_GROUP_KEYS = {
+    "execution_scoped": "execution_scoped",
+    "metrics": "metrics",
+    "logs": "logs",
+    "log_components": "log_components",
+    "events": "events",
+    "strategy_events": "strategy_events",
+    "trades": "trades",
+    "positions": "positions",
+    "trend_replay": "trend_replay",
+    "orders": "orders",
+    "summary": "summary",
+    "executions": "executions",
+    "execution_detail": "execution_detail",
+    "pagination": "pagination",
+}
+
+
+def get_query_group_spec(endpoint: str) -> QueryGroupSpec:
+    return QUERY_GROUP_SPECS[ENDPOINT_QUERY_GROUP_KEYS[endpoint]]
+
+
+def _build_query_serializer_alias(endpoint: str) -> type[serializers.Serializer]:
+    return get_query_group_spec(endpoint).build_serializer()
+
 
 def _parse_datetime_value(value: str | None) -> datetime | None:
     if value:
@@ -590,24 +648,20 @@ def _parse_execution_id_value(value: str | None) -> UUID | None:
         raise _invalid_query_param(f"Invalid execution_id: {value}") from exc
 
 
-ExecutionScopedQueryParamsSchemaSerializer = QUERY_GROUP_SPECS[
-    "execution_scoped"
-].build_serializer()
-MetricsQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["metrics"].build_serializer()
-LogsQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["logs"].build_serializer()
-LogComponentsQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["log_components"].build_serializer()
-EventsQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["events"].build_serializer()
-StrategyEventsQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["strategy_events"].build_serializer()
-TradesQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["trades"].build_serializer()
-PositionsQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["positions"].build_serializer()
-TrendReplayQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["trend_replay"].build_serializer()
-OrdersQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["orders"].build_serializer()
-SummaryQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["summary"].build_serializer()
-ExecutionsQueryParamsSchemaSerializer = QUERY_GROUP_SPECS["executions"].build_serializer()
-ExecutionDetailQueryParamsSchemaSerializer = QUERY_GROUP_SPECS[
-    "execution_detail"
-].build_serializer()
-PaginationSchemaSerializer = QUERY_GROUP_SPECS["pagination"].build_serializer()
+ExecutionScopedQueryParamsSchemaSerializer = _build_query_serializer_alias("execution_scoped")
+MetricsQueryParamsSchemaSerializer = _build_query_serializer_alias("metrics")
+LogsQueryParamsSchemaSerializer = _build_query_serializer_alias("logs")
+LogComponentsQueryParamsSchemaSerializer = _build_query_serializer_alias("log_components")
+EventsQueryParamsSchemaSerializer = _build_query_serializer_alias("events")
+StrategyEventsQueryParamsSchemaSerializer = _build_query_serializer_alias("strategy_events")
+TradesQueryParamsSchemaSerializer = _build_query_serializer_alias("trades")
+PositionsQueryParamsSchemaSerializer = _build_query_serializer_alias("positions")
+TrendReplayQueryParamsSchemaSerializer = _build_query_serializer_alias("trend_replay")
+OrdersQueryParamsSchemaSerializer = _build_query_serializer_alias("orders")
+SummaryQueryParamsSchemaSerializer = _build_query_serializer_alias("summary")
+ExecutionsQueryParamsSchemaSerializer = _build_query_serializer_alias("executions")
+ExecutionDetailQueryParamsSchemaSerializer = _build_query_serializer_alias("execution_detail")
+PaginationSchemaSerializer = _build_query_serializer_alias("pagination")
 
 
 @dataclass(frozen=True)
@@ -623,7 +677,7 @@ class PaginationParams:
         default_page_size: int = 100,
         max_page_size: int = 1000,
     ) -> PaginationParams:
-        pagination_group = RUNTIME_QUERY_GROUP_BUILDERS["pagination"](
+        pagination_group = _pagination_group(
             default_page_size=default_page_size,
             max_page_size=max_page_size,
         )
@@ -649,7 +703,7 @@ class ExecutionScopedQuery:
         default_page_size: int = 100,
         max_page_size: int = 1000,
     ) -> ExecutionScopedQuery:
-        execution_group = RUNTIME_QUERY_GROUP_BUILDERS["execution_scoped"](
+        execution_group = _execution_scoped_group(
             default_page_size=default_page_size,
             max_page_size=max_page_size,
         )
@@ -714,13 +768,7 @@ class PositionQuery:
         default_page_size: int = 100,
         max_page_size: int = 1000,
     ) -> PositionQuery:
-        parsed = _parse_query_group(
-            request,
-            POSITION_STATUS_SPEC,
-            DIRECTION_SPEC,
-            INCLUDE_TRADE_IDS_SPEC,
-            serializer_name="PositionQueryRuntimeSerializer",
-        )
+        parsed = RUNTIME_QUERY_GROUP_REGISTRY["position_filters"]().parse(request)
         return cls(
             execution=ExecutionScopedQuery.from_request(
                 request,

@@ -15,6 +15,7 @@ from apps.trading.logging import TaskLoggingSession
 from apps.trading.models import BacktestTask
 from apps.trading.services.execution_lifecycle import transition_task_to_running
 from apps.trading.tasks.lifecycle_events import (
+    build_lifecycle_event_spec,
     finalize_task_terminal_lifecycle,
     publish_task_lifecycle_event,
 )
@@ -88,11 +89,13 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
             logger=logger,
             task=task,
             task_type=TaskType.BACKTEST,
-            kind="task_started",
-            description="Backtest task execution started",
-            log_level=LogLevel.INFO,
-            log_component=__name__,
-            log_message="Backtest task execution started",
+            event=build_lifecycle_event_spec(
+                kind="task_started",
+                description="Backtest task execution started",
+                log_level=LogLevel.INFO,
+                log_component=__name__,
+                log_message="Backtest task execution started",
+            ),
         )
 
         # Execute the backtest
@@ -121,12 +124,14 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
             task=task,
             task_type=TaskType.BACKTEST,
             status=TaskStatus.COMPLETED,
-            kind="task_completed",
-            description="Backtest task completed successfully",
+            event=build_lifecycle_event_spec(
+                kind="task_completed",
+                description="Backtest task completed successfully",
+                log_level=LogLevel.INFO,
+                log_message="Backtest task completed successfully",
+                log_component=__name__,
+            ),
             expected_current_status=TaskStatus.RUNNING,
-            log_level=LogLevel.INFO,
-            log_message="Backtest task completed successfully",
-            log_component=__name__,
         )
 
         if rows_updated == 0:
@@ -231,13 +236,17 @@ def handle_exception(task_id: UUID, task: BacktestTask | None, error: Exception)
             task=task,
             task_type=TaskType.BACKTEST,
             status=TaskStatus.FAILED,
-            kind="task_failed",
-            description=f"Backtest task failed: {type(error).__name__}: {error_message}",
+            event=build_lifecycle_event_spec(
+                kind="task_failed",
+                description=f"Backtest task failed: {type(error).__name__}: {error_message}",
+                log_level=LogLevel.ERROR,
+                log_message=(
+                    f"Backtest task execution failed: {type(error).__name__}: {error_message}"
+                ),
+                log_component=__name__,
+            ),
             error_message=error_message,
             error_traceback=error_traceback,
-            log_level=LogLevel.ERROR,
-            log_message=f"Backtest task execution failed: {type(error).__name__}: {error_message}",
-            log_component=__name__,
         )
 
         logger.info(f"Task marked as FAILED - task_id={task_id}, completed_at={task.completed_at}")
@@ -422,13 +431,15 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
                 task=task,
                 task_type=TaskType.BACKTEST,
                 status=TaskStatus.STOPPED,
-                kind="task_stopped",
-                description="Backtest task stopped",
+                event=build_lifecycle_event_spec(
+                    kind="task_stopped",
+                    description="Backtest task stopped",
+                    log_level=LogLevel.INFO,
+                    log_message="Backtest task stopped",
+                    log_component=__name__,
+                ),
                 expected_current_status=TaskStatus.STOPPING,
                 extra_details={"mode": "worker_stop"},
-                log_level=LogLevel.INFO,
-                log_message="Backtest task stopped",
-                log_component=__name__,
             )
             logger.info(f"[STOP:BACKTEST] Current: STOPPED - task_id={task_id}")
 
@@ -445,13 +456,15 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
                 task=task,
                 task_type=TaskType.BACKTEST,
                 status=TaskStatus.STOPPED,
-                kind="task_stopped",
-                description="Backtest task stopped after completion race",
+                event=build_lifecycle_event_spec(
+                    kind="task_stopped",
+                    description="Backtest task stopped after completion race",
+                    log_level=LogLevel.INFO,
+                    log_message="Backtest task stopped after completion race",
+                    log_component=__name__,
+                ),
                 expected_current_status=TaskStatus.COMPLETED,
                 extra_details={"mode": "worker_stop"},
-                log_level=LogLevel.INFO,
-                log_message="Backtest task stopped after completion race",
-                log_component=__name__,
             )
             logger.info(f"[STOP:BACKTEST] Current: STOPPED - task_id={task_id}")
 

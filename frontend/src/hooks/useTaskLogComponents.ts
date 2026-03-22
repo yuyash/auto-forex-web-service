@@ -4,9 +4,9 @@
  * Fetches distinct logger/component names for a task's logs.
  */
 
-import { useQuery } from '@tanstack/react-query';
 import { TaskType } from '../types/common';
 import { createTaskLogComponentsQuery } from './taskLogComponentQueries';
+import { useSimpleQueryState } from './useTaskCollections';
 
 interface UseTaskLogComponentsOptions {
   taskId: string;
@@ -25,13 +25,13 @@ export const useTaskLogComponents = ({
   taskType,
   executionRunId,
 }: UseTaskLogComponentsOptions): UseTaskLogComponentsResult => {
-  const query = useQuery(
+  const query = useSimpleQueryState(
     createTaskLogComponentsQuery(taskId, taskType, executionRunId)
   );
 
   return {
     components: query.data ?? [],
     isLoading: query.isLoading,
-    error: (query.error as Error | null) ?? null,
+    error: query.error,
   };
 };

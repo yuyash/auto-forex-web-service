@@ -1,8 +1,48 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { queryClient, queryKeys } from '../../../src/config/reactQuery';
-import { patchTaskDerivedCaches } from '../../../src/hooks/taskMutationCache';
+import {
+  patchTaskDerivedCaches,
+  patchTaskStatusCache,
+  upsertTaskCaches,
+} from '../../../src/hooks/taskMutationCache';
 import { TaskStatus, TaskType } from '../../../src/types/common';
+import type { PaginatedResponse, TradingTask } from '../../../src/types';
 import type { StrategyVisualizationResponse } from '../../../src/types/strategyVisualization';
+
+function buildTradingTask(overrides?: Partial<TradingTask>): TradingTask {
+  return {
+    id: 'task-1',
+    user_id: 1,
+    config_id: 'config-1',
+    config_name: 'Config',
+    strategy_type: 'snowball',
+    instrument: 'USD_JPY',
+    account_id: 'account-1',
+    account_name: 'Practice',
+    account_type: 'practice',
+    name: 'Task',
+    description: 'desc',
+    status: TaskStatus.RUNNING,
+    sell_on_stop: false,
+    dry_run: false,
+    hedging_enabled: false,
+    created_at: '2026-03-22T00:00:00Z',
+    updated_at: '2026-03-22T00:00:00Z',
+    ...overrides,
+  };
+}
+
+function buildTradingPage(
+  results: TradingTask[],
+  count = results.length
+): PaginatedResponse<TradingTask> {
+  return {
+    count,
+    next: null,
+    previous: null,
+    results,
+  };
+}
 
 describe('taskMutationCache', () => {
   beforeEach(() => {
@@ -27,21 +67,7 @@ describe('taskMutationCache', () => {
     });
 
     patchTaskDerivedCaches('trading', {
-      id: 'task-1',
-      user_id: 1,
-      config_id: 'config-1',
-      config_name: 'Config',
-      strategy_type: 'snowball',
-      instrument: 'USD_JPY',
-      account_id: 'account-1',
-      account_name: 'Practice',
-      account_type: 'practice',
-      name: 'Task',
-      description: 'desc',
-      status: TaskStatus.RUNNING,
-      sell_on_stop: false,
-      dry_run: false,
-      hedging_enabled: false,
+      ...buildTradingTask(),
       latest_execution: {
         id: 'run-new',
         execution_number: 2,
@@ -49,8 +75,6 @@ describe('taskMutationCache', () => {
         progress: 10,
         started_at: '2026-03-22T00:00:00Z',
       },
-      created_at: '2026-03-22T00:00:00Z',
-      updated_at: '2026-03-22T00:00:00Z',
     });
 
     expect(
@@ -113,5 +137,69 @@ describe('taskMutationCache', () => {
         groups: [],
       },
     });
+  });
+
+  it('re-sorts cached task lists when an updated task changes ordering', () => {
+    const listKey = queryKeys.tradingTasks.list({ ordering: 'name' });
+    queryClient.setQueryData<PaginatedResponse<TradingTask>>(
+      listKey,
+      buildTradingPage([
+        buildTradingTask({ id: 'task-2', name: 'Zulu' }),
+        buildTradingTask({ id: 'task-1', name: 'Task' }),
+      ])
+    );
+
+    upsertTaskCaches(
+      'trading',
+      buildTradingTask({ id: 'task-1', name: 'Alpha' })
+    );
+
+    expect(
+      queryClient
+        .getQueryData<PaginatedResponse<TradingTask>>(listKey)
+        ?.results.map((task) => task.name)
+    ).toEqual(['Alpha', 'Zulu']);
+  });
+
+  it('removes cached tasks that stop matching a filtered status list', () => {
+    const listKey = queryKeys.tradingTasks.list({ status: TaskStatus.RUNNING });
+    queryClient.setQueryData<PaginatedResponse<TradingTask>>(
+      listKey,
+      buildTradingPage([
+        buildTradingTask({ id: 'task-1', status: TaskStatus.RUNNING }),
+      ])
+    );
+
+    patchTaskStatusCache('trading', 'task-1', TaskStatus.STOPPED);
+
+    expect(
+      queryClient.getQueryData<PaginatedResponse<TradingTask>>(listKey)
+    ).toEqual(buildTradingPage([], 0));
+  });
+
+  it('re-inserts matching tasks into first-page filtered caches', () => {
+    const listKey = queryKeys.tradingTasks.list({
+      status: TaskStatus.RUNNING,
+      ordering: 'name',
+    });
+    queryClient.setQueryData<PaginatedResponse<TradingTask>>(
+      listKey,
+      buildTradingPage([buildTradingTask({ id: 'task-2', name: 'Zulu' })], 1)
+    );
+
+    upsertTaskCaches(
+      'trading',
+      buildTradingTask({
+        id: 'task-1',
+        name: 'Alpha',
+        status: TaskStatus.RUNNING,
+      })
+    );
+
+    expect(
+      queryClient
+        .getQueryData<PaginatedResponse<TradingTask>>(listKey)
+        ?.results.map((task) => task.name)
+    ).toEqual(['Alpha', 'Zulu']);
   });
 });
