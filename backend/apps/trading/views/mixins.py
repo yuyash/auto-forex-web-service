@@ -28,6 +28,13 @@ from apps.trading.serializers.execution import TaskExecutionSerializer
 from apps.trading.serializers.summary import TaskSummarySerializer
 from apps.trading.serializers.task import TaskLogSerializer
 from apps.trading.serializers.trend_replay import TaskTrendReplaySerializer
+from apps.trading.views.query_params import (
+    DateRangeQuery,
+    ExecutionScopedQuery,
+    PaginationParams,
+    PositionQuery,
+    TrendReplayQueryParams,
+)
 from apps.trading.views.pagination import TaskSubResourcePagination
 
 
@@ -62,17 +69,8 @@ def _parse_execution_id(request: Request):
 
 def _parse_page_params(request: Request) -> tuple[int, int]:
     """Return ``(page, page_size)`` from query params with defaults."""
-    page = 1
-    page_size = 1000
-    try:
-        page = max(1, int(request.query_params.get("page", 1)))
-    except (ValueError, TypeError):
-        pass
-    try:
-        page_size = max(1, min(int(request.query_params.get("page_size", 1000)), 5000))
-    except (ValueError, TypeError):
-        pass
-    return page, page_size
+    pagination = PaginationParams.from_request(request)
+    return pagination.page, pagination.page_size
 
 
 def _ensure_dict(value) -> dict:
@@ -167,19 +165,19 @@ class TaskSubResourceMixin:
         from apps.trading.models.metrics import Metrics
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
+        query = ExecutionScopedQuery.from_request(
+            request,
+            default_execution_id=task.execution_id,
+        )
 
         queryset = Metrics.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
-            execution_id=execution_id,
+            execution_id=query.execution_id,
         ).order_by("timestamp")
 
-        since = _parse_since(request)
-        if since:
-            queryset = queryset.filter(timestamp__gt=since)
+        if query.since:
+            queryset = queryset.filter(timestamp__gt=query.since)
 
         until_raw = request.query_params.get("until")
         if until_raw:
@@ -210,7 +208,7 @@ class TaskSubResourceMixin:
 
                 aggregated = [bucketed[key] for key in sorted(bucketed)]
                 total_count = len(aggregated)
-                page, page_size = _parse_page_params(request)
+                page, page_size = query.pagination.page, query.pagination.page_size
                 start = (page - 1) * page_size
                 end = start + page_size
                 page_rows = aggregated[start:end]
@@ -226,15 +224,15 @@ class TaskSubResourceMixin:
             base_where = "task_type = %s AND task_id = %s"
             params: list = [self.task_type_label, str(task.pk)]
 
-            if execution_id is None:
+            if query.execution_id is None:
                 base_where += " AND execution_id IS NULL"
             else:
                 base_where += " AND execution_id = %s"
-                params.append(str(execution_id))
+                params.append(str(query.execution_id))
 
-            if since:
+            if query.since:
                 base_where += " AND timestamp > %s"
-                params.append(since)
+                params.append(query.since)
             if until_raw:
                 until_dt2 = parse_datetime(until_raw)
                 if until_dt2:
@@ -265,7 +263,7 @@ class TaskSubResourceMixin:
 
             total_count = len(rows)
             # Manual pagination over raw SQL results
-            page, page_size = _parse_page_params(request)
+            page, page_size = query.pagination.page, query.pagination.page_size
             start = (page - 1) * page_size
             end = start + page_size
             page_rows = rows[start:end]
@@ -275,7 +273,7 @@ class TaskSubResourceMixin:
 
         # Default: interval=1, use ORM with cursor pagination
         total_count = queryset.count()
-        page, page_size = _parse_page_params(request)
+        page, page_size = query.pagination.page, query.pagination.page_size
         start = (page - 1) * page_size
         rows = queryset.values_list("timestamp", "metrics")[start : start + page_size]
 
@@ -324,9 +322,10 @@ class TaskSubResourceMixin:
     @action(detail=True, methods=["get"])
     def logs(self, request: Request, pk: int | None = None) -> Response:
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
+        query = ExecutionScopedQuery.from_request(
+            request,
+            default_execution_id=task.execution_id,
+        )
         level_param = request.query_params.get("level")
         level_values = (
             [v.strip().upper() for v in level_param.split(",") if v.strip()] if level_param else []
@@ -341,7 +340,7 @@ class TaskSubResourceMixin:
         queryset = TaskLog.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
-            execution_id=execution_id,
+            execution_id=query.execution_id,
         )
         if level_values:
             resolved = [LogLevel[v] for v in level_values if v in LogLevel.__members__]
@@ -362,9 +361,8 @@ class TaskSubResourceMixin:
         if timestamp_to:
             queryset = queryset.filter(timestamp__lte=timestamp_to)
 
-        since = _parse_since(request)
-        if since:
-            queryset = queryset.filter(timestamp__gt=since)
+        if query.since:
+            queryset = queryset.filter(timestamp__gt=query.since)
 
         queryset = queryset.order_by("-timestamp")
         paginator = TaskSubResourcePagination()
@@ -389,14 +387,15 @@ class TaskSubResourceMixin:
     def log_components(self, request: Request, pk: int | None = None) -> Response:
         """Return distinct component names for the task's logs."""
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
+        query = ExecutionScopedQuery.from_request(
+            request,
+            default_execution_id=task.execution_id,
+        )
         components = list(
             TaskLog.objects.filter(
                 task_type=self.task_type_label,
                 task_id=task.pk,
-                execution_id=execution_id,
+                execution_id=query.execution_id,
             )
             .values_list("component", flat=True)
             .distinct()
@@ -443,16 +442,17 @@ class TaskSubResourceMixin:
         from apps.trading.models import TradingEvent
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
+        query = ExecutionScopedQuery.from_request(
+            request,
+            default_execution_id=task.execution_id,
+        )
         event_type = request.query_params.get("event_type")
         severity = request.query_params.get("severity")
         scope = (request.query_params.get("scope") or "all").strip().lower()
         queryset = TradingEvent.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
-            execution_id=execution_id,
+            execution_id=query.execution_id,
         ).order_by("-created_at")
         if event_type:
             queryset = queryset.filter(event_type=event_type)
@@ -469,15 +469,15 @@ class TaskSubResourceMixin:
                     Q(details__kind__isnull=True) | ~Q(details__kind__startswith="task_")
                 ).exclude(event_type__in=task_scoped_event_types)
 
-        since = _parse_since(request)
-        if since:
-            queryset = queryset.filter(created_at__gt=since)
-        created_from = _parse_datetime_param(request, "created_from")
-        if created_from:
-            queryset = queryset.filter(created_at__gte=created_from)
-        created_to = _parse_datetime_param(request, "created_to")
-        if created_to:
-            queryset = queryset.filter(created_at__lte=created_to)
+        if query.since:
+            queryset = queryset.filter(created_at__gt=query.since)
+        created_range = DateRangeQuery.from_request(
+            request, start_key="created_from", end_key="created_to"
+        )
+        if created_range.start:
+            queryset = queryset.filter(created_at__gte=created_range.start)
+        if created_range.end:
+            queryset = queryset.filter(created_at__lte=created_range.end)
 
         paginator = TaskSubResourcePagination()
         page = paginator.paginate_queryset(queryset, request)
@@ -515,14 +515,15 @@ class TaskSubResourceMixin:
         )
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
+        query = ExecutionScopedQuery.from_request(
+            request,
+            default_execution_id=task.execution_id,
+        )
         root_entry_id = request.query_params.get("root_entry_id")
         response = StrategyVisualizationService().build(
             task=task,
             task_type=self.task_type_label,
-            execution_id=execution_id,
+            execution_id=query.execution_id,
             root_entry_id=int(root_entry_id) if root_entry_id else None,
         )
         return Response(response)
@@ -566,14 +567,15 @@ class TaskSubResourceMixin:
         from apps.trading.models.trades import Trade
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
+        query = ExecutionScopedQuery.from_request(
+            request,
+            default_execution_id=task.execution_id,
+        )
         direction = (request.query_params.get("direction") or "").lower()
         queryset = Trade.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
-            execution_id=execution_id,
+            execution_id=query.execution_id,
         ).order_by("timestamp")
         if direction:
             if direction == "buy":
@@ -583,15 +585,15 @@ class TaskSubResourceMixin:
             else:
                 queryset = queryset.filter(direction=direction)
 
-        since = _parse_since(request)
-        if since:
-            queryset = queryset.filter(updated_at__gt=since)
-        timestamp_from = _parse_datetime_param(request, "timestamp_from")
-        if timestamp_from:
-            queryset = queryset.filter(timestamp__gte=timestamp_from)
-        timestamp_to = _parse_datetime_param(request, "timestamp_to")
-        if timestamp_to:
-            queryset = queryset.filter(timestamp__lte=timestamp_to)
+        if query.since:
+            queryset = queryset.filter(updated_at__gt=query.since)
+        timestamp_range = DateRangeQuery.from_request(
+            request, start_key="timestamp_from", end_key="timestamp_to"
+        )
+        if timestamp_range.start:
+            queryset = queryset.filter(timestamp__gte=timestamp_range.start)
+        if timestamp_range.end:
+            queryset = queryset.filter(timestamp__lte=timestamp_range.end)
 
         trades_qs = queryset.values(
             "id",
@@ -668,50 +670,42 @@ class TaskSubResourceMixin:
         from apps.trading.models.positions import Position
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
-        include_trade_ids = str(request.query_params.get("include_trade_ids", "false")).lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
+        query = PositionQuery.from_request(
+            request,
+            default_execution_id=task.execution_id,
+        )
         queryset = Position.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
-            execution_id=execution_id,
+            execution_id=query.execution.execution_id,
         ).order_by("-entry_time")
-        if include_trade_ids:
+        if query.include_trade_ids:
             queryset = queryset.prefetch_related("trades")
 
-        status_param = (request.query_params.get("position_status") or "").lower()
-        if status_param == "open":
+        if query.position_status == "open":
             queryset = queryset.filter(is_open=True)
-        elif status_param == "closed":
+        elif query.position_status == "closed":
             queryset = queryset.filter(is_open=False)
 
-        direction = (request.query_params.get("direction") or "").lower()
-        if direction:
-            queryset = queryset.filter(direction=direction)
+        if query.direction:
+            queryset = queryset.filter(direction=query.direction)
 
-        since = _parse_since(request)
-        if since:
-            queryset = queryset.filter(updated_at__gt=since)
+        if query.execution.since:
+            queryset = queryset.filter(updated_at__gt=query.execution.since)
 
-        range_from = _parse_datetime_param(request, "range_from")
-        range_to = _parse_datetime_param(request, "range_to")
-        if range_to:
-            queryset = queryset.filter(entry_time__lte=range_to)
-        if range_from:
-            queryset = queryset.filter(Q(exit_time__isnull=True) | Q(exit_time__gte=range_from))
+        if query.range.end:
+            queryset = queryset.filter(entry_time__lte=query.range.end)
+        if query.range.start:
+            queryset = queryset.filter(
+                Q(exit_time__isnull=True) | Q(exit_time__gte=query.range.start)
+            )
 
         paginator = TaskSubResourcePagination()
         page = paginator.paginate_queryset(queryset, request)
         serializer = PositionSerializer(
             page,
             many=True,
-            context={"include_trade_ids": include_trade_ids},
+            context={"include_trade_ids": query.include_trade_ids},
         )
         return paginator.get_paginated_response(serializer.data)
 
@@ -746,32 +740,27 @@ class TaskSubResourceMixin:
         )
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
-
-        try:
-            page = max(1, int(request.query_params.get("page", 1)))
-        except (TypeError, ValueError):
-            page = 1
-        try:
-            page_size = min(
-                max(1, int(request.query_params.get("page_size", DEFAULT_TREND_REPLAY_PAGE_SIZE))),
-                MAX_TREND_REPLAY_PAGE_SIZE,
-            )
-        except (TypeError, ValueError):
-            page_size = DEFAULT_TREND_REPLAY_PAGE_SIZE
+        query = TrendReplayQueryParams.from_request(
+            request,
+            default_execution_id=task.execution_id,
+            default_page_size=DEFAULT_TREND_REPLAY_PAGE_SIZE,
+            max_page_size=MAX_TREND_REPLAY_PAGE_SIZE,
+        )
 
         payload = build_trend_replay_payload(
             TrendReplayQuery(
                 task_type=self.task_type_label,
                 task_id=str(task.pk),
-                execution_id=str(execution_id) if execution_id is not None else None,
-                range_from=_parse_datetime_param(request, "range_from"),
-                range_to=_parse_datetime_param(request, "range_to"),
-                since=_parse_since(request),
-                page=page,
-                page_size=page_size,
+                execution_id=(
+                    str(query.execution.execution_id)
+                    if query.execution.execution_id is not None
+                    else None
+                ),
+                range_from=query.range.start,
+                range_to=query.range.end,
+                since=query.execution.since,
+                page=query.execution.pagination.page,
+                page_size=query.execution.pagination.page_size,
             )
         )
         serializer = TaskTrendReplaySerializer(payload)
@@ -809,13 +798,14 @@ class TaskSubResourceMixin:
         from apps.trading.models.orders import Order
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
+        query = ExecutionScopedQuery.from_request(
+            request,
+            default_execution_id=task.execution_id,
+        )
         queryset = Order.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
-            execution_id=execution_id,
+            execution_id=query.execution_id,
         ).order_by("-submitted_at")
 
         status_param = (request.query_params.get("status") or "").lower()
@@ -830,9 +820,8 @@ class TaskSubResourceMixin:
         if direction:
             queryset = queryset.filter(direction=direction)
 
-        since = _parse_since(request)
-        if since:
-            queryset = queryset.filter(updated_at__gt=since)
+        if query.since:
+            queryset = queryset.filter(updated_at__gt=query.since)
 
         paginator = TaskSubResourcePagination()
         page = paginator.paginate_queryset(queryset, request)
@@ -858,14 +847,15 @@ class TaskSubResourceMixin:
         from apps.trading.services.summary import compute_cached_task_summary
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
+        query = ExecutionScopedQuery.from_request(
+            request,
+            default_execution_id=task.execution_id,
+        )
 
         result = compute_cached_task_summary(
             task_type=self.task_type_label,
             task_id=str(task.pk),
-            execution_id=execution_id,
+            execution_id=query.execution_id,
         )
 
         serializer = TaskSummarySerializer(asdict(result))
@@ -902,13 +892,13 @@ class TaskSubResourceMixin:
             "yes",
             "on",
         }
-        page, page_size = _parse_page_params(request)
+        pagination = PaginationParams.from_request(request)
         total_count, rows = list_task_executions(
             task=task,
             task_type=self.task_type_label,
             include_metrics=include_metrics,
-            page=page,
-            page_size=page_size,
+            page=pagination.page,
+            page_size=pagination.page_size,
         )
         serializer = TaskExecutionSerializer(rows, many=True)
         return Response(
@@ -916,8 +906,8 @@ class TaskSubResourceMixin:
                 request,
                 serializer.data,
                 total_count,
-                page,
-                page_size,
+                pagination.page,
+                pagination.page_size,
             )
         )
 

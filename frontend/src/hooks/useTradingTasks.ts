@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query';
 import { queryClient, queryKeys } from '../config/reactQuery';
 import type {
   PaginatedResponse,
@@ -11,6 +10,7 @@ import {
   createTaskListQuery,
 } from './taskResourceQueries';
 import { usePollingActivity } from './usePollingActivity';
+import { useTaskDetail, useTaskList } from './useTaskCollections';
 
 interface UseTradingTasksResult {
   data: PaginatedResponse<TradingTask> | null;
@@ -35,19 +35,13 @@ interface UseTradingTaskOptions {
 export function useTradingTasks(
   params?: TradingTaskListParams
 ): UseTradingTasksResult {
-  const query = useQuery(
-    createTaskListQuery<TradingTask>(TaskType.TRADING, params)
-  );
-
-  return {
-    data: query.data ?? null,
-    isLoading: query.isLoading,
-    error: (query.error as Error | null) ?? null,
-    refresh: () =>
+  return useTaskList<TradingTask, TradingTaskListParams>(
+    createTaskListQuery<TradingTask>(TaskType.TRADING, params),
+    () =>
       queryClient.invalidateQueries({
         queryKey: queryKeys.tradingTasks.list(params),
-      }),
-  };
+      })
+  );
 }
 
 export function useTradingTask(
@@ -57,22 +51,16 @@ export function useTradingTask(
   const pollingEnabled = usePollingActivity(
     Boolean(id) && options?.enablePolling === true
   );
-  const query = useQuery(
+  return useTaskDetail<TradingTask>(
     createTaskDetailQuery<TradingTask>(TaskType.TRADING, id, {
       ...options,
       enablePolling: pollingEnabled,
-    })
-  );
-
-  return {
-    data: query.data ?? null,
-    isLoading: query.isLoading,
-    error: (query.error as Error | null) ?? null,
-    refresh: () =>
+    }),
+    () =>
       id
         ? queryClient.invalidateQueries({
             queryKey: queryKeys.tradingTasks.detail(id),
           })
-        : Promise.resolve(),
-  };
+        : Promise.resolve()
+  );
 }

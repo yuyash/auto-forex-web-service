@@ -9,7 +9,7 @@ import {
 import type { SelectChangeEvent } from '@mui/material/Select';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
-import { type Time, type UTCTimestamp } from 'lightweight-charts';
+import { type UTCTimestamp } from 'lightweight-charts';
 import { type TaskSummary } from '../../../hooks/useTaskSummary';
 import { usePollingActivity } from '../../../hooks/usePollingActivity';
 import { useSupportedGranularities } from '../../../hooks/useMarketConfig';
@@ -40,7 +40,7 @@ import { useTaskTrendTradesTable } from './taskTrendPanel/useTaskTrendTradesTabl
 import { useTaskTrendPositionsTable } from './taskTrendPanel/useTaskTrendPositionsTable';
 import { useTaskTrendPanelState } from './taskTrendPanel/useTaskTrendPanelState';
 import { useTaskTrendMarkers } from './taskTrendPanel/useTaskTrendMarkers';
-import { logger } from '../../../utils/logger';
+import { useTaskSelectionNavigation } from '../../../hooks/useTaskSelectionNavigation';
 
 interface TaskTrendPanelProps {
   taskId: string | number;
@@ -370,131 +370,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     selectAllOnPage: selectAllTradeRowsOnPage,
   } = tradeTable;
 
-  // --- Cross-linking helpers: trade ↔ position (using backend IDs) ---
-  const positionById = useMemo(() => {
-    const map = new Map<string, (typeof allPositions)[number]>();
-    for (const pos of allPositions) map.set(pos.id, pos);
-    return map;
-  }, [allPositions]);
-
-  const tradeById = useMemo(() => {
-    const map = new Map<string, ReplayTrade>();
-    for (const t of trades) map.set(t.id, t);
-    return map;
-  }, [trades]);
-
-  const posToTradeIds = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const pos of allPositions) {
-      if (pos.trade_ids && pos.trade_ids.length > 0) {
-        map.set(pos.id, pos.trade_ids);
-      }
-    }
-    return map;
-  }, [allPositions]);
-
-  const findPositionForTrade = useCallback(
-    (trade: ReplayTrade): (typeof allPositions)[number] | null => {
-      if (trade.position_id) {
-        return positionById.get(trade.position_id) ?? null;
-      }
-      return null;
-    },
-    [positionById]
-  );
-
-  const findTradeIdsForPosition = useCallback(
-    (pos: (typeof allPositions)[number]): string[] => {
-      return posToTradeIds.get(pos.id) ?? [];
-    },
-    [posToTradeIds]
-  );
-
-  /** Highlight the related position in the correct Long or Short table. */
-  const navigateToPosition = useCallback(
-    (pos: (typeof allPositions)[number]) => {
-      setSelectedPosId(pos.id);
-
-      if (pos.direction === 'long') {
-        const idx = sortedLongPositions.findIndex((p) => p.id === pos.id);
-        if (idx !== -1) {
-          setLongPosPage(Math.floor(idx / longPosRowsPerPage));
-        }
-      } else if (pos.direction === 'short') {
-        const idx = sortedShortPositions.findIndex((p) => p.id === pos.id);
-        if (idx !== -1) {
-          setShortPosPage(Math.floor(idx / shortPosRowsPerPage));
-        }
-      }
-    },
-    [
-      longPosRowsPerPage,
-      setLongPosPage,
-      setSelectedPosId,
-      setShortPosPage,
-      shortPosRowsPerPage,
-      sortedLongPositions,
-      sortedShortPositions,
-    ]
-  );
-
-  useEffect(() => {
-    if (!chartClickedRef.current || !selectedTradeId) return;
-    chartClickedRef.current = false;
-
-    const idx = sortedTrades.findIndex((t) => t.id === selectedTradeId);
-    if (idx !== -1) {
-      setTradePage(Math.floor(idx / tradeRowsPerPage));
-    }
-
-    const highlightReset = requestAnimationFrame(() => {
-      setHighlightedTradeIds(new Set());
-    });
-
-    // Also highlight the related position
-    const trade = trades.find((t) => t.id === selectedTradeId);
-    if (trade) {
-      const pos = findPositionForTrade(trade);
-      if (pos) {
-        const relatedTradeIds = findTradeIdsForPosition(pos).filter(
-          (tradeId) => tradeId !== selectedTradeId
-        );
-        const highlightRelatedMarkers = requestAnimationFrame(() => {
-          setHighlightedTradeIds(new Set(relatedTradeIds));
-        });
-        const raf = requestAnimationFrame(() => {
-          navigateToPosition(pos);
-        });
-        return () => {
-          cancelAnimationFrame(highlightReset);
-          cancelAnimationFrame(highlightRelatedMarkers);
-          cancelAnimationFrame(raf);
-        };
-      } else {
-        const raf = requestAnimationFrame(() => {
-          setSelectedPosId(null);
-        });
-        return () => {
-          cancelAnimationFrame(highlightReset);
-          cancelAnimationFrame(raf);
-        };
-      }
-    }
-    return () => cancelAnimationFrame(highlightReset);
-  }, [
-    selectedTradeId,
-    chartClickedRef,
-    sortedTrades,
-    tradeRowsPerPage,
-    setTradePage,
-    setHighlightedTradeIds,
-    setSelectedPosId,
-    trades,
-    findPositionForTrade,
-    findTradeIdsForPosition,
-    navigateToPosition,
-  ]);
-
   const granularityOptions = useMemo(() => {
     if (granularities.length > 0) {
       return granularities.filter((g) => ALLOWED_VALUES.has(g.value));
@@ -610,158 +485,34 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     reportChartWarning,
   });
 
+  const { selectTrade, selectPosition } = useTaskSelectionNavigation({
+    trades,
+    positions: allPositions,
+    selectedTradeId,
+    selectedPosId,
+    highlightedTradeIds,
+    sortedTrades,
+    sortedLongPositions,
+    sortedShortPositions,
+    tradeRowsPerPage,
+    longPosRowsPerPage,
+    shortPosRowsPerPage,
+    chartClickedRef,
+    chartRef,
+    programmaticScrollRef,
+    setSelectedTradeId,
+    setSelectedPosId,
+    setHighlightedTradeIds,
+    setAutoFollow,
+    setTradePage,
+    setLongPosPage,
+    setShortPosPage,
+    reportChartWarning,
+  });
+
   const handleGranularityChange = (e: SelectChangeEvent) => {
     storeVisibleRange();
     setGranularity(String(e.target.value));
-  };
-
-  const onRowSelect = (row: ReplayTrade) => {
-    // Toggle off if the same trade is already selected
-    if (row.id === selectedTradeId) {
-      setSelectedTradeId(null);
-      setSelectedPosId(null);
-      setHighlightedTradeIds(new Set());
-      return;
-    }
-
-    setSelectedTradeId(row.id);
-    setHighlightedTradeIds(new Set());
-    setAutoFollow(false);
-
-    // Also highlight the related position
-    const pos = findPositionForTrade(row);
-    if (pos) {
-      navigateToPosition(pos);
-    } else {
-      setSelectedPosId(null);
-    }
-
-    const ts = chartRef.current?.timeScale();
-    if (!ts) return;
-
-    const range = ts.getVisibleRange();
-    if (!range) return;
-
-    const from = Number(range.from);
-    const to = Number(range.to);
-    const target = Number(row.timeSec);
-
-    // Already visible → just highlight, no scroll
-    if (target >= from && target <= to) return;
-
-    // Scroll so the target appears at the centre, keeping the same span
-    const span = to - from;
-    const half = span / 2;
-    programmaticScrollRef.current = true;
-    try {
-      ts.setVisibleRange({
-        from: (target - half) as Time,
-        to: (target + half) as Time,
-      });
-      reportChartWarning(null);
-    } catch {
-      reportChartWarning(
-        'Failed to update the chart range for the selected row.'
-      );
-    }
-  };
-
-  const onPosRowSelect = (pos: (typeof allPositions)[number]) => {
-    // Toggle off if the same position is already selected
-    if (pos.id === selectedPosId) {
-      setSelectedPosId(null);
-      setSelectedTradeId(null);
-      setHighlightedTradeIds(new Set());
-      return;
-    }
-
-    setSelectedPosId(pos.id);
-    setAutoFollow(false);
-
-    // Find related trade IDs from the position's trade_ids
-    const relatedTradeIds = findTradeIdsForPosition(pos);
-    const relatedIdSet = new Set(relatedTradeIds);
-    setHighlightedTradeIds(relatedIdSet);
-
-    // Find the first (open) trade to highlight in the Trades table and scroll chart to it
-    // Prefer the earliest trade (the open trade)
-    const relatedTrades = relatedTradeIds
-      .map((tid) => tradeById.get(tid))
-      .filter((t): t is ReplayTrade => t != null)
-      .sort(
-        (a, b) =>
-          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-      );
-
-    if (relatedTrades.length > 0) {
-      const openTrade = relatedTrades[0];
-      setSelectedTradeId(openTrade.id);
-
-      // Navigate Trades table to the open trade's page
-      const idx = sortedTrades.findIndex((t) => t.id === openTrade.id);
-      if (idx !== -1) {
-        const targetPage = Math.floor(idx / tradeRowsPerPage);
-        setTradePage(targetPage);
-      }
-
-      // Scroll chart to show all related markers (open + close).
-      // Strategy: keep the current zoom level and only pan horizontally.
-      // If the current span is too narrow to contain all markers, zoom out
-      // just enough to fit them with some padding.
-      const ts = chartRef.current?.timeScale();
-      if (ts) {
-        const range = ts.getVisibleRange();
-        if (range) {
-          const from = Number(range.from);
-          const to = Number(range.to);
-          const span = to - from;
-
-          // Compute the bounding range of all related markers
-          const times = relatedTrades.map((t) => Number(t.timeSec));
-          const minTime = Math.min(...times);
-          const maxTime = Math.max(...times);
-          const markerSpan = maxTime - minTime;
-
-          // Add 10% padding on each side so markers aren't at the very edge
-          const padding = Math.max(markerSpan * 0.1, span * 0.05);
-          const paddedMin = minTime - padding;
-          const paddedMax = maxTime + padding;
-          const paddedSpan = paddedMax - paddedMin;
-
-          const allVisible = minTime >= from && maxTime <= to;
-
-          if (!allVisible) {
-            programmaticScrollRef.current = true;
-            try {
-              if (paddedSpan <= span) {
-                // Current zoom is wide enough — just pan to centre the markers
-                const centre = (minTime + maxTime) / 2;
-                const half = span / 2;
-                ts.setVisibleRange({
-                  from: (centre - half) as Time,
-                  to: (centre + half) as Time,
-                });
-              } else {
-                // Need to zoom out to fit all markers
-                ts.setVisibleRange({
-                  from: paddedMin as Time,
-                  to: paddedMax as Time,
-                });
-              }
-            } catch (e) {
-              logger.warn('Failed to set visible range on position select', {
-                error: e instanceof Error ? e.message : String(e),
-              });
-              reportChartWarning(
-                'Failed to update the visible chart range after selecting a position.'
-              );
-            }
-          }
-        }
-      }
-    } else {
-      setSelectedTradeId(null);
-    }
   };
 
   if (isLoading) {
@@ -977,7 +728,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
             onSelectAllOnPage={selectAllTradeRowsOnPage}
             onResetSelection={resetTradeSelection}
             onReload={fetchReplayData}
-            onSelectTrade={onRowSelect}
+            onSelectTrade={selectTrade}
             onToggleRowSelection={toggleTradeRowSelection}
             onTogglePageSelection={toggleTradePageSelection}
             onSort={handleTradeSort}
@@ -1023,7 +774,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           onToggleOpenOnly={toggleOpenLongOnly}
           onTogglePageSelection={toggleLongPosPageSelection}
           onSort={handleLongPosSort}
-          onSelectPosition={onPosRowSelect}
+          onSelectPosition={selectPosition}
           onToggleSelection={toggleLongPosSelection}
           onPageChange={(_e, newPage) => setLongPosPage(newPage)}
           onRowsPerPageChange={(e) => {
@@ -1066,7 +817,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           onToggleOpenOnly={toggleOpenShortOnly}
           onTogglePageSelection={toggleShortPosPageSelection}
           onSort={handleShortPosSort}
-          onSelectPosition={onPosRowSelect}
+          onSelectPosition={selectPosition}
           onToggleSelection={toggleShortPosSelection}
           onPageChange={(_e, newPage) => setShortPosPage(newPage)}
           onRowsPerPageChange={(e) => {

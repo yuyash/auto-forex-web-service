@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query';
 import { queryClient, queryKeys } from '../config/reactQuery';
 import { TaskType } from '../types/common';
 import type {
@@ -11,6 +10,7 @@ import {
   createTaskListQuery,
 } from './taskResourceQueries';
 import { usePollingActivity } from './usePollingActivity';
+import { useTaskList, useTaskDetail } from './useTaskCollections';
 
 interface UseBacktestTasksResult {
   data: PaginatedResponse<BacktestTask> | null;
@@ -35,19 +35,13 @@ interface UseBacktestTaskOptions {
 export function useBacktestTasks(
   params?: BacktestTaskListParams
 ): UseBacktestTasksResult {
-  const query = useQuery(
-    createTaskListQuery<BacktestTask>(TaskType.BACKTEST, params)
-  );
-
-  return {
-    data: query.data ?? null,
-    isLoading: query.isLoading,
-    error: (query.error as Error | null) ?? null,
-    refresh: () =>
+  return useTaskList<BacktestTask, BacktestTaskListParams>(
+    createTaskListQuery<BacktestTask>(TaskType.BACKTEST, params),
+    () =>
       queryClient.invalidateQueries({
         queryKey: queryKeys.backtestTasks.list(params),
-      }),
-  };
+      })
+  );
 }
 
 export function useBacktestTask(
@@ -57,22 +51,16 @@ export function useBacktestTask(
   const pollingEnabled = usePollingActivity(
     Boolean(id) && options?.enablePolling === true
   );
-  const query = useQuery(
+  return useTaskDetail<BacktestTask>(
     createTaskDetailQuery<BacktestTask>(TaskType.BACKTEST, id, {
       ...options,
       enablePolling: pollingEnabled,
-    })
-  );
-
-  return {
-    data: query.data ?? null,
-    isLoading: query.isLoading,
-    error: (query.error as Error | null) ?? null,
-    refresh: () =>
+    }),
+    () =>
       id
         ? queryClient.invalidateQueries({
             queryKey: queryKeys.backtestTasks.detail(id),
           })
-        : Promise.resolve(),
-  };
+        : Promise.resolve()
+  );
 }

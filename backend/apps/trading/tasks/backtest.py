@@ -14,7 +14,11 @@ from apps.trading.engine import TradingEngine
 from apps.trading.enums import LogLevel, TaskStatus, TaskType
 from apps.trading.logging import TaskLoggingSession
 from apps.trading.models import BacktestTask, TaskLog
-from apps.trading.services.execution_lifecycle import sync_terminal_execution_artifacts
+from apps.trading.services.execution_lifecycle import (
+    sync_terminal_execution_artifacts,
+    transition_task_to_running,
+    transition_task_to_terminal,
+)
 from apps.trading.tasks.executor import BacktestExecutor
 from apps.trading.tasks.source import RedisTickDataSource
 from apps.trading.utils import pip_size_for_instrument
@@ -65,14 +69,7 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
 
         # Atomically transition to RUNNING only if still in STARTING/CREATED.
         # This acts as a distributed lock — only one worker can win.
-        now = dj_timezone.now()
-        rows_updated = BacktestTask.objects.filter(
-            pk=task_id,
-            status=TaskStatus.STARTING,
-        ).update(
-            status=TaskStatus.RUNNING,
-            started_at=now,
-        )
+        rows_updated = transition_task_to_running(task_model=BacktestTask, task_id=task_id)
 
         if rows_updated == 0:
             # Another worker already transitioned this task
@@ -118,14 +115,12 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
 
         # Mark as completed — atomically transition RUNNING -> COMPLETED.
         # Only allow completion from RUNNING to prevent stale state overwrites.
-        completed_at = dj_timezone.now()
         logger.info(f"Transitioning: {task.status} -> COMPLETED - task_id={task_id}")
-        rows_updated = BacktestTask.objects.filter(
-            pk=task_id,
-            status=TaskStatus.RUNNING,
-        ).update(
+        rows_updated = transition_task_to_terminal(
+            task=task,
+            task_type=TaskType.BACKTEST,
             status=TaskStatus.COMPLETED,
-            completed_at=completed_at,
+            expected_current_status=TaskStatus.RUNNING,
         )
 
         if rows_updated == 0:
@@ -136,9 +131,7 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
             )
             return
 
-        task.refresh_from_db()
         logger.info(f"Current: {task.status} - task_id={task_id}, completed_at={task.completed_at}")
-        sync_terminal_execution_artifacts(task=task, task_type=TaskType.BACKTEST)
 
         # Log task completion
         TaskLog.objects.create(
@@ -238,19 +231,13 @@ def handle_exception(task_id: UUID, task: BacktestTask | None, error: Exception)
 
     if task:
         # Update task with error information
-        task.status = TaskStatus.FAILED
-        task.completed_at = dj_timezone.now()
-        task.error_message = error_message
-        task.error_traceback = error_traceback
-        task.save(
-            update_fields=[
-                "status",
-                "completed_at",
-                "error_message",
-                "error_traceback",
-            ]
+        transition_task_to_terminal(
+            task=task,
+            task_type=TaskType.BACKTEST,
+            status=TaskStatus.FAILED,
+            error_message=error_message,
+            error_traceback=error_traceback,
         )
-        sync_terminal_execution_artifacts(task=task, task_type=TaskType.BACKTEST)
 
         logger.info(f"Task marked as FAILED - task_id={task_id}, completed_at={task.completed_at}")
 
