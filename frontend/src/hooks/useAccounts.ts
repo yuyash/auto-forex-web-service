@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../config/reactQuery';
 import { accountsApi, type AccountListParams } from '../services/api/accounts';
+import { toQueryStateResult } from './useTaskCollections';
 
 // List accounts
 export function useAccounts(
@@ -13,11 +14,10 @@ export function useAccounts(
     queryFn: () => accountsApi.list(params),
     enabled: options?.enabled !== false,
   });
-
-  return {
+  return toQueryStateResult({
     ...query,
-    refresh: () => query.refetch(),
-  };
+    refetch: () => query.refetch(),
+  });
 }
 
 // Get single account
@@ -27,9 +27,8 @@ export function useAccount(id: number, options?: { enabled?: boolean }) {
     queryFn: () => accountsApi.get(id),
     enabled: options?.enabled !== false && id > 0,
   });
-
-  return {
+  return toQueryStateResult({
     ...query,
-    refresh: () => query.refetch(),
-  };
+    refetch: () => query.refetch(),
+  });
 }

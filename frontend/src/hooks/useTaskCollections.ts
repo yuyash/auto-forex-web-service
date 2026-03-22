@@ -15,6 +15,23 @@ interface QueryPollingOptions<TData> {
   shouldPoll?: (data: TData | null) => boolean;
 }
 
+export function toQueryStateResult<TData>(state: {
+  data: TData | undefined;
+  isLoading: boolean;
+  error: unknown;
+  refresh?: () => Promise<unknown>;
+  refetch: () => Promise<unknown>;
+}): QueryStateResult<TData> {
+  const refresh = state.refresh ?? state.refetch;
+  return {
+    data: state.data ?? null,
+    isLoading: state.isLoading,
+    error: (state.error as Error | null) ?? null,
+    refresh,
+    refetch: refresh,
+  };
+}
+
 export function useTaskList<TData>(
   queryOptions: UseQueryOptions<TData>,
   refresh?: () => Promise<unknown>,
@@ -22,14 +39,11 @@ export function useTaskList<TData>(
 ): QueryStateResult<TData> {
   const query = useQuery(queryOptions);
   useTaskQueryPolling(query, polling);
-
-  return {
-    data: query.data ?? null,
-    isLoading: query.isLoading,
-    error: (query.error as Error | null) ?? null,
-    refresh: refresh ?? (() => query.refetch()),
-    refetch: refresh ?? (() => query.refetch()),
-  };
+  return toQueryStateResult({
+    ...query,
+    refresh,
+    refetch: () => query.refetch(),
+  });
 }
 
 export function useTaskDetail<TData>(
@@ -39,14 +53,11 @@ export function useTaskDetail<TData>(
 ): QueryStateResult<TData> {
   const query = useQuery(queryOptions);
   useTaskQueryPolling(query, polling);
-
-  return {
-    data: query.data ?? null,
-    isLoading: query.isLoading,
-    error: (query.error as Error | null) ?? null,
-    refresh: refresh ?? (() => query.refetch()),
-    refetch: refresh ?? (() => query.refetch()),
-  };
+  return toQueryStateResult({
+    ...query,
+    refresh,
+    refetch: () => query.refetch(),
+  });
 }
 
 export function usePolledTaskResource<TData>(
@@ -60,14 +71,11 @@ export function usePolledTaskResource<TData>(
     baseIntervalMs: options?.intervalMs ?? 10_000,
   });
   useTaskQueryPolling(query, { policy: pollingPolicy });
-
-  return {
-    data: query.data ?? null,
-    isLoading: query.isLoading,
-    error: (query.error as Error | null) ?? null,
+  return toQueryStateResult({
+    ...query,
     refresh,
     refetch: refresh,
-  };
+  });
 }
 
 export interface IncrementalCollectionState<TItem>

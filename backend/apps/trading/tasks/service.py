@@ -19,7 +19,6 @@ from django.utils import timezone as _timezone
 from apps.trading.enums import TaskStatus
 from apps.trading.models import (
     BacktestTask,
-    TradingEvent,  # noqa: F401 - kept for compatibility with existing test seams
     TradingTask,
 )
 from apps.trading.services.execution_lifecycle import sync_terminal_execution_artifacts

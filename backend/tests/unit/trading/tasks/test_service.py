@@ -480,9 +480,8 @@ class TestCancelTask:
 
 class TestRestartTask:
     @patch("apps.trading.models.state.ExecutionState")
-    @patch("apps.trading.tasks.service.TradingEvent")
     @patch("apps.trading.tasks.service.BacktestTask")
-    def test_restart_stopped_task(self, mock_bt, mock_events, mock_state):
+    def test_restart_stopped_task(self, mock_bt, mock_state):
         from apps.trading.tasks.service import TaskService
 
         task_id = uuid4()
@@ -521,9 +520,8 @@ class TestRestartTask:
 
     @patch("apps.trading.models.state.ExecutionState")
     @patch("celery.current_app")
-    @patch("apps.trading.tasks.service.TradingEvent")
     @patch("apps.trading.tasks.service.BacktestTask")
-    def test_restart_running_stops_first(self, mock_bt, mock_events, mock_app, mock_state):
+    def test_restart_running_stops_first(self, mock_bt, mock_app, mock_state):
         from apps.trading.tasks.service import TaskService
 
         task_id = uuid4()

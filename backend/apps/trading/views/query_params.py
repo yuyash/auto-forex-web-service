@@ -108,35 +108,125 @@ SINCE_SPEC = QueryFieldSpec(
     kind="datetime",
     help_text="RFC3339 timestamp for incremental fetch.",
 )
-
-
-def _schema_datetime_field(help_text: str) -> serializers.DateTimeField:
-    return serializers.DateTimeField(required=False, allow_null=True, help_text=help_text)
-
-
-def _schema_string_field(help_text: str) -> serializers.CharField:
-    return serializers.CharField(required=False, allow_blank=True, help_text=help_text)
-
-
-def _schema_uuid_field(help_text: str) -> serializers.UUIDField:
-    return serializers.UUIDField(required=False, allow_null=True, help_text=help_text)
-
-
-def _schema_page_field() -> serializers.IntegerField:
-    return serializers.IntegerField(required=False, min_value=1, help_text="Page number (1-based).")
-
-
-def _schema_page_size_field(*, default: int, max_value: int) -> serializers.IntegerField:
-    return serializers.IntegerField(
-        required=False,
-        min_value=1,
-        max_value=max_value,
-        help_text=f"Results per page. Default {default}, maximum {max_value}.",
-    )
-
-
-def _schema_bool_field(help_text: str) -> serializers.BooleanField:
-    return serializers.BooleanField(required=False, help_text=help_text)
+ROOT_ENTRY_ID_SPEC = QueryFieldSpec(
+    name="root_entry_id",
+    kind="int",
+    help_text="Optional root entry group filter.",
+)
+UNTIL_SPEC = QueryFieldSpec(
+    name="until",
+    kind="datetime",
+    help_text="RFC3339 upper-bound timestamp (exclusive).",
+)
+INTERVAL_SPEC = QueryFieldSpec(
+    name="interval",
+    kind="int",
+    max_value=1440,
+    help_text=(
+        "Aggregation interval in minutes. Default 1. When greater than 1, "
+        "returns one point per N-minute window."
+    ),
+)
+LEVEL_SPEC = QueryFieldSpec(
+    name="level",
+    kind="string",
+    allow_blank=True,
+    help_text="Log level filter (comma-separated for multiple).",
+)
+COMPONENT_SPEC = QueryFieldSpec(
+    name="component",
+    kind="string",
+    allow_blank=True,
+    help_text="Logger/component name filter (comma-separated for multiple).",
+)
+POSITION_ID_SPEC = QueryFieldSpec(
+    name="position_id",
+    kind="string",
+    allow_blank=True,
+    help_text="Optional position ID prefix filter.",
+)
+TIMESTAMP_FROM_SPEC = QueryFieldSpec(
+    name="timestamp_from",
+    kind="datetime",
+    help_text="Filter records from this RFC3339 timestamp (inclusive).",
+)
+TIMESTAMP_TO_SPEC = QueryFieldSpec(
+    name="timestamp_to",
+    kind="datetime",
+    help_text="Filter records until this RFC3339 timestamp (inclusive).",
+)
+EVENT_TYPE_SPEC = QueryFieldSpec(
+    name="event_type",
+    kind="string",
+    allow_blank=True,
+    help_text="Event type filter.",
+)
+SEVERITY_SPEC = QueryFieldSpec(
+    name="severity",
+    kind="string",
+    allow_blank=True,
+    help_text="Severity filter.",
+)
+SCOPE_SPEC = QueryFieldSpec(
+    name="scope",
+    kind="choice",
+    choices=("all", "trading", "task"),
+    help_text="Event scope filter.",
+)
+CREATED_FROM_SPEC = QueryFieldSpec(
+    name="created_from",
+    kind="datetime",
+    help_text="Filter events created at or after this RFC3339 timestamp.",
+)
+CREATED_TO_SPEC = QueryFieldSpec(
+    name="created_to",
+    kind="datetime",
+    help_text="Filter events created at or before this RFC3339 timestamp.",
+)
+DIRECTION_SPEC = QueryFieldSpec(
+    name="direction",
+    kind="string",
+    allow_blank=True,
+    help_text="Direction filter.",
+)
+POSITION_STATUS_SPEC = QueryFieldSpec(
+    name="position_status",
+    kind="choice",
+    choices=("open", "closed"),
+    help_text="Position status filter.",
+)
+INCLUDE_TRADE_IDS_SPEC = QueryFieldSpec(
+    name="include_trade_ids",
+    kind="bool",
+    help_text="Include position trade_ids in the response.",
+)
+RANGE_FROM_SPEC = QueryFieldSpec(
+    name="range_from",
+    kind="datetime",
+    help_text="RFC3339 lower bound for the chart window.",
+)
+RANGE_TO_SPEC = QueryFieldSpec(
+    name="range_to",
+    kind="datetime",
+    help_text="RFC3339 upper bound for the chart window.",
+)
+ORDER_STATUS_SPEC = QueryFieldSpec(
+    name="status",
+    kind="string",
+    allow_blank=True,
+    help_text="Order status filter.",
+)
+ORDER_TYPE_SPEC = QueryFieldSpec(
+    name="order_type",
+    kind="string",
+    allow_blank=True,
+    help_text="Order type filter.",
+)
+INCLUDE_METRICS_SPEC = QueryFieldSpec(
+    name="include_metrics",
+    kind="bool",
+    help_text="Include aggregate execution metrics.",
+)
 
 
 def _invalid_query_param(detail: str) -> ValidationError:
@@ -324,61 +414,41 @@ class MetricsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSeriali
             f"maximum {MetricsPagination.max_page_size}."
         ),
     ).schema_field()
-    until = _schema_datetime_field("RFC3339 upper-bound timestamp (exclusive).")
-    interval = serializers.IntegerField(
-        required=False,
-        min_value=1,
-        max_value=1440,
-        help_text=(
-            "Aggregation interval in minutes. Default 1. When greater than 1, "
-            "returns one point per N-minute window."
-        ),
-    )
+    until = UNTIL_SPEC.schema_field()
+    interval = INTERVAL_SPEC.schema_field()
 
 
 class LogsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for logs query parameters."""
 
-    level = _schema_string_field("Log level filter (comma-separated for multiple).")
-    component = _schema_string_field("Logger/component name filter (comma-separated for multiple).")
-    position_id = _schema_string_field("Optional position ID prefix filter.")
-    timestamp_from = _schema_datetime_field("Filter logs from this RFC3339 timestamp (inclusive).")
-    timestamp_to = _schema_datetime_field("Filter logs until this RFC3339 timestamp (inclusive).")
+    level = LEVEL_SPEC.schema_field()
+    component = COMPONENT_SPEC.schema_field()
+    position_id = POSITION_ID_SPEC.schema_field()
+    timestamp_from = TIMESTAMP_FROM_SPEC.schema_field()
+    timestamp_to = TIMESTAMP_TO_SPEC.schema_field()
 
 
 class LogComponentsQueryParamsSchemaSerializer(QueryParamsSerializer):
     """OpenAPI serializer for log component query parameters."""
 
-    execution_id = _schema_uuid_field("Filter by execution ID (UUID).")
+    execution_id = EXECUTION_ID_SPEC.schema_field()
 
 
 class EventsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for task events query parameters."""
 
-    event_type = _schema_string_field("Event type filter.")
-    severity = _schema_string_field("Severity filter.")
-    scope = serializers.ChoiceField(
-        required=False,
-        choices=("all", "trading", "task"),
-        help_text="Event scope filter.",
-    )
-    created_from = _schema_datetime_field(
-        "Filter events created at or after this RFC3339 timestamp."
-    )
-    created_to = _schema_datetime_field(
-        "Filter events created at or before this RFC3339 timestamp."
-    )
+    event_type = EVENT_TYPE_SPEC.schema_field()
+    severity = SEVERITY_SPEC.schema_field()
+    scope = SCOPE_SPEC.schema_field()
+    created_from = CREATED_FROM_SPEC.schema_field()
+    created_to = CREATED_TO_SPEC.schema_field()
 
 
 class StrategyEventsQueryParamsSchemaSerializer(QueryParamsSerializer):
     """OpenAPI serializer for strategy event visualization parameters."""
 
     execution_id = EXECUTION_ID_SPEC.schema_field()
-    root_entry_id = serializers.IntegerField(
-        required=False,
-        min_value=1,
-        help_text="Optional root entry group filter.",
-    )
+    root_entry_id = ROOT_ENTRY_ID_SPEC.schema_field()
 
 
 class TradesQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
@@ -394,13 +464,22 @@ class TradesQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializ
             f"maximum {TradePositionPagination.max_page_size}."
         ),
     ).schema_field()
-    direction = _schema_string_field("Direction filter (buy/sell/long/short).")
-    timestamp_from = _schema_datetime_field(
-        "Filter trades executed at or after this RFC3339 timestamp."
-    )
-    timestamp_to = _schema_datetime_field(
-        "Filter trades executed at or before this RFC3339 timestamp."
-    )
+    direction = QueryFieldSpec(
+        name="direction",
+        kind="string",
+        allow_blank=True,
+        help_text="Direction filter (buy/sell/long/short).",
+    ).schema_field()
+    timestamp_from = QueryFieldSpec(
+        name="timestamp_from",
+        kind="datetime",
+        help_text="Filter trades executed at or after this RFC3339 timestamp.",
+    ).schema_field()
+    timestamp_to = QueryFieldSpec(
+        name="timestamp_to",
+        kind="datetime",
+        help_text="Filter trades executed at or before this RFC3339 timestamp.",
+    ).schema_field()
 
 
 class PositionsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
@@ -416,19 +495,19 @@ class PositionsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSeria
             f"maximum {TradePositionPagination.max_page_size}."
         ),
     ).schema_field()
-    position_status = serializers.ChoiceField(
-        required=False,
-        choices=("open", "closed"),
-        help_text="Position status filter.",
-    )
-    direction = _schema_string_field("Direction filter.")
-    include_trade_ids = _schema_bool_field("Include position trade_ids in the response.")
-    range_from = _schema_datetime_field(
-        "RFC3339 lower bound for positions overlapping a chart range."
-    )
-    range_to = _schema_datetime_field(
-        "RFC3339 upper bound for positions overlapping a chart range."
-    )
+    position_status = POSITION_STATUS_SPEC.schema_field()
+    direction = DIRECTION_SPEC.schema_field()
+    include_trade_ids = INCLUDE_TRADE_IDS_SPEC.schema_field()
+    range_from = QueryFieldSpec(
+        name="range_from",
+        kind="datetime",
+        help_text="RFC3339 lower bound for positions overlapping a chart range.",
+    ).schema_field()
+    range_to = QueryFieldSpec(
+        name="range_to",
+        kind="datetime",
+        help_text="RFC3339 upper bound for positions overlapping a chart range.",
+    ).schema_field()
 
 
 class TrendReplayQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
@@ -444,8 +523,8 @@ class TrendReplayQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSer
             f"maximum {TradePositionPagination.max_page_size}."
         ),
     ).schema_field()
-    range_from = _schema_datetime_field("RFC3339 lower bound for the chart window.")
-    range_to = _schema_datetime_field("RFC3339 upper bound for the chart window.")
+    range_from = RANGE_FROM_SPEC.schema_field()
+    range_to = RANGE_TO_SPEC.schema_field()
 
 
 class OrdersQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
@@ -461,9 +540,9 @@ class OrdersQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializ
             f"maximum {TradePositionPagination.max_page_size}."
         ),
     ).schema_field()
-    status = _schema_string_field("Order status filter.")
-    order_type = _schema_string_field("Order type filter.")
-    direction = _schema_string_field("Direction filter.")
+    status = ORDER_STATUS_SPEC.schema_field()
+    order_type = ORDER_TYPE_SPEC.schema_field()
+    direction = DIRECTION_SPEC.schema_field()
 
 
 class SummaryQueryParamsSchemaSerializer(QueryParamsSerializer):
@@ -486,13 +565,13 @@ class ExecutionsQueryParamsSchemaSerializer(serializers.Serializer):
             f"maximum {ActivityPagination.max_page_size}."
         ),
     ).schema_field()
-    include_metrics = _schema_bool_field("Include aggregate execution metrics.")
+    include_metrics = INCLUDE_METRICS_SPEC.schema_field()
 
 
 class ExecutionDetailQueryParamsSchemaSerializer(QueryParamsSerializer):
     """OpenAPI serializer for execution detail query parameters."""
 
-    include_metrics = _schema_bool_field("Include aggregate execution metrics.")
+    include_metrics = INCLUDE_METRICS_SPEC.schema_field()
 
 
 class PaginationSchemaSerializer(serializers.Serializer):

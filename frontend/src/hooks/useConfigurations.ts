@@ -7,30 +7,16 @@ import type {
   StrategyConfig,
   StrategyConfigListParams,
 } from '../types';
+import {
+  toQueryStateResult,
+  type QueryStateResult,
+} from './useTaskCollections';
 
-interface UseConfigurationsResult {
-  data: PaginatedResponse<StrategyConfig> | null;
-  isLoading: boolean;
-  error: Error | null;
-  refresh: () => Promise<unknown>;
-  refetch: () => Promise<unknown>;
-}
-
-interface UseConfigurationResult {
-  data: StrategyConfig | null;
-  isLoading: boolean;
-  error: Error | null;
-  refresh: () => Promise<unknown>;
-  refetch: () => Promise<unknown>;
-}
-
-interface UseConfigurationTasksResult {
-  data: ConfigurationTask[] | null;
-  isLoading: boolean;
-  error: Error | null;
-  refresh: () => Promise<unknown>;
-  refetch: () => Promise<unknown>;
-}
+type UseConfigurationsResult = QueryStateResult<
+  PaginatedResponse<StrategyConfig>
+>;
+type UseConfigurationResult = QueryStateResult<StrategyConfig>;
+type UseConfigurationTasksResult = QueryStateResult<ConfigurationTask[]>;
 
 export function useConfigurations(
   params?: StrategyConfigListParams
@@ -39,14 +25,10 @@ export function useConfigurations(
     queryKey: queryKeys.configurations.list(params),
     queryFn: () => configurationsApi.list(params),
   });
-
-  return {
-    data: query.data ?? null,
-    isLoading: query.isLoading,
-    error: (query.error as Error | null) ?? null,
-    refresh: () => query.refetch(),
+  return toQueryStateResult({
+    ...query,
     refetch: () => query.refetch(),
-  };
+  });
 }
 
 export function useConfiguration(id?: string): UseConfigurationResult {
@@ -57,14 +39,10 @@ export function useConfiguration(id?: string): UseConfigurationResult {
     queryFn: () => configurationsApi.get(id!),
     enabled: Boolean(id),
   });
-
-  return {
-    data: query.data ?? null,
-    isLoading: query.isLoading,
-    error: (query.error as Error | null) ?? null,
-    refresh: () => (id ? query.refetch() : Promise.resolve()),
+  return toQueryStateResult({
+    ...query,
     refetch: () => (id ? query.refetch() : Promise.resolve()),
-  };
+  });
 }
 
 export function useConfigurationTasks(
@@ -76,12 +54,8 @@ export function useConfigurationTasks(
     queryFn: () => configurationsApi.getTasks(String(id)),
     enabled: Boolean(id) && options?.enabled !== false,
   });
-
-  return {
-    data: query.data ?? null,
-    isLoading: query.isLoading,
-    error: (query.error as Error | null) ?? null,
-    refresh: () => query.refetch(),
+  return toQueryStateResult({
+    ...query,
     refetch: () => query.refetch(),
-  };
+  });
 }

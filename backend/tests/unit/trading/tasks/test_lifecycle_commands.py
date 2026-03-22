@@ -39,7 +39,6 @@ def test_stop_uses_injected_adapters() -> None:
     task = MagicMock(pk=task_id, status=TaskStatus.RUNNING, execution_id=execution_id)
     service = MagicMock()
     service._get_task_and_type.return_value = (task, "trading")
-    service._emit_task_lifecycle_event = MagicMock()
 
     commands, adapters = _make_commands(service)
 
@@ -67,7 +66,6 @@ def test_restart_uses_injected_sleep() -> None:
     service.stop_task = MagicMock(return_value=True)
     service.start_task = MagicMock(return_value=task)
     service.writer.clear_execution_history = MagicMock()
-    service._emit_task_lifecycle_event = MagicMock()
     task_model.objects.filter.return_value.update.return_value = 1
 
     commands, adapters = _make_commands(service)
@@ -83,7 +81,6 @@ def test_stop_continues_when_signal_adapter_fails() -> None:
     task = MagicMock(pk=task_id, status=TaskStatus.RUNNING, execution_id=uuid4())
     service = MagicMock()
     service._get_task_and_type.return_value = (task, "backtest")
-    service._emit_task_lifecycle_event = MagicMock()
 
     commands, adapters = _make_commands(service)
     adapters.signal_stop.side_effect = RuntimeError("redis unavailable")
