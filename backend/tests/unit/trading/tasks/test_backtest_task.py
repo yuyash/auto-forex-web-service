@@ -27,11 +27,10 @@ class TestRunBacktestTask:
         with pytest.raises(_DoesNotExist):
             run_backtest_task.__wrapped__(uuid4())
 
-    @patch("apps.trading.tasks.backtest.TaskLog")
     @patch("apps.trading.tasks.backtest.TaskLoggingSession")
     @patch("apps.trading.tasks.backtest.execute_backtest")
     @patch("apps.trading.tasks.backtest.BacktestTask")
-    def test_skips_if_not_starting(self, mock_model, mock_exec, mock_logging, mock_log):
+    def test_skips_if_not_starting(self, mock_model, mock_exec, mock_logging):
         from apps.trading.tasks.backtest import run_backtest_task
 
         task = MagicMock(pk=uuid4(), status=TaskStatus.COMPLETED, instrument="EUR_USD")
@@ -41,7 +40,7 @@ class TestRunBacktestTask:
         mock_exec.assert_not_called()
 
     @patch("apps.trading.tasks.backtest.finalize_task_terminal_lifecycle")
-    @patch("apps.trading.tasks.backtest.TaskLog")
+    @patch("apps.trading.tasks.backtest.record_task_lifecycle_log")
     @patch("apps.trading.tasks.backtest.TaskLoggingSession")
     @patch("apps.trading.tasks.backtest.execute_backtest")
     @patch("apps.trading.tasks.backtest.BacktestTask")
@@ -50,7 +49,7 @@ class TestRunBacktestTask:
         mock_model,
         mock_exec,
         mock_logging,
-        mock_log,
+        mock_log_lifecycle,
         mock_finalize_terminal,
     ):
         from apps.trading.tasks.backtest import run_backtest_task
@@ -69,11 +68,11 @@ class TestRunBacktestTask:
         mock_exec.assert_called_once_with(task)
         mock_finalize_terminal.assert_called_once()
 
-    @patch("apps.trading.tasks.backtest.TaskLog")
+    @patch("apps.trading.tasks.backtest.record_task_lifecycle_log")
     @patch("apps.trading.tasks.backtest.TaskLoggingSession")
     @patch("apps.trading.tasks.backtest.execute_backtest")
     @patch("apps.trading.tasks.backtest.BacktestTask")
-    def test_exception_handling(self, mock_model, mock_exec, mock_logging, mock_log):
+    def test_exception_handling(self, mock_model, mock_exec, mock_logging, mock_log_lifecycle):
         from apps.trading.tasks.backtest import run_backtest_task
 
         task = MagicMock(pk=uuid4(), status=TaskStatus.STARTING, instrument="EUR_USD")
@@ -122,16 +121,16 @@ class TestExecuteBacktest:
 
 
 class TestHandleExceptionBacktest:
-    @patch("apps.trading.tasks.backtest.TaskLog")
-    def test_with_task_none(self, mock_log):
+    @patch("apps.trading.tasks.backtest.record_task_lifecycle_log")
+    def test_with_task_none(self, mock_log_lifecycle):
         from apps.trading.tasks.backtest import handle_exception
 
         handle_exception(uuid4(), None, RuntimeError("test"))
-        mock_log.objects.create.assert_not_called()
+        mock_log_lifecycle.assert_not_called()
 
-    @patch("apps.trading.tasks.backtest.TaskLog")
+    @patch("apps.trading.tasks.backtest.record_task_lifecycle_log")
     @patch("apps.trading.tasks.backtest.finalize_task_terminal_lifecycle")
-    def test_with_task_updates_status(self, mock_finalize_terminal, mock_log):
+    def test_with_task_updates_status(self, mock_finalize_terminal, mock_log_lifecycle):
         from apps.trading.tasks.backtest import handle_exception
 
         task_id = uuid4()
@@ -140,7 +139,7 @@ class TestHandleExceptionBacktest:
         mock_finalize_terminal.return_value = 1
         handle_exception(task_id, task, ValueError("bad"))
         mock_finalize_terminal.assert_called_once()
-        mock_log.objects.create.assert_called_once()
+        mock_log_lifecycle.assert_not_called()
 
 
 class TestTriggerBacktestPublisher:

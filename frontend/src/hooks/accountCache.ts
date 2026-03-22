@@ -4,26 +4,29 @@ import {
   removeFromListQueries,
   upsertFilteredListEntity,
 } from './listCacheUtils';
-import { matchesSearchFilter } from './listFilterUtils';
+import {
+  matchesEntityFilterSpec,
+  type EntityFilterSpec,
+} from './listFilterUtils';
 import type { Account } from '../types/strategy';
 
-function matchesAccountListFilter(
-  account: Account,
-  params?: Record<string, unknown>
-): boolean {
-  return matchesSearchFilter(params, [
-    account.account_id,
-    account.api_type,
-    account.currency,
-    account.jurisdiction ?? '',
-  ]);
-}
+const ACCOUNT_LIST_FILTER_SPEC: EntityFilterSpec<Account> = {
+  search: {
+    haystack: (account) => [
+      account.account_id,
+      account.api_type,
+      account.currency,
+      account.jurisdiction ?? '',
+    ],
+  },
+};
 
 export function upsertAccountCaches(account: Account): void {
   queryClient.setQueryData(queryKeys.accounts.detail(account.id), account);
   patchListQueries<Account[]>(queryKeys.accounts.lists(), (cached, params) =>
     upsertFilteredListEntity(cached, account, params, {
-      matches: matchesAccountListFilter,
+      matches: (entry, queryParams) =>
+        matchesEntityFilterSpec(queryParams, entry, ACCOUNT_LIST_FILTER_SPEC),
     })
   );
 }

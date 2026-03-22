@@ -1,5 +1,20 @@
 import type { CacheListParams } from './listCacheUtils';
 
+export interface ExactEntityFilterSpec<TItem> {
+  key: string;
+  value: (item: TItem) => string | number | boolean | undefined | null;
+}
+
+export interface SearchEntityFilterSpec<TItem> {
+  key?: string;
+  haystack: (item: TItem) => Array<string | number | null | undefined>;
+}
+
+export interface EntityFilterSpec<TItem> {
+  exact?: ExactEntityFilterSpec<TItem>[];
+  search?: SearchEntityFilterSpec<TItem>;
+}
+
 export function readStringFilter(
   params: CacheListParams,
   key: string
@@ -44,4 +59,26 @@ export function readOrderingFilter(
   params: CacheListParams
 ): string | undefined {
   return readStringFilter(params, 'ordering');
+}
+
+export function matchesEntityFilterSpec<TItem>(
+  params: CacheListParams,
+  item: TItem,
+  spec: EntityFilterSpec<TItem>
+): boolean {
+  for (const filter of spec.exact ?? []) {
+    if (!matchesExactFilter(params, filter.key, filter.value(item))) {
+      return false;
+    }
+  }
+
+  if (spec.search) {
+    return matchesSearchFilter(
+      params,
+      spec.search.haystack(item),
+      spec.search.key
+    );
+  }
+
+  return true;
 }

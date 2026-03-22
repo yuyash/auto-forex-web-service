@@ -12,9 +12,12 @@ from celery import shared_task
 from apps.trading.engine import TradingEngine
 from apps.trading.enums import LogLevel, TaskStatus, TaskType
 from apps.trading.logging import TaskLoggingSession
-from apps.trading.models import BacktestTask, TaskLog
+from apps.trading.models import BacktestTask
 from apps.trading.services.execution_lifecycle import transition_task_to_running
-from apps.trading.tasks.lifecycle_events import finalize_task_terminal_lifecycle
+from apps.trading.tasks.lifecycle_events import (
+    finalize_task_terminal_lifecycle,
+    record_task_lifecycle_log,
+)
 from apps.trading.tasks.executor import BacktestExecutor
 from apps.trading.tasks.source import RedisTickDataSource
 from apps.trading.utils import pip_size_for_instrument
@@ -81,11 +84,9 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
 
         logger.info(f"Current: RUNNING - task_id={task_id}, started_at={task.started_at}")
 
-        # Log task start
-        TaskLog.objects.create(
+        record_task_lifecycle_log(
+            task=task,
             task_type=TaskType.BACKTEST,
-            task_id=task.pk,
-            execution_id=task.execution_id,
             level=LogLevel.INFO,
             component=__name__,
             message="Backtest task execution started",
@@ -120,6 +121,9 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
             kind="task_completed",
             description="Backtest task completed successfully",
             expected_current_status=TaskStatus.RUNNING,
+            log_level=LogLevel.INFO,
+            log_message="Backtest task completed successfully",
+            log_component=__name__,
         )
 
         if rows_updated == 0:
@@ -131,16 +135,6 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
             return
 
         logger.info(f"Current: {task.status} - task_id={task_id}, completed_at={task.completed_at}")
-        # Log task completion
-        TaskLog.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=task.pk,
-            execution_id=task.execution_id,
-            level=LogLevel.INFO,
-            component=__name__,
-            message="Backtest task completed successfully",
-        )
-
         logger.info(
             f"SUCCESS - task_id={task_id}, "
             f"completed_at={task.completed_at}, duration={(task.completed_at - task.started_at).total_seconds()}s"
@@ -238,19 +232,12 @@ def handle_exception(task_id: UUID, task: BacktestTask | None, error: Exception)
             description=f"Backtest task failed: {type(error).__name__}: {error_message}",
             error_message=error_message,
             error_traceback=error_traceback,
+            log_level=LogLevel.ERROR,
+            log_message=f"Backtest task execution failed: {type(error).__name__}: {error_message}",
+            log_component=__name__,
         )
 
         logger.info(f"Task marked as FAILED - task_id={task_id}, completed_at={task.completed_at}")
-
-        # Log error
-        TaskLog.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=task.pk,
-            execution_id=task.execution_id,
-            level=LogLevel.ERROR,
-            component=__name__,
-            message=f"Backtest task execution failed: {type(error).__name__}: {error_message}",
-        )
 
 
 def trigger_backtest_publisher(task: BacktestTask) -> None:
@@ -436,6 +423,9 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
                 description="Backtest task stopped",
                 expected_current_status=TaskStatus.STOPPING,
                 extra_details={"mode": "worker_stop"},
+                log_level=LogLevel.INFO,
+                log_message="Backtest task stopped",
+                log_component=__name__,
             )
             logger.info(f"[STOP:BACKTEST] Current: STOPPED - task_id={task_id}")
 
@@ -456,6 +446,9 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
                 description="Backtest task stopped after completion race",
                 expected_current_status=TaskStatus.COMPLETED,
                 extra_details={"mode": "worker_stop"},
+                log_level=LogLevel.INFO,
+                log_message="Backtest task stopped after completion race",
+                log_component=__name__,
             )
             logger.info(f"[STOP:BACKTEST] Current: STOPPED - task_id={task_id}")
 

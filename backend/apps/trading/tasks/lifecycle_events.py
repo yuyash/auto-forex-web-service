@@ -8,9 +8,9 @@ from typing import Callable, Protocol
 
 from django.utils import timezone
 
-from apps.trading.enums import TaskStatus
+from apps.trading.enums import LogLevel, TaskStatus
 from apps.trading.models.celery import CeleryTaskStatus
-from apps.trading.models import BacktestTask, TradingEvent, TradingTask
+from apps.trading.models import BacktestTask, TaskLog, TradingEvent, TradingTask
 from apps.trading.services.execution_lifecycle import (
     sync_terminal_execution_artifacts,
     transition_task_to_stopped,
@@ -45,6 +45,26 @@ class TaskLifecycleEventSink(Protocol):
 
     def publish(self, event: TaskLifecycleEvent) -> None:
         """Handle a lifecycle event."""
+
+
+def record_task_lifecycle_log(
+    *,
+    task: BacktestTask | TradingTask,
+    task_type: str,
+    level: LogLevel,
+    message: str,
+    component: str,
+) -> None:
+    """Persist a lifecycle-oriented TaskLog entry."""
+
+    TaskLog.objects.create(
+        task_type=task_type,
+        task_id=task.pk,
+        execution_id=getattr(task, "execution_id", None),
+        level=level,
+        component=component,
+        message=message,
+    )
 
 
 class LoggerLifecycleEventSink:
@@ -248,6 +268,9 @@ def finalize_task_terminal_lifecycle(
     extra_details: dict[str, object] | None = None,
     error_message: str | None = None,
     error_traceback: str | None = None,
+    log_level: LogLevel | None = None,
+    log_message: str | None = None,
+    log_component: str | None = None,
 ) -> int:
     """Persist a terminal task transition and publish its lifecycle event."""
 
@@ -268,6 +291,14 @@ def finalize_task_terminal_lifecycle(
         )
 
     if rows_updated > 0:
+        if log_level is not None and log_message and log_component:
+            record_task_lifecycle_log(
+                task=task,
+                task_type=task_type,
+                level=log_level,
+                message=log_message,
+                component=log_component,
+            )
         publish_task_lifecycle_event(
             logger=logger,
             task=task,

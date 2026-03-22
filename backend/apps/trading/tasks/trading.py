@@ -12,9 +12,12 @@ from celery import shared_task
 from apps.trading.engine import TradingEngine
 from apps.trading.enums import LogLevel, StopMode, TaskStatus, TaskType
 from apps.trading.logging import TaskLoggingSession
-from apps.trading.models import TaskLog, TradingTask
+from apps.trading.models import TradingTask
 from apps.trading.services.execution_lifecycle import transition_task_to_running
-from apps.trading.tasks.lifecycle_events import finalize_task_terminal_lifecycle
+from apps.trading.tasks.lifecycle_events import (
+    finalize_task_terminal_lifecycle,
+    record_task_lifecycle_log,
+)
 from apps.trading.tasks.executor import TradingExecutor
 from apps.trading.tasks.source import LiveTickDataSource
 from apps.trading.utils import pip_size_for_instrument
@@ -69,11 +72,9 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
         logger.info(f"Transitioning: STARTING -> RUNNING - task_id={task_id}")
         logger.info(f"Current: RUNNING - task_id={task_id}, started_at={task.started_at}")
 
-        # Log task start
-        TaskLog.objects.create(
+        record_task_lifecycle_log(
+            task=task,
             task_type=TaskType.TRADING,
-            task_id=task.pk,
-            execution_id=task.execution_id,
             level=LogLevel.INFO,
             component=__name__,
             message="Trading task execution started",
@@ -98,6 +99,9 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
                 kind="task_stopped",
                 description="Trading task stopped after execution completed",
                 expected_current_status=TaskStatus.RUNNING,
+                log_level=LogLevel.INFO,
+                log_message="Trading task stopped successfully",
+                log_component=__name__,
             )
             if rows_updated == 0:
                 task.refresh_from_db()
@@ -109,15 +113,6 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
         else:
             logger.info(f"Already in terminal state: {task.status} - task_id={task_id}")
 
-        # Log task completion
-        TaskLog.objects.create(
-            task_type=TaskType.TRADING,
-            task_id=task.pk,
-            execution_id=task.execution_id,
-            level=LogLevel.INFO,
-            component=__name__,
-            message="Trading task stopped successfully",
-        )
     except TradingTask.DoesNotExist:
         logger.error(f"TradingTask {task_id} not found")
         raise
@@ -193,16 +188,9 @@ def handle_exception(task_id: UUID, task: TradingTask | None, error: Exception) 
             description=f"Trading task failed: {type(error).__name__}: {error_message}",
             error_message=error_message,
             error_traceback=error_traceback,
-        )
-
-        # Log error
-        TaskLog.objects.create(
-            task_type=TaskType.TRADING,
-            task_id=task.pk,
-            execution_id=task.execution_id,
-            level=LogLevel.ERROR,
-            component=__name__,
-            message=f"Trading task execution failed: {type(error).__name__}: {error_message}",
+            log_level=LogLevel.ERROR,
+            log_message=f"Trading task execution failed: {type(error).__name__}: {error_message}",
+            log_component=__name__,
         )
 
 
@@ -251,6 +239,9 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
                 description="Trading task stopped",
                 expected_current_status=TaskStatus.STOPPING,
                 extra_details={"mode": stop_mode.value},
+                log_level=LogLevel.INFO,
+                log_message="Trading task stopped",
+                log_component=__name__,
             )
             logger.info(f"Current: STOPPED - task_id={task_id}")
 

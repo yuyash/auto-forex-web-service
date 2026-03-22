@@ -27,11 +27,10 @@ class TestRunTradingTask:
         with pytest.raises(_DoesNotExist):
             run_trading_task.__wrapped__(uuid4())
 
-    @patch("apps.trading.tasks.trading.TaskLog")
     @patch("apps.trading.tasks.trading.TaskLoggingSession")
     @patch("apps.trading.tasks.trading.execute_trading")
     @patch("apps.trading.tasks.trading.TradingTask")
-    def test_skips_if_not_starting(self, mock_model, mock_exec, mock_logging, mock_log):
+    def test_skips_if_not_starting(self, mock_model, mock_exec, mock_logging):
         from apps.trading.tasks.trading import run_trading_task
 
         task = MagicMock(pk=uuid4(), status=TaskStatus.COMPLETED, instrument="EUR_USD")
@@ -42,7 +41,7 @@ class TestRunTradingTask:
         mock_exec.assert_not_called()
 
     @patch("apps.trading.tasks.trading.finalize_task_terminal_lifecycle")
-    @patch("apps.trading.tasks.trading.TaskLog")
+    @patch("apps.trading.tasks.trading.record_task_lifecycle_log")
     @patch("apps.trading.tasks.trading.TaskLoggingSession")
     @patch("apps.trading.tasks.trading.execute_trading")
     @patch("apps.trading.tasks.trading.TradingTask")
@@ -51,7 +50,7 @@ class TestRunTradingTask:
         mock_model,
         mock_exec,
         mock_logging,
-        mock_log,
+        mock_log_lifecycle,
         mock_finalize_terminal,
     ):
         from apps.trading.tasks.trading import run_trading_task
@@ -82,11 +81,11 @@ class TestRunTradingTask:
         mock_exec.assert_called_once_with(task)
         mock_finalize_terminal.assert_called_once()
 
-    @patch("apps.trading.tasks.trading.TaskLog")
+    @patch("apps.trading.tasks.trading.record_task_lifecycle_log")
     @patch("apps.trading.tasks.trading.TaskLoggingSession")
     @patch("apps.trading.tasks.trading.execute_trading")
     @patch("apps.trading.tasks.trading.TradingTask")
-    def test_exception_handling(self, mock_model, mock_exec, mock_logging, mock_log):
+    def test_exception_handling(self, mock_model, mock_exec, mock_logging, mock_log_lifecycle):
         from apps.trading.tasks.trading import run_trading_task
 
         task = MagicMock(pk=uuid4(), status=TaskStatus.STARTING, instrument="EUR_USD")
@@ -136,16 +135,16 @@ class TestExecuteTrading:
 
 
 class TestHandleExceptionTrading:
-    @patch("apps.trading.tasks.trading.TaskLog")
-    def test_with_task_none(self, mock_log):
+    @patch("apps.trading.tasks.trading.record_task_lifecycle_log")
+    def test_with_task_none(self, mock_log_lifecycle):
         from apps.trading.tasks.trading import handle_exception
 
         handle_exception(uuid4(), None, RuntimeError("test"))
-        mock_log.objects.create.assert_not_called()
+        mock_log_lifecycle.assert_not_called()
 
-    @patch("apps.trading.tasks.trading.TaskLog")
+    @patch("apps.trading.tasks.trading.record_task_lifecycle_log")
     @patch("apps.trading.tasks.trading.finalize_task_terminal_lifecycle")
-    def test_with_task_updates_status(self, mock_finalize_terminal, mock_log):
+    def test_with_task_updates_status(self, mock_finalize_terminal, mock_log_lifecycle):
         from apps.trading.tasks.trading import handle_exception
 
         task_id = uuid4()
@@ -156,11 +155,11 @@ class TestHandleExceptionTrading:
         handle_exception(task_id, task, ValueError("bad"))
 
         mock_finalize_terminal.assert_called_once()
-        mock_log.objects.create.assert_called_once()
+        mock_log_lifecycle.assert_not_called()
 
-    @patch("apps.trading.tasks.trading.TaskLog")
+    @patch("apps.trading.tasks.trading.record_task_lifecycle_log")
     @patch("apps.trading.tasks.trading.finalize_task_terminal_lifecycle")
-    def test_error_message_stored(self, mock_finalize_terminal, mock_log):
+    def test_error_message_stored(self, mock_finalize_terminal, mock_log_lifecycle):
         from apps.trading.tasks.trading import handle_exception
 
         task = MagicMock(pk=uuid4(), execution_id=uuid4())

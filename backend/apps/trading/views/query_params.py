@@ -369,6 +369,34 @@ DATE_RANGE_SPECS: dict[tuple[str, str], tuple[QueryFieldSpec, QueryFieldSpec]] =
 }
 
 
+def _pagination_group(*, default_page_size: int, max_page_size: int) -> tuple[QueryFieldSpec, ...]:
+    return _query_spec_group(
+        PAGE_SPEC,
+        _page_size_spec(default=default_page_size, max_value=max_page_size),
+    )
+
+
+def _execution_scoped_group(
+    *,
+    default_page_size: int,
+    max_page_size: int,
+) -> tuple[QueryFieldSpec, ...]:
+    return _query_spec_group(
+        EXECUTION_ID_SPEC,
+        SINCE_SPEC,
+        *_pagination_group(
+            default_page_size=default_page_size,
+            max_page_size=max_page_size,
+        ),
+    )
+
+
+RUNTIME_QUERY_GROUP_BUILDERS = {
+    "pagination": _pagination_group,
+    "execution_scoped": _execution_scoped_group,
+}
+
+
 def _invalid_query_param(detail: str) -> ValidationError:
     return ValidationError({"code": "invalid_query_param", "detail": detail})
 
@@ -581,8 +609,10 @@ class PaginationParams:
         default_page_size: int = 100,
         max_page_size: int = 1000,
     ) -> PaginationParams:
-        page_size_spec = _page_size_spec(default=default_page_size, max_value=max_page_size)
-        pagination_group = _query_spec_group(PAGE_SPEC, page_size_spec)
+        pagination_group = RUNTIME_QUERY_GROUP_BUILDERS["pagination"](
+            default_page_size=default_page_size,
+            max_page_size=max_page_size,
+        )
         parsed = _parse_query_group(
             request,
             *pagination_group,
@@ -609,9 +639,9 @@ class ExecutionScopedQuery:
         default_page_size: int = 100,
         max_page_size: int = 1000,
     ) -> ExecutionScopedQuery:
-        page_size_spec = _page_size_spec(default=default_page_size, max_value=max_page_size)
-        execution_group = _query_spec_group(
-            EXECUTION_ID_SPEC, SINCE_SPEC, PAGE_SPEC, page_size_spec
+        execution_group = RUNTIME_QUERY_GROUP_BUILDERS["execution_scoped"](
+            default_page_size=default_page_size,
+            max_page_size=max_page_size,
         )
         parsed = _parse_query_group(
             request,

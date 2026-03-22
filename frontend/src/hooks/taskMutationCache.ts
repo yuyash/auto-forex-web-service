@@ -16,9 +16,9 @@ import {
   upsertFilteredPaginatedEntity,
 } from './listCacheUtils';
 import {
-  matchesExactFilter,
-  matchesSearchFilter,
+  matchesEntityFilterSpec,
   readOrderingFilter,
+  type EntityFilterSpec,
 } from './listFilterUtils';
 
 type TaskEntity = BacktestTask | TradingTask;
@@ -102,45 +102,40 @@ function sortTaskResults<T extends TaskEntity>(
   return sorted;
 }
 
+function getTaskListFilterSpec(
+  taskKind: TaskKind
+): EntityFilterSpec<TaskEntity> {
+  const exact: EntityFilterSpec<TaskEntity>['exact'] = [
+    { key: 'status', value: (task) => task.status },
+    { key: 'config_id', value: (task) => task.config_id },
+    { key: 'strategy_type', value: (task) => task.strategy_type },
+  ];
+  if (taskKind === 'trading') {
+    exact.push({
+      key: 'account_id',
+      value: (task) => (task as TradingTask).account_id,
+    });
+  }
+
+  return {
+    exact,
+    search: {
+      haystack: (task) => [
+        task.name,
+        task.description,
+        task.config_name,
+        task.strategy_type,
+      ],
+    },
+  };
+}
+
 function matchesTaskListFilter(
   taskKind: TaskKind,
   task: TaskEntity,
   params?: Record<string, unknown>
 ): boolean {
-  if (!matchesExactFilter(params, 'status', task.status)) {
-    return false;
-  }
-  if (!matchesExactFilter(params, 'config_id', task.config_id)) {
-    return false;
-  }
-  if (!matchesExactFilter(params, 'strategy_type', task.strategy_type)) {
-    return false;
-  }
-
-  if (taskKind === 'trading') {
-    if (
-      !matchesExactFilter(
-        params,
-        'account_id',
-        (task as TradingTask).account_id
-      )
-    ) {
-      return false;
-    }
-  }
-
-  if (
-    !matchesSearchFilter(params, [
-      task.name,
-      task.description,
-      task.config_name,
-      task.strategy_type,
-    ])
-  ) {
-    return false;
-  }
-
-  return true;
+  return matchesEntityFilterSpec(params, task, getTaskListFilterSpec(taskKind));
 }
 
 export function upsertTaskCaches<T extends TaskEntity>(

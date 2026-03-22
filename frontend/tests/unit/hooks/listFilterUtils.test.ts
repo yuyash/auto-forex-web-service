@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  matchesEntityFilterSpec,
   matchesExactFilter,
   matchesSearchFilter,
   readOrderingFilter,
@@ -34,5 +35,28 @@ describe('listFilterUtils', () => {
     expect(readOrderingFilter({ ordering: ' -updated_at ' })).toBe(
       '-updated_at'
     );
+  });
+
+  it('matches entity filter specs with exact and search filters', () => {
+    expect(
+      matchesEntityFilterSpec(
+        { status: 'running', search: 'alpha' },
+        { status: 'running', name: 'Alpha Task' },
+        {
+          exact: [{ key: 'status', value: (item) => item.status }],
+          search: { haystack: (item) => [item.name] },
+        }
+      )
+    ).toBe(true);
+    expect(
+      matchesEntityFilterSpec(
+        { status: 'stopped', search: 'alpha' },
+        { status: 'running', name: 'Alpha Task' },
+        {
+          exact: [{ key: 'status', value: (item) => item.status }],
+          search: { haystack: (item) => [item.name] },
+        }
+      )
+    ).toBe(false);
   });
 });

@@ -6,29 +6,26 @@ import {
   removeFromListQueries,
   upsertFilteredPaginatedEntity,
 } from './listCacheUtils';
-import { matchesExactFilter, matchesSearchFilter } from './listFilterUtils';
+import {
+  matchesEntityFilterSpec,
+  type EntityFilterSpec,
+} from './listFilterUtils';
 
-type ConfigListParams = Record<string, unknown> | undefined;
-
-function matchesConfigurationFilter(
-  config: StrategyConfig,
-  params?: ConfigListParams
-): boolean {
-  if (!matchesExactFilter(params, 'strategy_type', config.strategy_type)) {
-    return false;
-  }
-  if (
-    !matchesSearchFilter(params, [
+const CONFIGURATION_LIST_FILTER_SPEC: EntityFilterSpec<StrategyConfig> = {
+  exact: [
+    {
+      key: 'strategy_type',
+      value: (config) => config.strategy_type,
+    },
+  ],
+  search: {
+    haystack: (config) => [
       config.name,
       config.description,
       config.strategy_type,
-    ])
-  ) {
-    return false;
-  }
-
-  return true;
-}
+    ],
+  },
+};
 
 export function upsertConfigurationCaches(config: StrategyConfig): void {
   queryClient.setQueryData(queryKeys.configurations.detail(config.id), config);
@@ -36,7 +33,12 @@ export function upsertConfigurationCaches(config: StrategyConfig): void {
     queryKeys.configurations.lists(),
     (cached, params) =>
       upsertFilteredPaginatedEntity(cached, config, params, {
-        matches: matchesConfigurationFilter,
+        matches: (entry, queryParams) =>
+          matchesEntityFilterSpec(
+            queryParams,
+            entry,
+            CONFIGURATION_LIST_FILTER_SPEC
+          ),
       })
   );
 }
