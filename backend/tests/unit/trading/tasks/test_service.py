@@ -433,10 +433,10 @@ class TestPauseTask:
 
 
 class TestCancelTask:
-    @patch("apps.trading.tasks.service.sync_terminal_execution_artifacts")
+    @patch("apps.trading.tasks.lifecycle_events.ExecutionArtifactsLifecycleSink.publish")
     @patch("apps.trading.tasks.service.timezone")
     @patch("apps.trading.tasks.service.BacktestTask")
-    def test_cancel_running_task(self, mock_bt, mock_tz, mock_sync):
+    def test_cancel_running_task(self, mock_bt, mock_tz, mock_sync_publish):
         from apps.trading.tasks.service import TaskService
 
         task = MagicMock(pk=uuid4(), status=TaskStatus.RUNNING, execution_id=uuid4())
@@ -452,7 +452,7 @@ class TestCancelTask:
         assert result is True
         assert task.status == TaskStatus.STOPPED
         mock_result.revoke.assert_called_once_with(terminate=True)
-        mock_sync.assert_called_once()
+        mock_sync_publish.assert_called_once()
 
     @patch("apps.trading.tasks.service.BacktestTask")
     def test_cancel_non_active_returns_false(self, mock_bt):

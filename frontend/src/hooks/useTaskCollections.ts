@@ -32,6 +32,16 @@ export function toQueryStateResult<TData>(state: {
   };
 }
 
+export function toRefreshActions<TValue>(refresh: () => Promise<TValue>): {
+  refresh: () => Promise<TValue>;
+  refetch: () => Promise<TValue>;
+} {
+  return {
+    refresh,
+    refetch: refresh,
+  };
+}
+
 export function useTaskList<TData>(
   queryOptions: UseQueryOptions<TData>,
   refresh?: () => Promise<unknown>,
@@ -96,6 +106,7 @@ export function toIncrementalCollectionState<TItem>(state: {
   refresh: () => Promise<void>;
   refetch: () => Promise<void>;
 }): IncrementalCollectionState<TItem> {
+  const refreshActions = toRefreshActions(state.refresh);
   return {
     data: state.items,
     items: state.items,
@@ -104,7 +115,6 @@ export function toIncrementalCollectionState<TItem>(state: {
     hasPrevious: state.hasPrevious,
     isLoading: state.isLoading,
     error: state.error,
-    refresh: state.refresh,
-    refetch: state.refetch,
+    ...refreshActions,
   };
 }

@@ -260,19 +260,23 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     summary: {
       pnl: { realized: totalRealizedPnl, unrealized: totalUnrealizedPnl },
     },
-    refetch: refetchPnl,
+    refresh: refreshPnl,
   } = useTaskSummary(String(taskId), taskType, executionRunId);
 
   const prevRealTimeRef = React.useRef(enableRealTimeUpdates);
   React.useEffect(() => {
-    if (prevRealTimeRef.current && !enableRealTimeUpdates) refetchPnl();
+    if (prevRealTimeRef.current && !enableRealTimeUpdates) {
+      void refreshPnl();
+    }
     prevRealTimeRef.current = enableRealTimeUpdates;
-  }, [enableRealTimeUpdates, refetchPnl]);
+  }, [enableRealTimeUpdates, refreshPnl]);
   React.useEffect(() => {
     if (!enableRealTimeUpdates) return;
-    const interval = setInterval(refetchPnl, 10000);
+    const interval = setInterval(() => {
+      void refreshPnl();
+    }, 10000);
     return () => clearInterval(interval);
-  }, [enableRealTimeUpdates, refetchPnl]);
+  }, [enableRealTimeUpdates, refreshPnl]);
 
   const getRowId = useCallback((row: TaskPosition) => String(row.id), []);
 
@@ -1088,7 +1092,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     setPageFn: (p: number) => void,
     rppVal: number,
     setRppFn: (r: number) => void,
-    refetch: () => Promise<void>,
+    refresh: () => Promise<void>,
     key: string,
     columns: Column<TaskPosition>[],
     extractors: CopyValueExtractors<TaskPosition>,
@@ -1146,7 +1150,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             onCopy={makeCopy(data, selObj, columns, extractors, ids)}
             onSelectAll={() => selObj.selectAllOnPage(ids)}
             onReset={selObj.resetSelection}
-            onReload={makeReload(key, refetch)}
+            onReload={makeReload(key, refresh)}
             isReloading={!!reloading[key]}
           />
         </Box>

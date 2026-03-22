@@ -7,6 +7,7 @@ from logging import Logger
 from typing import Callable, Protocol
 
 from apps.trading.models import BacktestTask, TradingEvent, TradingTask
+from apps.trading.services.execution_lifecycle import sync_terminal_execution_artifacts
 
 
 @dataclass(frozen=True)
@@ -93,6 +94,34 @@ class TradingEventLifecycleSink:
             )
 
 
+class ExecutionArtifactsLifecycleSink:
+    """Refresh execution read models for terminal lifecycle events."""
+
+    terminal_kinds = frozenset({"task_cancelled"})
+
+    def __init__(
+        self,
+        *,
+        logger: Logger,
+        sync_artifacts: Callable[..., None] = sync_terminal_execution_artifacts,
+    ) -> None:
+        self.logger = logger
+        self.sync_artifacts = sync_artifacts
+
+    def publish(self, event: TaskLifecycleEvent) -> None:
+        if event.kind not in self.terminal_kinds:
+            return
+        try:
+            self.sync_artifacts(task=event.task, task_type=event.task_type)
+        except Exception as exc:  # pragma: no cover - defensive logging path
+            self.logger.warning(
+                "[SERVICE:EVENT] Failed to sync execution artifacts - task_id=%s, kind=%s, error=%s",
+                event.task.pk,
+                event.kind,
+                exc,
+            )
+
+
 class TaskLifecycleEventPublisher:
     """Dispatch lifecycle events to configured sinks."""
 
@@ -105,6 +134,7 @@ class TaskLifecycleEventPublisher:
         self.logger = logger
         self.sinks = sinks or (
             LoggerLifecycleEventSink(logger=logger),
+            ExecutionArtifactsLifecycleSink(logger=logger),
             TradingEventLifecycleSink(logger=logger),
         )
 

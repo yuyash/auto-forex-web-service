@@ -92,6 +92,16 @@ class QueryFieldSpec:
         raise ValueError(f"Unsupported query field kind: {self.kind}")
 
 
+def _page_size_spec(*, default: int, max_value: int) -> QueryFieldSpec:
+    return QueryFieldSpec(
+        name="page_size",
+        kind="int",
+        default=default,
+        max_value=max_value,
+        help_text=f"Results per page. Default {default}, maximum {max_value}.",
+    )
+
+
 PAGE_SPEC = QueryFieldSpec(
     name="page",
     kind="int",
@@ -226,6 +236,44 @@ INCLUDE_METRICS_SPEC = QueryFieldSpec(
     name="include_metrics",
     kind="bool",
     help_text="Include aggregate execution metrics.",
+)
+ACTIVITY_PAGE_SIZE_SPEC = _page_size_spec(
+    default=ActivityPagination.page_size,
+    max_value=ActivityPagination.max_page_size,
+)
+METRICS_PAGE_SIZE_SPEC = _page_size_spec(
+    default=MetricsPagination.page_size,
+    max_value=MetricsPagination.max_page_size,
+)
+TRADE_POSITION_PAGE_SIZE_SPEC = _page_size_spec(
+    default=TradePositionPagination.page_size,
+    max_value=TradePositionPagination.max_page_size,
+)
+TRADES_DIRECTION_SPEC = QueryFieldSpec(
+    name="direction",
+    kind="string",
+    allow_blank=True,
+    help_text="Direction filter (buy/sell/long/short).",
+)
+TRADE_TIMESTAMP_FROM_SPEC = QueryFieldSpec(
+    name="timestamp_from",
+    kind="datetime",
+    help_text="Filter trades executed at or after this RFC3339 timestamp.",
+)
+TRADE_TIMESTAMP_TO_SPEC = QueryFieldSpec(
+    name="timestamp_to",
+    kind="datetime",
+    help_text="Filter trades executed at or before this RFC3339 timestamp.",
+)
+POSITIONS_RANGE_FROM_SPEC = QueryFieldSpec(
+    name="range_from",
+    kind="datetime",
+    help_text="RFC3339 lower bound for positions overlapping a chart range.",
+)
+POSITIONS_RANGE_TO_SPEC = QueryFieldSpec(
+    name="range_to",
+    kind="datetime",
+    help_text="RFC3339 upper bound for positions overlapping a chart range.",
 )
 
 
@@ -389,31 +437,13 @@ class ExecutionScopedQueryParamsSchemaSerializer(serializers.Serializer):
     execution_id = EXECUTION_ID_SPEC.schema_field()
     since = SINCE_SPEC.schema_field()
     page = PAGE_SPEC.schema_field()
-    page_size = QueryFieldSpec(
-        name="page_size",
-        kind="int",
-        default=ActivityPagination.page_size,
-        max_value=ActivityPagination.max_page_size,
-        help_text=(
-            f"Results per page. Default {ActivityPagination.page_size}, "
-            f"maximum {ActivityPagination.max_page_size}."
-        ),
-    ).schema_field()
+    page_size = ACTIVITY_PAGE_SIZE_SPEC.schema_field()
 
 
 class MetricsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for metrics query parameters."""
 
-    page_size = QueryFieldSpec(
-        name="page_size",
-        kind="int",
-        default=MetricsPagination.page_size,
-        max_value=MetricsPagination.max_page_size,
-        help_text=(
-            f"Results per page. Default {MetricsPagination.page_size}, "
-            f"maximum {MetricsPagination.max_page_size}."
-        ),
-    ).schema_field()
+    page_size = METRICS_PAGE_SIZE_SPEC.schema_field()
     until = UNTIL_SPEC.schema_field()
     interval = INTERVAL_SPEC.schema_field()
 
@@ -454,75 +484,27 @@ class StrategyEventsQueryParamsSchemaSerializer(QueryParamsSerializer):
 class TradesQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for trades query parameters."""
 
-    page_size = QueryFieldSpec(
-        name="page_size",
-        kind="int",
-        default=TradePositionPagination.page_size,
-        max_value=TradePositionPagination.max_page_size,
-        help_text=(
-            f"Results per page. Default {TradePositionPagination.page_size}, "
-            f"maximum {TradePositionPagination.max_page_size}."
-        ),
-    ).schema_field()
-    direction = QueryFieldSpec(
-        name="direction",
-        kind="string",
-        allow_blank=True,
-        help_text="Direction filter (buy/sell/long/short).",
-    ).schema_field()
-    timestamp_from = QueryFieldSpec(
-        name="timestamp_from",
-        kind="datetime",
-        help_text="Filter trades executed at or after this RFC3339 timestamp.",
-    ).schema_field()
-    timestamp_to = QueryFieldSpec(
-        name="timestamp_to",
-        kind="datetime",
-        help_text="Filter trades executed at or before this RFC3339 timestamp.",
-    ).schema_field()
+    page_size = TRADE_POSITION_PAGE_SIZE_SPEC.schema_field()
+    direction = TRADES_DIRECTION_SPEC.schema_field()
+    timestamp_from = TRADE_TIMESTAMP_FROM_SPEC.schema_field()
+    timestamp_to = TRADE_TIMESTAMP_TO_SPEC.schema_field()
 
 
 class PositionsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for positions query parameters."""
 
-    page_size = QueryFieldSpec(
-        name="page_size",
-        kind="int",
-        default=TradePositionPagination.page_size,
-        max_value=TradePositionPagination.max_page_size,
-        help_text=(
-            f"Results per page. Default {TradePositionPagination.page_size}, "
-            f"maximum {TradePositionPagination.max_page_size}."
-        ),
-    ).schema_field()
+    page_size = TRADE_POSITION_PAGE_SIZE_SPEC.schema_field()
     position_status = POSITION_STATUS_SPEC.schema_field()
     direction = DIRECTION_SPEC.schema_field()
     include_trade_ids = INCLUDE_TRADE_IDS_SPEC.schema_field()
-    range_from = QueryFieldSpec(
-        name="range_from",
-        kind="datetime",
-        help_text="RFC3339 lower bound for positions overlapping a chart range.",
-    ).schema_field()
-    range_to = QueryFieldSpec(
-        name="range_to",
-        kind="datetime",
-        help_text="RFC3339 upper bound for positions overlapping a chart range.",
-    ).schema_field()
+    range_from = POSITIONS_RANGE_FROM_SPEC.schema_field()
+    range_to = POSITIONS_RANGE_TO_SPEC.schema_field()
 
 
 class TrendReplayQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for trend replay parameters."""
 
-    page_size = QueryFieldSpec(
-        name="page_size",
-        kind="int",
-        default=TradePositionPagination.page_size,
-        max_value=TradePositionPagination.max_page_size,
-        help_text=(
-            f"Results per page. Default {TradePositionPagination.page_size}, "
-            f"maximum {TradePositionPagination.max_page_size}."
-        ),
-    ).schema_field()
+    page_size = TRADE_POSITION_PAGE_SIZE_SPEC.schema_field()
     range_from = RANGE_FROM_SPEC.schema_field()
     range_to = RANGE_TO_SPEC.schema_field()
 
@@ -530,16 +512,7 @@ class TrendReplayQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSer
 class OrdersQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for orders query parameters."""
 
-    page_size = QueryFieldSpec(
-        name="page_size",
-        kind="int",
-        default=TradePositionPagination.page_size,
-        max_value=TradePositionPagination.max_page_size,
-        help_text=(
-            f"Results per page. Default {TradePositionPagination.page_size}, "
-            f"maximum {TradePositionPagination.max_page_size}."
-        ),
-    ).schema_field()
+    page_size = TRADE_POSITION_PAGE_SIZE_SPEC.schema_field()
     status = ORDER_STATUS_SPEC.schema_field()
     order_type = ORDER_TYPE_SPEC.schema_field()
     direction = DIRECTION_SPEC.schema_field()
@@ -555,16 +528,7 @@ class ExecutionsQueryParamsSchemaSerializer(serializers.Serializer):
     """OpenAPI serializer for execution list query parameters."""
 
     page = PAGE_SPEC.schema_field()
-    page_size = QueryFieldSpec(
-        name="page_size",
-        kind="int",
-        default=ActivityPagination.page_size,
-        max_value=ActivityPagination.max_page_size,
-        help_text=(
-            f"Results per page. Default {ActivityPagination.page_size}, "
-            f"maximum {ActivityPagination.max_page_size}."
-        ),
-    ).schema_field()
+    page_size = ACTIVITY_PAGE_SIZE_SPEC.schema_field()
     include_metrics = INCLUDE_METRICS_SPEC.schema_field()
 
 
@@ -578,16 +542,7 @@ class PaginationSchemaSerializer(serializers.Serializer):
     """OpenAPI serializer for plain pagination parameters."""
 
     page = PAGE_SPEC.schema_field()
-    page_size = QueryFieldSpec(
-        name="page_size",
-        kind="int",
-        default=ActivityPagination.page_size,
-        max_value=ActivityPagination.max_page_size,
-        help_text=(
-            f"Results per page. Default {ActivityPagination.page_size}, "
-            f"maximum {ActivityPagination.max_page_size}."
-        ),
-    ).schema_field()
+    page_size = ACTIVITY_PAGE_SIZE_SPEC.schema_field()
 
 
 @dataclass(frozen=True)

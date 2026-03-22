@@ -4,6 +4,7 @@ import { handleAuthErrorStatus } from '../utils/authEvents';
 import { logger } from '../utils/logger';
 import { usePollingPolicy } from './usePollingPolicy';
 import { useSequentialPolling } from './useSequentialPolling';
+import { toRefreshActions } from './useTaskCollections';
 import {
   fetchTaskResourcePage,
   isApiErrorWithStatus,
@@ -245,7 +246,6 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
     hasPrevious,
     isLoading,
     error,
-    refresh: () => fetchItems(false),
-    refetch: () => fetchItems(false),
+    ...toRefreshActions(() => fetchItems(false)),
   };
 }

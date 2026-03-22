@@ -8,7 +8,6 @@ from django.utils import timezone
 
 from apps.trading.enums import TaskStatus
 from apps.trading.models import BacktestTask, StrategyEventRecord, TradingEvent, TradingTask
-from apps.trading.services.execution_lifecycle import sync_terminal_execution_artifacts
 
 
 class TaskLifecycleWriter:
@@ -34,14 +33,11 @@ class TaskLifecycleWriter:
         self,
         *,
         task: BacktestTask | TradingTask,
-        task_type: str,
         status: TaskStatus,
         extra_updates: dict[str, object] | None = None,
-        sync_artifacts=sync_terminal_execution_artifacts,
     ) -> None:
         terminal_updates = {"completed_at": timezone.now(), **(extra_updates or {})}
         self.persist_state(task, status=status, extra_updates=terminal_updates)
-        sync_artifacts(task=task, task_type=task_type)
 
     def clear_execution_history(
         self,

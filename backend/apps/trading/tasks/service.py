@@ -21,7 +21,6 @@ from apps.trading.models import (
     BacktestTask,
     TradingTask,
 )
-from apps.trading.services.execution_lifecycle import sync_terminal_execution_artifacts
 from apps.trading.tasks.lifecycle_commands import TaskLifecycleCommands
 from apps.trading.tasks.lifecycle_events import TaskLifecycleEventPublisher
 from apps.trading.tasks.lifecycle_writes import TaskLifecycleWriter
@@ -218,10 +217,8 @@ class TaskService:
     ) -> None:
         self.writer.finalize_terminal_task(
             task=task,
-            task_type=task_type,
             status=status,
             extra_updates=extra_updates,
-            sync_artifacts=sync_terminal_execution_artifacts,
         )
         self.events.publish(
             task=task,

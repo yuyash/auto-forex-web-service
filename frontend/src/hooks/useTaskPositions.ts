@@ -16,7 +16,10 @@ import { handleAuthErrorStatus } from '../utils/authEvents';
 import { logger } from '../utils/logger';
 import { usePollingPolicy } from './usePollingPolicy';
 import { useSequentialPolling } from './useSequentialPolling';
-import { toIncrementalCollectionState } from './useTaskCollections';
+import {
+  toIncrementalCollectionState,
+  toRefreshActions,
+} from './useTaskCollections';
 import {
   fetchTaskResourcePage,
   isApiErrorWithStatus,
@@ -310,10 +313,12 @@ export const useTaskPositions = ({
     if (prevRealTimeRef.current && !enableRealTimeUpdates) {
       sinceRef.current = null;
       hasInitialFetchRef.current = false;
-      fetchPositions(false);
+      void fetchPositions(false);
     }
     prevRealTimeRef.current = enableRealTimeUpdates;
   }, [enableRealTimeUpdates, fetchPositions]);
+
+  const refreshActions = toRefreshActions(() => fetchPositions(false));
 
   return {
     ...toIncrementalCollectionState({
@@ -323,11 +328,9 @@ export const useTaskPositions = ({
       hasPrevious,
       isLoading,
       error,
-      refresh: () => fetchPositions(false),
-      refetch: () => fetchPositions(false),
+      ...refreshActions,
     }),
     positions,
-    refresh: () => fetchPositions(false),
-    refetch: () => fetchPositions(false),
+    ...refreshActions,
   };
 };

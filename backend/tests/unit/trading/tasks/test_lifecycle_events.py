@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 from apps.trading.tasks.lifecycle_events import (
     CallbackLifecycleEventSink,
+    ExecutionArtifactsLifecycleSink,
     TaskLifecycleEventPublisher,
 )
 
@@ -54,3 +55,30 @@ def test_callback_sink_forwards_event() -> None:
 
     callback.assert_called_once()
     assert callback.call_args.args[0].kind == "task_paused"
+
+
+def test_execution_artifacts_sink_only_handles_terminal_kinds() -> None:
+    logger = MagicMock()
+    sync_artifacts = MagicMock()
+    sink = ExecutionArtifactsLifecycleSink(
+        logger=logger,
+        sync_artifacts=sync_artifacts,
+    )
+    task = MagicMock(pk="task-1", status="stopped", name="Task")
+
+    publisher = TaskLifecycleEventPublisher(logger=logger, sinks=(sink,))
+
+    publisher.publish(
+        task=task,
+        task_type="trading",
+        kind="task_stop_requested",
+        description="Task stop requested",
+    )
+    publisher.publish(
+        task=task,
+        task_type="trading",
+        kind="task_cancelled",
+        description="Task cancelled",
+    )
+
+    sync_artifacts.assert_called_once_with(task=task, task_type="trading")
