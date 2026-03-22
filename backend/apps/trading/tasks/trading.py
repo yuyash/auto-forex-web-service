@@ -14,12 +14,8 @@ from apps.trading.engine import TradingEngine
 from apps.trading.enums import LogLevel, StopMode, TaskStatus, TaskType
 from apps.trading.logging import TaskLoggingSession
 from apps.trading.models import CeleryTaskStatus, TaskLog, TradingTask
-from apps.trading.services.execution_lifecycle import (
-    transition_task_to_stopped,
-    transition_task_to_running,
-    transition_task_to_terminal,
-)
-from apps.trading.tasks.lifecycle_events import publish_task_lifecycle_event
+from apps.trading.services.execution_lifecycle import transition_task_to_running
+from apps.trading.tasks.lifecycle_events import finalize_task_terminal_lifecycle
 from apps.trading.tasks.executor import TradingExecutor
 from apps.trading.tasks.source import LiveTickDataSource
 from apps.trading.utils import pip_size_for_instrument
@@ -95,10 +91,13 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
         if task.status not in [TaskStatus.STOPPED, TaskStatus.STOPPING]:
             # Atomically transition RUNNING -> STOPPED
             logger.info(f"Transitioning: {task.status} -> STOPPED - task_id={task_id}")
-            rows_updated = transition_task_to_terminal(
+            rows_updated = finalize_task_terminal_lifecycle(
+                logger=logger,
                 task=task,
                 task_type=TaskType.TRADING,
                 status=TaskStatus.STOPPED,
+                kind="task_stopped",
+                description="Trading task stopped after execution completed",
                 expected_current_status=TaskStatus.RUNNING,
             )
             if rows_updated == 0:
@@ -107,14 +106,6 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
                     f"STOPPED transition failed - task_id={task_id}, current_status={task.status}."
                 )
                 return
-            task.refresh_from_db()
-            publish_task_lifecycle_event(
-                logger=logger,
-                task=task,
-                task_type=TaskType.TRADING,
-                kind="task_stopped",
-                description="Trading task stopped after execution completed",
-            )
             logger.info(f"Current: {task.status} - task_id={task_id}")
         else:
             logger.info(f"Already in terminal state: {task.status} - task_id={task_id}")
@@ -194,19 +185,15 @@ def handle_exception(task_id: UUID, task: TradingTask | None, error: Exception) 
 
     if task:
         # Update task with error information
-        transition_task_to_terminal(
-            task=task,
-            task_type=TaskType.TRADING,
-            status=TaskStatus.FAILED,
-            error_message=error_message,
-            error_traceback=error_traceback,
-        )
-        publish_task_lifecycle_event(
+        finalize_task_terminal_lifecycle(
             logger=logger,
             task=task,
             task_type=TaskType.TRADING,
+            status=TaskStatus.FAILED,
             kind="task_failed",
             description=f"Trading task failed: {type(error).__name__}: {error_message}",
+            error_message=error_message,
+            error_traceback=error_traceback,
         )
 
         # Update CeleryTaskStatus to maintain state consistency
@@ -269,17 +256,14 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
 
             # Update task status to STOPPED (without completed_at since it didn't complete)
             logger.info(f"Transitioning: {task.status} -> STOPPED - task_id={task_id}")
-            transition_task_to_stopped(
-                task=task,
-                task_type=TaskType.TRADING,
-                expected_current_status=TaskStatus.STOPPING,
-            )
-            publish_task_lifecycle_event(
+            finalize_task_terminal_lifecycle(
                 logger=logger,
                 task=task,
                 task_type=TaskType.TRADING,
+                status=TaskStatus.STOPPED,
                 kind="task_stopped",
                 description="Trading task stopped",
+                expected_current_status=TaskStatus.STOPPING,
                 extra_details={"mode": stop_mode.value},
             )
             logger.info(f"Current: STOPPED - task_id={task_id}")

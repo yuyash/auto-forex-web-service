@@ -4,7 +4,7 @@ import {
   patchListQueries,
   removePaginatedEntity,
   removeFromListQueries,
-  upsertPaginatedEntity,
+  upsertFilteredPaginatedEntity,
 } from './listCacheUtils';
 
 type ConfigListParams = Record<string, unknown> | undefined;
@@ -39,22 +39,14 @@ function matchesConfigurationFilter(
   return true;
 }
 
-function patchListEntry(
-  cached: PaginatedResponse<StrategyConfig> | undefined,
-  config: StrategyConfig,
-  params?: ConfigListParams
-): PaginatedResponse<StrategyConfig> | undefined {
-  return upsertPaginatedEntity(cached, config, {
-    matches: matchesConfigurationFilter(config, params),
-    page: Number(params?.page ?? 1),
-  });
-}
-
 export function upsertConfigurationCaches(config: StrategyConfig): void {
   queryClient.setQueryData(queryKeys.configurations.detail(config.id), config);
   patchListQueries<PaginatedResponse<StrategyConfig>>(
     queryKeys.configurations.lists(),
-    (cached, params) => patchListEntry(cached, config, params)
+    (cached, params) =>
+      upsertFilteredPaginatedEntity(cached, config, params, {
+        matches: matchesConfigurationFilter,
+      })
   );
 }
 

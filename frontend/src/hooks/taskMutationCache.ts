@@ -13,7 +13,7 @@ import {
   patchListQueries,
   removePaginatedEntity,
   removeFromListQueries,
-  upsertPaginatedEntity,
+  upsertFilteredPaginatedEntity,
 } from './listCacheUtils';
 
 type TaskEntity = BacktestTask | TradingTask;
@@ -154,23 +154,6 @@ function matchesTaskListFilter(
   return true;
 }
 
-function patchListEntry<T extends TaskEntity>(
-  taskKind: TaskKind,
-  cached: PaginatedResponse<T> | undefined,
-  task: T,
-  params?: Record<string, unknown>
-): PaginatedResponse<T> | undefined {
-  return upsertPaginatedEntity(cached, task, {
-    matches: matchesTaskListFilter(taskKind, task, params),
-    page: Number(params?.page ?? 1),
-    sort: (items) =>
-      sortTaskResults(
-        items,
-        typeof params?.ordering === 'string' ? params.ordering : undefined
-      ),
-  });
-}
-
 export function upsertTaskCaches<T extends TaskEntity>(
   taskKind: TaskKind,
   task: T
@@ -178,7 +161,17 @@ export function upsertTaskCaches<T extends TaskEntity>(
   const keys = getTaskKeys(taskKind);
   queryClient.setQueryData(keys.detail(task.id), task);
   patchListQueries<PaginatedResponse<T>>(keys.lists, (cached, params) =>
-    patchListEntry(taskKind, cached, task, params)
+    upsertFilteredPaginatedEntity(cached, task, params, {
+      matches: (entity, queryParams) =>
+        matchesTaskListFilter(taskKind, entity, queryParams),
+      sort: (items, queryParams) =>
+        sortTaskResults(
+          items,
+          typeof queryParams?.ordering === 'string'
+            ? queryParams.ordering
+            : undefined
+        ),
+    })
   );
 }
 
@@ -215,11 +208,21 @@ export function patchTaskStatusCache(
       if (!current) {
         return cached;
       }
-      return patchListEntry(
-        taskKind,
+      return upsertFilteredPaginatedEntity(
         cached,
         { ...current, status } as TaskEntity,
-        params
+        params,
+        {
+          matches: (entity, queryParams) =>
+            matchesTaskListFilter(taskKind, entity, queryParams),
+          sort: (items, queryParams) =>
+            sortTaskResults(
+              items,
+              typeof queryParams?.ordering === 'string'
+                ? queryParams.ordering
+                : undefined
+            ),
+        }
       );
     }
   );

@@ -102,6 +102,10 @@ def _page_size_spec(*, default: int, max_value: int) -> QueryFieldSpec:
     )
 
 
+def _query_spec_group(*specs: QueryFieldSpec) -> tuple[QueryFieldSpec, ...]:
+    return specs
+
+
 def _build_query_schema_serializer(
     name: str,
     *specs: QueryFieldSpec,
@@ -319,6 +323,33 @@ POSITIONS_RANGE_TO_SPEC = QueryFieldSpec(
     help_text="RFC3339 upper bound for positions overlapping a chart range.",
 )
 
+ACTIVITY_PAGINATION_GROUP = _query_spec_group(PAGE_SPEC, ACTIVITY_PAGE_SIZE_SPEC)
+METRICS_PAGINATION_GROUP = _query_spec_group(PAGE_SPEC, METRICS_PAGE_SIZE_SPEC)
+TRADE_POSITION_PAGINATION_GROUP = _query_spec_group(
+    PAGE_SPEC,
+    TRADE_POSITION_PAGE_SIZE_SPEC,
+)
+EXECUTION_SCOPED_ACTIVITY_GROUP = _query_spec_group(
+    EXECUTION_ID_SPEC,
+    SINCE_SPEC,
+    *ACTIVITY_PAGINATION_GROUP,
+)
+EXECUTION_SCOPED_METRICS_GROUP = _query_spec_group(
+    EXECUTION_ID_SPEC,
+    SINCE_SPEC,
+    *METRICS_PAGINATION_GROUP,
+)
+EXECUTION_SCOPED_TRADE_POSITION_GROUP = _query_spec_group(
+    EXECUTION_ID_SPEC,
+    SINCE_SPEC,
+    *TRADE_POSITION_PAGINATION_GROUP,
+)
+DATE_RANGE_SPECS: dict[tuple[str, str], tuple[QueryFieldSpec, QueryFieldSpec]] = {
+    ("range_from", "range_to"): (RANGE_FROM_SPEC, RANGE_TO_SPEC),
+    ("timestamp_from", "timestamp_to"): (TIMESTAMP_FROM_SPEC, TIMESTAMP_TO_SPEC),
+    ("created_from", "created_to"): (CREATED_FROM_SPEC, CREATED_TO_SPEC),
+}
+
 
 def _invalid_query_param(detail: str) -> ValidationError:
     return ValidationError({"code": "invalid_query_param", "detail": detail})
@@ -392,19 +423,13 @@ def _parse_execution_id_value(value: str | None) -> UUID | None:
 
 ExecutionScopedQueryParamsSchemaSerializer = _build_query_schema_serializer(
     "ExecutionScopedQueryParamsSchemaSerializer",
-    EXECUTION_ID_SPEC,
-    SINCE_SPEC,
-    PAGE_SPEC,
-    ACTIVITY_PAGE_SIZE_SPEC,
+    *EXECUTION_SCOPED_ACTIVITY_GROUP,
     docstring="OpenAPI serializer for execution-scoped task query parameters.",
 )
 
 MetricsQueryParamsSchemaSerializer = _build_query_schema_serializer(
     "MetricsQueryParamsSchemaSerializer",
-    EXECUTION_ID_SPEC,
-    SINCE_SPEC,
-    PAGE_SPEC,
-    METRICS_PAGE_SIZE_SPEC,
+    *EXECUTION_SCOPED_METRICS_GROUP,
     UNTIL_SPEC,
     INTERVAL_SPEC,
     docstring="OpenAPI serializer for metrics query parameters.",
@@ -412,10 +437,7 @@ MetricsQueryParamsSchemaSerializer = _build_query_schema_serializer(
 
 LogsQueryParamsSchemaSerializer = _build_query_schema_serializer(
     "LogsQueryParamsSchemaSerializer",
-    EXECUTION_ID_SPEC,
-    SINCE_SPEC,
-    PAGE_SPEC,
-    ACTIVITY_PAGE_SIZE_SPEC,
+    *EXECUTION_SCOPED_ACTIVITY_GROUP,
     LEVEL_SPEC,
     COMPONENT_SPEC,
     POSITION_ID_SPEC,
@@ -433,10 +455,7 @@ LogComponentsQueryParamsSchemaSerializer = _build_query_schema_serializer(
 
 EventsQueryParamsSchemaSerializer = _build_query_schema_serializer(
     "EventsQueryParamsSchemaSerializer",
-    EXECUTION_ID_SPEC,
-    SINCE_SPEC,
-    PAGE_SPEC,
-    ACTIVITY_PAGE_SIZE_SPEC,
+    *EXECUTION_SCOPED_ACTIVITY_GROUP,
     EVENT_TYPE_SPEC,
     SEVERITY_SPEC,
     SCOPE_SPEC,
@@ -455,10 +474,7 @@ StrategyEventsQueryParamsSchemaSerializer = _build_query_schema_serializer(
 
 TradesQueryParamsSchemaSerializer = _build_query_schema_serializer(
     "TradesQueryParamsSchemaSerializer",
-    EXECUTION_ID_SPEC,
-    SINCE_SPEC,
-    PAGE_SPEC,
-    TRADE_POSITION_PAGE_SIZE_SPEC,
+    *EXECUTION_SCOPED_TRADE_POSITION_GROUP,
     TRADES_DIRECTION_SPEC,
     TRADE_TIMESTAMP_FROM_SPEC,
     TRADE_TIMESTAMP_TO_SPEC,
@@ -467,10 +483,7 @@ TradesQueryParamsSchemaSerializer = _build_query_schema_serializer(
 
 PositionsQueryParamsSchemaSerializer = _build_query_schema_serializer(
     "PositionsQueryParamsSchemaSerializer",
-    EXECUTION_ID_SPEC,
-    SINCE_SPEC,
-    PAGE_SPEC,
-    TRADE_POSITION_PAGE_SIZE_SPEC,
+    *EXECUTION_SCOPED_TRADE_POSITION_GROUP,
     POSITION_STATUS_SPEC,
     DIRECTION_SPEC,
     INCLUDE_TRADE_IDS_SPEC,
@@ -481,10 +494,7 @@ PositionsQueryParamsSchemaSerializer = _build_query_schema_serializer(
 
 TrendReplayQueryParamsSchemaSerializer = _build_query_schema_serializer(
     "TrendReplayQueryParamsSchemaSerializer",
-    EXECUTION_ID_SPEC,
-    SINCE_SPEC,
-    PAGE_SPEC,
-    TRADE_POSITION_PAGE_SIZE_SPEC,
+    *EXECUTION_SCOPED_TRADE_POSITION_GROUP,
     RANGE_FROM_SPEC,
     RANGE_TO_SPEC,
     docstring="OpenAPI serializer for trend replay parameters.",
@@ -492,10 +502,7 @@ TrendReplayQueryParamsSchemaSerializer = _build_query_schema_serializer(
 
 OrdersQueryParamsSchemaSerializer = _build_query_schema_serializer(
     "OrdersQueryParamsSchemaSerializer",
-    EXECUTION_ID_SPEC,
-    SINCE_SPEC,
-    PAGE_SPEC,
-    TRADE_POSITION_PAGE_SIZE_SPEC,
+    *EXECUTION_SCOPED_TRADE_POSITION_GROUP,
     ORDER_STATUS_SPEC,
     ORDER_TYPE_SPEC,
     DIRECTION_SPEC,
@@ -511,8 +518,7 @@ SummaryQueryParamsSchemaSerializer = _build_query_schema_serializer(
 
 ExecutionsQueryParamsSchemaSerializer = _build_query_schema_serializer(
     "ExecutionsQueryParamsSchemaSerializer",
-    PAGE_SPEC,
-    ACTIVITY_PAGE_SIZE_SPEC,
+    *ACTIVITY_PAGINATION_GROUP,
     INCLUDE_METRICS_SPEC,
     docstring="OpenAPI serializer for execution list query parameters.",
 )
@@ -526,8 +532,7 @@ ExecutionDetailQueryParamsSchemaSerializer = _build_query_schema_serializer(
 
 PaginationSchemaSerializer = _build_query_schema_serializer(
     "PaginationSchemaSerializer",
-    PAGE_SPEC,
-    ACTIVITY_PAGE_SIZE_SPEC,
+    *ACTIVITY_PAGINATION_GROUP,
     docstring="OpenAPI serializer for plain pagination parameters.",
 )
 
@@ -545,14 +550,11 @@ class PaginationParams:
         default_page_size: int = 100,
         max_page_size: int = 1000,
     ) -> PaginationParams:
-        page_size_spec = _page_size_spec(
-            default=default_page_size,
-            max_value=max_page_size,
-        )
+        page_size_spec = _page_size_spec(default=default_page_size, max_value=max_page_size)
+        pagination_group = _query_spec_group(PAGE_SPEC, page_size_spec)
         parsed = _parse_query_group(
             request,
-            PAGE_SPEC,
-            page_size_spec,
+            *pagination_group,
             serializer_name="PaginationParamsRuntimeSerializer",
         )
         return cls(
@@ -576,16 +578,13 @@ class ExecutionScopedQuery:
         default_page_size: int = 100,
         max_page_size: int = 1000,
     ) -> ExecutionScopedQuery:
-        page_size_spec = _page_size_spec(
-            default=default_page_size,
-            max_value=max_page_size,
+        page_size_spec = _page_size_spec(default=default_page_size, max_value=max_page_size)
+        execution_group = _query_spec_group(
+            EXECUTION_ID_SPEC, SINCE_SPEC, PAGE_SPEC, page_size_spec
         )
         parsed = _parse_query_group(
             request,
-            EXECUTION_ID_SPEC,
-            SINCE_SPEC,
-            PAGE_SPEC,
-            page_size_spec,
+            *execution_group,
             serializer_name="ExecutionScopedQueryRuntimeSerializer",
         )
         return cls(
@@ -611,20 +610,13 @@ class DateRangeQuery:
         start_key: str,
         end_key: str,
     ) -> DateRangeQuery:
-        field_specs = {
-            "range_from": RANGE_FROM_SPEC,
-            "range_to": RANGE_TO_SPEC,
-            "timestamp_from": TIMESTAMP_FROM_SPEC,
-            "timestamp_to": TIMESTAMP_TO_SPEC,
-            "created_from": CREATED_FROM_SPEC,
-            "created_to": CREATED_TO_SPEC,
-        }
-        start_spec = field_specs.get(start_key) or QueryFieldSpec(
+        start_spec, end_spec = DATE_RANGE_SPECS.get((start_key, end_key), (None, None))
+        start_spec = start_spec or QueryFieldSpec(
             name=start_key,
             kind="datetime",
             help_text=f"RFC3339 lower bound for {start_key}.",
         )
-        end_spec = field_specs.get(end_key) or QueryFieldSpec(
+        end_spec = end_spec or QueryFieldSpec(
             name=end_key,
             kind="datetime",
             help_text=f"RFC3339 upper bound for {end_key}.",

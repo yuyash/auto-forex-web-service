@@ -1,5 +1,9 @@
 import { queryClient, queryKeys } from '../config/reactQuery';
-import { patchListQueries, removeFromListQueries } from './listCacheUtils';
+import {
+  patchListQueries,
+  removeFromListQueries,
+  upsertFilteredListEntity,
+} from './listCacheUtils';
 import type { Account } from '../types/strategy';
 
 function matchesAccountListFilter(
@@ -25,38 +29,12 @@ function matchesAccountListFilter(
   return haystack.includes(normalized);
 }
 
-function mergeAccountListEntry(
-  cached: Account[] | undefined,
-  account: Account,
-  params?: Record<string, unknown>
-): Account[] | undefined {
-  if (!cached) {
-    return cached;
-  }
-  const matches = matchesAccountListFilter(account, params);
-  const existing = cached.find((entry) => entry.id === account.id);
-  if (existing) {
-    if (!matches) {
-      return cached.filter((entry) => entry.id !== account.id);
-    }
-    return cached.map((entry) =>
-      entry.id === account.id ? { ...entry, ...account } : entry
-    );
-  }
-  if (!matches) {
-    return cached;
-  }
-  const page = Number(params?.page ?? 1);
-  if (page > 1) {
-    return cached;
-  }
-  return [account, ...cached];
-}
-
 export function upsertAccountCaches(account: Account): void {
   queryClient.setQueryData(queryKeys.accounts.detail(account.id), account);
   patchListQueries<Account[]>(queryKeys.accounts.lists(), (cached, params) =>
-    mergeAccountListEntry(cached, account, params)
+    upsertFilteredListEntity(cached, account, params, {
+      matches: matchesAccountListFilter,
+    })
   );
 }
 

@@ -77,6 +77,64 @@ export function upsertPaginatedEntity<T extends { id: string }>(
   };
 }
 
+export function upsertFilteredPaginatedEntity<
+  T extends { id: string },
+  TParams extends CacheListParams = CacheListParams,
+>(
+  cached: PaginatedResponse<T> | undefined,
+  entity: T,
+  params: TParams,
+  options: {
+    matches: (entity: T, params: TParams) => boolean;
+    sort?: (items: T[], params: TParams) => T[];
+  }
+): PaginatedResponse<T> | undefined {
+  return upsertPaginatedEntity(cached, entity, {
+    matches: options.matches(entity, params),
+    page: Number((params as Record<string, unknown> | undefined)?.page ?? 1),
+    sort: options.sort ? (items) => options.sort!(items, params) : undefined,
+  });
+}
+
+export function upsertFilteredListEntity<
+  T extends { id: string | number },
+  TParams extends CacheListParams = CacheListParams,
+>(
+  cached: T[] | undefined,
+  entity: T,
+  params: TParams,
+  options: {
+    matches: (entity: T, params: TParams) => boolean;
+    sort?: (items: T[], params: TParams) => T[];
+  }
+): T[] | undefined {
+  if (!cached) {
+    return cached;
+  }
+
+  const matches = options.matches(entity, params);
+  const index = cached.findIndex((entry) => entry.id === entity.id);
+  const sort = options.sort ?? ((items: T[]) => items);
+
+  if (index >= 0) {
+    if (!matches) {
+      return cached.filter((entry) => entry.id !== entity.id);
+    }
+    const nextItems = [...cached];
+    nextItems[index] = { ...nextItems[index], ...entity };
+    return sort(nextItems, params);
+  }
+
+  if (
+    !matches ||
+    Number((params as Record<string, unknown> | undefined)?.page ?? 1) > 1
+  ) {
+    return cached;
+  }
+
+  return sort([entity, ...cached], params);
+}
+
 export function removePaginatedEntity<T extends { id: string }>(
   cached: PaginatedResponse<T> | undefined,
   entityId: string

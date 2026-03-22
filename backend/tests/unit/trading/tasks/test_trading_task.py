@@ -42,8 +42,7 @@ class TestRunTradingTask:
         mock_exec.assert_not_called()
 
     @patch("apps.trading.tasks.trading.dj_timezone")
-    @patch("apps.trading.tasks.trading.publish_task_lifecycle_event")
-    @patch("apps.trading.tasks.trading.transition_task_to_terminal")
+    @patch("apps.trading.tasks.trading.finalize_task_terminal_lifecycle")
     @patch("apps.trading.tasks.trading.TaskLog")
     @patch("apps.trading.tasks.trading.TaskLoggingSession")
     @patch("apps.trading.tasks.trading.execute_trading")
@@ -54,8 +53,7 @@ class TestRunTradingTask:
         mock_exec,
         mock_logging,
         mock_log,
-        mock_transition,
-        mock_publish_event,
+        mock_finalize_terminal,
         mock_tz,
     ):
         from apps.trading.tasks.trading import run_trading_task
@@ -80,11 +78,11 @@ class TestRunTradingTask:
                 task.status = TaskStatus.RUNNING
 
         task.refresh_from_db = refresh
-        mock_transition.return_value = 1
+        mock_finalize_terminal.return_value = 1
 
         run_trading_task.__wrapped__(task_id)
         mock_exec.assert_called_once_with(task)
-        mock_publish_event.assert_called_once()
+        mock_finalize_terminal.assert_called_once()
 
     @patch("apps.trading.tasks.trading.TaskLog")
     @patch("apps.trading.tasks.trading.TaskLoggingSession")
@@ -150,40 +148,36 @@ class TestHandleExceptionTrading:
 
     @patch("apps.trading.tasks.trading.TaskLog")
     @patch("apps.trading.tasks.trading.dj_timezone")
-    @patch("apps.trading.tasks.trading.publish_task_lifecycle_event")
-    @patch("apps.trading.tasks.trading.transition_task_to_terminal")
-    def test_with_task_updates_status(self, mock_transition, mock_publish_event, mock_tz, mock_log):
+    @patch("apps.trading.tasks.trading.finalize_task_terminal_lifecycle")
+    def test_with_task_updates_status(self, mock_finalize_terminal, mock_tz, mock_log):
         from apps.trading.tasks.trading import handle_exception
 
         task_id = uuid4()
         execution_id = uuid4()
         task = MagicMock(pk=task_id, execution_id=execution_id)
-        mock_transition.return_value = 1
+        mock_finalize_terminal.return_value = 1
 
         with patch("apps.trading.models.celery.CeleryTaskStatus") as mock_cs:
             mock_cs.Status.FAILED = "failed"
             handle_exception(task_id, task, ValueError("bad"))
 
-        mock_transition.assert_called_once()
-        mock_publish_event.assert_called_once()
+        mock_finalize_terminal.assert_called_once()
         mock_log.objects.create.assert_called_once()
 
     @patch("apps.trading.tasks.trading.TaskLog")
     @patch("apps.trading.tasks.trading.dj_timezone")
-    @patch("apps.trading.tasks.trading.publish_task_lifecycle_event")
-    @patch("apps.trading.tasks.trading.transition_task_to_terminal")
-    def test_error_message_stored(self, mock_transition, mock_publish_event, mock_tz, mock_log):
+    @patch("apps.trading.tasks.trading.finalize_task_terminal_lifecycle")
+    def test_error_message_stored(self, mock_finalize_terminal, mock_tz, mock_log):
         from apps.trading.tasks.trading import handle_exception
 
         task = MagicMock(pk=uuid4(), execution_id=uuid4())
-        mock_transition.return_value = 1
+        mock_finalize_terminal.return_value = 1
 
         with patch("apps.trading.models.celery.CeleryTaskStatus") as mock_cs:
             mock_cs.Status.FAILED = "failed"
             handle_exception(task.pk, task, RuntimeError("specific error"))
 
-        mock_transition.assert_called_once()
-        mock_publish_event.assert_called_once()
+        mock_finalize_terminal.assert_called_once()
 
 
 class TestStopTradingTask:
@@ -200,14 +194,12 @@ class TestStopTradingTask:
     @patch("apps.trading.tasks.trading.CeleryTaskStatus")
     @patch("apps.trading.tasks.trading.dj_timezone")
     @patch("celery.current_app")
-    @patch("apps.trading.tasks.trading.publish_task_lifecycle_event")
-    @patch("apps.trading.tasks.trading.transition_task_to_stopped")
+    @patch("apps.trading.tasks.trading.finalize_task_terminal_lifecycle")
     @patch("apps.trading.tasks.trading.TradingTask")
     def test_stopping_state(
         self,
         mock_model,
-        mock_transition_stopped,
-        mock_publish_event,
+        mock_finalize_terminal,
         mock_app,
         mock_tz,
         mock_celery,
@@ -219,8 +211,8 @@ class TestStopTradingTask:
         mock_model.objects.get.return_value = task
         mock_model.DoesNotExist = _DoesNotExist
         mock_celery.Status.STOPPED = "stopped"
-        mock_transition_stopped.return_value = 1
-        mock_transition_stopped.side_effect = (
+        mock_finalize_terminal.return_value = 1
+        mock_finalize_terminal.side_effect = (
             lambda **kwargs: setattr(task, "status", TaskStatus.STOPPED) or 1
         )
 
@@ -228,7 +220,7 @@ class TestStopTradingTask:
 
         assert task.status == TaskStatus.STOPPED
         mock_app.control.revoke.assert_not_called()
-        mock_publish_event.assert_called_once()
+        mock_finalize_terminal.assert_called_once()
 
     @patch("apps.trading.tasks.trading.TradingTask")
     def test_already_stopped_noop(self, mock_model):
@@ -245,14 +237,12 @@ class TestStopTradingTask:
     @patch("apps.trading.tasks.trading.dj_timezone")
     @patch("apps.trading.tasks.trading._close_open_positions_for_task")
     @patch("celery.current_app")
-    @patch("apps.trading.tasks.trading.publish_task_lifecycle_event")
-    @patch("apps.trading.tasks.trading.transition_task_to_stopped")
+    @patch("apps.trading.tasks.trading.finalize_task_terminal_lifecycle")
     @patch("apps.trading.tasks.trading.TradingTask")
     def test_stop_graceful_mode(
         self,
         mock_model,
-        mock_transition_stopped,
-        mock_publish_event,
+        mock_finalize_terminal,
         mock_app,
         mock_close_positions,
         mock_tz,
@@ -265,8 +255,8 @@ class TestStopTradingTask:
         mock_model.objects.get.return_value = task
         mock_model.DoesNotExist = _DoesNotExist
         mock_celery.Status.STOPPED = "stopped"
-        mock_transition_stopped.return_value = 1
-        mock_transition_stopped.side_effect = (
+        mock_finalize_terminal.return_value = 1
+        mock_finalize_terminal.side_effect = (
             lambda **kwargs: setattr(task, "status", TaskStatus.STOPPED) or 1
         )
 
@@ -275,20 +265,18 @@ class TestStopTradingTask:
         assert task.status == TaskStatus.STOPPED
         mock_app.control.revoke.assert_not_called()
         mock_close_positions.assert_not_called()
-        mock_publish_event.assert_called_once()
+        mock_finalize_terminal.assert_called_once()
 
     @patch("apps.trading.tasks.trading.CeleryTaskStatus")
     @patch("apps.trading.tasks.trading.dj_timezone")
     @patch("apps.trading.tasks.trading._close_open_positions_for_task")
     @patch("celery.current_app")
-    @patch("apps.trading.tasks.trading.publish_task_lifecycle_event")
-    @patch("apps.trading.tasks.trading.transition_task_to_stopped")
+    @patch("apps.trading.tasks.trading.finalize_task_terminal_lifecycle")
     @patch("apps.trading.tasks.trading.TradingTask")
     def test_stop_graceful_close_closes_positions(
         self,
         mock_model,
-        mock_transition_stopped,
-        mock_publish_event,
+        mock_finalize_terminal,
         mock_app,
         mock_close_positions,
         mock_tz,
@@ -302,8 +290,8 @@ class TestStopTradingTask:
         mock_model.objects.get.return_value = task
         mock_model.DoesNotExist = _DoesNotExist
         mock_celery.Status.STOPPED = "stopped"
-        mock_transition_stopped.return_value = 1
-        mock_transition_stopped.side_effect = (
+        mock_finalize_terminal.return_value = 1
+        mock_finalize_terminal.side_effect = (
             lambda **kwargs: setattr(task, "status", TaskStatus.STOPPED) or 1
         )
 
@@ -311,19 +299,17 @@ class TestStopTradingTask:
 
         mock_app.control.revoke.assert_not_called()
         mock_close_positions.assert_called_once_with(task)
-        mock_publish_event.assert_called_once()
+        mock_finalize_terminal.assert_called_once()
 
     @patch("apps.trading.tasks.trading.CeleryTaskStatus")
     @patch("apps.trading.tasks.trading.dj_timezone")
     @patch("celery.current_app")
-    @patch("apps.trading.tasks.trading.publish_task_lifecycle_event")
-    @patch("apps.trading.tasks.trading.transition_task_to_stopped")
+    @patch("apps.trading.tasks.trading.finalize_task_terminal_lifecycle")
     @patch("apps.trading.tasks.trading.TradingTask")
     def test_stop_immediate_mode_revokes(
         self,
         mock_model,
-        mock_transition_stopped,
-        mock_publish_event,
+        mock_finalize_terminal,
         mock_app,
         mock_tz,
         mock_celery,
@@ -336,8 +322,8 @@ class TestStopTradingTask:
         mock_model.objects.get.return_value = task
         mock_model.DoesNotExist = _DoesNotExist
         mock_celery.Status.STOPPED = "stopped"
-        mock_transition_stopped.return_value = 1
-        mock_transition_stopped.side_effect = (
+        mock_finalize_terminal.return_value = 1
+        mock_finalize_terminal.side_effect = (
             lambda **kwargs: setattr(task, "status", TaskStatus.STOPPED) or 1
         )
 
@@ -346,4 +332,4 @@ class TestStopTradingTask:
         mock_app.control.revoke.assert_called_once_with(
             str(execution_id), terminate=True, signal="SIGKILL"
         )
-        mock_publish_event.assert_called_once()
+        mock_finalize_terminal.assert_called_once()

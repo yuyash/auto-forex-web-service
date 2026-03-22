@@ -18,15 +18,13 @@ export function toQueryStateResult<TData>(state: {
   data: TData | undefined;
   isLoading: boolean;
   error: unknown;
-  refresh?: () => Promise<unknown>;
-  refetch: () => Promise<unknown>;
+  refresh: () => Promise<unknown>;
 }): QueryStateResult<TData> {
-  const refresh = state.refresh ?? state.refetch;
   return {
     data: state.data ?? null,
     isLoading: state.isLoading,
     error: (state.error as Error | null) ?? null,
-    refresh,
+    refresh: state.refresh,
   };
 }
 
@@ -47,8 +45,7 @@ export function useTaskList<TData>(
   useTaskQueryPolling(query, polling);
   return toQueryStateResult({
     ...query,
-    refresh,
-    refetch: () => query.refetch(),
+    refresh: refresh ?? (() => query.refetch()),
   });
 }
 
@@ -61,8 +58,7 @@ export function useTaskDetail<TData>(
   useTaskQueryPolling(query, polling);
   return toQueryStateResult({
     ...query,
-    refresh,
-    refetch: () => query.refetch(),
+    refresh: refresh ?? (() => query.refetch()),
   });
 }
 
@@ -80,7 +76,6 @@ export function usePolledTaskResource<TData>(
   return toQueryStateResult({
     ...query,
     refresh,
-    refetch: refresh,
   });
 }
 

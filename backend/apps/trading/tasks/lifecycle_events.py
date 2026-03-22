@@ -6,8 +6,13 @@ from dataclasses import dataclass
 from logging import Logger
 from typing import Callable, Protocol
 
+from apps.trading.enums import TaskStatus
 from apps.trading.models import BacktestTask, TradingEvent, TradingTask
-from apps.trading.services.execution_lifecycle import sync_terminal_execution_artifacts
+from apps.trading.services.execution_lifecycle import (
+    sync_terminal_execution_artifacts,
+    transition_task_to_stopped,
+    transition_task_to_terminal,
+)
 
 
 @dataclass(frozen=True)
@@ -176,3 +181,46 @@ def publish_task_lifecycle_event(
         description=description,
         extra_details=extra_details,
     )
+
+
+def finalize_task_terminal_lifecycle(
+    *,
+    logger: Logger,
+    task: BacktestTask | TradingTask,
+    task_type: str,
+    status: TaskStatus,
+    kind: str,
+    description: str,
+    expected_current_status: TaskStatus | None = None,
+    extra_details: dict[str, object] | None = None,
+    error_message: str | None = None,
+    error_traceback: str | None = None,
+) -> int:
+    """Persist a terminal task transition and publish its lifecycle event."""
+
+    if status == TaskStatus.STOPPED:
+        rows_updated = transition_task_to_stopped(
+            task=task,
+            task_type=task_type,
+            expected_current_status=expected_current_status,
+        )
+    else:
+        rows_updated = transition_task_to_terminal(
+            task=task,
+            task_type=task_type,
+            status=status,
+            expected_current_status=expected_current_status,
+            error_message=error_message,
+            error_traceback=error_traceback,
+        )
+
+    if rows_updated > 0:
+        publish_task_lifecycle_event(
+            logger=logger,
+            task=task,
+            task_type=task_type,
+            kind=kind,
+            description=description,
+            extra_details=extra_details,
+        )
+    return rows_updated

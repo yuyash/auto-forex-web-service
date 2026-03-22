@@ -17,7 +17,6 @@ export function useAccounts(
   return toQueryStateResult({
     ...query,
     refresh: () => query.refetch(),
-    refetch: () => query.refetch(),
   });
 }
 
@@ -31,6 +30,5 @@ export function useAccount(id: number, options?: { enabled?: boolean }) {
   return toQueryStateResult({
     ...query,
     refresh: () => query.refetch(),
-    refetch: () => query.refetch(),
   });
 }

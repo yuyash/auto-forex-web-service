@@ -14,12 +14,8 @@ from apps.trading.engine import TradingEngine
 from apps.trading.enums import LogLevel, TaskStatus, TaskType
 from apps.trading.logging import TaskLoggingSession
 from apps.trading.models import BacktestTask, TaskLog
-from apps.trading.services.execution_lifecycle import (
-    transition_task_to_stopped,
-    transition_task_to_running,
-    transition_task_to_terminal,
-)
-from apps.trading.tasks.lifecycle_events import publish_task_lifecycle_event
+from apps.trading.services.execution_lifecycle import transition_task_to_running
+from apps.trading.tasks.lifecycle_events import finalize_task_terminal_lifecycle
 from apps.trading.tasks.executor import BacktestExecutor
 from apps.trading.tasks.source import RedisTickDataSource
 from apps.trading.utils import pip_size_for_instrument
@@ -117,10 +113,13 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
         # Mark as completed — atomically transition RUNNING -> COMPLETED.
         # Only allow completion from RUNNING to prevent stale state overwrites.
         logger.info(f"Transitioning: {task.status} -> COMPLETED - task_id={task_id}")
-        rows_updated = transition_task_to_terminal(
+        rows_updated = finalize_task_terminal_lifecycle(
+            logger=logger,
             task=task,
             task_type=TaskType.BACKTEST,
             status=TaskStatus.COMPLETED,
+            kind="task_completed",
+            description="Backtest task completed successfully",
             expected_current_status=TaskStatus.RUNNING,
         )
 
@@ -133,14 +132,6 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
             return
 
         logger.info(f"Current: {task.status} - task_id={task_id}, completed_at={task.completed_at}")
-        publish_task_lifecycle_event(
-            logger=logger,
-            task=task,
-            task_type=TaskType.BACKTEST,
-            kind="task_completed",
-            description="Backtest task completed successfully",
-        )
-
         # Log task completion
         TaskLog.objects.create(
             task_type=TaskType.BACKTEST,
@@ -239,19 +230,15 @@ def handle_exception(task_id: UUID, task: BacktestTask | None, error: Exception)
 
     if task:
         # Update task with error information
-        transition_task_to_terminal(
-            task=task,
-            task_type=TaskType.BACKTEST,
-            status=TaskStatus.FAILED,
-            error_message=error_message,
-            error_traceback=error_traceback,
-        )
-        publish_task_lifecycle_event(
+        finalize_task_terminal_lifecycle(
             logger=logger,
             task=task,
             task_type=TaskType.BACKTEST,
+            status=TaskStatus.FAILED,
             kind="task_failed",
             description=f"Backtest task failed: {type(error).__name__}: {error_message}",
+            error_message=error_message,
+            error_traceback=error_traceback,
         )
 
         logger.info(f"Task marked as FAILED - task_id={task_id}, completed_at={task.completed_at}")
@@ -454,17 +441,14 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
             logger.info(
                 f"[STOP:BACKTEST] Transitioning: {task.status} -> STOPPED - task_id={task_id}"
             )
-            transition_task_to_stopped(
-                task=task,
-                task_type=TaskType.BACKTEST,
-                expected_current_status=TaskStatus.STOPPING,
-            )
-            publish_task_lifecycle_event(
+            finalize_task_terminal_lifecycle(
                 logger=logger,
                 task=task,
                 task_type=TaskType.BACKTEST,
+                status=TaskStatus.STOPPED,
                 kind="task_stopped",
                 description="Backtest task stopped",
+                expected_current_status=TaskStatus.STOPPING,
                 extra_details={"mode": "worker_stop"},
             )
             logger.info(f"[STOP:BACKTEST] Current: STOPPED - task_id={task_id}")
@@ -488,17 +472,14 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
                 f"[STOP:BACKTEST] Race condition detected: COMPLETED -> STOPPED - task_id={task_id}"
             )
             # Change from COMPLETED to STOPPED since user requested stop
-            transition_task_to_stopped(
-                task=task,
-                task_type=TaskType.BACKTEST,
-                expected_current_status=TaskStatus.COMPLETED,
-            )
-            publish_task_lifecycle_event(
+            finalize_task_terminal_lifecycle(
                 logger=logger,
                 task=task,
                 task_type=TaskType.BACKTEST,
+                status=TaskStatus.STOPPED,
                 kind="task_stopped",
                 description="Backtest task stopped after completion race",
+                expected_current_status=TaskStatus.COMPLETED,
                 extra_details={"mode": "worker_stop"},
             )
             logger.info(f"[STOP:BACKTEST] Current: STOPPED - task_id={task_id}")

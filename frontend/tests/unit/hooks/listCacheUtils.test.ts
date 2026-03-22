@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   removePaginatedEntity,
+  upsertFilteredListEntity,
+  upsertFilteredPaginatedEntity,
   upsertPaginatedEntity,
 } from '../../../src/hooks/listCacheUtils';
 import type { PaginatedResponse, StrategyConfig } from '../../../src/types';
@@ -71,5 +73,42 @@ describe('listCacheUtils', () => {
     const next = removePaginatedEntity(cached, 'config-1');
 
     expect(next).toEqual(buildPage([buildConfig({ id: 'config-2' })], 1));
+  });
+
+  it('applies sorted filtered paginated updates', () => {
+    const cached = buildPage([
+      buildConfig({ id: 'config-2', name: 'Zulu' }),
+      buildConfig({ id: 'config-1', name: 'Alpha' }),
+    ]);
+
+    const next = upsertFilteredPaginatedEntity(
+      cached,
+      buildConfig({ id: 'config-2', name: 'Beta' }),
+      { page: 1, search: 'be' },
+      {
+        matches: (entity, params) =>
+          entity.name.toLowerCase().includes(String(params?.search ?? '')),
+        sort: (items) =>
+          [...items].sort((left, right) => left.name.localeCompare(right.name)),
+      }
+    );
+
+    expect(next?.results.map((item) => item.name)).toEqual(['Alpha', 'Beta']);
+  });
+
+  it('applies filtered list upserts without prepending on later pages', () => {
+    const next = upsertFilteredListEntity(
+      [{ id: 2, name: 'Zulu' }],
+      { id: 1, name: 'Alpha' },
+      { page: 2, search: 'a' },
+      {
+        matches: (entity, params) =>
+          entity.name.toLowerCase().includes(String(params?.search ?? '')),
+        sort: (items) =>
+          [...items].sort((left, right) => left.name.localeCompare(right.name)),
+      }
+    );
+
+    expect(next).toEqual([{ id: 2, name: 'Zulu' }]);
   });
 });
