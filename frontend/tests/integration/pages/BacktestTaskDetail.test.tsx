@@ -10,6 +10,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BacktestTaskDetail } from '../../../src/components/backtest/BacktestTaskDetail';
 import { TaskStatus } from '../../../src/types/common';
+import { buildTaskTrendViewModel } from '../../fixtures/taskTrendViewModel';
 
 const {
   mockBacktestStart,
@@ -177,7 +178,14 @@ vi.mock('../../../src/components/tasks/detail/TaskPositionsTable', () => ({
   TaskPositionsTable: () => <div data-testid="positions-table">Positions</div>,
 }));
 vi.mock('../../../src/components/tasks/detail/TaskTrendPanel', () => ({
-  TaskTrendPanel: () => <div data-testid="trend-panel">Trend</div>,
+  TaskTrendPanel: () => {
+    const fixture = buildTaskTrendViewModel();
+    return (
+      <div data-testid="trend-panel">
+        Trend {fixture.toolbarProps.executionRunId}
+      </div>
+    );
+  },
 }));
 vi.mock('../../../src/components/tasks/TaskProgress', () => ({
   TaskProgress: () => <div>Progress</div>,

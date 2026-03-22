@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from apps.trading.tasks.lifecycle_events import TaskLifecycleEventPublisher
+from apps.trading.tasks.lifecycle_events import (
+    CallbackLifecycleEventSink,
+    TaskLifecycleEventPublisher,
+)
 
 
 def test_publisher_dispatches_to_all_sinks() -> None:
@@ -32,3 +35,22 @@ def test_publisher_dispatches_to_all_sinks() -> None:
     assert published_event.task is task
     assert published_event.task_type == "trading"
     assert published_event.details["mode"] == "graceful"
+
+
+def test_callback_sink_forwards_event() -> None:
+    callback = MagicMock()
+    sink = CallbackLifecycleEventSink(callback=callback)
+    logger = MagicMock()
+    task = MagicMock(pk="task-1", status="running", name="Task")
+
+    publisher = TaskLifecycleEventPublisher(logger=logger, sinks=(sink,))
+
+    publisher.publish(
+        task=task,
+        task_type="trading",
+        kind="task_paused",
+        description="Task paused",
+    )
+
+    callback.assert_called_once()
+    assert callback.call_args.args[0].kind == "task_paused"

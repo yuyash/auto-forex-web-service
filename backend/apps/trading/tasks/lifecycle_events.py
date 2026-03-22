@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from logging import Logger
-from typing import Protocol
+from typing import Callable, Protocol
 
 from apps.trading.models import BacktestTask, TradingEvent, TradingTask
 
@@ -52,6 +52,16 @@ class LoggerLifecycleEventSink:
             event.kind,
             event.task.status,
         )
+
+
+class CallbackLifecycleEventSink:
+    """Forward lifecycle events to an injected callback for notifications."""
+
+    def __init__(self, *, callback: Callable[[TaskLifecycleEvent], None]) -> None:
+        self.callback = callback
+
+    def publish(self, event: TaskLifecycleEvent) -> None:
+        self.callback(event)
 
 
 class TradingEventLifecycleSink:

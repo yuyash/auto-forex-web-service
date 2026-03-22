@@ -9,6 +9,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TradingTaskDetail } from '../../../src/components/trading/TradingTaskDetail';
 import { TaskStatus } from '../../../src/types/common';
+import { buildTaskTrendViewModel } from '../../fixtures/taskTrendViewModel';
 
 const {
   mockTradingStart,
@@ -188,7 +189,14 @@ vi.mock('../../../src/components/tasks/detail/TaskOrdersTable', () => ({
   TaskOrdersTable: () => <div data-testid="orders-table">Orders</div>,
 }));
 vi.mock('../../../src/components/tasks/detail/TaskTrendPanel', () => ({
-  TaskTrendPanel: () => <div data-testid="trend-panel">Trend</div>,
+  TaskTrendPanel: () => {
+    const fixture = buildTaskTrendViewModel();
+    return (
+      <div data-testid="trend-panel">
+        Trend {fixture.toolbarProps.executionRunId}
+      </div>
+    );
+  },
 }));
 vi.mock('../../../src/components/tasks/actions/DeleteTaskDialog', () => ({
   DeleteTaskDialog: () => null,
