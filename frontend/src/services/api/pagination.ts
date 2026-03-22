@@ -25,7 +25,7 @@ function parseNextRequest(nextUrl: string): {
   };
 }
 
-export async function fetchAllPaginatedResults<T>(
+export async function fetchPaginatedResults<T>(
   path: string,
   params: Record<string, string | number | undefined>
 ): Promise<T[]> {

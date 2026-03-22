@@ -9,10 +9,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
 import { useUpdateTradingTask } from '../../hooks/useTradingTaskMutations';
-import {
-  useConfiguration,
-  useAllConfigurations,
-} from '../../hooks/useConfigurations';
+import { useConfiguration } from '../../hooks/useConfigurations';
 import {
   useStrategies,
   getStrategyDisplayName,
@@ -55,9 +52,6 @@ export default function TradingTaskUpdateForm({
     defaultValues: initialData,
   });
 
-  // Fetch all configurations and strategies
-  const { data: configurations = [], isLoading: configurationsLoading } =
-    useAllConfigurations();
   const { strategies } = useStrategies();
 
   // Watch selected config
@@ -162,8 +156,6 @@ export default function TradingTaskUpdateForm({
               control={control}
               render={({ field }) => (
                 <ConfigurationSelector
-                  configurations={configurations}
-                  isLoading={configurationsLoading}
                   value={field.value}
                   onChange={field.onChange}
                   error={errors.config_id?.message}

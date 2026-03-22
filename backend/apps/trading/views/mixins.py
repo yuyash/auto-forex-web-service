@@ -630,6 +630,16 @@ class TaskSubResourceMixin:
                 "position_status", str, description="Position status filter (open/closed)"
             ),
             OpenApiParameter("direction", str, description="Direction filter"),
+            OpenApiParameter(
+                "range_from",
+                str,
+                description="RFC3339 lower bound for positions overlapping a chart range",
+            ),
+            OpenApiParameter(
+                "range_to",
+                str,
+                description="RFC3339 upper bound for positions overlapping a chart range",
+            ),
             OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
             OpenApiParameter("page", int),
             OpenApiParameter("page_size", int),
@@ -678,6 +688,13 @@ class TaskSubResourceMixin:
         since = _parse_since(request)
         if since:
             queryset = queryset.filter(updated_at__gt=since)
+
+        range_from = _parse_datetime_param(request, "range_from")
+        range_to = _parse_datetime_param(request, "range_to")
+        if range_to:
+            queryset = queryset.filter(entry_time__lte=range_to)
+        if range_from:
+            queryset = queryset.filter(Q(exit_time__isnull=True) | Q(exit_time__gte=range_from))
 
         paginator = TaskSubResourcePagination()
         page = paginator.paginate_queryset(queryset, request)

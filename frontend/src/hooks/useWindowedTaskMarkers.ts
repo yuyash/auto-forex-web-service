@@ -9,7 +9,7 @@ import {
   subtractLoadedRanges,
 } from '../utils/windowedRanges';
 import { getRetryAfterMsFromError } from '../utils/retryAfter';
-import { fetchAllTaskResourcePages } from '../services/api/taskResources';
+import { fetchPaginatedTaskResource } from '../services/api/taskResources';
 import { useSequentialPolling } from './useSequentialPolling';
 
 export interface WindowedTradeMarker {
@@ -82,7 +82,7 @@ export function useWindowedTaskMarkers({
       endpoint: 'events' | 'strategy-events',
       params: Record<string, string>
     ) => {
-      return fetchAllTaskResourcePages<TaskEvent>(
+      return fetchPaginatedTaskResource<TaskEvent>(
         taskType,
         taskId,
         endpoint,
@@ -94,7 +94,7 @@ export function useWindowedTaskMarkers({
 
   const fetchTradesInRange = useCallback(
     async (params: Record<string, string>) => {
-      return fetchAllTaskResourcePages<WindowedTradeMarker>(
+      return fetchPaginatedTaskResource<WindowedTradeMarker>(
         taskType,
         taskId,
         'trades',
@@ -129,7 +129,6 @@ export function useWindowedTaskMarkers({
         for (const missing of missingTask) {
           const results = await fetchEventsInRange('events', {
             scope: 'task',
-            page_size: '5000',
             ...(executionRunId ? { execution_id: executionRunId } : {}),
             created_from: new Date(missing.from * 1000).toISOString(),
             created_to: new Date(missing.to * 1000).toISOString(),
@@ -141,7 +140,6 @@ export function useWindowedTaskMarkers({
         }
         for (const missing of missingTrades) {
           const results = await fetchTradesInRange({
-            page_size: '5000',
             ...(executionRunId ? { execution_id: executionRunId } : {}),
             timestamp_from: new Date(missing.from * 1000).toISOString(),
             timestamp_to: new Date(missing.to * 1000).toISOString(),
@@ -188,22 +186,20 @@ export function useWindowedTaskMarkers({
       : {};
     try {
       const [taskItems, tradeItems] = await Promise.all([
-        fetchAllTaskResourcePages<TaskEvent>(taskType, taskId, 'events', {
+        fetchPaginatedTaskResource<TaskEvent>(taskType, taskId, 'events', {
           ...commonParams,
           scope: 'task',
-          page_size: '5000',
           ...(latestTaskCreatedAtRef.current
             ? { since: latestTaskCreatedAtRef.current }
             : {}),
         }),
         pollTrades
-          ? fetchAllTaskResourcePages<WindowedTradeMarker>(
+          ? fetchPaginatedTaskResource<WindowedTradeMarker>(
               taskType,
               taskId,
               'trades',
               {
                 ...commonParams,
-                page_size: '5000',
                 ...(latestTradeUpdatedAtRef.current
                   ? { since: latestTradeUpdatedAtRef.current }
                   : {}),

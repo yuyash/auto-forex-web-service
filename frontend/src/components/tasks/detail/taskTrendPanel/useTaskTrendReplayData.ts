@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  fetchAllTrades,
   fetchLatestTradesPage,
   fetchTradesInRange,
   fetchTradesSince,
-} from '../../../../utils/fetchAllTrades';
+} from '../../../../utils/replayTradeFetchers';
 import type { TaskSummary } from '../../../../hooks/useTaskSummary';
 import { parseUtcTimestamp } from './shared';
 import type { ReplaySummary, ReplayTrade } from './shared';
@@ -208,13 +207,11 @@ export function useTaskTrendReplayData({
                 timestampFrom: loadedTimeRange.from,
                 timestampTo: loadedTimeRange.to,
               })
-            : expectedTotalTrades > MAX_EAGER_REPLAY_TRADE_COUNT
-              ? await fetchLatestTradesPage(
-                  String(taskId),
-                  taskType,
-                  executionRunId
-                )
-              : await fetchAllTrades(String(taskId), taskType, executionRunId);
+            : await fetchLatestTradesPage(
+                String(taskId),
+                taskType,
+                executionRunId
+              );
 
         const latestUpdatedAt = getLatestTradeUpdatedAt(rawTrades);
         if (

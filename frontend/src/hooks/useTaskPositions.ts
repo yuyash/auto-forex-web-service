@@ -46,6 +46,8 @@ interface UseTaskPositionsOptions {
   direction?: 'long' | 'short';
   page?: number;
   pageSize?: number;
+  rangeFrom?: string;
+  rangeTo?: string;
   /** ISO 8601 timestamp — only return records updated after this time. */
   since?: string;
   enableRealTimeUpdates?: boolean;
@@ -81,6 +83,8 @@ export const useTaskPositions = ({
   direction,
   page = 1,
   pageSize = 100,
+  rangeFrom,
+  rangeTo,
   since,
   enableRealTimeUpdates = false,
   refreshInterval = 10_000,
@@ -109,7 +113,7 @@ export const useTaskPositions = ({
   const canUseIncrementalPolling = page === 1;
 
   // Reset incremental state when key params change.
-  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${status}-${direction}-${page}-${pageSize}-${since ?? ''}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${status}-${direction}-${page}-${pageSize}-${rangeFrom ?? ''}-${rangeTo ?? ''}-${since ?? ''}`;
   const prevParamsKeyRef = useRef(paramsKey);
   if (paramsKey !== prevParamsKeyRef.current) {
     prevParamsKeyRef.current = paramsKey;
@@ -139,6 +143,8 @@ export const useTaskPositions = ({
         }
         if (status) params.position_status = status;
         if (direction) params.direction = direction;
+        if (rangeFrom) params.range_from = rangeFrom;
+        if (rangeTo) params.range_to = rangeTo;
         // Use caller-provided `since` OR our tracked incremental timestamp.
         const effectiveSince =
           since ??
@@ -246,6 +252,8 @@ export const useTaskPositions = ({
       direction,
       page,
       pageSize,
+      rangeFrom,
+      rangeTo,
       since,
       canUseIncrementalPolling,
     ]

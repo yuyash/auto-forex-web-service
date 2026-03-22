@@ -22,10 +22,7 @@ import { InstrumentSelector } from '../tasks/forms/InstrumentSelector';
 import { BalanceInput } from '../tasks/forms/BalanceInput';
 import { DataSource } from '../../types/common';
 import { useUpdateBacktestTask } from '../../hooks/useBacktestTaskMutations';
-import {
-  useConfiguration,
-  useAllConfigurations,
-} from '../../hooks/useConfigurations';
+import { useConfiguration } from '../../hooks/useConfigurations';
 import {
   useStrategies,
   getStrategyDisplayName,
@@ -99,9 +96,6 @@ export default function BacktestTaskUpdateForm({
     defaultValues: { ...initialData, data_source: DataSource.POSTGRESQL },
   });
 
-  // Fetch all configurations and strategies
-  const { data: configurations = [], isLoading: configurationsLoading } =
-    useAllConfigurations();
   const { strategies } = useStrategies();
 
   // Watch selected config
@@ -218,8 +212,6 @@ export default function BacktestTaskUpdateForm({
               control={control}
               render={({ field }) => (
                 <ConfigurationSelector
-                  configurations={configurations}
-                  isLoading={configurationsLoading}
                   value={field.value}
                   onChange={field.onChange}
                   error={errors.config_id?.message}

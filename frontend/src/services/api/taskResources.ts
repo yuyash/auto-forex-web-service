@@ -1,9 +1,6 @@
 import { ApiError, api } from '../../api/apiClient';
 import { TaskType } from '../../types/common';
-import {
-  fetchAllPaginatedResults,
-  type PaginatedApiResponse,
-} from './pagination';
+import { fetchPaginatedResults, type PaginatedApiResponse } from './pagination';
 
 function buildTaskPrefix(taskType: TaskType): string {
   return taskType === TaskType.BACKTEST
@@ -54,13 +51,13 @@ export async function fetchTaskResourceObject<T>(
   return api.get<T>(getTaskResourcePath(taskType, taskId, resource), params);
 }
 
-export async function fetchAllTaskResourcePages<T>(
+export async function fetchPaginatedTaskResource<T>(
   taskType: TaskType,
   taskId: string | number,
   resource: string,
   params: Record<string, string | number | undefined>
 ): Promise<T[]> {
-  return fetchAllPaginatedResults(
+  return fetchPaginatedResults(
     getTaskResourcePath(taskType, taskId, resource),
     params
   );

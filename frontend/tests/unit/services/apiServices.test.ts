@@ -23,7 +23,7 @@ import { backtestTasksApi } from '../../../src/services/api/backtestTasks';
 import { configurationsApi } from '../../../src/services/api/configurations';
 import { accountsApi } from '../../../src/services/api/accounts';
 import {
-  fetchAllTaskResourcePages,
+  fetchPaginatedTaskResource,
   fetchTaskResourceObject,
   fetchTaskResourcePage,
 } from '../../../src/services/api/taskResources';
@@ -222,7 +222,7 @@ describe('API service contracts', () => {
       });
 
     await expect(
-      fetchAllTaskResourcePages('backtest', 'task-1', 'trades', {
+      fetchPaginatedTaskResource('backtest', 'task-1', 'trades', {
         page: 1,
       })
     ).resolves.toEqual([{ id: 'trade-1' }, { id: 'trade-2' }]);

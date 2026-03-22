@@ -23,7 +23,11 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts';
 import { useDocumentVisibility } from '../../../hooks/useDocumentVisibility';
-import { fetchMetrics, type MetricPoint } from '../../../utils/fetchMetrics';
+import {
+  fetchPaginatedMetrics,
+  fetchMetrics,
+  type MetricPoint,
+} from '../../../utils/fetchMetrics';
 import { TaskType } from '../../../types/common';
 import { getRetryAfterMsFromError } from '../../../utils/retryAfter';
 
@@ -167,10 +171,20 @@ export function useMetricsOverlay({
           since: new Date(bufFrom * 1000).toISOString(),
           until: new Date(bufTo * 1000).toISOString(),
           interval: computeInterval(bufTo - bufFrom),
-          pageSize: 5000,
         });
+        const results =
+          page.next === null
+            ? page.results
+            : await fetchPaginatedMetrics({
+                taskId,
+                taskType,
+                executionRunId,
+                since: new Date(bufFrom * 1000).toISOString(),
+                until: new Date(bufTo * 1000).toISOString(),
+                interval: computeInterval(bufTo - bufFrom),
+              });
         return {
-          results: page.results,
+          results,
           fetched: { from: bufFrom, to: bufTo },
         };
       } catch (error) {
@@ -277,11 +291,19 @@ export function useMetricsOverlay({
           taskId,
           taskType,
           executionRunId,
-          pageSize: 5000,
           since: ts ? new Date(ts * 1000).toISOString() : undefined,
         });
-        if (page.results.length > 0)
-          setSnapshots((prev) => mergeSnapshots(prev, page.results));
+        const results =
+          page.next === null
+            ? page.results
+            : await fetchPaginatedMetrics({
+                taskId,
+                taskType,
+                executionRunId,
+                since: ts ? new Date(ts * 1000).toISOString() : undefined,
+              });
+        if (results.length > 0)
+          setSnapshots((prev) => mergeSnapshots(prev, results));
       } catch (error) {
         const retryAfterMs = getRetryAfterMsFromError(error);
         if (retryAfterMs != null) {

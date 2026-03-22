@@ -1,5 +1,5 @@
 /**
- * Utility to fetch all trade pages from the paginated trades API.
+ * Utility to fetch paginated trade data from the task trades API.
  *
  * Used by TaskTrendPanel where the full trade set is needed for chart markers.
  * Supports incremental fetching via the `since` parameter so that polling
@@ -12,7 +12,7 @@ import { TaskType } from '../types/common';
 import { ApiError } from '../api/apiClient';
 import {
   fetchTaskResourcePage,
-  fetchAllTaskResourcePages,
+  fetchPaginatedTaskResource,
   isApiErrorWithStatus,
 } from '../services/api/taskResources';
 
@@ -43,22 +43,6 @@ function getBackoffMs(
     }
   }
   return INITIAL_BACKOFF_MS * Math.pow(2, attempt);
-}
-
-/**
- * Full fetch — retrieves all trades across all pages.
- * Used for the initial load.
- */
-export async function fetchAllTrades(
-  taskId: string,
-  taskType: TaskType,
-  executionRunId?: string
-): Promise<Array<Record<string, unknown>>> {
-  return fetchWithRetry(taskId, taskType, {
-    execution_id: executionRunId,
-    page: 1,
-    page_size: MAX_PAGE_SIZE,
-  });
 }
 
 /**
@@ -131,7 +115,7 @@ async function fetchWithRetry(
 ): Promise<Array<Record<string, unknown>>> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      return await fetchAllTaskResourcePages<Record<string, unknown>>(
+      return await fetchPaginatedTaskResource<Record<string, unknown>>(
         taskType,
         taskId,
         'trades',

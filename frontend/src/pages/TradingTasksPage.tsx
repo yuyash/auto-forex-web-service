@@ -29,12 +29,11 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useTradingTasks } from '../hooks/useTradingTasks';
-import { useAllConfigurations } from '../hooks/useConfigurations';
 import { TaskStatus } from '../types/common';
 import TradingTaskCard from '../components/trading/TradingTaskCard';
 import { Breadcrumbs } from '../components/common';
 import { LoadingSpinner } from '../components/common';
-import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
+import { ConfigurationSelector } from '../components/tasks/forms/ConfigurationSelector';
 import { useSequentialPolling } from '../hooks/useSequentialPolling';
 import { logger } from '../utils/logger';
 
@@ -128,10 +127,6 @@ export default function TradingTasksPage() {
     void refresh();
   };
 
-  // Fetch configurations for filter dropdown and strategies
-  const { data: configurationsData } = useAllConfigurations();
-  const { strategies } = useStrategies();
-
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
     setPage(1); // Reset to first page when changing tabs
@@ -144,13 +139,6 @@ export default function TradingTasksPage() {
 
   const handleSortChange = (event: { target: { value: string } }) => {
     setSortBy(event.target.value);
-    setPage(1);
-  };
-
-  const handleConfigFilterChange = (event: {
-    target: { value: string | '' };
-  }) => {
-    setConfigFilter(event.target.value);
     setPage(1);
   };
 
@@ -264,25 +252,16 @@ export default function TradingTasksPage() {
               />
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
-              <FormControl fullWidth>
-                <InputLabel>{t('common:labels.configuration')}</InputLabel>
-                <Select
-                  value={configFilter}
-                  onChange={handleConfigFilterChange}
-                  label={t('common:labels.configuration')}
-                >
-                  <MenuItem value="">
-                    {t('trading:filters.allConfigurations')}
-                  </MenuItem>
-                  {configurationsData?.results.map((config) => (
-                    <MenuItem key={config.id} value={config.id}>
-                      {config.name} (
-                      {getStrategyDisplayName(strategies, config.strategy_type)}
-                      )
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <ConfigurationSelector
+                value={configFilter}
+                onChange={(value) => {
+                  setConfigFilter(value);
+                  setPage(1);
+                }}
+                label={t('common:labels.configuration')}
+                allowEmptySelection
+                emptySelectionLabel={t('trading:filters.allConfigurations')}
+              />
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
               <FormControl fullWidth>

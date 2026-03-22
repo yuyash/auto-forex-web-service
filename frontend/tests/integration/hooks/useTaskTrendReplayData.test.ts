@@ -4,13 +4,14 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { TaskType } from '../../../src/types/common';
 import { useTaskTrendReplayData } from '../../../src/components/tasks/detail/taskTrendPanel/useTaskTrendReplayData';
 
-const { mockFetchAllTrades, mockFetchTradesSince } = vi.hoisted(() => ({
-  mockFetchAllTrades: vi.fn(),
+const { mockFetchLatestTradesPage, mockFetchTradesSince } = vi.hoisted(() => ({
+  mockFetchLatestTradesPage: vi.fn(),
   mockFetchTradesSince: vi.fn(),
 }));
 
-vi.mock('../../../src/utils/fetchAllTrades', () => ({
-  fetchAllTrades: mockFetchAllTrades,
+vi.mock('../../../src/utils/replayTradeFetchers', () => ({
+  fetchLatestTradesPage: mockFetchLatestTradesPage,
+  fetchTradesInRange: vi.fn(),
   fetchTradesSince: mockFetchTradesSince,
 }));
 
@@ -20,7 +21,7 @@ describe('useTaskTrendReplayData', () => {
   });
 
   it('surfaces refresh errors while keeping the latest loaded trades', async () => {
-    mockFetchAllTrades.mockResolvedValue([
+    mockFetchLatestTradesPage.mockResolvedValue([
       {
         id: 'trade-1',
         timestamp: '2026-03-20T00:00:00Z',

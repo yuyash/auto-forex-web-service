@@ -2720,6 +2720,22 @@
                     },
                     {
                         "in": "query",
+                        "name": "range_from",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 lower bound for positions overlapping a chart range"
+                    },
+                    {
+                        "in": "query",
+                        "name": "range_to",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 upper bound for positions overlapping a chart range"
+                    },
+                    {
+                        "in": "query",
                         "name": "since",
                         "schema": {
                             "type": "string"
@@ -4040,6 +4056,22 @@
                             "type": "string"
                         },
                         "description": "Position status filter (open/closed)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "range_from",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 lower bound for positions overlapping a chart range"
+                    },
+                    {
+                        "in": "query",
+                        "name": "range_to",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 upper bound for positions overlapping a chart range"
                     },
                     {
                         "in": "query",

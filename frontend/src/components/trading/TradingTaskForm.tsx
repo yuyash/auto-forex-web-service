@@ -33,10 +33,7 @@ import {
   useCreateTradingTask,
   useUpdateTradingTask,
 } from '../../hooks/useTradingTaskMutations';
-import {
-  useConfiguration,
-  useAllConfigurations,
-} from '../../hooks/useConfigurations';
+import { useConfiguration } from '../../hooks/useConfigurations';
 import { useAccounts, useAccount } from '../../hooks/useAccounts';
 import { useTradingTasks } from '../../hooks/useTradingTasks';
 import { TaskStatus } from '../../types/common';
@@ -163,8 +160,6 @@ export default function TradingTaskForm({
     }
   }, [selectedAccount?.hedging_enabled, setValue]);
 
-  // Fetch all configurations and strategies
-  const { data: configurations = [] } = useAllConfigurations();
   const { strategies } = useStrategies();
 
   const { data: selectedConfig } = useConfiguration(
@@ -411,7 +406,6 @@ export default function TradingTaskForm({
                   control={control}
                   render={({ field }) => (
                     <ConfigurationSelector
-                      configurations={configurations}
                       value={field.value}
                       onChange={field.onChange}
                       error={errors.config_id?.message}

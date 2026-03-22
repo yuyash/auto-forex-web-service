@@ -184,6 +184,17 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
         })) as CandlePoint[],
     [liveRangeUpperBound, startTimeSec, windowedCandles]
   );
+  const loadedTimeRange = useMemo(() => {
+    if (candles.length === 0) {
+      return undefined;
+    }
+    return {
+      from: new Date(Number(candles[0].time) * 1000).toISOString(),
+      to: new Date(
+        Number(candles[candles.length - 1].time) * 1000
+      ).toISOString(),
+    };
+  }, [candles]);
   const granularitySeconds = useMemo(
     () => (GRANULARITY_MINUTES[granularity] ?? 1) * 60,
     [granularity]
@@ -206,7 +217,8 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     taskId,
     taskType,
     executionRunId,
-    pageSize: 5000,
+    rangeFrom: loadedTimeRange?.from,
+    rangeTo: loadedTimeRange?.to,
     enableRealTimeUpdates: realTimeUpdatesEnabled,
   });
   const {
@@ -291,17 +303,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
 
   const currentPrice =
     currentTick?.price != null ? parseFloat(currentTick.price) : null;
-  const loadedTimeRange = useMemo(() => {
-    if (candles.length === 0) {
-      return undefined;
-    }
-    return {
-      from: new Date(Number(candles[0].time) * 1000).toISOString(),
-      to: new Date(
-        Number(candles[candles.length - 1].time) * 1000
-      ).toISOString(),
-    };
-  }, [candles]);
   const {
     trades,
     isRefreshing,

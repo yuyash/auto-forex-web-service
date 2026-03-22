@@ -32,10 +32,7 @@ import {
   useCreateBacktestTask,
   useUpdateBacktestTask,
 } from '../../hooks/useBacktestTaskMutations';
-import {
-  useConfiguration,
-  useAllConfigurations,
-} from '../../hooks/useConfigurations';
+import { useConfiguration } from '../../hooks/useConfigurations';
 import {
   useStrategies,
   getStrategyDisplayName,
@@ -303,7 +300,6 @@ export default function BacktestTaskForm({
   }, [formData, setValue]); // Removed activeStep dependency so it runs on initial render too
 
   // Fetch all configurations and strategies
-  const { data: configurations = [] } = useAllConfigurations();
   const { strategies } = useStrategies();
   const {
     instruments: availableInstruments,
@@ -315,11 +311,8 @@ export default function BacktestTaskForm({
 
   const { data: selectedConfig } = useConfiguration(configIdString);
 
-  // eslint-disable-next-line react-hooks/incompatible-library
   const watchedInstrument = watch('instrument');
-  // eslint-disable-next-line react-hooks/incompatible-library
   const watchedStartTime = watch('start_time');
-  // eslint-disable-next-line react-hooks/incompatible-library
   const watchedEndTime = watch('end_time');
   const {
     dataRange,
@@ -504,7 +497,6 @@ export default function BacktestTaskForm({
                   control={control}
                   render={({ field }) => (
                     <ConfigurationSelector
-                      configurations={configurations}
                       value={field.value as string | undefined}
                       onChange={field.onChange}
                       error={errors.config_id?.message}
