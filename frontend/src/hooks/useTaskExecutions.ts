@@ -8,6 +8,7 @@ import {
   refreshTaskExecution,
   refreshTaskExecutions,
 } from './taskResourceCache';
+import { usePollingPolicy } from './usePollingPolicy';
 import { useTaskDetail, useTaskList } from './useTaskCollections';
 
 interface UseTaskExecutionsResult {
@@ -34,9 +35,20 @@ export function useTaskExecutions(
   params?: { page?: number; page_size?: number; include_metrics?: boolean },
   options?: { enablePolling?: boolean; pollingInterval?: number }
 ): UseTaskExecutionsResult {
+  const pollingPolicy = usePollingPolicy({
+    enabled: options?.enablePolling !== false,
+    baseIntervalMs: options?.pollingInterval ?? 3000,
+  });
   const resource = useTaskList(
     createTaskExecutionsQuery(taskId, taskType, params, options),
-    () => refreshTaskExecutions(taskId, taskType, params)
+    () => refreshTaskExecutions(taskId, taskType, params),
+    {
+      policy: pollingPolicy,
+      shouldPoll: (data) =>
+        Boolean(
+          data?.results?.some((execution) => execution.status === 'running')
+        ),
+    }
   );
 
   return {

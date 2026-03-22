@@ -14,7 +14,7 @@
 import { TaskType } from '../types/common';
 import { refreshTaskSummary } from './taskResourceCache';
 import { createTaskSummaryQuery } from './taskResourceQueries';
-import { usePollingActivity } from './usePollingActivity';
+import { usePollingPolicy } from './usePollingPolicy';
 import { usePolledTaskResource } from './useTaskCollections';
 
 export interface TickInfo {
@@ -102,12 +102,18 @@ export function useTaskSummary(
   options: UseTaskSummaryOptions = {}
 ): UseTaskSummaryResult {
   const { polling = false, interval = 10_000 } = options;
-  const pollingEnabled = usePollingActivity(polling && Boolean(taskId));
+  const pollingPolicy = usePollingPolicy({
+    enabled: polling && Boolean(taskId),
+    baseIntervalMs: interval,
+  });
   const refresh = () => refreshTaskSummary(taskId, taskType, executionRunId);
   const resource = usePolledTaskResource(
     createTaskSummaryQuery(taskId, taskType, executionRunId, INITIAL_SUMMARY),
     refresh,
-    { pollingEnabled, intervalMs: interval }
+    {
+      pollingEnabled: pollingPolicy.isActive,
+      intervalMs: pollingPolicy.intervalMs,
+    }
   );
 
   return {

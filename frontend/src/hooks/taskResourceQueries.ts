@@ -54,7 +54,7 @@ interface TaskSummaryResponse {
 type TaskListParams = BacktestTaskListParams | TradingTaskListParams;
 type TaskEntity = BacktestTask | TradingTask;
 
-function shouldPollTaskStatus(status: string | undefined): boolean {
+export function shouldPollTaskStatus(status: string | undefined): boolean {
   return status === 'starting' || status === 'running' || status === 'paused';
 }
 
@@ -102,15 +102,6 @@ export function createTaskDetailQuery<TTask extends TaskEntity>(
         ? (backtestTasksApi.get(id!) as Promise<TTask>)
         : (tradingTasksApi.get(id!) as Promise<TTask>),
     enabled: Boolean(id) && options?.enabled !== false,
-    refetchInterval: (queryContext) => {
-      if (options?.enablePolling !== true) {
-        return false;
-      }
-      const currentTask = queryContext.state.data as TTask | undefined;
-      return shouldPollTaskStatus(currentTask?.status)
-        ? (options.pollingInterval ?? 3000)
-        : false;
-    },
   };
 }
 
@@ -195,8 +186,7 @@ export function createTaskSummaryQuery(
 export function createTaskExecutionsQuery(
   taskId: string,
   taskType: TaskType,
-  params?: { page?: number; page_size?: number; include_metrics?: boolean },
-  options?: { enablePolling?: boolean; pollingInterval?: number }
+  params?: { page?: number; page_size?: number; include_metrics?: boolean }
 ): UseQueryOptions<PaginatedResponse<TaskExecution>> {
   return {
     queryKey:
@@ -218,18 +208,6 @@ export function createTaskExecutionsQuery(
     },
     staleTime: 2000,
     refetchOnWindowFocus: true,
-    refetchInterval: (query) => {
-      const queryData = query.state.data as
-        | PaginatedResponse<TaskExecution>
-        | undefined;
-      const hasRunningExecution = queryData?.results?.some(
-        (exec) => exec.status === 'running'
-      );
-      if (options?.enablePolling !== false && hasRunningExecution) {
-        return options?.pollingInterval ?? 3000;
-      }
-      return false;
-    },
   };
 }
 

@@ -47,7 +47,7 @@ class TestOandaAccountView:
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    @patch("apps.market.views.oanda.invalidate_market_metadata_cache")
+    @patch("apps.market.models.oanda.invalidate_market_metadata_cache")
     def test_create_account(self, mock_invalidate: Any, user: Any) -> None:
         """Test creating a new OANDA account."""
         client = APIClient()
@@ -68,7 +68,7 @@ class TestOandaAccountView:
         # Verify account was created
         account = OandaAccounts.objects.get(account_id="101-001-1234567-003")
         assert account.user == user
-        mock_invalidate.assert_called_once_with([account.api_hostname])
+        mock_invalidate.assert_called_once_with({account.api_hostname})
 
     def test_create_account_invalid_data(self, user: Any) -> None:
         """Test creating account with invalid data."""
@@ -115,7 +115,7 @@ class TestOandaAccountDetailView:
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    @patch("apps.market.views.oanda.invalidate_market_metadata_cache")
+    @patch("apps.market.models.oanda.invalidate_market_metadata_cache")
     def test_update_account(self, mock_invalidate: Any, user: Any) -> None:
         """Test updating account."""
         account = OandaAccounts.objects.create(
@@ -124,6 +124,7 @@ class TestOandaAccountDetailView:
             api_type=ApiType.PRACTICE,
             is_active=True,
         )
+        mock_invalidate.reset_mock()
 
         client = APIClient()
         client.force_authenticate(user=user)
@@ -138,9 +139,9 @@ class TestOandaAccountDetailView:
         # Verify update
         account.refresh_from_db()
         assert account.is_active is False
-        mock_invalidate.assert_called_once_with([account.api_hostname, account.api_hostname])
+        mock_invalidate.assert_called_once_with({account.api_hostname})
 
-    @patch("apps.market.views.oanda.invalidate_market_metadata_cache")
+    @patch("apps.market.models.oanda.invalidate_market_metadata_cache")
     def test_delete_account(self, mock_invalidate: Any, user: Any) -> None:
         """Test deleting account."""
         account = OandaAccounts.objects.create(
@@ -149,6 +150,7 @@ class TestOandaAccountDetailView:
             api_type=ApiType.PRACTICE,
             is_used=False,
         )
+        mock_invalidate.reset_mock()
 
         client = APIClient()
         client.force_authenticate(user=user)
@@ -159,7 +161,7 @@ class TestOandaAccountDetailView:
 
         # Verify deletion
         assert not OandaAccounts.objects.filter(id=account.id).exists()
-        mock_invalidate.assert_called_once()
+        mock_invalidate.assert_called_once_with({account.api_hostname})
 
     def test_delete_account_in_use(self, user: Any) -> None:
         """Test deleting account that is in use."""

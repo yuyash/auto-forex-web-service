@@ -11,7 +11,7 @@ interface UsePollingPolicyOptions {
   maxIntervalMs?: number;
 }
 
-interface PollingPolicyState {
+export interface PollingPolicyState {
   isActive: boolean;
   intervalMs: number;
   consecutiveFailures: number;

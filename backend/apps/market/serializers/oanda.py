@@ -99,10 +99,10 @@ class OandaAccountsSerializer(serializers.ModelSerializer):
         existing_accounts_count = OandaAccounts.objects.filter(user=user).count()
         if existing_accounts_count == 0:
             is_default = True
-        account = OandaAccounts.objects.create(user=user, **validated_data)
+        account = OandaAccounts(user=user, is_default=is_default, **validated_data)
         account.set_api_token(api_token)
         account.save()
-        if is_default:
+        if is_default and existing_accounts_count > 0:
             account.set_as_default()
         return account
 

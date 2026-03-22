@@ -10,6 +10,7 @@ import {
 } from '../utils/windowedRanges';
 import { getRetryAfterMsFromError } from '../utils/retryAfter';
 import { fetchPaginatedTaskResource } from '../services/api/taskResources';
+import { usePollingPolicy } from './usePollingPolicy';
 import { useSequentialPolling } from './useSequentialPolling';
 
 export interface WindowedTradeMarker {
@@ -240,9 +241,14 @@ export function useWindowedTaskMarkers({
     }
   }, [executionRunId, pollTrades, taskId, taskType]);
 
-  useSequentialPolling(refreshLatestMarkers, {
+  const pollingPolicy = usePollingPolicy({
     enabled: enableRealTimeUpdates,
-    intervalMs: 10000,
+    baseIntervalMs: 10000,
+  });
+
+  useSequentialPolling(refreshLatestMarkers, {
+    enabled: pollingPolicy.isActive,
+    intervalMs: pollingPolicy.intervalMs,
   });
 
   useEffect(() => {

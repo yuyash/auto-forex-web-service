@@ -1,5 +1,5 @@
 import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
-import { usePollingPolicy } from './usePollingPolicy';
+import { usePollingPolicy, type PollingPolicyState } from './usePollingPolicy';
 import { useSequentialPolling } from './useSequentialPolling';
 
 export interface QueryStateResult<TData> {
@@ -10,29 +10,82 @@ export interface QueryStateResult<TData> {
   refetch: () => Promise<unknown>;
 }
 
+interface QueryPollingOptions<TData> {
+  policy: PollingPolicyState;
+  shouldPoll?: (data: TData | null) => boolean;
+}
+
 export function useTaskList<TData>(
-  queryOptions: UseQueryOptions<TData>
+  queryOptions: UseQueryOptions<TData>,
+  refresh?: () => Promise<unknown>,
+  polling?: QueryPollingOptions<TData>
 ): QueryStateResult<TData> {
   const query = useQuery(queryOptions);
+
+  useSequentialPolling(
+    async () => {
+      if (query.isFetching) {
+        return Promise.resolve();
+      }
+      const result = await query.refetch();
+      if (result.error) {
+        polling?.policy.registerFailure();
+      } else {
+        polling?.policy.resetFailures();
+      }
+      return result;
+    },
+    {
+      enabled:
+        polling?.policy.isActive === true &&
+        (polling.shouldPoll?.(query.data ?? null) ?? true),
+      intervalMs: polling?.policy.intervalMs ?? 10_000,
+    }
+  );
+
   return {
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refresh: () => query.refetch(),
-    refetch: () => query.refetch(),
+    refresh: refresh ?? (() => query.refetch()),
+    refetch: refresh ?? (() => query.refetch()),
   };
 }
 
 export function useTaskDetail<TData>(
-  queryOptions: UseQueryOptions<TData>
+  queryOptions: UseQueryOptions<TData>,
+  refresh?: () => Promise<unknown>,
+  polling?: QueryPollingOptions<TData>
 ): QueryStateResult<TData> {
   const query = useQuery(queryOptions);
+
+  useSequentialPolling(
+    async () => {
+      if (query.isFetching) {
+        return Promise.resolve();
+      }
+      const result = await query.refetch();
+      if (result.error) {
+        polling?.policy.registerFailure();
+      } else {
+        polling?.policy.resetFailures();
+      }
+      return result;
+    },
+    {
+      enabled:
+        polling?.policy.isActive === true &&
+        (polling.shouldPoll?.(query.data ?? null) ?? true),
+      intervalMs: polling?.policy.intervalMs ?? 10_000,
+    }
+  );
+
   return {
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refresh: () => query.refetch(),
-    refetch: () => query.refetch(),
+    refresh: refresh ?? (() => query.refetch()),
+    refetch: refresh ?? (() => query.refetch()),
   };
 }
 

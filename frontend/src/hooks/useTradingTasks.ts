@@ -7,8 +7,9 @@ import { TaskType } from '../types/common';
 import {
   createTaskDetailQuery,
   createTaskListQuery,
+  shouldPollTaskStatus,
 } from './taskResourceQueries';
-import { usePollingActivity } from './usePollingActivity';
+import { usePollingPolicy } from './usePollingPolicy';
 import { useTaskDetail, useTaskList } from './useTaskCollections';
 
 interface UseTradingTasksResult {
@@ -43,13 +44,19 @@ export function useTradingTask(
   id?: string,
   options?: UseTradingTaskOptions
 ): UseTradingTaskResult {
-  const pollingEnabled = usePollingActivity(
-    Boolean(id) && options?.enablePolling === true
-  );
+  const pollingPolicy = usePollingPolicy({
+    enabled: Boolean(id) && options?.enablePolling === true,
+    baseIntervalMs: options?.pollingInterval ?? 3000,
+  });
   return useTaskDetail<TradingTask>(
     createTaskDetailQuery<TradingTask>(TaskType.TRADING, id, {
       ...options,
-      enablePolling: pollingEnabled,
-    })
+      enablePolling: pollingPolicy.isActive,
+    }),
+    undefined,
+    {
+      policy: pollingPolicy,
+      shouldPoll: (task) => shouldPollTaskStatus(task?.status),
+    }
   );
 }

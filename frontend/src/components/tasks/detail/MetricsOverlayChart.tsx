@@ -22,9 +22,8 @@ import {
   type IChartApi,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import { useDocumentVisibility } from '../../../hooks/useDocumentVisibility';
+import { usePollingPolicy } from '../../../hooks/usePollingPolicy';
 import { useSequentialPolling } from '../../../hooks/useSequentialPolling';
-import { useOnlineStatus } from '../../../hooks/useOnlineStatus';
 import {
   fetchPaginatedMetrics,
   fetchMetrics,
@@ -145,8 +144,11 @@ export function useMetricsOverlay({
   candleTimestamps,
   currentTickTimestamp,
 }: UseMetricsOverlayOptions) {
-  const isPageVisible = useDocumentVisibility();
-  const isOnline = useOnlineStatus();
+  const pollingPolicy = usePollingPolicy({
+    enabled: enableRealTimeUpdates,
+    baseIntervalMs: pollingIntervalMs,
+  });
+  const isPageVisible = pollingPolicy.isActive;
   const seriesRef = useRef<ReturnType<typeof attachSeries> | null>(null);
   const attachedToChart = useRef<IChartApi | null>(null);
   const [snapshots, setSnapshots] = useState<MetricPoint[]>([]);
@@ -313,8 +315,8 @@ export function useMetricsOverlay({
       }
     },
     {
-      enabled: enableRealTimeUpdates && isPageVisible && isOnline,
-      intervalMs: pollingIntervalMs,
+      enabled: pollingPolicy.isActive,
+      intervalMs: pollingPolicy.intervalMs,
     }
   );
 

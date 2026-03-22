@@ -2,7 +2,7 @@ import { refreshTaskStrategyEvents } from './taskResourceCache';
 import { createTaskStrategyEventsQuery } from './taskResourceQueries';
 import { TaskType } from '../types/common';
 import type { StrategyVisualizationResponse } from '../types/strategyVisualization';
-import { usePollingActivity } from './usePollingActivity';
+import { usePollingPolicy } from './usePollingPolicy';
 import { usePolledTaskResource } from './useTaskCollections';
 
 interface UseTaskStrategyEventsOptions {
@@ -28,15 +28,19 @@ export function useTaskStrategyEvents({
   enableRealTimeUpdates = false,
   refreshInterval = 10_000,
 }: UseTaskStrategyEventsOptions): UseTaskStrategyEventsResult {
-  const pollingEnabled = usePollingActivity(
-    enableRealTimeUpdates && Boolean(taskId)
-  );
+  const pollingPolicy = usePollingPolicy({
+    enabled: enableRealTimeUpdates && Boolean(taskId),
+    baseIntervalMs: refreshInterval,
+  });
   const refresh = () =>
     refreshTaskStrategyEvents(String(taskId), taskType, executionRunId);
   const resource = usePolledTaskResource(
     createTaskStrategyEventsQuery(taskId, taskType, executionRunId),
     refresh,
-    { pollingEnabled, intervalMs: refreshInterval }
+    {
+      pollingEnabled: pollingPolicy.isActive,
+      intervalMs: pollingPolicy.intervalMs,
+    }
   );
 
   return {

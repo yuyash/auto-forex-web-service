@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { type UTCTimestamp } from 'lightweight-charts';
-import { usePollingActivity } from '../../../../hooks/usePollingActivity';
+import { usePollingPolicy } from '../../../../hooks/usePollingPolicy';
 import { useSupportedGranularities } from '../../../../hooks/useMarketConfig';
 import { useWindowedCandles } from '../../../../hooks/useWindowedCandles';
 import { useWindowedTaskMarkers } from '../../../../hooks/useWindowedTaskMarkers';
@@ -61,7 +61,11 @@ export function useTaskTrendChartModel({
     taskId,
     executionRunId,
   });
-  const realTimeUpdatesEnabled = usePollingActivity(enableRealTimeUpdates);
+  const realTimePollingPolicy = usePollingPolicy({
+    enabled: enableRealTimeUpdates,
+    baseIntervalMs: panelState.pollingIntervalMs,
+  });
+  const realTimeUpdatesEnabled = realTimePollingPolicy.isActive;
   const { granularities, usingFallback: usingGranularityFallback } =
     useSupportedGranularities();
 

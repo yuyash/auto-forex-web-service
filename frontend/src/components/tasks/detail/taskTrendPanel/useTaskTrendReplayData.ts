@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TaskSummary } from '../../../../hooks/useTaskSummary';
 import { useSequentialPolling } from '../../../../hooks/useSequentialPolling';
-import { usePollingActivity } from '../../../../hooks/usePollingActivity';
+import { usePollingPolicy } from '../../../../hooks/usePollingPolicy';
 import {
   fetchTaskTrendReplay,
   type TaskTrendReplayPosition,
@@ -305,10 +305,13 @@ export function useTaskTrendReplayData({
   useEffect(() => {
     void fetchReplayData();
   }, [fetchReplayData]);
-  const pollingEnabled = usePollingActivity(enableRealTimeUpdates);
+  const pollingPolicy = usePollingPolicy({
+    enabled: enableRealTimeUpdates,
+    baseIntervalMs: pollingIntervalMs,
+  });
   useSequentialPolling(fetchReplayData, {
-    enabled: pollingEnabled,
-    intervalMs: pollingIntervalMs,
+    enabled: pollingPolicy.isActive,
+    intervalMs: pollingPolicy.intervalMs,
   });
 
   useEffect(() => {
