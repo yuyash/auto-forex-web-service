@@ -6,6 +6,12 @@ import type {
   BacktestTaskCreateData,
   BacktestTaskUpdateData,
 } from '../types';
+import {
+  invalidateTaskDerivedCaches,
+  patchTaskStatusCache,
+  removeTaskCaches,
+  upsertTaskCaches,
+} from './taskMutationCache';
 import { useWrappedMutation } from './useWrappedMutation';
 
 async function invalidateBacktestQueries(taskId?: string): Promise<void> {
@@ -13,15 +19,7 @@ async function invalidateBacktestQueries(taskId?: string): Promise<void> {
     queryKey: queryKeys.backtestTasks.lists(),
   });
   if (taskId) {
-    await queryClient.invalidateQueries({
-      queryKey: queryKeys.backtestTasks.detail(taskId),
-    });
-    await queryClient.invalidateQueries({
-      queryKey: queryKeys.backtestTasks.executions(taskId),
-    });
-    await queryClient.invalidateQueries({
-      queryKey: queryKeys.taskResources.summary('backtest', taskId),
-    });
+    await invalidateTaskDerivedCaches('backtest', taskId);
   }
 }
 
@@ -33,7 +31,7 @@ export function useCreateBacktestTask(options?: {
     (variables: BacktestTaskCreateData) => backtestTasksApi.create(variables),
     {
       onSuccess: async (data) => {
-        queryClient.setQueryData(queryKeys.backtestTasks.detail(data.id), data);
+        upsertTaskCaches('backtest', data);
         await invalidateBacktestQueries(data.id);
         options?.onSuccess?.(data);
       },
@@ -51,8 +49,8 @@ export function useUpdateBacktestTask(options?: {
       backtestTasksApi.partialUpdate(variables.id, variables.data),
     {
       onSuccess: async (data) => {
-        queryClient.setQueryData(queryKeys.backtestTasks.detail(data.id), data);
-        await invalidateBacktestQueries(data.id);
+        upsertTaskCaches('backtest', data);
+        await invalidateTaskDerivedCaches('backtest', data.id);
         options?.onSuccess?.(data);
       },
       onError: (error) => options?.onError?.(error),
@@ -65,8 +63,11 @@ export function useDeleteBacktestTask(options?: {
   onError?: (error: Error) => void;
 }) {
   return useWrappedMutation((id: string) => backtestTasksApi.delete(id), {
-    onSuccess: async () => {
-      await invalidateBacktestQueries();
+    onSuccess: async (_, id) => {
+      removeTaskCaches('backtest', id);
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.backtestTasks.lists(),
+      });
       options?.onSuccess?.();
     },
     onError: (error) => options?.onError?.(error),
@@ -82,7 +83,7 @@ export function useCopyBacktestTask(options?: {
       backtestTasksApi.copy(variables.id, variables.data),
     {
       onSuccess: async (data) => {
-        queryClient.setQueryData(queryKeys.backtestTasks.detail(data.id), data);
+        upsertTaskCaches('backtest', data);
         await invalidateBacktestQueries(data.id);
         options?.onSuccess?.(data);
       },
@@ -97,8 +98,8 @@ export function useStartBacktestTask(options?: {
 }) {
   return useWrappedMutation((id: string) => backtestTasksApi.start(id), {
     onSuccess: async (data) => {
-      queryClient.setQueryData(queryKeys.backtestTasks.detail(data.id), data);
-      await invalidateBacktestQueries(data.id);
+      upsertTaskCaches('backtest', data);
+      await invalidateTaskDerivedCaches('backtest', data.id);
       options?.onSuccess?.(data);
     },
     onError: (error) => options?.onError?.(error),
@@ -111,7 +112,8 @@ export function useStopBacktestTask(options?: {
 }) {
   return useWrappedMutation((id: string) => backtestTasksApi.stop(id), {
     onSuccess: async (data, id) => {
-      await invalidateBacktestQueries(id);
+      patchTaskStatusCache('backtest', id, 'stopping');
+      await invalidateTaskDerivedCaches('backtest', id);
       options?.onSuccess?.(data);
     },
     onError: (error) => options?.onError?.(error),
@@ -124,8 +126,8 @@ export function useRerunBacktestTask(options?: {
 }) {
   return useWrappedMutation((id: string) => backtestTasksApi.restart(id), {
     onSuccess: async (data) => {
-      queryClient.setQueryData(queryKeys.backtestTasks.detail(data.id), data);
-      await invalidateBacktestQueries(data.id);
+      upsertTaskCaches('backtest', data);
+      await invalidateTaskDerivedCaches('backtest', data.id);
       options?.onSuccess?.(data);
     },
     onError: (error) => options?.onError?.(error),
@@ -138,8 +140,8 @@ export function usePauseBacktestTask(options?: {
 }) {
   return useWrappedMutation((id: string) => backtestTasksApi.pause(id), {
     onSuccess: async (data) => {
-      queryClient.setQueryData(queryKeys.backtestTasks.detail(data.id), data);
-      await invalidateBacktestQueries(data.id);
+      upsertTaskCaches('backtest', data);
+      await invalidateTaskDerivedCaches('backtest', data.id);
       options?.onSuccess?.(data);
     },
     onError: (error) => options?.onError?.(error),
@@ -152,8 +154,8 @@ export function useResumeBacktestTask(options?: {
 }) {
   return useWrappedMutation((id: string) => backtestTasksApi.resume(id), {
     onSuccess: async (data) => {
-      queryClient.setQueryData(queryKeys.backtestTasks.detail(data.id), data);
-      await invalidateBacktestQueries(data.id);
+      upsertTaskCaches('backtest', data);
+      await invalidateTaskDerivedCaches('backtest', data.id);
       options?.onSuccess?.(data);
     },
     onError: (error) => options?.onError?.(error),

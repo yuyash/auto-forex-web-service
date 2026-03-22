@@ -19,7 +19,6 @@ import { type Time, type UTCTimestamp } from 'lightweight-charts';
 import { type TaskSummary } from '../../../hooks/useTaskSummary';
 import { useDocumentVisibility } from '../../../hooks/useDocumentVisibility';
 import { useSupportedGranularities } from '../../../hooks/useMarketConfig';
-import { useTaskPositions } from '../../../hooks/useTaskPositions';
 import { TaskType } from '../../../types/common';
 import { getTimezoneAbbr } from '../../../utils/chartTimezone';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -211,17 +210,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     [taskDataBounds]
   );
 
-  // Fetch positions once and derive open/closed state client-side to avoid
-  // duplicating position polling for the trend panel.
-  const { positions: fetchedPositions } = useTaskPositions({
-    taskId,
-    taskType,
-    executionRunId,
-    rangeFrom: loadedTimeRange?.from,
-    rangeTo: loadedTimeRange?.to,
-    includeTradeIds: true,
-    enableRealTimeUpdates: realTimeUpdatesEnabled,
-  });
   const {
     taskEvents: taskLifecycleEvents,
     strategyEvents,
@@ -306,6 +294,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     currentTick?.price != null ? parseFloat(currentTick.price) : null;
   const {
     trades,
+    positions: fetchedPositions,
     isRefreshing,
     errorMessage,
     warningMessage,

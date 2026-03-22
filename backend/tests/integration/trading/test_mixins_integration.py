@@ -21,6 +21,7 @@ from apps.trading.models import (
     Position,
     StrategyEventRecord,
     TaskLog,
+    TaskExecutionSnapshot,
     Trade,
     TradingEvent,
 )
@@ -589,3 +590,114 @@ class TestExecutions:
             f"/api/trading/tasks/backtest/{task.pk}/executions/{uuid4()}/",
         )
         assert missing_response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_execution_detail_prefers_persisted_snapshot(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        from uuid import uuid4
+
+        execution_id = uuid4()
+        CeleryTaskStatus.objects.create(
+            task_name="trading.tasks.run_backtest_task",
+            instance_key=f"{task.pk}:{execution_id}",
+            status=CeleryTaskStatus.Status.COMPLETED,
+        )
+        TaskExecutionSnapshot.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=execution_id,
+            summary={
+                "timestamp": "2026-03-21T00:00:00+00:00",
+                "pnl": {"realized": "12.5", "unrealized": "0"},
+                "counts": {
+                    "total_trades": 7,
+                    "open_positions": 0,
+                    "closed_positions": 3,
+                },
+                "execution": {
+                    "current_balance": "10012.5",
+                    "ticks_processed": 42,
+                    "account_currency": "USD",
+                    "current_balance_display": "10012.5",
+                    "display_currency": "USD",
+                },
+                "tick": {
+                    "timestamp": "2026-03-21T00:00:00+00:00",
+                    "bid": "150.1000",
+                    "ask": "150.1100",
+                    "mid": "150.1050",
+                },
+                "task": {
+                    "status": "completed",
+                    "started_at": None,
+                    "completed_at": "2026-03-21T00:00:10+00:00",
+                    "error_message": None,
+                    "progress": 100,
+                },
+            },
+            metrics={
+                "total_pnl": "12.5",
+                "unrealized_pnl": "0",
+                "total_trades": 7,
+                "winning_trades": 5,
+                "losing_trades": 2,
+                "win_rate": "71.4286",
+            },
+        )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/executions/{execution_id}/",
+            {"include_metrics": "true"},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["metrics"]["total_trades"] == 7
+        assert response.data["metrics"]["winning_trades"] == 5
+
+
+@pytest.mark.django_db
+class TestTrendReplay:
+    """GET /api/trading/tasks/backtest/{id}/trend-replay/"""
+
+    def test_returns_windowed_trades_and_positions(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        base_time = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        position = Position.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction="long",
+            units=1000,
+            entry_price=Decimal("150.000"),
+            entry_time=base_time,
+            is_open=True,
+        )
+        trade = Trade.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction="long",
+            units=1000,
+            price=Decimal("150.010"),
+            execution_method="market_entry",
+            timestamp=base_time + timedelta(minutes=1),
+            position=position,
+        )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/trend-replay/",
+            {
+                "range_from": base_time.isoformat(),
+                "range_to": (base_time + timedelta(minutes=2)).isoformat(),
+            },
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["meta"]["mode"] == "windowed"
+        assert response.data["meta"]["returned_trades"] == 1
+        assert len(response.data["trades"]) == 1
+        assert len(response.data["positions"]) == 1
+        assert response.data["trades"][0]["id"] == str(trade.id)
+        assert response.data["positions"][0]["trade_ids"] == [str(trade.id)]

@@ -8,12 +8,11 @@ from typing import Any, overload
 from uuid import UUID
 
 from django.core.cache import cache
-from django.db.models import Case, DecimalField, F, IntegerField, Sum, Value, When
 
 from apps.trading.enums import TaskStatus
 from apps.trading.models import CeleryTaskStatus
-from apps.trading.models.positions import Position
-from apps.trading.models.trades import Trade
+from apps.trading.services.execution_metrics import build_execution_metrics
+from apps.trading.services.execution_snapshots import get_metrics_snapshot
 from apps.trading.services.summary import compute_cached_task_summary
 
 
@@ -311,6 +310,14 @@ def _get_cached_execution_metrics(
     meta: dict[str, Any],
     fallback_mid_rate: Decimal | None = None,
 ) -> dict[str, Any]:
+    persisted_metrics = get_metrics_snapshot(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=run_id,
+    )
+    if persisted_metrics is not None:
+        return persisted_metrics
+
     cache_key = _build_execution_metrics_cache_key(
         task=task,
         task_type=task_type,
@@ -356,123 +363,14 @@ def _compute_execution_metrics(
         task_id=task_id,
         execution_id=run_id,
     )
-    closed_qs = Position.objects.filter(
+    return build_execution_metrics(
+        task=task,
         task_type=task_type,
         task_id=task_id,
         execution_id=run_id,
-        is_open=False,
-    ).exclude(exit_price__isnull=True)
-
-    pnl_expr = Case(
-        When(
-            direction="long",
-            then=(F("exit_price") - F("entry_price")) * _abs_units(),
-        ),
-        When(
-            direction="short",
-            then=(F("entry_price") - F("exit_price")) * _abs_units(),
-        ),
-        default=Value(Decimal("0")),
-        output_field=DecimalField(max_digits=24, decimal_places=10),
+        summary=summary,
+        fallback_mid_rate=fallback_mid_rate,
     )
-    with_pnl = closed_qs.annotate(pnl_value=pnl_expr)
-    wins_losses = with_pnl.aggregate(
-        winning_trades=Sum(
-            Case(
-                When(pnl_value__gt=0, then=Value(1)),
-                default=Value(0),
-                output_field=IntegerField(),
-            )
-        ),
-        losing_trades=Sum(
-            Case(
-                When(pnl_value__lt=0, then=Value(1)),
-                default=Value(0),
-                output_field=IntegerField(),
-            )
-        ),
-    )
-    winning_trades = int(wins_losses["winning_trades"] or 0)
-    losing_trades = int(wins_losses["losing_trades"] or 0)
-    total_trades = int(
-        Trade.objects.filter(task_type=task_type, task_id=task_id, execution_id=run_id).count()
-    )
-    decisions = winning_trades + losing_trades
-    win_rate = (
-        (Decimal(winning_trades) / Decimal(decisions) * Decimal("100"))
-        if decisions > 0
-        else Decimal("0")
-    )
-
-    total_pnl = summary.pnl.realized + summary.pnl.unrealized
-    mid_rate = summary.tick.mid or fallback_mid_rate
-    total_return = _compute_total_return(
-        task=task,
-        task_type=task_type,
-        current_balance=summary.execution.current_balance,
-        total_pnl=total_pnl,
-        mid_rate=mid_rate,
-    )
-
-    metrics: dict[str, Any] = {
-        "total_pnl": total_pnl,
-        "unrealized_pnl": summary.pnl.unrealized,
-        "total_trades": total_trades,
-        "winning_trades": winning_trades,
-        "losing_trades": losing_trades,
-        "win_rate": win_rate.quantize(Decimal("0.0001")),
-    }
-    if total_return is not None:
-        metrics["total_return"] = total_return
-    return metrics
-
-
-def _compute_total_return(
-    *,
-    task,
-    task_type: str,
-    current_balance: Decimal | None,
-    total_pnl: Decimal,
-    mid_rate: Decimal | None,
-) -> Decimal | None:
-    """Compute total return % from current balance vs initial balance.
-
-    Primary method: use current_balance from ExecutionState.
-    current_balance is kept in account currency (e.g. USD) — the executor
-    converts realized PnL to account currency before adding it — so the
-    delta (current_balance - initial_balance) is already in account currency
-    and needs no conversion.
-
-    Fallback: when current_balance is unavailable (e.g. past executions whose
-    ExecutionState has been cleaned up), use total_pnl which is aggregated
-    from positions in quote currency, so it must be converted via mid_rate
-    when account currency != quote currency.
-    """
-    if task_type != "backtest":
-        return None
-    initial_balance: Decimal | None = getattr(task, "initial_balance", None)
-    if not initial_balance:
-        return None
-    try:
-        initial = Decimal(str(initial_balance))
-        if initial == Decimal("0"):
-            return None
-
-        if current_balance is not None:
-            # current_balance is in account currency — no conversion needed
-            pnl_delta = Decimal(str(current_balance)) - initial
-        else:
-            # Fallback: total_pnl is in quote currency
-            pnl_delta = total_pnl
-            account_ccy = getattr(task, "account_currency", "USD").upper()
-            instrument = getattr(task, "instrument", "")
-            quote_ccy = instrument.split("_")[-1].upper() if "_" in instrument else ""
-            if quote_ccy and account_ccy != quote_ccy and mid_rate and mid_rate > 0:
-                pnl_delta = pnl_delta / mid_rate
-
-        return (pnl_delta / initial * Decimal("100")).quantize(Decimal("0.0000000001"))
-    except Exception:
-        return None
 
 
 def _compute_progress(*, task, task_type: str, run_id: str, status: str) -> int:
@@ -521,10 +419,3 @@ def _map_celery_status(status: str) -> str:
         CeleryTaskStatus.Status.FAILED: TaskStatus.FAILED,
     }
     return str(mapping.get(status, TaskStatus.CREATED))
-
-
-def _abs_units():
-    return Case(
-        When(units__lt=0, then=-F("units")),
-        default=F("units"),
-    )

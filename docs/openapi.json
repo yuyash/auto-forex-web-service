@@ -3171,6 +3171,90 @@
                 }
             }
         },
+        "/api/trading/tasks/backtest/{id}/trend-replay/": {
+            "get": {
+                "operationId": "trading_tasks_backtest_trend_replay_retrieve",
+                "description": "Retrieve chart-oriented trades and positions for task trend replay.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by execution ID (UUID)"
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "range_from",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 lower bound for the chart window"
+                    },
+                    {
+                        "in": "query",
+                        "name": "range_to",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 upper bound for the chart window"
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch"
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskTrendReplay"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/trading/": {
             "get": {
                 "operationId": "trading_tasks_trading_list",
@@ -4509,6 +4593,90 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/TaskTradePaginatedResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/trading/{id}/trend-replay/": {
+            "get": {
+                "operationId": "trading_tasks_trading_trend_replay_retrieve",
+                "description": "Retrieve chart-oriented trades and positions for task trend replay.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filter by execution ID (UUID)"
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "range_from",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 lower bound for the chart window"
+                    },
+                    {
+                        "in": "query",
+                        "name": "range_to",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 upper bound for the chart window"
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch"
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskTrendReplay"
                                 }
                             }
                         },
@@ -7973,6 +8141,82 @@
                     "next",
                     "previous",
                     "results"
+                ]
+            },
+            "TaskTrendReplay": {
+                "type": "object",
+                "description": "Combined trend replay payload for the chart view.",
+                "properties": {
+                    "trades": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Trade"
+                        }
+                    },
+                    "positions": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Position"
+                        }
+                    },
+                    "meta": {
+                        "$ref": "#/components/schemas/TaskTrendReplayMeta"
+                    }
+                },
+                "required": [
+                    "meta",
+                    "positions",
+                    "trades"
+                ]
+            },
+            "TaskTrendReplayMeta": {
+                "type": "object",
+                "description": "Metadata for a trend replay payload.",
+                "properties": {
+                    "mode": {
+                        "type": "string"
+                    },
+                    "page": {
+                        "type": "integer"
+                    },
+                    "page_size": {
+                        "type": "integer"
+                    },
+                    "total_trades": {
+                        "type": "integer"
+                    },
+                    "returned_trades": {
+                        "type": "integer"
+                    },
+                    "has_more_trades": {
+                        "type": "boolean"
+                    },
+                    "latest_trade_updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "range_from": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "range_to": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "has_more_trades",
+                    "latest_trade_updated_at",
+                    "mode",
+                    "page",
+                    "page_size",
+                    "range_from",
+                    "range_to",
+                    "returned_trades",
+                    "total_trades"
                 ]
             },
             "TaskTypeEnum": {

@@ -14,6 +14,7 @@ from apps.trading.engine import TradingEngine
 from apps.trading.enums import LogLevel, StopMode, TaskStatus, TaskType
 from apps.trading.logging import TaskLoggingSession
 from apps.trading.models import CeleryTaskStatus, TaskLog, TradingTask
+from apps.trading.services.execution_snapshots import persist_execution_snapshot
 from apps.trading.tasks.executor import TradingExecutor
 from apps.trading.tasks.source import LiveTickDataSource
 from apps.trading.utils import pip_size_for_instrument
@@ -112,6 +113,7 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
             logger.info(f"Current: {task.status} - task_id={task_id}")
         else:
             logger.info(f"Already in terminal state: {task.status} - task_id={task_id}")
+        persist_execution_snapshot(task=task, task_type=TaskType.TRADING)
 
         # Log task completion
         TaskLog.objects.create(
@@ -200,6 +202,7 @@ def handle_exception(task_id: UUID, task: TradingTask | None, error: Exception) 
                 "error_traceback",
             ]
         )
+        persist_execution_snapshot(task=task, task_type=TaskType.TRADING)
 
         # Update CeleryTaskStatus to maintain state consistency
         from apps.trading.models.celery import CeleryTaskStatus
@@ -263,6 +266,7 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
             logger.info(f"Transitioning: {task.status} -> STOPPED - task_id={task_id}")
             task.status = TaskStatus.STOPPED
             task.save(update_fields=["status", "updated_at"])
+            persist_execution_snapshot(task=task, task_type=TaskType.TRADING)
             logger.info(f"Current: STOPPED - task_id={task_id}")
 
             # Update CeleryTaskStatus

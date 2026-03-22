@@ -27,6 +27,7 @@ from apps.trading.serializers.events import (
 from apps.trading.serializers.execution import TaskExecutionSerializer
 from apps.trading.serializers.summary import TaskSummarySerializer
 from apps.trading.serializers.task import TaskLogSerializer
+from apps.trading.serializers.trend_replay import TaskTrendReplaySerializer
 from apps.trading.views.pagination import TaskSubResourcePagination
 
 
@@ -713,6 +714,68 @@ class TaskSubResourceMixin:
             context={"include_trade_ids": include_trade_ids},
         )
         return paginator.get_paginated_response(serializer.data)
+
+    @extend_schema(
+        tags=["Trading"],
+        parameters=[
+            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
+            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
+            OpenApiParameter(
+                "range_from",
+                str,
+                description="RFC3339 lower bound for the chart window",
+            ),
+            OpenApiParameter(
+                "range_to",
+                str,
+                description="RFC3339 upper bound for the chart window",
+            ),
+            OpenApiParameter("page", int),
+            OpenApiParameter("page_size", int),
+        ],
+        responses={200: TaskTrendReplaySerializer},
+        description="Retrieve chart-oriented trades and positions for task trend replay.",
+    )
+    @action(detail=True, methods=["get"], url_path="trend-replay")
+    def trend_replay(self, request: Request, pk: str | None = None) -> Response:
+        from apps.trading.services.trend_replay import (
+            DEFAULT_TREND_REPLAY_PAGE_SIZE,
+            MAX_TREND_REPLAY_PAGE_SIZE,
+            TrendReplayQuery,
+            build_trend_replay_payload,
+        )
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        execution_id = _parse_execution_id(request)
+        if execution_id is None:
+            execution_id = task.execution_id
+
+        try:
+            page = max(1, int(request.query_params.get("page", 1)))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = min(
+                max(1, int(request.query_params.get("page_size", DEFAULT_TREND_REPLAY_PAGE_SIZE))),
+                MAX_TREND_REPLAY_PAGE_SIZE,
+            )
+        except (TypeError, ValueError):
+            page_size = DEFAULT_TREND_REPLAY_PAGE_SIZE
+
+        payload = build_trend_replay_payload(
+            TrendReplayQuery(
+                task_type=self.task_type_label,
+                task_id=str(task.pk),
+                execution_id=str(execution_id) if execution_id is not None else None,
+                range_from=_parse_datetime_param(request, "range_from"),
+                range_to=_parse_datetime_param(request, "range_to"),
+                since=_parse_since(request),
+                page=page,
+                page_size=page_size,
+            )
+        )
+        serializer = TaskTrendReplaySerializer(payload)
+        return Response(serializer.data)
 
     # ------------------------------------------------------------------
     # orders (with incremental fetching via `since`)

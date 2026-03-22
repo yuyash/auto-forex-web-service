@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  fetchLatestTradesPage,
-  fetchTradesInRange,
-  fetchTradesSince,
-} from '../../../../utils/replayTradeFetchers';
 import type { TaskSummary } from '../../../../hooks/useTaskSummary';
+import { useSequentialPolling } from '../../../../hooks/useSequentialPolling';
+import {
+  fetchTaskTrendReplay,
+  type TaskTrendReplayPosition,
+} from '../../../../services/api/taskResources';
 import { parseUtcTimestamp } from './shared';
 import type { ReplaySummary, ReplayTrade } from './shared';
 import type { TaskType } from '../../../../types/common';
@@ -123,6 +123,7 @@ export function useTaskTrendReplayData({
   loadedTimeRange,
 }: UseTaskTrendReplayDataParams) {
   const [trades, setTrades] = useState<ReplayTrade[]>([]);
+  const [positions, setPositions] = useState<TaskTrendReplayPosition[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [warningMessage, setWarningMessage] = useState<string | null>(null);
@@ -178,40 +179,29 @@ export function useTaskTrendReplayData({
 
         if (isInitialLoad && expectedTotalTrades === 0) {
           setTrades([]);
+          setPositions([]);
           setErrorMessage(null);
           setWarningMessage(null);
           return;
         }
 
-        const rawTrades = useIncrementalTrades
-          ? shouldUseWindowedInitialFetch &&
-            loadedTimeRange?.from &&
-            loadedTimeRange?.to
-            ? await fetchTradesInRange(String(taskId), taskType, {
-                executionRunId,
-                since: tradeSinceRef.current!,
-                timestampFrom: loadedTimeRange.from,
-                timestampTo: loadedTimeRange.to,
-              })
-            : await fetchTradesSince(
-                String(taskId),
-                taskType,
-                tradeSinceRef.current!,
-                executionRunId
-              )
-          : shouldUseWindowedInitialFetch &&
-              loadedTimeRange?.from &&
-              loadedTimeRange?.to
-            ? await fetchTradesInRange(String(taskId), taskType, {
-                executionRunId,
-                timestampFrom: loadedTimeRange.from,
-                timestampTo: loadedTimeRange.to,
-              })
-            : await fetchLatestTradesPage(
-                String(taskId),
-                taskType,
-                executionRunId
-              );
+        const replayPayload = await fetchTaskTrendReplay(
+          taskType,
+          String(taskId),
+          {
+            execution_id: executionRunId,
+            since: useIncrementalTrades
+              ? (tradeSinceRef.current ?? undefined)
+              : undefined,
+            range_from: loadedTimeRange?.from,
+            range_to: loadedTimeRange?.to,
+            page: 1,
+            page_size:
+              expectedTotalTrades > MAX_EAGER_REPLAY_TRADE_COUNT ? 500 : 1000,
+          }
+        );
+        const rawTrades = replayPayload.trades;
+        const incomingPositions = replayPayload.positions;
 
         const latestUpdatedAt = getLatestTradeUpdatedAt(rawTrades);
         if (
@@ -238,6 +228,19 @@ export function useTaskTrendReplayData({
             });
             return mergedTrades;
           });
+          setPositions((prev) => {
+            const mergedById = new Map(
+              prev.map((position) => [position.id, position])
+            );
+            for (const position of incomingPositions) {
+              mergedById.set(position.id, position);
+            }
+            return Array.from(mergedById.values()).sort(
+              (a, b) =>
+                new Date(b.entry_time).getTime() -
+                new Date(a.entry_time).getTime()
+            );
+          });
         } else if (!useIncrementalTrades) {
           const fullTrades = mapRawTrades(rawTrades, instrument).sort(
             (a, b) =>
@@ -257,13 +260,20 @@ export function useTaskTrendReplayData({
             }
             return fullTrades;
           });
+          setPositions(
+            [...incomingPositions].sort(
+              (a, b) =>
+                new Date(b.entry_time).getTime() -
+                new Date(a.entry_time).getTime()
+            )
+          );
         }
         setErrorMessage(null);
         if (shouldUseWindowedInitialFetch) {
           setWarningMessage(
             'Showing replay trades for the loaded chart range to avoid fetching the full execution history.'
           );
-        } else if (expectedTotalTrades > MAX_EAGER_REPLAY_TRADE_COUNT) {
+        } else if (replayPayload.meta.has_more_trades) {
           setWarningMessage(
             'Showing the latest replay trades first because this execution has a large trade history.'
           );
@@ -294,17 +304,14 @@ export function useTaskTrendReplayData({
   useEffect(() => {
     void fetchReplayData();
   }, [fetchReplayData]);
-
-  useEffect(() => {
-    if (!enableRealTimeUpdates) return;
-    const interval = setInterval(() => {
-      void fetchReplayData();
-    }, pollingIntervalMs);
-    return () => clearInterval(interval);
-  }, [enableRealTimeUpdates, fetchReplayData, pollingIntervalMs]);
+  useSequentialPolling(fetchReplayData, {
+    enabled: enableRealTimeUpdates,
+    intervalMs: pollingIntervalMs,
+  });
 
   useEffect(() => {
     setTrades([]);
+    setPositions([]);
     setIsRefreshing(false);
     setErrorMessage(null);
     setWarningMessage(null);
@@ -315,6 +322,7 @@ export function useTaskTrendReplayData({
 
   return {
     trades,
+    positions,
     isRefreshing,
     errorMessage,
     warningMessage,

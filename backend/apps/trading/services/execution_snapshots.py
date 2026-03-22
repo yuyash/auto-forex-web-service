@@ -1,0 +1,161 @@
+"""Persistence helpers for execution summary snapshots."""
+
+from __future__ import annotations
+
+from dataclasses import asdict
+from decimal import Decimal
+from typing import Any
+
+from apps.trading.models import TaskExecutionSnapshot
+from apps.trading.services.execution_metrics import build_execution_metrics
+from apps.trading.services.summary import (
+    CountsInfo,
+    ExecutionInfo,
+    PnlInfo,
+    TaskInfo,
+    TaskSummary,
+    TickInfo,
+    compute_task_summary,
+)
+
+
+def get_summary_snapshot(
+    *,
+    task_type: str,
+    task_id: str,
+    execution_id: str | None,
+) -> TaskSummary | None:
+    """Return a persisted summary snapshot when it exists."""
+    snapshot = _get_snapshot(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=execution_id,
+    )
+    if snapshot is None or not isinstance(snapshot.summary, dict) or not snapshot.summary:
+        return None
+    return _deserialize_summary(snapshot.summary)
+
+
+def get_metrics_snapshot(
+    *,
+    task_type: str,
+    task_id: str,
+    execution_id: str | None,
+) -> dict[str, Any] | None:
+    """Return persisted metrics snapshot when it exists."""
+    snapshot = _get_snapshot(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=execution_id,
+    )
+    if snapshot is None or not isinstance(snapshot.metrics, dict) or not snapshot.metrics:
+        return None
+    return snapshot.metrics
+
+
+def persist_execution_snapshot(*, task, task_type: str) -> TaskExecutionSnapshot | None:
+    """Persist summary and metrics for the task's current execution."""
+    execution_id = getattr(task, "execution_id", None)
+    if execution_id is None:
+        return None
+    task_id = str(task.pk)
+    run_id = str(execution_id)
+    summary = compute_task_summary(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=execution_id,
+    )
+    metrics = build_execution_metrics(
+        task=task,
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=run_id,
+        summary=summary,
+        fallback_mid_rate=summary.tick.mid,
+    )
+    snapshot, _ = TaskExecutionSnapshot.objects.update_or_create(
+        task_type=task_type,
+        task_id=task.pk,
+        execution_id=execution_id,
+        defaults={
+            "completed_at": getattr(task, "completed_at", None),
+            "summary": asdict(summary),
+            "metrics": metrics,
+        },
+    )
+    return snapshot
+
+
+def _get_snapshot(
+    *,
+    task_type: str,
+    task_id: str,
+    execution_id: str | None,
+) -> TaskExecutionSnapshot | None:
+    if execution_id is None:
+        return None
+    return (
+        TaskExecutionSnapshot.objects.filter(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+        )
+        .only("summary", "metrics")
+        .first()
+    )
+
+
+def _deserialize_summary(raw: dict[str, Any]) -> TaskSummary:
+    pnl = raw.get("pnl", {})
+    counts = raw.get("counts", {})
+    execution = raw.get("execution", {})
+    tick = raw.get("tick", {})
+    task = raw.get("task", {})
+    return TaskSummary(
+        timestamp=_to_str_or_none(raw.get("timestamp")),
+        pnl=PnlInfo(
+            realized=_to_decimal(pnl.get("realized")),
+            unrealized=_to_decimal(pnl.get("unrealized")),
+        ),
+        counts=CountsInfo(
+            total_trades=int(counts.get("total_trades") or 0),
+            open_positions=int(counts.get("open_positions") or 0),
+            closed_positions=int(counts.get("closed_positions") or 0),
+        ),
+        execution=ExecutionInfo(
+            current_balance=_to_optional_decimal(execution.get("current_balance")),
+            ticks_processed=int(execution.get("ticks_processed") or 0),
+            account_currency=_to_str_or_none(execution.get("account_currency")),
+            current_balance_display=_to_optional_decimal(execution.get("current_balance_display")),
+            display_currency=_to_str_or_none(execution.get("display_currency")),
+        ),
+        tick=TickInfo(
+            timestamp=_to_str_or_none(tick.get("timestamp")),
+            bid=_to_optional_decimal(tick.get("bid")),
+            ask=_to_optional_decimal(tick.get("ask")),
+            mid=_to_optional_decimal(tick.get("mid")),
+        ),
+        task=TaskInfo(
+            status=_to_str_or_none(task.get("status")) or "",
+            started_at=_to_str_or_none(task.get("started_at")),
+            completed_at=_to_str_or_none(task.get("completed_at")),
+            error_message=_to_str_or_none(task.get("error_message")),
+            progress=int(task.get("progress") or 0),
+        ),
+    )
+
+
+def _to_decimal(value: Any) -> Decimal:
+    return Decimal(str(value or "0"))
+
+
+def _to_optional_decimal(value: Any) -> Decimal | None:
+    if value is None or value == "":
+        return None
+    return Decimal(str(value))
+
+
+def _to_str_or_none(value: Any) -> str | None:
+    if value is None:
+        return None
+    return str(value)

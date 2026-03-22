@@ -4,15 +4,12 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { TaskType } from '../../../src/types/common';
 import { useTaskTrendReplayData } from '../../../src/components/tasks/detail/taskTrendPanel/useTaskTrendReplayData';
 
-const { mockFetchLatestTradesPage, mockFetchTradesSince } = vi.hoisted(() => ({
-  mockFetchLatestTradesPage: vi.fn(),
-  mockFetchTradesSince: vi.fn(),
+const { mockFetchTaskTrendReplay } = vi.hoisted(() => ({
+  mockFetchTaskTrendReplay: vi.fn(),
 }));
 
-vi.mock('../../../src/utils/replayTradeFetchers', () => ({
-  fetchLatestTradesPage: mockFetchLatestTradesPage,
-  fetchTradesInRange: vi.fn(),
-  fetchTradesSince: mockFetchTradesSince,
+vi.mock('../../../src/services/api/taskResources', () => ({
+  fetchTaskTrendReplay: mockFetchTaskTrendReplay,
 }));
 
 describe('useTaskTrendReplayData', () => {
@@ -21,18 +18,47 @@ describe('useTaskTrendReplayData', () => {
   });
 
   it('surfaces refresh errors while keeping the latest loaded trades', async () => {
-    mockFetchLatestTradesPage.mockResolvedValue([
-      {
-        id: 'trade-1',
-        timestamp: '2026-03-20T00:00:00Z',
-        updated_at: '2026-03-20T00:00:01Z',
-        direction: 'buy',
-        units: '1000',
-        price: '150.10',
-      },
-    ]);
-    mockFetchTradesSince
-      .mockResolvedValueOnce([])
+    mockFetchTaskTrendReplay
+      .mockResolvedValueOnce({
+        trades: [
+          {
+            id: 'trade-1',
+            timestamp: '2026-03-20T00:00:00Z',
+            updated_at: '2026-03-20T00:00:01Z',
+            direction: 'buy',
+            units: '1000',
+            price: '150.10',
+            instrument: 'USD_JPY',
+          },
+        ],
+        positions: [],
+        meta: {
+          mode: 'latest',
+          page: 1,
+          page_size: 1000,
+          total_trades: 1,
+          returned_trades: 1,
+          has_more_trades: false,
+          latest_trade_updated_at: '2026-03-20T00:00:01Z',
+          range_from: null,
+          range_to: null,
+        },
+      })
+      .mockResolvedValueOnce({
+        trades: [],
+        positions: [],
+        meta: {
+          mode: 'latest',
+          page: 1,
+          page_size: 1000,
+          total_trades: 1,
+          returned_trades: 0,
+          has_more_trades: false,
+          latest_trade_updated_at: '2026-03-20T00:00:01Z',
+          range_from: null,
+          range_to: null,
+        },
+      })
       .mockRejectedValueOnce(new Error('incremental refresh failed'));
     const refreshTailCandles = vi.fn().mockResolvedValue(0);
 
