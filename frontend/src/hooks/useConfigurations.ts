@@ -12,6 +12,7 @@ interface UseConfigurationsResult {
   data: PaginatedResponse<StrategyConfig> | null;
   isLoading: boolean;
   error: Error | null;
+  refresh: () => Promise<unknown>;
   refetch: () => Promise<unknown>;
 }
 
@@ -19,6 +20,7 @@ interface UseConfigurationResult {
   data: StrategyConfig | null;
   isLoading: boolean;
   error: Error | null;
+  refresh: () => Promise<unknown>;
   refetch: () => Promise<unknown>;
 }
 
@@ -26,6 +28,7 @@ interface UseConfigurationTasksResult {
   data: ConfigurationTask[] | null;
   isLoading: boolean;
   error: Error | null;
+  refresh: () => Promise<unknown>;
   refetch: () => Promise<unknown>;
 }
 
@@ -41,6 +44,7 @@ export function useConfigurations(
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
+    refresh: () => query.refetch(),
     refetch: () => query.refetch(),
   };
 }
@@ -58,6 +62,7 @@ export function useConfiguration(id?: string): UseConfigurationResult {
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
+    refresh: () => (id ? query.refetch() : Promise.resolve()),
     refetch: () => (id ? query.refetch() : Promise.resolve()),
   };
 }
@@ -76,6 +81,7 @@ export function useConfigurationTasks(
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
+    refresh: () => query.refetch(),
     refetch: () => query.refetch(),
   };
 }

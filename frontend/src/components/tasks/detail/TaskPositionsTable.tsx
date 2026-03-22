@@ -134,7 +134,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     totalCount: closedLongTotal,
     isLoading: cl1,
     error: ce1,
-    refetch: rCL,
+    refresh: rCL,
   } = useTaskPositions({
     taskId,
     taskType,
@@ -150,7 +150,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     totalCount: closedShortTotal,
     isLoading: cl2,
     error: ce2,
-    refetch: rCS,
+    refresh: rCS,
   } = useTaskPositions({
     taskId,
     taskType,
@@ -166,7 +166,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     totalCount: openLongTotal,
     isLoading: cl3,
     error: ce3,
-    refetch: rOL,
+    refresh: rOL,
   } = useTaskPositions({
     taskId,
     taskType,
@@ -182,7 +182,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     totalCount: openShortTotal,
     isLoading: cl4,
     error: ce4,
-    refetch: rOS,
+    refresh: rOS,
   } = useTaskPositions({
     taskId,
     taskType,
@@ -200,7 +200,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     totalCount: longTotal,
     isLoading: ld1,
     error: le1,
-    refetch: rLong,
+    refresh: rLong,
   } = useTaskPositions({
     taskId,
     taskType,
@@ -215,7 +215,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     totalCount: shortTotal,
     isLoading: ld2,
     error: le2,
-    refetch: rShort,
+    refresh: rShort,
   } = useTaskPositions({
     taskId,
     taskType,
@@ -232,7 +232,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     totalCount: allTotal,
     isLoading: ad1,
     error: ae1,
-    refetch: rAll,
+    refresh: rAll,
   } = useTaskPositions({
     taskId,
     taskType,
@@ -714,9 +714,9 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   };
 
   const makeReload =
-    (key: string, refetch: () => Promise<void>) => async () => {
+    (key: string, refresh: () => Promise<void>) => async () => {
       setReloading((p) => ({ ...p, [key]: true }));
-      await refetch();
+      await refresh();
       setReloading((p) => ({ ...p, [key]: false }));
     };
 

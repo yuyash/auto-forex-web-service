@@ -66,6 +66,7 @@ interface UseTaskPositionsResult {
   hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
+  refresh: () => Promise<void>;
   refetch: () => Promise<void>;
 }
 
@@ -326,6 +327,7 @@ export const useTaskPositions = ({
       refetch: () => fetchPositions(false),
     }),
     positions,
+    refresh: () => fetchPositions(false),
     refetch: () => fetchPositions(false),
   };
 };

@@ -68,10 +68,6 @@ class TaskService:
     - Task restart and resume operations
     """
 
-    writer = TaskLifecycleWriter(logger=logger)
-    commands = TaskLifecycleCommands(service=None, logger=logger)  # type: ignore[arg-type]
-    events = TaskLifecycleEventPublisher(logger=logger)
-
     def __init__(self) -> None:
         self.writer = TaskLifecycleWriter(logger=logger)
         self.events = TaskLifecycleEventPublisher(logger=logger)
@@ -90,24 +86,6 @@ class TaskService:
         if celery_task_id:
             return AsyncResult(celery_task_id)
         return None
-
-    @staticmethod
-    def _emit_task_lifecycle_event(
-        *,
-        task: BacktestTask | TradingTask,
-        task_type: str | None = None,
-        kind: str,
-        description: str,
-        extra_details: dict[str, object] | None = None,
-    ) -> None:
-        resolved_task_type = task_type or TaskService._resolve_task_type(task)
-        TaskLifecycleEventPublisher(logger=logger).publish(
-            task=task,
-            task_type=resolved_task_type,
-            kind=kind,
-            description=description,
-            extra_details=extra_details,
-        )
 
     @staticmethod
     def _resolve_task_type(task: BacktestTask | TradingTask) -> str:

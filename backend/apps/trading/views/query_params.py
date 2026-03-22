@@ -19,6 +19,97 @@ from apps.trading.views.pagination import (
 )
 
 
+@dataclass(frozen=True)
+class QueryFieldSpec:
+    """Shared runtime and schema definition for query parameters."""
+
+    name: str
+    help_text: str
+    kind: str
+    default: object | None = None
+    max_value: int | None = None
+    choices: tuple[str, ...] | None = None
+    allow_blank: bool = False
+
+    def schema_field(self) -> serializers.Field:
+        if self.kind == "datetime":
+            return serializers.DateTimeField(
+                required=False,
+                allow_null=True,
+                help_text=self.help_text,
+            )
+        if self.kind == "uuid":
+            return serializers.UUIDField(
+                required=False,
+                allow_null=True,
+                help_text=self.help_text,
+            )
+        if self.kind == "string":
+            return serializers.CharField(
+                required=False,
+                allow_blank=self.allow_blank,
+                help_text=self.help_text,
+            )
+        if self.kind == "bool":
+            return serializers.BooleanField(required=False, help_text=self.help_text)
+        if self.kind == "choice":
+            return serializers.ChoiceField(
+                required=False,
+                choices=self.choices or (),
+                help_text=self.help_text,
+            )
+        if self.kind == "int":
+            return serializers.IntegerField(
+                required=False,
+                min_value=1,
+                max_value=self.max_value,
+                help_text=self.help_text,
+            )
+        raise ValueError(f"Unsupported query field kind: {self.kind}")
+
+    def parse(self, value: str | None):
+        if self.kind == "datetime":
+            return _parse_datetime_value(value)
+        if self.kind == "uuid":
+            return _parse_execution_id_value(value)
+        if self.kind == "int":
+            default = self.default if isinstance(self.default, int) else 1
+            return _parse_positive_int(
+                value,
+                field_name=self.name,
+                default=default,
+                max_value=self.max_value,
+            )
+        if self.kind == "bool":
+            return str(value or "").lower() in {"1", "true", "yes", "on"}
+        if self.kind == "choice":
+            normalized = (value or "").lower()
+            if normalized and self.choices and normalized not in self.choices:
+                raise _invalid_query_param(f"{self.name} must be one of: {', '.join(self.choices)}")
+            return normalized
+        if self.kind == "string":
+            return value or ""
+        raise ValueError(f"Unsupported query field kind: {self.kind}")
+
+
+PAGE_SPEC = QueryFieldSpec(
+    name="page",
+    kind="int",
+    default=1,
+    help_text="Page number (1-based).",
+)
+EXECUTION_ID_SPEC = QueryFieldSpec(
+    name="execution_id",
+    kind="uuid",
+    help_text="Filter by execution ID (UUID).",
+)
+SINCE_SPEC = QueryFieldSpec(
+    name="since",
+    kind="datetime",
+    help_text="RFC3339 timestamp for incremental fetch.",
+)
+
+
 def _schema_datetime_field(help_text: str) -> serializers.DateTimeField:
     return serializers.DateTimeField(required=False, allow_null=True, help_text=help_text)
 
@@ -131,22 +222,18 @@ class PaginationParamsSerializer(QueryParamsSerializer):
     ) -> None:
         super().__init__(*args, **kwargs)
         self.request = request
-        self.default_page_size = default_page_size
-        self.max_page_size = max_page_size
+        self.page_size_spec = QueryFieldSpec(
+            name="page_size",
+            kind="int",
+            default=default_page_size,
+            max_value=max_page_size,
+            help_text=f"Results per page. Default {default_page_size}, maximum {max_page_size}.",
+        )
 
     def to_params(self) -> PaginationParams:
         return PaginationParams(
-            page=_parse_positive_int(
-                self.request.query_params.get("page"),
-                field_name="page",
-                default=1,
-            ),
-            page_size=_parse_positive_int(
-                self.request.query_params.get("page_size"),
-                field_name="page_size",
-                default=self.default_page_size,
-                max_value=self.max_page_size,
-            ),
+            page=PAGE_SPEC.parse(self.request.query_params.get("page")),
+            page_size=self.page_size_spec.parse(self.request.query_params.get("page_size")),
         )
 
 
@@ -173,9 +260,9 @@ class ExecutionScopedQuerySerializer(PaginationParamsSerializer):
 
     def to_query(self) -> ExecutionScopedQuery:
         return ExecutionScopedQuery(
-            execution_id=_parse_execution_id_value(self.request.query_params.get("execution_id"))
+            execution_id=EXECUTION_ID_SPEC.parse(self.request.query_params.get("execution_id"))
             or self.default_execution_id,
-            since=_parse_datetime_value(self.request.query_params.get("since")),
+            since=SINCE_SPEC.parse(self.request.query_params.get("since")),
             pagination=self.to_params(),
         )
 
@@ -209,22 +296,34 @@ class DateRangeQuerySerializer(QueryParamsSerializer):
 class ExecutionScopedQueryParamsSchemaSerializer(serializers.Serializer):
     """OpenAPI serializer for execution-scoped task query parameters."""
 
-    execution_id = _schema_uuid_field("Filter by execution ID (UUID).")
-    since = _schema_datetime_field("RFC3339 timestamp for incremental fetch.")
-    page = _schema_page_field()
-    page_size = _schema_page_size_field(
+    execution_id = EXECUTION_ID_SPEC.schema_field()
+    since = SINCE_SPEC.schema_field()
+    page = PAGE_SPEC.schema_field()
+    page_size = QueryFieldSpec(
+        name="page_size",
+        kind="int",
         default=ActivityPagination.page_size,
         max_value=ActivityPagination.max_page_size,
-    )
+        help_text=(
+            f"Results per page. Default {ActivityPagination.page_size}, "
+            f"maximum {ActivityPagination.max_page_size}."
+        ),
+    ).schema_field()
 
 
 class MetricsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for metrics query parameters."""
 
-    page_size = _schema_page_size_field(
+    page_size = QueryFieldSpec(
+        name="page_size",
+        kind="int",
         default=MetricsPagination.page_size,
         max_value=MetricsPagination.max_page_size,
-    )
+        help_text=(
+            f"Results per page. Default {MetricsPagination.page_size}, "
+            f"maximum {MetricsPagination.max_page_size}."
+        ),
+    ).schema_field()
     until = _schema_datetime_field("RFC3339 upper-bound timestamp (exclusive).")
     interval = serializers.IntegerField(
         required=False,
@@ -274,7 +373,7 @@ class EventsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializ
 class StrategyEventsQueryParamsSchemaSerializer(QueryParamsSerializer):
     """OpenAPI serializer for strategy event visualization parameters."""
 
-    execution_id = _schema_uuid_field("Filter by execution ID (UUID).")
+    execution_id = EXECUTION_ID_SPEC.schema_field()
     root_entry_id = serializers.IntegerField(
         required=False,
         min_value=1,
@@ -285,10 +384,16 @@ class StrategyEventsQueryParamsSchemaSerializer(QueryParamsSerializer):
 class TradesQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for trades query parameters."""
 
-    page_size = _schema_page_size_field(
+    page_size = QueryFieldSpec(
+        name="page_size",
+        kind="int",
         default=TradePositionPagination.page_size,
         max_value=TradePositionPagination.max_page_size,
-    )
+        help_text=(
+            f"Results per page. Default {TradePositionPagination.page_size}, "
+            f"maximum {TradePositionPagination.max_page_size}."
+        ),
+    ).schema_field()
     direction = _schema_string_field("Direction filter (buy/sell/long/short).")
     timestamp_from = _schema_datetime_field(
         "Filter trades executed at or after this RFC3339 timestamp."
@@ -301,10 +406,16 @@ class TradesQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializ
 class PositionsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for positions query parameters."""
 
-    page_size = _schema_page_size_field(
+    page_size = QueryFieldSpec(
+        name="page_size",
+        kind="int",
         default=TradePositionPagination.page_size,
         max_value=TradePositionPagination.max_page_size,
-    )
+        help_text=(
+            f"Results per page. Default {TradePositionPagination.page_size}, "
+            f"maximum {TradePositionPagination.max_page_size}."
+        ),
+    ).schema_field()
     position_status = serializers.ChoiceField(
         required=False,
         choices=("open", "closed"),
@@ -323,10 +434,16 @@ class PositionsQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSeria
 class TrendReplayQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for trend replay parameters."""
 
-    page_size = _schema_page_size_field(
+    page_size = QueryFieldSpec(
+        name="page_size",
+        kind="int",
         default=TradePositionPagination.page_size,
         max_value=TradePositionPagination.max_page_size,
-    )
+        help_text=(
+            f"Results per page. Default {TradePositionPagination.page_size}, "
+            f"maximum {TradePositionPagination.max_page_size}."
+        ),
+    ).schema_field()
     range_from = _schema_datetime_field("RFC3339 lower bound for the chart window.")
     range_to = _schema_datetime_field("RFC3339 upper bound for the chart window.")
 
@@ -334,10 +451,16 @@ class TrendReplayQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSer
 class OrdersQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializer):
     """OpenAPI serializer for orders query parameters."""
 
-    page_size = _schema_page_size_field(
+    page_size = QueryFieldSpec(
+        name="page_size",
+        kind="int",
         default=TradePositionPagination.page_size,
         max_value=TradePositionPagination.max_page_size,
-    )
+        help_text=(
+            f"Results per page. Default {TradePositionPagination.page_size}, "
+            f"maximum {TradePositionPagination.max_page_size}."
+        ),
+    ).schema_field()
     status = _schema_string_field("Order status filter.")
     order_type = _schema_string_field("Order type filter.")
     direction = _schema_string_field("Direction filter.")
@@ -346,17 +469,23 @@ class OrdersQueryParamsSchemaSerializer(ExecutionScopedQueryParamsSchemaSerializ
 class SummaryQueryParamsSchemaSerializer(QueryParamsSerializer):
     """OpenAPI serializer for summary query parameters."""
 
-    execution_id = _schema_uuid_field("Filter by execution ID (UUID).")
+    execution_id = EXECUTION_ID_SPEC.schema_field()
 
 
 class ExecutionsQueryParamsSchemaSerializer(serializers.Serializer):
     """OpenAPI serializer for execution list query parameters."""
 
-    page = _schema_page_field()
-    page_size = _schema_page_size_field(
+    page = PAGE_SPEC.schema_field()
+    page_size = QueryFieldSpec(
+        name="page_size",
+        kind="int",
         default=ActivityPagination.page_size,
         max_value=ActivityPagination.max_page_size,
-    )
+        help_text=(
+            f"Results per page. Default {ActivityPagination.page_size}, "
+            f"maximum {ActivityPagination.max_page_size}."
+        ),
+    ).schema_field()
     include_metrics = _schema_bool_field("Include aggregate execution metrics.")
 
 
@@ -369,11 +498,17 @@ class ExecutionDetailQueryParamsSchemaSerializer(QueryParamsSerializer):
 class PaginationSchemaSerializer(serializers.Serializer):
     """OpenAPI serializer for plain pagination parameters."""
 
-    page = _schema_page_field()
-    page_size = _schema_page_size_field(
+    page = PAGE_SPEC.schema_field()
+    page_size = QueryFieldSpec(
+        name="page_size",
+        kind="int",
         default=ActivityPagination.page_size,
         max_value=ActivityPagination.max_page_size,
-    )
+        help_text=(
+            f"Results per page. Default {ActivityPagination.page_size}, "
+            f"maximum {ActivityPagination.max_page_size}."
+        ),
+    ).schema_field()
 
 
 @dataclass(frozen=True)

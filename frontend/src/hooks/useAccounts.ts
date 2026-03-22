@@ -1,6 +1,6 @@
 // React Query hooks for accounts
 import { useQuery } from '@tanstack/react-query';
-import { queryClient, queryKeys } from '../config/reactQuery';
+import { queryKeys } from '../config/reactQuery';
 import { accountsApi, type AccountListParams } from '../services/api/accounts';
 
 // List accounts
@@ -16,10 +16,7 @@ export function useAccounts(
 
   return {
     ...query,
-    refresh: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.accounts.all,
-      }),
+    refresh: () => query.refetch(),
   };
 }
 
@@ -33,9 +30,6 @@ export function useAccount(id: number, options?: { enabled?: boolean }) {
 
   return {
     ...query,
-    refresh: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.accounts.detail(id),
-      }),
+    refresh: () => query.refetch(),
   };
 }
