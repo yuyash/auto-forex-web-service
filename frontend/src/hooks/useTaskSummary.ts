@@ -16,6 +16,7 @@ import { useSequentialPolling } from './useSequentialPolling';
 import { TaskType } from '../types/common';
 import { refreshTaskSummary } from './taskResourceCache';
 import { createTaskSummaryQuery } from './taskResourceQueries';
+import { usePollingActivity } from './usePollingActivity';
 
 export interface TickInfo {
   timestamp: string | null;
@@ -66,9 +67,11 @@ export interface UseTaskSummaryOptions {
 }
 
 export interface UseTaskSummaryResult {
+  data: TaskSummary;
   summary: TaskSummary;
   isLoading: boolean;
   error: Error | null;
+  refresh: () => Promise<unknown>;
   refetch: () => Promise<unknown>;
 }
 
@@ -103,6 +106,7 @@ export function useTaskSummary(
   const query = useQuery(
     createTaskSummaryQuery(taskId, taskType, executionRunId, INITIAL_SUMMARY)
   );
+  const pollingEnabled = usePollingActivity(polling && Boolean(taskId));
 
   useSequentialPolling(
     () => {
@@ -112,15 +116,19 @@ export function useTaskSummary(
       return Promise.resolve();
     },
     {
-      enabled: polling && Boolean(taskId),
+      enabled: pollingEnabled,
       intervalMs: interval,
     }
   );
 
+  const refresh = () => refreshTaskSummary(taskId, taskType, executionRunId);
+
   return {
+    data: query.data ?? INITIAL_SUMMARY,
     summary: query.data ?? INITIAL_SUMMARY,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: () => refreshTaskSummary(taskId, taskType, executionRunId),
+    refresh,
+    refetch: refresh,
   };
 }

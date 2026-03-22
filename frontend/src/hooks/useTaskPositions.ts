@@ -14,6 +14,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
 import { useSequentialPolling } from './useSequentialPolling';
+import { usePollingActivity } from './usePollingActivity';
 import {
   fetchTaskResourcePage,
   isApiErrorWithStatus,
@@ -269,6 +270,8 @@ export const useTaskPositions = ({
     fetchPositions(false);
   }, [fetchPositions]);
 
+  const pollingEnabled = usePollingActivity(enableRealTimeUpdates);
+
   useSequentialPolling(
     () => {
       if (hasInitialFetchRef.current) {
@@ -277,7 +280,7 @@ export const useTaskPositions = ({
       return Promise.resolve();
     },
     {
-      enabled: enableRealTimeUpdates,
+      enabled: pollingEnabled,
       intervalMs: refreshInterval,
     }
   );

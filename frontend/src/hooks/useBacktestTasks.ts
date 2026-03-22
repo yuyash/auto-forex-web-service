@@ -1,11 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryClient, queryKeys } from '../config/reactQuery';
-import { backtestTasksApi } from '../services/api';
+import { TaskType } from '../types/common';
 import type {
   BacktestTask,
   BacktestTaskListParams,
   PaginatedResponse,
 } from '../types';
+import {
+  createTaskDetailQuery,
+  createTaskListQuery,
+} from './taskResourceQueries';
+import { usePollingActivity } from './usePollingActivity';
 
 interface UseBacktestTasksResult {
   data: PaginatedResponse<BacktestTask> | null;
@@ -30,11 +35,9 @@ interface UseBacktestTaskOptions {
 export function useBacktestTasks(
   params?: BacktestTaskListParams
 ): UseBacktestTasksResult {
-  const query = useQuery({
-    queryKey: queryKeys.backtestTasks.list(params),
-    queryFn: () => backtestTasksApi.list(params),
-    enabled: params !== undefined,
-  });
+  const query = useQuery(
+    createTaskListQuery<BacktestTask>(TaskType.BACKTEST, params)
+  );
 
   return {
     data: query.data ?? null,
@@ -51,23 +54,15 @@ export function useBacktestTask(
   id?: string,
   options?: UseBacktestTaskOptions
 ): UseBacktestTaskResult {
-  const query = useQuery({
-    queryKey: id
-      ? queryKeys.backtestTasks.detail(id)
-      : ['backtest-task', 'empty'],
-    queryFn: () => backtestTasksApi.get(id!),
-    enabled: Boolean(id) && options?.enabled !== false,
-    refetchInterval: (queryContext) => {
-      if (options?.enablePolling !== true) {
-        return false;
-      }
-      const currentTask = queryContext.state.data as BacktestTask | undefined;
-      const status = currentTask?.status;
-      return status === 'starting' || status === 'running'
-        ? (options.pollingInterval ?? 3000)
-        : false;
-    },
-  });
+  const pollingEnabled = usePollingActivity(
+    Boolean(id) && options?.enablePolling === true
+  );
+  const query = useQuery(
+    createTaskDetailQuery<BacktestTask>(TaskType.BACKTEST, id, {
+      ...options,
+      enablePolling: pollingEnabled,
+    })
+  );
 
   return {
     data: query.data ?? null,

@@ -4,6 +4,7 @@ import { refreshTaskStrategyEvents } from './taskResourceCache';
 import { createTaskStrategyEventsQuery } from './taskResourceQueries';
 import { TaskType } from '../types/common';
 import type { StrategyVisualizationResponse } from '../types/strategyVisualization';
+import { usePollingActivity } from './usePollingActivity';
 
 interface UseTaskStrategyEventsOptions {
   taskId: string | number;
@@ -17,6 +18,7 @@ interface UseTaskStrategyEventsResult {
   data: StrategyVisualizationResponse | null;
   isLoading: boolean;
   error: Error | null;
+  refresh: () => Promise<unknown>;
   refetch: () => Promise<unknown>;
 }
 
@@ -30,6 +32,9 @@ export function useTaskStrategyEvents({
   const query = useQuery(
     createTaskStrategyEventsQuery(taskId, taskType, executionRunId)
   );
+  const pollingEnabled = usePollingActivity(
+    enableRealTimeUpdates && Boolean(taskId)
+  );
 
   useSequentialPolling(
     () => {
@@ -39,16 +44,19 @@ export function useTaskStrategyEvents({
       return Promise.resolve();
     },
     {
-      enabled: enableRealTimeUpdates && Boolean(taskId),
+      enabled: pollingEnabled,
       intervalMs: refreshInterval,
     }
   );
+
+  const refresh = () =>
+    refreshTaskStrategyEvents(String(taskId), taskType, executionRunId);
 
   return {
     data: query.data ?? null,
     isLoading: query.isLoading,
     error: (query.error as Error | null) ?? null,
-    refetch: () =>
-      refreshTaskStrategyEvents(String(taskId), taskType, executionRunId),
+    refresh,
+    refetch: refresh,
   };
 }

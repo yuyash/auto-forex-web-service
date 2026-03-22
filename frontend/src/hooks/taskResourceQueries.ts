@@ -5,7 +5,14 @@ import {
   fetchTaskResourceObject,
   isApiErrorWithStatus,
 } from '../services/api/taskResources';
-import type { PaginatedResponse, TaskExecution } from '../types';
+import type {
+  BacktestTask,
+  BacktestTaskListParams,
+  PaginatedResponse,
+  TaskExecution,
+  TradingTask,
+  TradingTaskListParams,
+} from '../types';
 import { TaskType } from '../types/common';
 import type { StrategyVisualizationResponse } from '../types/strategyVisualization';
 import { handleAuthErrorStatus } from '../utils/authEvents';
@@ -41,6 +48,69 @@ interface TaskSummaryResponse {
     completed_at?: string | null;
     error_message?: string | null;
     progress?: number;
+  };
+}
+
+type TaskListParams = BacktestTaskListParams | TradingTaskListParams;
+type TaskEntity = BacktestTask | TradingTask;
+
+function shouldPollTaskStatus(status: string | undefined): boolean {
+  return status === 'starting' || status === 'running' || status === 'paused';
+}
+
+export function createTaskListQuery<TTask extends TaskEntity>(
+  taskType: TaskType,
+  params?: TaskListParams
+): UseQueryOptions<PaginatedResponse<TTask>> {
+  return {
+    queryKey:
+      taskType === TaskType.BACKTEST
+        ? queryKeys.backtestTasks.list(params)
+        : queryKeys.tradingTasks.list(params),
+    queryFn: () =>
+      taskType === TaskType.BACKTEST
+        ? (backtestTasksApi.list(params as BacktestTaskListParams) as Promise<
+            PaginatedResponse<TTask>
+          >)
+        : (tradingTasksApi.list(params as TradingTaskListParams) as Promise<
+            PaginatedResponse<TTask>
+          >),
+    enabled: params !== undefined,
+  };
+}
+
+export function createTaskDetailQuery<TTask extends TaskEntity>(
+  taskType: TaskType,
+  id: string | undefined,
+  options?: {
+    enabled?: boolean;
+    enablePolling?: boolean;
+    pollingInterval?: number;
+  }
+): UseQueryOptions<TTask> {
+  return {
+    queryKey:
+      taskType === TaskType.BACKTEST
+        ? id
+          ? queryKeys.backtestTasks.detail(id)
+          : ['backtest-task', 'empty']
+        : id
+          ? queryKeys.tradingTasks.detail(id)
+          : ['trading-task', 'empty'],
+    queryFn: () =>
+      taskType === TaskType.BACKTEST
+        ? (backtestTasksApi.get(id!) as Promise<TTask>)
+        : (tradingTasksApi.get(id!) as Promise<TTask>),
+    enabled: Boolean(id) && options?.enabled !== false,
+    refetchInterval: (queryContext) => {
+      if (options?.enablePolling !== true) {
+        return false;
+      }
+      const currentTask = queryContext.state.data as TTask | undefined;
+      return shouldPollTaskStatus(currentTask?.status)
+        ? (options.pollingInterval ?? 3000)
+        : false;
+    },
   };
 }
 

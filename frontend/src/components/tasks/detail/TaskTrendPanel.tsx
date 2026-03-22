@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Alert,
   Box,
@@ -17,7 +11,7 @@ import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { type Time, type UTCTimestamp } from 'lightweight-charts';
 import { type TaskSummary } from '../../../hooks/useTaskSummary';
-import { useDocumentVisibility } from '../../../hooks/useDocumentVisibility';
+import { usePollingActivity } from '../../../hooks/usePollingActivity';
 import { useSupportedGranularities } from '../../../hooks/useMarketConfig';
 import { TaskType } from '../../../types/common';
 import { getTimezoneAbbr } from '../../../utils/chartTimezone';
@@ -32,13 +26,8 @@ import {
   ALLOWED_VALUES,
   GRANULARITY_MINUTES,
   POLLING_INTERVAL_OPTIONS,
-  findFirstCandleAtOrAfter,
-  findLastCandleAtOrBefore,
   isoToSec,
-  parseUtcTimestamp,
   recommendGranularity,
-  snapToCandleTimeInLoadedRange,
-  toEventMarkerTime,
 } from './taskTrendPanel/shared';
 import type { CandlePoint, ReplayTrade } from './taskTrendPanel/shared';
 import { TaskTrendToolbar } from './taskTrendPanel/TaskTrendToolbar';
@@ -49,11 +38,9 @@ import { useTaskTrendChart } from './taskTrendPanel/useTaskTrendChart';
 import { useTaskTrendReplayData } from './taskTrendPanel/useTaskTrendReplayData';
 import { useTaskTrendTradesTable } from './taskTrendPanel/useTaskTrendTradesTable';
 import { useTaskTrendPositionsTable } from './taskTrendPanel/useTaskTrendPositionsTable';
+import { useTaskTrendPanelState } from './taskTrendPanel/useTaskTrendPanelState';
+import { useTaskTrendMarkers } from './taskTrendPanel/useTaskTrendMarkers';
 import { logger } from '../../../utils/logger';
-import {
-  readRawStoredValue,
-  writeRawStoredValue,
-} from '../../../utils/persistentState';
 
 interface TaskTrendPanelProps {
   taskId: string | number;
@@ -92,18 +79,32 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   const muiTheme = useTheme();
   const isDark = muiTheme.palette.mode === 'dark';
   const timezone = user?.timezone || 'UTC';
-  const [granularity, setGranularity] = useState<string>('M1');
-  const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
-  const [pollingIntervalMs, setPollingIntervalMs] = useState(10_000);
-  const [chartWarningState, setChartWarningState] = useState<{
-    contextKey: string;
-    message: string | null;
-  }>({
-    contextKey: '',
-    message: null,
+  const {
+    granularity,
+    setGranularity,
+    selectedTradeId,
+    setSelectedTradeId,
+    pollingIntervalMs,
+    setPollingIntervalMs,
+    autoFollow,
+    setAutoFollow,
+    selectedPosId,
+    setSelectedPosId,
+    highlightedTradeIds,
+    setHighlightedTradeIds,
+    chartClickedRef,
+    selectedPosRowRef,
+    chartHeight,
+    minChartHeight: MIN_CHART_HEIGHT,
+    handleSeparatorMouseDown,
+    chartWarning,
+    reportChartWarning,
+  } = useTaskTrendPanelState({
+    taskType,
+    taskId,
+    executionRunId,
   });
-  const isPageVisible = useDocumentVisibility();
-  const realTimeUpdatesEnabled = enableRealTimeUpdates && isPageVisible;
+  const realTimeUpdatesEnabled = usePollingActivity(enableRealTimeUpdates);
   const { granularities, usingFallback: usingGranularityFallback } =
     useSupportedGranularities();
   const {
@@ -221,73 +222,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     bounds: taskDataBounds,
     pollTrades: false,
   });
-
-  // Auto-follow: track whether the chart should auto-scroll to the position line
-  const [autoFollow, setAutoFollow] = useState(true);
-
-  const chartClickedRef = useRef(false);
-  const selectedPosRowRef = useRef<HTMLTableRowElement | null>(null);
-  const [selectedPosId, setSelectedPosId] = useState<string | null>(null);
-  const [highlightedTradeIds, setHighlightedTradeIds] = useState<Set<string>>(
-    new Set()
-  );
-
-  // Chart height state for draggable separator
-  const MIN_CHART_HEIGHT = 200;
-  const CHART_HEIGHT_STORAGE_KEY = 'replay-chart-height';
-  const [chartHeight, setChartHeight] = useState(() => {
-    const saved = readRawStoredValue(CHART_HEIGHT_STORAGE_KEY);
-    if (saved) {
-      const parsed = parseInt(saved, 10);
-      if (Number.isFinite(parsed) && parsed >= MIN_CHART_HEIGHT) return parsed;
-    }
-    return 400;
-  });
-  const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
-
-  const handleSeparatorMouseDown = useCallback(
-    (e: React.MouseEvent | React.TouchEvent) => {
-      e.preventDefault();
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-      dragRef.current = { startY: clientY, startHeight: chartHeight };
-
-      const onMove = (ev: MouseEvent | TouchEvent) => {
-        if (!dragRef.current) return;
-        const moveY =
-          'touches' in ev ? ev.touches[0].clientY : (ev as MouseEvent).clientY;
-        const diff = moveY - dragRef.current.startY;
-        const maxHeight = window.innerHeight;
-        const newHeight = Math.min(
-          maxHeight,
-          Math.max(MIN_CHART_HEIGHT, dragRef.current.startHeight + diff)
-        );
-        setChartHeight(newHeight);
-      };
-
-      const onEnd = () => {
-        dragRef.current = null;
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onEnd);
-        document.removeEventListener('touchmove', onMove);
-        document.removeEventListener('touchend', onEnd);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        // Persist final height
-        setChartHeight((h) => {
-          writeRawStoredValue(CHART_HEIGHT_STORAGE_KEY, String(h));
-          return h;
-        });
-      };
-
-      document.body.style.cursor = 'row-resize';
-      document.body.style.userSelect = 'none';
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onEnd);
-      document.addEventListener('touchmove', onMove, { passive: false });
-      document.addEventListener('touchend', onEnd);
-    },
-    [chartHeight]
-  );
 
   const currentPrice =
     currentTick?.price != null ? parseFloat(currentTick.price) : null;
@@ -496,6 +430,7 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     [
       longPosRowsPerPage,
       setLongPosPage,
+      setSelectedPosId,
       setShortPosPage,
       shortPosRowsPerPage,
       sortedLongPositions,
@@ -548,9 +483,12 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     return () => cancelAnimationFrame(highlightReset);
   }, [
     selectedTradeId,
+    chartClickedRef,
     sortedTrades,
     tradeRowsPerPage,
     setTradePage,
+    setHighlightedTradeIds,
+    setSelectedPosId,
     trades,
     findPositionForTrade,
     findTradeIdsForPosition,
@@ -588,29 +526,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       to: candleTimestampsMemo[candleTimestampsMemo.length - 1],
     });
   }, [candleTimestampsMemo, ensureMarkerRange, realTimeUpdatesEnabled]);
-
-  const chartWarningContextKey = `${taskType}:${taskId}:${executionRunId ?? 'none'}:${granularity}`;
-  const chartWarning = useMemo(
-    () =>
-      chartWarningState.contextKey === chartWarningContextKey
-        ? chartWarningState.message
-        : null,
-    [chartWarningContextKey, chartWarningState]
-  );
-  const reportChartWarning = useCallback(
-    (message: string | null) => {
-      setChartWarningState((prev) => {
-        if (
-          prev.contextKey === chartWarningContextKey &&
-          prev.message === message
-        ) {
-          return prev;
-        }
-        return { contextKey: chartWarningContextKey, message };
-      });
-    },
-    [chartWarningContextKey]
-  );
 
   const {
     chartContainerRef,
@@ -675,191 +590,25 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
       setGranularity(recommendedGranularity);
     });
     return () => cancelAnimationFrame(raf);
-  }, [recommendedGranularity, instrument, startTime, endTime]);
+  }, [recommendedGranularity, instrument, setGranularity, startTime, endTime]);
 
   useEffect(() => {
     tradesRef.current = trades;
   }, [trades]);
-
-  // Chart height is managed by flex layout + ResizeObserver
-
-  const eventMarkers = useMemo(() => {
-    const candleTimes = candles.map((c) => Number(c.time));
-    const markers: Array<{
-      time: Time;
-      position: 'aboveBar' | 'belowBar';
-      shape: 'circle' | 'arrowUp' | 'arrowDown' | 'square';
-      color: string;
-      text?: string;
-      size?: number;
-    }> = [];
-
-    for (const event of taskLifecycleEvents) {
-      const rawTime = toEventMarkerTime(event);
-      if (!rawTime) continue;
-      const time = snapToCandleTimeInLoadedRange(Number(rawTime), candleTimes);
-      if (!time) continue;
-      markers.push({
-        time,
-        position: 'aboveBar',
-        shape: 'circle',
-        color: '#2563eb',
-        text: event.event_type_display || event.event_type,
-      });
-    }
-
-    // Trading events (open/close) are intentionally excluded here because
-    // tradeMarkers already display the same information with direction and
-    // lot size.  Including both would create duplicate overlapping markers.
-
-    for (const event of strategyEvents) {
-      const rawTime = toEventMarkerTime(event);
-      if (!rawTime) continue;
-      const time = snapToCandleTimeInLoadedRange(Number(rawTime), candleTimes);
-      if (!time) continue;
-      markers.push({
-        time,
-        position: 'aboveBar',
-        shape: 'arrowDown',
-        color: '#111111',
-        text: event.event_type_display || event.event_type,
-      });
-    }
-
-    if (startTimeSec != null) {
-      const time = findFirstCandleAtOrAfter(startTimeSec, candleTimes);
-      if (time) {
-        markers.push({
-          time,
-          position: 'aboveBar',
-          shape: 'arrowDown',
-          color: '#111111',
-          text: 'START',
-        });
-      }
-    }
-
-    if (endTimeSec != null) {
-      const time = findLastCandleAtOrBefore(endTimeSec, candleTimes);
-      if (time) {
-        markers.push({
-          time,
-          position: 'aboveBar',
-          shape: 'arrowDown',
-          color: '#111111',
-          text: 'STOP',
-        });
-      }
-    }
-
-    return markers
-      .filter((marker) => {
-        if (markerDisplayCutoffSec == null) {
-          return true;
-        }
-        return Number(marker.time) <= markerDisplayCutoffSec;
-      })
-      .sort((a, b) => Number(a.time) - Number(b.time));
-  }, [
+  useTaskTrendMarkers({
+    candles,
     taskLifecycleEvents,
     strategyEvents,
-    candles,
-    startTimeSec,
-    endTimeSec,
-    markerDisplayCutoffSec,
-  ]);
-
-  // Update trade markers when trades or selection changes (without resetting the view)
-  useEffect(() => {
-    if (!markersRef.current) return;
-    const candleTimes = candles.map((c) => Number(c.time));
-
-    const renderedTradeMarkers = trades
-      .map((trade) => {
-        const selected =
-          trade.id === selectedTradeId || highlightedTradeIds.has(trade.id);
-        const units = Number(trade.units);
-        const lots = Number.isFinite(units) ? Math.abs(units) / 1000 : null;
-        const executionMethod = String(
-          trade.execution_method || ''
-        ).toLowerCase();
-        const isClose =
-          executionMethod === 'take_profit' ||
-          executionMethod === 'margin_protection' ||
-          executionMethod === 'volatility_lock' ||
-          executionMethod === 'close_position' ||
-          executionMethod === 'volatility_hedge_neutralize';
-        const direction: 'long' | 'short' =
-          trade.direction === 'long' || trade.direction === 'short'
-            ? trade.direction
-            : Number.isFinite(units) && units < 0
-              ? 'short'
-              : 'long';
-        const lotLabel = lots === null ? '' : `${Math.round(lots)}L`;
-        const dirLabel = direction.toUpperCase();
-        const rawTradeTime = parseUtcTimestamp(trade.timestamp);
-        const markerTime =
-          rawTradeTime != null
-            ? snapToCandleTimeInLoadedRange(Number(rawTradeTime), candleTimes)
-            : null;
-
-        return {
-          time: (markerTime ?? 0) as UTCTimestamp,
-          position:
-            direction === 'short'
-              ? ('aboveBar' as const)
-              : ('belowBar' as const),
-          shape:
-            direction === 'short'
-              ? ('arrowDown' as const)
-              : ('arrowUp' as const),
-          color: selected
-            ? '#f59e0b'
-            : isClose
-              ? '#9ca3af'
-              : direction === 'long'
-                ? '#16a34a'
-                : '#ef4444',
-          text: isClose
-            ? `CLOSE ${dirLabel} ${lotLabel}`.trim()
-            : `OPEN ${dirLabel} ${lotLabel}`.trim(),
-        };
-      })
-      .filter((marker) => {
-        if (Number(marker.time) <= 0) {
-          return false;
-        }
-        if (markerDisplayCutoffSec == null) {
-          return true;
-        }
-        return Number(marker.time) <= markerDisplayCutoffSec;
-      });
-
-    try {
-      programmaticScrollRef.current = true;
-      const allMarkers = [...eventMarkers, ...renderedTradeMarkers].sort(
-        (a, b) => Number(a.time) - Number(b.time)
-      );
-      markersRef.current.setMarkers(allMarkers);
-      requestAnimationFrame(() => {
-        reportChartWarning(null);
-      });
-    } catch {
-      requestAnimationFrame(() => {
-        reportChartWarning('Failed to render trade markers.');
-      });
-    }
-  }, [
     trades,
-    candles,
     selectedTradeId,
     highlightedTradeIds,
-    eventMarkers,
+    startTimeSec,
+    endTimeSec,
     markerDisplayCutoffSec,
     markersRef,
     programmaticScrollRef,
     reportChartWarning,
-  ]);
+  });
 
   const handleGranularityChange = (e: SelectChangeEvent) => {
     storeVisibleRange();

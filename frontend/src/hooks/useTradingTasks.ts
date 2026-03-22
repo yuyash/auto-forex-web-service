@@ -1,11 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { queryClient, queryKeys } from '../config/reactQuery';
-import { tradingTasksApi } from '../services/api';
 import type {
   PaginatedResponse,
   TradingTask,
   TradingTaskListParams,
 } from '../types';
+import { TaskType } from '../types/common';
+import {
+  createTaskDetailQuery,
+  createTaskListQuery,
+} from './taskResourceQueries';
+import { usePollingActivity } from './usePollingActivity';
 
 interface UseTradingTasksResult {
   data: PaginatedResponse<TradingTask> | null;
@@ -30,11 +35,9 @@ interface UseTradingTaskOptions {
 export function useTradingTasks(
   params?: TradingTaskListParams
 ): UseTradingTasksResult {
-  const query = useQuery({
-    queryKey: queryKeys.tradingTasks.list(params),
-    queryFn: () => tradingTasksApi.list(params),
-    enabled: params !== undefined,
-  });
+  const query = useQuery(
+    createTaskListQuery<TradingTask>(TaskType.TRADING, params)
+  );
 
   return {
     data: query.data ?? null,
@@ -51,23 +54,15 @@ export function useTradingTask(
   id?: string,
   options?: UseTradingTaskOptions
 ): UseTradingTaskResult {
-  const query = useQuery({
-    queryKey: id
-      ? queryKeys.tradingTasks.detail(id)
-      : ['trading-task', 'empty'],
-    queryFn: () => tradingTasksApi.get(id!),
-    enabled: Boolean(id) && options?.enabled !== false,
-    refetchInterval: (queryContext) => {
-      if (options?.enablePolling !== true) {
-        return false;
-      }
-      const currentTask = queryContext.state.data as TradingTask | undefined;
-      const status = currentTask?.status;
-      return status === 'starting' || status === 'running'
-        ? (options.pollingInterval ?? 3000)
-        : false;
-    },
-  });
+  const pollingEnabled = usePollingActivity(
+    Boolean(id) && options?.enablePolling === true
+  );
+  const query = useQuery(
+    createTaskDetailQuery<TradingTask>(TaskType.TRADING, id, {
+      ...options,
+      enablePolling: pollingEnabled,
+    })
+  );
 
   return {
     data: query.data ?? null,

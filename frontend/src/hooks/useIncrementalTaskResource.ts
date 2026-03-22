@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
 import { useSequentialPolling } from './useSequentialPolling';
+import { usePollingActivity } from './usePollingActivity';
 import {
   fetchTaskResourcePage,
   isApiErrorWithStatus,
@@ -194,6 +195,8 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
     void fetchItems(false);
   }, [fetchItems]);
 
+  const pollingEnabled = usePollingActivity(enableRealTimeUpdates);
+
   useSequentialPolling(
     () => {
       if (hasInitialFetchRef.current) {
@@ -202,7 +205,7 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
       return Promise.resolve();
     },
     {
-      enabled: enableRealTimeUpdates,
+      enabled: pollingEnabled,
       intervalMs: refreshInterval,
     }
   );

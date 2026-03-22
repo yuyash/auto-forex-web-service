@@ -16,6 +16,7 @@ interface UseTaskExecutionsResult {
   isLoading: boolean;
   error: Error | null;
   refresh: () => Promise<unknown>;
+  refetch: () => Promise<unknown>;
 }
 
 /**
@@ -43,6 +44,7 @@ export function useTaskExecutions(
     isLoading,
     error: error as Error | null,
     refresh: () => refreshTaskExecutions(taskId, taskType, params),
+    refetch: () => refreshTaskExecutions(taskId, taskType, params),
   };
 }
 
@@ -51,6 +53,7 @@ interface UseTaskExecutionResult {
   isLoading: boolean;
   error: Error | null;
   refresh: () => Promise<unknown>;
+  refetch: () => Promise<unknown>;
 }
 
 /**
@@ -70,6 +73,7 @@ export function useTaskExecution(
     isLoading,
     error: error as Error | null,
     refresh: () => refreshTaskExecution(taskId, executionId, taskType),
+    refetch: () => refreshTaskExecution(taskId, executionId, taskType),
   };
 }
 

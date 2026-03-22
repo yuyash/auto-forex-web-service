@@ -24,6 +24,7 @@ import {
 } from 'lightweight-charts';
 import { useDocumentVisibility } from '../../../hooks/useDocumentVisibility';
 import { useSequentialPolling } from '../../../hooks/useSequentialPolling';
+import { useOnlineStatus } from '../../../hooks/useOnlineStatus';
 import {
   fetchPaginatedMetrics,
   fetchMetrics,
@@ -145,6 +146,7 @@ export function useMetricsOverlay({
   currentTickTimestamp,
 }: UseMetricsOverlayOptions) {
   const isPageVisible = useDocumentVisibility();
+  const isOnline = useOnlineStatus();
   const seriesRef = useRef<ReturnType<typeof attachSeries> | null>(null);
   const attachedToChart = useRef<IChartApi | null>(null);
   const [snapshots, setSnapshots] = useState<MetricPoint[]>([]);
@@ -311,7 +313,7 @@ export function useMetricsOverlay({
       }
     },
     {
-      enabled: enableRealTimeUpdates && isPageVisible,
+      enabled: enableRealTimeUpdates && isPageVisible && isOnline,
       intervalMs: pollingIntervalMs,
     }
   );

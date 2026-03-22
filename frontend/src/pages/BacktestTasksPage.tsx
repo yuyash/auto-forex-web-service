@@ -30,6 +30,7 @@ import { TaskStatus } from '../types/common';
 import BacktestTaskCard from '../components/backtest/BacktestTaskCard';
 import { LoadingSpinner, Breadcrumbs } from '../components/common';
 import { useSequentialPolling } from '../hooks/useSequentialPolling';
+import { usePollingActivity } from '../hooks/usePollingActivity';
 import { logger } from '../utils/logger';
 
 interface TabPanelProps {
@@ -103,6 +104,7 @@ export default function BacktestTasksPage() {
   const hasRunningTasks = !!data?.results.some(
     (task) => task.status === TaskStatus.RUNNING
   );
+  const pollingEnabled = usePollingActivity(hasRunningTasks);
 
   useSequentialPolling(
     () => {
@@ -110,7 +112,7 @@ export default function BacktestTasksPage() {
       return refresh();
     },
     {
-      enabled: hasRunningTasks,
+      enabled: pollingEnabled,
       intervalMs: 10000,
     }
   );

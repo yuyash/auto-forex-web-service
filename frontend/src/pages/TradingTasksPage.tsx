@@ -35,6 +35,7 @@ import { Breadcrumbs } from '../components/common';
 import { LoadingSpinner } from '../components/common';
 import { ConfigurationSelector } from '../components/tasks/forms/ConfigurationSelector';
 import { useSequentialPolling } from '../hooks/useSequentialPolling';
+import { usePollingActivity } from '../hooks/usePollingActivity';
 import { logger } from '../utils/logger';
 
 interface TabPanelProps {
@@ -111,6 +112,7 @@ export default function TradingTasksPage() {
     (task) =>
       task.status === TaskStatus.RUNNING || task.status === TaskStatus.PAUSED
   );
+  const pollingEnabled = usePollingActivity(hasRunningTasks);
 
   useSequentialPolling(
     () => {
@@ -118,7 +120,7 @@ export default function TradingTasksPage() {
       return refresh();
     },
     {
-      enabled: hasRunningTasks,
+      enabled: pollingEnabled,
       intervalMs: 10000,
     }
   );
