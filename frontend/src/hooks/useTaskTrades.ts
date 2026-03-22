@@ -53,7 +53,6 @@ interface UseTaskTradesResult {
   isLoading: boolean;
   error: Error | null;
   refresh: () => Promise<void>;
-  refetch: () => Promise<void>;
 }
 
 function getLatestUpdatedAt(trades: TaskTrade[]): string | null {
@@ -112,7 +111,6 @@ export const useTaskTrades = ({
     isLoading,
     error,
     refresh,
-    refetch,
   } = useIncrementalTaskResource<Record<string, unknown>, TaskTrade>({
     taskId,
     taskType,
@@ -148,7 +146,6 @@ export const useTaskTrades = ({
       isLoading,
       error,
       refresh,
-      refetch,
     }),
     trades,
   };

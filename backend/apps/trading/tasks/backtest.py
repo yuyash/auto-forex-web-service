@@ -15,7 +15,7 @@ from apps.trading.enums import LogLevel, TaskStatus, TaskType
 from apps.trading.logging import TaskLoggingSession
 from apps.trading.models import BacktestTask, TaskLog
 from apps.trading.services.execution_lifecycle import (
-    sync_terminal_execution_artifacts,
+    transition_task_to_stopped,
     transition_task_to_running,
     transition_task_to_terminal,
 )
@@ -454,16 +454,11 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
             logger.info(
                 f"[STOP:BACKTEST] Transitioning: {task.status} -> STOPPED - task_id={task_id}"
             )
-            transition_task_to_terminal(
+            transition_task_to_stopped(
                 task=task,
                 task_type=TaskType.BACKTEST,
-                status=TaskStatus.STOPPED,
                 expected_current_status=TaskStatus.STOPPING,
             )
-            task.refresh_from_db()
-            task.completed_at = None
-            task.save(update_fields=["completed_at", "updated_at"])
-            sync_terminal_execution_artifacts(task=task, task_type=TaskType.BACKTEST)
             publish_task_lifecycle_event(
                 logger=logger,
                 task=task,
@@ -493,16 +488,11 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
                 f"[STOP:BACKTEST] Race condition detected: COMPLETED -> STOPPED - task_id={task_id}"
             )
             # Change from COMPLETED to STOPPED since user requested stop
-            transition_task_to_terminal(
+            transition_task_to_stopped(
                 task=task,
                 task_type=TaskType.BACKTEST,
-                status=TaskStatus.STOPPED,
                 expected_current_status=TaskStatus.COMPLETED,
             )
-            task.refresh_from_db()
-            task.completed_at = None  # Remove completed_at since it was stopped
-            task.save(update_fields=["completed_at", "updated_at"])
-            sync_terminal_execution_artifacts(task=task, task_type=TaskType.BACKTEST)
             publish_task_lifecycle_event(
                 logger=logger,
                 task=task,

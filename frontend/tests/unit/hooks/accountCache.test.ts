@@ -56,4 +56,17 @@ describe('accountCache', () => {
     ]);
     expect(queryClient.getQueryData(detailKey)).toBeUndefined();
   });
+
+  it('does not prepend new accounts into page>1 caches', () => {
+    const pageTwoKey = queryKeys.accounts.list({ search: 'acc', page: 2 });
+    queryClient.setQueryData<Account[]>(pageTwoKey, [
+      buildAccount({ id: 2, account_id: 'ACC-002' }),
+    ]);
+
+    upsertAccountCaches(buildAccount());
+
+    expect(queryClient.getQueryData<Account[]>(pageTwoKey)).toEqual([
+      expect.objectContaining({ id: 2, account_id: 'ACC-002' }),
+    ]);
+  });
 });

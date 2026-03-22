@@ -70,7 +70,6 @@ interface UseTaskPositionsResult {
   isLoading: boolean;
   error: Error | null;
   refresh: () => Promise<void>;
-  refetch: () => Promise<void>;
 }
 
 /** Extract the latest updated_at from a list of positions. */
@@ -331,6 +330,5 @@ export const useTaskPositions = ({
       ...refreshActions,
     }),
     positions,
-    ...refreshActions,
   };
 };

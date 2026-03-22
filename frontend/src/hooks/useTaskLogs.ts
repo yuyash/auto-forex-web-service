@@ -44,7 +44,6 @@ interface UseTaskLogsResult {
   isLoading: boolean;
   error: Error | null;
   refresh: () => Promise<void>;
-  refetch: () => Promise<void>;
 }
 
 function getLatestTimestamp(logs: TaskLog[]): string | null {
@@ -80,7 +79,6 @@ export const useTaskLogs = ({
     isLoading,
     error,
     refresh,
-    refetch,
   } = useIncrementalTaskResource<TaskLog>({
     taskId,
     taskType,
@@ -119,7 +117,6 @@ export const useTaskLogs = ({
       isLoading,
       error,
       refresh,
-      refetch,
     }),
     logs,
   };

@@ -216,14 +216,14 @@ class TestStopBacktestTask:
     @patch("apps.trading.tasks.backtest.dj_timezone")
     @patch("celery.current_app")
     @patch("apps.trading.tasks.backtest.publish_task_lifecycle_event")
-    @patch("apps.trading.tasks.backtest.transition_task_to_terminal")
+    @patch("apps.trading.tasks.backtest.transition_task_to_stopped")
     @patch("apps.market.signals.management.task_management_handler")
     @patch("apps.trading.tasks.backtest.BacktestTask")
     def test_stopping_state(
         self,
         mock_model,
         mock_handler,
-        mock_transition,
+        mock_transition_stopped,
         mock_publish_event,
         mock_app,
         mock_tz,
@@ -244,21 +244,21 @@ class TestStopBacktestTask:
         mock_market_celery.Status.STOPPED = "stopped"
         mock_trading_celery.objects.filter.return_value.update.return_value = 1
         mock_trading_celery.Status.STOPPED = "stopped"
-        mock_transition.return_value = 1
+        mock_transition_stopped.return_value = 1
+        mock_transition_stopped.side_effect = (
+            lambda **kwargs: setattr(task, "status", TaskStatus.STOPPED) or 1
+        )
         with patch("time.sleep"):
             stop_backtest_task.__wrapped__(task_id)
-        task.save.assert_called()
         mock_publish_event.assert_called_once()
 
     @patch("apps.trading.tasks.backtest.publish_task_lifecycle_event")
-    @patch("apps.trading.tasks.backtest.sync_terminal_execution_artifacts")
-    @patch("apps.trading.tasks.backtest.transition_task_to_terminal")
+    @patch("apps.trading.tasks.backtest.transition_task_to_stopped")
     @patch("apps.trading.tasks.backtest.BacktestTask")
     def test_completed_transitions_to_stopped(
         self,
         mock_model,
-        mock_transition,
-        mock_sync_artifacts,
+        mock_transition_stopped,
         mock_publish_event,
     ):
         from apps.trading.tasks.backtest import stop_backtest_task
@@ -267,12 +267,10 @@ class TestStopBacktestTask:
         task = MagicMock(pk=task_id, status=TaskStatus.COMPLETED)
         mock_model.objects.get.return_value = task
         mock_model.DoesNotExist = _DoesNotExist
-        mock_transition.return_value = 1
-        mock_transition.side_effect = (
+        mock_transition_stopped.return_value = 1
+        mock_transition_stopped.side_effect = (
             lambda **kwargs: setattr(task, "status", TaskStatus.STOPPED) or 1
         )
         stop_backtest_task.__wrapped__(task_id)
         assert task.status == TaskStatus.STOPPED
-        task.save.assert_called()
-        mock_sync_artifacts.assert_called_once()
         mock_publish_event.assert_called_once()

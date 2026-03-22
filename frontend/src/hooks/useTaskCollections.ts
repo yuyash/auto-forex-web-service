@@ -7,7 +7,6 @@ export interface QueryStateResult<TData> {
   isLoading: boolean;
   error: Error | null;
   refresh: () => Promise<unknown>;
-  refetch: () => Promise<unknown>;
 }
 
 interface QueryPollingOptions<TData> {
@@ -28,17 +27,14 @@ export function toQueryStateResult<TData>(state: {
     isLoading: state.isLoading,
     error: (state.error as Error | null) ?? null,
     refresh,
-    refetch: refresh,
   };
 }
 
 export function toRefreshActions<TValue>(refresh: () => Promise<TValue>): {
   refresh: () => Promise<TValue>;
-  refetch: () => Promise<TValue>;
 } {
   return {
     refresh,
-    refetch: refresh,
   };
 }
 
@@ -104,7 +100,6 @@ export function toIncrementalCollectionState<TItem>(state: {
   isLoading: boolean;
   error: Error | null;
   refresh: () => Promise<void>;
-  refetch: () => Promise<void>;
 }): IncrementalCollectionState<TItem> {
   const refreshActions = toRefreshActions(state.refresh);
   return {

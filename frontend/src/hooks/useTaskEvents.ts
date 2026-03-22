@@ -45,7 +45,6 @@ interface UseTaskEventsResult {
   isLoading: boolean;
   error: Error | null;
   refresh: () => Promise<void>;
-  refetch: () => Promise<void>;
 }
 
 function getLatestCreatedAt(events: TaskEvent[]): string | null {
@@ -80,7 +79,6 @@ export const useTaskEvents = ({
     isLoading,
     error,
     refresh,
-    refetch,
   } = useIncrementalTaskResource<TaskEvent>({
     taskId,
     taskType,
@@ -117,7 +115,6 @@ export const useTaskEvents = ({
       isLoading,
       error,
       refresh,
-      refetch,
     }),
     events,
   };

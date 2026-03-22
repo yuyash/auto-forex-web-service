@@ -52,3 +52,24 @@ def transition_task_to_terminal(
         task.refresh_from_db()
         sync_terminal_execution_artifacts(task=task, task_type=task_type)
     return rows_updated
+
+
+def transition_task_to_stopped(
+    *,
+    task,
+    task_type: str,
+    expected_current_status: TaskStatus | None = None,
+) -> int:
+    """Persist a STOPPED transition without a completion timestamp."""
+    queryset = type(task).objects.filter(pk=task.pk)
+    if expected_current_status is not None:
+        queryset = queryset.filter(status=expected_current_status)
+
+    rows_updated = queryset.update(
+        status=TaskStatus.STOPPED,
+        completed_at=None,
+    )
+    if rows_updated > 0:
+        task.refresh_from_db()
+        sync_terminal_execution_artifacts(task=task, task_type=task_type)
+    return rows_updated

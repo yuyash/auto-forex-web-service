@@ -114,6 +114,37 @@ def _build_query_schema_serializer(
     return cast(type[serializers.Serializer], type(name, (base,), attrs))
 
 
+def _parse_query_group(
+    request: Request,
+    *specs: QueryFieldSpec,
+    serializer_name: str,
+) -> dict[str, object]:
+    del serializer_name
+    return {spec.name: spec.parse(request.query_params.get(spec.name)) for spec in specs}
+
+
+def _parse_date_range_group(
+    request: Request,
+    *,
+    start_spec: QueryFieldSpec,
+    end_spec: QueryFieldSpec,
+    serializer_name: str,
+) -> tuple[datetime | None, datetime | None]:
+    parsed = _parse_query_group(
+        request,
+        start_spec,
+        end_spec,
+        serializer_name=serializer_name,
+    )
+    start = cast(datetime | None, parsed[start_spec.name])
+    end = cast(datetime | None, parsed[end_spec.name])
+    if start and end and start > end:
+        raise _invalid_query_param(
+            f"{start_spec.name} must be earlier than or equal to {end_spec.name}"
+        )
+    return start, end
+
+
 PAGE_SPEC = QueryFieldSpec(
     name="page",
     kind="int",
@@ -315,7 +346,7 @@ class QueryParamsSerializer(serializers.Serializer):
 
     @classmethod
     def parse_query_params(cls, request: Request, **kwargs):
-        serializer = cls(data=request.query_params, request=request, **kwargs)
+        serializer = cls(data=request.query_params, **kwargs)
         if not serializer.is_valid():
             raise _invalid_query_param(_extract_validation_detail(serializer.errors))
         return serializer
@@ -357,90 +388,6 @@ def _parse_execution_id_value(value: str | None) -> UUID | None:
         return UUID(value)
     except (TypeError, ValueError) as exc:
         raise _invalid_query_param(f"Invalid execution_id: {value}") from exc
-
-
-class PaginationParamsSerializer(QueryParamsSerializer):
-    """Serializer for page/page_size validation."""
-
-    def __init__(
-        self,
-        *args,
-        request: Request,
-        default_page_size: int = 100,
-        max_page_size: int = 1000,
-        **kwargs,
-    ) -> None:
-        super().__init__(*args, **kwargs)
-        self.request = request
-        self.page_size_spec = QueryFieldSpec(
-            name="page_size",
-            kind="int",
-            default=default_page_size,
-            max_value=max_page_size,
-            help_text=f"Results per page. Default {default_page_size}, maximum {max_page_size}.",
-        )
-
-    def to_params(self) -> PaginationParams:
-        return PaginationParams(
-            page=PAGE_SPEC.parse(self.request.query_params.get("page")),
-            page_size=self.page_size_spec.parse(self.request.query_params.get("page_size")),
-        )
-
-
-class ExecutionScopedQuerySerializer(PaginationParamsSerializer):
-    """Serializer for execution-scoped query params."""
-
-    def __init__(
-        self,
-        *args,
-        request: Request,
-        default_execution_id: UUID | None = None,
-        default_page_size: int = 100,
-        max_page_size: int = 1000,
-        **kwargs,
-    ) -> None:
-        super().__init__(
-            *args,
-            request=request,
-            default_page_size=default_page_size,
-            max_page_size=max_page_size,
-            **kwargs,
-        )
-        self.default_execution_id = default_execution_id
-
-    def to_query(self) -> ExecutionScopedQuery:
-        return ExecutionScopedQuery(
-            execution_id=EXECUTION_ID_SPEC.parse(self.request.query_params.get("execution_id"))
-            or self.default_execution_id,
-            since=SINCE_SPEC.parse(self.request.query_params.get("since")),
-            pagination=self.to_params(),
-        )
-
-
-class DateRangeQuerySerializer(QueryParamsSerializer):
-    """Serializer for datetime range validation."""
-
-    def __init__(
-        self,
-        *args,
-        request: Request,
-        start_key: str,
-        end_key: str,
-        **kwargs,
-    ) -> None:
-        super().__init__(*args, **kwargs)
-        self.start_key = start_key
-        self.end_key = end_key
-        self.request = request
-
-    def to_range(self) -> DateRangeQuery:
-        start = _parse_datetime_value(self.request.query_params.get(self.start_key))
-        end = _parse_datetime_value(self.request.query_params.get(self.end_key))
-        if start and end and start > end:
-            raise _invalid_query_param(
-                f"{self.start_key} must be earlier than or equal to {self.end_key}"
-            )
-        return DateRangeQuery(start=start, end=end)
 
 
 ExecutionScopedQueryParamsSchemaSerializer = _build_query_schema_serializer(
@@ -598,12 +545,20 @@ class PaginationParams:
         default_page_size: int = 100,
         max_page_size: int = 1000,
     ) -> PaginationParams:
-        serializer = PaginationParamsSerializer.parse_query_params(
-            request,
-            default_page_size=default_page_size,
-            max_page_size=max_page_size,
+        page_size_spec = _page_size_spec(
+            default=default_page_size,
+            max_value=max_page_size,
         )
-        return serializer.to_params()
+        parsed = _parse_query_group(
+            request,
+            PAGE_SPEC,
+            page_size_spec,
+            serializer_name="PaginationParamsRuntimeSerializer",
+        )
+        return cls(
+            page=cast(int, parsed["page"]),
+            page_size=cast(int, parsed["page_size"]),
+        )
 
 
 @dataclass(frozen=True)
@@ -621,13 +576,26 @@ class ExecutionScopedQuery:
         default_page_size: int = 100,
         max_page_size: int = 1000,
     ) -> ExecutionScopedQuery:
-        serializer = ExecutionScopedQuerySerializer.parse_query_params(
-            request,
-            default_execution_id=default_execution_id,
-            default_page_size=default_page_size,
-            max_page_size=max_page_size,
+        page_size_spec = _page_size_spec(
+            default=default_page_size,
+            max_value=max_page_size,
         )
-        return serializer.to_query()
+        parsed = _parse_query_group(
+            request,
+            EXECUTION_ID_SPEC,
+            SINCE_SPEC,
+            PAGE_SPEC,
+            page_size_spec,
+            serializer_name="ExecutionScopedQueryRuntimeSerializer",
+        )
+        return cls(
+            execution_id=cast(UUID | None, parsed["execution_id"]) or default_execution_id,
+            since=cast(datetime | None, parsed["since"]),
+            pagination=PaginationParams(
+                page=cast(int, parsed["page"]),
+                page_size=cast(int, parsed["page_size"]),
+            ),
+        )
 
 
 @dataclass(frozen=True)
@@ -643,12 +611,31 @@ class DateRangeQuery:
         start_key: str,
         end_key: str,
     ) -> DateRangeQuery:
-        serializer = DateRangeQuerySerializer.parse_query_params(
-            request,
-            start_key=start_key,
-            end_key=end_key,
+        field_specs = {
+            "range_from": RANGE_FROM_SPEC,
+            "range_to": RANGE_TO_SPEC,
+            "timestamp_from": TIMESTAMP_FROM_SPEC,
+            "timestamp_to": TIMESTAMP_TO_SPEC,
+            "created_from": CREATED_FROM_SPEC,
+            "created_to": CREATED_TO_SPEC,
+        }
+        start_spec = field_specs.get(start_key) or QueryFieldSpec(
+            name=start_key,
+            kind="datetime",
+            help_text=f"RFC3339 lower bound for {start_key}.",
         )
-        return serializer.to_range()
+        end_spec = field_specs.get(end_key) or QueryFieldSpec(
+            name=end_key,
+            kind="datetime",
+            help_text=f"RFC3339 upper bound for {end_key}.",
+        )
+        start, end = _parse_date_range_group(
+            request,
+            start_spec=start_spec,
+            end_spec=end_spec,
+            serializer_name="DateRangeQueryRuntimeSerializer",
+        )
+        return cls(start=start, end=end)
 
 
 @dataclass(frozen=True)
@@ -668,6 +655,13 @@ class PositionQuery:
         default_page_size: int = 100,
         max_page_size: int = 1000,
     ) -> PositionQuery:
+        parsed = _parse_query_group(
+            request,
+            POSITION_STATUS_SPEC,
+            DIRECTION_SPEC,
+            INCLUDE_TRADE_IDS_SPEC,
+            serializer_name="PositionQueryRuntimeSerializer",
+        )
         return cls(
             execution=ExecutionScopedQuery.from_request(
                 request,
@@ -675,10 +669,9 @@ class PositionQuery:
                 default_page_size=default_page_size,
                 max_page_size=max_page_size,
             ),
-            position_status=(request.query_params.get("position_status") or "").lower(),
-            direction=(request.query_params.get("direction") or "").lower(),
-            include_trade_ids=str(request.query_params.get("include_trade_ids", "false")).lower()
-            in {"1", "true", "yes", "on"},
+            position_status=cast(str, parsed["position_status"]),
+            direction=cast(str, parsed["direction"]),
+            include_trade_ids=cast(bool, parsed["include_trade_ids"]),
             range=DateRangeQuery.from_request(
                 request,
                 start_key="range_from",

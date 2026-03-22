@@ -15,7 +15,7 @@ from apps.trading.enums import LogLevel, StopMode, TaskStatus, TaskType
 from apps.trading.logging import TaskLoggingSession
 from apps.trading.models import CeleryTaskStatus, TaskLog, TradingTask
 from apps.trading.services.execution_lifecycle import (
-    sync_terminal_execution_artifacts,
+    transition_task_to_stopped,
     transition_task_to_running,
     transition_task_to_terminal,
 )
@@ -269,16 +269,11 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
 
             # Update task status to STOPPED (without completed_at since it didn't complete)
             logger.info(f"Transitioning: {task.status} -> STOPPED - task_id={task_id}")
-            transition_task_to_terminal(
+            transition_task_to_stopped(
                 task=task,
                 task_type=TaskType.TRADING,
-                status=TaskStatus.STOPPED,
                 expected_current_status=TaskStatus.STOPPING,
             )
-            task.refresh_from_db()
-            task.completed_at = None
-            task.save(update_fields=["completed_at", "updated_at"])
-            sync_terminal_execution_artifacts(task=task, task_type=TaskType.TRADING)
             publish_task_lifecycle_event(
                 logger=logger,
                 task=task,

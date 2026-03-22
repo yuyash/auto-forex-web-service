@@ -27,6 +27,7 @@ export function useConfigurations(
   });
   return toQueryStateResult({
     ...query,
+    refresh: () => query.refetch(),
     refetch: () => query.refetch(),
   });
 }
@@ -41,6 +42,7 @@ export function useConfiguration(id?: string): UseConfigurationResult {
   });
   return toQueryStateResult({
     ...query,
+    refresh: () => (id ? query.refetch() : Promise.resolve()),
     refetch: () => (id ? query.refetch() : Promise.resolve()),
   });
 }
@@ -56,6 +58,7 @@ export function useConfigurationTasks(
   });
   return toQueryStateResult({
     ...query,
+    refresh: () => query.refetch(),
     refetch: () => query.refetch(),
   });
 }

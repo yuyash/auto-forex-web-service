@@ -54,7 +54,6 @@ interface UseTaskOrdersResult {
   isLoading: boolean;
   error: Error | null;
   refresh: () => Promise<void>;
-  refetch: () => Promise<void>;
 }
 
 function getLatestUpdatedAt(orders: TaskOrder[]): string | null {
@@ -89,7 +88,6 @@ export const useTaskOrders = ({
     isLoading,
     error,
     refresh,
-    refetch,
   } = useIncrementalTaskResource<TaskOrder>({
     taskId,
     taskType,
@@ -125,7 +123,6 @@ export const useTaskOrders = ({
       isLoading,
       error,
       refresh,
-      refetch,
     }),
     orders,
   };
