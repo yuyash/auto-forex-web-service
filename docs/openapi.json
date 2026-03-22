@@ -2179,7 +2179,7 @@
         },
         "/api/trading/tasks/backtest/{id}/executions/": {
             "get": {
-                "operationId": "trading_tasks_backtest_executions_retrieve",
+                "operationId": "backtest_task_execution_history",
                 "description": "Retrieve execution history for a task.",
                 "parameters": [
                     {
@@ -2229,6 +2229,62 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/TaskExecutionPaginatedResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/backtest/{id}/executions/{execution_id}/": {
+            "get": {
+                "operationId": "backtest_task_execution_detail",
+                "description": "Retrieve a single execution record for a task.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_metrics",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Include aggregate metrics"
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskExecution"
                                 }
                             }
                         },
@@ -3446,7 +3502,7 @@
         },
         "/api/trading/tasks/trading/{id}/executions/": {
             "get": {
-                "operationId": "trading_tasks_trading_executions_retrieve",
+                "operationId": "trading_task_execution_history",
                 "description": "Retrieve execution history for a task.",
                 "parameters": [
                     {
@@ -3496,6 +3552,62 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/TaskExecutionPaginatedResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/trading/{id}/executions/{execution_id}/": {
+            "get": {
+                "operationId": "trading_task_execution_detail",
+                "description": "Retrieve a single execution record for a task.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_metrics",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Include aggregate metrics"
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskExecution"
                                 }
                             }
                         },

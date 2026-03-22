@@ -69,6 +69,14 @@ logger: Logger = logging.getLogger(name=__name__)
         tags=["Trading"],
         responses={200: BacktestTaskSerializer},
     ),
+    executions=extend_schema(
+        operation_id="backtest_task_execution_history",
+        tags=["Trading"],
+    ),
+    execution_detail=extend_schema(
+        operation_id="backtest_task_execution_detail",
+        tags=["Trading"],
+    ),
 )
 @extend_schema(tags=["Trading"])
 class BacktestTaskViewSet(TaskViewSetBase):

@@ -87,6 +87,14 @@ class ConflictError(APIException):
         tags=["Trading"],
         responses={200: TradingTaskSerializer},
     ),
+    executions=extend_schema(
+        operation_id="trading_task_execution_history",
+        tags=["Trading"],
+    ),
+    execution_detail=extend_schema(
+        operation_id="trading_task_execution_detail",
+        tags=["Trading"],
+    ),
 )
 @extend_schema(tags=["Trading"])
 class TradingTaskViewSet(TaskViewSetBase):

@@ -5,7 +5,7 @@
  * Mirrors BacktestTaskDetail's structure for consistency.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -21,7 +21,6 @@ import {
   useTheme,
 } from '@mui/material';
 import { useTradingTask } from '../../hooks/useTradingTasks';
-import { useTaskPolling } from '../../hooks/useTaskPolling';
 import {
   useStrategies,
   getStrategyDisplayName,
@@ -92,8 +91,6 @@ export const TradingTaskDetail: React.FC = () => {
   const tabParam = searchParams.get('tab') || 'overview';
   const visibleTabIds = visibleTabs.map((tab) => tab.id);
 
-  const { data: task, isLoading, error } = useTradingTask(taskId);
-  const { strategies } = useStrategies();
   const {
     optimisticStatus,
     statusPollingIntervalMs,
@@ -101,24 +98,17 @@ export const TradingTaskDetail: React.FC = () => {
     clearOptimisticStatus,
   } = useOptimisticTaskStatus();
   const {
-    status: polledStatus,
-    details: polledDetails,
-    startPolling,
-    refetch: refetchPolledTask,
-  } = useTaskPolling(taskId, 'trading', {
-    enabled: !!taskId,
-    pollStatus: true,
-    pollDetails: true,
-    interval: statusPollingIntervalMs,
+    data: task,
+    isLoading,
+    error,
+    refresh: refreshTask,
+  } = useTradingTask(taskId, {
+    enablePolling: true,
+    pollingInterval: statusPollingIntervalMs,
   });
-  const liveTask = polledDetails?.task ?? task;
-  const actualStatus = polledStatus?.status ?? liveTask?.status;
+  const { strategies } = useStrategies();
+  const actualStatus = task?.status;
   const currentStatus = optimisticStatus?.status ?? actualStatus;
-  const triggerPolledRefetch = () => {
-    if (typeof refetchPolledTask === 'function') {
-      refetchPolledTask();
-    }
-  };
 
   useEffect(() => {
     if (!optimisticStatus || !actualStatus) {
@@ -133,7 +123,7 @@ export const TradingTaskDetail: React.FC = () => {
   const overviewSummary = useTaskSummary(
     taskId,
     TaskType.TRADING,
-    polledDetails?.task?.execution_id ?? task?.execution_id,
+    task?.execution_id,
     {
       polling:
         currentStatus === TaskStatus.STARTING ||
@@ -149,13 +139,6 @@ export const TradingTaskDetail: React.FC = () => {
       }
     : null;
 
-  // Do NOT call refetch() on status transitions to avoid 429 rate-limiting.
-  const prevStatusRef = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (polledStatus) {
-      prevStatusRef.current = polledStatus.status;
-    }
-  }, [polledStatus]);
   const activeTabIndex = Math.max(0, visibleTabIds.indexOf(tabParam));
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setSearchParams({ tab: visibleTabIds[newValue] || 'overview' });
@@ -187,7 +170,7 @@ export const TradingTaskDetail: React.FC = () => {
       </Container>
     );
   }
-  const detailTask = (liveTask ?? task) as TradingTask;
+  const detailTask = task as TradingTask;
   const activeExecutionId = detailTask.execution_id;
   const pnlCurrency = detailTask.instrument?.includes('_')
     ? detailTask.instrument.split('_')[1]
@@ -249,8 +232,7 @@ export const TradingTaskDetail: React.FC = () => {
             TaskStatus.RUNNING,
             TaskStatus.FAILED,
           ]);
-          startPolling();
-          triggerPolledRefetch();
+          await refreshTask();
         }}
         onStop={async (id) => {
           await stopTask.mutate({ id });
@@ -260,8 +242,7 @@ export const TradingTaskDetail: React.FC = () => {
             TaskStatus.COMPLETED,
             TaskStatus.FAILED,
           ]);
-          startPolling();
-          triggerPolledRefetch();
+          await refreshTask();
         }}
         onRestart={async (id) => {
           const updatedTask = await restartTask.mutate(id);
@@ -270,8 +251,7 @@ export const TradingTaskDetail: React.FC = () => {
             TaskStatus.RUNNING,
             TaskStatus.FAILED,
           ]);
-          startPolling();
-          triggerPolledRefetch();
+          await refreshTask();
         }}
         onResume={async (id) => {
           const updatedTask = await resumeTask.mutate(id);
@@ -280,8 +260,7 @@ export const TradingTaskDetail: React.FC = () => {
             TaskStatus.PAUSED,
             TaskStatus.FAILED,
           ]);
-          startPolling();
-          triggerPolledRefetch();
+          await refreshTask();
         }}
         onPause={async (id) => {
           const updatedTask = await pauseTask.mutate(id);
@@ -290,8 +269,7 @@ export const TradingTaskDetail: React.FC = () => {
             TaskStatus.RUNNING,
             TaskStatus.FAILED,
           ]);
-          startPolling();
-          triggerPolledRefetch();
+          await refreshTask();
         }}
         onEdit={() => navigate(`/trading-tasks/${taskId}/edit`)}
         onDelete={() => setDeleteDialogOpen(true)}

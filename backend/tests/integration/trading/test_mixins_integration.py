@@ -553,3 +553,39 @@ class TestExecutions:
         current = next(r for r in response.data["results"] if r["id"] == str(new_execution_id))
         assert current["status"] == "running"
         assert "metrics" in current
+
+    def test_paginate_before_metric_aggregation_and_get_single_execution(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        from uuid import uuid4
+
+        execution_ids = [uuid4(), uuid4(), uuid4()]
+        for execution_id in execution_ids:
+            CeleryTaskStatus.objects.create(
+                task_name="trading.tasks.run_backtest_task",
+                instance_key=f"{task.pk}:{execution_id}",
+                status=CeleryTaskStatus.Status.COMPLETED,
+            )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/executions/",
+            {"page": 1, "page_size": 1, "include_metrics": "true"},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 4
+        assert len(response.data["results"]) == 1
+        execution_id = response.data["results"][0]["id"]
+        assert "metrics" in response.data["results"][0]
+
+        detail_response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/executions/{execution_id}/",
+            {"include_metrics": "true"},
+        )
+        assert detail_response.status_code == status.HTTP_200_OK
+        assert detail_response.data["id"] == execution_id
+        assert "metrics" in detail_response.data
+
+        missing_response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/executions/{uuid4()}/",
+        )
+        assert missing_response.status_code == status.HTTP_404_NOT_FOUND

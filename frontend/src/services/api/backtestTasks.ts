@@ -169,4 +169,16 @@ export const backtestTasksApi = {
       results: result.results ?? [],
     };
   },
+
+  getExecution: async (
+    id: string,
+    executionId: string,
+    params?: { include_metrics?: boolean }
+  ): Promise<TaskExecution> => {
+    return withRetry(() =>
+      api.get<TaskExecution>(`${BASE}/${id}/executions/${executionId}/`, {
+        include_metrics: params?.include_metrics,
+      })
+    );
+  },
 };

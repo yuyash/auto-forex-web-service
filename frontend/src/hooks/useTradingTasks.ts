@@ -21,6 +21,12 @@ interface UseTradingTaskResult {
   refresh: () => Promise<unknown>;
 }
 
+interface UseTradingTaskOptions {
+  enabled?: boolean;
+  enablePolling?: boolean;
+  pollingInterval?: number;
+}
+
 export function useTradingTasks(
   params?: TradingTaskListParams
 ): UseTradingTasksResult {
@@ -43,7 +49,7 @@ export function useTradingTasks(
 
 export function useTradingTask(
   id?: string,
-  options?: { enabled?: boolean }
+  options?: UseTradingTaskOptions
 ): UseTradingTaskResult {
   const query = useQuery({
     queryKey: id
@@ -51,6 +57,16 @@ export function useTradingTask(
       : ['trading-task', 'empty'],
     queryFn: () => tradingTasksApi.get(id!),
     enabled: Boolean(id) && options?.enabled !== false,
+    refetchInterval: (queryContext) => {
+      if (options?.enablePolling !== true) {
+        return false;
+      }
+      const currentTask = queryContext.state.data as TradingTask | undefined;
+      const status = currentTask?.status;
+      return status === 'starting' || status === 'running'
+        ? (options.pollingInterval ?? 3000)
+        : false;
+    },
   });
 
   return {
@@ -63,28 +79,5 @@ export function useTradingTask(
             queryKey: queryKeys.tradingTasks.detail(id),
           })
         : Promise.resolve(),
-  };
-}
-
-export function useTradingTaskPolling(
-  id: string,
-  enabled: boolean = true,
-  interval: number = 5000
-): UseTradingTaskResult {
-  const query = useQuery({
-    queryKey: queryKeys.tradingTasks.detail(id),
-    queryFn: () => tradingTasksApi.get(id),
-    enabled: enabled && Boolean(id),
-    refetchInterval: enabled ? interval : false,
-  });
-
-  return {
-    data: query.data ?? null,
-    isLoading: query.isLoading,
-    error: (query.error as Error | null) ?? null,
-    refresh: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.tradingTasks.detail(id),
-      }),
   };
 }

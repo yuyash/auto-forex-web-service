@@ -66,6 +66,7 @@ export const useSupportedInstruments = () => {
     instruments: query.data ?? FALLBACK_INSTRUMENTS,
     isLoading: query.isLoading,
     error: query.error instanceof Error ? query.error.message : null,
+    usingFallback: !query.isLoading && !query.data && !!query.error,
   };
 };
 
@@ -96,5 +97,6 @@ export const useSupportedGranularities = () => {
     granularities: query.data ?? FALLBACK_GRANULARITIES,
     isLoading: query.isLoading,
     error: query.error instanceof Error ? query.error.message : null,
+    usingFallback: !query.isLoading && !query.data && !!query.error,
   };
 };

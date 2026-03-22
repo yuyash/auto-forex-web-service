@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from decimal import Decimal
-from typing import Any
+from typing import Any, overload
 from uuid import UUID
 
 from django.db.models import Case, DecimalField, F, IntegerField, Sum, Value, When
@@ -35,10 +35,97 @@ class TaskExecutionRow:
     metrics: dict[str, Any] | None = None
 
 
+@overload
 def list_task_executions(
-    *, task, task_type: str, include_metrics: bool = False
-) -> list[dict[str, Any]]:
-    """List execution history for a task ordered by newest run first."""
+    *,
+    task,
+    task_type: str,
+    include_metrics: bool = False,
+    page: int,
+    page_size: int,
+) -> tuple[int, list[dict[str, Any]]]: ...
+
+
+@overload
+def list_task_executions(
+    *,
+    task,
+    task_type: str,
+    include_metrics: bool = False,
+    page: None = None,
+    page_size: None = None,
+) -> list[dict[str, Any]]: ...
+
+
+def list_task_executions(
+    *,
+    task,
+    task_type: str,
+    include_metrics: bool = False,
+    page: int | None = None,
+    page_size: int | None = None,
+) -> list[dict[str, Any]] | tuple[int, list[dict[str, Any]]]:
+    """List execution history for a task ordered by newest run first.
+
+    When ``page`` and ``page_size`` are provided, returns ``(total_count, rows)``
+    so callers can paginate before metric aggregation.
+    """
+    ordered_run_ids, by_run_id, fallback_mid_rate = _load_execution_index(
+        task=task,
+        task_type=task_type,
+    )
+    total_count = len(ordered_run_ids)
+
+    if page is not None and page_size is not None:
+        start = max(page - 1, 0) * page_size
+        end = start + page_size
+        ordered_run_ids = ordered_run_ids[start:end]
+
+    rows = [
+        _serialize_execution_row(
+            task=task,
+            task_type=task_type,
+            run_id=run_id,
+            meta=by_run_id[run_id],
+            include_metrics=include_metrics,
+            fallback_mid_rate=fallback_mid_rate,
+        )
+        for run_id in ordered_run_ids
+    ]
+
+    if page is not None and page_size is not None:
+        return total_count, rows
+    return rows
+
+
+def get_task_execution(
+    *,
+    task,
+    task_type: str,
+    execution_id: str,
+    include_metrics: bool = False,
+) -> dict[str, Any] | None:
+    """Return a single execution row when it exists for the task."""
+    ordered_run_ids, by_run_id, fallback_mid_rate = _load_execution_index(
+        task=task,
+        task_type=task_type,
+    )
+    if execution_id not in by_run_id or execution_id not in ordered_run_ids:
+        return None
+    return _serialize_execution_row(
+        task=task,
+        task_type=task_type,
+        run_id=execution_id,
+        meta=by_run_id[execution_id],
+        include_metrics=include_metrics,
+        fallback_mid_rate=fallback_mid_rate,
+    )
+
+
+def _load_execution_index(
+    *, task, task_type: str
+) -> tuple[list[str], dict[str, dict[str, Any]], Decimal | None]:
+    """Build execution metadata keyed by run ID and return sorted run IDs."""
     task_id = str(task.pk)
     task_name = (
         "trading.tasks.run_backtest_task"
@@ -90,29 +177,40 @@ def list_task_executions(
         )
         by_run_id[current_run_id] = current
 
-    rows: list[dict[str, Any]] = []
     # Get the latest mid rate from the task's most recent ExecutionState
     # to use as fallback for past executions that no longer have state.
     from apps.trading.models.state import ExecutionState as _ES
 
-    _latest_state = (
+    latest_state = (
         _ES.objects.filter(task_type=task_type, task_id=task_id)
         .exclude(last_tick_price__isnull=True)
         .order_by("-updated_at")
         .values_list("last_tick_price", flat=True)
         .first()
     )
-    for run_id in sorted(by_run_id.keys(), reverse=True):
-        meta = by_run_id[run_id]
-        started_at = meta.get("started_at")
-        completed_at = meta.get("completed_at")
-        progress = _compute_progress(
-            task=task,
-            task_type=task_type,
-            run_id=run_id,
-            status=str(meta.get("status") or TaskStatus.CREATED),
-        )
-        row: dict[str, Any] = TaskExecutionRow(
+    return sorted(by_run_id.keys(), reverse=True), by_run_id, latest_state
+
+
+def _serialize_execution_row(
+    *,
+    task,
+    task_type: str,
+    run_id: str,
+    meta: dict[str, Any],
+    include_metrics: bool,
+    fallback_mid_rate: Decimal | None,
+) -> dict[str, Any]:
+    task_id = str(task.pk)
+    started_at = meta.get("started_at")
+    completed_at = meta.get("completed_at")
+    progress = _compute_progress(
+        task=task,
+        task_type=task_type,
+        run_id=run_id,
+        status=str(meta.get("status") or TaskStatus.CREATED),
+    )
+    row = asdict(
+        TaskExecutionRow(
             id=run_id,
             task_type=task_type,
             task_id=task_id,
@@ -126,19 +224,19 @@ def list_task_executions(
             duration=_compute_duration_seconds(started_at, completed_at),
             created_at=(meta.get("created_at") or task.created_at).isoformat(),
             metrics=None,
-        ).__dict__
+        )
+    )
 
-        if include_metrics:
-            row["metrics"] = _compute_execution_metrics(
-                task=task,
-                task_type=task_type,
-                task_id=task_id,
-                run_id=run_id,
-                fallback_mid_rate=_latest_state,
-            )
-        rows.append(row)
+    if include_metrics:
+        row["metrics"] = _compute_execution_metrics(
+            task=task,
+            task_type=task_type,
+            task_id=task_id,
+            run_id=run_id,
+            fallback_mid_rate=fallback_mid_rate,
+        )
 
-    return rows
+    return row
 
 
 def _compute_execution_metrics(

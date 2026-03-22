@@ -101,7 +101,8 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
   });
   const isPageVisible = useDocumentVisibility();
   const realTimeUpdatesEnabled = enableRealTimeUpdates && isPageVisible;
-  const { granularities } = useSupportedGranularities();
+  const { granularities, usingFallback: usingGranularityFallback } =
+    useSupportedGranularities();
   const {
     candles: windowedCandles,
     isInitialLoading: isLoading,
@@ -1049,6 +1050,11 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
           sx={{ mb: 1 }}
         >
           {candleErrorMessage}
+        </Alert>
+      )}
+      {usingGranularityFallback && (
+        <Alert severity="warning" sx={{ mb: 1 }}>
+          {t('tables.trend.granularityFallbackWarning')}
         </Alert>
       )}
       {errorMessage && (

@@ -6,7 +6,7 @@
  *
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -22,7 +22,6 @@ import {
   useTheme,
 } from '@mui/material';
 import { useBacktestTask } from '../../hooks/useBacktestTasks';
-import { useTaskPolling } from '../../hooks/useTaskPolling';
 import {
   useStrategies,
   getStrategyDisplayName,
@@ -99,35 +98,24 @@ export const BacktestTaskDetail: React.FC = () => {
   const tabParam = searchParams.get('tab') || 'overview';
   const visibleTabIds = visibleTabs.map((t) => t.id);
 
-  const { data: task, isLoading, error } = useBacktestTask(taskId || undefined);
-  const { strategies } = useStrategies();
   const {
     optimisticStatus,
     statusPollingIntervalMs,
     applyOptimisticStatus,
     clearOptimisticStatus,
   } = useOptimisticTaskStatus();
-
-  // Use HTTP polling for task status updates
   const {
-    status: polledStatus,
-    details: polledDetails,
-    startPolling,
-    refetch: refetchPolledTask,
-  } = useTaskPolling(taskId, 'backtest', {
-    enabled: !!taskId,
-    pollStatus: true,
-    pollDetails: true,
-    interval: statusPollingIntervalMs,
+    data: task,
+    isLoading,
+    error,
+    refresh: refreshTask,
+  } = useBacktestTask(taskId || undefined, {
+    enablePolling: true,
+    pollingInterval: statusPollingIntervalMs,
   });
-  const liveTask = polledDetails?.task ?? task;
-  const actualStatus = polledStatus?.status ?? liveTask?.status;
+  const { strategies } = useStrategies();
+  const actualStatus = task?.status;
   const currentStatus = optimisticStatus?.status ?? actualStatus;
-  const triggerPolledRefetch = () => {
-    if (typeof refetchPolledTask === 'function') {
-      refetchPolledTask();
-    }
-  };
 
   useEffect(() => {
     if (!optimisticStatus || !actualStatus) {
@@ -142,7 +130,7 @@ export const BacktestTaskDetail: React.FC = () => {
   const overviewSummary = useTaskSummary(
     taskId,
     TaskType.BACKTEST,
-    polledDetails?.task?.execution_id ?? task?.execution_id,
+    task?.execution_id,
     {
       polling:
         currentStatus === TaskStatus.STARTING ||
@@ -158,23 +146,6 @@ export const BacktestTaskDetail: React.FC = () => {
         price: s.tick.mid != null ? String(s.tick.mid) : null,
       }
     : null;
-
-  // Update the displayed status from the lightweight status poller.
-  // We intentionally do NOT call refetch() on status transitions because
-  // the burst of concurrent API calls (task detail + positions + events +
-  // trades + summary + metrics) triggers 429 rate-limiting, which causes
-  // useBacktestTask to set error state → the component tree unmounts
-  // (including TaskTrendPanel) → on recovery the chart remounts and
-  // fitContent() scrolls to the last candle.
-  //
-  // The polledStatus is already used for the status badge and
-  // enableRealTimeUpdates, so the UI stays in sync without refetching.
-  const prevStatusRef = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (polledStatus) {
-      prevStatusRef.current = polledStatus.status;
-    }
-  }, [polledStatus]);
 
   // Derive tab value from URL parameter (use this for rendering)
   const activeTabIndex = Math.max(0, visibleTabIds.indexOf(tabParam));
@@ -198,8 +169,7 @@ export const BacktestTaskDetail: React.FC = () => {
         TaskStatus.COMPLETED,
         TaskStatus.FAILED,
       ]);
-      startPolling();
-      triggerPolledRefetch();
+      await refreshTask();
       setStopDialogOpen(false);
     } finally {
       setIsStopping(false);
@@ -233,7 +203,7 @@ export const BacktestTaskDetail: React.FC = () => {
     );
   }
 
-  const detailTask = (liveTask ?? task) as BacktestTask;
+  const detailTask = task as BacktestTask;
   const activeExecutionId = detailTask.execution_id;
   const pnlCurrency = detailTask.instrument?.includes('_')
     ? detailTask.instrument.split('_')[1]
@@ -297,8 +267,7 @@ export const BacktestTaskDetail: React.FC = () => {
             TaskStatus.RUNNING,
             TaskStatus.FAILED,
           ]);
-          startPolling();
-          triggerPolledRefetch();
+          await refreshTask();
         }}
         onStop={async () => {
           setStopDialogOpen(true);
@@ -310,8 +279,7 @@ export const BacktestTaskDetail: React.FC = () => {
             TaskStatus.RUNNING,
             TaskStatus.FAILED,
           ]);
-          startPolling();
-          triggerPolledRefetch();
+          await refreshTask();
         }}
         onResume={async (id) => {
           const updatedTask = await resumeTask.mutate(id);
@@ -320,8 +288,7 @@ export const BacktestTaskDetail: React.FC = () => {
             TaskStatus.PAUSED,
             TaskStatus.FAILED,
           ]);
-          startPolling();
-          triggerPolledRefetch();
+          await refreshTask();
         }}
         onPause={async (id) => {
           const updatedTask = await pauseTask.mutate(id);
@@ -330,8 +297,7 @@ export const BacktestTaskDetail: React.FC = () => {
             TaskStatus.RUNNING,
             TaskStatus.FAILED,
           ]);
-          startPolling();
-          triggerPolledRefetch();
+          await refreshTask();
         }}
         onEdit={() => navigate(`/backtest-tasks/${taskId}/edit`)}
         onDelete={() => setDeleteDialogOpen(true)}

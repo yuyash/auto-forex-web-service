@@ -21,6 +21,12 @@ interface UseBacktestTaskResult {
   refresh: () => Promise<unknown>;
 }
 
+interface UseBacktestTaskOptions {
+  enabled?: boolean;
+  enablePolling?: boolean;
+  pollingInterval?: number;
+}
+
 export function useBacktestTasks(
   params?: BacktestTaskListParams
 ): UseBacktestTasksResult {
@@ -41,13 +47,26 @@ export function useBacktestTasks(
   };
 }
 
-export function useBacktestTask(id?: string): UseBacktestTaskResult {
+export function useBacktestTask(
+  id?: string,
+  options?: UseBacktestTaskOptions
+): UseBacktestTaskResult {
   const query = useQuery({
     queryKey: id
       ? queryKeys.backtestTasks.detail(id)
       : ['backtest-task', 'empty'],
     queryFn: () => backtestTasksApi.get(id!),
-    enabled: Boolean(id),
+    enabled: Boolean(id) && options?.enabled !== false,
+    refetchInterval: (queryContext) => {
+      if (options?.enablePolling !== true) {
+        return false;
+      }
+      const currentTask = queryContext.state.data as BacktestTask | undefined;
+      const status = currentTask?.status;
+      return status === 'starting' || status === 'running'
+        ? (options.pollingInterval ?? 3000)
+        : false;
+    },
   });
 
   return {
@@ -60,28 +79,5 @@ export function useBacktestTask(id?: string): UseBacktestTaskResult {
             queryKey: queryKeys.backtestTasks.detail(id),
           })
         : Promise.resolve(),
-  };
-}
-
-export function useBacktestTaskPolling(
-  id: string,
-  enabled: boolean = true,
-  interval: number = 10000
-): UseBacktestTaskResult {
-  const query = useQuery({
-    queryKey: queryKeys.backtestTasks.detail(id),
-    queryFn: () => backtestTasksApi.get(id),
-    enabled: enabled && Boolean(id),
-    refetchInterval: enabled ? interval : false,
-  });
-
-  return {
-    data: query.data ?? null,
-    isLoading: query.isLoading,
-    error: (query.error as Error | null) ?? null,
-    refresh: () =>
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.backtestTasks.detail(id),
-      }),
   };
 }

@@ -809,13 +809,57 @@ class TaskSubResourceMixin:
             "yes",
             "on",
         }
-        rows = list_task_executions(
+        page, page_size = _parse_page_params(request)
+        total_count, rows = list_task_executions(
             task=task,
             task_type=self.task_type_label,
             include_metrics=include_metrics,
+            page=page,
+            page_size=page_size,
+        )
+        serializer = TaskExecutionSerializer(rows, many=True)
+        return Response(
+            _paginated_envelope(
+                request,
+                serializer.data,
+                total_count,
+                page,
+                page_size,
+            )
         )
 
-        paginator = TaskSubResourcePagination()
-        page = paginator.paginate_queryset(rows, request)
-        serializer = TaskExecutionSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+    @extend_schema(
+        tags=["Trading"],
+        parameters=[
+            OpenApiParameter("include_metrics", bool, description="Include aggregate metrics"),
+        ],
+        responses={200: TaskExecutionSerializer},
+        description="Retrieve a single execution record for a task.",
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path=r"executions/(?P<execution_id>[^/.]+)",
+    )
+    def execution_detail(
+        self, request: Request, pk: str | None = None, execution_id: str | None = None
+    ) -> Response:
+        from apps.trading.services.executions import get_task_execution
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        include_metrics = str(request.query_params.get("include_metrics", "false")).lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        row = get_task_execution(
+            task=task,
+            task_type=self.task_type_label,
+            execution_id=execution_id or "",
+            include_metrics=include_metrics,
+        )
+        if row is None:
+            return Response({"detail": "Execution not found."}, status=404)
+        serializer = TaskExecutionSerializer(row)
+        return Response(serializer.data)

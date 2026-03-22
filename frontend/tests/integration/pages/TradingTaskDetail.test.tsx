@@ -52,17 +52,7 @@ vi.mock('../../../src/hooks/useTradingTasks', () => ({
     data: mockTaskData,
     isLoading: false,
     error: null,
-  })),
-}));
-
-vi.mock('../../../src/hooks/useTaskPolling', () => ({
-  useTaskPolling: vi.fn(() => ({
-    status: null,
-    details: null,
-    isPolling: false,
-    startPolling: vi.fn(),
-    stopPolling: vi.fn(),
-    refetch: vi.fn(),
+    refresh: vi.fn(),
   })),
 }));
 
@@ -247,6 +237,7 @@ describe('TradingTaskDetail', () => {
       data: { ...mockTaskData, status: TaskStatus.CREATED },
       isLoading: false,
       error: null,
+      refresh: vi.fn(),
     });
     const user = userEvent.setup();
 
@@ -289,6 +280,7 @@ describe('TradingTaskDetail', () => {
       data: { ...mockTaskData, status: TaskStatus.PAUSED },
       isLoading: false,
       error: null,
+      refresh: vi.fn(),
     });
     const user = userEvent.setup();
 
@@ -307,6 +299,7 @@ describe('TradingTaskDetail', () => {
       data: { ...mockTaskData, status: TaskStatus.STOPPED },
       isLoading: false,
       error: null,
+      refresh: vi.fn(),
     });
     const user = userEvent.setup();
 

@@ -64,15 +64,7 @@ vi.mock('../../../src/hooks/useBacktestTasks', () => ({
     isLoading: false,
     error: null,
     refetch: vi.fn(),
-  })),
-}));
-
-vi.mock('../../../src/hooks/useTaskPolling', () => ({
-  useTaskPolling: vi.fn(() => ({
-    status: null,
-    isPolling: false,
-    startPolling: vi.fn(),
-    stopPolling: vi.fn(),
+    refresh: vi.fn(),
   })),
 }));
 
@@ -305,6 +297,7 @@ describe('BacktestTaskDetail', () => {
       isLoading: true,
       error: null,
       refetch: vi.fn(),
+      refresh: vi.fn(),
     });
 
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
@@ -318,6 +311,7 @@ describe('BacktestTaskDetail', () => {
       isLoading: false,
       error: new Error('Failed to load'),
       refetch: vi.fn(),
+      refresh: vi.fn(),
     });
 
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
@@ -340,6 +334,7 @@ describe('BacktestTaskDetail', () => {
       isLoading: false,
       error: null,
       refetch: vi.fn(),
+      refresh: vi.fn(),
     });
     const user = userEvent.setup();
 
@@ -388,6 +383,7 @@ describe('BacktestTaskDetail', () => {
       isLoading: false,
       error: null,
       refetch: vi.fn(),
+      refresh: vi.fn(),
     });
     const user = userEvent.setup();
 
@@ -407,6 +403,7 @@ describe('BacktestTaskDetail', () => {
       isLoading: false,
       error: null,
       refetch: vi.fn(),
+      refresh: vi.fn(),
     });
     const user = userEvent.setup();
 
