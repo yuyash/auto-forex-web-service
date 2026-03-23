@@ -23,10 +23,12 @@ from apps.trading.views.query_params import (
     LogsQueryParams,
     MetricsQueryParams,
     OrdersQueryParams,
+    PositionQuery,
     StrategyEventsQueryParams,
     SummaryQueryParams,
     SummaryQueryParamsSchemaSerializer,
     TradesQueryParams,
+    TrendReplayQueryParams,
 )
 
 factory = APIRequestFactory()
@@ -128,6 +130,26 @@ def test_orders_query_params_parses_filters():
     assert query.direction == "buy"
 
 
+def test_position_query_parses_filters_and_overlap_range():
+    request = _request(
+        "?position_status=open&direction=long&include_trade_ids=true"
+        "&range_from=2026-01-01T00:00:00Z&range_to=2026-01-01T03:00:00Z"
+    )
+
+    query = PositionQuery.from_request(
+        request,
+        default_execution_id=None,
+        default_page_size=TradePositionPagination.page_size,
+        max_page_size=TradePositionPagination.max_page_size,
+    )
+
+    assert query.position_status == "open"
+    assert query.direction == "long"
+    assert query.include_trade_ids is True
+    assert query.range.start is not None
+    assert query.range.end is not None
+
+
 def test_strategy_events_query_params_uses_default_execution_id():
     default_execution_id = uuid4()
     request = _request("?root_entry_id=42")
@@ -182,6 +204,27 @@ def test_execution_detail_query_params_defaults_metrics_false():
     query = ExecutionDetailQueryParams.from_request(_request())
 
     assert query.include_metrics is False
+
+
+def test_trend_replay_query_params_parse_range_and_pagination():
+    execution_id = uuid4()
+    request = _request(
+        f"?execution_id={execution_id}&range_from=2026-01-01T00:00:00Z"
+        "&range_to=2026-01-01T01:00:00Z&page=2&page_size=20"
+    )
+
+    query = TrendReplayQueryParams.from_request(
+        request,
+        default_execution_id=None,
+        default_page_size=TradePositionPagination.page_size,
+        max_page_size=TradePositionPagination.max_page_size,
+    )
+
+    assert query.execution.execution_id == execution_id
+    assert query.execution.pagination.page == 2
+    assert query.execution.pagination.page_size == 20
+    assert query.range.start is not None
+    assert query.range.end is not None
 
 
 def test_summary_schema_serializer_exposes_execution_id_field_metadata():

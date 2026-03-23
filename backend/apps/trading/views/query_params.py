@@ -117,6 +117,14 @@ class QueryGroupSpec:
         )
 
 
+@dataclass(frozen=True)
+class EndpointQuerySpec:
+    """Declarative endpoint mapping to a shared query group."""
+
+    endpoint: str
+    group_key: str
+
+
 def _page_size_spec(*, default: int, max_value: int) -> QueryFieldSpec:
     return QueryFieldSpec(
         name="page_size",
@@ -597,26 +605,29 @@ QUERY_GROUP_SPECS = {
     ),
 }
 
-ENDPOINT_QUERY_GROUP_KEYS = {
-    "execution_scoped": "execution_scoped",
-    "metrics": "metrics",
-    "logs": "logs",
-    "log_components": "log_components",
-    "events": "events",
-    "strategy_events": "strategy_events",
-    "trades": "trades",
-    "positions": "positions",
-    "trend_replay": "trend_replay",
-    "orders": "orders",
-    "summary": "summary",
-    "executions": "executions",
-    "execution_detail": "execution_detail",
-    "pagination": "pagination",
+ENDPOINT_QUERY_SPECS = {
+    endpoint: EndpointQuerySpec(endpoint=endpoint, group_key=endpoint)
+    for endpoint in (
+        "execution_scoped",
+        "metrics",
+        "logs",
+        "log_components",
+        "events",
+        "strategy_events",
+        "trades",
+        "positions",
+        "trend_replay",
+        "orders",
+        "summary",
+        "executions",
+        "execution_detail",
+        "pagination",
+    )
 }
 
 
 def get_query_group_spec(endpoint: str) -> QueryGroupSpec:
-    return QUERY_GROUP_SPECS[ENDPOINT_QUERY_GROUP_KEYS[endpoint]]
+    return QUERY_GROUP_SPECS[ENDPOINT_QUERY_SPECS[endpoint].group_key]
 
 
 def _build_query_serializer_alias(endpoint: str) -> type[serializers.Serializer]:
