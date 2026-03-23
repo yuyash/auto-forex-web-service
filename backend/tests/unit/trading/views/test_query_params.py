@@ -18,11 +18,14 @@ from apps.trading.views.query_params import (
     EventsQueryParams,
     ExecutionDetailQueryParams,
     ExecutionsQueryParams,
+    ExecutionsQueryParamsSchemaSerializer,
+    LogComponentsQueryParams,
     LogsQueryParams,
     MetricsQueryParams,
     OrdersQueryParams,
     StrategyEventsQueryParams,
     SummaryQueryParams,
+    SummaryQueryParamsSchemaSerializer,
     TradesQueryParams,
 )
 
@@ -138,6 +141,17 @@ def test_strategy_events_query_params_uses_default_execution_id():
     assert query.root_entry_id == 42
 
 
+def test_log_components_query_params_uses_default_execution_id():
+    default_execution_id = uuid4()
+
+    query = LogComponentsQueryParams.from_request(
+        _request(),
+        default_execution_id=default_execution_id,
+    )
+
+    assert query.execution_id == default_execution_id
+
+
 def test_summary_query_params_parses_execution_id():
     execution_id = uuid4()
     request = _request(f"?execution_id={execution_id}")
@@ -168,6 +182,24 @@ def test_execution_detail_query_params_defaults_metrics_false():
     query = ExecutionDetailQueryParams.from_request(_request())
 
     assert query.include_metrics is False
+
+
+def test_summary_schema_serializer_exposes_execution_id_field_metadata():
+    serializer = SummaryQueryParamsSchemaSerializer()
+
+    field = serializer.fields["execution_id"]
+
+    assert field.help_text == "Filter by execution ID (UUID)."
+    assert field.required is False
+
+
+def test_executions_schema_serializer_exposes_page_size_constraints():
+    serializer = ExecutionsQueryParamsSchemaSerializer()
+
+    field = serializer.fields["page_size"]
+
+    assert field.help_text == "Results per page. Default 100, maximum 1000."
+    assert field.max_value == 1000
 
 
 def test_trades_query_params_rejects_invalid_page_size():

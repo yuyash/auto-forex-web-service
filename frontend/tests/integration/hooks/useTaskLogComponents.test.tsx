@@ -1,25 +1,14 @@
 import { renderHook, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
 import { vi } from 'vitest';
 import { useTaskLogComponents } from '../../../src/hooks/useTaskLogComponents';
 import { TaskType } from '../../../src/types/common';
 import * as taskResourcesApi from '../../../src/services/api/taskResources';
+import { createQueryHookWrapper } from '../../utils/queryHookTestUtils';
 
 vi.mock('../../../src/services/api/taskResources', () => ({
   fetchTaskResourceObject: vi.fn(),
   isApiErrorWithStatus: vi.fn(() => false),
 }));
-
-function createWrapper() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-
-  return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  );
-}
 
 describe('useTaskLogComponents', () => {
   beforeEach(() => {
@@ -38,7 +27,7 @@ describe('useTaskLogComponents', () => {
           taskType: TaskType.TRADING,
           executionRunId: 'exec-1',
         }),
-      { wrapper: createWrapper() }
+      { wrapper: createQueryHookWrapper().wrapper }
     );
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -59,7 +48,7 @@ describe('useTaskLogComponents', () => {
           taskId: 'task-1',
           taskType: TaskType.BACKTEST,
         }),
-      { wrapper: createWrapper() }
+      { wrapper: createQueryHookWrapper().wrapper }
     );
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));

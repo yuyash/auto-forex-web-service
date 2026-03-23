@@ -30,11 +30,11 @@ from apps.trading.serializers.trend_replay import TaskTrendReplaySerializer
 from apps.trading.views.query_params import (
     ExecutionDetailQueryParams,
     ExecutionDetailQueryParamsSchemaSerializer,
-    ExecutionScopedQuery,
     ExecutionsQueryParams,
     ExecutionsQueryParamsSchemaSerializer,
     EventsQueryParams,
     EventsQueryParamsSchemaSerializer,
+    LogComponentsQueryParams,
     LogComponentsQueryParamsSchemaSerializer,
     LogsQueryParams,
     LogsQueryParamsSchemaSerializer,
@@ -325,11 +325,9 @@ class TaskSubResourceMixin:
     def log_components(self, request: Request, pk: int | None = None) -> Response:
         """Return distinct component names for the task's logs."""
         task = self.get_object()  # type: ignore[attr-defined]
-        query = ExecutionScopedQuery.from_request(
+        query = LogComponentsQueryParams.from_request(
             request,
             default_execution_id=task.execution_id,
-            default_page_size=ActivityPagination.page_size,
-            max_page_size=ActivityPagination.max_page_size,
         )
         components = list(
             TaskLog.objects.filter(

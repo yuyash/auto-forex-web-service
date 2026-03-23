@@ -1026,6 +1026,23 @@ class OrdersQueryParams:
 
 
 @dataclass(frozen=True)
+class LogComponentsQueryParams:
+    execution_id: UUID | None
+
+    @classmethod
+    def from_request(
+        cls,
+        request: Request,
+        *,
+        default_execution_id: UUID | None,
+    ) -> LogComponentsQueryParams:
+        parsed = QUERY_GROUP_SPECS["log_components"].parse(request)
+        return cls(
+            execution_id=cast(UUID | None, parsed["execution_id"]) or default_execution_id,
+        )
+
+
+@dataclass(frozen=True)
 class StrategyEventsQueryParams:
     execution_id: UUID | None
     root_entry_id: int | None

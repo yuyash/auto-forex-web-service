@@ -1,11 +1,10 @@
 import { act, renderHook } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { backtestTasksApi, tradingTasksApi } from '../../../src/services/api';
 import { useBacktestTask } from '../../../src/hooks/useBacktestTasks';
 import { useTaskExecutions } from '../../../src/hooks/useTaskExecutions';
 import { TaskType } from '../../../src/types/common';
+import { createQueryHookWrapper } from '../../utils/queryHookTestUtils';
 
 vi.mock('../../../src/services/api', () => ({
   backtestTasksApi: {
@@ -25,21 +24,6 @@ vi.mock('../../../src/hooks/useDocumentVisibility', () => ({
 vi.mock('../../../src/hooks/useOnlineStatus', () => ({
   useOnlineStatus: () => true,
 }));
-
-function createWrapper() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-        gcTime: Infinity,
-      },
-    },
-  });
-
-  return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  );
-}
 
 async function flushAsyncWork() {
   await act(async () => {
@@ -78,7 +62,7 @@ describe('task polling hooks', () => {
           enablePolling: true,
           pollingInterval: 1000,
         }),
-      { wrapper: createWrapper() }
+      { wrapper: createQueryHookWrapper({ gcTime: Infinity }).wrapper }
     );
 
     await flushAsyncWork();
@@ -123,7 +107,7 @@ describe('task polling hooks', () => {
           { page: 1, page_size: 10 },
           { enablePolling: true, pollingInterval: 1000 }
         ),
-      { wrapper: createWrapper() }
+      { wrapper: createQueryHookWrapper({ gcTime: Infinity }).wrapper }
     );
 
     await flushAsyncWork();

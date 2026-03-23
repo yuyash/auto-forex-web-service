@@ -1,6 +1,4 @@
 import { renderHook, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
 import { vi } from 'vitest';
 import {
   useSupportedGranularities,
@@ -8,6 +6,7 @@ import {
   useTickDataRange,
 } from '../../../src/hooks/useMarketConfig';
 import { marketApi } from '../../../src/services/api/market';
+import { createQueryHookWrapper } from '../../utils/queryHookTestUtils';
 
 vi.mock('../../../src/services/api/market', () => ({
   marketApi: {
@@ -16,16 +15,6 @@ vi.mock('../../../src/services/api/market', () => ({
     getTickDataRange: vi.fn(),
   },
 }));
-
-function createWrapper() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-
-  return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  );
-}
 
 describe('useMarketConfig', () => {
   beforeEach(() => {
@@ -38,7 +27,7 @@ describe('useMarketConfig', () => {
     );
 
     const { result } = renderHook(() => useSupportedInstruments(), {
-      wrapper: createWrapper(),
+      wrapper: createQueryHookWrapper().wrapper,
     });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -58,7 +47,7 @@ describe('useMarketConfig', () => {
     });
 
     const { result } = renderHook(() => useSupportedGranularities(), {
-      wrapper: createWrapper(),
+      wrapper: createQueryHookWrapper().wrapper,
     });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -80,7 +69,7 @@ describe('useMarketConfig', () => {
     });
 
     const { result } = renderHook(() => useTickDataRange('USD_JPY'), {
-      wrapper: createWrapper(),
+      wrapper: createQueryHookWrapper().wrapper,
     });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));

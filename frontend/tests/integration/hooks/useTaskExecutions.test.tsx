@@ -1,10 +1,9 @@
 import { renderHook, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
 import { vi } from 'vitest';
 import { useTaskExecution } from '../../../src/hooks/useTaskExecutions';
 import { TaskType } from '../../../src/types/common';
 import { backtestTasksApi, tradingTasksApi } from '../../../src/services/api';
+import { createQueryHookWrapper } from '../../utils/queryHookTestUtils';
 
 vi.mock('../../../src/services/api', () => ({
   backtestTasksApi: {
@@ -14,16 +13,6 @@ vi.mock('../../../src/services/api', () => ({
     getExecution: vi.fn(),
   },
 }));
-
-function createWrapper() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-
-  return ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  );
-}
 
 describe('useTaskExecution', () => {
   beforeEach(() => {
@@ -48,7 +37,7 @@ describe('useTaskExecution', () => {
 
     const { result } = renderHook(
       () => useTaskExecution('task-1', 'exec-1', TaskType.BACKTEST),
-      { wrapper: createWrapper() }
+      { wrapper: createQueryHookWrapper().wrapper }
     );
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -78,7 +67,7 @@ describe('useTaskExecution', () => {
 
     const { result } = renderHook(
       () => useTaskExecution('task-2', 'exec-2', TaskType.TRADING),
-      { wrapper: createWrapper() }
+      { wrapper: createQueryHookWrapper().wrapper }
     );
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
