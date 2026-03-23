@@ -48,7 +48,7 @@ In production, `docker-compose.prod.yaml` pulls pre-built images from DockerHub 
 
 | Layer          | Technologies                                                      |
 | -------------- | ----------------------------------------------------------------- |
-| Backend        | Python 3.13, Django 5.2 LTS, DRF, Django Channels, Celery, Daphne |
+| Backend        | Python 3.13, Django 5.2 LTS, DRF, Celery, Uvicorn              |
 | Frontend       | React 19, TypeScript, Vite, Material-UI, react-financial-charts   |
 | Database       | PostgreSQL 17                                                     |
 | Cache/Broker   | Redis 7                                                           |

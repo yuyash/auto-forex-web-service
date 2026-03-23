@@ -61,16 +61,6 @@ SESSION_ENGINE = "django.contrib.sessions.backends.cache"
 SESSION_CACHE_ALIAS = "default"
 
 # =============================================================================
-# Channel Layers Configuration (In-Memory for Tests)
-# =============================================================================
-
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer",
-    },
-}
-
-# =============================================================================
 # Password Hashing (Faster for Tests)
 # =============================================================================
 

@@ -48,8 +48,6 @@ ALLOWED_HOSTS = [
 # Application definition
 
 INSTALLED_APPS = [
-    # Django Channels must be before django.contrib.staticfiles
-    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -60,7 +58,6 @@ INSTALLED_APPS = [
     "corsheaders",
     "rest_framework",
     "drf_spectacular",
-    "channels",
     "django_celery_beat",
     # Local apps
     "apps.accounts",
@@ -188,22 +185,6 @@ SESSION_COOKIE_AGE = JWT_EXPIRATION
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SAMESITE = "Lax"
-
-
-# =============================================================================
-# Django Channels Configuration
-# =============================================================================
-
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [REDIS_URL.replace(f"/{REDIS_DB}", "/1")],  # Use db 1 for channels
-            "capacity": 1500,
-            "expiry": 10,
-        },
-    },
-}
 
 
 # =============================================================================
