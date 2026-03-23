@@ -50,6 +50,12 @@ const appSettingsSchema = z.object({
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  // NOTE: The access token is held in React state (and synced to an in-memory
+  // variable via setAuthToken) which is standard for SPAs.  The refresh token
+  // is stored in an httpOnly cookie.  If the access-token lifetime
+  // (JWT_EXPIRATION, default 3600 s) is ever increased significantly, consider
+  // moving to an httpOnly cookie for the access token as well to reduce the
+  // XSS exposure window.
   const [token, setToken] = useState<string | null>(null);
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(
     null

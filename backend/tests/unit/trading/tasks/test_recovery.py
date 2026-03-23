@@ -12,6 +12,15 @@ from django.utils import timezone as dj_timezone
 from apps.trading.enums import TaskStatus
 
 
+def _make_qs(task_list):
+    """Return a mock queryset that supports .order_by()[:N] → iterable."""
+    qs = MagicMock()
+    sliceable = MagicMock()
+    sliceable.__iter__ = MagicMock(return_value=iter(task_list))
+    qs.order_by.return_value.__getitem__ = MagicMock(return_value=sliceable)
+    return qs
+
+
 @pytest.fixture()
 def _mock_models():
     """Patch BacktestTask, TradingTask, CeleryTaskStatus, TaskLog."""
@@ -22,6 +31,8 @@ def _mock_models():
         patch("apps.trading.tasks.recovery.TaskLog") as tl,
         patch("apps.trading.tasks.service.TaskService") as svc_cls,
     ):
+        bt.objects.filter.return_value = _make_qs([])
+        tt.objects.filter.return_value = _make_qs([])
         yield bt, tt, cts, tl, svc_cls
 
 
@@ -31,31 +42,24 @@ class TestRecoverOrphanedTasks:
     @pytest.mark.usefixtures("_mock_models")
     def test_no_orphaned_tasks(self, _mock_models):
         bt, tt, cts, tl, svc_cls = _mock_models
-        bt.objects.filter.return_value = []
-        tt.objects.filter.return_value = []
 
         from apps.trading.tasks.recovery import recover_orphaned_tasks
 
         result = recover_orphaned_tasks(source="test")
-
         assert result == {"backtest": 0, "trading": 0}
 
     @pytest.mark.usefixtures("_mock_models")
     def test_recovers_orphaned_backtest_no_cts_row(self, _mock_models):
-        """Task with no CeleryTaskStatus row is treated as orphaned."""
         bt, tt, cts, tl, svc_cls = _mock_models
 
         task = MagicMock()
         task.pk = uuid4()
         task.status = TaskStatus.RUNNING
         task.celery_task_id = "old-celery-id"
-        bt.objects.filter.return_value = [task]
-        tt.objects.filter.return_value = []
+        bt.objects.filter.return_value = _make_qs([task])
 
-        # No CeleryTaskStatus row
         cts.objects.filter.return_value.first.return_value = None
 
-        # Reset succeeds
         type(task).objects = MagicMock()
         type(task).objects.filter.return_value.update.return_value = 1
 
@@ -65,22 +69,18 @@ class TestRecoverOrphanedTasks:
         from apps.trading.tasks.recovery import recover_orphaned_tasks
 
         result = recover_orphaned_tasks(source="test")
-
         assert result["backtest"] == 1
         service_instance.start_task.assert_called_once()
 
     @pytest.mark.usefixtures("_mock_models")
     def test_recovers_orphaned_backtest_stale_heartbeat(self, _mock_models):
-        """Task with stale heartbeat is treated as orphaned."""
         bt, tt, cts, tl, svc_cls = _mock_models
 
         task = MagicMock()
         task.pk = uuid4()
         task.status = TaskStatus.RUNNING
-        bt.objects.filter.return_value = [task]
-        tt.objects.filter.return_value = []
+        bt.objects.filter.return_value = _make_qs([task])
 
-        # Stale heartbeat (10 minutes ago)
         stale_cts = MagicMock()
         stale_cts.last_heartbeat_at = dj_timezone.now() - timedelta(minutes=10)
         cts.objects.filter.return_value.first.return_value = stale_cts
@@ -94,21 +94,17 @@ class TestRecoverOrphanedTasks:
         from apps.trading.tasks.recovery import recover_orphaned_tasks
 
         result = recover_orphaned_tasks(source="test")
-
         assert result["backtest"] == 1
 
     @pytest.mark.usefixtures("_mock_models")
     def test_skips_task_with_recent_heartbeat(self, _mock_models):
-        """Task with recent heartbeat is NOT orphaned."""
         bt, tt, cts, tl, svc_cls = _mock_models
 
         task = MagicMock()
         task.pk = uuid4()
         task.status = TaskStatus.RUNNING
-        bt.objects.filter.return_value = [task]
-        tt.objects.filter.return_value = []
+        bt.objects.filter.return_value = _make_qs([task])
 
-        # Recent heartbeat (1 minute ago)
         recent_cts = MagicMock()
         recent_cts.last_heartbeat_at = dj_timezone.now() - timedelta(minutes=1)
         cts.objects.filter.return_value.first.return_value = recent_cts
@@ -116,19 +112,16 @@ class TestRecoverOrphanedTasks:
         from apps.trading.tasks.recovery import recover_orphaned_tasks
 
         result = recover_orphaned_tasks(source="test")
-
         assert result["backtest"] == 0
 
     @pytest.mark.usefixtures("_mock_models")
     def test_marks_failed_when_resubmit_fails(self, _mock_models):
-        """If start_task raises, the task is marked FAILED."""
         bt, tt, cts, tl, svc_cls = _mock_models
 
         task = MagicMock()
         task.pk = uuid4()
         task.status = TaskStatus.RUNNING
-        bt.objects.filter.return_value = [task]
-        tt.objects.filter.return_value = []
+        bt.objects.filter.return_value = _make_qs([task])
 
         cts.objects.filter.return_value.first.return_value = None
 
@@ -142,26 +135,21 @@ class TestRecoverOrphanedTasks:
         from apps.trading.tasks.recovery import recover_orphaned_tasks
 
         result = recover_orphaned_tasks(source="test")
-
         assert result["backtest"] == 0
-        # Should have been called twice: once for reset, once for marking FAILED
         assert type(task).objects.filter.return_value.update.call_count == 2
 
     @pytest.mark.usefixtures("_mock_models")
     def test_race_condition_reset_returns_zero(self, _mock_models):
-        """If another process already reset the task, skip it."""
         bt, tt, cts, tl, svc_cls = _mock_models
 
         task = MagicMock()
         task.pk = uuid4()
         task.status = TaskStatus.RUNNING
-        bt.objects.filter.return_value = [task]
-        tt.objects.filter.return_value = []
+        bt.objects.filter.return_value = _make_qs([task])
 
         cts.objects.filter.return_value.first.return_value = None
 
         type(task).objects = MagicMock()
-        # Another process already handled it
         type(task).objects.filter.return_value.update.return_value = 0
 
         service_instance = MagicMock()
@@ -170,14 +158,11 @@ class TestRecoverOrphanedTasks:
         from apps.trading.tasks.recovery import recover_orphaned_tasks
 
         result = recover_orphaned_tasks(source="test")
-
-        # Count is 0 because the reset didn't actually happen
         assert result["backtest"] == 0
         service_instance.start_task.assert_not_called()
 
     @pytest.mark.usefixtures("_mock_models")
     def test_recovers_trading_task_in_same_run(self, _mock_models):
-        """Trading orphan recovery must preserve run and call recover_trading_task."""
         bt, tt, cts, tl, svc_cls = _mock_models
 
         task = MagicMock()
@@ -185,10 +170,8 @@ class TestRecoverOrphanedTasks:
         task.status = TaskStatus.RUNNING
         task.celery_task_id = "old-celery-id"
         task.execution_run_id = 5
-        bt.objects.filter.return_value = []
-        tt.objects.filter.return_value = [task]
+        tt.objects.filter.return_value = _make_qs([task])
 
-        # No CeleryTaskStatus row -> orphan.
         cts.objects.filter.return_value.first.return_value = None
 
         service_instance = MagicMock()
@@ -197,7 +180,6 @@ class TestRecoverOrphanedTasks:
         from apps.trading.tasks.recovery import recover_orphaned_tasks
 
         result = recover_orphaned_tasks(source="test")
-
         assert result["trading"] == 1
         service_instance.recover_trading_task.assert_called_once_with(task)
         service_instance.start_task.assert_not_called()
@@ -209,10 +191,11 @@ class TestRecoverOrphanedTasks:
         task = MagicMock()
         task.pk = uuid4()
         task.status = TaskStatus.RUNNING
-        bt.objects.filter.return_value = []
+
+        # First call: recovery queryset for trading; second call: update for FAILED
         update_qs = MagicMock()
         update_qs.update.return_value = 1
-        tt.objects.filter.side_effect = [[task], update_qs]
+        tt.objects.filter.side_effect = [_make_qs([task]), update_qs]
         cts.objects.filter.return_value.first.return_value = None
 
         service_instance = MagicMock()
@@ -222,7 +205,6 @@ class TestRecoverOrphanedTasks:
         from apps.trading.tasks.recovery import recover_orphaned_tasks
 
         result = recover_orphaned_tasks(source="test")
-
         assert result["trading"] == 0
 
 
@@ -236,6 +218,5 @@ class TestRecoverOrphanedTasksBeat:
         from apps.trading.tasks.recovery import recover_orphaned_tasks_beat
 
         result = recover_orphaned_tasks_beat()
-
         mock_recover.assert_called_once_with(source="celery_beat")
         assert result == {"backtest": 0, "trading": 0}

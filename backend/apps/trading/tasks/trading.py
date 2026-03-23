@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import traceback
-from logging import Logger, getLogger
+import logging
 from typing import Any
 from uuid import UUID
 
@@ -14,18 +13,18 @@ from apps.trading.enums import StopMode, TaskStatus, TaskType
 from apps.trading.logging import TaskLoggingSession
 from apps.trading.models import TradingTask
 from apps.trading.services.execution_lifecycle import transition_task_to_running
+from apps.trading.tasks.executor import TradingExecutor
 from apps.trading.tasks.lifecycle_events import (
-    build_failed_event_spec,
     build_started_event_spec,
     build_stopped_event_spec,
     finalize_task_terminal_lifecycle,
     publish_task_lifecycle_event,
 )
-from apps.trading.tasks.executor import TradingExecutor
 from apps.trading.tasks.source import LiveTickDataSource
+from apps.trading.tasks.task_runner import handle_task_exception
 from apps.trading.utils import pip_size_for_instrument
 
-logger: Logger = getLogger(name=__name__)
+logger = logging.getLogger(__name__)
 
 
 @shared_task(
@@ -36,44 +35,36 @@ logger: Logger = getLogger(name=__name__)
     track_started=True,
 )
 def run_trading_task(self: Any, task_id: UUID) -> None:
-    """Celery task wrapper for running trading tasks.
-
-    Args:
-        task_id: UUID of the TradingTask to execute
-    """
+    """Celery task wrapper for running trading tasks."""
     task = None
     logging_session: TaskLoggingSession | None = None
 
     try:
-        logger.info(f"Starting a new celery trading task. Task ID: {task_id}.")
+        logger.info("Starting a new celery trading task. Task ID: %s.", task_id)
         task = TradingTask.objects.get(pk=task_id)
         logging_session = TaskLoggingSession(task)
         logging_session.start()
 
-        # Guard: only allow execution from STARTING status.
-        # This prevents duplicate Celery dispatches or retries from
-        # re-running a task that has already completed/failed/stopped.
         if task.status != TaskStatus.STARTING:
             logger.warning(
-                f"SKIPPING execution - task_id={task_id}, status={task.status} "
-                f"is not STARTING. Another worker may have already processed this task."
+                "SKIPPING execution - task_id=%s, status=%s is not STARTING",
+                task_id,
+                task.status,
             )
             return
 
-        # Atomically transition to RUNNING only if still in STARTING/CREATED.
         rows_updated = transition_task_to_running(task_model=TradingTask, task_id=task_id)
-
         if rows_updated == 0:
             task.refresh_from_db()
             logger.warning(
-                f"SKIPPING execution (lost race) - task_id={task_id}, "
-                f"current_status={task.status}. Another worker won the transition."
+                "SKIPPING execution (lost race) - task_id=%s, current_status=%s",
+                task_id,
+                task.status,
             )
             return
 
         task.refresh_from_db()
-        logger.info(f"Transitioning: STARTING -> RUNNING - task_id={task_id}")
-        logger.info(f"Current: RUNNING - task_id={task_id}, started_at={task.started_at}")
+        logger.info("Transitioning: STARTING -> RUNNING - task_id=%s", task_id)
 
         publish_task_lifecycle_event(
             logger=logger,
@@ -82,17 +73,11 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
             event=build_started_event_spec(task_label="Trading", component=__name__),
         )
 
-        # Execute the trading task
         execute_trading(task)
 
-        # Mark as stopped (trading tasks run until stopped, only if not already stopped/stopping)
-        logger.info(f"Execution completed, checking final status - task_id={task_id}")
+        # Mark as stopped (trading tasks run until stopped)
         task.refresh_from_db()
-        logger.info(f"Current after execution: {task.status} - task_id={task_id}")
-
         if task.status not in [TaskStatus.STOPPED, TaskStatus.STOPPING]:
-            # Atomically transition RUNNING -> STOPPED
-            logger.info(f"Transitioning: {task.status} -> STOPPED - task_id={task_id}")
             rows_updated = finalize_task_terminal_lifecycle(
                 logger=logger,
                 task=task,
@@ -109,18 +94,26 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
             if rows_updated == 0:
                 task.refresh_from_db()
                 logger.warning(
-                    f"STOPPED transition failed - task_id={task_id}, current_status={task.status}."
+                    "STOPPED transition failed - task_id=%s, current_status=%s",
+                    task_id,
+                    task.status,
                 )
                 return
-            logger.info(f"Current: {task.status} - task_id={task_id}")
         else:
-            logger.info(f"Already in terminal state: {task.status} - task_id={task_id}")
+            logger.info("Already in terminal state: %s - task_id=%s", task.status, task_id)
 
     except TradingTask.DoesNotExist:
-        logger.error(f"TradingTask {task_id} not found")
+        logger.error("TradingTask %s not found", task_id)
         raise
     except Exception as e:
-        handle_exception(task_id, task, e)
+        handle_task_exception(
+            task_id=task_id,
+            task=task,
+            error=e,
+            task_type=TaskType.TRADING,
+            task_label="Trading",
+            component=__name__,
+        )
         raise
     finally:
         if logging_session:
@@ -128,16 +121,9 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
 
 
 def execute_trading(task: TradingTask) -> None:
-    """Execute a trading task.
-
-    Args:
-        task: Trading task to execute
-    """
-
-    # Resolve pip_size: use task value, or derive from instrument
+    """Execute a trading task."""
     resolved_pip_size = task.pip_size or pip_size_for_instrument(task.instrument)
 
-    # Create trading engine
     engine = TradingEngine(
         instrument=task.instrument,
         pip_size=resolved_pip_size,
@@ -146,94 +132,43 @@ def execute_trading(task: TradingTask) -> None:
         hedging_enabled=task.hedging_enabled,
     )
 
-    # Persist pip_size back to task if it was null
     if not task.pip_size:
         task.pip_size = resolved_pip_size
         task.save(update_fields=["pip_size", "updated_at"])
 
-    # Create data source for live ticks
     channel = f"live:{task.oanda_account.account_id}:{task.instrument}"
     data_source = LiveTickDataSource(
         channel=channel,
         instrument=task.instrument,
     )
 
-    # Create executor (respect task-level dry_run flag)
     executor = TradingExecutor(
         task=task,
         engine=engine,
         data_source=data_source,
         dry_run=task.dry_run,
     )
-
-    # Execute
     executor.execute()
-
-
-def handle_exception(task_id: UUID, task: TradingTask | None, error: Exception) -> None:
-    # Capture error details and update task
-    error_message = str(error)
-    error_traceback = traceback.format_exc()
-
-    logger.error(
-        f"Trading task {task_id} failed: {error_message}",
-        exc_info=True,
-    )
-
-    if task:
-        # Update task with error information
-        finalize_task_terminal_lifecycle(
-            logger=logger,
-            task=task,
-            task_type=TaskType.TRADING,
-            status=TaskStatus.FAILED,
-            event=build_failed_event_spec(
-                task_label="Trading",
-                component=__name__,
-                error_type=type(error).__name__,
-                error_message=error_message,
-            ),
-            error_message=error_message,
-            error_traceback=error_traceback,
-        )
 
 
 @shared_task(bind=True, name="trading.tasks.stop_trading_task")
 def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
-    """Stop a running trading task.
-
-    This performs the actual stop operation, updating the task to STOPPED status.
-
-    Args:
-        task_id: UUID of the trading task to stop
-        mode: Stop mode ('immediate', 'graceful', 'graceful_close')
-    """
+    """Stop a running trading task."""
     try:
-        logger.info(f"Stop task started - task_id={task_id}, mode={mode}")
+        logger.info("Stop task started - task_id=%s, mode=%s", task_id, mode)
         stop_mode = StopMode(mode)
         task = TradingTask.objects.get(pk=task_id)
-        logger.info(f"Task loaded - task_id={task_id}, status={task.status}")
+        logger.info("Task loaded - task_id=%s, status=%s", task_id, task.status)
 
-        # Handle STOPPING state (normal case)
         if task.status == TaskStatus.STOPPING:
-            logger.info(f"Current: STOPPING, proceeding with stop - task_id={task_id}")
-            # Only IMMEDIATE mode force-revokes worker process.
             if stop_mode == StopMode.IMMEDIATE and task.execution_id:
                 from celery import current_app
 
-                logger.info(
-                    f"Revoking Celery task - task_id={task_id}, execution_id={task.execution_id}"
-                )
                 current_app.control.revoke(str(task.execution_id), terminate=True, signal="SIGKILL")
-                logger.info(
-                    f"Celery task revoked - task_id={task_id}, execution_id={task.execution_id}"
-                )
 
             if stop_mode == StopMode.GRACEFUL_CLOSE or getattr(task, "sell_on_stop", False) is True:
                 _close_open_positions_for_task(task)
 
-            # Update task status to STOPPED (without completed_at since it didn't complete)
-            logger.info(f"Transitioning: {task.status} -> STOPPED - task_id={task_id}")
             finalize_task_terminal_lifecycle(
                 logger=logger,
                 task=task,
@@ -247,18 +182,15 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
                 expected_current_status=TaskStatus.STOPPING,
                 extra_details={"mode": stop_mode.value},
             )
-            logger.info(f"Current: STOPPED - task_id={task_id}")
+            logger.info("Trading task %s stopped successfully (mode=%s)", task_id, mode)
 
-            logger.info(f"Trading task {task_id} stopped successfully (mode={mode})")
-
-        # Handle STOPPED state (race condition - task stopped before stop task ran)
         elif task.status == TaskStatus.STOPPED:
-            logger.info(f"Already STOPPED - task_id={task_id}, nothing to do")
+            logger.info("Already STOPPED - task_id=%s, nothing to do", task_id)
 
         else:
-            logger.warning(f"Unexpected state: {task.status} - task_id={task_id}")
+            logger.warning("Unexpected state: %s - task_id=%s", task.status, task_id)
     except TradingTask.DoesNotExist:
-        logger.error(f"Trading task {task_id} not found")
+        logger.error("Trading task %s not found", task_id)
         raise
 
 
@@ -273,7 +205,8 @@ def _close_open_positions_for_task(task: TradingTask) -> None:
             service.close_position(position=position)
         except OrderServiceError as exc:
             logger.warning(
-                "Failed to close position during graceful_close - task_id=%s, position_id=%s, error=%s",
+                "Failed to close position during graceful_close - "
+                "task_id=%s, position_id=%s, error=%s",
                 task.pk,
                 position.pk,
                 exc,

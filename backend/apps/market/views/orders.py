@@ -27,6 +27,7 @@ from apps.market.services.oanda import (
     Order,
     StopOrderRequest,
 )
+from apps.market.views.account_helpers import get_user_accounts
 from apps.trading.views.pagination import StandardPagination
 
 logger: Logger = getLogger(name=__name__)
@@ -127,17 +128,9 @@ class OrderView(APIView):
         instrument = request.query_params.get("instrument")
         order_status = request.query_params.get("status", "all").lower()
 
-        # If no account_id specified, get orders from all user accounts
-        if account_id:
-            try:
-                accounts = [OandaAccounts.objects.get(id=int(account_id), user=request.user.pk)]
-            except OandaAccounts.DoesNotExist:
-                return Response(
-                    {"error": "Account not found or access denied"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-        else:
-            accounts = list(OandaAccounts.objects.filter(user=request.user.pk, is_active=True))
+        accounts, err = get_user_accounts(request, account_id)
+        if err is not None:
+            return err
 
         if not accounts:
             return Response({"count": 0, "next": None, "previous": None, "results": []})

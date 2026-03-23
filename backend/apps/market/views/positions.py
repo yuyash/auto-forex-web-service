@@ -19,6 +19,7 @@ from apps.market.services.oanda import (
     OandaService,
     OpenTrade,
 )
+from apps.market.views.account_helpers import get_user_accounts
 from apps.trading.views.pagination import StandardPagination
 
 logger: Logger = getLogger(name=__name__)
@@ -215,16 +216,9 @@ class PositionView(APIView):
             )
 
         # Get accounts to query
-        if account_id:
-            try:
-                accounts = [OandaAccounts.objects.get(id=int(account_id), user=request.user.id)]
-            except OandaAccounts.DoesNotExist:
-                return Response(
-                    {"error": "Account not found or access denied"},
-                    status=status.HTTP_404_NOT_FOUND,
-                )
-        else:
-            accounts = list(OandaAccounts.objects.filter(user=request.user.id, is_active=True))
+        accounts, err = get_user_accounts(request, account_id)
+        if err is not None:
+            return err
 
         if not accounts:
             return Response({"count": 0, "next": None, "previous": None, "results": []})
