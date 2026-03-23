@@ -41,6 +41,9 @@ export function upsertConfigurationCaches(config: StrategyConfig): void {
           ),
       })
   );
+  void queryClient.invalidateQueries({
+    queryKey: queryKeys.configurations.lists(),
+  });
 }
 
 export function removeConfigurationCaches(id: string): void {
@@ -50,6 +53,9 @@ export function removeConfigurationCaches(id: string): void {
     queryKeys.configurations.lists(),
     (cached) => removePaginatedEntity(cached, id)
   );
+  void queryClient.invalidateQueries({
+    queryKey: queryKeys.configurations.lists(),
+  });
 }
 
 export function clearConfigurationTasksCache(id: string): void {
