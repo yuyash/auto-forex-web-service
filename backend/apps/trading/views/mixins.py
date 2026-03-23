@@ -28,8 +28,10 @@ from apps.trading.serializers.summary import TaskSummarySerializer
 from apps.trading.serializers.task import TaskLogSerializer
 from apps.trading.serializers.trend_replay import TaskTrendReplaySerializer
 from apps.trading.views.query_params import (
+    ExecutionDetailQueryParams,
     ExecutionDetailQueryParamsSchemaSerializer,
     ExecutionScopedQuery,
+    ExecutionsQueryParams,
     ExecutionsQueryParamsSchemaSerializer,
     EventsQueryParams,
     EventsQueryParamsSchemaSerializer,
@@ -40,10 +42,11 @@ from apps.trading.views.query_params import (
     MetricsQueryParamsSchemaSerializer,
     OrdersQueryParams,
     OrdersQueryParamsSchemaSerializer,
-    PaginationParams,
     PositionQuery,
     PositionsQueryParamsSchemaSerializer,
+    StrategyEventsQueryParams,
     StrategyEventsQueryParamsSchemaSerializer,
+    SummaryQueryParams,
     SummaryQueryParamsSchemaSerializer,
     TradesQueryParams,
     TradesQueryParamsSchemaSerializer,
@@ -423,18 +426,15 @@ class TaskSubResourceMixin:
         )
 
         task = self.get_object()  # type: ignore[attr-defined]
-        query = ExecutionScopedQuery.from_request(
+        query = StrategyEventsQueryParams.from_request(
             request,
             default_execution_id=task.execution_id,
-            default_page_size=TradePositionPagination.page_size,
-            max_page_size=TradePositionPagination.max_page_size,
         )
-        root_entry_id = request.query_params.get("root_entry_id")
         response = StrategyVisualizationService().build(
             task=task,
             task_type=self.task_type_label,
             execution_id=query.execution_id,
-            root_entry_id=int(root_entry_id) if root_entry_id else None,
+            root_entry_id=query.root_entry_id,
         )
         return Response(response)
 
@@ -687,7 +687,7 @@ class TaskSubResourceMixin:
         from apps.trading.services.summary import compute_cached_task_summary
 
         task = self.get_object()  # type: ignore[attr-defined]
-        query = ExecutionScopedQuery.from_request(
+        query = SummaryQueryParams.from_request(
             request,
             default_execution_id=task.execution_id,
         )
@@ -722,19 +722,17 @@ class TaskSubResourceMixin:
         from apps.trading.services.executions import list_task_executions
 
         task = self.get_object()  # type: ignore[attr-defined]
-        include_metrics = str(request.query_params.get("include_metrics", "false")).lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
-        pagination = PaginationParams.from_request(request)
+        query = ExecutionsQueryParams.from_request(
+            request,
+            default_page_size=ActivityPagination.page_size,
+            max_page_size=ActivityPagination.max_page_size,
+        )
         total_count, rows = list_task_executions(
             task=task,
             task_type=self.task_type_label,
-            include_metrics=include_metrics,
-            page=pagination.page,
-            page_size=pagination.page_size,
+            include_metrics=query.include_metrics,
+            page=query.pagination.page,
+            page_size=query.pagination.page_size,
         )
         serializer = TaskExecutionSerializer(rows, many=True)
         return Response(
@@ -742,8 +740,8 @@ class TaskSubResourceMixin:
                 request,
                 serializer.data,
                 total_count,
-                pagination.page,
-                pagination.page_size,
+                query.pagination.page,
+                query.pagination.page_size,
             )
         )
 
@@ -764,17 +762,12 @@ class TaskSubResourceMixin:
         from apps.trading.services.executions import get_task_execution
 
         task = self.get_object()  # type: ignore[attr-defined]
-        include_metrics = str(request.query_params.get("include_metrics", "false")).lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
+        query = ExecutionDetailQueryParams.from_request(request)
         row = get_task_execution(
             task=task,
             task_type=self.task_type_label,
             execution_id=execution_id or "",
-            include_metrics=include_metrics,
+            include_metrics=query.include_metrics,
         )
         if row is None:
             return Response({"detail": "Execution not found."}, status=404)

@@ -45,6 +45,8 @@ describe('useMarketConfig', () => {
 
     expect(result.current.usingFallback).toBe(true);
     expect(result.current.instruments.length).toBeGreaterThan(0);
+    expect(result.current.data).toBeNull();
+    expect(result.current.error).toBe('boom');
   });
 
   it('filters second-based granularities and does not mark successful responses as fallback', async () => {
@@ -65,6 +67,8 @@ describe('useMarketConfig', () => {
     expect(result.current.granularities).toEqual([
       { value: 'M1', label: '1 Minute' },
     ]);
+    expect(result.current.data).toEqual([{ value: 'M1', label: '1 Minute' }]);
+    expect(result.current.error).toBeNull();
   });
 
   it('fetches tick data ranges through react-query', async () => {
@@ -83,5 +87,6 @@ describe('useMarketConfig', () => {
 
     expect(result.current.dataRange?.instrument).toBe('USD_JPY');
     expect(result.current.error).toBeNull();
+    expect(result.current.data?.instrument).toBe('USD_JPY');
   });
 });

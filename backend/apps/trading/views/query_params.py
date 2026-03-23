@@ -1026,6 +1026,78 @@ class OrdersQueryParams:
 
 
 @dataclass(frozen=True)
+class StrategyEventsQueryParams:
+    execution_id: UUID | None
+    root_entry_id: int | None
+
+    @classmethod
+    def from_request(
+        cls,
+        request: Request,
+        *,
+        default_execution_id: UUID | None,
+    ) -> StrategyEventsQueryParams:
+        parsed = QUERY_GROUP_SPECS["strategy_events"].parse(request)
+        root_entry_id = cast(int | None, parsed["root_entry_id"])
+        return cls(
+            execution_id=cast(UUID | None, parsed["execution_id"]) or default_execution_id,
+            root_entry_id=root_entry_id,
+        )
+
+
+@dataclass(frozen=True)
+class SummaryQueryParams:
+    execution_id: UUID | None
+
+    @classmethod
+    def from_request(
+        cls,
+        request: Request,
+        *,
+        default_execution_id: UUID | None,
+    ) -> SummaryQueryParams:
+        parsed = QUERY_GROUP_SPECS["summary"].parse(request)
+        return cls(
+            execution_id=cast(UUID | None, parsed["execution_id"]) or default_execution_id,
+        )
+
+
+@dataclass(frozen=True)
+class ExecutionsQueryParams:
+    pagination: PaginationParams
+    include_metrics: bool
+
+    @classmethod
+    def from_request(
+        cls,
+        request: Request,
+        *,
+        default_page_size: int,
+        max_page_size: int,
+    ) -> ExecutionsQueryParams:
+        parsed = QUERY_GROUP_SPECS["executions"].parse(request)
+        pagination = PaginationParams.from_request(
+            request,
+            default_page_size=default_page_size,
+            max_page_size=max_page_size,
+        )
+        return cls(
+            pagination=pagination,
+            include_metrics=cast(bool, parsed["include_metrics"]),
+        )
+
+
+@dataclass(frozen=True)
+class ExecutionDetailQueryParams:
+    include_metrics: bool
+
+    @classmethod
+    def from_request(cls, request: Request) -> ExecutionDetailQueryParams:
+        parsed = QUERY_GROUP_SPECS["execution_detail"].parse(request)
+        return cls(include_metrics=cast(bool, parsed["include_metrics"]))
+
+
+@dataclass(frozen=True)
 class TrendReplayQueryParams:
     execution: ExecutionScopedQuery
     range: DateRangeQuery

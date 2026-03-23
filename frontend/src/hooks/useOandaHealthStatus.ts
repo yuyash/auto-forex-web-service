@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../config/reactQuery';
 import { healthApi } from '../services/api';
 import { createOandaHealthStatusQuery } from './miscQueries';
-import { useSimpleQueryState } from './useTaskCollections';
+import { mapQueryStateFields, useSimpleQueryState } from './useTaskCollections';
 
 interface UseOandaHealthStatusOptions {
   enabled: boolean;
@@ -67,5 +67,9 @@ export function useOandaHealthStatus({
     };
   }, [activeCheck, enabled, queryClient, refreshIntervalMs]);
 
-  return query;
+  return mapQueryStateFields(query, (data) => ({
+    status: data?.status ?? null,
+    isAvailable: Boolean(data?.status?.is_available),
+    checkedAt: data?.status?.checked_at ?? null,
+  }));
 }
