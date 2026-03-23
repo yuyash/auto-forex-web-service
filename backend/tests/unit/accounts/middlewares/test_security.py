@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 
 from apps.accounts.middlewares.security import SecurityMonitoringMiddleware
+from apps.accounts.middlewares.utils import get_client_ip
 
 
 class TestSecurityMonitoringMiddleware:
@@ -20,25 +21,19 @@ class TestSecurityMonitoringMiddleware:
 
     def test_get_client_ip_with_x_forwarded_for(self) -> None:
         """Test extracting client IP from X-Forwarded-For header."""
-        get_response = MagicMock()
-        middleware = SecurityMonitoringMiddleware(get_response)
-
         request = MagicMock()
         request.META = {"HTTP_X_FORWARDED_FOR": "203.0.113.1, 198.51.100.1"}
 
-        ip = middleware._get_client_ip(request)
+        ip = get_client_ip(request)
 
         assert ip == "203.0.113.1"
 
     def test_get_client_ip_without_x_forwarded_for(self) -> None:
         """Test extracting client IP from REMOTE_ADDR."""
-        get_response = MagicMock()
-        middleware = SecurityMonitoringMiddleware(get_response)
-
         request = MagicMock()
         request.META = {"REMOTE_ADDR": "192.168.1.1"}
 
-        ip = middleware._get_client_ip(request)
+        ip = get_client_ip(request)
 
         assert ip == "192.168.1.1"
 

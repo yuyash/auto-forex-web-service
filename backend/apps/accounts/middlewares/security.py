@@ -2,8 +2,8 @@
 
 from collections.abc import Callable
 from logging import Logger, getLogger
-from typing import Any, cast
 
+from django.core.cache import cache
 from django.http import HttpRequest, HttpResponse
 from django.utils import timezone
 
@@ -11,19 +11,12 @@ from apps.accounts.models import User, UserSession
 from apps.accounts.services.events import SecurityEventService
 
 from .limiter import RateLimiter
+from .utils import get_authenticated_user, get_client_ip
 
 logger: Logger = getLogger(name=__name__)
 
-
-def _get_authenticated_user(user: Any) -> User | None:
-    """Return authenticated user when available."""
-    if user is None:
-        return None
-
-    if bool(getattr(user, "is_authenticated", False)):
-        return cast(User, user)
-
-    return None
+# Cache session existence checks to avoid a DB query on every request.
+_SESSION_CHECK_CACHE_TTL = 300  # 5 minutes
 
 
 class SecurityMonitoringMiddleware:
@@ -40,7 +33,7 @@ class SecurityMonitoringMiddleware:
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         """Process the request and log security events."""
-        ip_address = self._get_client_ip(request)
+        ip_address = get_client_ip(request)
 
         if self._is_blocked_ip(ip_address):
             self.security_events.log_security_event(
@@ -57,7 +50,7 @@ class SecurityMonitoringMiddleware:
 
         response = self.get_response(request)
 
-        auth_user = self._get_authenticated_user(getattr(request, "user", None))
+        auth_user = get_authenticated_user(getattr(request, "user", None))
 
         if auth_user and response.status_code == 200:
             user_agent = request.META.get("HTTP_USER_AGENT", "")
@@ -68,19 +61,6 @@ class SecurityMonitoringMiddleware:
             )
 
         return response
-
-    def _get_client_ip(self, request: HttpRequest) -> str:
-        """Get client IP address from request."""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip: str = x_forwarded_for.split(",")[0].strip()
-        else:
-            ip = str(request.META.get("REMOTE_ADDR", ""))
-        return ip
-
-    def _get_authenticated_user(self, user: Any) -> User | None:
-        """Return the authenticated User instance when available."""
-        return _get_authenticated_user(user)
 
     def _is_blocked_ip(self, ip_address: str) -> bool:
         """Check if an IP address is blocked."""
@@ -127,3 +107,43 @@ class SecurityMonitoringMiddleware:
 
         if not existing_session:
             self._create_user_session(user, ip_address, user_agent)
+
+    def _create_or_update_user_session(
+        self,
+        user: User,
+        ip_address: str,
+        user_agent: str,
+    ) -> None:
+        """Create a user session record if one does not already exist.
+
+        Uses a short-lived cache key to avoid hitting the database on every
+        single authenticated request.
+        """
+        cache_key = f"session_exists:{user.pk}:{ip_address}"
+        if cache.get(cache_key):
+            return
+
+        existing_session = UserSession.objects.filter(
+            user=user, ip_address=ip_address, is_active=True
+        ).exists()
+
+        if not existing_session:
+            session_key = f"{user.pk}_{ip_address}_{timezone.now().timestamp()}"
+            UserSession.objects.create(
+                user=user,
+                session_key=session_key,
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            logger.info(
+                "Created session for user %s from %s",
+                user.email,
+                ip_address,
+                extra={
+                    "user_id": user.pk,
+                    "email": user.email,
+                    "ip_address": ip_address,
+                },
+            )
+
+        cache.set(cache_key, True, timeout=_SESSION_CHECK_CACHE_TTL)

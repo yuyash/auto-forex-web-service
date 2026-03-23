@@ -2,16 +2,16 @@
 
 from collections.abc import Callable
 from logging import Logger, getLogger
-from typing import Any
 from uuid import uuid4
 
 from django.http import HttpRequest, HttpResponse
 from django.utils import timezone
 
 from apps.accounts.api_logging import build_request_log_context, safe_request_data
-from apps.accounts.models import User
 from apps.accounts.request_logging import get_request_id, set_request_id
 from apps.accounts.services.events import SecurityEventService
+
+from .utils import get_authenticated_user, get_client_ip
 
 logger: Logger = getLogger(name=__name__)
 
@@ -27,7 +27,7 @@ class HTTPAccessLoggingMiddleware:
     def __call__(self, request: HttpRequest) -> HttpResponse:
         """Process the request and log HTTP access."""
         start_time = timezone.now()
-        ip_address = self._get_client_ip(request)
+        ip_address = get_client_ip(request)
         set_request_id(
             request,
             request.META.get("HTTP_X_REQUEST_ID") or str(uuid4()),
@@ -60,25 +60,6 @@ class HTTPAccessLoggingMiddleware:
 
         return response
 
-    def _get_authenticated_user(self, user: Any) -> User | None:
-        """Return the authenticated User instance when available."""
-        if user is None:
-            return None
-
-        if bool(getattr(user, "is_authenticated", False)):
-            return user
-
-        return None
-
-    def _get_client_ip(self, request: HttpRequest) -> str:
-        """Get client IP address from request."""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip: str = x_forwarded_for.split(",")[0].strip()
-        else:
-            ip = str(request.META.get("REMOTE_ADDR", ""))
-        return ip
-
     def _detect_suspicious_patterns(
         self,
         request: HttpRequest,
@@ -97,12 +78,8 @@ class HTTPAccessLoggingMiddleware:
             "INSERT INTO",
             "DELETE FROM",
             "UPDATE SET",
-            "--",
             ";--",
-            "/*",
-            "*/",
             "xp_",
-            "sp_",
         ]
 
         path_traversal_patterns = [
@@ -160,7 +137,7 @@ class HTTPAccessLoggingMiddleware:
         user_agent = request.META.get("HTTP_USER_AGENT", "")
 
         if path.startswith("/api/admin/"):
-            log_user = self._get_authenticated_user(getattr(request, "user", None))
+            log_user = get_authenticated_user(getattr(request, "user", None))
             is_authenticated = log_user is not None
             is_staff = bool(log_user and log_user.is_staff)
 
@@ -181,7 +158,7 @@ class HTTPAccessLoggingMiddleware:
                 },
             )
 
-        user = self._get_authenticated_user(getattr(request, "user", None))
+        user = get_authenticated_user(getattr(request, "user", None))
         username = user.username if user else "-"
         content_length = response.get("Content-Length", "-")
 

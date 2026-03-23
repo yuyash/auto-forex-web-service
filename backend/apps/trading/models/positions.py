@@ -1,11 +1,14 @@
 """Position models for trade execution."""
 
+import logging
 from decimal import Decimal
 from uuid import uuid4
 
 from django.db import models
 
 from apps.trading.enums import Direction, TaskType
+
+logger = logging.getLogger(__name__)
 
 
 class Position(models.Model):
@@ -160,7 +163,14 @@ class Position(models.Model):
                 except Position.DoesNotExist:
                     existing = None
                 if existing is not None and self.planned_exit_price != existing:
-                    # Silently preserve the original value
+                    logger.warning(
+                        "Attempted to change immutable planned_exit_price on position %s "
+                        "(from %s to %s) — preserving original",
+                        self.pk,
+                        existing,
+                        self.planned_exit_price,
+                    )
+                    # Preserve the original value
                     self.planned_exit_price = existing
         super().save(*args, **kwargs)
 

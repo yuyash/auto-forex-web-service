@@ -170,7 +170,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const authRefreshPolicy = usePollingPolicy({
     enabled: Boolean(token),
-    baseIntervalMs: 50 * 60 * 1000,
+    baseIntervalMs: 45 * 60 * 1000, // 45 min — ~75% of default 60 min JWT expiry
     requireVisible: false,
   });
 

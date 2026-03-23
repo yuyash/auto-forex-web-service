@@ -7,6 +7,7 @@ This module exposes a class-based API (instantiate where used).
 
 from __future__ import annotations
 
+import logging
 import secrets
 from hashlib import sha256
 from datetime import UTC, datetime, timedelta
@@ -18,6 +19,8 @@ from django.db import transaction
 
 if TYPE_CHECKING:
     pass
+
+logger = logging.getLogger(__name__)
 
 
 class JWTService:
@@ -177,9 +180,7 @@ class JWTService:
             if rt.revoked_at is not None:
                 # Someone is replaying an already-used token -> compromise assumed.
                 self.revoke_all_refresh_tokens(rt.user)
-                import logging
-
-                logging.getLogger(__name__).warning(
+                logger.warning(
                     "Refresh token reuse detected for user %s - all tokens revoked",
                     rt.user_id,
                 )
