@@ -40,6 +40,8 @@ def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
             # Trading queue: live execution
             "trading.tasks.run_trading_task": {"queue": "trading"},
             "trading.tasks.stop_trading_task": {"queue": "trading"},
+            # Default queue: infrastructure tasks
+            "config.tasks.backup_database": {"queue": "default"},
         },
         "CELERY_BEAT_SCHEDULE": {
             "recover-orphaned-tasks": {
@@ -56,6 +58,11 @@ def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
                 "task": "market.tasks.load_daily_tick_data",
                 "schedule": crontab(hour=2, minute=0),  # Daily at 02:00 UTC
                 "options": {"queue": "market"},
+            },
+            "backup-database": {
+                "task": "config.tasks.backup_database",
+                "schedule": crontab(hour=3, minute=0),  # Daily at 03:00 UTC
+                "options": {"queue": "default"},
             },
         },
     }
