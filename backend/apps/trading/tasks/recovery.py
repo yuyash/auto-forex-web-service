@@ -70,21 +70,27 @@ def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
     counts: dict[str, int] = {"backtest": 0, "trading": 0}
 
     # --- Backtest tasks (bounded queryset) ---
-    orphaned_backtest = BacktestTask.objects.filter(
-        status__in=_ACTIVE_STATUSES,
-    ).order_by("started_at")[:_MAX_RECOVERY_BATCH]
+    orphaned_backtest = list(
+        BacktestTask.objects.filter(
+            status__in=_ACTIVE_STATUSES,
+        ).order_by("started_at")[:_MAX_RECOVERY_BATCH]
+    )
+    backtest_heartbeats = _prefetch_heartbeats(orphaned_backtest, "trading.tasks.run_backtest_task")
     for task in orphaned_backtest:
-        if not _is_orphaned(task, "trading.tasks.run_backtest_task", cutoff):
+        if not _is_orphaned_prefetched(task, backtest_heartbeats, cutoff):
             continue
         if _recover_task(task, TaskType.BACKTEST, service, source):
             counts["backtest"] += 1
 
     # --- Trading tasks (bounded queryset) ---
-    orphaned_trading = TradingTask.objects.filter(
-        status__in=_ACTIVE_STATUSES,
-    ).order_by("started_at")[:_MAX_RECOVERY_BATCH]
+    orphaned_trading = list(
+        TradingTask.objects.filter(
+            status__in=_ACTIVE_STATUSES,
+        ).order_by("started_at")[:_MAX_RECOVERY_BATCH]
+    )
+    trading_heartbeats = _prefetch_heartbeats(orphaned_trading, "trading.tasks.run_trading_task")
     for task in orphaned_trading:
-        if not _is_orphaned(task, "trading.tasks.run_trading_task", cutoff):
+        if not _is_orphaned_prefetched(task, trading_heartbeats, cutoff):
             continue
         if _recover_task(task, TaskType.TRADING, service, source):
             counts["trading"] += 1
@@ -107,6 +113,50 @@ def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _prefetch_heartbeats(
+    tasks: list[BacktestTask | TradingTask],
+    celery_task_name: str,
+) -> dict[str, CeleryTaskStatus]:
+    """Fetch all CeleryTaskStatus rows for a batch of tasks in one query."""
+    if not tasks:
+        return {}
+    keys = [_instance_key(t) for t in tasks]
+    return {
+        cts.instance_key: cts
+        for cts in CeleryTaskStatus.objects.filter(
+            task_name=celery_task_name,
+            instance_key__in=keys,
+        )
+    }
+
+
+def _is_orphaned_prefetched(
+    task: BacktestTask | TradingTask,
+    heartbeats: dict[str, CeleryTaskStatus],
+    cutoff: datetime,
+) -> bool:
+    """Return True if the task has no recent heartbeat (using prefetched data)."""
+    cts = heartbeats.get(_instance_key(task))
+
+    if cts is None:
+        logger.info(
+            "[RECOVERY] No CeleryTaskStatus row for task_id=%s — treating as orphaned",
+            task.pk,
+        )
+        return True
+
+    if cts.last_heartbeat_at is None or cts.last_heartbeat_at < cutoff:
+        logger.info(
+            "[RECOVERY] Stale heartbeat for task_id=%s — last_heartbeat=%s, cutoff=%s",
+            task.pk,
+            cts.last_heartbeat_at,
+            cutoff,
+        )
+        return True
+
+    return False
 
 
 def _is_orphaned(
@@ -213,6 +263,17 @@ def _recover_task(
 
 def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, source: str) -> bool:
     """Resume an orphaned trading task in the same execution run."""
+    # Optimistic lock: verify the task is still in a recoverable state before
+    # proceeding.  Without this, concurrent recovery runs could both attempt
+    # to resume the same task.
+    rows = TradingTask.objects.filter(
+        pk=task.pk,
+        status__in=_ACTIVE_STATUSES,
+    ).update(status=TaskStatus.STARTING)
+    if rows == 0:
+        logger.info("[RECOVERY:%s] Trading task already transitioned - task_id=%s", source, task.pk)
+        return False
+
     CeleryTaskStatus.objects.filter(
         task_name="trading.tasks.run_trading_task",
         instance_key=_instance_key(task),

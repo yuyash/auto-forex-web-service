@@ -5223,7 +5223,7 @@
             },
             "BacktestTaskList": {
                 "type": "object",
-                "description": "Serializer for BacktestTask list view (summary only).",
+                "description": "Serializer for BacktestTask list view (summary only).\n\nInherits all fields from BacktestTaskSerializer but drops\n``commission_per_trade`` and ``execution_id``, and marks everything\nread-only.",
                 "properties": {
                     "id": {
                         "type": "string",

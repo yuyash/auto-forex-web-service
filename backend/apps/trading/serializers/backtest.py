@@ -60,37 +60,19 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
         ]
 
 
-class BacktestTaskListSerializer(serializers.ModelSerializer):
-    """Serializer for BacktestTask list view (summary only)."""
+class BacktestTaskListSerializer(BacktestTaskSerializer):
+    """Serializer for BacktestTask list view (summary only).
 
-    user_id = serializers.IntegerField(source="user.id", read_only=True)
-    config_id = serializers.UUIDField(source="config.id", read_only=True)
-    config_name = serializers.CharField(source="config.name", read_only=True)
-    strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
+    Inherits all fields from BacktestTaskSerializer but drops
+    ``commission_per_trade`` and ``execution_id``, and marks everything
+    read-only.
+    """
 
-    class Meta:
-        model = BacktestTask
+    class Meta(BacktestTaskSerializer.Meta):
         fields = [
-            "id",
-            "user_id",
-            "config_id",
-            "config_name",
-            "strategy_type",
-            "name",
-            "description",
-            "data_source",
-            "start_time",
-            "end_time",
-            "initial_balance",
-            "pip_size",
-            "instrument",
-            "hedging_enabled",
-            "status",
-            "started_at",
-            "completed_at",
-            "error_message",
-            "created_at",
-            "updated_at",
+            f
+            for f in BacktestTaskSerializer.Meta.fields
+            if f not in {"commission_per_trade", "execution_id"}
         ]
         read_only_fields = fields
 

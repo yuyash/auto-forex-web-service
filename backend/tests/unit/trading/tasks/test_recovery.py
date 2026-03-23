@@ -33,6 +33,9 @@ def _mock_models():
     ):
         bt.objects.filter.return_value = _make_qs([])
         tt.objects.filter.return_value = _make_qs([])
+        # Default: prefetch returns no heartbeats (empty iterable)
+        cts.objects.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
+        cts.objects.filter.return_value.first.return_value = None
         yield bt, tt, cts, tl, svc_cls
 
 
@@ -82,8 +85,9 @@ class TestRecoverOrphanedTasks:
         bt.objects.filter.return_value = _make_qs([task])
 
         stale_cts = MagicMock()
+        stale_cts.instance_key = f"{task.pk}:{task.execution_id}"
         stale_cts.last_heartbeat_at = dj_timezone.now() - timedelta(minutes=10)
-        cts.objects.filter.return_value.first.return_value = stale_cts
+        cts.objects.filter.return_value.__iter__ = MagicMock(return_value=iter([stale_cts]))
 
         type(task).objects = MagicMock()
         type(task).objects.filter.return_value.update.return_value = 1
@@ -106,8 +110,10 @@ class TestRecoverOrphanedTasks:
         bt.objects.filter.return_value = _make_qs([task])
 
         recent_cts = MagicMock()
+        recent_cts.instance_key = f"{task.pk}:{task.execution_id}"
         recent_cts.last_heartbeat_at = dj_timezone.now() - timedelta(minutes=1)
-        cts.objects.filter.return_value.first.return_value = recent_cts
+        # Prefetch returns the recent heartbeat
+        cts.objects.filter.return_value.__iter__ = MagicMock(return_value=iter([recent_cts]))
 
         from apps.trading.tasks.recovery import recover_orphaned_tasks
 
@@ -170,7 +176,11 @@ class TestRecoverOrphanedTasks:
         task.status = TaskStatus.RUNNING
         task.celery_task_id = "old-celery-id"
         task.execution_run_id = 5
-        tt.objects.filter.return_value = _make_qs([task])
+
+        # Calls: 1) recovery queryset, 2) optimistic lock update
+        optimistic_lock_qs = MagicMock()
+        optimistic_lock_qs.update.return_value = 1
+        tt.objects.filter.side_effect = [_make_qs([task]), optimistic_lock_qs]
 
         cts.objects.filter.return_value.first.return_value = None
 
@@ -192,10 +202,12 @@ class TestRecoverOrphanedTasks:
         task.pk = uuid4()
         task.status = TaskStatus.RUNNING
 
-        # First call: recovery queryset for trading; second call: update for FAILED
-        update_qs = MagicMock()
-        update_qs.update.return_value = 1
-        tt.objects.filter.side_effect = [_make_qs([task]), update_qs]
+        # Calls: 1) recovery queryset, 2) optimistic lock update, 3) FAILED update
+        optimistic_lock_qs = MagicMock()
+        optimistic_lock_qs.update.return_value = 1  # lock acquired
+        failed_update_qs = MagicMock()
+        failed_update_qs.update.return_value = 1
+        tt.objects.filter.side_effect = [_make_qs([task]), optimistic_lock_qs, failed_update_qs]
         cts.objects.filter.return_value.first.return_value = None
 
         service_instance = MagicMock()

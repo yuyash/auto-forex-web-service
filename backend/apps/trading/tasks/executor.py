@@ -43,8 +43,6 @@ def is_forex_market_closed() -> bool:
 
     Forex market closes Friday 21:00 UTC and reopens Sunday 21:00 UTC.
     """
-    from datetime import UTC, datetime
-
     now = datetime.now(UTC)
     weekday = now.weekday()  # 0=Monday, 6=Sunday
     hour = now.hour

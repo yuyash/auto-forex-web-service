@@ -11,22 +11,9 @@ import {
 } from './taskResourceQueries';
 import { usePollingPolicy } from './usePollingPolicy';
 import { useTaskList, useTaskDetail } from './useTaskCollections';
+import type { QueryStateResult } from './useTaskCollections';
 
-interface UseBacktestTasksResult {
-  data: PaginatedResponse<BacktestTask> | null;
-  isLoading: boolean;
-  error: Error | null;
-  refresh: () => Promise<unknown>;
-}
-
-interface UseBacktestTaskResult {
-  data: BacktestTask | null;
-  isLoading: boolean;
-  error: Error | null;
-  refresh: () => Promise<unknown>;
-}
-
-interface UseBacktestTaskOptions {
+interface UseTaskOptions {
   enabled?: boolean;
   enablePolling?: boolean;
   pollingInterval?: number;
@@ -34,7 +21,7 @@ interface UseBacktestTaskOptions {
 
 export function useBacktestTasks(
   params?: BacktestTaskListParams
-): UseBacktestTasksResult {
+): QueryStateResult<PaginatedResponse<BacktestTask>> {
   return useTaskList<PaginatedResponse<BacktestTask>>(
     createTaskListQuery<BacktestTask>(TaskType.BACKTEST, params)
   );
@@ -42,8 +29,8 @@ export function useBacktestTasks(
 
 export function useBacktestTask(
   id?: string,
-  options?: UseBacktestTaskOptions
-): UseBacktestTaskResult {
+  options?: UseTaskOptions
+): QueryStateResult<BacktestTask> {
   const pollingPolicy = usePollingPolicy({
     enabled: Boolean(id) && options?.enablePolling === true,
     baseIntervalMs: options?.pollingInterval ?? 3000,
