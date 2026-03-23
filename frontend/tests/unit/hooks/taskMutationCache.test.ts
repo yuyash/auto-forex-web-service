@@ -7,7 +7,11 @@ import {
   upsertTaskCaches,
 } from '../../../src/hooks/taskMutationCache';
 import { TaskStatus, TaskType } from '../../../src/types/common';
-import type { PaginatedResponse, TradingTask } from '../../../src/types';
+import type {
+  PaginatedResponse,
+  TaskExecution,
+  TradingTask,
+} from '../../../src/types';
 import type { StrategyVisualizationResponse } from '../../../src/types/strategyVisualization';
 
 function buildTradingTask(overrides?: Partial<TradingTask>): TradingTask {
@@ -45,6 +49,18 @@ function buildTradingPage(
   };
 }
 
+function buildExecutionPage(
+  results: TaskExecution[],
+  count = results.length
+): PaginatedResponse<TaskExecution> {
+  return {
+    count,
+    next: null,
+    previous: null,
+    results,
+  };
+}
+
 describe('taskMutationCache', () => {
   beforeEach(() => {
     queryClient.clear();
@@ -55,6 +71,15 @@ describe('taskMutationCache', () => {
       TaskType.TRADING,
       'task-1'
     );
+    const summaryKey = queryKeys.taskResources.summary(
+      TaskType.TRADING,
+      'task-1'
+    );
+    const logComponentsKey = queryKeys.taskResources.logComponents(
+      TaskType.TRADING,
+      'task-1'
+    );
+    const executionsKey = queryKeys.tradingTasks.executions('task-1');
     queryClient.setQueryData<StrategyVisualizationResponse>(queryKey, {
       strategy_type: 'snowball',
       supported: true,
@@ -66,6 +91,11 @@ describe('taskMutationCache', () => {
         groups: [],
       },
     });
+    queryClient.setQueryData(summaryKey, {
+      task: { status: TaskStatus.CREATED },
+    });
+    queryClient.setQueryData(logComponentsKey, ['engine', 'orders']);
+    queryClient.setQueryData(executionsKey, buildExecutionPage([]));
 
     patchTaskDerivedCaches('trading', {
       ...buildTradingTask(),
@@ -86,6 +116,17 @@ describe('taskMutationCache', () => {
       view_model: {
         kind: 'snowball_runs',
       },
+    });
+    expect(queryClient.getQueryData(summaryKey)).toMatchObject({
+      task: { status: TaskStatus.RUNNING },
+    });
+    expect(queryClient.getQueryData(logComponentsKey)).toEqual([]);
+    expect(
+      queryClient.getQueryData<PaginatedResponse<TaskExecution>>(executionsKey)
+        ?.results?.[0]
+    ).toMatchObject({
+      id: 'run-new',
+      status: TaskStatus.RUNNING,
     });
   });
 

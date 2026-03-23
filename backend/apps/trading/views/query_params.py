@@ -858,6 +858,174 @@ class PositionQuery:
 
 
 @dataclass(frozen=True)
+class MetricsQueryParams:
+    execution: ExecutionScopedQuery
+    until: datetime | None
+    interval: int
+
+    @classmethod
+    def from_request(
+        cls,
+        request: Request,
+        *,
+        default_execution_id: UUID | None,
+        default_page_size: int,
+        max_page_size: int,
+    ) -> MetricsQueryParams:
+        parsed = QUERY_GROUP_SPECS["metrics"].parse(request)
+        return cls(
+            execution=_build_execution_scoped_query(
+                request,
+                default_execution_id=default_execution_id,
+                default_page_size=default_page_size,
+                max_page_size=max_page_size,
+            ),
+            until=cast(datetime | None, parsed["until"]),
+            interval=max(1, cast(int | None, parsed["interval"]) or 1),
+        )
+
+
+@dataclass(frozen=True)
+class LogsQueryParams:
+    execution: ExecutionScopedQuery
+    levels: list[str]
+    components: list[str]
+    position_id: str
+    timestamp_range: DateRangeQuery
+
+    @classmethod
+    def from_request(
+        cls,
+        request: Request,
+        *,
+        default_execution_id: UUID | None,
+        default_page_size: int,
+        max_page_size: int,
+    ) -> LogsQueryParams:
+        parsed = QUERY_GROUP_SPECS["logs"].parse(request)
+        level_param = cast(str, parsed["level"])
+        component_param = cast(str, parsed["component"])
+        return cls(
+            execution=_build_execution_scoped_query(
+                request,
+                default_execution_id=default_execution_id,
+                default_page_size=default_page_size,
+                max_page_size=max_page_size,
+            ),
+            levels=[v.strip().upper() for v in level_param.split(",") if v.strip()],
+            components=[v.strip() for v in component_param.split(",") if v.strip()],
+            position_id=cast(str, parsed["position_id"]),
+            timestamp_range=_build_date_range_query(
+                request,
+                start_key="timestamp_from",
+                end_key="timestamp_to",
+                group_name="timestamp",
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class EventsQueryParams:
+    execution: ExecutionScopedQuery
+    event_type: str
+    severity: str
+    scope: str
+    created_range: DateRangeQuery
+
+    @classmethod
+    def from_request(
+        cls,
+        request: Request,
+        *,
+        default_execution_id: UUID | None,
+        default_page_size: int = 100,
+        max_page_size: int = 1000,
+    ) -> EventsQueryParams:
+        parsed = QUERY_GROUP_SPECS["events"].parse(request)
+        scope = cast(str, parsed["scope"]) or "all"
+        return cls(
+            execution=_build_execution_scoped_query(
+                request,
+                default_execution_id=default_execution_id,
+                default_page_size=default_page_size,
+                max_page_size=max_page_size,
+            ),
+            event_type=cast(str, parsed["event_type"]),
+            severity=cast(str, parsed["severity"]),
+            scope=scope,
+            created_range=_build_date_range_query(
+                request,
+                start_key="created_from",
+                end_key="created_to",
+                group_name="created",
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class TradesQueryParams:
+    execution: ExecutionScopedQuery
+    direction: str
+    timestamp_range: DateRangeQuery
+
+    @classmethod
+    def from_request(
+        cls,
+        request: Request,
+        *,
+        default_execution_id: UUID | None,
+        default_page_size: int = 100,
+        max_page_size: int = 1000,
+    ) -> TradesQueryParams:
+        parsed = QUERY_GROUP_SPECS["trades"].parse(request)
+        return cls(
+            execution=_build_execution_scoped_query(
+                request,
+                default_execution_id=default_execution_id,
+                default_page_size=default_page_size,
+                max_page_size=max_page_size,
+            ),
+            direction=cast(str, parsed["direction"]),
+            timestamp_range=_build_date_range_query(
+                request,
+                start_key="timestamp_from",
+                end_key="timestamp_to",
+                group_name="timestamp",
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class OrdersQueryParams:
+    execution: ExecutionScopedQuery
+    status: str
+    order_type: str
+    direction: str
+
+    @classmethod
+    def from_request(
+        cls,
+        request: Request,
+        *,
+        default_execution_id: UUID | None,
+        default_page_size: int = 100,
+        max_page_size: int = 1000,
+    ) -> OrdersQueryParams:
+        parsed = QUERY_GROUP_SPECS["orders"].parse(request)
+        return cls(
+            execution=_build_execution_scoped_query(
+                request,
+                default_execution_id=default_execution_id,
+                default_page_size=default_page_size,
+                max_page_size=max_page_size,
+            ),
+            status=cast(str, parsed["status"]),
+            order_type=cast(str, parsed["order_type"]),
+            direction=cast(str, parsed["direction"]),
+        )
+
+
+@dataclass(frozen=True)
 class TrendReplayQueryParams:
     execution: ExecutionScopedQuery
     range: DateRangeQuery

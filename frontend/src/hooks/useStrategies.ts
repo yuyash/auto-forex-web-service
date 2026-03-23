@@ -4,7 +4,7 @@ import {
   createStrategiesQuery,
   createStrategyDefaultsQuery,
 } from './miscQueries';
-import { useSimpleQueryState } from './useTaskCollections';
+import { mapQueryStateFields, useSimpleQueryState } from './useTaskCollections';
 
 interface UseStrategiesResult {
   strategies: Strategy[];
@@ -17,12 +17,9 @@ interface UseStrategiesResult {
  */
 export function useStrategies(): UseStrategiesResult {
   const query = useSimpleQueryState(createStrategiesQuery());
-
-  return {
-    strategies: query.data?.strategies || [],
-    isLoading: query.isLoading,
-    error: query.error,
-  };
+  return mapQueryStateFields(query, (data) => ({
+    strategies: data?.strategies || [],
+  }));
 }
 
 export function useStrategyDefaults(

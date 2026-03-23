@@ -125,6 +125,63 @@ def build_lifecycle_event_spec(
     )
 
 
+def build_started_event_spec(*, task_label: str, component: str) -> TaskLifecycleEventSpec:
+    """Build a canonical task-started lifecycle event."""
+
+    return build_lifecycle_event_spec(
+        kind=TaskLifecycleKind.STARTED,
+        description=f"{task_label} task execution started",
+        log_component=component,
+        log_message=f"{task_label} task execution started",
+    )
+
+
+def build_completed_event_spec(*, task_label: str, component: str) -> TaskLifecycleEventSpec:
+    """Build a canonical task-completed lifecycle event."""
+
+    return build_lifecycle_event_spec(
+        kind=TaskLifecycleKind.COMPLETED,
+        description=f"{task_label} task completed successfully",
+        log_component=component,
+        log_message=f"{task_label} task completed successfully",
+    )
+
+
+def build_failed_event_spec(
+    *,
+    task_label: str,
+    component: str,
+    error_type: str,
+    error_message: str,
+) -> TaskLifecycleEventSpec:
+    """Build a canonical task-failed lifecycle event."""
+
+    suffix = f"{error_type}: {error_message}"
+    return build_lifecycle_event_spec(
+        kind=TaskLifecycleKind.FAILED,
+        description=f"{task_label} task failed: {suffix}",
+        log_component=component,
+        log_message=f"{task_label} task execution failed: {suffix}",
+    )
+
+
+def build_stopped_event_spec(
+    *,
+    task_label: str,
+    component: str,
+    description: str | None = None,
+    log_message: str | None = None,
+) -> TaskLifecycleEventSpec:
+    """Build a canonical task-stopped lifecycle event."""
+
+    return build_lifecycle_event_spec(
+        kind=TaskLifecycleKind.STOPPED,
+        description=description or f"{task_label} task stopped",
+        log_component=component,
+        log_message=log_message or f"{task_label} task stopped",
+    )
+
+
 class TaskLifecycleEventSink(Protocol):
     """Sink for lifecycle event side effects."""
 

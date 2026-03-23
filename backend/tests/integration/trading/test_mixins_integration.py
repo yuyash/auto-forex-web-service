@@ -213,7 +213,7 @@ class TestStrictQueryValidation:
         [
             ("logs", {"execution_id": "invalid"}, "Invalid execution_id: invalid"),
             ("events", {"page_size": -1}, "page_size must be greater than 0"),
-            ("trades", {"page_size": 9999}, "page_size exceeds maximum allowed value of 1000"),
+            ("trades", {"page_size": 9999}, "page_size exceeds maximum allowed value of 200"),
             (
                 "orders",
                 {"execution_id": "invalid"},

@@ -1,11 +1,16 @@
 import { queryClient, queryKeys } from '../config/reactQuery';
 import { authApi, type UserSettingsResponse } from '../services/api/auth';
 import { createUserSettingsQuery } from './miscQueries';
-import { useSimpleQueryState } from './useTaskCollections';
+import { mapQueryStateFields, useSimpleQueryState } from './useTaskCollections';
 import { useWrappedMutation } from './useWrappedMutation';
 
 export function useUserSettings(options?: { enabled?: boolean }) {
-  return useSimpleQueryState(createUserSettingsQuery(options));
+  return mapQueryStateFields(
+    useSimpleQueryState(createUserSettingsQuery(options)),
+    (data) => ({
+      settings: data,
+    })
+  );
 }
 
 export function useUpdateUserSettings(options?: {

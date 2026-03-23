@@ -10,15 +10,16 @@ from uuid import UUID
 from celery import shared_task
 
 from apps.trading.engine import TradingEngine
-from apps.trading.enums import LogLevel, StopMode, TaskStatus, TaskType
+from apps.trading.enums import StopMode, TaskStatus, TaskType
 from apps.trading.logging import TaskLoggingSession
 from apps.trading.models import TradingTask
 from apps.trading.services.execution_lifecycle import transition_task_to_running
 from apps.trading.tasks.lifecycle_events import (
-    build_lifecycle_event_spec,
+    build_failed_event_spec,
+    build_started_event_spec,
+    build_stopped_event_spec,
     finalize_task_terminal_lifecycle,
     publish_task_lifecycle_event,
-    TaskLifecycleKind,
 )
 from apps.trading.tasks.executor import TradingExecutor
 from apps.trading.tasks.source import LiveTickDataSource
@@ -78,13 +79,7 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
             logger=logger,
             task=task,
             task_type=TaskType.TRADING,
-            event=build_lifecycle_event_spec(
-                kind=TaskLifecycleKind.STARTED,
-                description="Trading task execution started",
-                log_level=LogLevel.INFO,
-                log_component=__name__,
-                log_message="Trading task execution started",
-            ),
+            event=build_started_event_spec(task_label="Trading", component=__name__),
         )
 
         # Execute the trading task
@@ -103,12 +98,11 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
                 task=task,
                 task_type=TaskType.TRADING,
                 status=TaskStatus.STOPPED,
-                event=build_lifecycle_event_spec(
-                    kind=TaskLifecycleKind.STOPPED,
+                event=build_stopped_event_spec(
+                    task_label="Trading",
+                    component=__name__,
                     description="Trading task stopped after execution completed",
-                    log_level=LogLevel.INFO,
                     log_message="Trading task stopped successfully",
-                    log_component=__name__,
                 ),
                 expected_current_status=TaskStatus.RUNNING,
             )
@@ -193,14 +187,11 @@ def handle_exception(task_id: UUID, task: TradingTask | None, error: Exception) 
             task=task,
             task_type=TaskType.TRADING,
             status=TaskStatus.FAILED,
-            event=build_lifecycle_event_spec(
-                kind=TaskLifecycleKind.FAILED,
-                description=f"Trading task failed: {type(error).__name__}: {error_message}",
-                log_level=LogLevel.ERROR,
-                log_message=(
-                    f"Trading task execution failed: {type(error).__name__}: {error_message}"
-                ),
-                log_component=__name__,
+            event=build_failed_event_spec(
+                task_label="Trading",
+                component=__name__,
+                error_type=type(error).__name__,
+                error_message=error_message,
             ),
             error_message=error_message,
             error_traceback=error_traceback,
@@ -248,12 +239,10 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
                 task=task,
                 task_type=TaskType.TRADING,
                 status=TaskStatus.STOPPED,
-                event=build_lifecycle_event_spec(
-                    kind=TaskLifecycleKind.STOPPED,
+                event=build_stopped_event_spec(
+                    task_label="Trading",
+                    component=__name__,
                     description="Trading task stopped",
-                    log_level=LogLevel.INFO,
-                    log_message="Trading task stopped",
-                    log_component=__name__,
                 ),
                 expected_current_status=TaskStatus.STOPPING,
                 extra_details={"mode": stop_mode.value},

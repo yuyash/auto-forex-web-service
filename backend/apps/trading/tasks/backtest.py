@@ -10,15 +10,17 @@ from uuid import UUID
 from celery import shared_task
 
 from apps.trading.engine import TradingEngine
-from apps.trading.enums import LogLevel, TaskStatus, TaskType
+from apps.trading.enums import TaskStatus, TaskType
 from apps.trading.logging import TaskLoggingSession
 from apps.trading.models import BacktestTask
 from apps.trading.services.execution_lifecycle import transition_task_to_running
 from apps.trading.tasks.lifecycle_events import (
-    build_lifecycle_event_spec,
+    build_completed_event_spec,
+    build_failed_event_spec,
+    build_started_event_spec,
+    build_stopped_event_spec,
     finalize_task_terminal_lifecycle,
     publish_task_lifecycle_event,
-    TaskLifecycleKind,
 )
 from apps.trading.tasks.executor import BacktestExecutor
 from apps.trading.tasks.source import RedisTickDataSource
@@ -90,13 +92,7 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
             logger=logger,
             task=task,
             task_type=TaskType.BACKTEST,
-            event=build_lifecycle_event_spec(
-                kind=TaskLifecycleKind.STARTED,
-                description="Backtest task execution started",
-                log_level=LogLevel.INFO,
-                log_component=__name__,
-                log_message="Backtest task execution started",
-            ),
+            event=build_started_event_spec(task_label="Backtest", component=__name__),
         )
 
         # Execute the backtest
@@ -125,12 +121,9 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
             task=task,
             task_type=TaskType.BACKTEST,
             status=TaskStatus.COMPLETED,
-            event=build_lifecycle_event_spec(
-                kind=TaskLifecycleKind.COMPLETED,
-                description="Backtest task completed successfully",
-                log_level=LogLevel.INFO,
-                log_message="Backtest task completed successfully",
-                log_component=__name__,
+            event=build_completed_event_spec(
+                task_label="Backtest",
+                component=__name__,
             ),
             expected_current_status=TaskStatus.RUNNING,
         )
@@ -237,14 +230,11 @@ def handle_exception(task_id: UUID, task: BacktestTask | None, error: Exception)
             task=task,
             task_type=TaskType.BACKTEST,
             status=TaskStatus.FAILED,
-            event=build_lifecycle_event_spec(
-                kind=TaskLifecycleKind.FAILED,
-                description=f"Backtest task failed: {type(error).__name__}: {error_message}",
-                log_level=LogLevel.ERROR,
-                log_message=(
-                    f"Backtest task execution failed: {type(error).__name__}: {error_message}"
-                ),
-                log_component=__name__,
+            event=build_failed_event_spec(
+                task_label="Backtest",
+                component=__name__,
+                error_type=type(error).__name__,
+                error_message=error_message,
             ),
             error_message=error_message,
             error_traceback=error_traceback,
@@ -432,12 +422,10 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
                 task=task,
                 task_type=TaskType.BACKTEST,
                 status=TaskStatus.STOPPED,
-                event=build_lifecycle_event_spec(
-                    kind=TaskLifecycleKind.STOPPED,
+                event=build_stopped_event_spec(
+                    task_label="Backtest",
+                    component=__name__,
                     description="Backtest task stopped",
-                    log_level=LogLevel.INFO,
-                    log_message="Backtest task stopped",
-                    log_component=__name__,
                 ),
                 expected_current_status=TaskStatus.STOPPING,
                 extra_details={"mode": "worker_stop"},
@@ -457,12 +445,10 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
                 task=task,
                 task_type=TaskType.BACKTEST,
                 status=TaskStatus.STOPPED,
-                event=build_lifecycle_event_spec(
-                    kind=TaskLifecycleKind.STOPPED,
+                event=build_stopped_event_spec(
+                    task_label="Backtest",
+                    component=__name__,
                     description="Backtest task stopped after completion race",
-                    log_level=LogLevel.INFO,
-                    log_message="Backtest task stopped after completion race",
-                    log_component=__name__,
                 ),
                 expected_current_status=TaskStatus.COMPLETED,
                 extra_details={"mode": "worker_stop"},
