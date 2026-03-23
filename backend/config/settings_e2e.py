@@ -52,16 +52,6 @@ CELERY_BROKER_URL = "memory://"
 CELERY_RESULT_BACKEND = "cache+memory://"
 
 # =============================================================================
-# Channel Layers — in-memory for E2E tests
-# =============================================================================
-
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer",
-    },
-}
-
-# =============================================================================
 # Session — use cache backend
 # =============================================================================
 

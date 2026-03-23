@@ -88,7 +88,7 @@ services:
       - ${HOME}/.aws:/root/.aws:ro
     ports:
       - "8000:8000"
-    command: sh -c "python manage.py migrate && python manage.py collectstatic --noinput && daphne -b 0.0.0.0 -p 8000 config.asgi:application"
+    command: sh -c "python manage.py migrate && python manage.py collectstatic --noinput && uvicorn config.asgi:application --host 0.0.0.0 --port 8000"
     restart: unless-stopped
     networks:
       - forex_network

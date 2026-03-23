@@ -45,7 +45,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for the steps to deploy the application.
 The system follows a microservices-inspired architecture:
 
 - **Nginx**: Reverse proxy, SSL termination, static file serving
-- **Django Backend**: REST API, WebSocket server, business logic
+- **Django Backend**: REST API server, business logic
 - **Celery Workers**: Asynchronous task processing, strategy execution
 - **PostgreSQL**: Persistent data storage
 - **Redis**: Caching, session storage, message broker
