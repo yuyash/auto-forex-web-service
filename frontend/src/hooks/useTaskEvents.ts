@@ -44,7 +44,7 @@ interface UseTaskEventsResult {
   hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<unknown>;
 }
 
 function getLatestCreatedAt(events: TaskEvent[]): string | null {

@@ -38,7 +38,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     logger.error('ErrorBoundary caught an error', {
       message: error.message,
-      componentStack: errorInfo.componentStack,
+      componentStack: errorInfo.componentStack ?? undefined,
     });
     this.setState({
       error,
@@ -51,7 +51,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     }
 
     reportFrontendError(error, {
-      componentStack: errorInfo.componentStack,
+      componentStack: errorInfo.componentStack ?? undefined,
       level: this.props.level,
     });
   }

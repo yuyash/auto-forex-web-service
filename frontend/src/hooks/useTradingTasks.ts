@@ -35,7 +35,7 @@ interface UseTradingTaskOptions {
 export function useTradingTasks(
   params?: TradingTaskListParams
 ): UseTradingTasksResult {
-  return useTaskList<TradingTask, TradingTaskListParams>(
+  return useTaskList<PaginatedResponse<TradingTask>>(
     createTaskListQuery<TradingTask>(TaskType.TRADING, params)
   );
 }

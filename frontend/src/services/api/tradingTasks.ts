@@ -41,6 +41,7 @@ function toTradingTask(task: BackendTradingTask): TradingTask {
     ...task,
     account_id: String(task.account_id),
     status: task.status as TradingTask['status'],
+    pip_size: task.pip_size ?? undefined,
     execution_id: task.execution_id ?? undefined,
     started_at: task.started_at ?? undefined,
     completed_at: task.completed_at ?? undefined,

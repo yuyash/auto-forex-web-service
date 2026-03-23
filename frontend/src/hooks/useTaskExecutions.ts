@@ -39,7 +39,7 @@ export function useTaskExecutions(
     baseIntervalMs: options?.pollingInterval ?? 3000,
   });
   const resource = useTaskList(
-    createTaskExecutionsQuery(taskId, taskType, params, options),
+    createTaskExecutionsQuery(taskId, taskType, params),
     () => refreshTaskExecutions(taskId, taskType, params),
     {
       policy: pollingPolicy,

@@ -35,7 +35,7 @@ interface UseBacktestTaskOptions {
 export function useBacktestTasks(
   params?: BacktestTaskListParams
 ): UseBacktestTasksResult {
-  return useTaskList<BacktestTask, BacktestTaskListParams>(
+  return useTaskList<PaginatedResponse<BacktestTask>>(
     createTaskListQuery<BacktestTask>(TaskType.BACKTEST, params)
   );
 }

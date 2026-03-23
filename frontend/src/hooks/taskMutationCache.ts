@@ -1,6 +1,6 @@
 import { queryClient, queryKeys } from '../config/reactQuery';
 import type { BacktestTask, PaginatedResponse, TradingTask } from '../types';
-import { TaskType } from '../types/common';
+import { TaskStatus, TaskType } from '../types/common';
 import {
   clearTaskExecutions,
   patchTaskLogComponents,
@@ -171,7 +171,7 @@ export function patchTaskStatusCache(
   const keys = getTaskKeys(taskKind);
   queryClient.setQueryData<TaskEntity | undefined>(
     keys.detail(taskId),
-    (cached) => (cached ? { ...cached, status } : cached)
+    (cached) => (cached ? { ...cached, status: status as TaskStatus } : cached)
   );
   patchListQueries<PaginatedResponse<TaskEntity>>(
     keys.lists,

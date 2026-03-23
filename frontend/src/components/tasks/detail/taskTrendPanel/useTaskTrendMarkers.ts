@@ -8,6 +8,7 @@ import {
   toEventMarkerTime,
 } from './shared';
 import type { CandlePoint, ReplayTrade } from './shared';
+import type { TaskEvent } from '../../../../hooks/useTaskEvents';
 
 interface ChartMarker {
   time: Time;
@@ -20,8 +21,8 @@ interface ChartMarker {
 
 interface UseTaskTrendMarkersParams {
   candles: CandlePoint[];
-  taskLifecycleEvents: Array<Record<string, unknown>>;
-  strategyEvents: Array<Record<string, unknown>>;
+  taskLifecycleEvents: TaskEvent[];
+  strategyEvents: TaskEvent[];
   trades: ReplayTrade[];
   selectedTradeId: string | null;
   highlightedTradeIds: Set<string>;

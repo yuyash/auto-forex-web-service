@@ -5,6 +5,7 @@ import { usePollingPolicy } from '../../../../hooks/usePollingPolicy';
 import {
   fetchTaskTrendReplay,
   type TaskTrendReplayPosition,
+  type TaskTrendReplayTrade,
 } from '../../../../services/api/taskResources';
 import { parseUtcTimestamp } from './shared';
 import type { ReplaySummary, ReplayTrade } from './shared';
@@ -32,7 +33,7 @@ const CANDLE_REFRESH_INTERVAL_MS = 60_000;
 const MAX_EAGER_REPLAY_TRADE_COUNT = 1_000;
 
 function mapRawTrades(
-  rawTrades: Array<Record<string, unknown>>,
+  rawTrades: Array<Record<string, unknown> | TaskTrendReplayTrade>,
   instrument: string,
   startSequence = 0
 ): ReplayTrade[] {
@@ -92,7 +93,7 @@ function mapRawTrades(
 }
 
 function getLatestTradeUpdatedAt(
-  rawTrades: Array<Record<string, unknown>>
+  rawTrades: Array<Record<string, unknown> | TaskTrendReplayTrade>
 ): string | null {
   let latest: string | null = null;
   for (const trade of rawTrades) {
@@ -194,8 +195,8 @@ export function useTaskTrendReplayData({
             since: useIncrementalTrades
               ? (tradeSinceRef.current ?? undefined)
               : undefined,
-            range_from: loadedTimeRange?.from,
-            range_to: loadedTimeRange?.to,
+            range_from: loadedTimeRange?.from ?? undefined,
+            range_to: loadedTimeRange?.to ?? undefined,
             page: 1,
             page_size:
               expectedTotalTrades > MAX_EAGER_REPLAY_TRADE_COUNT ? 500 : 1000,

@@ -43,7 +43,7 @@ interface UseTaskLogsResult {
   hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<unknown>;
 }
 
 function getLatestTimestamp(logs: TaskLog[]): string | null {

@@ -51,10 +51,11 @@ const AccountManagement = () => {
   const { t } = useTranslation(['settings', 'common']);
   const { showSuccess, showError } = useToast();
   const {
-    data: accounts = [],
+    data: rawAccounts,
     isLoading: loading,
     error: accountsError,
   } = useAccounts();
+  const accounts = rawAccounts ?? [];
   const createAccount = useCreateAccount();
   const updateAccount = useUpdateAccount();
   const deleteAccount = useDeleteAccount();

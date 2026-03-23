@@ -28,7 +28,10 @@ export const accountsApi = {
   list: async (params?: AccountListParams) => {
     return (
       await withRetry(() =>
-        api.get<BackendAccount[]>('/api/market/accounts/', params)
+        api.get<BackendAccount[]>(
+          '/api/market/accounts/',
+          params as Record<string, unknown>
+        )
       )
     ).map(toAccount);
   },

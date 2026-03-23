@@ -134,7 +134,9 @@ const GeneralSettings = () => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const data = await updateUserSettings.mutate(settings);
+      const data = await updateUserSettings.mutate(
+        settings as unknown as Record<string, unknown>
+      );
       if (data.user && user && token) {
         login(token, data.user);
       }

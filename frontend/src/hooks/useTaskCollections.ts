@@ -127,7 +127,7 @@ export function toIncrementalCollectionState<TItem>(state: {
   hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<unknown>;
 }): IncrementalCollectionState<TItem> {
   const refreshActions = toRefreshActions(state.refresh);
   return {

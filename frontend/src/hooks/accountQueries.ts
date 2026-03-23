@@ -8,7 +8,7 @@ export function createAccountsQuery(
   options?: { enabled?: boolean }
 ): UseQueryOptions<Account[]> {
   return {
-    queryKey: queryKeys.accounts.list(params),
+    queryKey: queryKeys.accounts.list(params as Record<string, unknown>),
     queryFn: () => accountsApi.list(params),
     enabled: options?.enabled !== false,
   };

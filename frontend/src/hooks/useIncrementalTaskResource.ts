@@ -35,7 +35,7 @@ interface UseIncrementalTaskResourceResult<TItem> {
   hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<unknown>;
 }
 
 export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
@@ -131,7 +131,7 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
 
         const incoming = mapResultsRef.current
           ? mapResultsRef.current(data.results)
-          : (data.results as TItem[]);
+          : (data.results as unknown as TItem[]);
 
         if (incremental && incoming.length > 0) {
           setItems((prev) => {

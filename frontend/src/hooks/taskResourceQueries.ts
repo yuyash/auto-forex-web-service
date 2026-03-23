@@ -76,8 +76,8 @@ export function createTaskListQuery<TTask extends TaskEntity>(
   return {
     queryKey:
       taskType === TaskType.BACKTEST
-        ? queryKeys.backtestTasks.list(params)
-        : queryKeys.tradingTasks.list(params),
+        ? queryKeys.backtestTasks.list(params as Record<string, unknown>)
+        : queryKeys.tradingTasks.list(params as Record<string, unknown>),
     queryFn: () =>
       taskType === TaskType.BACKTEST
         ? (backtestTasksApi.list(params as BacktestTaskListParams) as Promise<

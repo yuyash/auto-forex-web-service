@@ -53,7 +53,7 @@ interface UseTaskOrdersResult {
   hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<unknown>;
 }
 
 function getLatestUpdatedAt(orders: TaskOrder[]): string | null {

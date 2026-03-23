@@ -52,7 +52,7 @@ interface UseTaskTradesResult {
   hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<unknown>;
 }
 
 function getLatestUpdatedAt(trades: TaskTrade[]): string | null {

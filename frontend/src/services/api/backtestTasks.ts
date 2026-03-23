@@ -21,6 +21,8 @@ function toBacktestTask(task: BackendBacktestTask): BacktestTask {
     ...task,
     data_source: task.data_source as BacktestTask['data_source'],
     status: task.status as BacktestTask['status'],
+    sell_at_completion: false,
+    pip_size: task.pip_size ?? undefined,
     execution_id: task.execution_id ?? undefined,
     started_at: task.started_at ?? undefined,
     completed_at: task.completed_at ?? undefined,

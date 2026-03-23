@@ -39,10 +39,9 @@ export async function fetchPaginatedResults<T>(
   };
 
   while (nextRequest) {
-    const response = await api.get<PaginatedApiResponse<T>>(
-      nextRequest.path,
-      nextRequest.query
-    );
+    const response: PaginatedApiResponse<T> = await api.get<
+      PaginatedApiResponse<T>
+    >(nextRequest.path, nextRequest.query);
     results.push(...(response.results ?? []));
     nextRequest = response.next ? parseNextRequest(response.next) : null;
   }

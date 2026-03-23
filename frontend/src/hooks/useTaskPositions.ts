@@ -69,7 +69,7 @@ interface UseTaskPositionsResult {
   hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<unknown>;
 }
 
 /** Extract the latest updated_at from a list of positions. */

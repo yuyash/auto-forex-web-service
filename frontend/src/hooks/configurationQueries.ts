@@ -12,7 +12,7 @@ export function createConfigurationsQuery(
   params?: StrategyConfigListParams
 ): UseQueryOptions<PaginatedResponse<StrategyConfig>> {
   return {
-    queryKey: queryKeys.configurations.list(params),
+    queryKey: queryKeys.configurations.list(params as Record<string, unknown>),
     queryFn: () => configurationsApi.list(params),
   };
 }

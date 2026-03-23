@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { type UTCTimestamp } from 'lightweight-charts';
+import type { SelectChangeEvent } from '@mui/material/Select';
 import { usePollingPolicy } from '../../../../hooks/usePollingPolicy';
 import { useSupportedGranularities } from '../../../../hooks/useMarketConfig';
 import { useWindowedCandles } from '../../../../hooks/useWindowedCandles';

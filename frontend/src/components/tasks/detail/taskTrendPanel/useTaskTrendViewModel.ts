@@ -14,7 +14,10 @@ export interface TaskTrendViewModelParams extends TaskTrendOrchestrationParams {
 }
 
 export type TaskTrendAlertsViewModel = ComponentProps<typeof TaskTrendAlerts>;
-export type TaskTrendToolbarViewModel = ComponentProps<typeof TaskTrendToolbar>;
+export type TaskTrendToolbarViewModel = Omit<
+  ComponentProps<typeof TaskTrendToolbar>,
+  'pollingIntervalOptions'
+>;
 export type TaskTrendChartSectionViewModel = ComponentProps<
   typeof TaskTrendChartSection
 >;

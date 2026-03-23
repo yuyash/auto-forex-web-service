@@ -1,11 +1,11 @@
 import { useTaskSelectionNavigation } from '../../../../hooks/useTaskSelectionNavigation';
-import type { TrendPosition } from './shared';
+import type { ReplayTrade, TrendPosition } from './shared';
 import { useTaskTrendPositionsTable } from './useTaskTrendPositionsTable';
 import { useTaskTrendTableState } from './useTaskTrendTableState';
 import { useTaskTrendTradesTable } from './useTaskTrendTradesTable';
 
 interface TaskTrendTableModelParams {
-  trades: Array<Record<string, unknown>>;
+  trades: ReplayTrade[];
   allPositions: TrendPosition[];
   longPositions: TrendPosition[];
   shortPositions: TrendPosition[];
@@ -26,7 +26,8 @@ interface TaskTrendTableModelParams {
     reportChartWarning: (message: string | null) => void;
   };
   chartState: {
-    chartRef: { current: unknown };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    chartRef: { current: any };
     programmaticScrollRef: { current: boolean };
   };
 }

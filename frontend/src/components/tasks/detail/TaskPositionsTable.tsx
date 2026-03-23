@@ -718,7 +718,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   };
 
   const makeReload =
-    (key: string, refresh: () => Promise<void>) => async () => {
+    (key: string, refresh: () => Promise<unknown>) => async () => {
       setReloading((p) => ({ ...p, [key]: true }));
       await refresh();
       setReloading((p) => ({ ...p, [key]: false }));
@@ -884,7 +884,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     setLongPageFn: (p: number) => void,
     longRppVal: number,
     setLongRppFn: (r: number) => void,
-    longRefetch: () => Promise<void>,
+    longRefetch: () => Promise<unknown>,
     longKey: string,
     shortData: TaskPosition[],
     shortTotal: number,
@@ -893,7 +893,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     setShortPageFn: (p: number) => void,
     shortRppVal: number,
     setShortRppFn: (r: number) => void,
-    shortRefetch: () => Promise<void>,
+    shortRefetch: () => Promise<unknown>,
     shortKey: string,
     columns: (dir: 'long' | 'short') => Column<TaskPosition>[],
     pnlLabel: string,
@@ -1092,7 +1092,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     setPageFn: (p: number) => void,
     rppVal: number,
     setRppFn: (r: number) => void,
-    refresh: () => Promise<void>,
+    refresh: () => Promise<unknown>,
     key: string,
     columns: Column<TaskPosition>[],
     extractors: CopyValueExtractors<TaskPosition>,
