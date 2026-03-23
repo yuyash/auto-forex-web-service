@@ -82,6 +82,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key required}
+      OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:?OANDA token encryption key required}
       HEALTHCHECK_HOST: ${HEALTHCHECK_HOST:-www.auto-forex.com}
       # IMPORTANT: include your public domain(s) here to avoid DisallowedHost.
       # Override via .env if needed.
@@ -124,6 +125,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key required}
+      OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:?OANDA token encryption key required}
     volumes:
       # See note in backend service: avoid shadowing the Django `config` package.
       - ./logs:/app/logs
@@ -153,6 +155,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key required}
+      OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:?OANDA token encryption key required}
     volumes:
       # See note in backend service: avoid shadowing the Django `config` package.
       - ./logs:/app/logs
