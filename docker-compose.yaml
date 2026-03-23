@@ -79,6 +79,7 @@ services:
       # Secrets only - all other config comes from environment variables
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
+      OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:-}
     volumes:
       - ./backend:/app
       - ./logs:/app/logs
@@ -115,6 +116,7 @@ services:
       # Secrets only - all other config comes from environment variables
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
+      OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:-}
     volumes:
       - ./backend:/app
       - ./logs:/app/logs
@@ -146,6 +148,7 @@ services:
       # Secrets only - all other config comes from environment variables
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
+      OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:-}
     volumes:
       - ./backend:/app
       - ./logs:/app/logs
