@@ -82,12 +82,16 @@ class TestUserLogoutView:
 
     def test_post_success_clears_refresh_cookie(self) -> None:
         """Test successful logout clears the refresh-token cookie."""
+        from apps.accounts.models import User
+
         request = self.factory.post("/api/auth/logout")
         request.META["HTTP_AUTHORIZATION"] = "Bearer valid_token"
         request.user = MagicMock(
+            spec=User,
             is_authenticated=True,
             email="test@example.com",
             id=1,
+            pk=1,
         )
         view = UserLogoutView()
 

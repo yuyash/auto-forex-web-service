@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import asdict
 from decimal import Decimal
 from typing import Any
@@ -126,8 +127,8 @@ def persist_execution_snapshot(*, task, task_type: str) -> TaskExecutionSnapshot
         execution_id=execution_id,
         defaults={
             "completed_at": getattr(task, "completed_at", None),
-            "summary": asdict(summary),
-            "metrics": metrics,
+            "summary": _make_json_safe(asdict(summary)),
+            "metrics": _make_json_safe(metrics),
         },
     )
     return snapshot
@@ -206,3 +207,17 @@ def _to_str_or_none(value: Any) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+class _DecimalEncoder(json.JSONEncoder):
+    """JSON encoder that converts Decimal to string."""
+
+    def default(self, o: Any) -> Any:
+        if isinstance(o, Decimal):
+            return str(o)
+        return super().default(o)
+
+
+def _make_json_safe(obj: Any) -> Any:
+    """Round-trip through JSON to convert Decimal values to strings."""
+    return json.loads(json.dumps(obj, cls=_DecimalEncoder))

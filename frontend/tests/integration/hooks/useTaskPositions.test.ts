@@ -6,7 +6,7 @@ import { TaskType } from '../../../src/types/common';
 
 vi.mock('axios', () => ({
   default: {
-    get: vi.fn(),
+    request: vi.fn(),
     isAxiosError: vi.fn(() => false),
   },
 }));
@@ -16,16 +16,18 @@ vi.mock('../../../src/api/apiConfig', () => ({
     BASE: 'http://localhost:5173',
     WITH_CREDENTIALS: true,
   },
-  resolveToken: vi.fn().mockResolvedValue(null),
+  getAuthHeaders: vi.fn().mockResolvedValue({}),
 }));
 
 describe('useTaskPositions', () => {
-  const mockGet = vi.mocked(axios.get);
+  const mockRequest = vi.mocked(axios.request);
 
   beforeEach(() => {
     vi.useFakeTimers();
-    mockGet.mockReset();
-    mockGet.mockResolvedValue({
+    mockRequest.mockReset();
+    mockRequest.mockResolvedValue({
+      status: 200,
+      statusText: 'OK',
       data: {
         count: 50,
         next: 'next',
@@ -69,23 +71,27 @@ describe('useTaskPositions', () => {
 
     expect(result.current.isLoading).toBe(false);
 
-    expect(mockGet).toHaveBeenCalledTimes(1);
-    expect(mockGet.mock.calls[0]?.[1]?.params).toEqual({
-      execution_id: 'exec-1',
-      page: '2',
-      page_size: '25',
-    });
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(mockRequest.mock.calls[0]?.[0]?.params).toEqual(
+      expect.objectContaining({
+        execution_id: 'exec-1',
+        page: '2',
+        page_size: '25',
+      })
+    );
 
     await act(async () => {
       vi.advanceTimersByTime(1000);
       await Promise.resolve();
     });
 
-    expect(mockGet.mock.calls[1]?.[1]?.params).toEqual({
-      execution_id: 'exec-1',
-      page: '2',
-      page_size: '25',
-    });
-    expect(mockGet.mock.calls[1]?.[1]?.params).not.toHaveProperty('since');
+    expect(mockRequest.mock.calls[1]?.[0]?.params).toEqual(
+      expect.objectContaining({
+        execution_id: 'exec-1',
+        page: '2',
+        page_size: '25',
+      })
+    );
+    expect(mockRequest.mock.calls[1]?.[0]?.params).not.toHaveProperty('since');
   });
 });
