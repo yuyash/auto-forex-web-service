@@ -133,9 +133,16 @@ services:
       LOAD_DATA_AWS_PROFILE: ${LOAD_DATA_AWS_PROFILE:-}
       LOAD_DATA_ROLE_ARN: ${LOAD_DATA_ROLE_ARN:-}
       LOAD_DATA_OUTPUT_BUCKET: ${LOAD_DATA_OUTPUT_BUCKET:-}
+      # Database backup to S3 (optional — local-only if S3_BUCKET is empty)
+      DB_BACKUP_S3_BUCKET: ${DB_BACKUP_S3_BUCKET:-}
+      DB_BACKUP_S3_PREFIX: ${DB_BACKUP_S3_PREFIX:-db-backups/}
+      DB_BACKUP_ROLE_ARN: ${DB_BACKUP_ROLE_ARN:-}
+      DB_BACKUP_AWS_PROFILE: ${DB_BACKUP_AWS_PROFILE:-}
+      DB_BACKUP_RETENTION_DAYS: ${DB_BACKUP_RETENTION_DAYS:-7}
     volumes:
       # See note in backend service: avoid shadowing the Django `config` package.
       - ./logs:/app/logs
+      - ./backups:/app/backups
       - ${HOME}/.aws:/root/.aws:ro
     command: celery -A config worker -l info --concurrency=8 --max-tasks-per-child=50 -Q default,trading,market,backtest,system
     restart: unless-stopped
@@ -231,28 +238,6 @@ services:
       while :; do
         certbot renew --webroot -w /var/www/certbot --quiet;
         sleep 12h & wait $${!};
-      done"
-    restart: unless-stopped
-    networks:
-      - forex_network
-
-  # Daily PostgreSQL backup
-  db-backup:
-    image: postgres:17-alpine
-    container_name: db_backup
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      PGPASSWORD: ${DB_PASSWORD:?Database password required}
-    volumes:
-      - ./backups:/backups
-    entrypoint: >
-      sh -c "
-      while true; do
-        pg_dump -h postgres -U postgres auto-forex | gzip > /backups/backup_$$(date +%Y%m%d_%H%M%S).sql.gz;
-        find /backups -name 'backup_*.sql.gz' -mtime +7 -delete;
-        sleep 86400;
       done"
     restart: unless-stopped
     networks:

@@ -27,6 +27,9 @@ app.config_from_object("django.conf:settings", namespace="CELERY")
 # Use a callable to ensure Django apps are loaded before discovery
 app.autodiscover_tasks(lambda: [app_config.name for app_config in apps.get_app_configs()])
 
+# Also discover infrastructure tasks in config.tasks
+app.autodiscover_tasks(["config"])
+
 
 @worker_ready.connect
 def _recover_orphaned_tasks_on_startup(**_kwargs: object) -> None:
