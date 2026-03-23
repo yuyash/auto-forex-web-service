@@ -32,7 +32,7 @@ The system runs as a set of Docker containers on a single host:
 | Service     | Role                                                  |
 | ----------- | ----------------------------------------------------- |
 | nginx       | Reverse proxy, SSL termination (prod), static files   |
-| backend     | Django + Daphne (ASGI) — REST API server              |
+| backend     | Django + Uvicorn (ASGI) — REST API server             |
 | celery      | Async task workers (queues: default, trading, market, backtest, system) |
 | celery-beat | Periodic task scheduler (django-celery-beat)          |
 | frontend    | React SPA served by its own Nginx container           |
