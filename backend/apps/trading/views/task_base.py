@@ -157,13 +157,23 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
             started = self.task_service.start_task(task)
             return Response(self._serialize_detail(started))
         except TaskConflictError as exc:
+            logger.warning(
+                "Task conflict on start: task_id=%s, detail=%s",
+                task.pk,
+                exc,
+            )
             return Response(
-                {"error": "Account already has an active task", "detail": str(exc)},
+                {"error": "Account already has an active task"},
                 status=status.HTTP_409_CONFLICT,
             )
         except TaskValidationError as exc:
+            logger.warning(
+                "Task validation failed on start: task_id=%s, detail=%s",
+                task.pk,
+                exc,
+            )
             return Response(
-                {"error": "Validation error", "detail": str(exc)},
+                {"error": "Task validation failed. Check configuration and try again."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except TaskSubmissionError:
@@ -191,7 +201,11 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         try:
             success = self.task_service.stop_task(task.pk, mode=mode)
         except ValueError as exc:
-            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.warning("Stop validation failed: task_id=%s, detail=%s", task.pk, exc)
+            return Response(
+                {"error": "Invalid stop request for current task state"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except Exception:
             logger.exception(
                 "Unexpected %s stop failure", self.task_type_label, extra={"task_id": str(task.pk)}
@@ -227,7 +241,11 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         try:
             success = self.task_service.pause_task(task.pk)
         except ValueError as exc:
-            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.warning("Pause validation failed: task_id=%s, detail=%s", task.pk, exc)
+            return Response(
+                {"error": "Invalid pause request for current task state"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except Exception:
             logger.exception(
                 "Unexpected %s pause failure", self.task_type_label, extra={"task_id": str(task.pk)}
@@ -253,9 +271,17 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         try:
             resumed = self.task_service.resume_task(task.pk)
         except TaskConflictError as exc:
-            return Response({"error": str(exc)}, status=status.HTTP_409_CONFLICT)
+            logger.warning("Resume conflict: task_id=%s, detail=%s", task.pk, exc)
+            return Response(
+                {"error": "Task cannot be resumed due to a conflict"},
+                status=status.HTTP_409_CONFLICT,
+            )
         except ValueError as exc:
-            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.warning("Resume validation failed: task_id=%s, detail=%s", task.pk, exc)
+            return Response(
+                {"error": "Invalid resume request for current task state"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except Exception:
             logger.exception(
                 "Unexpected %s resume failure",
@@ -276,9 +302,17 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         try:
             restarted = self.task_service.restart_task(task.pk)
         except TaskConflictError as exc:
-            return Response({"error": str(exc)}, status=status.HTTP_409_CONFLICT)
+            logger.warning("Restart conflict: task_id=%s, detail=%s", task.pk, exc)
+            return Response(
+                {"error": "Task cannot be restarted due to a conflict"},
+                status=status.HTTP_409_CONFLICT,
+            )
         except ValueError as exc:
-            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            logger.warning("Restart validation failed: task_id=%s, detail=%s", task.pk, exc)
+            return Response(
+                {"error": "Invalid restart request for current task state"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         except Exception:
             logger.exception(
                 "Unexpected %s restart failure",

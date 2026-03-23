@@ -198,7 +198,16 @@ class Transaction:
 
 
 class OandaAPIError(Exception):
-    """Exception raised when OANDA API call fails."""
+    """Exception raised when OANDA API call fails.
+
+    The ``str()`` of this exception returns only the safe, user-facing
+    message.  Raw upstream details are stored in ``internal_detail`` for
+    server-side logging and must never be sent to the client.
+    """
+
+    def __init__(self, message: str, *, internal_detail: str = ""):
+        super().__init__(message)
+        self.internal_detail = internal_detail
 
 
 class OandaService:
@@ -364,6 +373,8 @@ class OandaService:
             account_resource = self._account_object_to_dict(account_data)
             self._account_resource_cache = account_resource
             return account_resource
+        except OandaAPIError:
+            raise
         except Exception as e:
             account_id = self.account.account_id if self.account else "unknown"
             logger.error(
@@ -372,7 +383,10 @@ class OandaService:
                 str(e),
                 exc_info=True,
             )
-            raise OandaAPIError(f"Error fetching account resource: {str(e)}") from e
+            raise OandaAPIError(
+                "Error fetching account resource",
+                internal_detail=str(e),
+            ) from e
 
     def cancel_order(self, order: Order) -> CancelledOrder:
         assert self.api is not None, "API client not initialized"
@@ -416,6 +430,8 @@ class OandaService:
                 transaction_id=str(tx_id) if tx_id is not None else None,
             )
 
+        except OandaAPIError:
+            raise
         except Exception as e:
             account_id = self.account.account_id if self.account else "unknown"
             logger.error(
@@ -425,7 +441,10 @@ class OandaService:
                 str(e),
                 exc_info=True,
             )
-            raise OandaAPIError(f"Error cancelling order: {str(e)}") from e
+            raise OandaAPIError(
+                "Error cancelling order",
+                internal_detail=str(e),
+            ) from e
 
     def close_trade(self, trade: OpenTrade, units: Decimal | None = None) -> MarketOrder:
         assert self.api is not None, "API client not initialized"
@@ -464,6 +483,8 @@ class OandaService:
                 fill_time=fill_time,
             )
 
+        except OandaAPIError:
+            raise
         except Exception as e:
             account_id = self.account.account_id if self.account else "unknown"
             logger.error(
@@ -473,7 +494,10 @@ class OandaService:
                 str(e),
                 exc_info=True,
             )
-            raise OandaAPIError(f"Error closing trade: {str(e)}") from e
+            raise OandaAPIError(
+                "Error closing trade",
+                internal_detail=str(e),
+            ) from e
 
     def close_position(
         self,
@@ -566,6 +590,8 @@ class OandaService:
                 fill_time=fill_time,
             )
 
+        except OandaAPIError:
+            raise
         except Exception as e:
             logger.error(
                 "Error closing position %s for %s: %s",
@@ -574,7 +600,10 @@ class OandaService:
                 str(e),
                 exc_info=True,
             )
-            raise OandaAPIError(f"Error closing position: {str(e)}") from e
+            raise OandaAPIError(
+                "Error closing position",
+                internal_detail=str(e),
+            ) from e
 
     def create_limit_order(self, request: LimitOrderRequest) -> LimitOrder:
         assert self.account is not None, "Account not initialized"
@@ -893,6 +922,8 @@ class OandaService:
                 pending_order_count=int(_read("pendingOrderCount", 0) or 0),
                 last_transaction_id=str(_read("lastTransactionID", "")),
             )
+        except OandaAPIError:
+            raise
         except Exception as e:
             logger.error(
                 "Error fetching account details for %s: %s",
@@ -900,7 +931,10 @@ class OandaService:
                 str(e),
                 exc_info=True,
             )
-            raise OandaAPIError(f"Error fetching account details: {str(e)}") from e
+            raise OandaAPIError(
+                "Error fetching account details",
+                internal_detail=str(e),
+            ) from e
 
     def get_account_hedging_enabled(self) -> bool:
         """Return whether the OANDA account has hedging enabled.
@@ -918,6 +952,8 @@ class OandaService:
         try:
             account_data = self.get_account_resource()
             return bool(account_data.get("hedgingEnabled", False))
+        except OandaAPIError:
+            raise
         except Exception as e:
             account_id = self.account.account_id if self.account else "unknown"
             logger.error(
@@ -926,7 +962,10 @@ class OandaService:
                 str(e),
                 exc_info=True,
             )
-            raise OandaAPIError(f"Error fetching account configuration: {str(e)}") from e
+            raise OandaAPIError(
+                "Error fetching account configuration",
+                internal_detail=str(e),
+            ) from e
 
     def get_account_position_mode(self) -> str:
         """Return `hedging` or `netting` based on the account configuration."""
@@ -985,6 +1024,8 @@ class OandaService:
                 self.account.account_id,
             )
             return positions
+        except OandaAPIError:
+            raise
         except Exception as e:
             logger.error(
                 "Error fetching positions for %s: %s",
@@ -992,7 +1033,10 @@ class OandaService:
                 str(e),
                 exc_info=True,
             )
-            raise OandaAPIError(f"Error fetching positions: {str(e)}") from e
+            raise OandaAPIError(
+                "Error fetching positions",
+                internal_detail=str(e),
+            ) from e
 
     def get_open_trades(self, instrument: str | None = None) -> list[OpenTrade]:
         """
@@ -1050,6 +1094,8 @@ class OandaService:
                 self.account.account_id,
             )
             return trades
+        except OandaAPIError:
+            raise
         except Exception as e:
             logger.error(
                 "Error fetching trades for %s: %s",
@@ -1057,7 +1103,10 @@ class OandaService:
                 str(e),
                 exc_info=True,
             )
-            raise OandaAPIError(f"Error fetching trades: {str(e)}") from e
+            raise OandaAPIError(
+                "Error fetching trades",
+                internal_detail=str(e),
+            ) from e
 
     def get_pending_orders(self, instrument: str | None = None) -> list[PendingOrder]:
         assert self.api is not None, "API client not initialized"
@@ -1076,6 +1125,8 @@ class OandaService:
                 orders.append(self._as_pending_order(order_obj))
             return orders
 
+        except OandaAPIError:
+            raise
         except Exception as e:
             logger.error(
                 "Error fetching pending orders for %s: %s",
@@ -1083,7 +1134,10 @@ class OandaService:
                 str(e),
                 exc_info=True,
             )
-            raise OandaAPIError(f"Error fetching pending orders: {str(e)}") from e
+            raise OandaAPIError(
+                "Error fetching pending orders",
+                internal_detail=str(e),
+            ) from e
 
     def get_order_history(
         self, instrument: str | None = None, count: int = 50, state: str = "ALL"
@@ -1105,6 +1159,8 @@ class OandaService:
                 orders.append(self._parse_order(order_data))
             return orders
 
+        except OandaAPIError:
+            raise
         except Exception as e:
             logger.error(
                 "Error fetching order history for %s: %s",
@@ -1112,7 +1168,10 @@ class OandaService:
                 str(e),
                 exc_info=True,
             )
-            raise OandaAPIError(f"Error fetching order history: {str(e)}") from e
+            raise OandaAPIError(
+                "Error fetching order history",
+                internal_detail=str(e),
+            ) from e
 
     def get_order(self, order_id: str) -> Order:
         assert self.api is not None, "API client not initialized"
@@ -1124,6 +1183,8 @@ class OandaService:
                 raise OandaAPIError(f"Failed to fetch order {order_id}: status {response.status}")
             order_data = response.body.get("order") or {}
             return self._parse_order(order_data)
+        except OandaAPIError:
+            raise
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error(
                 "OANDA API error fetching order %s for %s: %s",
@@ -1131,7 +1192,10 @@ class OandaService:
                 self.account.account_id,
                 str(e),
             )
-            raise OandaAPIError(f"OANDA API error: {str(e)}") from e
+            raise OandaAPIError(
+                "OANDA API error",
+                internal_detail=str(e),
+            ) from e
 
     def get_transaction_history(
         self,
@@ -1193,6 +1257,8 @@ class OandaService:
                     logger.warning("Failed to parse transaction page: %s", exc)
                     continue
             return transactions
+        except OandaAPIError:
+            raise
         except Exception as e:
             account_id = self.account.account_id if self.account else "unknown"
             logger.error(
@@ -1201,7 +1267,10 @@ class OandaService:
                 str(e),
                 exc_info=True,
             )
-            raise OandaAPIError(f"Error fetching transactions: {str(e)}") from e
+            raise OandaAPIError(
+                "Error fetching transactions",
+                internal_detail=str(e),
+            ) from e
 
     def stream_pricing_ticks(
         self,
