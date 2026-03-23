@@ -148,6 +148,10 @@ export function upsertTaskCaches<T extends TaskEntity>(
         sortTaskResults(items, readOrderingFilter(queryParams)),
     })
   );
+  // Ensure list queries refetch from the server so pages that mount after
+  // this cache write (e.g. navigating back to the list) always show the
+  // latest data including correct status and timestamps.
+  void queryClient.invalidateQueries({ queryKey: keys.lists });
 }
 
 export function removeTaskCaches(taskKind: TaskKind, taskId: string): void {
@@ -161,6 +165,7 @@ export function removeTaskCaches(taskKind: TaskKind, taskId: string): void {
   removeFromListQueries<PaginatedResponse<TaskEntity>>(keys.lists, (cached) =>
     removePaginatedEntity(cached, taskId)
   );
+  void queryClient.invalidateQueries({ queryKey: keys.lists });
 }
 
 export function patchTaskStatusCache(
@@ -201,6 +206,7 @@ export function patchTaskStatusCache(
     taskKind === 'backtest' ? TaskType.BACKTEST : TaskType.TRADING,
     status
   );
+  void queryClient.invalidateQueries({ queryKey: keys.lists });
 }
 
 export async function invalidateTaskDerivedCaches(
