@@ -232,6 +232,28 @@ services:
     networks:
       - forex_network
 
+  # Daily PostgreSQL backup
+  db-backup:
+    image: postgres:17-alpine
+    container_name: db_backup
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${DB_PASSWORD:?Database password required}
+    volumes:
+      - ./backups:/backups
+    entrypoint: >
+      sh -c "
+      while true; do
+        pg_dump -h postgres -U postgres auto-forex | gzip > /backups/backup_$$(date +%Y%m%d_%H%M%S).sql.gz;
+        find /backups -name 'backup_*.sql.gz' -mtime +7 -delete;
+        sleep 86400;
+      done"
+    restart: unless-stopped
+    networks:
+      - forex_network
+
 # Named volumes for data persistence
 volumes:
   postgres_data:

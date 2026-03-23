@@ -149,19 +149,8 @@ export const tradingTasksApi = {
     id: string,
     data: { new_name: string }
   ): Promise<TradingTask> => {
-    const original = await withRetry(() =>
-      api.get<BackendTradingTask>(`${BASE}/${id}/`)
-    );
     const result = await withRetry(() =>
-      api.post<BackendTradingTask>(`${BASE}/`, {
-        name: data.new_name,
-        config_id: original.config_id,
-        account_id: original.account_id,
-        description: original.description,
-        sell_on_stop: original.sell_on_stop,
-        dry_run: original.dry_run,
-        hedging_enabled: original.hedging_enabled,
-      })
+      api.post<BackendTradingTask>(`${BASE}/${id}/copy/`, data)
     );
     return toTradingTask(result);
   },

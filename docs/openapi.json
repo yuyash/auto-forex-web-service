@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.14.1",
+        "version": "1.14.3",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -2068,6 +2068,54 @@
                 }
             }
         },
+        "/api/trading/tasks/backtest/{id}/copy/": {
+            "post": {
+                "operationId": "backtest_tasks_copy",
+                "description": "Create a copy of the task with a new name.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/BacktestTaskRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/BacktestTask"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/backtest/{id}/events/": {
             "get": {
                 "operationId": "trading_tasks_backtest_events_retrieve",
@@ -3597,6 +3645,54 @@
                 "responses": {
                     "204": {
                         "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/trading/{id}/copy/": {
+            "post": {
+                "operationId": "trading_tasks_copy",
+                "description": "Create a copy of the task with a new name.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/TradingTaskRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TradingTask"
+                                }
+                            }
+                        },
+                        "description": ""
                     }
                 }
             }

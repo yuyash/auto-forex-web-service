@@ -32,6 +32,27 @@ from apps.trading.views.pagination import StandardPagination
 logger: Logger = getLogger(name=__name__)
 
 
+def _format_order_dict(order_obj: Any, account: OandaAccounts | None = None) -> dict:
+    """Format an order-like object into a consistent API response dict."""
+    data = {
+        "id": order_obj.order_id,
+        "instrument": order_obj.instrument,
+        "type": order_obj.order_type.value,
+        "direction": order_obj.direction.value,
+        "units": str(order_obj.units),
+        "price": str(order_obj.price) if order_obj.price is not None else None,
+        "state": order_obj.state.value,
+        "time_in_force": order_obj.time_in_force,
+        "create_time": order_obj.create_time.isoformat() if order_obj.create_time else None,
+        "fill_time": order_obj.fill_time.isoformat() if order_obj.fill_time else None,
+        "cancel_time": order_obj.cancel_time.isoformat() if order_obj.cancel_time else None,
+    }
+    if account is not None:
+        data["account_name"] = account.account_id
+        data["account_db_id"] = account.pk
+    return data
+
+
 class MarketOrderSerializer(serializers.Serializer):  # pylint: disable=abstract-method
     """Schema serializer for a single market order response item."""
 
@@ -130,39 +151,7 @@ class OrderView(APIView):
                 if order_status == "pending":
                     # Get only pending orders
                     for pending_order in client.get_pending_orders(instrument=instrument):
-                        all_orders.append(
-                            {
-                                "id": pending_order.order_id,
-                                "instrument": pending_order.instrument,
-                                "type": pending_order.order_type.value,
-                                "direction": pending_order.direction.value,
-                                "units": str(pending_order.units),
-                                "price": (
-                                    str(pending_order.price)
-                                    if pending_order.price is not None
-                                    else None
-                                ),
-                                "state": pending_order.state.value,
-                                "time_in_force": pending_order.time_in_force,
-                                "create_time": (
-                                    pending_order.create_time.isoformat()
-                                    if pending_order.create_time
-                                    else None
-                                ),
-                                "fill_time": (
-                                    pending_order.fill_time.isoformat()
-                                    if pending_order.fill_time
-                                    else None
-                                ),
-                                "cancel_time": (
-                                    pending_order.cancel_time.isoformat()
-                                    if pending_order.cancel_time
-                                    else None
-                                ),
-                                "account_name": account.account_id,
-                                "account_db_id": account.pk,
-                            }
-                        )
+                        all_orders.append(_format_order_dict(pending_order, account))
                 else:
                     # Get order history (includes all states)
                     for order in client.get_order_history(
@@ -170,29 +159,7 @@ class OrderView(APIView):
                         count=500,
                         state="ALL",
                     ):
-                        all_orders.append(
-                            {
-                                "id": order.order_id,
-                                "instrument": order.instrument,
-                                "type": order.order_type.value,
-                                "direction": order.direction.value,
-                                "units": str(order.units),
-                                "price": str(order.price) if order.price is not None else None,
-                                "state": order.state.value,
-                                "time_in_force": order.time_in_force,
-                                "create_time": (
-                                    order.create_time.isoformat() if order.create_time else None
-                                ),
-                                "fill_time": (
-                                    order.fill_time.isoformat() if order.fill_time else None
-                                ),
-                                "cancel_time": (
-                                    order.cancel_time.isoformat() if order.cancel_time else None
-                                ),
-                                "account_name": account.account_id,
-                                "account_db_id": account.pk,
-                            }
-                        )
+                        all_orders.append(_format_order_dict(order, account))
 
             except OandaAPIError as e:
                 logger.error(
@@ -374,23 +341,7 @@ class OrderView(APIView):
 
     def _format_order_response(self, order_result: Order) -> dict:
         """Format an Order object for API response."""
-        return {
-            "id": order_result.order_id,
-            "instrument": order_result.instrument,
-            "type": order_result.order_type.value,
-            "direction": order_result.direction.value,
-            "units": str(order_result.units),
-            "price": str(order_result.price) if order_result.price is not None else None,
-            "state": order_result.state.value,
-            "time_in_force": order_result.time_in_force,
-            "create_time": (
-                order_result.create_time.isoformat() if order_result.create_time else None
-            ),
-            "fill_time": order_result.fill_time.isoformat() if order_result.fill_time else None,
-            "cancel_time": (
-                order_result.cancel_time.isoformat() if order_result.cancel_time else None
-            ),
-        }
+        return _format_order_dict(order_result)
 
     def _format_order_from_model(self, order: Any) -> dict:
         """Format Order model instance for API response."""
@@ -476,21 +427,7 @@ class OrderDetailView(APIView):
             client = OandaService(account)
             order = client.get_order(order_id)
 
-            return Response(
-                {
-                    "id": order.order_id,
-                    "instrument": order.instrument,
-                    "type": order.order_type.value,
-                    "direction": order.direction.value,
-                    "units": str(order.units),
-                    "price": str(order.price) if order.price is not None else None,
-                    "state": order.state.value,
-                    "time_in_force": order.time_in_force,
-                    "create_time": order.create_time.isoformat() if order.create_time else None,
-                    "fill_time": order.fill_time.isoformat() if order.fill_time else None,
-                    "cancel_time": order.cancel_time.isoformat() if order.cancel_time else None,
-                }
-            )
+            return Response(_format_order_dict(order))
 
         except OandaAPIError as e:
             logger.error("Failed to fetch order %s: %s", order_id, str(e))

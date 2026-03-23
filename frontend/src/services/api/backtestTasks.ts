@@ -128,22 +128,8 @@ export const backtestTasksApi = {
     id: string,
     data: { new_name: string }
   ): Promise<BacktestTask> => {
-    const original = await withRetry(() =>
-      api.get<BackendBacktestTask>(`${BASE}/${id}/`)
-    );
     const result = await withRetry(() =>
-      api.post<BackendBacktestTask>(`${BASE}/`, {
-        name: data.new_name,
-        config: original.config_id,
-        start_time: original.start_time,
-        end_time: original.end_time,
-        description: original.description,
-        data_source: original.data_source,
-        initial_balance: original.initial_balance,
-        commission_per_trade: original.commission_per_trade,
-        instrument: original.instrument,
-        hedging_enabled: original.hedging_enabled,
-      })
+      api.post<BackendBacktestTask>(`${BASE}/${id}/copy/`, data)
     );
     return toBacktestTask(result);
   },
