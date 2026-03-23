@@ -8,12 +8,20 @@ from typing import Any
 from uuid import UUID
 
 from celery import shared_task
-from django.utils import timezone as dj_timezone
 
 from apps.trading.engine import TradingEngine
-from apps.trading.enums import LogLevel, TaskStatus, TaskType
+from apps.trading.enums import TaskStatus, TaskType
 from apps.trading.logging import TaskLoggingSession
-from apps.trading.models import BacktestTask, TaskLog
+from apps.trading.models import BacktestTask
+from apps.trading.services.execution_lifecycle import transition_task_to_running
+from apps.trading.tasks.lifecycle_events import (
+    build_completed_event_spec,
+    build_failed_event_spec,
+    build_started_event_spec,
+    build_stopped_event_spec,
+    finalize_task_terminal_lifecycle,
+    publish_task_lifecycle_event,
+)
 from apps.trading.tasks.executor import BacktestExecutor
 from apps.trading.tasks.source import RedisTickDataSource
 from apps.trading.utils import pip_size_for_instrument
@@ -64,14 +72,7 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
 
         # Atomically transition to RUNNING only if still in STARTING/CREATED.
         # This acts as a distributed lock — only one worker can win.
-        now = dj_timezone.now()
-        rows_updated = BacktestTask.objects.filter(
-            pk=task_id,
-            status=TaskStatus.STARTING,
-        ).update(
-            status=TaskStatus.RUNNING,
-            started_at=now,
-        )
+        rows_updated = transition_task_to_running(task_model=BacktestTask, task_id=task_id)
 
         if rows_updated == 0:
             # Another worker already transitioned this task
@@ -87,14 +88,11 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
 
         logger.info(f"Current: RUNNING - task_id={task_id}, started_at={task.started_at}")
 
-        # Log task start
-        TaskLog.objects.create(
+        publish_task_lifecycle_event(
+            logger=logger,
+            task=task,
             task_type=TaskType.BACKTEST,
-            task_id=task.pk,
-            execution_id=task.execution_id,
-            level=LogLevel.INFO,
-            component=__name__,
-            message="Backtest task execution started",
+            event=build_started_event_spec(task_label="Backtest", component=__name__),
         )
 
         # Execute the backtest
@@ -117,14 +115,17 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
 
         # Mark as completed — atomically transition RUNNING -> COMPLETED.
         # Only allow completion from RUNNING to prevent stale state overwrites.
-        completed_at = dj_timezone.now()
         logger.info(f"Transitioning: {task.status} -> COMPLETED - task_id={task_id}")
-        rows_updated = BacktestTask.objects.filter(
-            pk=task_id,
-            status=TaskStatus.RUNNING,
-        ).update(
+        rows_updated = finalize_task_terminal_lifecycle(
+            logger=logger,
+            task=task,
+            task_type=TaskType.BACKTEST,
             status=TaskStatus.COMPLETED,
-            completed_at=completed_at,
+            event=build_completed_event_spec(
+                task_label="Backtest",
+                component=__name__,
+            ),
+            expected_current_status=TaskStatus.RUNNING,
         )
 
         if rows_updated == 0:
@@ -135,19 +136,7 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
             )
             return
 
-        task.refresh_from_db()
         logger.info(f"Current: {task.status} - task_id={task_id}, completed_at={task.completed_at}")
-
-        # Log task completion
-        TaskLog.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=task.pk,
-            execution_id=task.execution_id,
-            level=LogLevel.INFO,
-            component=__name__,
-            message="Backtest task completed successfully",
-        )
-
         logger.info(
             f"SUCCESS - task_id={task_id}, "
             f"completed_at={task.completed_at}, duration={(task.completed_at - task.started_at).total_seconds()}s"
@@ -236,43 +225,22 @@ def handle_exception(task_id: UUID, task: BacktestTask | None, error: Exception)
 
     if task:
         # Update task with error information
-        task.status = TaskStatus.FAILED
-        task.completed_at = dj_timezone.now()
-        task.error_message = error_message
-        task.error_traceback = error_traceback
-        task.save(
-            update_fields=[
-                "status",
-                "completed_at",
-                "error_message",
-                "error_traceback",
-            ]
+        finalize_task_terminal_lifecycle(
+            logger=logger,
+            task=task,
+            task_type=TaskType.BACKTEST,
+            status=TaskStatus.FAILED,
+            event=build_failed_event_spec(
+                task_label="Backtest",
+                component=__name__,
+                error_type=type(error).__name__,
+                error_message=error_message,
+            ),
+            error_message=error_message,
+            error_traceback=error_traceback,
         )
 
         logger.info(f"Task marked as FAILED - task_id={task_id}, completed_at={task.completed_at}")
-
-        # Update CeleryTaskStatus to maintain state consistency
-        from apps.trading.models.celery import CeleryTaskStatus
-
-        CeleryTaskStatus.objects.filter(
-            task_name="trading.tasks.run_backtest_task",
-            instance_key=f"{task_id}:{task.execution_id}",
-        ).update(
-            status=CeleryTaskStatus.Status.FAILED,
-            status_message=f"Task failed: {type(error).__name__}: {error_message}",
-        )
-
-        logger.info(f"CeleryTaskStatus updated to FAILED - task_id={task_id}")
-
-        # Log error
-        TaskLog.objects.create(
-            task_type=TaskType.BACKTEST,
-            task_id=task.pk,
-            execution_id=task.execution_id,
-            level=LogLevel.ERROR,
-            component=__name__,
-            message=f"Backtest task execution failed: {type(error).__name__}: {error_message}",
-        )
 
 
 def trigger_backtest_publisher(task: BacktestTask) -> None:
@@ -449,22 +417,20 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
             logger.info(
                 f"[STOP:BACKTEST] Transitioning: {task.status} -> STOPPED - task_id={task_id}"
             )
-            task.refresh_from_db()
-            task.status = TaskStatus.STOPPED
-            task.completed_at = None
-            task.save(update_fields=["status", "completed_at", "updated_at"])
-            logger.info(f"[STOP:BACKTEST] Current: STOPPED - task_id={task_id}")
-
-            # Update CeleryTaskStatus
-            from apps.trading.models import CeleryTaskStatus
-
-            task_name = "trading.tasks.run_backtest_task"
-            instance_key = f"{task_id}:{task.execution_id}"
-            CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=instance_key).update(
-                status=CeleryTaskStatus.Status.STOPPED,
-                stopped_at=dj_timezone.now(),
-                last_heartbeat_at=dj_timezone.now(),
+            finalize_task_terminal_lifecycle(
+                logger=logger,
+                task=task,
+                task_type=TaskType.BACKTEST,
+                status=TaskStatus.STOPPED,
+                event=build_stopped_event_spec(
+                    task_label="Backtest",
+                    component=__name__,
+                    description="Backtest task stopped",
+                ),
+                expected_current_status=TaskStatus.STOPPING,
+                extra_details={"mode": "worker_stop"},
             )
+            logger.info(f"[STOP:BACKTEST] Current: STOPPED - task_id={task_id}")
 
             logger.info(f"Backtest task {task_id} stopped successfully")
 
@@ -474,9 +440,19 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
                 f"[STOP:BACKTEST] Race condition detected: COMPLETED -> STOPPED - task_id={task_id}"
             )
             # Change from COMPLETED to STOPPED since user requested stop
-            task.status = TaskStatus.STOPPED
-            task.completed_at = None  # Remove completed_at since it was stopped
-            task.save(update_fields=["status", "completed_at", "updated_at"])
+            finalize_task_terminal_lifecycle(
+                logger=logger,
+                task=task,
+                task_type=TaskType.BACKTEST,
+                status=TaskStatus.STOPPED,
+                event=build_stopped_event_spec(
+                    task_label="Backtest",
+                    component=__name__,
+                    description="Backtest task stopped after completion race",
+                ),
+                expected_current_status=TaskStatus.COMPLETED,
+                extra_details={"mode": "worker_stop"},
+            )
             logger.info(f"[STOP:BACKTEST] Current: STOPPED - task_id={task_id}")
 
         else:

@@ -10,11 +10,9 @@
  * generated OpenAPI client being regenerated.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import axios from 'axios';
-import { apiConfig, resolveToken } from '../api/apiConfig';
 import { TaskType } from '../types/common';
-import { handleAuthErrorStatus } from '../utils/authEvents';
+import { toIncrementalCollectionState } from './useTaskCollections';
+import { useIncrementalTaskResource } from './useIncrementalTaskResource';
 
 export interface TaskTrade {
   id: number | string;
@@ -54,16 +52,7 @@ interface UseTaskTradesResult {
   hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
-  refetch: () => Promise<void>;
-}
-
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  const token = await resolveToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
+  refresh: () => Promise<unknown>;
 }
 
 function getLatestUpdatedAt(trades: TaskTrade[]): string | null {
@@ -113,155 +102,51 @@ export const useTaskTrades = ({
   enableRealTimeUpdates = false,
   refreshInterval = 10_000,
 }: UseTaskTradesOptions): UseTaskTradesResult => {
-  const [trades, setTrades] = useState<TaskTrade[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [hasNext, setHasNext] = useState(false);
-  const [hasPrevious, setHasPrevious] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
-  const latestRequestRef = useRef(0);
-  const sinceRef = useRef<string | null>(null);
-  const hasInitialFetchRef = useRef(false);
-
-  // Reset incremental state when key params change.
   const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${direction}-${page}-${pageSize}-${since ?? ''}`;
-  const prevParamsKeyRef = useRef(paramsKey);
-  if (paramsKey !== prevParamsKeyRef.current) {
-    prevParamsKeyRef.current = paramsKey;
-    sinceRef.current = null;
-    hasInitialFetchRef.current = false;
-  }
-
-  const fetchTrades = useCallback(
-    async (incremental = false) => {
-      if (!taskId) {
-        setIsLoading(false);
-        return;
-      }
-
-      const requestId = ++latestRequestRef.current;
-
-      try {
-        if (!incremental) setIsLoading(true);
-        setError(null);
-
-        const prefix =
-          taskType === TaskType.BACKTEST
-            ? '/api/trading/tasks/backtest'
-            : '/api/trading/tasks/trading';
-
-        const apiDirection =
-          direction === 'long'
-            ? 'buy'
-            : direction === 'short'
-              ? 'sell'
-              : undefined;
-
-        const params: Record<string, string> = {
-          page: String(page),
-          page_size: String(pageSize),
-        };
-        if (executionRunId != null) {
-          params.execution_id = String(executionRunId);
-        }
-        if (apiDirection) params.direction = apiDirection;
-        const effectiveSince = since ?? (incremental ? sinceRef.current : null);
-        if (effectiveSince) params.since = effectiveSince;
-
-        const url = `${apiConfig.BASE}${prefix}/${taskId}/trades/`;
-        const headers = await getAuthHeaders();
-
-        const response = await axios.get(url, {
-          params,
-          headers,
-          withCredentials: apiConfig.WITH_CREDENTIALS,
-        });
-
-        if (requestId !== latestRequestRef.current) return;
-
-        const data = response.data;
-        const rawResults = (data.results || []) as Array<
-          Record<string, unknown>
-        >;
-        const incoming = mapTradeResults(rawResults, page, pageSize);
-
-        if (incremental && incoming.length > 0) {
-          setTrades((prev) => {
-            const map = new Map(prev.map((t) => [t.id, t]));
-            for (const t of incoming) {
-              map.set(t.id, t);
-            }
-            return Array.from(map.values());
-          });
-          setTotalCount(data.count ?? totalCount);
-        } else if (!incremental) {
-          setTrades(incoming);
-          setTotalCount(data.count ?? 0);
-          setHasNext(Boolean(data.next));
-          setHasPrevious(Boolean(data.previous));
-        }
-
-        const latestTs = getLatestUpdatedAt(incoming);
-        if (latestTs && (!sinceRef.current || latestTs > sinceRef.current)) {
-          sinceRef.current = latestTs;
-        }
-        hasInitialFetchRef.current = true;
-      } catch (err) {
-        if (requestId !== latestRequestRef.current) return;
-
-        if (axios.isAxiosError(err) && err.response) {
-          handleAuthErrorStatus(err.response.status, {
-            source: 'http',
-            status: err.response.status,
-            context: 'task_trades',
-          });
-        }
-        const errorMessage =
-          err instanceof Error ? err.message : 'Failed to load trades';
-        setError(new Error(errorMessage));
-      } finally {
-        if (requestId === latestRequestRef.current) {
-          setIsLoading(false);
-        }
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [taskId, taskType, executionRunId, direction, page, pageSize, since]
-  );
-
-  useEffect(() => {
-    fetchTrades(false);
-  }, [fetchTrades]);
-
-  useEffect(() => {
-    if (!enableRealTimeUpdates) return;
-    const interval = setInterval(() => {
-      if (hasInitialFetchRef.current) {
-        fetchTrades(true);
-      }
-    }, refreshInterval);
-    return () => clearInterval(interval);
-  }, [enableRealTimeUpdates, refreshInterval, fetchTrades]);
-
-  // Final full refetch when real-time updates stop.
-  const prevRealTimeRef = useRef(enableRealTimeUpdates);
-  useEffect(() => {
-    if (prevRealTimeRef.current && !enableRealTimeUpdates) {
-      sinceRef.current = null;
-      hasInitialFetchRef.current = false;
-      fetchTrades(false);
-    }
-    prevRealTimeRef.current = enableRealTimeUpdates;
-  }, [enableRealTimeUpdates, fetchTrades]);
-
-  return {
-    trades,
+  const {
+    items: trades,
     totalCount,
     hasNext,
     hasPrevious,
     isLoading,
     error,
-    refetch: () => fetchTrades(false),
+    refresh,
+  } = useIncrementalTaskResource<Record<string, unknown>, TaskTrade>({
+    taskId,
+    taskType,
+    endpoint: 'trades',
+    paramsKey,
+    page,
+    pageSize,
+    since,
+    enableRealTimeUpdates,
+    refreshInterval,
+    errorContext: 'task_trades',
+    fallbackErrorMessage: 'Failed to load trades',
+    buildParams: () => {
+      const params: Record<string, string> = {};
+      if (executionRunId != null) {
+        params.execution_id = String(executionRunId);
+      }
+      if (direction === 'long') params.direction = 'buy';
+      if (direction === 'short') params.direction = 'sell';
+      return params;
+    },
+    getLatestCursor: getLatestUpdatedAt,
+    getItemId: (trade) => trade.id,
+    mapResults: (results) => mapTradeResults(results, page, pageSize),
+  });
+
+  return {
+    ...toIncrementalCollectionState({
+      items: trades,
+      totalCount,
+      hasNext,
+      hasPrevious,
+      isLoading,
+      error,
+      refresh,
+    }),
+    trades,
   };
 };

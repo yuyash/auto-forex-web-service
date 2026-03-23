@@ -1,32 +1,52 @@
-/**
- * Backtest Task API service using direct axios calls.
- */
-
 import { api } from '../../api/apiClient';
 import { withRetry } from '../../api/client';
 import type {
-  BacktestTaskRequest,
-  PatchedBacktestTaskCreateRequest,
-  PaginatedApiResponse,
-} from '../../api/types';
-import type {
   BacktestTask,
+  BacktestTaskCreateData,
   BacktestTaskListParams,
+  BacktestTaskUpdateData,
   PaginatedResponse,
+  TaskExecution,
 } from '../../types';
+import type {
+  BackendBacktestTask,
+  BackendPaginatedBacktestTasks,
+} from './contracts';
+import type { PaginatedApiResponse } from './pagination';
 
 const BASE = '/api/trading/tasks/backtest';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const toLocal = (task: any): BacktestTask => task as BacktestTask;
+function toBacktestTask(task: BackendBacktestTask): BacktestTask {
+  return {
+    ...task,
+    data_source: task.data_source as BacktestTask['data_source'],
+    status: task.status as BacktestTask['status'],
+    sell_at_completion: false,
+    pip_size: task.pip_size ?? undefined,
+    execution_id: task.execution_id ?? undefined,
+    started_at: task.started_at ?? undefined,
+    completed_at: task.completed_at ?? undefined,
+    error_message: task.error_message ?? undefined,
+  };
+}
+
+function toPaginatedResponse(
+  result: BackendPaginatedBacktestTasks
+): PaginatedResponse<BacktestTask> {
+  return {
+    count: result.count,
+    next: result.next ?? null,
+    previous: result.previous ?? null,
+    results: result.results.map(toBacktestTask),
+  };
+}
 
 export const backtestTasksApi = {
   list: async (
     params?: BacktestTaskListParams
   ): Promise<PaginatedResponse<BacktestTask>> => {
     const result = await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      api.get<PaginatedApiResponse<any>>(`${BASE}/`, {
+      api.get<BackendPaginatedBacktestTasks>(`${BASE}/`, {
         config_id: params?.config_id,
         ordering: params?.ordering,
         page: params?.page,
@@ -35,44 +55,41 @@ export const backtestTasksApi = {
         status: params?.status,
       })
     );
-    return {
-      count: result.count,
-      next: result.next ?? null,
-      previous: result.previous ?? null,
-      results: result.results.map(toLocal),
-    };
+    return toPaginatedResponse(result);
   },
 
   get: async (id: string): Promise<BacktestTask> => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await withRetry(() => api.get<any>(`${BASE}/${id}/`));
-    return toLocal(result);
+    const result = await withRetry(() =>
+      api.get<BackendBacktestTask>(`${BASE}/${id}/`)
+    );
+    return toBacktestTask(result);
   },
 
-  create: async (data: BacktestTaskRequest): Promise<BacktestTask> => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await withRetry(() => api.post<any>(`${BASE}/`, data));
-    return toLocal(result);
+  create: async (data: BacktestTaskCreateData): Promise<BacktestTask> => {
+    const result = await withRetry(() =>
+      api.post<BackendBacktestTask>(`${BASE}/`, data)
+    );
+    return toBacktestTask(result);
   },
 
   update: async (
     id: string,
-    data: BacktestTaskRequest
+    data: BacktestTaskCreateData
   ): Promise<BacktestTask> => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await withRetry(() => api.put<any>(`${BASE}/${id}/`, data));
-    return toLocal(result);
+    const result = await withRetry(() =>
+      api.put<BackendBacktestTask>(`${BASE}/${id}/`, data)
+    );
+    return toBacktestTask(result);
   },
 
   partialUpdate: async (
     id: string,
-    data: PatchedBacktestTaskCreateRequest
+    data: BacktestTaskUpdateData
   ): Promise<BacktestTask> => {
     const result = await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      api.patch<any>(`${BASE}/${id}/`, data)
+      api.patch<BackendBacktestTask>(`${BASE}/${id}/`, data)
     );
-    return toLocal(result);
+    return toBacktestTask(result);
   },
 
   delete: async (id: string): Promise<void> => {
@@ -80,52 +97,44 @@ export const backtestTasksApi = {
   },
 
   start: async (id: string): Promise<BacktestTask> => {
-    // Do NOT use withRetry — start is not idempotent (dispatches a Celery task).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await api.post<any>(`${BASE}/${id}/start/`, {});
-    return toLocal(result);
+    return toBacktestTask(
+      await api.post<BackendBacktestTask>(`${BASE}/${id}/start/`, {})
+    );
   },
 
   stop: async (id: string): Promise<Record<string, unknown>> => {
-    // Do NOT use withRetry — stop dispatches a Celery task.
     return api.post<Record<string, unknown>>(`${BASE}/${id}/stop/`, {});
   },
 
   pause: async (id: string): Promise<BacktestTask> => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await api.post<any>(`${BASE}/${id}/pause/`, {});
-    return toLocal(result);
+    return toBacktestTask(
+      await api.post<BackendBacktestTask>(`${BASE}/${id}/pause/`, {})
+    );
   },
 
   resume: async (id: string): Promise<BacktestTask> => {
-    // Do NOT use withRetry — resume dispatches a Celery task.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await api.post<any>(`${BASE}/${id}/resume/`, {});
-    return toLocal(result);
+    return toBacktestTask(
+      await api.post<BackendBacktestTask>(`${BASE}/${id}/resume/`, {})
+    );
   },
 
-  restart: async (
-    id: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _clearState?: boolean
-  ): Promise<BacktestTask> => {
-    // Do NOT use withRetry — restart is not idempotent.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await api.post<any>(`${BASE}/${id}/restart/`, {});
-    return toLocal(result);
+  restart: async (id: string): Promise<BacktestTask> => {
+    return toBacktestTask(
+      await api.post<BackendBacktestTask>(`${BASE}/${id}/restart/`, {})
+    );
   },
 
   copy: async (
     id: string,
-    _data: { new_name: string }
+    data: { new_name: string }
   ): Promise<BacktestTask> => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const original = await withRetry(() => api.get<any>(`${BASE}/${id}/`));
+    const original = await withRetry(() =>
+      api.get<BackendBacktestTask>(`${BASE}/${id}/`)
+    );
     const result = await withRetry(() =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      api.post<any>(`${BASE}/`, {
-        name: _data.new_name,
-        config: original.config,
+      api.post<BackendBacktestTask>(`${BASE}/`, {
+        name: data.new_name,
+        config: original.config_id,
         start_time: original.start_time,
         end_time: original.end_time,
         description: original.description,
@@ -133,17 +142,18 @@ export const backtestTasksApi = {
         initial_balance: original.initial_balance,
         commission_per_trade: original.commission_per_trade,
         instrument: original.instrument,
+        hedging_enabled: original.hedging_enabled,
       })
     );
-    return toLocal(result);
+    return toBacktestTask(result);
   },
 
   getExecutions: async (
     id: string,
     params?: { page?: number; page_size?: number; include_metrics?: boolean }
-  ): Promise<PaginatedResponse<import('../../types').TaskExecution>> => {
+  ): Promise<PaginatedResponse<TaskExecution>> => {
     const result = await withRetry(() =>
-      api.get<PaginatedApiResponse<import('../../types').TaskExecution>>(
+      api.get<PaginatedApiResponse<TaskExecution>>(
         `${BASE}/${id}/executions/`,
         {
           page: params?.page,
@@ -158,5 +168,17 @@ export const backtestTasksApi = {
       previous: result.previous ?? null,
       results: result.results ?? [],
     };
+  },
+
+  getExecution: async (
+    id: string,
+    executionId: string,
+    params?: { include_metrics?: boolean }
+  ): Promise<TaskExecution> => {
+    return withRetry(() =>
+      api.get<TaskExecution>(`${BASE}/${id}/executions/${executionId}/`, {
+        include_metrics: params?.include_metrics,
+      })
+    );
   },
 };

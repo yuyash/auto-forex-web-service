@@ -11,40 +11,33 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAppSettings } from '../../hooks/useAppSettings';
+import {
+  useSupportedGranularities,
+  useSupportedInstruments,
+} from '../../hooks/useMarketConfig';
 import type { Granularity } from '../../types/chart';
-
-const INSTRUMENTS = [
-  'USD_JPY',
-  'EUR_USD',
-  'GBP_USD',
-  'AUD_USD',
-  'NZD_USD',
-  'USD_CHF',
-  'USD_CAD',
-  'EUR_JPY',
-  'GBP_JPY',
-  'EUR_GBP',
-  'EUR_CHF',
-  'AUD_JPY',
-  'EUR_AUD',
-  'EUR_CAD',
-  'GBP_CHF',
-];
-
-const GRANULARITIES: { value: Granularity; label: string }[] = [
-  { value: 'M1', label: '1 Minute' },
-  { value: 'M5', label: '5 Minutes' },
-  { value: 'M15', label: '15 Minutes' },
-  { value: 'M30', label: '30 Minutes' },
-  { value: 'H1', label: '1 Hour' },
-  { value: 'H4', label: '4 Hours' },
-  { value: 'D', label: 'Daily' },
-  { value: 'W', label: 'Weekly' },
-];
 
 const DisplaySettings = () => {
   const { t } = useTranslation(['settings', 'common']);
   const { settings, updateSetting } = useAppSettings();
+  const { instruments, usingFallback: usingInstrumentFallback } =
+    useSupportedInstruments();
+  const { granularities, usingFallback: usingGranularityFallback } =
+    useSupportedGranularities();
+  const instrumentOptions = Array.from(
+    new Set([settings.defaultInstrument, ...instruments].filter(Boolean))
+  );
+  const granularityOptions = Array.from(
+    new Map(
+      [
+        {
+          value: settings.defaultGranularity,
+          label: settings.defaultGranularity,
+        },
+        ...granularities,
+      ].map((granularity) => [granularity.value, granularity])
+    ).values()
+  );
 
   return (
     <Box>
@@ -122,6 +115,11 @@ const DisplaySettings = () => {
         {t('settings:display.defaultInstrument')}
       </Typography>
       <Box sx={{ mt: 2 }}>
+        {usingInstrumentFallback && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            {t('common:tables.trend.instrumentFallbackWarning')}
+          </Alert>
+        )}
         <FormControl fullWidth margin="normal">
           <InputLabel id="default-instrument-label">
             {t('settings:display.currencyPair')}
@@ -132,7 +130,7 @@ const DisplaySettings = () => {
             label={t('settings:display.currencyPair')}
             onChange={(e) => updateSetting('defaultInstrument', e.target.value)}
           >
-            {INSTRUMENTS.map((inst) => (
+            {instrumentOptions.map((inst) => (
               <MenuItem key={inst} value={inst}>
                 {inst.replace('_', '/')}
               </MenuItem>
@@ -140,6 +138,11 @@ const DisplaySettings = () => {
           </Select>
         </FormControl>
 
+        {usingGranularityFallback && (
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            {t('common:tables.trend.granularityFallbackWarning')}
+          </Alert>
+        )}
         <FormControl fullWidth margin="normal">
           <InputLabel id="default-granularity-label">
             {t('settings:display.defaultGranularity')}
@@ -152,9 +155,9 @@ const DisplaySettings = () => {
               updateSetting('defaultGranularity', e.target.value as Granularity)
             }
           >
-            {GRANULARITIES.map((g) => (
+            {granularityOptions.map((g) => (
               <MenuItem key={g.value} value={g.value}>
-                {g.value} — {g.label}
+                {g.value} - {g.label}
               </MenuItem>
             ))}
           </Select>

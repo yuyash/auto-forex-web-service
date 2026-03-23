@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
@@ -675,3 +676,56 @@ class TestTradingDurability:
 
         assert should_stop is False
         assert call_order[:2] == ["save_state", "handle_events"]
+
+
+class TestCommonRuntimeMetrics:
+    """Tests for executor-managed common metrics."""
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_process_single_tick_populates_common_metrics_without_strategy_metrics(
+        self, mock_handler
+    ):
+        from apps.trading.dataclasses.result import StrategyResult
+        from apps.trading.models import BacktestTask
+        from apps.trading.tasks.executor import ExecutionLoopState, TaskExecutor
+
+        task = MagicMock(spec=BacktestTask)
+        task.pk = uuid4()
+        task.instrument = "USD_JPY"
+        task.pip_size = Decimal("0.01")
+        task.initial_balance = Decimal("100000")
+        task.account_currency = "JPY"
+        task.config.config_dict = {}
+        task.execution_id = uuid4()
+
+        engine = MagicMock()
+        executor = TaskExecutor(
+            task=task,
+            engine=engine,
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=MagicMock(),
+            state_manager=MagicMock(),
+        )
+
+        state = MagicMock()
+        state.ticks_processed = 0
+        state.current_balance = Decimal("100000")
+        state.strategy_state = {}
+
+        tick = SimpleNamespace(
+            timestamp=datetime(2026, 3, 22, 10, 0, tzinfo=UTC),
+            mid=Decimal("150.10"),
+            bid=Decimal("150.09"),
+            ask=Decimal("150.11"),
+        )
+        engine.on_tick.return_value = StrategyResult.from_state(state)
+
+        with patch.object(executor, "save_events", return_value=[]):
+            loop = ExecutionLoopState(state=state)
+            should_stop = executor._process_single_tick(loop, tick)
+
+        assert should_stop is False
+        metrics = state.strategy_state["metrics"]
+        assert metrics["margin_ratio"] == "0"
+        assert "current_atr" in metrics

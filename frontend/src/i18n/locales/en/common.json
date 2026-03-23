@@ -90,6 +90,7 @@
     "connected": "Connected",
     "disconnected": "Disconnected",
     "noOandaAccount": "No Account",
+    "activeTasks": "{{count}} active tasks",
     "loading": "Loading...",
     "updating": "Updating...",
     "checking": "Checking...",
@@ -429,7 +430,11 @@
       "exit": "Exit",
       "pips": "Pips",
       "pnl": "PnL",
-      "noOandaAccount": "Register an OANDA account to display market candles in the Trend tab."
+      "noOandaAccount": "Register an OANDA account to display market candles in the Trend tab.",
+      "instrumentFallbackWarning": "Using fallback instrument options because the market configuration endpoint is unavailable.",
+      "granularityFallbackWarning": "Using fallback granularity options because the market configuration endpoint is unavailable.",
+      "replayRefreshFailed": "Failed to refresh replay data. Showing the latest available trades.",
+      "chartRenderFailed": "Some chart elements could not be rendered."
     }
   },
   "columnConfig": {

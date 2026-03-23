@@ -65,10 +65,11 @@ function PageLoadingFallback() {
 }
 
 function AppRoutes() {
-  const { isAuthenticated, systemSettings, systemSettingsLoading } = useAuth();
+  const { isAuthenticated, systemSettings, authLoading, appLoading } =
+    useAuth();
 
   // Show loading state while fetching system settings
-  if (systemSettingsLoading) {
+  if (authLoading || appLoading) {
     return (
       <Routes>
         <Route

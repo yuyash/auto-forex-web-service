@@ -57,7 +57,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
   const [isReloading, setIsReloading] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<TaskEvent | null>(null);
 
-  const { events, totalCount, isLoading, error, refetch } = useTaskEvents({
+  const { events, totalCount, isLoading, error, refresh } = useTaskEvents({
     taskId,
     taskType,
     executionRunId,
@@ -84,9 +84,9 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
 
   const handleReload = useCallback(async () => {
     setIsReloading(true);
-    await refetch();
+    await refresh();
     setIsReloading(false);
-  }, [refetch]);
+  }, [refresh]);
 
   const handleSeverityChange = (value: string) => {
     setSeverityFilter(value);

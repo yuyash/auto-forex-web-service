@@ -6,11 +6,9 @@
  * cycles only new/updated records are fetched and merged into the local cache.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import axios from 'axios';
-import { apiConfig, resolveToken } from '../api/apiConfig';
 import { TaskType } from '../types/common';
-import { handleAuthErrorStatus } from '../utils/authEvents';
+import { toIncrementalCollectionState } from './useTaskCollections';
+import { useIncrementalTaskResource } from './useIncrementalTaskResource';
 
 export interface TaskOrder {
   id: string;
@@ -55,16 +53,7 @@ interface UseTaskOrdersResult {
   hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
-  refetch: () => Promise<void>;
-}
-
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  const token = await resolveToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
+  refresh: () => Promise<unknown>;
 }
 
 function getLatestUpdatedAt(orders: TaskOrder[]): string | null {
@@ -90,155 +79,51 @@ export const useTaskOrders = ({
   enableRealTimeUpdates = false,
   refreshInterval = 10_000,
 }: UseTaskOrdersOptions): UseTaskOrdersResult => {
-  const [orders, setOrders] = useState<TaskOrder[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [hasNext, setHasNext] = useState(false);
-  const [hasPrevious, setHasPrevious] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
-  const latestRequestRef = useRef(0);
-  const sinceRef = useRef<string | null>(null);
-  const hasInitialFetchRef = useRef(false);
-
   const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${status}-${orderType}-${direction}-${page}-${pageSize}-${since ?? ''}`;
-  const prevParamsKeyRef = useRef(paramsKey);
-  if (paramsKey !== prevParamsKeyRef.current) {
-    prevParamsKeyRef.current = paramsKey;
-    sinceRef.current = null;
-    hasInitialFetchRef.current = false;
-  }
-
-  const fetchOrders = useCallback(
-    async (incremental = false) => {
-      if (!taskId) {
-        setIsLoading(false);
-        return;
-      }
-
-      const requestId = ++latestRequestRef.current;
-
-      try {
-        if (!incremental) setIsLoading(true);
-        setError(null);
-
-        const prefix =
-          taskType === TaskType.BACKTEST
-            ? '/api/trading/tasks/backtest'
-            : '/api/trading/tasks/trading';
-
-        const params: Record<string, string> = {
-          page: String(page),
-          page_size: String(pageSize),
-        };
-        if (status) params.status = status;
-        if (orderType) params.order_type = orderType;
-        if (direction) params.direction = direction;
-        if (executionRunId != null) {
-          params.execution_id = String(executionRunId);
-        }
-        const effectiveSince = since ?? (incremental ? sinceRef.current : null);
-        if (effectiveSince) params.since = effectiveSince;
-
-        const url = `${apiConfig.BASE}${prefix}/${taskId}/orders/`;
-        const headers = await getAuthHeaders();
-
-        const response = await axios.get(url, {
-          params,
-          headers,
-          withCredentials: apiConfig.WITH_CREDENTIALS,
-        });
-
-        if (requestId !== latestRequestRef.current) return;
-
-        const data = response.data;
-        const incoming = (data.results || []) as TaskOrder[];
-
-        if (incremental && incoming.length > 0) {
-          setOrders((prev) => {
-            const map = new Map(prev.map((o) => [o.id, o]));
-            for (const o of incoming) {
-              map.set(o.id, o);
-            }
-            return Array.from(map.values());
-          });
-          setTotalCount(data.count ?? totalCount);
-        } else if (!incremental) {
-          setOrders(incoming);
-          setTotalCount(data.count ?? 0);
-          setHasNext(Boolean(data.next));
-          setHasPrevious(Boolean(data.previous));
-        }
-
-        const latestTs = getLatestUpdatedAt(incoming);
-        if (latestTs && (!sinceRef.current || latestTs > sinceRef.current)) {
-          sinceRef.current = latestTs;
-        }
-        hasInitialFetchRef.current = true;
-      } catch (err) {
-        if (requestId !== latestRequestRef.current) return;
-
-        if (axios.isAxiosError(err) && err.response) {
-          handleAuthErrorStatus(err.response.status, {
-            source: 'http',
-            status: err.response.status,
-            context: 'task_orders',
-          });
-        }
-        const msg =
-          err instanceof Error ? err.message : 'Failed to load orders';
-        setError(new Error(msg));
-      } finally {
-        if (requestId === latestRequestRef.current) {
-          setIsLoading(false);
-        }
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      taskId,
-      taskType,
-      executionRunId,
-      status,
-      orderType,
-      direction,
-      page,
-      pageSize,
-      since,
-    ]
-  );
-
-  useEffect(() => {
-    fetchOrders(false);
-  }, [fetchOrders]);
-
-  useEffect(() => {
-    if (!enableRealTimeUpdates) return;
-    const interval = setInterval(() => {
-      if (hasInitialFetchRef.current) {
-        fetchOrders(true);
-      }
-    }, refreshInterval);
-    return () => clearInterval(interval);
-  }, [enableRealTimeUpdates, refreshInterval, fetchOrders]);
-
-  const prevRealTimeRef = useRef(enableRealTimeUpdates);
-  useEffect(() => {
-    if (prevRealTimeRef.current && !enableRealTimeUpdates) {
-      sinceRef.current = null;
-      hasInitialFetchRef.current = false;
-      fetchOrders(false);
-    }
-    prevRealTimeRef.current = enableRealTimeUpdates;
-  }, [enableRealTimeUpdates, fetchOrders]);
-
-  return {
-    orders,
+  const {
+    items: orders,
     totalCount,
     hasNext,
     hasPrevious,
     isLoading,
     error,
-    refetch: () => fetchOrders(false),
+    refresh,
+  } = useIncrementalTaskResource<TaskOrder>({
+    taskId,
+    taskType,
+    endpoint: 'orders',
+    paramsKey,
+    page,
+    pageSize,
+    since,
+    enableRealTimeUpdates,
+    refreshInterval,
+    errorContext: 'task_orders',
+    fallbackErrorMessage: 'Failed to load orders',
+    buildParams: () => {
+      const params: Record<string, string> = {};
+      if (status) params.status = status;
+      if (orderType) params.order_type = orderType;
+      if (direction) params.direction = direction;
+      if (executionRunId != null) {
+        params.execution_id = String(executionRunId);
+      }
+      return params;
+    },
+    getLatestCursor: getLatestUpdatedAt,
+    getItemId: (order) => order.id,
+  });
+
+  return {
+    ...toIncrementalCollectionState({
+      items: orders,
+      totalCount,
+      hasNext,
+      hasPrevious,
+      isLoading,
+      error,
+      refresh,
+    }),
+    orders,
   };
 };

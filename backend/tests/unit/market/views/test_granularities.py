@@ -1,5 +1,9 @@
 """Pure unit tests for granularities views (with mocks, no DB)."""
 
+from unittest.mock import patch
+
+from rest_framework.test import APIRequestFactory
+
 
 class TestSupportedGranularitiesViewUnit:
     """Pure unit tests for SupportedGranularitiesView."""
@@ -37,3 +41,29 @@ class TestSupportedGranularitiesViewUnit:
         assert "H1" in values
         assert "H4" in values
         assert "D" in values
+
+    @patch("apps.market.views.granularities.cache")
+    def test_get_uses_cache_when_available(self, mock_cache) -> None:
+        from apps.market.views.granularities import SupportedGranularitiesView
+
+        mock_cache.get.return_value = [{"value": "M1", "label": "1 Minute"}]
+        request = APIRequestFactory().get("/")
+        request.user = object()
+
+        response = SupportedGranularitiesView().get(request)
+
+        assert response.data["source"] == "cache"
+        assert response.data["granularities"] == [{"value": "M1", "label": "1 Minute"}]
+
+    @patch("apps.market.views.granularities.cache")
+    def test_get_primes_cache_when_empty(self, mock_cache) -> None:
+        from apps.market.views.granularities import SupportedGranularitiesView
+
+        mock_cache.get.return_value = None
+        request = APIRequestFactory().get("/")
+        request.user = object()
+
+        response = SupportedGranularitiesView().get(request)
+
+        assert response.data["source"] == "cache"
+        mock_cache.set.assert_called_once()

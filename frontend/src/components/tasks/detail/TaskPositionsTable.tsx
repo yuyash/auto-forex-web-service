@@ -46,17 +46,19 @@ import {
   buildCopyHandler,
   type CopyValueExtractors,
 } from '../../../utils/tableCopyUtils';
+import {
+  readRawStoredValue,
+  writeRawStoredValue,
+} from '../../../utils/persistentState';
 
 type ViewMode = 'all' | 'byDirection' | 'byStatus';
 
 const VIEW_MODE_STORAGE_KEY = 'positions_view_mode';
 
 function loadViewMode(): ViewMode {
-  try {
-    const v = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
-    if (v === 'all' || v === 'byDirection' || v === 'byStatus') return v;
-  } catch {
-    /* ignore */
+  const v = readRawStoredValue(VIEW_MODE_STORAGE_KEY);
+  if (v === 'all' || v === 'byDirection' || v === 'byStatus') {
+    return v;
   }
   return 'all';
 }
@@ -86,7 +88,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     (_: React.MouseEvent<HTMLElement>, v: ViewMode | null) => {
       if (v) {
         setViewMode(v);
-        localStorage.setItem(VIEW_MODE_STORAGE_KEY, v);
+        writeRawStoredValue(VIEW_MODE_STORAGE_KEY, v);
       }
     },
     []
@@ -132,7 +134,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     totalCount: closedLongTotal,
     isLoading: cl1,
     error: ce1,
-    refetch: rCL,
+    refresh: rCL,
   } = useTaskPositions({
     taskId,
     taskType,
@@ -148,7 +150,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     totalCount: closedShortTotal,
     isLoading: cl2,
     error: ce2,
-    refetch: rCS,
+    refresh: rCS,
   } = useTaskPositions({
     taskId,
     taskType,
@@ -164,7 +166,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     totalCount: openLongTotal,
     isLoading: cl3,
     error: ce3,
-    refetch: rOL,
+    refresh: rOL,
   } = useTaskPositions({
     taskId,
     taskType,
@@ -180,7 +182,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     totalCount: openShortTotal,
     isLoading: cl4,
     error: ce4,
-    refetch: rOS,
+    refresh: rOS,
   } = useTaskPositions({
     taskId,
     taskType,
@@ -198,7 +200,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     totalCount: longTotal,
     isLoading: ld1,
     error: le1,
-    refetch: rLong,
+    refresh: rLong,
   } = useTaskPositions({
     taskId,
     taskType,
@@ -213,7 +215,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     totalCount: shortTotal,
     isLoading: ld2,
     error: le2,
-    refetch: rShort,
+    refresh: rShort,
   } = useTaskPositions({
     taskId,
     taskType,
@@ -230,7 +232,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     totalCount: allTotal,
     isLoading: ad1,
     error: ae1,
-    refetch: rAll,
+    refresh: rAll,
   } = useTaskPositions({
     taskId,
     taskType,
@@ -258,19 +260,23 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     summary: {
       pnl: { realized: totalRealizedPnl, unrealized: totalUnrealizedPnl },
     },
-    refetch: refetchPnl,
+    refresh: refreshPnl,
   } = useTaskSummary(String(taskId), taskType, executionRunId);
 
   const prevRealTimeRef = React.useRef(enableRealTimeUpdates);
   React.useEffect(() => {
-    if (prevRealTimeRef.current && !enableRealTimeUpdates) refetchPnl();
+    if (prevRealTimeRef.current && !enableRealTimeUpdates) {
+      void refreshPnl();
+    }
     prevRealTimeRef.current = enableRealTimeUpdates;
-  }, [enableRealTimeUpdates, refetchPnl]);
+  }, [enableRealTimeUpdates, refreshPnl]);
   React.useEffect(() => {
     if (!enableRealTimeUpdates) return;
-    const interval = setInterval(refetchPnl, 10000);
+    const interval = setInterval(() => {
+      void refreshPnl();
+    }, 10000);
     return () => clearInterval(interval);
-  }, [enableRealTimeUpdates, refetchPnl]);
+  }, [enableRealTimeUpdates, refreshPnl]);
 
   const getRowId = useCallback((row: TaskPosition) => String(row.id), []);
 
@@ -712,9 +718,9 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   };
 
   const makeReload =
-    (key: string, refetch: () => Promise<void>) => async () => {
+    (key: string, refresh: () => Promise<unknown>) => async () => {
       setReloading((p) => ({ ...p, [key]: true }));
-      await refetch();
+      await refresh();
       setReloading((p) => ({ ...p, [key]: false }));
     };
 
@@ -878,7 +884,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     setLongPageFn: (p: number) => void,
     longRppVal: number,
     setLongRppFn: (r: number) => void,
-    longRefetch: () => Promise<void>,
+    longRefetch: () => Promise<unknown>,
     longKey: string,
     shortData: TaskPosition[],
     shortTotal: number,
@@ -887,7 +893,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     setShortPageFn: (p: number) => void,
     shortRppVal: number,
     setShortRppFn: (r: number) => void,
-    shortRefetch: () => Promise<void>,
+    shortRefetch: () => Promise<unknown>,
     shortKey: string,
     columns: (dir: 'long' | 'short') => Column<TaskPosition>[],
     pnlLabel: string,
@@ -1086,7 +1092,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     setPageFn: (p: number) => void,
     rppVal: number,
     setRppFn: (r: number) => void,
-    refetch: () => Promise<void>,
+    refresh: () => Promise<unknown>,
     key: string,
     columns: Column<TaskPosition>[],
     extractors: CopyValueExtractors<TaskPosition>,
@@ -1144,7 +1150,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             onCopy={makeCopy(data, selObj, columns, extractors, ids)}
             onSelectAll={() => selObj.selectAllOnPage(ids)}
             onReset={selObj.resetSelection}
-            onReload={makeReload(key, refetch)}
+            onReload={makeReload(key, refresh)}
             isReloading={!!reloading[key]}
           />
         </Box>

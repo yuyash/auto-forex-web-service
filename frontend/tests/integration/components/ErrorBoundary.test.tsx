@@ -7,6 +7,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ErrorBoundary from '../../../src/components/common/ErrorBoundary';
+import { reportFrontendError } from '../../../src/services/monitoring/errorReporting';
+
+vi.mock('../../../src/services/monitoring/errorReporting', () => ({
+  reportFrontendError: vi.fn(),
+}));
 
 function ThrowingChild({ shouldThrow }: { shouldThrow: boolean }) {
   if (shouldThrow) throw new Error('Test explosion');
@@ -75,6 +80,19 @@ describe('ErrorBoundary', () => {
     );
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError.mock.calls[0][0].message).toBe('Test explosion');
+  });
+
+  it('reports captured errors to the monitoring service', () => {
+    render(
+      <ErrorBoundary level="page">
+        <ThrowingChild shouldThrow={true} />
+      </ErrorBoundary>
+    );
+
+    expect(reportFrontendError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'Test explosion' }),
+      expect.objectContaining({ level: 'page' })
+    );
   });
 
   it('resets error state when Try Again is clicked', async () => {

@@ -7,7 +7,11 @@
 
 import { apiConfig } from './apiConfig';
 import { ApiError } from './apiClient';
-import { broadcastAuthLogout } from '../utils/authEvents';
+import {
+  broadcastAuthLogout,
+  shouldBroadcastAuthLogoutForHttp,
+} from '../utils/authEvents';
+import { logger } from '../utils/logger';
 
 /**
  * API Client Configuration
@@ -150,21 +154,26 @@ export function transformApiError(error: unknown): TransformedApiError {
         message = error.message || 'An unexpected error occurred.';
     }
 
-    // Handle 401 globally — clear credentials and let React Router
-    // redirect via AuthContext state change.  Avoid window.location.href
-    // to prevent race conditions with concurrent React state updates and
-    // a full page reload that depends on systemSettings fetch succeeding.
-    if (statusCode === 401) {
-      console.warn(`[API:AUTH] 401 Unauthorized - Clearing auth state`);
-      localStorage.removeItem('token');
-      localStorage.removeItem('refresh_token');
-      localStorage.removeItem('user');
-      clearAuthToken();
+    // Handle 401 globally by notifying the auth layer.
+    // Session cleanup stays in AuthContext to avoid split ownership.
+    if (
+      shouldBroadcastAuthLogoutForHttp({
+        source: 'http',
+        status: statusCode,
+        url: error.url,
+        context: 'api_client',
+      })
+    ) {
+      logger.warn('401 Unauthorized received from API client', {
+        statusCode,
+        url: error.url,
+      });
       broadcastAuthLogout({
         source: 'http',
         status: 401,
         message: 'Session expired',
         context: 'api_client',
+        url: error.url,
       });
     }
 

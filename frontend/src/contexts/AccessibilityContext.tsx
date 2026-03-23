@@ -1,5 +1,10 @@
 import React, { useState, useEffect, type ReactNode } from 'react';
 import { isHighContrastMode } from '../utils/contrastUtils';
+import {
+  readRawStoredValue,
+  removeStoredValue,
+  writeRawStoredValue,
+} from '../utils/persistentState';
 import { AccessibilityContext } from './AccessibilityContextDefinition';
 import type { ThemeMode } from './AccessibilityContextDefinition';
 
@@ -11,7 +16,7 @@ export const AccessibilityProvider: React.FC<AccessibilityProviderProps> = ({
   children,
 }) => {
   const [highContrastMode, setHighContrastMode] = useState(() => {
-    const stored = localStorage.getItem('highContrastMode');
+    const stored = readRawStoredValue('highContrastMode');
     if (stored !== null) {
       return stored === 'true';
     }
@@ -20,16 +25,16 @@ export const AccessibilityProvider: React.FC<AccessibilityProviderProps> = ({
 
   // Theme mode: 'light' | 'dark' | 'system'
   const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
-    const stored = localStorage.getItem('themeMode');
+    const stored = readRawStoredValue('themeMode');
     if (stored === 'light' || stored === 'dark' || stored === 'system') {
       return stored;
     }
     // Migrate from old boolean darkMode key
-    const oldDark = localStorage.getItem('darkMode');
+    const oldDark = readRawStoredValue('darkMode');
     if (oldDark !== null) {
-      localStorage.removeItem('darkMode');
+      removeStoredValue('darkMode');
       const mode = oldDark === 'true' ? 'dark' : 'light';
-      localStorage.setItem('themeMode', mode);
+      writeRawStoredValue('themeMode', mode);
       return mode;
     }
     return 'system';
@@ -60,7 +65,7 @@ export const AccessibilityProvider: React.FC<AccessibilityProviderProps> = ({
 
   const setThemeMode = (mode: ThemeMode) => {
     setThemeModeState(mode);
-    localStorage.setItem('themeMode', mode);
+    writeRawStoredValue('themeMode', mode);
   };
 
   const [reducedMotion, setReducedMotion] = useState(() => {
@@ -70,7 +75,7 @@ export const AccessibilityProvider: React.FC<AccessibilityProviderProps> = ({
 
   const [fontSize, setFontSize] = useState<'normal' | 'large' | 'extra-large'>(
     () => {
-      const stored = localStorage.getItem('fontSize');
+      const stored = readRawStoredValue('fontSize');
       return (stored as 'normal' | 'large' | 'extra-large') || 'normal';
     }
   );
@@ -82,7 +87,7 @@ export const AccessibilityProvider: React.FC<AccessibilityProviderProps> = ({
     const mediaQuery = window.matchMedia('(prefers-contrast: high)');
     const handleChange = (e: MediaQueryListEvent) => {
       // Only update if user hasn't manually set a preference
-      const stored = localStorage.getItem('highContrastMode');
+      const stored = readRawStoredValue('highContrastMode');
       if (stored === null) {
         setHighContrastMode(e.matches);
       }
@@ -122,14 +127,14 @@ export const AccessibilityProvider: React.FC<AccessibilityProviderProps> = ({
   const toggleHighContrastMode = () => {
     setHighContrastMode((prev) => {
       const newValue = !prev;
-      localStorage.setItem('highContrastMode', String(newValue));
+      writeRawStoredValue('highContrastMode', String(newValue));
       return newValue;
     });
   };
 
   const handleSetFontSize = (size: 'normal' | 'large' | 'extra-large') => {
     setFontSize(size);
-    localStorage.setItem('fontSize', size);
+    writeRawStoredValue('fontSize', size);
   };
 
   return (

@@ -30,6 +30,7 @@ from apps.trading.models.logs import TaskLog
 from apps.trading.models.metrics import Metrics
 from apps.trading.models.orders import Order
 from apps.trading.models.positions import Position
+from apps.trading.models.snapshots import TaskExecutionSnapshot
 from apps.trading.models.state import ExecutionState
 from apps.trading.models.trades import Trade
 from apps.trading.models.trading import (
@@ -61,6 +62,7 @@ __all__ = [
     "Trade",
     "Equity",
     "Metrics",
+    "TaskExecutionSnapshot",
     # Floor Strategy
     "Layer",
 ]

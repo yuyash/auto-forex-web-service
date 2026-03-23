@@ -144,25 +144,11 @@ export const InstrumentSelector: React.FC<InstrumentSelectorProps> = ({
         {filteredInstrument.length === 0 ? (
           <MenuItem disabled>No instrument found</MenuItem>
         ) : (
-          filteredInstrument.map((instrument) => {
-            // Only USD_JPY is enabled for now
-            const isEnabled = instrument === 'USD_JPY';
-            return (
-              <MenuItem
-                key={instrument}
-                value={instrument}
-                disabled={!isEnabled}
-                sx={{
-                  opacity: isEnabled ? 1 : 0.5,
-                }}
-              >
-                <ListItemText
-                  primary={instrument}
-                  secondary={!isEnabled ? 'Coming soon' : undefined}
-                />
-              </MenuItem>
-            );
-          })
+          filteredInstrument.map((instrument) => (
+            <MenuItem key={instrument} value={instrument}>
+              <ListItemText primary={instrument} />
+            </MenuItem>
+          ))
         )}
       </Select>
       {displayError && <FormHelperText>{displayError}</FormHelperText>}

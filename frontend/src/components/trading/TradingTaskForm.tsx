@@ -33,10 +33,7 @@ import {
   useCreateTradingTask,
   useUpdateTradingTask,
 } from '../../hooks/useTradingTaskMutations';
-import {
-  useConfiguration,
-  useConfigurations,
-} from '../../hooks/useConfigurations';
+import { useConfiguration } from '../../hooks/useConfigurations';
 import { useAccounts, useAccount } from '../../hooks/useAccounts';
 import { useTradingTasks } from '../../hooks/useTradingTasks';
 import { TaskStatus } from '../../types/common';
@@ -125,7 +122,7 @@ export default function TradingTaskForm({
   const watchedDescription = useWatch({ control, name: 'description' });
 
   // Fetch accounts
-  const { data: accountsData } = useAccounts({ page_size: 100 });
+  const { data: accountsData } = useAccounts();
   const accounts = (
     Array.isArray(accountsData)
       ? accountsData
@@ -163,9 +160,6 @@ export default function TradingTaskForm({
     }
   }, [selectedAccount?.hedging_enabled, setValue]);
 
-  // Fetch all configurations and strategies
-  const { data: configurationsData } = useConfigurations({ page_size: 100 });
-  const configurations = configurationsData?.results || [];
   const { strategies } = useStrategies();
 
   const { data: selectedConfig } = useConfiguration(
@@ -412,7 +406,6 @@ export default function TradingTaskForm({
                   control={control}
                   render={({ field }) => (
                     <ConfigurationSelector
-                      configurations={configurations}
                       value={field.value}
                       onChange={field.onChange}
                       error={errors.config_id?.message}

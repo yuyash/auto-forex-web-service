@@ -9,6 +9,13 @@ This module extends the base settings with test-specific configurations:
 - Simplified logging
 """
 
+import os
+
+os.environ.setdefault(
+    "OANDA_TOKEN_ENCRYPTION_KEY",
+    "0VnOF0t7mggT8F_hLto5Q4TbsS5k8M_3xK6HDhM2sLo=",
+)
+
 from config.settings import *  # noqa: F403
 
 # =============================================================================

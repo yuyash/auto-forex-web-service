@@ -48,6 +48,7 @@ interface UseTaskTrendChartParams {
   ensureMarkerRange: (range: TimeRange) => Promise<unknown>;
   setAutoFollow: React.Dispatch<React.SetStateAction<boolean>>;
   onTradeMarkerClick: (tradeId: string | null) => void;
+  onChartError?: (message: string | null) => void;
 }
 
 export function useTaskTrendChart({
@@ -72,6 +73,7 @@ export function useTaskTrendChart({
   ensureMarkerRange,
   setAutoFollow,
   onTradeMarkerClick,
+  onChartError,
 }: UseTaskTrendChartParams) {
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -224,12 +226,19 @@ export function useTaskTrendChart({
 
   const maybeFetchVisibleWindowRef = useRef(maybeFetchVisibleWindow);
   const onTradeMarkerClickRef = useRef(onTradeMarkerClick);
+  const onChartErrorRef = useRef(onChartError);
   useEffect(() => {
     maybeFetchVisibleWindowRef.current = maybeFetchVisibleWindow;
   }, [maybeFetchVisibleWindow]);
   useEffect(() => {
     onTradeMarkerClickRef.current = onTradeMarkerClick;
   }, [onTradeMarkerClick]);
+  useEffect(() => {
+    onChartErrorRef.current = onChartError;
+  }, [onChartError]);
+  const reportChartError = useCallback((message: string | null) => {
+    onChartErrorRef.current?.(message);
+  }, []);
 
   useEffect(() => {
     if (isLoading || !hasCandles) return;
@@ -445,8 +454,9 @@ export function useTaskTrendChart({
 
     try {
       seriesRef.current.setData(candles);
-    } catch (error) {
-      console.warn('Failed to set candle data:', error);
+      reportChartError(null);
+    } catch {
+      reportChartError('Failed to render candle data.');
       return;
     }
 
@@ -489,8 +499,9 @@ export function useTaskTrendChart({
             from: logicalCenter - half,
             to: logicalCenter + half,
           });
-        } catch (error) {
-          console.warn('Failed to set initial visible range on tick:', error);
+          reportChartError(null);
+        } catch {
+          reportChartError('Failed to position the chart at the current tick.');
         }
       } else if (!enableRealTimeUpdates && startTimeSec != null) {
         const totalSpanSeconds = AUTO_FOLLOW_CANDLES * granularitySeconds;
@@ -511,11 +522,9 @@ export function useTaskTrendChart({
             from: initialFrom as Time,
             to: (initialFrom + initialSpanSeconds) as Time,
           });
-        } catch (error) {
-          console.warn(
-            'Failed to set initial visible range at task start:',
-            error
-          );
+          reportChartError(null);
+        } catch {
+          reportChartError('Failed to position the chart at the task start.');
         }
       } else {
         try {
@@ -523,8 +532,9 @@ export function useTaskTrendChart({
             from: 0,
             to: AUTO_FOLLOW_CANDLES,
           });
-        } catch (error) {
-          console.warn('Failed to set initial visible range at start:', error);
+          reportChartError(null);
+        } catch {
+          reportChartError('Failed to set the initial chart range.');
         }
       }
 
@@ -546,8 +556,11 @@ export function useTaskTrendChart({
           from: savedLogicalRange.from + prependCount,
           to: savedLogicalRange.to + prependCount,
         });
-      } catch (error) {
-        console.warn('Failed to restore visible range after setData:', error);
+        reportChartError(null);
+      } catch {
+        reportChartError(
+          'Failed to restore the chart range after updating data.'
+        );
       }
     }
 
@@ -560,10 +573,10 @@ export function useTaskTrendChart({
           from: from as Time,
           to: to as Time,
         });
-      } catch (error) {
-        console.warn(
-          'Failed to restore visible range after granularity change:',
-          error
+        reportChartError(null);
+      } catch {
+        reportChartError(
+          'Failed to restore the chart range after changing granularity.'
         );
       }
     }
@@ -578,6 +591,7 @@ export function useTaskTrendChart({
     enableRealTimeUpdates,
     granularity,
     granularitySeconds,
+    reportChartError,
     startTimeSec,
     timezone,
     programmaticScrollRef,
@@ -631,11 +645,9 @@ export function useTaskTrendChart({
               from: logicalCenter - leftCandles,
               to: logicalCenter + rightCandles,
             });
-          } catch (error) {
-            console.warn(
-              'Failed to set visible range during auto-follow:',
-              error
-            );
+            reportChartError(null);
+          } catch {
+            reportChartError('Failed to keep the chart in auto-follow mode.');
           }
         }
       }
@@ -648,6 +660,7 @@ export function useTaskTrendChart({
     currentTick?.timestamp,
     enableRealTimeUpdates,
     programmaticScrollRef,
+    reportChartError,
     taskType,
   ]);
 

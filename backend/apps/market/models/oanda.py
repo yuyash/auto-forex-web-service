@@ -1,13 +1,14 @@
 """OANDA account model."""
 
-import base64
-import hashlib
+from collections.abc import Collection, Iterable
+from typing import Any
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
 from django.db import models
 
 from apps.market.enums import ApiType, Jurisdiction
+from apps.market.services.cache import invalidate_market_metadata_cache
 
 
 class OandaAccounts(models.Model):
@@ -104,25 +105,38 @@ class OandaAccounts(models.Model):
         ]
         ordering = ["-created_at"]
 
+    MARKET_METADATA_DEPENDENCY_FIELDS = frozenset(
+        {"account_id", "api_type", "api_token", "is_active", "is_default", "user"}
+    )
+
     def __str__(self) -> str:
         return f"{self.user.email} - {self.account_id} ({self.api_type})"
 
-    @staticmethod
-    def _get_cipher() -> Fernet:
-        key = hashlib.sha256(settings.SECRET_KEY.encode()).digest()
-        fernet_key = base64.urlsafe_b64encode(key)
-        return Fernet(fernet_key)
+    @classmethod
+    def _get_encryption_cipher(cls) -> Fernet:
+        return Fernet(settings.OANDA_TOKEN_ENCRYPTION_KEY.encode("utf-8"))
+
+    @classmethod
+    def _get_decryption_ciphers(cls) -> Iterable[Fernet]:
+        keys = [settings.OANDA_TOKEN_ENCRYPTION_KEY, *settings.OANDA_TOKEN_ENCRYPTION_FALLBACK_KEYS]
+        for key in keys:
+            yield Fernet(key.encode("utf-8"))
 
     def set_api_token(self, token: str) -> None:
-        cipher = self._get_cipher()
+        cipher = self._get_encryption_cipher()
         token = token.strip()
         encrypted_token = cipher.encrypt(token.encode())
         self.api_token = encrypted_token.decode()
 
     def get_api_token(self) -> str:
-        cipher = self._get_cipher()
-        decrypted_token = cipher.decrypt(self.api_token.encode())
-        return decrypted_token.decode().strip()
+        encrypted = self.api_token.encode()
+        for cipher in self._get_decryption_ciphers():
+            try:
+                decrypted_token = cipher.decrypt(encrypted)
+                return decrypted_token.decode().strip()
+            except InvalidToken:
+                continue
+        raise ValueError("Unable to decrypt OANDA API token with configured keys.")
 
     @property
     def api_hostname(self) -> str:
@@ -171,3 +185,35 @@ class OandaAccounts(models.Model):
         )
         self.is_default = True
         self.save(update_fields=["is_default", "updated_at"])
+
+    @classmethod
+    def _should_invalidate_market_metadata(
+        cls, update_fields: Collection[str] | None, is_create: bool
+    ) -> bool:
+        if is_create or update_fields is None:
+            return True
+        return bool(cls.MARKET_METADATA_DEPENDENCY_FIELDS.intersection(update_fields))
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        update_fields = kwargs.get("update_fields")
+        is_create = self._state.adding
+        previous_hostname: str | None = None
+
+        if self.pk and self._should_invalidate_market_metadata(update_fields, is_create):
+            previous = type(self).objects.filter(pk=self.pk).only("account_id", "api_type").first()
+            if previous is not None:
+                previous_hostname = previous.api_hostname
+
+        super().save(*args, **kwargs)
+
+        if self._should_invalidate_market_metadata(update_fields, is_create):
+            hostnames = {self.api_hostname}
+            if previous_hostname:
+                hostnames.add(previous_hostname)
+            invalidate_market_metadata_cache(hostnames)
+
+    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
+        hostname = self.api_hostname
+        result = super().delete(*args, **kwargs)
+        invalidate_market_metadata_cache({hostname})
+        return result

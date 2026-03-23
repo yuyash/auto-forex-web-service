@@ -193,7 +193,10 @@
     "dateRangeHelperText": "Backtesting requires historical data. Future dates are not allowed.",
     "checkingTickDataRange": "Checking tick data range...",
     "noTickDataFound": "No tick data found for {{instrument}} in the database.",
+    "tickDataRangeFetchFailed": "Failed to fetch tick data range.",
     "dataRange": "{{instrument}} data range:",
+    "startTimeBeforeMinData": "Start time is before the earliest data timestamp ({{timestamp}}).",
+    "endTimeAfterMaxData": "End time is after the latest data timestamp ({{timestamp}}).",
     "steps": {
       "configuration": "Configuration",
       "parameters": "Parameters",
@@ -202,6 +205,7 @@
   },
   "toast": {
     "startedSuccessfully": "Backtest task started successfully",
+    "pausedSuccessfully": "Backtest task paused successfully",
     "stoppedSuccessfully": "Backtest task stopped successfully",
     "resumedSuccessfully": "Backtest task resumed successfully",
     "restartedSuccessfully": "Backtest task restarted successfully",

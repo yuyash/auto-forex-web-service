@@ -49,7 +49,7 @@ export function ExecutionHistoryTable({
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [colConfigOpen, setColConfigOpen] = useState(false);
 
-  const { data, isLoading, refetch } = useTaskExecutions(
+  const { data, isLoading, refresh } = useTaskExecutions(
     taskId,
     taskType,
     { page: page + 1, page_size: rowsPerPage, include_metrics: true },
@@ -266,7 +266,7 @@ export function ExecutionHistoryTable({
         <Tooltip title={t('tables.executions.refresh')}>
           <IconButton
             size="small"
-            onClick={() => refetch()}
+            onClick={() => void refresh()}
             aria-label={t('tables.executions.refresh')}
           >
             <RefreshIcon fontSize="small" />

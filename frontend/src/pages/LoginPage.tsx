@@ -13,23 +13,13 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { useLogin } from '../hooks/useAuthMutations';
+import { ApiError } from '../api/apiClient';
+import { logger } from '../utils/logger';
 
 interface LoginFormData {
   email: string;
   password: string;
-}
-
-interface LoginResponse {
-  token: string;
-  refresh_token: string;
-  user: {
-    id: number;
-    email: string;
-    username: string;
-    is_staff: boolean;
-    timezone: string;
-    language: string;
-  };
 }
 
 interface ErrorResponse {
@@ -44,6 +34,7 @@ const LoginPage = () => {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
   const { login, systemSettings, systemSettingsLoading } = useAuth();
+  const loginMutation = useLogin();
 
   const [formData, setFormData] = useState<LoginFormData>({
     email: '',
@@ -95,33 +86,22 @@ const LoginPage = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/accounts/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
+      const loginData = await loginMutation.mutate(formData);
 
-      // Keep a clone when available so we can fall back to text if JSON parsing fails.
-      // In unit tests, fetch may be mocked with a plain object lacking clone().
-      const responseForText =
-        typeof (response as Response).clone === 'function'
-          ? (response as Response).clone()
-          : response;
+      if (!loginData.token || !loginData.user) {
+        setErrors({
+          general: t('auth.loginFailedInvalidResponse'),
+        });
+        return;
+      }
 
-      const data = await response
-        .json()
-        .catch(() => undefined as LoginResponse | ErrorResponse | undefined);
+      login(loginData.token, loginData.user);
 
-      const responseText =
-        data === undefined
-          ? await responseForText.text().catch(() => undefined)
-          : undefined;
-
-      if (!response.ok) {
-        const errorData = (data ?? {}) as ErrorResponse;
+      // Redirect to default authenticated landing page
+      navigate('/dashboard');
+    } catch (error) {
+      if (error instanceof ApiError) {
+        const errorData = (error.body ?? {}) as ErrorResponse;
         const emailError = errorData.email?.[0];
         const passwordError = errorData.password?.[0];
 
@@ -129,15 +109,8 @@ const LoginPage = () => {
           errorData.error || errorData.detail || errorData.message || '';
 
         if (!general) {
-          const trimmed = (responseText ?? '').trim();
-          if (trimmed && !trimmed.includes('<')) {
-            general = trimmed;
-          }
-        }
-
-        if (!general) {
           const statusText =
-            `${response.status || ''} ${response.statusText || ''}`.trim();
+            `${error.status || ''} ${error.statusText || ''}`.trim();
           general = statusText
             ? t('auth.loginFailedWithStatus', { status: statusText })
             : t('auth.loginFailed');
@@ -145,11 +118,11 @@ const LoginPage = () => {
 
         // Prefer localized/friendlier messages for known login failures.
         // Keep backend-provided message when it contains specific details.
-        if (response.status === 503) {
+        if (error.status === 503) {
           general = t('auth.loginDisabled');
-        } else if (response.status === 429) {
+        } else if (error.status === 429) {
           general = general || t('auth.loginBlocked');
-        } else if (response.status === 403) {
+        } else if (error.status === 403) {
           const normalized = general.toLowerCase();
           if (
             normalized.includes('not authorized') ||
@@ -166,39 +139,9 @@ const LoginPage = () => {
         });
         return;
       }
-
-      if (!data) {
-        const trimmed = (responseText ?? '').trim();
-        const statusText =
-          `${response.status || ''} ${response.statusText || ''}`.trim();
-
-        setErrors({
-          general:
-            trimmed && !trimmed.includes('<')
-              ? `${t('auth.loginFailedInvalidResponse')}: ${trimmed}`
-              : statusText
-                ? t('auth.loginFailedWithStatus', { status: statusText })
-                : t('auth.loginFailed'),
-        });
-        return;
-      }
-
-      // Success - store token and redirect
-      const loginData = data as LoginResponse;
-
-      if (!loginData.token || !loginData.user) {
-        setErrors({
-          general: t('auth.loginFailedInvalidResponse'),
-        });
-        return;
-      }
-
-      login(loginData.token, loginData.refresh_token, loginData.user);
-
-      // Redirect to default authenticated landing page
-      navigate('/dashboard');
-    } catch (error) {
-      console.error('Login error:', error);
+      logger.error('Login error', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       setErrors({
         general: t('errors.unexpectedError'),
       });

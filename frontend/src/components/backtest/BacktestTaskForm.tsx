@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -21,6 +21,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
 import { DateRangePicker } from '../tasks/forms/DateRangePicker';
 import { BalanceInput } from '../tasks/forms/BalanceInput';
+import { InstrumentSelector } from '../tasks/forms/InstrumentSelector';
 import {
   backtestTaskSchema,
   type BacktestTaskSchemaOutput,
@@ -31,19 +32,16 @@ import {
   useCreateBacktestTask,
   useUpdateBacktestTask,
 } from '../../hooks/useBacktestTaskMutations';
-import {
-  useConfiguration,
-  useConfigurations,
-} from '../../hooks/useConfigurations';
-import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
+import { useConfiguration } from '../../hooks/useConfigurations';
 import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
 import {
-  fetchTickDataRange,
-  type TickDataRange,
-} from '../../services/api/market';
+  useSupportedInstruments,
+  useTickDataRange,
+} from '../../hooks/useMarketConfig';
+import { useToast } from '../common/useToast';
 
 const DEFAULT_DATE_RANGE_DAYS = 30;
 
@@ -219,6 +217,7 @@ export default function BacktestTaskForm({
 }: BacktestTaskFormProps) {
   const { t } = useTranslation(['backtest', 'common']);
   const navigate = useNavigate();
+  const { showError } = useToast();
   const steps = [
     t('backtest:form.steps.configuration'),
     t('backtest:form.steps.parameters'),
@@ -264,11 +263,6 @@ export default function BacktestTaskForm({
   const createTask = useCreateBacktestTask();
   const updateTask = useUpdateBacktestTask();
 
-  // Tick data availability state
-  const [dataRange, setDataRange] = useState<TickDataRange | null>(null);
-  const [dataRangeError, setDataRangeError] = useState<string | null>(null);
-  const [dataRangeLoading, setDataRangeLoading] = useState(false);
-
   const {
     control,
     handleSubmit,
@@ -287,6 +281,7 @@ export default function BacktestTaskForm({
     defaultValues: resolvedDefaultValues,
   });
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const selectedConfigId = watch('config_id');
 
   // Sync saved formData back into React Hook Form when changing steps
@@ -305,48 +300,33 @@ export default function BacktestTaskForm({
   }, [formData, setValue]); // Removed activeStep dependency so it runs on initial render too
 
   // Fetch all configurations and strategies
-  const { data: configurationsData } = useConfigurations({ page_size: 100 });
-  const configurations = configurationsData?.results || [];
   const { strategies } = useStrategies();
+  const {
+    instruments: availableInstruments,
+    usingFallback: usingInstrumentFallback,
+  } = useSupportedInstruments();
 
   // config_id is now a UUID string
   const configIdString = selectedConfigId || '';
 
   const { data: selectedConfig } = useConfiguration(configIdString);
 
-  // Fetch tick data range when instrument changes
-  const checkDataRange = useCallback(async (instrument: string) => {
-    if (!instrument) {
-      setDataRange(null);
-      setDataRangeError(null);
-      return;
-    }
-    setDataRangeLoading(true);
-    setDataRangeError(null);
-    try {
-      const range = await fetchTickDataRange(instrument);
-      setDataRange(range);
-    } catch {
-      setDataRangeError('Failed to fetch tick data range');
-      setDataRange(null);
-    } finally {
-      setDataRangeLoading(false);
-    }
-  }, []);
-
   const watchedInstrument = watch('instrument');
   const watchedStartTime = watch('start_time');
   const watchedEndTime = watch('end_time');
-
-  useEffect(() => {
-    checkDataRange(watchedInstrument);
-  }, [watchedInstrument, checkDataRange]);
+  const {
+    dataRange,
+    error: dataRangeError,
+    isLoading: dataRangeLoading,
+  } = useTickDataRange(watchedInstrument);
 
   // Compute data coverage warning
   const dataCoverageWarning = useMemo<string | null>(() => {
     if (!dataRange || !dataRange.has_data) {
       if (dataRange && !dataRange.has_data && watchedInstrument) {
-        return `No tick data found for ${watchedInstrument} in the database.`;
+        return t('backtest:form.noTickDataFound', {
+          instrument: watchedInstrument,
+        });
       }
       return null;
     }
@@ -356,7 +336,9 @@ export default function BacktestTaskForm({
       const minTs = new Date(dataRange.min_timestamp);
       if (start < minTs) {
         warnings.push(
-          `Start time is before the earliest data timestamp (${minTs.toLocaleString()}).`
+          t('backtest:form.startTimeBeforeMinData', {
+            timestamp: minTs.toLocaleString(),
+          })
         );
       }
     }
@@ -365,12 +347,14 @@ export default function BacktestTaskForm({
       const maxTs = new Date(dataRange.max_timestamp);
       if (end > maxTs) {
         warnings.push(
-          `End time is after the latest data timestamp (${maxTs.toLocaleString()}).`
+          t('backtest:form.endTimeAfterMaxData', {
+            timestamp: maxTs.toLocaleString(),
+          })
         );
       }
     }
     return warnings.length > 0 ? warnings.join(' ') : null;
-  }, [dataRange, watchedInstrument, watchedStartTime, watchedEndTime]);
+  }, [dataRange, t, watchedInstrument, watchedStartTime, watchedEndTime]);
 
   const handleNext = async () => {
     // Save current form values to state BEFORE validation
@@ -453,9 +437,6 @@ export default function BacktestTaskForm({
         await createTask.mutate(apiData);
       }
 
-      // Invalidate cache so the task list refreshes
-      invalidateBacktestTasksCache();
-
       navigate('/backtest-tasks');
     } catch (error: unknown) {
       const err = error as {
@@ -493,7 +474,7 @@ export default function BacktestTaskForm({
         errorMessage = err.message;
       }
 
-      alert(errorMessage);
+      showError(errorMessage, 8000);
     }
   };
 
@@ -516,7 +497,6 @@ export default function BacktestTaskForm({
                   control={control}
                   render={({ field }) => (
                     <ConfigurationSelector
-                      configurations={configurations}
                       value={field.value as string | undefined}
                       onChange={field.onChange}
                       error={errors.config_id?.message}
@@ -632,13 +612,17 @@ export default function BacktestTaskForm({
               )}
               {dataRangeError && (
                 <Grid size={{ xs: 12 }}>
-                  <Alert severity="warning">{dataRangeError}</Alert>
+                  <Alert severity="warning">
+                    {t('backtest:form.tickDataRangeFetchFailed')}
+                  </Alert>
                 </Grid>
               )}
               {dataRange && dataRange.has_data && (
                 <Grid size={{ xs: 12 }}>
                   <Alert severity="info">
-                    {dataRange.instrument} data range:{' '}
+                    {t('backtest:form.dataRange', {
+                      instrument: dataRange.instrument,
+                    })}{' '}
                     {new Date(dataRange.min_timestamp!).toLocaleString()} –{' '}
                     {new Date(dataRange.max_timestamp!).toLocaleString()}
                   </Alert>
@@ -647,6 +631,13 @@ export default function BacktestTaskForm({
               {dataCoverageWarning && (
                 <Grid size={{ xs: 12 }}>
                   <Alert severity="warning">{dataCoverageWarning}</Alert>
+                </Grid>
+              )}
+              {usingInstrumentFallback && (
+                <Grid size={{ xs: 12 }}>
+                  <Alert severity="warning">
+                    {t('common:tables.trend.instrumentFallbackWarning')}
+                  </Alert>
                 </Grid>
               )}
 
@@ -690,16 +681,17 @@ export default function BacktestTaskForm({
                   name="instrument"
                   control={control}
                   render={({ field }) => (
-                    <TextField
-                      {...field}
-                      fullWidth
+                    <InstrumentSelector
+                      value={field.value}
+                      onChange={field.onChange}
+                      availableInstrument={availableInstruments}
                       label={t('common:labels.instrument')}
-                      placeholder={t('backtest:form.instrumentPlaceholder')}
-                      error={!!errors.instrument}
+                      error={errors.instrument?.message}
                       helperText={
                         errors.instrument?.message ||
                         t('backtest:form.instrumentHelperText')
                       }
+                      required
                     />
                   )}
                 />

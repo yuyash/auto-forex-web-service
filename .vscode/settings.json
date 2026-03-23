@@ -84,7 +84,10 @@
     "wget": true,
     "xargs": true
   },
-  "editor.rulers": [100, 120],
+  "editor.rulers": [
+    100,
+    120
+  ],
   "editor.tabSize": 4,
   "editor.insertSpaces": true,
   "editor.formatOnSave": true,
@@ -92,13 +95,17 @@
   "editor.wordWrap": "on",
   "explorer.excludeGitIgnore": true,
   "ruff.configuration": "backend/pyproject.toml",
-  "ruff.interpreter": ["backend/.venv/bin/python"],
+  "ruff.interpreter": [
+    "backend/.venv/bin/python"
+  ],
   "python.createEnvironment.contentButton": "show",
   "python.defaultInterpreterPath": "backend/.venv/bin/python",
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
   "python.testing.pytestPath": "backend/.venv/bin/pytest",
-  "python.testing.pytestArgs": ["tests"],
+  "python.testing.pytestArgs": [
+    "tests"
+  ],
   "python.testing.cwd": "backend",
   "python.terminal.activateEnvironment": false,
   "python.terminal.activateEnvInCurrentTerminal": false,

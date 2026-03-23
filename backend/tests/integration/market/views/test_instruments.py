@@ -56,6 +56,33 @@ class TestSupportedInstrumentsView:
         assert response.data["source"] == "fallback"
         assert "EUR_USD" in response.data["instruments"]
 
+    @patch("apps.market.views.instruments.v20.Context")
+    def test_get_instruments_does_not_use_other_users_account(
+        self, mock_context: Mock, user: Any, django_user_model: Any
+    ) -> None:
+        """Requests should not query OANDA through another user's account."""
+        other_user = django_user_model.objects.create_user(
+            email="other@example.com",
+            username="other",
+            password="password123",
+        )
+        OandaAccounts.objects.create(
+            user=other_user,
+            account_id="101-001-9999999-001",
+            api_type=ApiType.PRACTICE,
+            is_active=True,
+            is_default=True,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.get("/api/market/instruments/")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["source"] == "fallback"
+        mock_context.assert_not_called()
+
     def test_get_instruments_unauthenticated(self) -> None:
         """Test that unauthenticated users cannot access instruments."""
         client = APIClient()

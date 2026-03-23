@@ -9,8 +9,7 @@ from __future__ import annotations
 import json
 
 from django.db.models import Q
-from django.utils.dateparse import parse_datetime
-from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
 from rest_framework.decorators import action
 from rest_framework.request import Request
@@ -27,51 +26,38 @@ from apps.trading.serializers.events import (
 from apps.trading.serializers.execution import TaskExecutionSerializer
 from apps.trading.serializers.summary import TaskSummarySerializer
 from apps.trading.serializers.task import TaskLogSerializer
-from apps.trading.views.pagination import TaskSubResourcePagination
-
-
-def _parse_since(request: Request):
-    """Return a datetime from the ``since`` query-param, or *None*."""
-    raw = request.query_params.get("since")
-    if raw:
-        return parse_datetime(raw)
-    return None
-
-
-def _parse_datetime_param(request: Request, key: str):
-    """Return a datetime from an arbitrary query param, or *None*."""
-    raw = request.query_params.get(key)
-    if raw:
-        return parse_datetime(raw)
-    return None
-
-
-def _parse_execution_id(request: Request):
-    """Return execution_id (UUID) from query param when valid."""
-    raw = request.query_params.get("execution_id")
-    if raw is None:
-        return None
-    try:
-        from uuid import UUID
-
-        return UUID(raw)
-    except (TypeError, ValueError):
-        return None
-
-
-def _parse_page_params(request: Request) -> tuple[int, int]:
-    """Return ``(page, page_size)`` from query params with defaults."""
-    page = 1
-    page_size = 1000
-    try:
-        page = max(1, int(request.query_params.get("page", 1)))
-    except (ValueError, TypeError):
-        pass
-    try:
-        page_size = max(1, min(int(request.query_params.get("page_size", 1000)), 5000))
-    except (ValueError, TypeError):
-        pass
-    return page, page_size
+from apps.trading.serializers.trend_replay import TaskTrendReplaySerializer
+from apps.trading.views.query_params import (
+    ExecutionDetailQueryParams,
+    ExecutionDetailQueryParamsSchemaSerializer,
+    ExecutionsQueryParams,
+    ExecutionsQueryParamsSchemaSerializer,
+    EventsQueryParams,
+    EventsQueryParamsSchemaSerializer,
+    LogComponentsQueryParams,
+    LogComponentsQueryParamsSchemaSerializer,
+    LogsQueryParams,
+    LogsQueryParamsSchemaSerializer,
+    MetricsQueryParams,
+    MetricsQueryParamsSchemaSerializer,
+    OrdersQueryParams,
+    OrdersQueryParamsSchemaSerializer,
+    PositionQuery,
+    PositionsQueryParamsSchemaSerializer,
+    StrategyEventsQueryParams,
+    StrategyEventsQueryParamsSchemaSerializer,
+    SummaryQueryParams,
+    SummaryQueryParamsSchemaSerializer,
+    TradesQueryParams,
+    TradesQueryParamsSchemaSerializer,
+    TrendReplayQueryParams,
+    TrendReplayQueryParamsSchemaSerializer,
+)
+from apps.trading.views.pagination import (
+    ActivityPagination,
+    MetricsPagination,
+    TradePositionPagination,
+)
 
 
 def _ensure_dict(value) -> dict:
@@ -125,21 +111,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
-            OpenApiParameter("until", str, description="RFC3339 upper-bound timestamp (exclusive)"),
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-            OpenApiParameter("page", int, description="Page number (1-based)"),
-            OpenApiParameter(
-                "page_size", int, description="Results per page (default 1000, max 5000)"
-            ),
-            OpenApiParameter(
-                "interval",
-                int,
-                description="Aggregation interval in minutes (default 1). "
-                "When > 1, returns one point per N-minute window.",
-            ),
-        ],
+        parameters=[MetricsQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
                 "TaskMetricsResponse",
@@ -166,34 +138,26 @@ class TaskSubResourceMixin:
         from apps.trading.models.metrics import Metrics
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
+        query = MetricsQueryParams.from_request(
+            request,
+            default_execution_id=task.execution_id,
+            default_page_size=MetricsPagination.page_size,
+            max_page_size=MetricsPagination.max_page_size,
+        )
 
         queryset = Metrics.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
-            execution_id=execution_id,
+            execution_id=query.execution.execution_id,
         ).order_by("timestamp")
 
-        since = _parse_since(request)
-        if since:
-            queryset = queryset.filter(timestamp__gt=since)
+        if query.execution.since:
+            queryset = queryset.filter(timestamp__gt=query.execution.since)
 
-        until_raw = request.query_params.get("until")
-        if until_raw:
-            until_dt = parse_datetime(until_raw)
-            if until_dt:
-                queryset = queryset.filter(timestamp__lt=until_dt)
+        if query.until:
+            queryset = queryset.filter(timestamp__lt=query.until)
 
-        # Aggregation interval (re-sample to N-minute windows)
-        interval = 1
-        interval_raw = request.query_params.get("interval")
-        if interval_raw:
-            try:
-                interval = max(1, min(int(interval_raw), 1440))
-            except (ValueError, TypeError):
-                pass
+        interval = query.interval
 
         if interval > 1:
             from django.db import connection
@@ -209,7 +173,10 @@ class TaskSubResourceMixin:
 
                 aggregated = [bucketed[key] for key in sorted(bucketed)]
                 total_count = len(aggregated)
-                page, page_size = _parse_page_params(request)
+                page, page_size = (
+                    query.execution.pagination.page,
+                    query.execution.pagination.page_size,
+                )
                 start = (page - 1) * page_size
                 end = start + page_size
                 page_rows = aggregated[start:end]
@@ -225,20 +192,18 @@ class TaskSubResourceMixin:
             base_where = "task_type = %s AND task_id = %s"
             params: list = [self.task_type_label, str(task.pk)]
 
-            if execution_id is None:
+            if query.execution.execution_id is None:
                 base_where += " AND execution_id IS NULL"
             else:
                 base_where += " AND execution_id = %s"
-                params.append(str(execution_id))
+                params.append(str(query.execution.execution_id))
 
-            if since:
+            if query.execution.since:
                 base_where += " AND timestamp > %s"
-                params.append(since)
-            if until_raw:
-                until_dt2 = parse_datetime(until_raw)
-                if until_dt2:
-                    base_where += " AND timestamp < %s"
-                    params.append(until_dt2)
+                params.append(query.execution.since)
+            if query.until:
+                base_where += " AND timestamp < %s"
+                params.append(query.until)
 
             interval_seconds = interval * 60
             params.append(interval_seconds)
@@ -264,7 +229,10 @@ class TaskSubResourceMixin:
 
             total_count = len(rows)
             # Manual pagination over raw SQL results
-            page, page_size = _parse_page_params(request)
+            page, page_size = (
+                query.execution.pagination.page,
+                query.execution.pagination.page_size,
+            )
             start = (page - 1) * page_size
             end = start + page_size
             page_rows = rows[start:end]
@@ -274,7 +242,10 @@ class TaskSubResourceMixin:
 
         # Default: interval=1, use ORM with cursor pagination
         total_count = queryset.count()
-        page, page_size = _parse_page_params(request)
+        page, page_size = (
+            query.execution.pagination.page,
+            query.execution.pagination.page_size,
+        )
         start = (page - 1) * page_size
         rows = queryset.values_list("timestamp", "metrics")[start : start + page_size]
 
@@ -283,30 +254,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
-            OpenApiParameter(
-                "level", str, description="Log level filter (comma-separated for multiple)"
-            ),
-            OpenApiParameter(
-                "component",
-                str,
-                description="Logger/component name filter (comma-separated for multiple)",
-            ),
-            OpenApiParameter(
-                "timestamp_from",
-                str,
-                description="Filter logs from this RFC3339 timestamp (inclusive)",
-            ),
-            OpenApiParameter(
-                "timestamp_to",
-                str,
-                description="Filter logs until this RFC3339 timestamp (inclusive)",
-            ),
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-            OpenApiParameter("page", int),
-            OpenApiParameter("page_size", int),
-        ],
+        parameters=[LogsQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
                 "TaskLogPaginatedResponse",
@@ -323,59 +271,48 @@ class TaskSubResourceMixin:
     @action(detail=True, methods=["get"])
     def logs(self, request: Request, pk: int | None = None) -> Response:
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
-        level_param = request.query_params.get("level")
-        level_values = (
-            [v.strip().upper() for v in level_param.split(",") if v.strip()] if level_param else []
+        query = LogsQueryParams.from_request(
+            request,
+            default_execution_id=task.execution_id,
+            default_page_size=ActivityPagination.page_size,
+            max_page_size=ActivityPagination.max_page_size,
         )
-        component_param = request.query_params.get("component")
-        component_values = (
-            [v.strip() for v in component_param.split(",") if v.strip()] if component_param else []
-        )
-        position_id_param = request.query_params.get("position_id")
-        timestamp_from = request.query_params.get("timestamp_from")
-        timestamp_to = request.query_params.get("timestamp_to")
         queryset = TaskLog.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
-            execution_id=execution_id,
+            execution_id=query.execution.execution_id,
         )
-        if level_values:
-            resolved = [LogLevel[v] for v in level_values if v in LogLevel.__members__]
+        if query.levels:
+            resolved = [LogLevel[v] for v in query.levels if v in LogLevel.__members__]
             if resolved:
                 queryset = queryset.filter(level__in=resolved)
-        if component_values:
-            queryset = queryset.filter(component__in=component_values)
-        if position_id_param:
+        if query.components:
+            queryset = queryset.filter(component__in=query.components)
+        if query.position_id:
             # Support prefix match for truncated UUIDs (e.g. first 8 chars).
             # Extract the nested JSON text value: details->'context'->>'position_id'
             from django.db.models.fields.json import KeyTextTransform
 
             queryset = queryset.annotate(
                 _pos_id=KeyTextTransform("position_id", KeyTextTransform("context", "details"))
-            ).filter(_pos_id__startswith=position_id_param)
-        if timestamp_from:
-            queryset = queryset.filter(timestamp__gte=timestamp_from)
-        if timestamp_to:
-            queryset = queryset.filter(timestamp__lte=timestamp_to)
+            ).filter(_pos_id__startswith=query.position_id)
+        if query.timestamp_range.start:
+            queryset = queryset.filter(timestamp__gte=query.timestamp_range.start)
+        if query.timestamp_range.end:
+            queryset = queryset.filter(timestamp__lte=query.timestamp_range.end)
 
-        since = _parse_since(request)
-        if since:
-            queryset = queryset.filter(timestamp__gt=since)
+        if query.execution.since:
+            queryset = queryset.filter(timestamp__gt=query.execution.since)
 
         queryset = queryset.order_by("-timestamp")
-        paginator = TaskSubResourcePagination()
+        paginator = ActivityPagination()
         page = paginator.paginate_queryset(queryset, request)
         serializer = TaskLogSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-        ],
+        parameters=[LogComponentsQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
                 "TaskLogComponentsResponse",
@@ -388,14 +325,15 @@ class TaskSubResourceMixin:
     def log_components(self, request: Request, pk: int | None = None) -> Response:
         """Return distinct component names for the task's logs."""
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
+        query = LogComponentsQueryParams.from_request(
+            request,
+            default_execution_id=task.execution_id,
+        )
         components = list(
             TaskLog.objects.filter(
                 task_type=self.task_type_label,
                 task_id=task.pk,
-                execution_id=execution_id,
+                execution_id=query.execution_id,
             )
             .values_list("component", flat=True)
             .distinct()
@@ -405,25 +343,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
-            OpenApiParameter("event_type", str, description="Event type filter"),
-            OpenApiParameter("severity", str, description="Severity filter"),
-            OpenApiParameter("scope", str, description="Event scope: all|trading|task"),
-            OpenApiParameter(
-                "created_from",
-                str,
-                description="Filter events created at or after this RFC3339 timestamp",
-            ),
-            OpenApiParameter(
-                "created_to",
-                str,
-                description="Filter events created at or before this RFC3339 timestamp",
-            ),
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-            OpenApiParameter("page", int),
-            OpenApiParameter("page_size", int),
-        ],
+        parameters=[EventsQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
                 "TaskEventPaginatedResponse",
@@ -442,24 +362,22 @@ class TaskSubResourceMixin:
         from apps.trading.models import TradingEvent
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
-        event_type = request.query_params.get("event_type")
-        severity = request.query_params.get("severity")
-        scope = (request.query_params.get("scope") or "all").strip().lower()
+        query = EventsQueryParams.from_request(
+            request,
+            default_execution_id=task.execution_id,
+        )
         queryset = TradingEvent.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
-            execution_id=execution_id,
+            execution_id=query.execution.execution_id,
         ).order_by("-created_at")
-        if event_type:
-            queryset = queryset.filter(event_type=event_type)
-        if severity:
-            queryset = queryset.filter(severity=severity)
-        if scope in {"trading", "task"}:
+        if query.event_type:
+            queryset = queryset.filter(event_type=query.event_type)
+        if query.severity:
+            queryset = queryset.filter(severity=query.severity)
+        if query.scope in {"trading", "task"}:
             task_scoped_event_types = EventType.task_scoped_values()
-            if scope == "task":
+            if query.scope == "task":
                 queryset = queryset.filter(
                     Q(details__kind__startswith="task_") | Q(event_type__in=task_scoped_event_types)
                 )
@@ -468,29 +386,21 @@ class TaskSubResourceMixin:
                     Q(details__kind__isnull=True) | ~Q(details__kind__startswith="task_")
                 ).exclude(event_type__in=task_scoped_event_types)
 
-        since = _parse_since(request)
-        if since:
-            queryset = queryset.filter(created_at__gt=since)
-        created_from = _parse_datetime_param(request, "created_from")
-        if created_from:
-            queryset = queryset.filter(created_at__gte=created_from)
-        created_to = _parse_datetime_param(request, "created_to")
-        if created_to:
-            queryset = queryset.filter(created_at__lte=created_to)
+        if query.execution.since:
+            queryset = queryset.filter(created_at__gt=query.execution.since)
+        if query.created_range.start:
+            queryset = queryset.filter(created_at__gte=query.created_range.start)
+        if query.created_range.end:
+            queryset = queryset.filter(created_at__lte=query.created_range.end)
 
-        paginator = TaskSubResourcePagination()
+        paginator = ActivityPagination()
         page = paginator.paginate_queryset(queryset, request)
         serializer = TradingEventSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-            OpenApiParameter("root_entry_id", int, description="Optional group filter"),
-            OpenApiParameter("page", int),
-            OpenApiParameter("page_size", int),
-        ],
+        parameters=[StrategyEventsQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
                 "TaskStrategyVisualizationResponse",
@@ -514,39 +424,21 @@ class TaskSubResourceMixin:
         )
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
-        root_entry_id = request.query_params.get("root_entry_id")
+        query = StrategyEventsQueryParams.from_request(
+            request,
+            default_execution_id=task.execution_id,
+        )
         response = StrategyVisualizationService().build(
             task=task,
             task_type=self.task_type_label,
-            execution_id=execution_id,
-            root_entry_id=int(root_entry_id) if root_entry_id else None,
+            execution_id=query.execution_id,
+            root_entry_id=query.root_entry_id,
         )
         return Response(response)
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
-            OpenApiParameter(
-                "direction", str, description="Direction filter (buy/sell/long/short)"
-            ),
-            OpenApiParameter(
-                "timestamp_from",
-                str,
-                description="Filter trades executed at or after this RFC3339 timestamp",
-            ),
-            OpenApiParameter(
-                "timestamp_to",
-                str,
-                description="Filter trades executed at or before this RFC3339 timestamp",
-            ),
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-            OpenApiParameter("page", int),
-            OpenApiParameter("page_size", int),
-        ],
+        parameters=[TradesQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
                 "TaskTradePaginatedResponse",
@@ -565,32 +457,29 @@ class TaskSubResourceMixin:
         from apps.trading.models.trades import Trade
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
-        direction = (request.query_params.get("direction") or "").lower()
+        query = TradesQueryParams.from_request(
+            request,
+            default_execution_id=task.execution_id,
+        )
         queryset = Trade.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
-            execution_id=execution_id,
+            execution_id=query.execution.execution_id,
         ).order_by("timestamp")
-        if direction:
-            if direction == "buy":
+        if query.direction:
+            if query.direction == "buy":
                 queryset = queryset.filter(direction="long")
-            elif direction == "sell":
+            elif query.direction == "sell":
                 queryset = queryset.filter(direction="short")
             else:
-                queryset = queryset.filter(direction=direction)
+                queryset = queryset.filter(direction=query.direction)
 
-        since = _parse_since(request)
-        if since:
-            queryset = queryset.filter(updated_at__gt=since)
-        timestamp_from = _parse_datetime_param(request, "timestamp_from")
-        if timestamp_from:
-            queryset = queryset.filter(timestamp__gte=timestamp_from)
-        timestamp_to = _parse_datetime_param(request, "timestamp_to")
-        if timestamp_to:
-            queryset = queryset.filter(timestamp__lte=timestamp_to)
+        if query.execution.since:
+            queryset = queryset.filter(updated_at__gt=query.execution.since)
+        if query.timestamp_range.start:
+            queryset = queryset.filter(timestamp__gte=query.timestamp_range.start)
+        if query.timestamp_range.end:
+            queryset = queryset.filter(timestamp__lte=query.timestamp_range.end)
 
         trades_qs = queryset.values(
             "id",
@@ -617,23 +506,14 @@ class TaskSubResourceMixin:
                     "buy" if side == "long" else "sell" if side == "short" else side
                 )
             normalized.append(trade)
-        paginator = TaskSubResourcePagination()
+        paginator = TradePositionPagination()
         page = paginator.paginate_queryset(normalized, request)
         serializer = TradeSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
-            OpenApiParameter(
-                "position_status", str, description="Position status filter (open/closed)"
-            ),
-            OpenApiParameter("direction", str, description="Direction filter"),
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-            OpenApiParameter("page", int),
-            OpenApiParameter("page_size", int),
-        ],
+        parameters=[PositionsQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
                 "TaskPositionPaginatedResponse",
@@ -652,52 +532,95 @@ class TaskSubResourceMixin:
         from apps.trading.models.positions import Position
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
-        queryset = (
-            Position.objects.filter(
-                task_type=self.task_type_label,
-                task_id=task.pk,
-                execution_id=execution_id,
-            )
-            .prefetch_related("trades")
-            .order_by("-entry_time")
+        query = PositionQuery.from_request(
+            request,
+            default_execution_id=task.execution_id,
+            default_page_size=TradePositionPagination.page_size,
+            max_page_size=TradePositionPagination.max_page_size,
         )
+        queryset = Position.objects.filter(
+            task_type=self.task_type_label,
+            task_id=task.pk,
+            execution_id=query.execution.execution_id,
+        ).order_by("-entry_time")
+        if query.include_trade_ids:
+            queryset = queryset.prefetch_related("trades")
 
-        status_param = (request.query_params.get("position_status") or "").lower()
-        if status_param == "open":
+        if query.position_status == "open":
             queryset = queryset.filter(is_open=True)
-        elif status_param == "closed":
+        elif query.position_status == "closed":
             queryset = queryset.filter(is_open=False)
 
-        direction = (request.query_params.get("direction") or "").lower()
-        if direction:
-            queryset = queryset.filter(direction=direction)
+        if query.direction:
+            queryset = queryset.filter(direction=query.direction)
 
-        since = _parse_since(request)
-        if since:
-            queryset = queryset.filter(updated_at__gt=since)
+        if query.execution.since:
+            queryset = queryset.filter(updated_at__gt=query.execution.since)
 
-        paginator = TaskSubResourcePagination()
+        if query.range.end:
+            queryset = queryset.filter(entry_time__lte=query.range.end)
+        if query.range.start:
+            queryset = queryset.filter(
+                Q(exit_time__isnull=True) | Q(exit_time__gte=query.range.start)
+            )
+
+        paginator = TradePositionPagination()
         page = paginator.paginate_queryset(queryset, request)
-        serializer = PositionSerializer(page, many=True)
+        serializer = PositionSerializer(
+            page,
+            many=True,
+            context={"include_trade_ids": query.include_trade_ids},
+        )
         return paginator.get_paginated_response(serializer.data)
+
+    @extend_schema(
+        tags=["Trading"],
+        parameters=[TrendReplayQueryParamsSchemaSerializer],
+        responses={200: TaskTrendReplaySerializer},
+        description="Retrieve chart-oriented trades and positions for task trend replay.",
+    )
+    @action(detail=True, methods=["get"], url_path="trend-replay")
+    def trend_replay(self, request: Request, pk: str | None = None) -> Response:
+        from apps.trading.services.trend_replay import (
+            DEFAULT_TREND_REPLAY_PAGE_SIZE,
+            MAX_TREND_REPLAY_PAGE_SIZE,
+            TrendReplayQuery,
+            build_trend_replay_payload,
+        )
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        query = TrendReplayQueryParams.from_request(
+            request,
+            default_execution_id=task.execution_id,
+            default_page_size=DEFAULT_TREND_REPLAY_PAGE_SIZE,
+            max_page_size=MAX_TREND_REPLAY_PAGE_SIZE,
+        )
+
+        payload = build_trend_replay_payload(
+            TrendReplayQuery(
+                task_type=self.task_type_label,
+                task_id=str(task.pk),
+                execution_id=(
+                    str(query.execution.execution_id)
+                    if query.execution.execution_id is not None
+                    else None
+                ),
+                range_from=query.range.start,
+                range_to=query.range.end,
+                since=query.execution.since,
+                page=query.execution.pagination.page,
+                page_size=query.execution.pagination.page_size,
+            )
+        )
+        serializer = TaskTrendReplaySerializer(payload)
+        return Response(serializer.data)
 
     # ------------------------------------------------------------------
     # orders (with incremental fetching via `since`)
     # ------------------------------------------------------------------
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("since", str, description="RFC3339 timestamp for incremental fetch"),
-            OpenApiParameter("status", str, description="Order status filter"),
-            OpenApiParameter("order_type", str, description="Order type filter"),
-            OpenApiParameter("direction", str, description="Direction filter"),
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-            OpenApiParameter("page", int),
-            OpenApiParameter("page_size", int),
-        ],
+        parameters=[OrdersQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
                 "TaskOrderPaginatedResponse",
@@ -716,41 +639,38 @@ class TaskSubResourceMixin:
         from apps.trading.models.orders import Order
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
+        query = OrdersQueryParams.from_request(
+            request,
+            default_execution_id=task.execution_id,
+            default_page_size=TradePositionPagination.page_size,
+            max_page_size=TradePositionPagination.max_page_size,
+        )
         queryset = Order.objects.filter(
             task_type=self.task_type_label,
             task_id=task.pk,
-            execution_id=execution_id,
+            execution_id=query.execution.execution_id,
         ).order_by("-submitted_at")
 
-        status_param = (request.query_params.get("status") or "").lower()
-        if status_param:
-            queryset = queryset.filter(status=status_param)
+        if query.status:
+            queryset = queryset.filter(status=query.status)
 
-        order_type_param = (request.query_params.get("order_type") or "").lower()
-        if order_type_param:
-            queryset = queryset.filter(order_type=order_type_param)
+        if query.order_type:
+            queryset = queryset.filter(order_type=query.order_type)
 
-        direction = (request.query_params.get("direction") or "").lower()
-        if direction:
-            queryset = queryset.filter(direction=direction)
+        if query.direction:
+            queryset = queryset.filter(direction=query.direction)
 
-        since = _parse_since(request)
-        if since:
-            queryset = queryset.filter(updated_at__gt=since)
+        if query.execution.since:
+            queryset = queryset.filter(updated_at__gt=query.execution.since)
 
-        paginator = TaskSubResourcePagination()
+        paginator = TradePositionPagination()
         page = paginator.paginate_queryset(queryset, request)
         serializer = OrderSerializer(page, many=True)
         return paginator.get_paginated_response(serializer.data)
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("execution_id", str, description="Filter by execution ID (UUID)"),
-        ],
+        parameters=[SummaryQueryParamsSchemaSerializer],
         responses={200: TaskSummarySerializer},
         description=(
             "Retrieve structured task summary including PnL, "
@@ -762,17 +682,18 @@ class TaskSubResourceMixin:
         """Retrieve comprehensive task summary."""
         from dataclasses import asdict
 
-        from apps.trading.services.summary import compute_task_summary
+        from apps.trading.services.summary import compute_cached_task_summary
 
         task = self.get_object()  # type: ignore[attr-defined]
-        execution_id = _parse_execution_id(request)
-        if execution_id is None:
-            execution_id = task.execution_id
+        query = SummaryQueryParams.from_request(
+            request,
+            default_execution_id=task.execution_id,
+        )
 
-        result = compute_task_summary(
+        result = compute_cached_task_summary(
             task_type=self.task_type_label,
             task_id=str(task.pk),
-            execution_id=execution_id,
+            execution_id=query.execution_id,
         )
 
         serializer = TaskSummarySerializer(asdict(result))
@@ -780,11 +701,7 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[
-            OpenApiParameter("include_metrics", bool, description="Include aggregate metrics"),
-            OpenApiParameter("page", int),
-            OpenApiParameter("page_size", int),
-        ],
+        parameters=[ExecutionsQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
                 "TaskExecutionPaginatedResponse",
@@ -803,19 +720,54 @@ class TaskSubResourceMixin:
         from apps.trading.services.executions import list_task_executions
 
         task = self.get_object()  # type: ignore[attr-defined]
-        include_metrics = str(request.query_params.get("include_metrics", "false")).lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
-        rows = list_task_executions(
+        query = ExecutionsQueryParams.from_request(
+            request,
+            default_page_size=ActivityPagination.page_size,
+            max_page_size=ActivityPagination.max_page_size,
+        )
+        total_count, rows = list_task_executions(
             task=task,
             task_type=self.task_type_label,
-            include_metrics=include_metrics,
+            include_metrics=query.include_metrics,
+            page=query.pagination.page,
+            page_size=query.pagination.page_size,
+        )
+        serializer = TaskExecutionSerializer(rows, many=True)
+        return Response(
+            _paginated_envelope(
+                request,
+                serializer.data,
+                total_count,
+                query.pagination.page,
+                query.pagination.page_size,
+            )
         )
 
-        paginator = TaskSubResourcePagination()
-        page = paginator.paginate_queryset(rows, request)
-        serializer = TaskExecutionSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+    @extend_schema(
+        tags=["Trading"],
+        parameters=[ExecutionDetailQueryParamsSchemaSerializer],
+        responses={200: TaskExecutionSerializer},
+        description="Retrieve a single execution record for a task.",
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path=r"executions/(?P<execution_id>[^/.]+)",
+    )
+    def execution_detail(
+        self, request: Request, pk: str | None = None, execution_id: str | None = None
+    ) -> Response:
+        from apps.trading.services.executions import get_task_execution
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        query = ExecutionDetailQueryParams.from_request(request)
+        row = get_task_execution(
+            task=task,
+            task_type=self.task_type_label,
+            execution_id=execution_id or "",
+            include_metrics=query.include_metrics,
+        )
+        if row is None:
+            return Response({"detail": "Execution not found."}, status=404)
+        serializer = TaskExecutionSerializer(row)
+        return Response(serializer.data)

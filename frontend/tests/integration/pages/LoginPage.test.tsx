@@ -6,47 +6,94 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
-import { AuthProvider } from '../../../src/contexts/AuthContext';
-import { I18nextProvider } from 'react-i18next';
-import i18n from '../../../src/i18n/config';
+import { ApiError } from '../../../src/api/apiClient';
+import { authApi } from '../../../src/services/api';
+import { useLogin } from '../../../src/hooks/useAuthMutations';
+import { createAuthPageWrapper } from '../../utils/authPageTestUtils';
 
 // Lazy-loaded page — import the default export
 import LoginPage from '../../../src/pages/LoginPage';
 
-function renderLoginPage() {
-  return render(
-    <I18nextProvider i18n={i18n}>
-      <MemoryRouter initialEntries={['/login']}>
-        <AuthProvider>
-          <LoginPage />
-        </AuthProvider>
-      </MemoryRouter>
-    </I18nextProvider>
-  );
+vi.mock('../../../src/api', () => ({
+  setAuthToken: vi.fn(),
+  clearAuthToken: vi.fn(),
+}));
+
+vi.mock('../../../src/services/api', () => ({
+  authApi: {
+    getPublicSettings: vi.fn(),
+    refresh: vi.fn(),
+    logout: vi.fn(),
+  },
+}));
+
+vi.mock('../../../src/hooks/useAuthMutations', () => ({
+  useLogin: vi.fn(),
+}));
+
+vi.mock('../../../src/utils/persistentState', () => ({
+  readRawStoredValue: vi.fn(() => null),
+  readStoredValue: vi.fn((_key, _schema, fallback) => fallback),
+  removeStoredValue: vi.fn(),
+  writeStoredValue: vi.fn(),
+}));
+
+async function getEnabledSubmitButton() {
+  const button = await screen.findByRole('button', {
+    name: /sign in|login|log in/i,
+  });
+  await waitFor(() => {
+    expect(button).toBeEnabled();
+  });
+  return button;
+}
+
+async function renderLoginPage() {
+  const rendered = render(<LoginPage />, {
+    wrapper: createAuthPageWrapper('/login').wrapper,
+  });
+  await waitFor(() => {
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+  return rendered;
 }
 
 describe('LoginPage', () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
+  const authApiMock = vi.mocked(authApi);
+  const useLoginMock = vi.mocked(useLogin);
+  let loginMutateMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     localStorage.clear();
-    // Default: settings endpoint returns login enabled
-    fetchSpy = vi.spyOn(globalThis, 'fetch');
+    authApiMock.getPublicSettings.mockResolvedValue({
+      login_enabled: true,
+      registration_enabled: true,
+    });
+    authApiMock.refresh.mockRejectedValue(
+      new ApiError('/api/accounts/auth/refresh', 401, 'Unauthorized', null)
+    );
+    authApiMock.logout.mockResolvedValue({
+      message: 'Logged out successfully.',
+      sessions_terminated: 0,
+    });
+    loginMutateMock = vi.fn();
+    useLoginMock.mockReturnValue({
+      mutate: loginMutateMock,
+    } as never);
   });
 
   afterEach(() => {
-    fetchSpy.mockRestore();
+    vi.clearAllMocks();
   });
 
-  it('renders email and password fields', () => {
-    renderLoginPage();
+  it('renders email and password fields', async () => {
+    await renderLoginPage();
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
   });
 
   it('renders submit button', async () => {
-    renderLoginPage();
+    await renderLoginPage();
     // Button text comes from i18n — may be "Sign In" or "Login"
     await waitFor(() => {
       expect(
@@ -57,11 +104,9 @@ describe('LoginPage', () => {
 
   it('shows validation error for empty email', async () => {
     const user = userEvent.setup();
-    renderLoginPage();
+    await renderLoginPage();
 
-    const btn = await screen.findByRole('button', {
-      name: /sign in|login|log in/i,
-    });
+    const btn = await getEnabledSubmitButton();
     await user.click(btn);
 
     await waitFor(() => {
@@ -71,12 +116,10 @@ describe('LoginPage', () => {
 
   it('shows validation error for invalid email format', async () => {
     const user = userEvent.setup();
-    renderLoginPage();
+    await renderLoginPage();
 
     const emailField = await screen.findByLabelText(/email/i);
-    const btn = await screen.findByRole('button', {
-      name: /sign in|login|log in/i,
-    });
+    const btn = await getEnabledSubmitButton();
 
     await user.type(emailField, 'notanemail');
     await user.click(btn);
@@ -88,12 +131,10 @@ describe('LoginPage', () => {
 
   it('shows validation error for empty password', async () => {
     const user = userEvent.setup();
-    renderLoginPage();
+    await renderLoginPage();
 
     const emailField = await screen.findByLabelText(/email/i);
-    const btn = await screen.findByRole('button', {
-      name: /sign in|login|log in/i,
-    });
+    const btn = await getEnabledSubmitButton();
 
     await user.type(emailField, 'user@example.com');
     await user.click(btn);
@@ -105,31 +146,17 @@ describe('LoginPage', () => {
 
   it('shows error alert on failed login', async () => {
     const user = userEvent.setup();
+    loginMutateMock.mockRejectedValueOnce(
+      new ApiError('/api/accounts/auth/login', 401, 'Unauthorized', {
+        error: 'Invalid credentials',
+      })
+    );
 
-    fetchSpy.mockImplementation(async (input: RequestInfo | URL) => {
-      const url = typeof input === 'string' ? input : input.toString();
-      if (url === '/api/accounts/settings/public') {
-        return new Response(
-          JSON.stringify({ login_enabled: true, registration_enabled: true }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
-      if (url === '/api/accounts/auth/login') {
-        return new Response(JSON.stringify({ error: 'Invalid credentials' }), {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-      return new Response('{}', { status: 200 });
-    });
-
-    renderLoginPage();
+    await renderLoginPage();
 
     const emailField = await screen.findByLabelText(/email/i);
     const passwordField = await screen.findByLabelText(/password/i);
-    const btn = await screen.findByRole('button', {
-      name: /sign in|login|log in/i,
-    });
+    const btn = await getEnabledSubmitButton();
 
     await user.type(emailField, 'user@example.com');
     await user.type(passwordField, 'wrongpassword');
@@ -142,11 +169,9 @@ describe('LoginPage', () => {
 
   it('clears field error when user starts typing', async () => {
     const user = userEvent.setup();
-    renderLoginPage();
+    await renderLoginPage();
 
-    const btn = await screen.findByRole('button', {
-      name: /sign in|login|log in/i,
-    });
+    const btn = await getEnabledSubmitButton();
     await user.click(btn);
 
     await waitFor(() => {

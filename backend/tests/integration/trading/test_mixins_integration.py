@@ -21,6 +21,7 @@ from apps.trading.models import (
     Position,
     StrategyEventRecord,
     TaskLog,
+    TaskExecutionSnapshot,
     Trade,
     TradingEvent,
 )
@@ -101,11 +102,141 @@ class TestMetrics:
 
         response = client.get(
             f"/api/trading/tasks/backtest/{task.pk}/metrics/",
-            {"interval": 2, "page_size": 5000},
+            {"interval": 2, "page_size": 500},
         )
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 1
         assert len(response.data["results"]) == 1
+
+
+@pytest.mark.django_db
+class TestStrictQueryValidation:
+    """Sub-resource endpoints reject malformed query parameters."""
+
+    def test_rejects_invalid_execution_id(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/trades/",
+            {"execution_id": "not-a-uuid"},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data == {
+            "code": "invalid_query_param",
+            "detail": "Invalid execution_id: not-a-uuid",
+        }
+
+    def test_rejects_invalid_since(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/events/",
+            {"since": "bad-date"},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data == {
+            "code": "invalid_query_param",
+            "detail": "Invalid datetime value: bad-date",
+        }
+
+    def test_rejects_invalid_page(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/logs/",
+            {"page": "zero"},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data == {
+            "code": "invalid_query_param",
+            "detail": "Invalid page parameter",
+        }
+
+    def test_rejects_non_positive_page_size(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/trades/",
+            {"page_size": 0},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data == {
+            "code": "invalid_query_param",
+            "detail": "page_size must be greater than 0",
+        }
+
+    def test_rejects_page_size_above_maximum(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/positions/",
+            {"page_size": 2000},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data == {
+            "code": "invalid_query_param",
+            "detail": "page_size exceeds maximum allowed value of 200",
+        }
+
+    def test_rejects_inverted_range(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        start = datetime(2024, 6, 1, 12, 5, tzinfo=timezone.utc)
+        end = datetime(2024, 6, 1, 12, 0, tzinfo=timezone.utc)
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/positions/",
+            {
+                "range_from": start.isoformat(),
+                "range_to": end.isoformat(),
+            },
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data == {
+            "code": "invalid_query_param",
+            "detail": "range_from must be earlier than or equal to range_to",
+        }
+
+    @pytest.mark.parametrize(
+        ("path", "params", "detail"),
+        [
+            ("logs", {"execution_id": "invalid"}, "Invalid execution_id: invalid"),
+            ("events", {"page_size": -1}, "page_size must be greater than 0"),
+            ("trades", {"page_size": 9999}, "page_size exceeds maximum allowed value of 200"),
+            (
+                "orders",
+                {"execution_id": "invalid"},
+                "Invalid execution_id: invalid",
+            ),
+            (
+                "positions",
+                {"range_from": "bad-date"},
+                "Invalid datetime value: bad-date",
+            ),
+        ],
+    )
+    def test_rejects_invalid_subresource_query_params(self, path, params, detail):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/{path}/", params)
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data == {
+            "code": "invalid_query_param",
+            "detail": detail,
+        }
 
 
 @pytest.mark.django_db
@@ -553,3 +684,150 @@ class TestExecutions:
         current = next(r for r in response.data["results"] if r["id"] == str(new_execution_id))
         assert current["status"] == "running"
         assert "metrics" in current
+
+    def test_paginate_before_metric_aggregation_and_get_single_execution(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        from uuid import uuid4
+
+        execution_ids = [uuid4(), uuid4(), uuid4()]
+        for execution_id in execution_ids:
+            CeleryTaskStatus.objects.create(
+                task_name="trading.tasks.run_backtest_task",
+                instance_key=f"{task.pk}:{execution_id}",
+                status=CeleryTaskStatus.Status.COMPLETED,
+            )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/executions/",
+            {"page": 1, "page_size": 1, "include_metrics": "true"},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 4
+        assert len(response.data["results"]) == 1
+        execution_id = response.data["results"][0]["id"]
+        assert "metrics" in response.data["results"][0]
+
+        detail_response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/executions/{execution_id}/",
+            {"include_metrics": "true"},
+        )
+        assert detail_response.status_code == status.HTTP_200_OK
+        assert detail_response.data["id"] == execution_id
+        assert "metrics" in detail_response.data
+
+        missing_response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/executions/{uuid4()}/",
+        )
+        assert missing_response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_execution_detail_prefers_persisted_snapshot(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        from uuid import uuid4
+
+        execution_id = uuid4()
+        CeleryTaskStatus.objects.create(
+            task_name="trading.tasks.run_backtest_task",
+            instance_key=f"{task.pk}:{execution_id}",
+            status=CeleryTaskStatus.Status.COMPLETED,
+        )
+        TaskExecutionSnapshot.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=execution_id,
+            summary={
+                "timestamp": "2026-03-21T00:00:00+00:00",
+                "pnl": {"realized": "12.5", "unrealized": "0"},
+                "counts": {
+                    "total_trades": 7,
+                    "open_positions": 0,
+                    "closed_positions": 3,
+                },
+                "execution": {
+                    "current_balance": "10012.5",
+                    "ticks_processed": 42,
+                    "account_currency": "USD",
+                    "current_balance_display": "10012.5",
+                    "display_currency": "USD",
+                },
+                "tick": {
+                    "timestamp": "2026-03-21T00:00:00+00:00",
+                    "bid": "150.1000",
+                    "ask": "150.1100",
+                    "mid": "150.1050",
+                },
+                "task": {
+                    "status": "completed",
+                    "started_at": None,
+                    "completed_at": "2026-03-21T00:00:10+00:00",
+                    "error_message": None,
+                    "progress": 100,
+                },
+            },
+            metrics={
+                "total_pnl": "12.5",
+                "unrealized_pnl": "0",
+                "total_trades": 7,
+                "winning_trades": 5,
+                "losing_trades": 2,
+                "win_rate": "71.4286",
+            },
+        )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/executions/{execution_id}/",
+            {"include_metrics": "true"},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["metrics"]["total_trades"] == 7
+        assert response.data["metrics"]["winning_trades"] == 5
+
+
+@pytest.mark.django_db
+class TestTrendReplay:
+    """GET /api/trading/tasks/backtest/{id}/trend-replay/"""
+
+    def test_returns_windowed_trades_and_positions(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        base_time = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        position = Position.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction="long",
+            units=1000,
+            entry_price=Decimal("150.000"),
+            entry_time=base_time,
+            is_open=True,
+        )
+        trade = Trade.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction="long",
+            units=1000,
+            price=Decimal("150.010"),
+            execution_method="market_entry",
+            timestamp=base_time + timedelta(minutes=1),
+            position=position,
+        )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/trend-replay/",
+            {
+                "range_from": base_time.isoformat(),
+                "range_to": (base_time + timedelta(minutes=2)).isoformat(),
+            },
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["meta"]["mode"] == "windowed"
+        assert response.data["meta"]["returned_trades"] == 1
+        assert len(response.data["trades"]) == 1
+        assert len(response.data["positions"]) == 1
+        assert response.data["trades"][0]["id"] == str(trade.id)
+        assert response.data["positions"][0]["trade_ids"] == [str(trade.id)]

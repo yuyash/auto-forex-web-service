@@ -62,8 +62,9 @@ class TestTokenRefreshView:
         """Test successful token refresh with rotation."""
         request = self.factory.post(
             "/api/auth/refresh",
-            data=json.dumps({"refresh_token": "valid_refresh_token"}),
+            data=json.dumps({}),
             content_type="application/json",
+            HTTP_COOKIE="refresh_token=valid_refresh_token",
         )
         view = TokenRefreshView.as_view()
 
@@ -86,8 +87,27 @@ class TestTokenRefreshView:
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data["token"] == "new_access_token"  # type: ignore[index]
-        assert response.data["refresh_token"] == "new_refresh_token"  # type: ignore[index]
+        assert "refresh_token" not in response.data  # type: ignore[operator]
         assert response.data["user"]["email"] == "test@example.com"  # type: ignore[index]
+        assert response.cookies["refresh_token"].value == "new_refresh_token"
+
+    def test_post_invalid_refresh_token_clears_cookie(self) -> None:
+        """Test invalid refresh token clears the cookie."""
+        request = self.factory.post(
+            "/api/auth/refresh",
+            data=json.dumps({}),
+            content_type="application/json",
+            HTTP_COOKIE="refresh_token=invalid_token",
+        )
+        view = TokenRefreshView.as_view()
+
+        with patch("apps.accounts.views.refresh.JWTService") as mock_jwt:
+            mock_jwt.return_value.rotate_refresh_token.return_value = None
+
+            response = view(request)
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.cookies["refresh_token"].value == ""
 
     def test_permission_classes(self) -> None:
         """Test view has AllowAny permission."""

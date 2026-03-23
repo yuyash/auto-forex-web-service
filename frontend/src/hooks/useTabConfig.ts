@@ -6,6 +6,12 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
+import { z } from 'zod';
+import {
+  readStoredValue,
+  removeStoredValue,
+  writeStoredValue,
+} from '../utils/persistentState';
 
 export interface TabItem {
   id: string;
@@ -18,42 +24,44 @@ interface TabConfig {
 }
 
 const STORAGE_PREFIX = 'tab_config_';
+const tabConfigSchema = z.object({
+  tabs: z.array(
+    z.object({
+      id: z.string(),
+      label: z.string(),
+      visible: z.boolean(),
+    })
+  ),
+});
 
 function loadConfig(storageKey: string, defaults: TabItem[]): TabItem[] {
-  try {
-    const raw = localStorage.getItem(`${STORAGE_PREFIX}${storageKey}`);
-    if (raw) {
-      const saved: TabConfig = JSON.parse(raw);
-      // Merge saved config with defaults to handle new tabs added after save
-      const savedMap = new Map(saved.tabs.map((t) => [t.id, t]));
-      const merged: TabItem[] = [];
-      // First, add saved tabs in their saved order
-      for (const tab of saved.tabs) {
-        const def = defaults.find((d) => d.id === tab.id);
-        if (def) {
-          merged.push({ ...def, visible: tab.visible });
-        }
+  const saved = readStoredValue<TabConfig | null>(
+    `${STORAGE_PREFIX}${storageKey}`,
+    tabConfigSchema.nullable(),
+    null
+  );
+  if (saved) {
+    const savedMap = new Map(saved.tabs.map((t) => [t.id, t]));
+    const merged: TabItem[] = [];
+    for (const tab of saved.tabs) {
+      const def = defaults.find((d) => d.id === tab.id);
+      if (def) {
+        merged.push({ ...def, visible: tab.visible });
       }
-      // Then, add any new default tabs not in saved config
-      for (const def of defaults) {
-        if (!savedMap.has(def.id)) {
-          merged.push(def);
-        }
-      }
-      return merged;
     }
-  } catch {
-    // ignore parse errors
+    for (const def of defaults) {
+      if (!savedMap.has(def.id)) {
+        merged.push(def);
+      }
+    }
+    return merged;
   }
   return defaults;
 }
 
 function saveConfig(storageKey: string, tabs: TabItem[]) {
   const config: TabConfig = { tabs };
-  localStorage.setItem(
-    `${STORAGE_PREFIX}${storageKey}`,
-    JSON.stringify(config)
-  );
+  writeStoredValue(`${STORAGE_PREFIX}${storageKey}`, config);
 }
 
 export function useTabConfig(storageKey: string, defaultTabs: TabItem[]) {
@@ -98,7 +106,7 @@ export function useTabConfig(storageKey: string, defaultTabs: TabItem[]) {
 
   const resetToDefaults = useCallback(() => {
     setTabs(defaultTabs);
-    localStorage.removeItem(`${STORAGE_PREFIX}${storageKey}`);
+    removeStoredValue(`${STORAGE_PREFIX}${storageKey}`);
   }, [storageKey, defaultTabs]);
 
   return { tabs: mergedTabs, visibleTabs, updateTabs, resetToDefaults };

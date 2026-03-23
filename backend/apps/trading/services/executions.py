@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from decimal import Decimal
-from typing import Any
+from typing import Any, overload
 from uuid import UUID
 
-from django.db.models import Case, DecimalField, F, IntegerField, Sum, Value, When
+from django.core.cache import cache
 
 from apps.trading.enums import TaskStatus
 from apps.trading.models import CeleryTaskStatus
-from apps.trading.models.positions import Position
-from apps.trading.models.trades import Trade
-from apps.trading.services.summary import compute_task_summary
+from apps.trading.services.execution_metrics import build_execution_metrics
+from apps.trading.services.execution_snapshots import get_metrics_snapshot
+from apps.trading.services.summary import compute_cached_task_summary
+
+
+EXECUTION_METRICS_CACHE_TTL_SECONDS = 60 * 60
 
 
 @dataclass(frozen=True)
@@ -35,10 +38,95 @@ class TaskExecutionRow:
     metrics: dict[str, Any] | None = None
 
 
+@overload
 def list_task_executions(
-    *, task, task_type: str, include_metrics: bool = False
-) -> list[dict[str, Any]]:
-    """List execution history for a task ordered by newest run first."""
+    *,
+    task,
+    task_type: str,
+    include_metrics: bool = False,
+    page: int,
+    page_size: int,
+) -> tuple[int, list[dict[str, Any]]]: ...
+
+
+@overload
+def list_task_executions(
+    *,
+    task,
+    task_type: str,
+    include_metrics: bool = False,
+    page: None = None,
+    page_size: None = None,
+) -> list[dict[str, Any]]: ...
+
+
+def list_task_executions(
+    *,
+    task,
+    task_type: str,
+    include_metrics: bool = False,
+    page: int | None = None,
+    page_size: int | None = None,
+) -> list[dict[str, Any]] | tuple[int, list[dict[str, Any]]]:
+    """List execution history for a task ordered by newest run first.
+
+    When ``page`` and ``page_size`` are provided, returns ``(total_count, rows)``
+    so callers can paginate before metric aggregation.
+    """
+    ordered_run_ids, by_run_id, fallback_mid_rate = _load_execution_index(
+        task=task,
+        task_type=task_type,
+    )
+    total_count = len(ordered_run_ids)
+
+    if page is not None and page_size is not None:
+        start = max(page - 1, 0) * page_size
+        end = start + page_size
+        ordered_run_ids = ordered_run_ids[start:end]
+
+    rows = [
+        _serialize_execution_row(
+            task=task,
+            task_type=task_type,
+            run_id=run_id,
+            meta=by_run_id[run_id],
+            include_metrics=include_metrics,
+            fallback_mid_rate=fallback_mid_rate,
+        )
+        for run_id in ordered_run_ids
+    ]
+
+    if page is not None and page_size is not None:
+        return total_count, rows
+    return rows
+
+
+def get_task_execution(
+    *,
+    task,
+    task_type: str,
+    execution_id: str,
+    include_metrics: bool = False,
+) -> dict[str, Any] | None:
+    """Return a single execution row when it exists for the task."""
+    meta = _load_execution_meta(task=task, task_type=task_type, run_id=execution_id)
+    if meta is None:
+        return None
+    fallback_mid_rate = _load_latest_fallback_mid_rate(task_type=task_type, task_id=str(task.pk))
+    return _serialize_execution_row(
+        task=task,
+        task_type=task_type,
+        run_id=execution_id,
+        meta=meta,
+        include_metrics=include_metrics,
+        fallback_mid_rate=fallback_mid_rate,
+    )
+
+
+def _load_execution_index(
+    *, task, task_type: str
+) -> tuple[list[str], dict[str, dict[str, Any]], Decimal | None]:
+    """Build execution metadata keyed by run ID and return sorted run IDs."""
     task_id = str(task.pk)
     task_name = (
         "trading.tasks.run_backtest_task"
@@ -90,29 +178,100 @@ def list_task_executions(
         )
         by_run_id[current_run_id] = current
 
-    rows: list[dict[str, Any]] = []
     # Get the latest mid rate from the task's most recent ExecutionState
     # to use as fallback for past executions that no longer have state.
+    latest_state = _load_latest_fallback_mid_rate(task_type=task_type, task_id=task_id)
+    return sorted(by_run_id.keys(), reverse=True), by_run_id, latest_state
+
+
+def _load_execution_meta(*, task, task_type: str, run_id: str) -> dict[str, Any] | None:
+    task_id = str(task.pk)
+    current_run_id = str(getattr(task, "execution_id", None) or "")
+    current_meta: dict[str, Any] | None = None
+    if run_id == current_run_id:
+        current_meta = {
+            "status": str(task.status),
+            "error_message": task.error_message or None,
+            "error_traceback": task.error_traceback if task.status == TaskStatus.FAILED else None,
+            "started_at": task.started_at,
+            "completed_at": task.completed_at,
+            "created_at": task.created_at,
+        }
+
+    task_name = (
+        "trading.tasks.run_backtest_task"
+        if task_type == "backtest"
+        else "trading.tasks.run_trading_task"
+    )
+    row = (
+        CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=f"{task_id}:{run_id}")
+        .order_by("-created_at")
+        .values(
+            "status",
+            "status_message",
+            "started_at",
+            "stopped_at",
+            "created_at",
+        )
+        .first()
+    )
+    if row is None:
+        return current_meta
+
+    meta = {
+        "status": _map_celery_status(str(row["status"])),
+        "error_message": str(row["status_message"]) if row["status"] == "failed" else None,
+        "started_at": row["started_at"],
+        "completed_at": row["stopped_at"],
+        "created_at": row["created_at"],
+        "error_traceback": None,
+    }
+    if current_meta:
+        meta.update(
+            {
+                "status": current_meta["status"],
+                "error_message": current_meta["error_message"] or meta.get("error_message"),
+                "error_traceback": current_meta["error_traceback"],
+                "started_at": current_meta["started_at"] or meta.get("started_at"),
+                "completed_at": current_meta["completed_at"] or meta.get("completed_at"),
+                "created_at": meta.get("created_at") or current_meta["created_at"],
+            }
+        )
+    return meta
+
+
+def _load_latest_fallback_mid_rate(*, task_type: str, task_id: str) -> Decimal | None:
     from apps.trading.models.state import ExecutionState as _ES
 
-    _latest_state = (
+    return (
         _ES.objects.filter(task_type=task_type, task_id=task_id)
         .exclude(last_tick_price__isnull=True)
         .order_by("-updated_at")
         .values_list("last_tick_price", flat=True)
         .first()
     )
-    for run_id in sorted(by_run_id.keys(), reverse=True):
-        meta = by_run_id[run_id]
-        started_at = meta.get("started_at")
-        completed_at = meta.get("completed_at")
-        progress = _compute_progress(
-            task=task,
-            task_type=task_type,
-            run_id=run_id,
-            status=str(meta.get("status") or TaskStatus.CREATED),
-        )
-        row: dict[str, Any] = TaskExecutionRow(
+
+
+def _serialize_execution_row(
+    *,
+    task,
+    task_type: str,
+    run_id: str,
+    meta: dict[str, Any],
+    include_metrics: bool,
+    fallback_mid_rate: Decimal | None,
+) -> dict[str, Any]:
+    task_id = str(task.pk)
+    started_at = meta.get("started_at")
+    completed_at = meta.get("completed_at")
+    progress = _compute_progress(
+        task=task,
+        task_type=task_type,
+        run_id=run_id,
+        status=str(meta.get("status") or TaskStatus.CREATED),
+    )
+    row = asdict(
+        TaskExecutionRow(
             id=run_id,
             task_type=task_type,
             task_id=task_id,
@@ -126,152 +285,99 @@ def list_task_executions(
             duration=_compute_duration_seconds(started_at, completed_at),
             created_at=(meta.get("created_at") or task.created_at).isoformat(),
             metrics=None,
-        ).__dict__
+        )
+    )
 
-        if include_metrics:
-            row["metrics"] = _compute_execution_metrics(
-                task=task,
-                task_type=task_type,
-                task_id=task_id,
-                run_id=run_id,
-                fallback_mid_rate=_latest_state,
-            )
-        rows.append(row)
+    if include_metrics:
+        row["metrics"] = _get_cached_execution_metrics(
+            task=task,
+            task_type=task_type,
+            task_id=task_id,
+            run_id=run_id,
+            meta=meta,
+            fallback_mid_rate=fallback_mid_rate,
+        )
 
-    return rows
+    return row
+
+
+def _get_cached_execution_metrics(
+    *,
+    task,
+    task_type: str,
+    task_id: str,
+    run_id: str,
+    meta: dict[str, Any],
+    fallback_mid_rate: Decimal | None = None,
+) -> dict[str, Any]:
+    persisted_metrics = get_metrics_snapshot(
+        task=task,
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=run_id,
+    )
+    if persisted_metrics is not None:
+        return persisted_metrics
+
+    cache_key = _build_execution_metrics_cache_key(
+        task=task,
+        task_type=task_type,
+        task_id=task_id,
+        run_id=run_id,
+        meta=meta,
+    )
+    cached_metrics = cache.get(cache_key)
+    if isinstance(cached_metrics, dict):
+        return cached_metrics
+
+    metrics = _compute_execution_metrics(
+        task=task,
+        task_type=task_type,
+        task_id=task_id,
+        run_id=run_id,
+        fallback_mid_rate=fallback_mid_rate,
+    )
+    cache.set(cache_key, metrics, EXECUTION_METRICS_CACHE_TTL_SECONDS)
+    return metrics
+
+
+def _build_execution_metrics_cache_key(
+    *, task, task_type: str, task_id: str, run_id: str, meta: dict[str, Any]
+) -> str:
+    status = str(meta.get("status") or "")
+    completed_at = meta.get("completed_at")
+    if status in {TaskStatus.COMPLETED, TaskStatus.STOPPED, TaskStatus.FAILED} and completed_at:
+        return (
+            f"task-execution-metrics-snapshot:{task_type}:{task_id}:{run_id}:"
+            f"{completed_at.isoformat()}"
+        )
+    updated_at = getattr(task, "updated_at", None)
+    updated_at_key = updated_at.isoformat() if updated_at else "na"
+    return f"task-execution-metrics:{task_type}:{task_id}:{run_id}:{updated_at_key}"
 
 
 def _compute_execution_metrics(
     *, task, task_type: str, task_id: str, run_id: str, fallback_mid_rate: Decimal | None = None
 ) -> dict[str, Any]:
-    summary = compute_task_summary(
+    summary = compute_cached_task_summary(
         task_type=task_type,
         task_id=task_id,
         execution_id=run_id,
     )
-    closed_qs = Position.objects.filter(
-        task_type=task_type,
-        task_id=task_id,
-        execution_id=run_id,
-        is_open=False,
-    ).exclude(exit_price__isnull=True)
-
-    pnl_expr = Case(
-        When(
-            direction="long",
-            then=(F("exit_price") - F("entry_price")) * _abs_units(),
-        ),
-        When(
-            direction="short",
-            then=(F("entry_price") - F("exit_price")) * _abs_units(),
-        ),
-        default=Value(Decimal("0")),
-        output_field=DecimalField(max_digits=24, decimal_places=10),
-    )
-    with_pnl = closed_qs.annotate(pnl_value=pnl_expr)
-    wins_losses = with_pnl.aggregate(
-        winning_trades=Sum(
-            Case(
-                When(pnl_value__gt=0, then=Value(1)),
-                default=Value(0),
-                output_field=IntegerField(),
-            )
-        ),
-        losing_trades=Sum(
-            Case(
-                When(pnl_value__lt=0, then=Value(1)),
-                default=Value(0),
-                output_field=IntegerField(),
-            )
-        ),
-    )
-    winning_trades = int(wins_losses["winning_trades"] or 0)
-    losing_trades = int(wins_losses["losing_trades"] or 0)
-    total_trades = int(
-        Trade.objects.filter(task_type=task_type, task_id=task_id, execution_id=run_id).count()
-    )
-    decisions = winning_trades + losing_trades
-    win_rate = (
-        (Decimal(winning_trades) / Decimal(decisions) * Decimal("100"))
-        if decisions > 0
-        else Decimal("0")
-    )
-
-    total_pnl = summary.pnl.realized + summary.pnl.unrealized
-    mid_rate = summary.tick.mid or fallback_mid_rate
-    total_return = _compute_total_return(
+    return build_execution_metrics(
         task=task,
         task_type=task_type,
-        current_balance=summary.execution.current_balance,
-        total_pnl=total_pnl,
-        mid_rate=mid_rate,
+        task_id=task_id,
+        execution_id=run_id,
+        summary=summary,
+        fallback_mid_rate=fallback_mid_rate,
     )
-
-    metrics: dict[str, Any] = {
-        "total_pnl": total_pnl,
-        "unrealized_pnl": summary.pnl.unrealized,
-        "total_trades": total_trades,
-        "winning_trades": winning_trades,
-        "losing_trades": losing_trades,
-        "win_rate": win_rate.quantize(Decimal("0.0001")),
-    }
-    if total_return is not None:
-        metrics["total_return"] = total_return
-    return metrics
-
-
-def _compute_total_return(
-    *,
-    task,
-    task_type: str,
-    current_balance: Decimal | None,
-    total_pnl: Decimal,
-    mid_rate: Decimal | None,
-) -> Decimal | None:
-    """Compute total return % from current balance vs initial balance.
-
-    Primary method: use current_balance from ExecutionState.
-    current_balance is kept in account currency (e.g. USD) — the executor
-    converts realized PnL to account currency before adding it — so the
-    delta (current_balance - initial_balance) is already in account currency
-    and needs no conversion.
-
-    Fallback: when current_balance is unavailable (e.g. past executions whose
-    ExecutionState has been cleaned up), use total_pnl which is aggregated
-    from positions in quote currency, so it must be converted via mid_rate
-    when account currency != quote currency.
-    """
-    if task_type != "backtest":
-        return None
-    initial_balance: Decimal | None = getattr(task, "initial_balance", None)
-    if not initial_balance:
-        return None
-    try:
-        initial = Decimal(str(initial_balance))
-        if initial == Decimal("0"):
-            return None
-
-        if current_balance is not None:
-            # current_balance is in account currency — no conversion needed
-            pnl_delta = Decimal(str(current_balance)) - initial
-        else:
-            # Fallback: total_pnl is in quote currency
-            pnl_delta = total_pnl
-            account_ccy = getattr(task, "account_currency", "USD").upper()
-            instrument = getattr(task, "instrument", "")
-            quote_ccy = instrument.split("_")[-1].upper() if "_" in instrument else ""
-            if quote_ccy and account_ccy != quote_ccy and mid_rate and mid_rate > 0:
-                pnl_delta = pnl_delta / mid_rate
-
-        return (pnl_delta / initial * Decimal("100")).quantize(Decimal("0.0000000001"))
-    except Exception:
-        return None
 
 
 def _compute_progress(*, task, task_type: str, run_id: str, status: str) -> int:
     current_run_id = str(getattr(task, "execution_id", None) or "")
     if run_id == current_run_id:
-        summary = compute_task_summary(
+        summary = compute_cached_task_summary(
             task_type=task_type,
             task_id=str(task.pk),
             execution_id=run_id,
@@ -314,10 +420,3 @@ def _map_celery_status(status: str) -> str:
         CeleryTaskStatus.Status.FAILED: TaskStatus.FAILED,
     }
     return str(mapping.get(status, TaskStatus.CREATED))
-
-
-def _abs_units():
-    return Case(
-        When(units__lt=0, then=-F("units")),
-        default=F("units"),
-    )

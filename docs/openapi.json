@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.13.14",
+        "version": "1.14.1",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -119,7 +119,7 @@
         "/api/accounts/auth/refresh": {
             "post": {
                 "operationId": "auth_token_refresh",
-                "description": "Exchange a refresh token for a new access + refresh token pair.",
+                "description": "Exchange a refresh token for a new access + refresh token pair. The refresh token is normally read from the HTTP-only cookie; the `refresh_token` request field is accepted only as a legacy fallback.",
                 "tags": [
                     "Accounts"
                 ],
@@ -130,8 +130,7 @@
                                 "$ref": "#/components/schemas/TokenRefreshRequestRequest"
                             }
                         }
-                    },
-                    "required": true
+                    }
                 },
                 "security": [
                     {}
@@ -1527,6 +1526,44 @@
             "get": {
                 "operationId": "trading_strategy_configs_list",
                 "description": "List and create strategy configurations.",
+                "parameters": [
+                    {
+                        "name": "ordering",
+                        "required": false,
+                        "in": "query",
+                        "description": "Which field to use when ordering the results.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "required": false,
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "page_size",
+                        "required": false,
+                        "in": "query",
+                        "description": "Number of results to return per page.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "required": false,
+                        "in": "query",
+                        "description": "A search term.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
                 "tags": [
                     "Trading"
                 ],
@@ -1540,7 +1577,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/StrategyConfigPaginatedResponse"
+                                    "$ref": "#/components/schemas/PaginatedStrategyConfigPaginatedResponseList"
                                 }
                             }
                         },
@@ -1674,6 +1711,50 @@
                     }
                 }
             },
+            "patch": {
+                "operationId": "trading_strategy_configs_partial_update",
+                "description": "Retrieve, update, and delete a strategy configuration.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "config_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "trading"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedStrategyConfigDetailRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StrategyConfigDetail"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
             "delete": {
                 "operationId": "trading_strategy_config_delete",
                 "description": "Retrieve, update, and delete a strategy configuration.",
@@ -1703,10 +1784,47 @@
                 }
             }
         },
+        "/api/trading/strategy-configs/{config_id}/tasks/": {
+            "get": {
+                "operationId": "trading_strategy_config_tasks",
+                "description": "List tasks using a strategy configuration.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "config_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/StrategyConfigTaskUsageList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/backtest/": {
             "get": {
                 "operationId": "trading_tasks_backtest_list",
-                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "ViewSet for BacktestTask operations with task-centric API.",
                 "parameters": [
                     {
                         "name": "ordering",
@@ -1749,7 +1867,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/PaginatedBacktestTaskList"
+                                    "$ref": "#/components/schemas/PaginatedBacktestTaskListList"
                                 }
                             }
                         },
@@ -1759,7 +1877,7 @@
             },
             "post": {
                 "operationId": "trading_tasks_backtest_create",
-                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "ViewSet for BacktestTask operations with task-centric API.",
                 "tags": [
                     "Trading"
                 ],
@@ -1783,7 +1901,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BacktestTaskCreate"
+                                    "$ref": "#/components/schemas/BacktestTask"
                                 }
                             }
                         },
@@ -1795,7 +1913,7 @@
         "/api/trading/tasks/backtest/{id}/": {
             "get": {
                 "operationId": "trading_tasks_backtest_retrieve",
-                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "ViewSet for BacktestTask operations with task-centric API.",
                 "parameters": [
                     {
                         "in": "path",
@@ -1831,7 +1949,7 @@
             },
             "put": {
                 "operationId": "trading_tasks_backtest_update",
-                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "ViewSet for BacktestTask operations with task-centric API.",
                 "parameters": [
                     {
                         "in": "path",
@@ -1867,7 +1985,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BacktestTaskCreate"
+                                    "$ref": "#/components/schemas/BacktestTask"
                                 }
                             }
                         },
@@ -1877,7 +1995,7 @@
             },
             "patch": {
                 "operationId": "trading_tasks_backtest_partial_update",
-                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "ViewSet for BacktestTask operations with task-centric API.",
                 "parameters": [
                     {
                         "in": "path",
@@ -1912,7 +2030,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BacktestTaskCreate"
+                                    "$ref": "#/components/schemas/BacktestTask"
                                 }
                             }
                         },
@@ -1922,7 +2040,7 @@
             },
             "delete": {
                 "operationId": "trading_tasks_backtest_destroy",
-                "description": "ViewSet for BacktestTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- pause: Pause running task\n- restart: Restart task from beginning\n- resume: Resume paused task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "ViewSet for BacktestTask operations with task-centric API.",
                 "parameters": [
                     {
                         "in": "path",
@@ -1959,17 +2077,21 @@
                         "in": "query",
                         "name": "created_from",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "Filter events created at or after this RFC3339 timestamp"
+                        "description": "Filter events created at or after this RFC3339 timestamp."
                     },
                     {
                         "in": "query",
                         "name": "created_to",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "Filter events created at or before this RFC3339 timestamp"
+                        "description": "Filter events created at or before this RFC3339 timestamp."
                     },
                     {
                         "in": "query",
@@ -1977,15 +2099,17 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Event type filter"
+                        "description": "Event type filter."
                     },
                     {
                         "in": "query",
                         "name": "execution_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
                         },
-                        "description": "Filter by execution ID (UUID)"
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -2001,23 +2125,34 @@
                         "in": "query",
                         "name": "page",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "maximum": 1000,
+                            "minimum": 1
+                        },
+                        "description": "Results per page. Default 100, maximum 1000."
                     },
                     {
                         "in": "query",
                         "name": "scope",
                         "schema": {
-                            "type": "string"
+                            "enum": [
+                                "all",
+                                "trading",
+                                "task"
+                            ],
+                            "type": "string",
+                            "minLength": 1
                         },
-                        "description": "Event scope: all|trading|task"
+                        "description": "Event scope filter.\n\n* `all` - all\n* `trading` - trading\n* `task` - task"
                     },
                     {
                         "in": "query",
@@ -2025,15 +2160,17 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Severity filter"
+                        "description": "Severity filter."
                     },
                     {
                         "in": "query",
                         "name": "since",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "RFC3339 timestamp for incremental fetch"
+                        "description": "RFC3339 timestamp for incremental fetch."
                     }
                 ],
                 "tags": [
@@ -2060,7 +2197,7 @@
         },
         "/api/trading/tasks/backtest/{id}/executions/": {
             "get": {
-                "operationId": "trading_tasks_backtest_executions_retrieve",
+                "operationId": "backtest_task_execution_history",
                 "description": "Retrieve execution history for a task.",
                 "parameters": [
                     {
@@ -2079,21 +2216,26 @@
                         "schema": {
                             "type": "boolean"
                         },
-                        "description": "Include aggregate metrics"
+                        "description": "Include aggregate execution metrics."
                     },
                     {
                         "in": "query",
                         "name": "page",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "maximum": 1000,
+                            "minimum": 1
+                        },
+                        "description": "Results per page. Default 100, maximum 1000."
                     }
                 ],
                 "tags": [
@@ -2118,6 +2260,62 @@
                 }
             }
         },
+        "/api/trading/tasks/backtest/{id}/executions/{execution_id}/": {
+            "get": {
+                "operationId": "backtest_task_execution_detail",
+                "description": "Retrieve a single execution record for a task.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_metrics",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Include aggregate execution metrics."
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskExecution"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/backtest/{id}/log-components/": {
             "get": {
                 "operationId": "trading_tasks_backtest_log_components_retrieve",
@@ -2127,9 +2325,11 @@
                         "in": "query",
                         "name": "execution_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
                         },
-                        "description": "Filter by execution ID (UUID)"
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -2175,15 +2375,17 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Logger/component name filter (comma-separated for multiple)"
+                        "description": "Logger/component name filter (comma-separated for multiple)."
                     },
                     {
                         "in": "query",
                         "name": "execution_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
                         },
-                        "description": "Filter by execution ID (UUID)"
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -2201,45 +2403,64 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Log level filter (comma-separated for multiple)"
+                        "description": "Log level filter (comma-separated for multiple)."
                     },
                     {
                         "in": "query",
                         "name": "page",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "maximum": 1000,
+                            "minimum": 1
+                        },
+                        "description": "Results per page. Default 100, maximum 1000."
+                    },
+                    {
+                        "in": "query",
+                        "name": "position_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional position ID prefix filter."
                     },
                     {
                         "in": "query",
                         "name": "since",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "RFC3339 timestamp for incremental fetch"
+                        "description": "RFC3339 timestamp for incremental fetch."
                     },
                     {
                         "in": "query",
                         "name": "timestamp_from",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "Filter logs from this RFC3339 timestamp (inclusive)"
+                        "description": "Filter records from this RFC3339 timestamp (inclusive)."
                     },
                     {
                         "in": "query",
                         "name": "timestamp_to",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "Filter logs until this RFC3339 timestamp (inclusive)"
+                        "description": "Filter records until this RFC3339 timestamp (inclusive)."
                     }
                 ],
                 "tags": [
@@ -2273,9 +2494,11 @@
                         "in": "query",
                         "name": "execution_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
                         },
-                        "description": "Filter by execution ID (UUID)"
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -2291,41 +2514,50 @@
                         "in": "query",
                         "name": "interval",
                         "schema": {
-                            "type": "integer"
+                            "type": "integer",
+                            "maximum": 1440,
+                            "minimum": 1
                         },
-                        "description": "Aggregation interval in minutes (default 1). When > 1, returns one point per N-minute window."
+                        "description": "Aggregation interval in minutes. Default 1. When greater than 1, returns one point per N-minute window."
                     },
                     {
                         "in": "query",
                         "name": "page",
                         "schema": {
-                            "type": "integer"
+                            "type": "integer",
+                            "minimum": 1
                         },
-                        "description": "Page number (1-based)"
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
-                            "type": "integer"
+                            "type": "integer",
+                            "maximum": 500,
+                            "minimum": 1
                         },
-                        "description": "Results per page (default 1000, max 5000)"
+                        "description": "Results per page. Default 100, maximum 500."
                     },
                     {
                         "in": "query",
                         "name": "since",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "RFC3339 timestamp for incremental fetch"
+                        "description": "RFC3339 timestamp for incremental fetch."
                     },
                     {
                         "in": "query",
                         "name": "until",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "RFC3339 upper-bound timestamp (exclusive)"
+                        "description": "RFC3339 upper-bound timestamp (exclusive)."
                     }
                 ],
                 "tags": [
@@ -2361,15 +2593,17 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Direction filter"
+                        "description": "Direction filter."
                     },
                     {
                         "in": "query",
                         "name": "execution_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
                         },
-                        "description": "Filter by execution ID (UUID)"
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -2387,29 +2621,36 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Order type filter"
+                        "description": "Order type filter."
                     },
                     {
                         "in": "query",
                         "name": "page",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "maximum": 200,
+                            "minimum": 1
+                        },
+                        "description": "Results per page. Default 100, maximum 200."
                     },
                     {
                         "in": "query",
                         "name": "since",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "RFC3339 timestamp for incremental fetch"
+                        "description": "RFC3339 timestamp for incremental fetch."
                     },
                     {
                         "in": "query",
@@ -2417,7 +2658,7 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Order status filter"
+                        "description": "Order status filter."
                     }
                 ],
                 "tags": [
@@ -2445,7 +2686,7 @@
         "/api/trading/tasks/backtest/{id}/pause/": {
             "post": {
                 "operationId": "backtest_tasks_pause",
-                "description": "Pause running task.",
+                "description": "Pause a running task.",
                 "parameters": [
                     {
                         "in": "path",
@@ -2481,7 +2722,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BacktestTaskPauseResponse"
+                                    "$ref": "#/components/schemas/BacktestTask"
                                 }
                             }
                         },
@@ -2501,15 +2742,17 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Direction filter"
+                        "description": "Direction filter."
                     },
                     {
                         "in": "query",
                         "name": "execution_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
                         },
-                        "description": "Filter by execution ID (UUID)"
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -2523,33 +2766,73 @@
                     },
                     {
                         "in": "query",
+                        "name": "include_trade_ids",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Include position trade_ids in the response."
+                    },
+                    {
+                        "in": "query",
                         "name": "page",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "maximum": 200,
+                            "minimum": 1
+                        },
+                        "description": "Results per page. Default 100, maximum 200."
                     },
                     {
                         "in": "query",
                         "name": "position_status",
                         "schema": {
-                            "type": "string"
+                            "enum": [
+                                "open",
+                                "closed"
+                            ],
+                            "type": "string",
+                            "minLength": 1
                         },
-                        "description": "Position status filter (open/closed)"
+                        "description": "Position status filter.\n\n* `open` - open\n* `closed` - closed"
+                    },
+                    {
+                        "in": "query",
+                        "name": "range_from",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "RFC3339 lower bound for positions overlapping a chart range."
+                    },
+                    {
+                        "in": "query",
+                        "name": "range_to",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "RFC3339 upper bound for positions overlapping a chart range."
                     },
                     {
                         "in": "query",
                         "name": "since",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "RFC3339 timestamp for incremental fetch"
+                        "description": "RFC3339 timestamp for incremental fetch."
                     }
                 ],
                 "tags": [
@@ -2577,7 +2860,7 @@
         "/api/trading/tasks/backtest/{id}/restart/": {
             "post": {
                 "operationId": "backtest_tasks_restart",
-                "description": "Restart task from beginning.",
+                "description": "Restart a task from the beginning.",
                 "parameters": [
                     {
                         "in": "path",
@@ -2613,7 +2896,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BacktestTaskRestartResponse"
+                                    "$ref": "#/components/schemas/BacktestTask"
                                 }
                             }
                         },
@@ -2625,7 +2908,7 @@
         "/api/trading/tasks/backtest/{id}/resume/": {
             "post": {
                 "operationId": "backtest_tasks_resume",
-                "description": "Resume paused task.",
+                "description": "Resume a paused task.",
                 "parameters": [
                     {
                         "in": "path",
@@ -2661,7 +2944,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BacktestTaskResumeResponse"
+                                    "$ref": "#/components/schemas/BacktestTask"
                                 }
                             }
                         },
@@ -2709,7 +2992,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/BacktestTaskActionResponse"
+                                    "$ref": "#/components/schemas/BacktestTask"
                                 }
                             }
                         },
@@ -2775,9 +3058,11 @@
                         "in": "query",
                         "name": "execution_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
                         },
-                        "description": "Filter by execution ID (UUID)"
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -2791,25 +3076,12 @@
                     },
                     {
                         "in": "query",
-                        "name": "page",
-                        "schema": {
-                            "type": "integer"
-                        }
-                    },
-                    {
-                        "in": "query",
-                        "name": "page_size",
-                        "schema": {
-                            "type": "integer"
-                        }
-                    },
-                    {
-                        "in": "query",
                         "name": "root_entry_id",
                         "schema": {
-                            "type": "integer"
+                            "type": "integer",
+                            "minimum": 1
                         },
-                        "description": "Optional group filter"
+                        "description": "Optional root entry group filter."
                     }
                 ],
                 "tags": [
@@ -2843,9 +3115,11 @@
                         "in": "query",
                         "name": "execution_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
                         },
-                        "description": "Filter by execution ID (UUID)"
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -2891,15 +3165,17 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Direction filter (buy/sell/long/short)"
+                        "description": "Direction filter (buy/sell/long/short)."
                     },
                     {
                         "in": "query",
                         "name": "execution_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
                         },
-                        "description": "Filter by execution ID (UUID)"
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -2915,39 +3191,50 @@
                         "in": "query",
                         "name": "page",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "maximum": 200,
+                            "minimum": 1
+                        },
+                        "description": "Results per page. Default 100, maximum 200."
                     },
                     {
                         "in": "query",
                         "name": "since",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "RFC3339 timestamp for incremental fetch"
+                        "description": "RFC3339 timestamp for incremental fetch."
                     },
                     {
                         "in": "query",
                         "name": "timestamp_from",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "Filter trades executed at or after this RFC3339 timestamp"
+                        "description": "Filter trades executed at or after this RFC3339 timestamp."
                     },
                     {
                         "in": "query",
                         "name": "timestamp_to",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "Filter trades executed at or before this RFC3339 timestamp"
+                        "description": "Filter trades executed at or before this RFC3339 timestamp."
                     }
                 ],
                 "tags": [
@@ -2972,10 +3259,107 @@
                 }
             }
         },
+        "/api/trading/tasks/backtest/{id}/trend-replay/": {
+            "get": {
+                "operationId": "trading_tasks_backtest_trend_replay_retrieve",
+                "description": "Retrieve chart-oriented trades and positions for task trend replay.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                        },
+                        "description": "Filter by execution ID (UUID)."
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Page number (1-based)."
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 200,
+                            "minimum": 1
+                        },
+                        "description": "Results per page. Default 100, maximum 200."
+                    },
+                    {
+                        "in": "query",
+                        "name": "range_from",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "RFC3339 lower bound for the chart window."
+                    },
+                    {
+                        "in": "query",
+                        "name": "range_to",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "RFC3339 upper bound for the chart window."
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskTrendReplay"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/trading/": {
             "get": {
                 "operationId": "trading_tasks_trading_list",
-                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "ViewSet for TradingTask operations with task-centric API.",
                 "parameters": [
                     {
                         "name": "ordering",
@@ -3018,7 +3402,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/PaginatedTradingTaskList"
+                                    "$ref": "#/components/schemas/PaginatedTradingTaskListList"
                                 }
                             }
                         },
@@ -3028,7 +3412,7 @@
             },
             "post": {
                 "operationId": "trading_tasks_trading_create",
-                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "ViewSet for TradingTask operations with task-centric API.",
                 "tags": [
                     "Trading"
                 ],
@@ -3051,7 +3435,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingTaskCreate"
+                                    "$ref": "#/components/schemas/TradingTask"
                                 }
                             }
                         },
@@ -3063,7 +3447,7 @@
         "/api/trading/tasks/trading/{id}/": {
             "get": {
                 "operationId": "trading_tasks_trading_retrieve",
-                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "ViewSet for TradingTask operations with task-centric API.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3099,7 +3483,7 @@
             },
             "put": {
                 "operationId": "trading_tasks_trading_update",
-                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "ViewSet for TradingTask operations with task-centric API.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3134,7 +3518,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingTaskCreate"
+                                    "$ref": "#/components/schemas/TradingTask"
                                 }
                             }
                         },
@@ -3144,7 +3528,7 @@
             },
             "patch": {
                 "operationId": "trading_tasks_trading_partial_update",
-                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "ViewSet for TradingTask operations with task-centric API.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3179,7 +3563,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingTaskCreate"
+                                    "$ref": "#/components/schemas/TradingTask"
                                 }
                             }
                         },
@@ -3189,7 +3573,7 @@
             },
             "delete": {
                 "operationId": "trading_tasks_trading_destroy",
-                "description": "ViewSet for TradingTask operations with task-centric API.\n\nProvides CRUD operations and task lifecycle management including:\n- submit: Submit task for execution\n- stop: Stop running task\n- restart: Restart task from beginning\n- resume: Resume cancelled task\n- logs: Retrieve task logs with pagination\n- events: Retrieve task events\n- trades: Retrieve trade history",
+                "description": "ViewSet for TradingTask operations with task-centric API.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3226,17 +3610,21 @@
                         "in": "query",
                         "name": "created_from",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "Filter events created at or after this RFC3339 timestamp"
+                        "description": "Filter events created at or after this RFC3339 timestamp."
                     },
                     {
                         "in": "query",
                         "name": "created_to",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "Filter events created at or before this RFC3339 timestamp"
+                        "description": "Filter events created at or before this RFC3339 timestamp."
                     },
                     {
                         "in": "query",
@@ -3244,15 +3632,17 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Event type filter"
+                        "description": "Event type filter."
                     },
                     {
                         "in": "query",
                         "name": "execution_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
                         },
-                        "description": "Filter by execution ID (UUID)"
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -3268,23 +3658,34 @@
                         "in": "query",
                         "name": "page",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "maximum": 1000,
+                            "minimum": 1
+                        },
+                        "description": "Results per page. Default 100, maximum 1000."
                     },
                     {
                         "in": "query",
                         "name": "scope",
                         "schema": {
-                            "type": "string"
+                            "enum": [
+                                "all",
+                                "trading",
+                                "task"
+                            ],
+                            "type": "string",
+                            "minLength": 1
                         },
-                        "description": "Event scope: all|trading|task"
+                        "description": "Event scope filter.\n\n* `all` - all\n* `trading` - trading\n* `task` - task"
                     },
                     {
                         "in": "query",
@@ -3292,15 +3693,17 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Severity filter"
+                        "description": "Severity filter."
                     },
                     {
                         "in": "query",
                         "name": "since",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "RFC3339 timestamp for incremental fetch"
+                        "description": "RFC3339 timestamp for incremental fetch."
                     }
                 ],
                 "tags": [
@@ -3327,7 +3730,7 @@
         },
         "/api/trading/tasks/trading/{id}/executions/": {
             "get": {
-                "operationId": "trading_tasks_trading_executions_retrieve",
+                "operationId": "trading_task_execution_history",
                 "description": "Retrieve execution history for a task.",
                 "parameters": [
                     {
@@ -3346,21 +3749,26 @@
                         "schema": {
                             "type": "boolean"
                         },
-                        "description": "Include aggregate metrics"
+                        "description": "Include aggregate execution metrics."
                     },
                     {
                         "in": "query",
                         "name": "page",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "maximum": 1000,
+                            "minimum": 1
+                        },
+                        "description": "Results per page. Default 100, maximum 1000."
                     }
                 ],
                 "tags": [
@@ -3385,6 +3793,62 @@
                 }
             }
         },
+        "/api/trading/tasks/trading/{id}/executions/{execution_id}/": {
+            "get": {
+                "operationId": "trading_task_execution_detail",
+                "description": "Retrieve a single execution record for a task.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "include_metrics",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Include aggregate execution metrics."
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskExecution"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/trading/{id}/log-components/": {
             "get": {
                 "operationId": "trading_tasks_trading_log_components_retrieve",
@@ -3394,9 +3858,11 @@
                         "in": "query",
                         "name": "execution_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
                         },
-                        "description": "Filter by execution ID (UUID)"
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -3442,15 +3908,17 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Logger/component name filter (comma-separated for multiple)"
+                        "description": "Logger/component name filter (comma-separated for multiple)."
                     },
                     {
                         "in": "query",
                         "name": "execution_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
                         },
-                        "description": "Filter by execution ID (UUID)"
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -3468,45 +3936,64 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Log level filter (comma-separated for multiple)"
+                        "description": "Log level filter (comma-separated for multiple)."
                     },
                     {
                         "in": "query",
                         "name": "page",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "maximum": 1000,
+                            "minimum": 1
+                        },
+                        "description": "Results per page. Default 100, maximum 1000."
+                    },
+                    {
+                        "in": "query",
+                        "name": "position_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional position ID prefix filter."
                     },
                     {
                         "in": "query",
                         "name": "since",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "RFC3339 timestamp for incremental fetch"
+                        "description": "RFC3339 timestamp for incremental fetch."
                     },
                     {
                         "in": "query",
                         "name": "timestamp_from",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "Filter logs from this RFC3339 timestamp (inclusive)"
+                        "description": "Filter records from this RFC3339 timestamp (inclusive)."
                     },
                     {
                         "in": "query",
                         "name": "timestamp_to",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "Filter logs until this RFC3339 timestamp (inclusive)"
+                        "description": "Filter records until this RFC3339 timestamp (inclusive)."
                     }
                 ],
                 "tags": [
@@ -3540,9 +4027,11 @@
                         "in": "query",
                         "name": "execution_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
                         },
-                        "description": "Filter by execution ID (UUID)"
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -3558,41 +4047,50 @@
                         "in": "query",
                         "name": "interval",
                         "schema": {
-                            "type": "integer"
+                            "type": "integer",
+                            "maximum": 1440,
+                            "minimum": 1
                         },
-                        "description": "Aggregation interval in minutes (default 1). When > 1, returns one point per N-minute window."
+                        "description": "Aggregation interval in minutes. Default 1. When greater than 1, returns one point per N-minute window."
                     },
                     {
                         "in": "query",
                         "name": "page",
                         "schema": {
-                            "type": "integer"
+                            "type": "integer",
+                            "minimum": 1
                         },
-                        "description": "Page number (1-based)"
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
-                            "type": "integer"
+                            "type": "integer",
+                            "maximum": 500,
+                            "minimum": 1
                         },
-                        "description": "Results per page (default 1000, max 5000)"
+                        "description": "Results per page. Default 100, maximum 500."
                     },
                     {
                         "in": "query",
                         "name": "since",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "RFC3339 timestamp for incremental fetch"
+                        "description": "RFC3339 timestamp for incremental fetch."
                     },
                     {
                         "in": "query",
                         "name": "until",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "RFC3339 upper-bound timestamp (exclusive)"
+                        "description": "RFC3339 upper-bound timestamp (exclusive)."
                     }
                 ],
                 "tags": [
@@ -3628,15 +4126,17 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Direction filter"
+                        "description": "Direction filter."
                     },
                     {
                         "in": "query",
                         "name": "execution_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
                         },
-                        "description": "Filter by execution ID (UUID)"
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -3654,29 +4154,36 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Order type filter"
+                        "description": "Order type filter."
                     },
                     {
                         "in": "query",
                         "name": "page",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "maximum": 200,
+                            "minimum": 1
+                        },
+                        "description": "Results per page. Default 100, maximum 200."
                     },
                     {
                         "in": "query",
                         "name": "since",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "RFC3339 timestamp for incremental fetch"
+                        "description": "RFC3339 timestamp for incremental fetch."
                     },
                     {
                         "in": "query",
@@ -3684,7 +4191,7 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Order status filter"
+                        "description": "Order status filter."
                     }
                 ],
                 "tags": [
@@ -3712,7 +4219,7 @@
         "/api/trading/tasks/trading/{id}/pause/": {
             "post": {
                 "operationId": "trading_tasks_pause",
-                "description": "Pause running task.",
+                "description": "Pause a running task.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3748,7 +4255,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingTaskPauseResponse"
+                                    "$ref": "#/components/schemas/TradingTask"
                                 }
                             }
                         },
@@ -3768,15 +4275,17 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Direction filter"
+                        "description": "Direction filter."
                     },
                     {
                         "in": "query",
                         "name": "execution_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
                         },
-                        "description": "Filter by execution ID (UUID)"
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -3790,33 +4299,73 @@
                     },
                     {
                         "in": "query",
+                        "name": "include_trade_ids",
+                        "schema": {
+                            "type": "boolean"
+                        },
+                        "description": "Include position trade_ids in the response."
+                    },
+                    {
+                        "in": "query",
                         "name": "page",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "maximum": 200,
+                            "minimum": 1
+                        },
+                        "description": "Results per page. Default 100, maximum 200."
                     },
                     {
                         "in": "query",
                         "name": "position_status",
                         "schema": {
-                            "type": "string"
+                            "enum": [
+                                "open",
+                                "closed"
+                            ],
+                            "type": "string",
+                            "minLength": 1
                         },
-                        "description": "Position status filter (open/closed)"
+                        "description": "Position status filter.\n\n* `open` - open\n* `closed` - closed"
+                    },
+                    {
+                        "in": "query",
+                        "name": "range_from",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "RFC3339 lower bound for positions overlapping a chart range."
+                    },
+                    {
+                        "in": "query",
+                        "name": "range_to",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "RFC3339 upper bound for positions overlapping a chart range."
                     },
                     {
                         "in": "query",
                         "name": "since",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "RFC3339 timestamp for incremental fetch"
+                        "description": "RFC3339 timestamp for incremental fetch."
                     }
                 ],
                 "tags": [
@@ -3844,7 +4393,7 @@
         "/api/trading/tasks/trading/{id}/restart/": {
             "post": {
                 "operationId": "trading_tasks_restart",
-                "description": "Restart task from beginning.",
+                "description": "Restart a task from the beginning.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3880,7 +4429,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingTaskRestartResponse"
+                                    "$ref": "#/components/schemas/TradingTask"
                                 }
                             }
                         },
@@ -3892,7 +4441,7 @@
         "/api/trading/tasks/trading/{id}/resume/": {
             "post": {
                 "operationId": "trading_tasks_resume",
-                "description": "Resume cancelled task.",
+                "description": "Resume a paused task.",
                 "parameters": [
                     {
                         "in": "path",
@@ -3928,7 +4477,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingTaskResumeResponse"
+                                    "$ref": "#/components/schemas/TradingTask"
                                 }
                             }
                         },
@@ -3976,7 +4525,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TradingTaskActionResponse"
+                                    "$ref": "#/components/schemas/TradingTask"
                                 }
                             }
                         },
@@ -4041,9 +4590,11 @@
                         "in": "query",
                         "name": "execution_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
                         },
-                        "description": "Filter by execution ID (UUID)"
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -4057,25 +4608,12 @@
                     },
                     {
                         "in": "query",
-                        "name": "page",
-                        "schema": {
-                            "type": "integer"
-                        }
-                    },
-                    {
-                        "in": "query",
-                        "name": "page_size",
-                        "schema": {
-                            "type": "integer"
-                        }
-                    },
-                    {
-                        "in": "query",
                         "name": "root_entry_id",
                         "schema": {
-                            "type": "integer"
+                            "type": "integer",
+                            "minimum": 1
                         },
-                        "description": "Optional group filter"
+                        "description": "Optional root entry group filter."
                     }
                 ],
                 "tags": [
@@ -4109,9 +4647,11 @@
                         "in": "query",
                         "name": "execution_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
                         },
-                        "description": "Filter by execution ID (UUID)"
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -4157,15 +4697,17 @@
                         "schema": {
                             "type": "string"
                         },
-                        "description": "Direction filter (buy/sell/long/short)"
+                        "description": "Direction filter (buy/sell/long/short)."
                     },
                     {
                         "in": "query",
                         "name": "execution_id",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
                         },
-                        "description": "Filter by execution ID (UUID)"
+                        "description": "Filter by execution ID (UUID)."
                     },
                     {
                         "in": "path",
@@ -4181,39 +4723,50 @@
                         "in": "query",
                         "name": "page",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Page number (1-based)."
                     },
                     {
                         "in": "query",
                         "name": "page_size",
                         "schema": {
-                            "type": "integer"
-                        }
+                            "type": "integer",
+                            "maximum": 200,
+                            "minimum": 1
+                        },
+                        "description": "Results per page. Default 100, maximum 200."
                     },
                     {
                         "in": "query",
                         "name": "since",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "RFC3339 timestamp for incremental fetch"
+                        "description": "RFC3339 timestamp for incremental fetch."
                     },
                     {
                         "in": "query",
                         "name": "timestamp_from",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "Filter trades executed at or after this RFC3339 timestamp"
+                        "description": "Filter trades executed at or after this RFC3339 timestamp."
                     },
                     {
                         "in": "query",
                         "name": "timestamp_to",
                         "schema": {
-                            "type": "string"
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
                         },
-                        "description": "Filter trades executed at or before this RFC3339 timestamp"
+                        "description": "Filter trades executed at or before this RFC3339 timestamp."
                     }
                 ],
                 "tags": [
@@ -4237,6 +4790,103 @@
                     }
                 }
             }
+        },
+        "/api/trading/tasks/trading/{id}/trend-replay/": {
+            "get": {
+                "operationId": "trading_tasks_trading_trend_replay_retrieve",
+                "description": "Retrieve chart-oriented trades and positions for task trend replay.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                        },
+                        "description": "Filter by execution ID (UUID)."
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Page number (1-based)."
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 200,
+                            "minimum": 1
+                        },
+                        "description": "Results per page. Default 100, maximum 200."
+                    },
+                    {
+                        "in": "query",
+                        "name": "range_from",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "RFC3339 lower bound for the chart window."
+                    },
+                    {
+                        "in": "query",
+                        "name": "range_to",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "RFC3339 upper bound for the chart window."
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskTrendReplay"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
         }
     },
     "components": {
@@ -4251,7 +4901,7 @@
             },
             "BacktestTask": {
                 "type": "object",
-                "description": "Serializer for BacktestTask with execution data.",
+                "description": "Serializer for BacktestTask full details.",
                 "properties": {
                     "id": {
                         "type": "string",
@@ -4259,85 +4909,9 @@
                         "readOnly": true,
                         "description": "Unique identifier for this record"
                     },
-                    "name": {
-                        "type": "string",
-                        "description": "Human-readable name for this backtest task",
-                        "maxLength": 255
-                    },
-                    "description": {
-                        "type": "string",
-                        "description": "Optional description of this backtest task"
-                    },
-                    "task_type": {
-                        "type": "string",
-                        "description": "Get the task type.\n\nArgs:\n    obj: Task instance\n\nReturns:\n    str: \"backtest\" or \"trading\"",
-                        "readOnly": true
-                    },
-                    "status": {
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/StatusEnum"
-                            }
-                        ],
-                        "readOnly": true,
-                        "description": "Current task status\n\n* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
-                    },
-                    "execution_id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "readOnly": true,
-                        "nullable": true,
-                        "description": "UUID identifying the current execution run (also used as Celery task_id)"
-                    },
-                    "created_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "readOnly": true,
-                        "description": "Timestamp when this record was created"
-                    },
-                    "updated_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "readOnly": true,
-                        "description": "Timestamp when this record was last updated"
-                    },
-                    "started_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "readOnly": true,
-                        "nullable": true,
-                        "description": "Timestamp when the task execution started"
-                    },
-                    "completed_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "readOnly": true,
-                        "nullable": true,
-                        "description": "Timestamp when the task execution completed"
-                    },
-                    "duration": {
-                        "type": "number",
-                        "format": "double",
-                        "nullable": true,
-                        "description": "Calculate task execution duration in seconds.\n\nArgs:\n    obj: Task instance\n\nReturns:\n    float | None: Duration in seconds if both started_at and completed_at are set,\n                 None otherwise",
-                        "readOnly": true
-                    },
-                    "error_message": {
-                        "type": "string",
-                        "readOnly": true,
-                        "nullable": true,
-                        "description": "Error message if task failed"
-                    },
-                    "error_traceback": {
-                        "type": "string",
-                        "readOnly": true,
-                        "nullable": true,
-                        "description": "Full error traceback if task failed"
-                    },
-                    "user": {
+                    "user_id": {
                         "type": "integer",
-                        "readOnly": true,
-                        "description": "User who created this backtest task"
+                        "readOnly": true
                     },
                     "config_id": {
                         "type": "string",
@@ -4352,90 +4926,6 @@
                         "type": "string",
                         "readOnly": true
                     },
-                    "data_source": {
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/DataSourceEnum"
-                            }
-                        ],
-                        "description": "Data source for historical tick data\n\n* `postgresql` - PostgreSQL\n* `athena` - AWS Athena\n* `s3` - AWS S3"
-                    },
-                    "start_time": {
-                        "type": "string",
-                        "format": "date-time",
-                        "description": "Start time for backtest period"
-                    },
-                    "end_time": {
-                        "type": "string",
-                        "format": "date-time",
-                        "description": "End time for backtest period"
-                    },
-                    "initial_balance": {
-                        "type": "string",
-                        "format": "decimal",
-                        "pattern": "^-?\\d{0,13}(?:\\.\\d{0,2})?$",
-                        "description": "Initial account balance for backtest"
-                    },
-                    "commission_per_trade": {
-                        "type": "string",
-                        "format": "decimal",
-                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,2})?$",
-                        "description": "Commission to apply per trade"
-                    },
-                    "pip_size": {
-                        "type": "string",
-                        "format": "decimal",
-                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,5})?$",
-                        "nullable": true,
-                        "description": "Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account."
-                    },
-                    "instrument": {
-                        "type": "string",
-                        "description": "Trading instrument (e.g., EUR_USD, USD_JPY)",
-                        "maxLength": 20
-                    }
-                },
-                "required": [
-                    "completed_at",
-                    "config_id",
-                    "config_name",
-                    "created_at",
-                    "duration",
-                    "end_time",
-                    "error_message",
-                    "error_traceback",
-                    "execution_id",
-                    "id",
-                    "name",
-                    "start_time",
-                    "started_at",
-                    "status",
-                    "strategy_type",
-                    "task_type",
-                    "updated_at",
-                    "user"
-                ]
-            },
-            "BacktestTaskActionResponse": {
-                "type": "object",
-                "properties": {
-                    "results": {
-                        "$ref": "#/components/schemas/BacktestTask"
-                    }
-                },
-                "required": [
-                    "results"
-                ]
-            },
-            "BacktestTaskCreate": {
-                "type": "object",
-                "description": "Serializer for creating and updating BacktestTask.",
-                "properties": {
-                    "config": {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Strategy configuration used by this task"
-                    },
                     "name": {
                         "type": "string",
                         "description": "Human-readable name for this backtest task",
@@ -4468,11 +4958,6 @@
                         "format": "decimal",
                         "pattern": "^-?\\d{0,13}(?:\\.\\d{0,2})?$",
                         "description": "Initial account balance for backtest"
-                    },
-                    "account_currency": {
-                        "type": "string",
-                        "description": "Account base currency (e.g., USD, JPY)",
-                        "maxLength": 3
                     },
                     "commission_per_trade": {
                         "type": "string",
@@ -4495,10 +4980,72 @@
                     "hedging_enabled": {
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging) during backtest."
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/StatusEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "Current task status\n\n* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
+                    },
+                    "execution_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                    },
+                    "started_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Timestamp when the task execution started"
+                    },
+                    "completed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Timestamp when the task execution completed"
+                    },
+                    "error_message": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Error message if task failed"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "description": "Timestamp when this record was created"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "description": "Timestamp when this record was last updated"
                     }
                 },
                 "required": [
-                    "config"
+                    "completed_at",
+                    "config_id",
+                    "config_name",
+                    "created_at",
+                    "end_time",
+                    "error_message",
+                    "execution_id",
+                    "id",
+                    "name",
+                    "start_time",
+                    "started_at",
+                    "status",
+                    "strategy_type",
+                    "updated_at",
+                    "user_id"
                 ]
             },
             "BacktestTaskCreateRequest": {
@@ -4578,20 +5125,157 @@
                     "config"
                 ]
             },
-            "BacktestTaskPauseResponse": {
+            "BacktestTaskList": {
                 "type": "object",
+                "description": "Serializer for BacktestTask list view (summary only).",
                 "properties": {
-                    "results": {
-                        "$ref": "#/components/schemas/BacktestTask"
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "description": "Unique identifier for this record"
+                    },
+                    "user_id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "config_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "config_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "strategy_type": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Human-readable name for this backtest task"
+                    },
+                    "description": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Optional description of this backtest task"
+                    },
+                    "data_source": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/DataSourceEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "Data source for historical tick data\n\n* `postgresql` - PostgreSQL\n* `athena` - AWS Athena\n* `s3` - AWS S3"
+                    },
+                    "start_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "description": "Start time for backtest period"
+                    },
+                    "end_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "description": "End time for backtest period"
+                    },
+                    "initial_balance": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,13}(?:\\.\\d{0,2})?$",
+                        "readOnly": true,
+                        "description": "Initial account balance for backtest"
+                    },
+                    "pip_size": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,5})?$",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account."
+                    },
+                    "instrument": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Trading instrument (e.g., EUR_USD, USD_JPY)"
+                    },
+                    "hedging_enabled": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Allow simultaneous long and short positions (hedging) during backtest."
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/StatusEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "Current task status\n\n* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
+                    },
+                    "started_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Timestamp when the task execution started"
+                    },
+                    "completed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Timestamp when the task execution completed"
+                    },
+                    "error_message": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Error message if task failed"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "description": "Timestamp when this record was created"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "description": "Timestamp when this record was last updated"
                     }
                 },
                 "required": [
-                    "results"
+                    "completed_at",
+                    "config_id",
+                    "config_name",
+                    "created_at",
+                    "data_source",
+                    "description",
+                    "end_time",
+                    "error_message",
+                    "hedging_enabled",
+                    "id",
+                    "initial_balance",
+                    "instrument",
+                    "name",
+                    "pip_size",
+                    "start_time",
+                    "started_at",
+                    "status",
+                    "strategy_type",
+                    "updated_at",
+                    "user_id"
                 ]
             },
             "BacktestTaskRequest": {
                 "type": "object",
-                "description": "Serializer for BacktestTask with execution data.",
+                "description": "Serializer for BacktestTask full details.",
                 "properties": {
                     "name": {
                         "type": "string",
@@ -4645,34 +5329,16 @@
                         "minLength": 1,
                         "description": "Trading instrument (e.g., EUR_USD, USD_JPY)",
                         "maxLength": 20
+                    },
+                    "hedging_enabled": {
+                        "type": "boolean",
+                        "description": "Allow simultaneous long and short positions (hedging) during backtest."
                     }
                 },
                 "required": [
                     "end_time",
                     "name",
                     "start_time"
-                ]
-            },
-            "BacktestTaskRestartResponse": {
-                "type": "object",
-                "properties": {
-                    "results": {
-                        "$ref": "#/components/schemas/BacktestTask"
-                    }
-                },
-                "required": [
-                    "results"
-                ]
-            },
-            "BacktestTaskResumeResponse": {
-                "type": "object",
-                "properties": {
-                    "results": {
-                        "$ref": "#/components/schemas/BacktestTask"
-                    }
-                },
-                "required": [
-                    "results"
                 ]
             },
             "BacktestTaskStopResponse": {
@@ -4682,7 +5348,7 @@
                         "type": "string"
                     },
                     "task_id": {
-                        "type": "integer"
+                        "type": "string"
                     },
                     "status": {
                         "type": "string"
@@ -5121,15 +5787,11 @@
                     "token": {
                         "type": "string"
                     },
-                    "refresh_token": {
-                        "type": "string"
-                    },
                     "user": {
                         "$ref": "#/components/schemas/LoginUser"
                     }
                 },
                 "required": [
-                    "refresh_token",
                     "token",
                     "user"
                 ]
@@ -6237,7 +6899,7 @@
                 "type": "string",
                 "description": "* `market` - market\n* `limit` - limit\n* `stop` - stop\n* `oco` - oco"
             },
-            "PaginatedBacktestTaskList": {
+            "PaginatedBacktestTaskListList": {
                 "type": "object",
                 "required": [
                     "count",
@@ -6263,12 +6925,12 @@
                     "results": {
                         "type": "array",
                         "items": {
-                            "$ref": "#/components/schemas/BacktestTask"
+                            "$ref": "#/components/schemas/BacktestTaskList"
                         }
                     }
                 }
             },
-            "PaginatedTradingTaskList": {
+            "PaginatedStrategyConfigPaginatedResponseList": {
                 "type": "object",
                 "required": [
                     "count",
@@ -6294,7 +6956,38 @@
                     "results": {
                         "type": "array",
                         "items": {
-                            "$ref": "#/components/schemas/TradingTask"
+                            "$ref": "#/components/schemas/StrategyConfigPaginatedResponse"
+                        }
+                    }
+                }
+            },
+            "PaginatedTradingTaskListList": {
+                "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "example": 123
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=4"
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=2"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/TradingTaskList"
                         }
                     }
                 }
@@ -6383,6 +7076,31 @@
                         "type": "string",
                         "format": "decimal",
                         "pattern": "^-?\\d{0,15}(?:\\.\\d{0,5})?$"
+                    }
+                }
+            },
+            "PatchedStrategyConfigDetailRequest": {
+                "type": "object",
+                "description": "Serializer for strategy configuration full details.",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Human-readable name for this configuration",
+                        "maxLength": 255
+                    },
+                    "strategy_type": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Type of strategy (e.g., 'floor', 'ma_crossover', 'rsi')",
+                        "maxLength": 50
+                    },
+                    "parameters": {
+                        "description": "Strategy-specific configuration parameters"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Optional description of this configuration"
                     }
                 }
             },
@@ -7024,6 +7742,43 @@
                     "results"
                 ]
             },
+            "StrategyConfigTaskUsage": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "task_type": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "id",
+                    "name",
+                    "status",
+                    "task_type"
+                ]
+            },
+            "StrategyConfigTaskUsageList": {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/StrategyConfigTaskUsage"
+                        }
+                    }
+                },
+                "required": [
+                    "results"
+                ]
+            },
             "StrategyDefaultsNotFound": {
                 "type": "object",
                 "properties": {
@@ -7591,6 +8346,82 @@
                     "results"
                 ]
             },
+            "TaskTrendReplay": {
+                "type": "object",
+                "description": "Combined trend replay payload for the chart view.",
+                "properties": {
+                    "trades": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Trade"
+                        }
+                    },
+                    "positions": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Position"
+                        }
+                    },
+                    "meta": {
+                        "$ref": "#/components/schemas/TaskTrendReplayMeta"
+                    }
+                },
+                "required": [
+                    "meta",
+                    "positions",
+                    "trades"
+                ]
+            },
+            "TaskTrendReplayMeta": {
+                "type": "object",
+                "description": "Metadata for a trend replay payload.",
+                "properties": {
+                    "mode": {
+                        "type": "string"
+                    },
+                    "page": {
+                        "type": "integer"
+                    },
+                    "page_size": {
+                        "type": "integer"
+                    },
+                    "total_trades": {
+                        "type": "integer"
+                    },
+                    "returned_trades": {
+                        "type": "integer"
+                    },
+                    "has_more_trades": {
+                        "type": "boolean"
+                    },
+                    "latest_trade_updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "range_from": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "range_to": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "has_more_trades",
+                    "latest_trade_updated_at",
+                    "mode",
+                    "page",
+                    "page_size",
+                    "range_from",
+                    "range_to",
+                    "returned_trades",
+                    "total_trades"
+                ]
+            },
             "TaskTypeEnum": {
                 "enum": [
                     "backtest",
@@ -7675,13 +8506,9 @@
                 "type": "object",
                 "properties": {
                     "refresh_token": {
-                        "type": "string",
-                        "minLength": 1
+                        "type": "string"
                     }
-                },
-                "required": [
-                    "refresh_token"
-                ]
+                }
             },
             "TokenRefreshResponse": {
                 "type": "object",
@@ -7689,15 +8516,11 @@
                     "token": {
                         "type": "string"
                     },
-                    "refresh_token": {
-                        "type": "string"
-                    },
                     "user": {
                         "$ref": "#/components/schemas/TokenRefreshUser"
                     }
                 },
                 "required": [
-                    "refresh_token",
                     "token",
                     "user"
                 ]
@@ -7883,7 +8706,7 @@
             },
             "TradingTask": {
                 "type": "object",
-                "description": "Serializer for TradingTask with execution data.",
+                "description": "Serializer for TradingTask full details.",
                 "properties": {
                     "id": {
                         "type": "string",
@@ -7891,85 +8714,9 @@
                         "readOnly": true,
                         "description": "Unique identifier for this record"
                     },
-                    "name": {
-                        "type": "string",
-                        "description": "Human-readable name for this trading task",
-                        "maxLength": 255
-                    },
-                    "description": {
-                        "type": "string",
-                        "description": "Optional description of this trading task"
-                    },
-                    "task_type": {
-                        "type": "string",
-                        "description": "Get the task type.\n\nArgs:\n    obj: Task instance\n\nReturns:\n    str: \"backtest\" or \"trading\"",
-                        "readOnly": true
-                    },
-                    "status": {
-                        "allOf": [
-                            {
-                                "$ref": "#/components/schemas/StatusEnum"
-                            }
-                        ],
-                        "readOnly": true,
-                        "description": "Current task status\n\n* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
-                    },
-                    "execution_id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "readOnly": true,
-                        "nullable": true,
-                        "description": "UUID identifying the current execution run (also used as Celery task_id)"
-                    },
-                    "created_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "readOnly": true,
-                        "description": "Timestamp when this record was created"
-                    },
-                    "updated_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "readOnly": true,
-                        "description": "Timestamp when this record was last updated"
-                    },
-                    "started_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "readOnly": true,
-                        "nullable": true,
-                        "description": "Timestamp when the task execution started"
-                    },
-                    "completed_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "readOnly": true,
-                        "nullable": true,
-                        "description": "Timestamp when the task execution completed"
-                    },
-                    "duration": {
-                        "type": "number",
-                        "format": "double",
-                        "nullable": true,
-                        "description": "Calculate task execution duration in seconds.\n\nArgs:\n    obj: Task instance\n\nReturns:\n    float | None: Duration in seconds if both started_at and completed_at are set,\n                 None otherwise",
-                        "readOnly": true
-                    },
-                    "error_message": {
-                        "type": "string",
-                        "readOnly": true,
-                        "nullable": true,
-                        "description": "Error message if task failed"
-                    },
-                    "error_traceback": {
-                        "type": "string",
-                        "readOnly": true,
-                        "nullable": true,
-                        "description": "Full error traceback if task failed"
-                    },
-                    "user": {
+                    "user_id": {
                         "type": "integer",
-                        "readOnly": true,
-                        "description": "User who created this trading task"
+                        "readOnly": true
                     },
                     "config_id": {
                         "type": "string",
@@ -7984,9 +8731,14 @@
                         "type": "string",
                         "readOnly": true
                     },
-                    "oanda_account": {
+                    "instrument": {
+                        "type": "string",
+                        "description": "Get instrument from configuration parameters.",
+                        "readOnly": true
+                    },
+                    "account_id": {
                         "type": "integer",
-                        "description": "OANDA account used for trading"
+                        "readOnly": true
                     },
                     "account_name": {
                         "type": "string",
@@ -7995,77 +8747,6 @@
                     "account_type": {
                         "type": "string",
                         "readOnly": true
-                    },
-                    "sell_on_stop": {
-                        "type": "boolean",
-                        "description": "Close all positions when task is stopped"
-                    },
-                    "dry_run": {
-                        "type": "boolean",
-                        "description": "Simulate order execution without placing real orders on OANDA"
-                    },
-                    "pip_size": {
-                        "type": "string",
-                        "format": "decimal",
-                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,5})?$",
-                        "nullable": true,
-                        "description": "Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account."
-                    },
-                    "instrument": {
-                        "type": "string",
-                        "description": "Trading instrument (e.g., EUR_USD, USD_JPY)",
-                        "maxLength": 20
-                    },
-                    "strategy_state": {
-                        "readOnly": true,
-                        "description": "Strategy-specific state for persistence across restarts"
-                    }
-                },
-                "required": [
-                    "account_name",
-                    "account_type",
-                    "completed_at",
-                    "config_id",
-                    "config_name",
-                    "created_at",
-                    "duration",
-                    "error_message",
-                    "error_traceback",
-                    "execution_id",
-                    "id",
-                    "name",
-                    "oanda_account",
-                    "started_at",
-                    "status",
-                    "strategy_state",
-                    "strategy_type",
-                    "task_type",
-                    "updated_at",
-                    "user"
-                ]
-            },
-            "TradingTaskActionResponse": {
-                "type": "object",
-                "properties": {
-                    "results": {
-                        "$ref": "#/components/schemas/TradingTask"
-                    }
-                },
-                "required": [
-                    "results"
-                ]
-            },
-            "TradingTaskCreate": {
-                "type": "object",
-                "description": "Serializer for creating and updating TradingTask.\n\nAccepts config_id and account_id from the frontend, mapping them\nto the config and oanda_account FK fields.",
-                "properties": {
-                    "config_id": {
-                        "type": "string",
-                        "format": "uuid",
-                        "description": "Unique identifier for this record"
-                    },
-                    "account_id": {
-                        "type": "integer"
                     },
                     "name": {
                         "type": "string",
@@ -8087,8 +8768,96 @@
                     "hedging_enabled": {
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account."
+                    },
+                    "pip_size": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,5})?$",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account."
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/StatusEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "Current task status\n\n* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
+                    },
+                    "execution_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                    },
+                    "started_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Timestamp when the task execution started"
+                    },
+                    "completed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Timestamp when the task execution completed"
+                    },
+                    "error_message": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Error message if task failed"
+                    },
+                    "has_strategy_state": {
+                        "type": "boolean",
+                        "description": "Check if task has saved strategy state.",
+                        "readOnly": true
+                    },
+                    "can_resume": {
+                        "type": "boolean",
+                        "description": "Check if task can be resumed with state recovery.",
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "description": "Timestamp when this record was created"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "description": "Timestamp when this record was last updated"
                     }
-                }
+                },
+                "required": [
+                    "account_id",
+                    "account_name",
+                    "account_type",
+                    "can_resume",
+                    "completed_at",
+                    "config_id",
+                    "config_name",
+                    "created_at",
+                    "error_message",
+                    "execution_id",
+                    "has_strategy_state",
+                    "id",
+                    "instrument",
+                    "name",
+                    "pip_size",
+                    "started_at",
+                    "status",
+                    "strategy_type",
+                    "updated_at",
+                    "user_id"
+                ]
             },
             "TradingTaskCreateRequest": {
                 "type": "object",
@@ -8126,20 +8895,160 @@
                     }
                 }
             },
-            "TradingTaskPauseResponse": {
+            "TradingTaskList": {
                 "type": "object",
+                "description": "Serializer for TradingTask list view (summary only).",
                 "properties": {
-                    "results": {
-                        "$ref": "#/components/schemas/TradingTask"
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "description": "Unique identifier for this record"
+                    },
+                    "user_id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "config_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "config_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "strategy_type": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "instrument": {
+                        "type": "string",
+                        "description": "Get instrument from configuration parameters.",
+                        "readOnly": true
+                    },
+                    "account_id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "account_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "account_type": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "name": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Human-readable name for this trading task"
+                    },
+                    "description": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Optional description of this trading task"
+                    },
+                    "sell_on_stop": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Close all positions when task is stopped"
+                    },
+                    "dry_run": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Simulate order execution without placing real orders on OANDA"
+                    },
+                    "hedging_enabled": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account."
+                    },
+                    "pip_size": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,5})?$",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account."
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/StatusEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "Current task status\n\n* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
+                    },
+                    "execution_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                    },
+                    "started_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Timestamp when the task execution started"
+                    },
+                    "completed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Timestamp when the task execution completed"
+                    },
+                    "error_message": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Error message if task failed"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "description": "Timestamp when this record was created"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "description": "Timestamp when this record was last updated"
                     }
                 },
                 "required": [
-                    "results"
+                    "account_id",
+                    "account_name",
+                    "account_type",
+                    "completed_at",
+                    "config_id",
+                    "config_name",
+                    "created_at",
+                    "description",
+                    "dry_run",
+                    "error_message",
+                    "execution_id",
+                    "hedging_enabled",
+                    "id",
+                    "instrument",
+                    "name",
+                    "pip_size",
+                    "sell_on_stop",
+                    "started_at",
+                    "status",
+                    "strategy_type",
+                    "updated_at",
+                    "user_id"
                 ]
             },
             "TradingTaskRequest": {
                 "type": "object",
-                "description": "Serializer for TradingTask with execution data.",
+                "description": "Serializer for TradingTask full details.",
                 "properties": {
                     "name": {
                         "type": "string",
@@ -8151,10 +9060,6 @@
                         "type": "string",
                         "description": "Optional description of this trading task"
                     },
-                    "oanda_account": {
-                        "type": "integer",
-                        "description": "OANDA account used for trading"
-                    },
                     "sell_on_stop": {
                         "type": "boolean",
                         "description": "Close all positions when task is stopped"
@@ -8163,45 +9068,13 @@
                         "type": "boolean",
                         "description": "Simulate order execution without placing real orders on OANDA"
                     },
-                    "pip_size": {
-                        "type": "string",
-                        "format": "decimal",
-                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,5})?$",
-                        "nullable": true,
-                        "description": "Pip size for the instrument (e.g., 0.0001 for EUR_USD, 0.01 for USD_JPY). If not provided, will be fetched from OANDA account."
-                    },
-                    "instrument": {
-                        "type": "string",
-                        "minLength": 1,
-                        "description": "Trading instrument (e.g., EUR_USD, USD_JPY)",
-                        "maxLength": 20
+                    "hedging_enabled": {
+                        "type": "boolean",
+                        "description": "Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account."
                     }
                 },
                 "required": [
-                    "name",
-                    "oanda_account"
-                ]
-            },
-            "TradingTaskRestartResponse": {
-                "type": "object",
-                "properties": {
-                    "results": {
-                        "$ref": "#/components/schemas/TradingTask"
-                    }
-                },
-                "required": [
-                    "results"
-                ]
-            },
-            "TradingTaskResumeResponse": {
-                "type": "object",
-                "properties": {
-                    "results": {
-                        "$ref": "#/components/schemas/TradingTask"
-                    }
-                },
-                "required": [
-                    "results"
+                    "name"
                 ]
             },
             "TradingTaskStopRequestRequest": {
@@ -8222,7 +9095,7 @@
                         "type": "string"
                     },
                     "task_id": {
-                        "type": "integer"
+                        "type": "string"
                     },
                     "mode": {
                         "type": "string"

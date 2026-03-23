@@ -89,7 +89,7 @@ class TestPositionSerializer:
         assert "is_open" in serializer.fields
 
     def test_get_trade_ids_with_prefetched(self):
-        serializer = PositionSerializer()
+        serializer = PositionSerializer(context={"include_trade_ids": True})
         obj = MagicMock()
         obj.prefetched_trade_ids = ["id1", "id2"]
         result = serializer.get_trade_ids(obj)

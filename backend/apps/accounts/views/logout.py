@@ -1,7 +1,7 @@
 """User logout view."""
 
 from logging import Logger, getLogger
-from typing import Any
+from typing import Any, cast
 
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
@@ -10,9 +10,10 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.models import UserSession
+from apps.accounts.models import User, UserSession
 from apps.accounts.services.events import SecurityEventService
 from apps.accounts.services.jwt import JWTService
+from apps.accounts.utils.cookies import clear_refresh_cookie
 
 logger: Logger = getLogger(name=__name__)
 
@@ -64,42 +65,31 @@ class UserLogoutView(APIView):
     def post(self, request: Request) -> Response:
         """Handle user logout."""
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
-        if not auth_header.startswith("Bearer "):
-            return Response(
-                {"error": "Invalid authorization header format."},
+        user_obj = getattr(request, "user", None)
+        if not auth_header.startswith("Bearer ") or not isinstance(user_obj, User):
+            response = Response(
+                {"error": "Authentication required."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
-
-        token = auth_header.split(" ")[1] if len(auth_header.split(" ")) > 1 else ""
-        if not token:
-            return Response(
-                {"error": "No token provided."},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
-
-        user = JWTService().get_user_from_token(token)
-        if not user:
-            return Response(
-                {"error": "Invalid or expired token."},
-                status=status.HTTP_401_UNAUTHORIZED,
-            )
+            return clear_refresh_cookie(response)
+        auth_user = cast(User, user_obj)
 
         ip_address = self.get_client_ip(request)
 
-        active_sessions = UserSession.objects.filter(user=user, is_active=True)
+        active_sessions = UserSession.objects.filter(user=auth_user, is_active=True)
         for session in active_sessions:
             session.terminate()
 
         # Revoke all refresh tokens for this user
-        revoked_count = JWTService.revoke_all_refresh_tokens(user)
+        revoked_count = JWTService.revoke_all_refresh_tokens(auth_user)
 
         logger.info(
             "User %s logged out successfully from %s",
-            user.email,
+            auth_user.email,
             ip_address,
             extra={
-                "user_id": user.id,
-                "email": user.email,
+                "user_id": auth_user.pk,
+                "email": auth_user.email,
                 "ip_address": ip_address,
                 "user_agent": request.META.get("HTTP_USER_AGENT", ""),
                 "sessions_terminated": active_sessions.count(),
@@ -108,14 +98,15 @@ class UserLogoutView(APIView):
         )
 
         self.security_events.log_logout(
-            user=user,
+            user=auth_user,
             ip_address=ip_address,
         )
 
-        return Response(
+        response = Response(
             {
                 "message": "Logged out successfully.",
                 "sessions_terminated": active_sessions.count(),
             },
             status=status.HTTP_200_OK,
         )
+        return clear_refresh_cookie(response)

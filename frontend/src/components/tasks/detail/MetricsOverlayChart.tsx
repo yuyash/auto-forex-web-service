@@ -22,8 +22,13 @@ import {
   type IChartApi,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import { useDocumentVisibility } from '../../../hooks/useDocumentVisibility';
-import { fetchMetrics, type MetricPoint } from '../../../utils/fetchMetrics';
+import { usePollingPolicy } from '../../../hooks/usePollingPolicy';
+import { useSequentialPolling } from '../../../hooks/useSequentialPolling';
+import {
+  fetchPaginatedMetrics,
+  fetchMetrics,
+  type MetricPoint,
+} from '../../../utils/fetchMetrics';
 import { TaskType } from '../../../types/common';
 import { getRetryAfterMsFromError } from '../../../utils/retryAfter';
 
@@ -139,14 +144,17 @@ export function useMetricsOverlay({
   candleTimestamps,
   currentTickTimestamp,
 }: UseMetricsOverlayOptions) {
-  const isPageVisible = useDocumentVisibility();
+  const pollingPolicy = usePollingPolicy({
+    enabled: enableRealTimeUpdates,
+    baseIntervalMs: pollingIntervalMs,
+  });
+  const isPageVisible = pollingPolicy.isActive;
   const seriesRef = useRef<ReturnType<typeof attachSeries> | null>(null);
   const attachedToChart = useRef<IChartApi | null>(null);
   const [snapshots, setSnapshots] = useState<MetricPoint[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const fetchedRangeRef = useRef<{ from: number; to: number } | null>(null);
   const latestTsRef = useRef<number | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const attachGenerationRef = useRef(0);
   const backoffUntilRef = useRef<number>(0);
 
@@ -167,10 +175,20 @@ export function useMetricsOverlay({
           since: new Date(bufFrom * 1000).toISOString(),
           until: new Date(bufTo * 1000).toISOString(),
           interval: computeInterval(bufTo - bufFrom),
-          pageSize: 5000,
         });
+        const results =
+          page.next === null
+            ? page.results
+            : await fetchPaginatedMetrics({
+                taskId,
+                taskType,
+                executionRunId,
+                since: new Date(bufFrom * 1000).toISOString(),
+                until: new Date(bufTo * 1000).toISOString(),
+                interval: computeInterval(bufTo - bufFrom),
+              });
         return {
-          results: page.results,
+          results,
           fetched: { from: bufFrom, to: bufTo },
         };
       } catch (error) {
@@ -267,9 +285,8 @@ export function useMetricsOverlay({
   }, [chart, fetchWindow, isCovered, expandRange, isPageVisible]);
 
   // Real-time incremental polling
-  useEffect(() => {
-    if (!enableRealTimeUpdates || !isPageVisible) return;
-    const poll = async () => {
+  useSequentialPolling(
+    async () => {
       if (Date.now() < backoffUntilRef.current) return;
       try {
         const ts = latestTsRef.current;
@@ -277,31 +294,31 @@ export function useMetricsOverlay({
           taskId,
           taskType,
           executionRunId,
-          pageSize: 5000,
           since: ts ? new Date(ts * 1000).toISOString() : undefined,
         });
-        if (page.results.length > 0)
-          setSnapshots((prev) => mergeSnapshots(prev, page.results));
+        const results =
+          page.next === null
+            ? page.results
+            : await fetchPaginatedMetrics({
+                taskId,
+                taskType,
+                executionRunId,
+                since: ts ? new Date(ts * 1000).toISOString() : undefined,
+              });
+        if (results.length > 0)
+          setSnapshots((prev) => mergeSnapshots(prev, results));
       } catch (error) {
         const retryAfterMs = getRetryAfterMsFromError(error);
         if (retryAfterMs != null) {
           backoffUntilRef.current = Date.now() + retryAfterMs;
         }
       }
-    };
-    intervalRef.current = setInterval(poll, pollingIntervalMs);
-    return () => {
-      if (intervalRef.current !== null) clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    };
-  }, [
-    enableRealTimeUpdates,
-    executionRunId,
-    isPageVisible,
-    pollingIntervalMs,
-    taskId,
-    taskType,
-  ]);
+    },
+    {
+      enabled: pollingPolicy.isActive,
+      intervalMs: pollingPolicy.intervalMs,
+    }
+  );
 
   // Attach series once per chart instance
   useLayoutEffect(() => {

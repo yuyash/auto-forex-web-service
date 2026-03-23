@@ -4,6 +4,8 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import HomeIcon from '@mui/icons-material/Home';
 import i18n from '../../i18n/config';
+import { reportFrontendError } from '../../services/monitoring/errorReporting';
+import { logger } from '../../utils/logger';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -34,7 +36,10 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    logger.error('ErrorBoundary caught an error', {
+      message: error.message,
+      componentStack: errorInfo.componentStack ?? undefined,
+    });
     this.setState({
       error,
       errorInfo,
@@ -45,15 +50,10 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
       this.props.onError(error, errorInfo);
     }
 
-    // Report error to monitoring service in production
-    if (import.meta.env.PROD) {
-      // TODO: Integrate with error reporting service (e.g., Sentry)
-      console.error('Production error:', {
-        message: error.message,
-        stack: error.stack,
-        componentStack: errorInfo.componentStack,
-      });
-    }
+    reportFrontendError(error, {
+      componentStack: errorInfo.componentStack ?? undefined,
+      level: this.props.level,
+    });
   }
 
   handleReset = (): void => {

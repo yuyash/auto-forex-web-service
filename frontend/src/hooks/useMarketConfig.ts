@@ -1,112 +1,86 @@
-import { useState, useEffect } from 'react';
-import { api } from '../api/apiClient';
-import type { Granularity } from '../types/chart';
+import {
+  type GranularityOption,
+  type TickDataRange,
+} from '../services/api/market';
+import {
+  createSupportedGranularitiesQuery,
+  createSupportedInstrumentsQuery,
+  createTickDataRangeQuery,
+} from './miscQueries';
+import { mapQueryStateFields, useSimpleQueryState } from './useTaskCollections';
 
-interface GranularityOption {
-  value: Granularity;
-  label: string;
-}
+const FALLBACK_INSTRUMENTS = [
+  'EUR_USD',
+  'GBP_USD',
+  'USD_JPY',
+  'USD_CHF',
+  'AUD_USD',
+  'USD_CAD',
+  'NZD_USD',
+  'EUR_GBP',
+  'EUR_JPY',
+  'GBP_JPY',
+  'EUR_CHF',
+  'AUD_JPY',
+  'GBP_CHF',
+  'EUR_AUD',
+  'EUR_CAD',
+];
+
+const FALLBACK_GRANULARITIES: GranularityOption[] = [
+  { value: 'M1', label: '1 Minute' },
+  { value: 'M2', label: '2 Minutes' },
+  { value: 'M4', label: '4 Minutes' },
+  { value: 'M5', label: '5 Minutes' },
+  { value: 'M10', label: '10 Minutes' },
+  { value: 'M15', label: '15 Minutes' },
+  { value: 'M30', label: '30 Minutes' },
+  { value: 'H1', label: '1 Hour' },
+  { value: 'H2', label: '2 Hours' },
+  { value: 'H3', label: '3 Hours' },
+  { value: 'H4', label: '4 Hours' },
+  { value: 'H6', label: '6 Hours' },
+  { value: 'H8', label: '8 Hours' },
+  { value: 'H12', label: '12 Hours' },
+  { value: 'D', label: 'Daily' },
+  { value: 'W', label: 'Weekly' },
+  { value: 'M', label: 'Monthly' },
+];
 
 /**
  * Hook to fetch supported currency pairs from backend
  */
 export const useSupportedInstruments = () => {
-  const [instruments, setInstruments] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const query = useSimpleQueryState(createSupportedInstrumentsQuery());
 
-  useEffect(() => {
-    const fetchInstruments = async () => {
-      try {
-        setIsLoading(true);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const response = await api.get<any>('/api/market/instruments/');
-        setInstruments(response.instruments || []);
-        setError(null);
-      } catch (err) {
-        console.error('Failed to fetch instruments:', err);
-        setError('Failed to load currency pairs');
-        // Fallback to default list
-        setInstruments([
-          'EUR_USD',
-          'GBP_USD',
-          'USD_JPY',
-          'USD_CHF',
-          'AUD_USD',
-          'USD_CAD',
-          'NZD_USD',
-          'EUR_GBP',
-          'EUR_JPY',
-          'GBP_JPY',
-          'EUR_CHF',
-          'AUD_JPY',
-          'GBP_CHF',
-          'EUR_AUD',
-          'EUR_CAD',
-        ]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchInstruments();
-  }, []);
-
-  return { instruments, isLoading, error };
+  return mapQueryStateFields(query, (data, state) => ({
+    instruments: data ?? FALLBACK_INSTRUMENTS,
+    error: state.error instanceof Error ? state.error.message : null,
+    usingFallback: !state.isLoading && !data && !!state.error,
+  }));
 };
 
 /**
  * Hook to fetch supported granularities from backend
  */
 export const useSupportedGranularities = () => {
-  const [granularities, setGranularities] = useState<GranularityOption[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const query = useSimpleQueryState(createSupportedGranularitiesQuery());
 
-  useEffect(() => {
-    const fetchGranularities = async () => {
-      try {
-        setIsLoading(true);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const response = await api.get<any>(
-          '/api/market/candles/granularities/'
-        );
-        // Filter out second-based granularities (S5, S10, S15, S30)
-        const filteredGranularities = (response.granularities || []).filter(
-          (g: { value: string }) => !g.value.startsWith('S')
-        );
-        setGranularities(filteredGranularities);
-        setError(null);
-      } catch (err) {
-        console.error('Failed to fetch granularities:', err);
-        setError('Failed to load timeframes');
-        // Fallback to default list
-        setGranularities([
-          { value: 'M1', label: '1 Minute' },
-          { value: 'M2', label: '2 Minutes' },
-          { value: 'M4', label: '4 Minutes' },
-          { value: 'M5', label: '5 Minutes' },
-          { value: 'M10', label: '10 Minutes' },
-          { value: 'M15', label: '15 Minutes' },
-          { value: 'M30', label: '30 Minutes' },
-          { value: 'H1', label: '1 Hour' },
-          { value: 'H2', label: '2 Hours' },
-          { value: 'H3', label: '3 Hours' },
-          { value: 'H4', label: '4 Hours' },
-          { value: 'H6', label: '6 Hours' },
-          { value: 'H8', label: '8 Hours' },
-          { value: 'H12', label: '12 Hours' },
-          { value: 'D', label: 'Daily' },
-          { value: 'W', label: 'Weekly' },
-          { value: 'M', label: 'Monthly' },
-        ]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  return mapQueryStateFields(query, (data, state) => ({
+    granularities: data ?? FALLBACK_GRANULARITIES,
+    error: state.error instanceof Error ? state.error.message : null,
+    usingFallback: !state.isLoading && !data && !!state.error,
+  }));
+};
 
-    fetchGranularities();
-  }, []);
+/**
+ * Hook to fetch the available tick data range for a given instrument.
+ */
+export const useTickDataRange = (instrument?: string) => {
+  const query = useSimpleQueryState(createTickDataRangeQuery(instrument));
 
-  return { granularities, isLoading, error };
+  return mapQueryStateFields(query, (data, state) => ({
+    dataRange: (data as TickDataRange | undefined) ?? null,
+    error: state.error instanceof Error ? state.error.message : null,
+  }));
 };

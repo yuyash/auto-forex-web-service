@@ -6,11 +6,9 @@
  * cycles only new records are fetched and merged into the local cache.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import axios from 'axios';
-import { apiConfig, resolveToken } from '../api/apiConfig';
 import { TaskType } from '../types/common';
-import { handleAuthErrorStatus } from '../utils/authEvents';
+import { toIncrementalCollectionState } from './useTaskCollections';
+import { useIncrementalTaskResource } from './useIncrementalTaskResource';
 
 export interface TaskLog {
   id: string;
@@ -45,16 +43,7 @@ interface UseTaskLogsResult {
   hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
-  refetch: () => Promise<void>;
-}
-
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  const token = await resolveToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
+  refresh: () => Promise<unknown>;
 }
 
 function getLatestTimestamp(logs: TaskLog[]): string | null {
@@ -81,158 +70,54 @@ export const useTaskLogs = ({
   enableRealTimeUpdates = false,
   refreshInterval = 10_000,
 }: UseTaskLogsOptions): UseTaskLogsResult => {
-  const [logs, setLogs] = useState<TaskLog[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [hasNext, setHasNext] = useState(false);
-  const [hasPrevious, setHasPrevious] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
-  const latestRequestRef = useRef(0);
-  const sinceRef = useRef<string | null>(null);
-  const hasInitialFetchRef = useRef(false);
-
   const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${(level || []).join(',')}-${(component || []).join(',')}-${positionId ?? ''}-${timestampFrom ?? ''}-${timestampTo ?? ''}-${page}-${pageSize}`;
-  const prevParamsKeyRef = useRef(paramsKey);
-  if (paramsKey !== prevParamsKeyRef.current) {
-    prevParamsKeyRef.current = paramsKey;
-    sinceRef.current = null;
-    hasInitialFetchRef.current = false;
-  }
-
-  const fetchLogs = useCallback(
-    async (incremental = false) => {
-      if (!taskId) {
-        setIsLoading(false);
-        return;
-      }
-
-      const requestId = ++latestRequestRef.current;
-
-      try {
-        if (!incremental) setIsLoading(true);
-        setError(null);
-
-        const prefix =
-          taskType === TaskType.BACKTEST
-            ? '/api/trading/tasks/backtest'
-            : '/api/trading/tasks/trading';
-
-        const params: Record<string, string> = {
-          page: String(page),
-          page_size: String(pageSize),
-        };
-        if (executionRunId != null) {
-          params.execution_id = String(executionRunId);
-        }
-        if (level && level.length > 0) params.level = level.join(',');
-        if (component && component.length > 0)
-          params.component = component.join(',');
-        if (positionId) params.position_id = positionId;
-        if (timestampFrom) params.timestamp_from = timestampFrom;
-        if (timestampTo) params.timestamp_to = timestampTo;
-        const effectiveSince = incremental ? sinceRef.current : null;
-        if (effectiveSince) params.since = effectiveSince;
-
-        const url = `${apiConfig.BASE}${prefix}/${taskId}/logs/`;
-        const headers = await getAuthHeaders();
-
-        const response = await axios.get(url, {
-          params,
-          headers,
-          withCredentials: apiConfig.WITH_CREDENTIALS,
-        });
-
-        if (requestId !== latestRequestRef.current) return;
-
-        const data = response.data;
-        const incoming = (data.results || []) as TaskLog[];
-
-        if (incremental && incoming.length > 0) {
-          setLogs((prev) => {
-            const map = new Map(prev.map((l) => [l.id, l]));
-            for (const l of incoming) {
-              map.set(l.id, l);
-            }
-            return Array.from(map.values());
-          });
-          setTotalCount(data.count ?? totalCount);
-        } else if (!incremental) {
-          setLogs(incoming);
-          setTotalCount(data.count ?? 0);
-          setHasNext(Boolean(data.next));
-          setHasPrevious(Boolean(data.previous));
-        }
-
-        const latestTs = getLatestTimestamp(incoming);
-        if (latestTs && (!sinceRef.current || latestTs > sinceRef.current)) {
-          sinceRef.current = latestTs;
-        }
-        hasInitialFetchRef.current = true;
-      } catch (err) {
-        if (requestId !== latestRequestRef.current) return;
-
-        if (axios.isAxiosError(err) && err.response) {
-          handleAuthErrorStatus(err.response.status, {
-            source: 'http',
-            status: err.response.status,
-            context: 'task_logs',
-          });
-        }
-        const msg = err instanceof Error ? err.message : 'Failed to load logs';
-        setError(new Error(msg));
-      } finally {
-        if (requestId === latestRequestRef.current) {
-          setIsLoading(false);
-        }
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      taskId,
-      taskType,
-      executionRunId,
-      level,
-      component,
-      positionId,
-      timestampFrom,
-      timestampTo,
-      page,
-      pageSize,
-    ]
-  );
-
-  useEffect(() => {
-    fetchLogs(false);
-  }, [fetchLogs]);
-
-  useEffect(() => {
-    if (!enableRealTimeUpdates) return;
-    const interval = setInterval(() => {
-      if (hasInitialFetchRef.current) {
-        fetchLogs(true);
-      }
-    }, refreshInterval);
-    return () => clearInterval(interval);
-  }, [enableRealTimeUpdates, refreshInterval, fetchLogs]);
-
-  const prevRealTimeRef = useRef(enableRealTimeUpdates);
-  useEffect(() => {
-    if (prevRealTimeRef.current && !enableRealTimeUpdates) {
-      sinceRef.current = null;
-      hasInitialFetchRef.current = false;
-      fetchLogs(false);
-    }
-    prevRealTimeRef.current = enableRealTimeUpdates;
-  }, [enableRealTimeUpdates, fetchLogs]);
-
-  return {
-    logs,
+  const {
+    items: logs,
     totalCount,
     hasNext,
     hasPrevious,
     isLoading,
     error,
-    refetch: () => fetchLogs(false),
+    refresh,
+  } = useIncrementalTaskResource<TaskLog>({
+    taskId,
+    taskType,
+    endpoint: 'logs',
+    paramsKey,
+    page,
+    pageSize,
+    enableRealTimeUpdates,
+    refreshInterval,
+    errorContext: 'task_logs',
+    fallbackErrorMessage: 'Failed to load logs',
+    buildParams: () => {
+      const params: Record<string, string> = {};
+      if (executionRunId != null) {
+        params.execution_id = String(executionRunId);
+      }
+      if (level && level.length > 0) params.level = level.join(',');
+      if (component && component.length > 0) {
+        params.component = component.join(',');
+      }
+      if (positionId) params.position_id = positionId;
+      if (timestampFrom) params.timestamp_from = timestampFrom;
+      if (timestampTo) params.timestamp_to = timestampTo;
+      return params;
+    },
+    getLatestCursor: getLatestTimestamp,
+    getItemId: (log) => log.id,
+  });
+
+  return {
+    ...toIncrementalCollectionState({
+      items: logs,
+      totalCount,
+      hasNext,
+      hasPrevious,
+      isLoading,
+      error,
+      refresh,
+    }),
+    logs,
   };
 };

@@ -19,11 +19,8 @@ export interface TradingTask {
   dry_run: boolean;
   hedging_enabled: boolean;
   latest_execution?: ExecutionSummary;
-  // State management fields
-  has_strategy_state: boolean;
-  has_open_positions: boolean;
-  open_positions_count: number;
-  can_resume: boolean;
+  has_strategy_state?: boolean;
+  can_resume?: boolean;
   execution_id?: string;
   started_at?: string;
   completed_at?: string;

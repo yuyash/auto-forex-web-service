@@ -50,7 +50,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
   const [rowsPerPage, setRowsPerPage] = useState(50);
   const [isReloading, setIsReloading] = useState(false);
 
-  const { trades, totalCount, isLoading, error, refetch } = useTaskTrades({
+  const { trades, totalCount, isLoading, error, refresh } = useTaskTrades({
     taskId,
     taskType,
     executionRunId,
@@ -75,9 +75,9 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
 
   const handleReload = useCallback(async () => {
     setIsReloading(true);
-    await refetch();
+    await refresh();
     setIsReloading(false);
-  }, [refetch]);
+  }, [refresh]);
 
   const formatTimestamp = (timestamp: string): string => {
     return new Date(timestamp).toLocaleString('en-US', {

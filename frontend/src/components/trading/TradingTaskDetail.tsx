@@ -5,7 +5,7 @@
  * Mirrors BacktestTaskDetail's structure for consistency.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -21,7 +21,10 @@ import {
   useTheme,
 } from '@mui/material';
 import { useTradingTask } from '../../hooks/useTradingTasks';
-import { useTaskPolling } from '../../hooks/useTaskPolling';
+import {
+  shouldEnableRealtimeTaskUpdates,
+  shouldPollTaskStatus,
+} from '../../hooks/taskResourceQueries';
 import {
   useStrategies,
   getStrategyDisplayName,
@@ -37,8 +40,14 @@ import { useTaskSummary } from '../../hooks/useTaskSummary';
 import { TaskStatus, TaskType } from '../../types/common';
 import type { TradingTask } from '../../types';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
-import { useDeleteTradingTask } from '../../hooks/useTradingTaskMutations';
-import { invalidateTradingTasksCache } from '../../hooks/useTradingTasks';
+import {
+  useDeleteTradingTask,
+  usePauseTradingTask,
+  useRestartTradingTask,
+  useResumeTradingTask,
+  useStartTradingTask,
+  useStopTradingTask,
+} from '../../hooks/useTradingTaskMutations';
 import { LazyTabPanel } from '../common/LazyTabPanel';
 import { TabConfigDialog } from '../common/TabConfigDialog';
 import { useTabConfig, type TabItem } from '../../hooks/useTabConfig';
@@ -57,6 +66,11 @@ export const TradingTaskDetail: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [tabConfigOpen, setTabConfigOpen] = useState(false);
   const deleteTask = useDeleteTradingTask();
+  const startTask = useStartTradingTask();
+  const stopTask = useStopTradingTask();
+  const restartTask = useRestartTradingTask();
+  const resumeTask = useResumeTradingTask();
+  const pauseTask = usePauseTradingTask();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { user } = useAuth();
@@ -81,8 +95,6 @@ export const TradingTaskDetail: React.FC = () => {
   const tabParam = searchParams.get('tab') || 'overview';
   const visibleTabIds = visibleTabs.map((tab) => tab.id);
 
-  const { data: task, isLoading, error } = useTradingTask(taskId);
-  const { strategies } = useStrategies();
   const {
     optimisticStatus,
     statusPollingIntervalMs,
@@ -90,24 +102,17 @@ export const TradingTaskDetail: React.FC = () => {
     clearOptimisticStatus,
   } = useOptimisticTaskStatus();
   const {
-    status: polledStatus,
-    details: polledDetails,
-    startPolling,
-    refetch: refetchPolledTask,
-  } = useTaskPolling(taskId, 'trading', {
-    enabled: !!taskId,
-    pollStatus: true,
-    pollDetails: true,
-    interval: statusPollingIntervalMs,
+    data: task,
+    isLoading,
+    error,
+    refresh: refreshTask,
+  } = useTradingTask(taskId, {
+    enablePolling: true,
+    pollingInterval: statusPollingIntervalMs,
   });
-  const liveTask = polledDetails?.task ?? task;
-  const actualStatus = polledStatus?.status ?? liveTask?.status;
+  const { strategies } = useStrategies();
+  const actualStatus = task?.status;
   const currentStatus = optimisticStatus?.status ?? actualStatus;
-  const triggerPolledRefetch = () => {
-    if (typeof refetchPolledTask === 'function') {
-      refetchPolledTask();
-    }
-  };
 
   useEffect(() => {
     if (!optimisticStatus || !actualStatus) {
@@ -122,11 +127,9 @@ export const TradingTaskDetail: React.FC = () => {
   const overviewSummary = useTaskSummary(
     taskId,
     TaskType.TRADING,
-    polledDetails?.task?.execution_id ?? task?.execution_id,
+    task?.execution_id,
     {
-      polling:
-        currentStatus === TaskStatus.STARTING ||
-        currentStatus === TaskStatus.RUNNING,
+      polling: shouldPollTaskStatus(currentStatus),
       interval: statusPollingIntervalMs,
     }
   );
@@ -138,13 +141,6 @@ export const TradingTaskDetail: React.FC = () => {
       }
     : null;
 
-  // Do NOT call refetch() on status transitions to avoid 429 rate-limiting.
-  const prevStatusRef = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (polledStatus) {
-      prevStatusRef.current = polledStatus.status;
-    }
-  }, [polledStatus]);
   const activeTabIndex = Math.max(0, visibleTabIds.indexOf(tabParam));
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setSearchParams({ tab: visibleTabIds[newValue] || 'overview' });
@@ -176,7 +172,7 @@ export const TradingTaskDetail: React.FC = () => {
       </Container>
     );
   }
-  const detailTask = (liveTask ?? task) as TradingTask;
+  const detailTask = task as TradingTask;
   const activeExecutionId = detailTask.execution_id;
   const pnlCurrency = detailTask.instrument?.includes('_')
     ? detailTask.instrument.split('_')[1]
@@ -232,70 +228,50 @@ export const TradingTaskDetail: React.FC = () => {
         editLabel={t('common:actions.edit')}
         deleteLabel={t('common:actions.delete')}
         onStart={async (id) => {
-          const { tradingTasksApi } = await import(
-            '../../services/api/tradingTasks'
-          );
-          const updatedTask = await tradingTasksApi.start(id);
+          const updatedTask = await startTask.mutate(id);
           applyOptimisticStatus(updatedTask.status, [
             TaskStatus.STARTING,
             TaskStatus.RUNNING,
             TaskStatus.FAILED,
           ]);
-          startPolling();
-          triggerPolledRefetch();
+          await refreshTask();
         }}
         onStop={async (id) => {
-          const { tradingTasksApi } = await import(
-            '../../services/api/tradingTasks'
-          );
-          await tradingTasksApi.stop(id);
+          await stopTask.mutate({ id });
           applyOptimisticStatus(TaskStatus.STOPPING, [
             TaskStatus.STOPPING,
             TaskStatus.STOPPED,
             TaskStatus.COMPLETED,
             TaskStatus.FAILED,
           ]);
-          startPolling();
-          triggerPolledRefetch();
+          await refreshTask();
         }}
         onRestart={async (id) => {
-          const { tradingTasksApi } = await import(
-            '../../services/api/tradingTasks'
-          );
-          const updatedTask = await tradingTasksApi.restart(id);
+          const updatedTask = await restartTask.mutate(id);
           applyOptimisticStatus(updatedTask.status, [
             TaskStatus.STARTING,
             TaskStatus.RUNNING,
             TaskStatus.FAILED,
           ]);
-          startPolling();
-          triggerPolledRefetch();
+          await refreshTask();
         }}
         onResume={async (id) => {
-          const { tradingTasksApi } = await import(
-            '../../services/api/tradingTasks'
-          );
-          const updatedTask = await tradingTasksApi.resume(id);
+          const updatedTask = await resumeTask.mutate(id);
           applyOptimisticStatus(updatedTask.status, [
             TaskStatus.RUNNING,
             TaskStatus.PAUSED,
             TaskStatus.FAILED,
           ]);
-          startPolling();
-          triggerPolledRefetch();
+          await refreshTask();
         }}
         onPause={async (id) => {
-          const { tradingTasksApi } = await import(
-            '../../services/api/tradingTasks'
-          );
-          const updatedTask = await tradingTasksApi.pause(id);
+          const updatedTask = await pauseTask.mutate(id);
           applyOptimisticStatus(updatedTask.status, [
             TaskStatus.PAUSED,
             TaskStatus.RUNNING,
             TaskStatus.FAILED,
           ]);
-          startPolling();
-          triggerPolledRefetch();
+          await refreshTask();
         }}
         onEdit={() => navigate(`/trading-tasks/${taskId}/edit`)}
         onDelete={() => setDeleteDialogOpen(true)}
@@ -347,10 +323,9 @@ export const TradingTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={
-                currentStatus === TaskStatus.STARTING ||
-                currentStatus === TaskStatus.RUNNING
-              }
+              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
+                currentStatus
+              )}
             />
           </LazyTabPanel>
         )}
@@ -371,10 +346,9 @@ export const TradingTaskDetail: React.FC = () => {
               latestExecution={detailTask.latest_execution}
               summary={s}
               currentTick={polledTick ?? null}
-              enableRealTimeUpdates={
-                currentStatus === TaskStatus.STARTING ||
-                currentStatus === TaskStatus.RUNNING
-              }
+              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
+                currentStatus
+              )}
               pipSize={
                 detailTask.pip_size ? parseFloat(detailTask.pip_size) : null
               }
@@ -391,10 +365,9 @@ export const TradingTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={
-                currentStatus === TaskStatus.STARTING ||
-                currentStatus === TaskStatus.RUNNING
-              }
+              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
+                currentStatus
+              )}
               currentPrice={
                 polledTick?.price != null ? parseFloat(polledTick.price) : null
               }
@@ -413,10 +386,9 @@ export const TradingTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={
-                currentStatus === TaskStatus.STARTING ||
-                currentStatus === TaskStatus.RUNNING
-              }
+              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
+                currentStatus
+              )}
               pipSize={
                 detailTask.pip_size ? parseFloat(detailTask.pip_size) : null
               }
@@ -432,10 +404,9 @@ export const TradingTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={
-                currentStatus === TaskStatus.STARTING ||
-                currentStatus === TaskStatus.RUNNING
-              }
+              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
+                currentStatus
+              )}
             />
           </LazyTabPanel>
         )}
@@ -448,10 +419,9 @@ export const TradingTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={
-                currentStatus === TaskStatus.STARTING ||
-                currentStatus === TaskStatus.RUNNING
-              }
+              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
+                currentStatus
+              )}
             />
           </LazyTabPanel>
         )}
@@ -464,10 +434,9 @@ export const TradingTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={
-                currentStatus === TaskStatus.STARTING ||
-                currentStatus === TaskStatus.RUNNING
-              }
+              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
+                currentStatus
+              )}
             />
           </LazyTabPanel>
         )}
@@ -488,7 +457,6 @@ export const TradingTaskDetail: React.FC = () => {
           try {
             await deleteTask.mutate(taskId);
             setDeleteDialogOpen(false);
-            invalidateTradingTasksCache();
             navigate('/trading-tasks', { state: { deleted: true } });
           } catch {
             /* handled */

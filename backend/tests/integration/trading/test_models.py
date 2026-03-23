@@ -1,5 +1,7 @@
 """Integration tests for trading models."""
 
+from uuid import uuid4
+
 import pytest
 from django.utils import timezone
 
@@ -153,9 +155,13 @@ class TestTradingTaskModel:
         task = TradingTaskFactory(status=TaskStatus.RUNNING)
         assert task.can_resume() is False
 
-    def test_can_resume_true_when_stopped_with_state(self):
-        task = TradingTaskFactory(status=TaskStatus.STOPPED, strategy_state={"key": "value"})
+    def test_can_resume_true_when_paused_with_execution_id(self):
+        task = TradingTaskFactory(status=TaskStatus.PAUSED, execution_id=uuid4())
         assert task.can_resume() is True
+
+    def test_can_resume_false_when_paused_without_execution_id(self):
+        task = TradingTaskFactory(status=TaskStatus.PAUSED, execution_id=None)
+        assert task.can_resume() is False
 
     def test_unique_name_per_user(self):
         user = UserFactory()

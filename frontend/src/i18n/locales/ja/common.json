@@ -90,6 +90,7 @@
     "connected": "接続済み",
     "disconnected": "切断済み",
     "noOandaAccount": "アカウント未設定",
+    "activeTasks": "{{count}} 件のアクティブタスク",
     "loading": "読み込み中...",
     "updating": "更新中...",
     "checking": "確認中...",
@@ -429,7 +430,11 @@
       "exit": "決済価格",
       "pips": "Pips",
       "pnl": "損益",
-      "noOandaAccount": "Trend タブで市場ローソク足を表示するには OANDA アカウントの登録が必要です。"
+      "noOandaAccount": "Trend タブで市場ローソク足を表示するには OANDA アカウントの登録が必要です。",
+      "instrumentFallbackWarning": "市場設定 API が利用できないため、フォールバックの通貨ペア候補を表示しています。",
+      "granularityFallbackWarning": "市場設定 API が利用できないため、フォールバックの時間足候補を表示しています。",
+      "replayRefreshFailed": "リプレイデータの更新に失敗しました。直近で取得できた取引を表示しています。",
+      "chartRenderFailed": "チャート要素の一部を描画できませんでした。"
     }
   },
   "columnConfig": {

@@ -11,10 +11,19 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import axios from 'axios';
-import { apiConfig, resolveToken } from '../api/apiConfig';
 import { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
+import { logger } from '../utils/logger';
+import { usePollingPolicy } from './usePollingPolicy';
+import { useSequentialPolling } from './useSequentialPolling';
+import {
+  toIncrementalCollectionState,
+  toRefreshActions,
+} from './useTaskCollections';
+import {
+  fetchTaskResourcePage,
+  isApiErrorWithStatus,
+} from '../services/api/taskResources';
 
 export interface TaskPosition {
   id: string;
@@ -44,6 +53,9 @@ interface UseTaskPositionsOptions {
   direction?: 'long' | 'short';
   page?: number;
   pageSize?: number;
+  rangeFrom?: string;
+  rangeTo?: string;
+  includeTradeIds?: boolean;
   /** ISO 8601 timestamp — only return records updated after this time. */
   since?: string;
   enableRealTimeUpdates?: boolean;
@@ -57,7 +69,7 @@ interface UseTaskPositionsResult {
   hasPrevious: boolean;
   isLoading: boolean;
   error: Error | null;
-  refetch: () => Promise<void>;
+  refresh: () => Promise<unknown>;
 }
 
 /** Extract the latest updated_at from a list of positions. */
@@ -71,15 +83,6 @@ function getLatestUpdatedAt(positions: TaskPosition[]): string | null {
   return latest;
 }
 
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  const token = await resolveToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  return headers;
-}
-
 export const useTaskPositions = ({
   taskId,
   taskType,
@@ -88,6 +91,9 @@ export const useTaskPositions = ({
   direction,
   page = 1,
   pageSize = 100,
+  rangeFrom,
+  rangeTo,
+  includeTradeIds = false,
   since,
   enableRealTimeUpdates = false,
   refreshInterval = 10_000,
@@ -116,7 +122,7 @@ export const useTaskPositions = ({
   const canUseIncrementalPolling = page === 1;
 
   // Reset incremental state when key params change.
-  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${status}-${direction}-${page}-${pageSize}-${since ?? ''}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${status}-${direction}-${page}-${pageSize}-${rangeFrom ?? ''}-${rangeTo ?? ''}-${includeTradeIds}-${since ?? ''}`;
   const prevParamsKeyRef = useRef(paramsKey);
   if (paramsKey !== prevParamsKeyRef.current) {
     prevParamsKeyRef.current = paramsKey;
@@ -128,7 +134,7 @@ export const useTaskPositions = ({
     async (incremental = false) => {
       if (!taskId) {
         setIsLoading(false);
-        return;
+        return false;
       }
 
       const requestId = ++latestRequestRef.current;
@@ -136,11 +142,6 @@ export const useTaskPositions = ({
       try {
         if (!incremental) setIsLoading(true);
         setError(null);
-
-        const prefix =
-          taskType === TaskType.BACKTEST
-            ? '/api/trading/tasks/backtest'
-            : '/api/trading/tasks/trading';
 
         const params: Record<string, string> = {
           page: String(page),
@@ -151,26 +152,26 @@ export const useTaskPositions = ({
         }
         if (status) params.position_status = status;
         if (direction) params.direction = direction;
+        if (rangeFrom) params.range_from = rangeFrom;
+        if (rangeTo) params.range_to = rangeTo;
+        if (includeTradeIds) params.include_trade_ids = 'true';
         // Use caller-provided `since` OR our tracked incremental timestamp.
         const effectiveSince =
           since ??
           (incremental && canUseIncrementalPolling ? sinceRef.current : null);
         if (effectiveSince) params.since = effectiveSince;
 
-        const url = `${apiConfig.BASE}${prefix}/${taskId}/positions/`;
-        const headers = await getAuthHeaders();
-
-        const response = await axios.get(url, {
-          params,
-          headers,
-          withCredentials: apiConfig.WITH_CREDENTIALS,
-        });
+        const data = await fetchTaskResourcePage<TaskPosition>(
+          taskType,
+          taskId,
+          'positions',
+          params
+        );
 
         // Discard stale responses.
         if (requestId !== latestRequestRef.current) return;
 
-        const data = response.data;
-        const incoming = (data.results || []) as TaskPosition[];
+        const incoming = data.results;
 
         if (incremental) {
           const serverCount = data.count as number | undefined;
@@ -189,7 +190,7 @@ export const useTaskPositions = ({
             // Use setTimeout to avoid calling fetchPositions recursively
             // inside the current execution.
             setTimeout(() => fetchPositions(false), 0);
-            return;
+            return false;
           }
 
           // Incremental poll: merge new/updated records into the cache.
@@ -234,19 +235,21 @@ export const useTaskPositions = ({
           sinceRef.current = latestTs;
         }
         hasInitialFetchRef.current = true;
+        return true;
       } catch (err) {
         if (requestId !== latestRequestRef.current) return;
 
-        if (axios.isAxiosError(err) && err.response) {
-          handleAuthErrorStatus(err.response.status, {
+        if (isApiErrorWithStatus(err)) {
+          handleAuthErrorStatus(err.status, {
             source: 'http',
-            status: err.response.status,
+            status: err.status,
             context: 'task_positions',
           });
         }
         const msg =
           err instanceof Error ? err.message : 'Failed to load positions';
         setError(new Error(msg));
+        return false;
       } finally {
         if (requestId === latestRequestRef.current) {
           setIsLoading(false);
@@ -261,6 +264,9 @@ export const useTaskPositions = ({
       direction,
       page,
       pageSize,
+      rangeFrom,
+      rangeTo,
+      includeTradeIds,
       since,
       canUseIncrementalPolling,
     ]
@@ -271,21 +277,34 @@ export const useTaskPositions = ({
     fetchPositions(false);
   }, [fetchPositions]);
 
-  // Incremental polling while task is running.
-  useEffect(() => {
-    if (!enableRealTimeUpdates) return;
-    const interval = setInterval(() => {
+  const pollingPolicy = usePollingPolicy({
+    enabled: enableRealTimeUpdates,
+    baseIntervalMs: refreshInterval,
+  });
+
+  useSequentialPolling(
+    async () => {
       if (hasInitialFetchRef.current) {
-        fetchPositions(canUseIncrementalPolling);
+        const ok = await fetchPositions(canUseIncrementalPolling);
+        if (ok) {
+          pollingPolicy.resetFailures();
+        } else {
+          pollingPolicy.registerFailure();
+        }
+        return ok;
       }
-    }, refreshInterval);
-    return () => clearInterval(interval);
-  }, [
-    enableRealTimeUpdates,
-    refreshInterval,
-    fetchPositions,
-    canUseIncrementalPolling,
-  ]);
+      return Promise.resolve();
+    },
+    {
+      enabled: pollingPolicy.isActive,
+      intervalMs: pollingPolicy.intervalMs,
+      onError: (error) => {
+        logger.warn('Task positions polling failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
+    }
+  );
 
   // When real-time updates stop (task finished), do one final full refetch.
   const prevRealTimeRef = useRef(enableRealTimeUpdates);
@@ -293,18 +312,23 @@ export const useTaskPositions = ({
     if (prevRealTimeRef.current && !enableRealTimeUpdates) {
       sinceRef.current = null;
       hasInitialFetchRef.current = false;
-      fetchPositions(false);
+      void fetchPositions(false);
     }
     prevRealTimeRef.current = enableRealTimeUpdates;
   }, [enableRealTimeUpdates, fetchPositions]);
 
+  const refreshActions = toRefreshActions(() => fetchPositions(false));
+
   return {
+    ...toIncrementalCollectionState({
+      items: positions,
+      totalCount,
+      hasNext,
+      hasPrevious,
+      isLoading,
+      error,
+      ...refreshActions,
+    }),
     positions,
-    totalCount,
-    hasNext,
-    hasPrevious,
-    isLoading,
-    error,
-    refetch: () => fetchPositions(false),
   };
 };

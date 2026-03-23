@@ -2,7 +2,7 @@
 
 from logging import Logger, getLogger
 
-import v20
+from django.core.cache import cache
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
@@ -10,9 +10,8 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.market.models import OandaAccounts
-
 logger: Logger = getLogger(name=__name__)
+GRANULARITIES_CACHE_TTL_SECONDS = 24 * 60 * 60
 
 
 class SupportedGranularitiesView(APIView):
@@ -84,67 +83,19 @@ class SupportedGranularitiesView(APIView):
         Returns:
             Response with list of granularity objects
         """
-        # Fetch from OANDA API to validate
-        granularities = self._fetch_granularities_from_oanda()
+        cache_key = "market:supported_granularities"
+        granularities = cache.get(cache_key)
+        if not isinstance(granularities, list):
+            granularities = self.GRANULARITIES
+            cache.set(cache_key, granularities, GRANULARITIES_CACHE_TTL_SECONDS)
+            logger.info("Primed supported granularities cache")
+        else:
+            logger.debug("Using cached supported granularities list")
 
-        if granularities:
-            logger.info(f"Validated {len(granularities)} granularities from OANDA")
-            return Response(
-                {
-                    "granularities": granularities,
-                    "count": len(granularities),
-                    "source": "oanda",
-                }
-            )
-
-        # Use standard list as fallback
-        logger.info("Using standard granularities list")
         return Response(
             {
-                "granularities": self.GRANULARITIES,
-                "count": len(self.GRANULARITIES),
-                "source": "standard",
+                "granularities": granularities,
+                "count": len(granularities),
+                "source": "cache",
             }
         )
-
-    def _fetch_granularities_from_oanda(self) -> list[dict[str, str]] | None:
-        """
-        Fetch available granularities from OANDA API.
-
-        Returns:
-            List of granularity objects or None if fetch fails
-        """
-        try:
-            # Get any active OANDA account to use for API call
-            account = OandaAccounts.objects.filter(is_active=True).first()
-            if not account:
-                logger.warning("No active OANDA account found")
-                return None
-
-            # Create API context
-            api = v20.Context(
-                hostname=account.api_hostname,
-                token=account.get_api_token(),
-                poll_timeout=10,
-            )
-
-            # Fetch candle specifications for any instrument to get granularities
-            response = api.account.instruments(account.account_id)
-
-            if response.status != 200:
-                logger.error(f"OANDA API error: {response.status}")
-                return None
-
-            # OANDA doesn't provide a direct granularities endpoint,
-            # but the granularities are standardized, so we validate
-            # that we can fetch instruments with our standard list
-            instruments = response.body.get("instruments", [])
-            if instruments:
-                # If we can fetch instruments, our granularities list is valid
-                return self.GRANULARITIES
-
-            return None
-
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            logger.error(f"Failed to validate granularities from OANDA: {e}")
-            return None

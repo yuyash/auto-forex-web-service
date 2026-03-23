@@ -1,6 +1,10 @@
-// Hook for fetching available strategies
-import { useQuery } from '@tanstack/react-query';
-import { strategiesApi, type Strategy } from '../services/api';
+import { type Strategy } from '../services/api';
+import type { StrategyConfig } from '../types/strategy';
+import {
+  createStrategiesQuery,
+  createStrategyDefaultsQuery,
+} from './miscQueries';
+import { mapQueryStateFields, useSimpleQueryState } from './useTaskCollections';
 
 interface UseStrategiesResult {
   strategies: Strategy[];
@@ -12,17 +16,19 @@ interface UseStrategiesResult {
  * Hook to fetch list of available strategies with their display names
  */
 export function useStrategies(): UseStrategiesResult {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['strategies'],
-    queryFn: () => strategiesApi.list(),
-    staleTime: 5 * 60 * 1000, // 5 minutes - strategies don't change often
-  });
-
-  return {
+  const query = useSimpleQueryState(createStrategiesQuery());
+  return mapQueryStateFields(query, (data) => ({
     strategies: data?.strategies || [],
-    isLoading,
-    error: error as Error | null,
-  };
+  }));
+}
+
+export function useStrategyDefaults(
+  strategyId?: string,
+  options?: { enabled?: boolean }
+) {
+  return useSimpleQueryState<StrategyConfig>(
+    createStrategyDefaultsQuery(strategyId, options)
+  );
 }
 
 /**

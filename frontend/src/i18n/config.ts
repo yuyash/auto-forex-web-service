@@ -1,5 +1,6 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import { z } from 'zod';
 import commonEN from './locales/en/common.json';
 import commonJA from './locales/ja/common.json';
 import strategyEN from './locales/en/strategy.json';
@@ -14,9 +15,13 @@ import tradingEN from './locales/en/trading.json';
 import tradingJA from './locales/ja/trading.json';
 import configurationEN from './locales/en/configuration.json';
 import configurationJA from './locales/ja/configuration.json';
+import {
+  readStoredStringValue,
+  writeStoredStringValue,
+} from '../utils/persistentState';
 
-// Restore saved language preference from localStorage
-const savedLanguage = localStorage.getItem('i18nextLng') || 'en';
+const languageSchema = z.enum(['en', 'ja']);
+const savedLanguage = readStoredStringValue('i18nextLng', languageSchema, 'en');
 
 // Initialize i18next
 i18n
@@ -64,7 +69,6 @@ i18n
 
 export default i18n;
 
-// Persist language choice to localStorage on every change
 i18n.on('languageChanged', (lng: string) => {
-  localStorage.setItem('i18nextLng', lng);
+  writeStoredStringValue('i18nextLng', lng);
 });

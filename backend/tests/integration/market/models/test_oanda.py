@@ -2,9 +2,10 @@
 
 from typing import Any
 
-
 import pytest
+from cryptography.fernet import Fernet
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 
 from apps.market.enums import ApiType, Jurisdiction
 from apps.market.models import OandaAccounts
@@ -51,6 +52,28 @@ class TestOandaAccountsModel:
         # Should decrypt correctly
         decrypted = account.get_api_token()
         assert decrypted == test_token
+
+    def test_get_api_token_uses_fallback_key(self, user: Any) -> None:
+        """Test decrypting existing tokens with configured fallback keys."""
+        old_key = Fernet.generate_key().decode("utf-8")
+        new_key = Fernet.generate_key().decode("utf-8")
+
+        with override_settings(
+            OANDA_TOKEN_ENCRYPTION_KEY=old_key,
+            OANDA_TOKEN_ENCRYPTION_FALLBACK_KEYS=[],
+        ):
+            account = OandaAccounts.objects.create(
+                user=user,
+                account_id="101-001-1234567-009",
+                api_type=ApiType.PRACTICE,
+            )
+            account.set_api_token("legacy_token")
+
+        with override_settings(
+            OANDA_TOKEN_ENCRYPTION_KEY=new_key,
+            OANDA_TOKEN_ENCRYPTION_FALLBACK_KEYS=[old_key],
+        ):
+            assert account.get_api_token() == "legacy_token"
 
     def test_api_hostname_practice(self, user: Any) -> None:
         """Test API hostname for practice account."""

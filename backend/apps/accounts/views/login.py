@@ -16,6 +16,7 @@ from apps.accounts.models import PublicAccountSettings, User, WhitelistedEmail
 from apps.accounts.serializers import UserLoginSerializer
 from apps.accounts.services.events import SecurityEventService
 from apps.accounts.services.jwt import JWTService
+from apps.accounts.utils.cookies import set_refresh_cookie
 
 logger: Logger = getLogger(name=__name__)
 
@@ -60,7 +61,6 @@ class UserLoginView(APIView):
                 "LoginResponse",
                 fields={
                     "token": serializers.CharField(),
-                    "refresh_token": serializers.CharField(),
                     "user": inline_serializer(
                         "LoginUser",
                         fields={
@@ -86,6 +86,14 @@ class UserLoginView(APIView):
         """Handle user login."""
         system_settings = PublicAccountSettings.get_settings()
         if not system_settings.login_enabled:
+            self.security_events.log_security_event(
+                event_type="login_blocked",
+                description="Login attempt blocked because login is disabled",
+                severity="warning",
+                ip_address=self.get_client_ip(request),
+                user_agent=request.META.get("HTTP_USER_AGENT", ""),
+                details={"status_code": status.HTTP_503_SERVICE_UNAVAILABLE},
+            )
             logger.warning(
                 "Login attempt blocked - login is disabled",
                 extra={"ip_address": self.get_client_ip(request)},
@@ -109,6 +117,18 @@ class UserLoginView(APIView):
         if not is_admin_user:
             is_blocked, block_reason = RateLimiter.is_ip_blocked(ip_address)
             if is_blocked:
+                self.security_events.log_security_event(
+                    event_type="login_rate_limited",
+                    description=f"Login rate limited for IP {ip_address}",
+                    severity="warning",
+                    ip_address=ip_address,
+                    user_agent=request.META.get("HTTP_USER_AGENT", ""),
+                    details={
+                        "status_code": status.HTTP_429_TOO_MANY_REQUESTS,
+                        "reason": block_reason,
+                        "attempts": RateLimiter.get_failed_attempts(ip_address),
+                    },
+                )
                 logger.warning(
                     "Login attempt from blocked IP: %s",
                     ip_address,
@@ -123,6 +143,15 @@ class UserLoginView(APIView):
             try:
                 user_check = User.objects.get(email__iexact=email)
                 if user_check.is_locked:
+                    self.security_events.log_security_event(
+                        event_type="login_account_locked",
+                        description=f"Locked-account login attempt from {ip_address}",
+                        severity="error",
+                        user=user_check,
+                        ip_address=ip_address,
+                        user_agent=request.META.get("HTTP_USER_AGENT", ""),
+                        details={"status_code": status.HTTP_403_FORBIDDEN},
+                    )
                     logger.warning(
                         "Login attempt for locked account %s from %s",
                         email,
@@ -272,10 +301,9 @@ class UserLoginView(APIView):
             user_agent=request.META.get("HTTP_USER_AGENT", ""),
         )
 
-        return Response(
+        response = Response(
             {
                 "token": token,
-                "refresh_token": refresh_token,
                 "user": {
                     "id": user.id,
                     "email": user.email,
@@ -287,3 +315,4 @@ class UserLoginView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+        return set_refresh_cookie(response, refresh_token)

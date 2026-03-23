@@ -13,7 +13,7 @@ import {
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
@@ -22,15 +22,12 @@ import { InstrumentSelector } from '../tasks/forms/InstrumentSelector';
 import { BalanceInput } from '../tasks/forms/BalanceInput';
 import { DataSource } from '../../types/common';
 import { useUpdateBacktestTask } from '../../hooks/useBacktestTaskMutations';
-import {
-  useConfiguration,
-  useConfigurations,
-} from '../../hooks/useConfigurations';
-import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
+import { useConfiguration } from '../../hooks/useConfigurations';
 import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
+import { logger } from '../../utils/logger';
 
 // Update schema - only editable fields
 const backtestTaskUpdateSchema = z
@@ -93,15 +90,12 @@ export default function BacktestTaskUpdateForm({
     watch,
     formState: { errors },
   } = useForm<BacktestTaskUpdateData>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(backtestTaskUpdateSchema) as any,
+    resolver: zodResolver(
+      backtestTaskUpdateSchema
+    ) as Resolver<BacktestTaskUpdateData>,
     defaultValues: { ...initialData, data_source: DataSource.POSTGRESQL },
   });
 
-  // Fetch all configurations and strategies
-  const { data: configurationsData, isLoading: configurationsLoading } =
-    useConfigurations({ page_size: 100 });
-  const configurations = configurationsData?.results || [];
   const { strategies } = useStrategies();
 
   // Watch selected config
@@ -130,12 +124,12 @@ export default function BacktestTaskUpdateForm({
         },
       });
 
-      // Invalidate cache so the task list refreshes
-      invalidateBacktestTasksCache();
-
       navigate('/backtest-tasks');
     } catch (error: unknown) {
-      console.error('Failed to update task:', error);
+      logger.error('Failed to update backtest task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       const err = error as {
         details?: Record<string, string | string[]>;
         message?: string;
@@ -218,8 +212,6 @@ export default function BacktestTaskUpdateForm({
               control={control}
               render={({ field }) => (
                 <ConfigurationSelector
-                  configurations={configurations}
-                  isLoading={configurationsLoading}
                   value={field.value}
                   onChange={field.onChange}
                   error={errors.config_id?.message}

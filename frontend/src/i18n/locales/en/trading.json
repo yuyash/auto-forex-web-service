@@ -118,6 +118,7 @@
   },
   "toast": {
     "startedSuccessfully": "Trading task started successfully",
+    "pausedSuccessfully": "Trading task paused successfully",
     "stoppedSuccessfully": "Trading task stopped successfully",
     "resumedSuccessfully": "Trading task resumed successfully",
     "restartedSuccessfully": "Trading task restarted successfully",

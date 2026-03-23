@@ -147,12 +147,10 @@ class TestStartTask:
 class TestRecoverTradingTask:
     @patch("apps.trading.tasks.service.transaction.atomic")
     @patch("apps.trading.tasks.service.run_trading_task")
-    @patch("apps.trading.tasks.service.uuid4")
     @patch("apps.trading.tasks.service.TradingTask")
     def test_requeues_without_changing_run_id(
         self,
         mock_tt,
-        mock_uuid,
         mock_run_trading_task,
         mock_atomic,
     ):
@@ -172,17 +170,15 @@ class TestRecoverTradingTask:
         locked.execution_id = task.execution_id
 
         mock_tt.objects.select_for_update.return_value.get.return_value = locked
-        new_execution_id = uuid4()
-        mock_uuid.return_value = new_execution_id
 
         result = TaskService().recover_trading_task(task)
 
         assert result is locked
         assert locked.status == TaskStatus.STARTING
-        assert locked.execution_id == new_execution_id
+        assert locked.execution_id == task.execution_id
         mock_run_trading_task.apply_async.assert_called_once_with(
             args=[locked.pk],
-            task_id=str(new_execution_id),
+            task_id=str(task.execution_id),
         )
 
     @patch("apps.trading.tasks.service.transaction.atomic")
@@ -205,6 +201,92 @@ class TestRecoverTradingTask:
 
         with pytest.raises(ValueError, match="STARTING/RUNNING"):
             TaskService().recover_trading_task(task)
+
+    @patch("apps.trading.tasks.service.transaction.atomic")
+    @patch("apps.trading.tasks.service.TradingTask")
+    def test_recover_requires_execution_id(self, mock_tt, mock_atomic):
+        from apps.trading.tasks.service import TaskService
+
+        mock_atomic.return_value.__enter__.return_value = None
+        mock_atomic.return_value.__exit__.return_value = None
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.status = TaskStatus.RUNNING
+        task.execution_id = None
+
+        locked = MagicMock(spec=TradingTask)
+        locked.pk = task.pk
+        locked.status = TaskStatus.RUNNING
+        locked.execution_id = None
+        mock_tt.objects.select_for_update.return_value.get.return_value = locked
+
+        with pytest.raises(ValueError, match="execution_id"):
+            TaskService().recover_trading_task(task)
+
+
+class TestResumeTask:
+    @patch("apps.trading.tasks.service.transaction.atomic")
+    @patch("apps.trading.tasks.service.run_backtest_task")
+    @patch("apps.trading.tasks.service.BacktestTask")
+    def test_resumes_paused_backtest_in_same_run(
+        self, mock_bt, mock_run_backtest_task, mock_atomic
+    ):
+        from apps.trading.tasks.service import TaskService
+
+        mock_atomic.return_value.__enter__.return_value = None
+        mock_atomic.return_value.__exit__.return_value = None
+
+        task_id = uuid4()
+        execution_id = uuid4()
+        task = MagicMock(spec=BacktestTask)
+        task.pk = task_id
+        task.status = TaskStatus.PAUSED
+        task.execution_id = execution_id
+
+        locked = MagicMock(spec=BacktestTask)
+        locked.pk = task_id
+        locked.status = TaskStatus.PAUSED
+        locked.execution_id = execution_id
+        mock_bt.objects.select_for_update.return_value.get.return_value = locked
+        mock_bt.objects.get.return_value = task
+        mock_bt.DoesNotExist = _DoesNotExist
+
+        with patch.object(TaskService, "get_celery_result", return_value=None):
+            result = TaskService().resume_task(task_id)
+
+        assert result is locked
+        assert locked.status == TaskStatus.STARTING
+        assert locked.execution_id == execution_id
+        mock_run_backtest_task.apply_async.assert_called_once_with(
+            args=[task_id],
+            task_id=str(execution_id),
+        )
+
+    @patch("apps.trading.tasks.service.transaction.atomic")
+    @patch("apps.trading.tasks.service.BacktestTask")
+    def test_resume_requires_execution_id(self, mock_bt, mock_atomic):
+        from apps.trading.tasks.service import TaskService
+
+        mock_atomic.return_value.__enter__.return_value = None
+        mock_atomic.return_value.__exit__.return_value = None
+
+        task_id = uuid4()
+        task = MagicMock(spec=BacktestTask)
+        task.pk = task_id
+        task.status = TaskStatus.PAUSED
+        task.execution_id = None
+
+        locked = MagicMock(spec=BacktestTask)
+        locked.pk = task_id
+        locked.status = TaskStatus.PAUSED
+        locked.execution_id = None
+        mock_bt.objects.select_for_update.return_value.get.return_value = locked
+        mock_bt.objects.get.return_value = task
+        mock_bt.DoesNotExist = _DoesNotExist
+
+        with pytest.raises(ValueError, match="execution_id"):
+            TaskService().resume_task(task_id)
 
 
 class TestStopTask:
@@ -351,9 +433,10 @@ class TestPauseTask:
 
 
 class TestCancelTask:
+    @patch("apps.trading.tasks.lifecycle_events.ExecutionArtifactsLifecycleSink.publish")
     @patch("apps.trading.tasks.service.timezone")
     @patch("apps.trading.tasks.service.BacktestTask")
-    def test_cancel_running_task(self, mock_bt, mock_tz):
+    def test_cancel_running_task(self, mock_bt, mock_tz, mock_sync_publish):
         from apps.trading.tasks.service import TaskService
 
         task = MagicMock(pk=uuid4(), status=TaskStatus.RUNNING, execution_id=uuid4())
@@ -369,6 +452,7 @@ class TestCancelTask:
         assert result is True
         assert task.status == TaskStatus.STOPPED
         mock_result.revoke.assert_called_once_with(terminate=True)
+        mock_sync_publish.assert_called_once()
 
     @patch("apps.trading.tasks.service.BacktestTask")
     def test_cancel_non_active_returns_false(self, mock_bt):
@@ -396,9 +480,8 @@ class TestCancelTask:
 
 class TestRestartTask:
     @patch("apps.trading.models.state.ExecutionState")
-    @patch("apps.trading.tasks.service.TradingEvent")
     @patch("apps.trading.tasks.service.BacktestTask")
-    def test_restart_stopped_task(self, mock_bt, mock_events, mock_state):
+    def test_restart_stopped_task(self, mock_bt, mock_state):
         from apps.trading.tasks.service import TaskService
 
         task_id = uuid4()
@@ -437,9 +520,8 @@ class TestRestartTask:
 
     @patch("apps.trading.models.state.ExecutionState")
     @patch("celery.current_app")
-    @patch("apps.trading.tasks.service.TradingEvent")
     @patch("apps.trading.tasks.service.BacktestTask")
-    def test_restart_running_stops_first(self, mock_bt, mock_events, mock_app, mock_state):
+    def test_restart_running_stops_first(self, mock_bt, mock_app, mock_state):
         from apps.trading.tasks.service import TaskService
 
         task_id = uuid4()

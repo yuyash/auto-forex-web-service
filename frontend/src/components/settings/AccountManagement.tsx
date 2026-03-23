@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Button,
@@ -32,9 +32,14 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useToast } from '../common/useToast';
 import ConfirmDialog from '../common/ConfirmDialog';
-import type { Account } from '../../types/strategy';
-import { accountsApi } from '../../services/api/accounts';
-import type { OandaAccounts, OandaAccountsRequest } from '../../api/types';
+import type { Account, AccountUpsertData } from '../../types/strategy';
+import {
+  useCreateAccount,
+  useDeleteAccount,
+  useUpdateAccount,
+} from '../../hooks/useAccountMutations';
+import { useAccounts } from '../../hooks/useAccounts';
+import { logger } from '../../utils/logger';
 
 interface AccountFormData {
   account_id: string;
@@ -45,11 +50,15 @@ interface AccountFormData {
 const AccountManagement = () => {
   const { t } = useTranslation(['settings', 'common']);
   const { showSuccess, showError } = useToast();
-
-  const isMountedRef = useRef(true);
-
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {
+    data: rawAccounts,
+    isLoading: loading,
+    error: accountsError,
+  } = useAccounts();
+  const accounts = rawAccounts ?? [];
+  const createAccount = useCreateAccount();
+  const updateAccount = useUpdateAccount();
+  const deleteAccount = useDeleteAccount();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -67,75 +76,6 @@ const AccountManagement = () => {
   const [formErrors, setFormErrors] = useState<
     Partial<Record<keyof AccountFormData, string>>
   >({});
-
-  // Fetch accounts
-  const fetchAccounts = useCallback(
-    async ({ showLoading = true }: { showLoading?: boolean } = {}) => {
-      try {
-        if (showLoading) {
-          setLoading(true);
-        }
-        const data = await accountsApi.list();
-
-        const listedAccounts = Array.isArray(data) ? data : [];
-        setAccounts(listedAccounts as Account[]);
-
-        // Hydrate each account with live data (balance/margins/etc) from the detail endpoint.
-        // Do this after the list loads so the UI renders quickly.
-        if (listedAccounts.length > 0) {
-          void (async () => {
-            const results = await Promise.allSettled(
-              listedAccounts
-                .filter((account: OandaAccounts) => account.id !== undefined)
-                .map((account: OandaAccounts) => accountsApi.get(account.id!))
-            );
-
-            if (!isMountedRef.current) {
-              return;
-            }
-
-            const hydratedAccounts = results
-              .filter(
-                (result): result is PromiseFulfilledResult<OandaAccounts> =>
-                  result.status === 'fulfilled'
-              )
-              .map(
-                (result: PromiseFulfilledResult<OandaAccounts>) => result.value
-              );
-
-            if (hydratedAccounts.length === 0) {
-              return;
-            }
-
-            setAccounts((previousAccounts) =>
-              previousAccounts.map(
-                (account: Account) =>
-                  (hydratedAccounts.find(
-                    (hydrated) => hydrated.id === account.id
-                  ) as Account | undefined) ?? account
-              )
-            );
-          })();
-        }
-      } catch (caughtError) {
-        console.error('Error fetching accounts:', caughtError);
-        showError(t('common:errors.fetchFailed'));
-      } finally {
-        if (showLoading) {
-          setLoading(false);
-        }
-      }
-    },
-    [showError, t]
-  );
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    fetchAccounts();
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, [fetchAccounts]);
 
   // Open dialog for adding new account
   const handleAddClick = () => {
@@ -222,20 +162,20 @@ const AccountManagement = () => {
       }
 
       if (editingAccount) {
-        await accountsApi.update(
-          editingAccount.id,
-          payload as OandaAccountsRequest
-        );
+        await updateAccount.mutate({
+          id: editingAccount.id,
+          data: payload as AccountUpsertData,
+        });
       } else {
-        await accountsApi.create(payload as OandaAccountsRequest);
+        await createAccount.mutate(payload as AccountUpsertData);
       }
 
-      // Close immediately; refresh balances in the background.
       showSuccess(t('settings:messages.accountAdded'));
       handleDialogClose();
-      await fetchAccounts({ showLoading: false });
     } catch (error: unknown) {
-      console.error('Error saving account:', error);
+      logger.error('Error saving account', {
+        error: error instanceof Error ? error.message : String(error),
+      });
 
       // Extract validation details from TransformedApiError or ApiError
       let message = t('settings:messages.saveError');
@@ -284,14 +224,15 @@ const AccountManagement = () => {
     if (!accountToDelete) return;
 
     try {
-      await accountsApi.delete(accountToDelete.id);
+      await deleteAccount.mutate(accountToDelete.id);
 
       showSuccess(t('settings:messages.accountDeleted'));
       setDeleteConfirmOpen(false);
       setAccountToDelete(null);
-      await fetchAccounts({ showLoading: false });
     } catch (error) {
-      console.error('Error deleting account:', error);
+      logger.error('Error deleting account', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       showError(t('common:errors.deleteFailed'));
     }
   };
@@ -342,6 +283,10 @@ const AccountManagement = () => {
         <CircularProgress />
       </Box>
     );
+  }
+
+  if (accountsError) {
+    return <Alert severity="error">{t('common:errors.fetchFailed')}</Alert>;
   }
 
   return (

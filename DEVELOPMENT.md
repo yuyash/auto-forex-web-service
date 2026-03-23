@@ -97,18 +97,30 @@ GRANT ALL PRIVILEGES ON DATABASE "auto-forex" TO postgres;
 # Copy the example file
 cp .env.example .env
 
-# Generate SECRET_KEY and JWT_SECRET_KEY, then paste them into .env
+# Generate SECRET_KEY, JWT_SECRET_KEY, and the OANDA token encryption key,
+# then paste them into .env
 python -c "from django.core.management.utils import get_random_secret_key; print('SECRET_KEY=' + get_random_secret_key())"
 python -c "import secrets; print('JWT_SECRET_KEY=' + secrets.token_urlsafe(64))"
+python -c "from cryptography.fernet import Fernet; print('OANDA_TOKEN_ENCRYPTION_KEY=' + Fernet.generate_key().decode())"
 
 # Edit .env — set at minimum:
 #   DB_PASSWORD=<your postgres password>
 #   SECRET_KEY=<generated above>
 #   JWT_SECRET_KEY=<generated above, must differ from SECRET_KEY>
+#   OANDA_TOKEN_ENCRYPTION_KEY=<generated above>
 #   DB_HOST=localhost
 #   REDIS_URL=redis://localhost:6379/0
 #   DEBUG=True
 ```
+
+If you rotate `OANDA_TOKEN_ENCRYPTION_KEY`, keep the previous key in
+`OANDA_TOKEN_ENCRYPTION_FALLBACK_KEYS` until all saved OANDA account tokens have
+been re-encrypted. The production rollout sequence is documented in
+[docs/oanda-key-rotation.md](docs/oanda-key-rotation.md).
+
+Existing environments that still have plaintext `refresh_tokens.token` rows must
+run `uv run python manage.py migrate` before deploying the new auth code. The
+included migration hashes legacy rows in place.
 
 ### 4. Backend Setup
 
@@ -185,14 +197,17 @@ cd backend
 # Copy the example file
 cp .env.example .env
 
-# Generate SECRET_KEY and JWT_SECRET_KEY, then paste them into .env
+# Generate SECRET_KEY, JWT_SECRET_KEY, and the OANDA token encryption key,
+# then paste them into .env
 python -c "from django.core.management.utils import get_random_secret_key; print('SECRET_KEY=' + get_random_secret_key())"
 python -c "import secrets; print('JWT_SECRET_KEY=' + secrets.token_urlsafe(64))"
+python -c "from cryptography.fernet import Fernet; print('OANDA_TOKEN_ENCRYPTION_KEY=' + Fernet.generate_key().decode())"
 
 # Edit .env — set at minimum:
 #   DB_PASSWORD=<your password>
 #   SECRET_KEY=<generated above>
 #   JWT_SECRET_KEY=<generated above, must differ from SECRET_KEY>
+#   OANDA_TOKEN_ENCRYPTION_KEY=<generated above>
 ```
 
 ### 2. Build and Start Services

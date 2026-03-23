@@ -191,7 +191,7 @@ class Strategy(ABC):
         )
 
     def on_resume(self, *, state: ExecutionState) -> StrategyResult:
-        """Called when strategy resumes from a stopped state.
+        """Called when strategy resumes from a paused state.
 
         Args:
             state: Current execution state

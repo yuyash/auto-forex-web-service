@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   Alert,
   Box,
@@ -13,8 +13,7 @@ import {
 import { Link, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-import { accountsApi } from '../services/api/accounts';
-import type { Account } from '../types/strategy';
+import { useAccount } from '../hooks/useAccounts';
 
 const formatJson = (value: unknown) => {
   if (value == null) {
@@ -79,47 +78,20 @@ export default function OandaAccountDetailPage() {
     return Number.isFinite(parsed) ? parsed : null;
   }, [params.id]);
 
-  const [account, setAccount] = useState<Account | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data: account = null,
+    isLoading: loading,
+    error: queryError,
+  } = useAccount(accountId ?? 0, { enabled: accountId !== null });
 
-  useEffect(() => {
-    let mounted = true;
-
-    const run = async () => {
-      if (!accountId) {
-        setError('Invalid account id');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        setError(null);
-        const detail = await accountsApi.get(accountId);
-        if (!mounted) return;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setAccount(detail as any as Account);
-      } catch (caughtError) {
-        if (!mounted) return;
-        setError(
-          caughtError instanceof Error
-            ? caughtError.message
-            : t('common:errors.fetchFailed')
-        );
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    void run();
-
-    return () => {
-      mounted = false;
-    };
-  }, [accountId, t]);
+  const error =
+    accountId === null
+      ? 'Invalid account id'
+      : queryError instanceof Error
+        ? queryError.message
+        : queryError
+          ? t('common:errors.fetchFailed')
+          : null;
 
   if (loading) {
     return (

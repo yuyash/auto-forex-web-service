@@ -21,8 +21,8 @@ import {
   useCopyBacktestTask,
   useDeleteBacktestTask,
 } from '../../hooks/useBacktestTaskMutations';
-import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
 import { useToast } from '../common';
+import { logger } from '../../utils/logger';
 
 interface BacktestTaskActionsProps {
   task: BacktestTask;
@@ -59,12 +59,13 @@ export default function BacktestTaskActions({
   const handleCopyConfirm = async (newName: string) => {
     try {
       await copyTask.mutate({ id: task.id, data: { new_name: newName } });
-      invalidateBacktestTasksCache(); // Refresh task list
       setCopyDialogOpen(false);
-      // Trigger refresh after successful copy
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to copy task:', error);
+      logger.error('Failed to copy backtest task', {
+        taskId: task.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to copy task';
       showError(errorMessage);
@@ -85,13 +86,14 @@ export default function BacktestTaskActions({
   const handleDeleteConfirm = async () => {
     try {
       await deleteTask.mutate(task.id);
-      invalidateBacktestTasksCache(); // Refresh task list
       setDeleteDialogOpen(false);
-      // Trigger refresh after successful delete
       onRefresh?.();
       navigate('/backtest-tasks', { state: { deleted: true } });
     } catch (error) {
-      console.error('Failed to delete task:', error);
+      logger.error('Failed to delete backtest task from actions menu', {
+        taskId: task.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to delete task';
 

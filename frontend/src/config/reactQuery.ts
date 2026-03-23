@@ -1,5 +1,8 @@
 // React Query configuration with optimized caching settings
 import { QueryClient } from '@tanstack/react-query';
+import { backtestTasksApi } from '../services/api/backtestTasks';
+import { configurationsApi } from '../services/api/configurations';
+import { tradingTasksApi } from '../services/api/tradingTasks';
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,8 +61,8 @@ export const queryKeys = {
       [...queryKeys.backtestTasks.lists(), params] as const,
     details: () => [...queryKeys.backtestTasks.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.backtestTasks.details(), id] as const,
-    executions: (id: string) =>
-      [...queryKeys.backtestTasks.detail(id), 'executions'] as const,
+    executions: (id: string, params?: Record<string, unknown>) =>
+      [...queryKeys.backtestTasks.detail(id), 'executions', params] as const,
     execution: (taskId: string, executionId: string) =>
       [...queryKeys.backtestTasks.executions(taskId), executionId] as const,
   },
@@ -72,31 +75,69 @@ export const queryKeys = {
       [...queryKeys.tradingTasks.lists(), params] as const,
     details: () => [...queryKeys.tradingTasks.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.tradingTasks.details(), id] as const,
-    executions: (id: string) =>
-      [...queryKeys.tradingTasks.detail(id), 'executions'] as const,
+    executions: (id: string, params?: Record<string, unknown>) =>
+      [...queryKeys.tradingTasks.detail(id), 'executions', params] as const,
     execution: (taskId: string, executionId: string) =>
       [...queryKeys.tradingTasks.executions(taskId), executionId] as const,
-  },
-
-  // Task execution keys
-  executions: {
-    all: ['executions'] as const,
-    lists: () => [...queryKeys.executions.all, 'list'] as const,
-    list: (taskType: string, taskId: string) =>
-      [...queryKeys.executions.lists(), taskType, taskId] as const,
-    details: () => [...queryKeys.executions.all, 'detail'] as const,
-    detail: (id: string) => [...queryKeys.executions.details(), id] as const,
-    metrics: (id: string) =>
-      [...queryKeys.executions.detail(id), 'metrics'] as const,
   },
 
   // Account keys
   accounts: {
     all: ['accounts'] as const,
     lists: () => [...queryKeys.accounts.all, 'list'] as const,
-    list: () => [...queryKeys.accounts.lists()] as const,
+    list: (params?: Record<string, unknown>) =>
+      [...queryKeys.accounts.lists(), params] as const,
     details: () => [...queryKeys.accounts.all, 'detail'] as const,
     detail: (id: number) => [...queryKeys.accounts.details(), id] as const,
+  },
+
+  health: {
+    all: ['health'] as const,
+    backend: () => [...queryKeys.health.all, 'backend'] as const,
+    oanda: () => [...queryKeys.health.all, 'oanda'] as const,
+  },
+
+  strategies: {
+    all: ['strategies'] as const,
+    list: () => [...queryKeys.strategies.all, 'list'] as const,
+    defaults: (id: string) =>
+      [...queryKeys.strategies.all, 'defaults', id] as const,
+  },
+
+  taskResources: {
+    all: ['task-resources'] as const,
+    summary: (taskType: string, taskId: string, executionRunId?: string) =>
+      [
+        ...queryKeys.taskResources.all,
+        taskType,
+        taskId,
+        'summary',
+        executionRunId ?? null,
+      ] as const,
+    strategyEvents: (
+      taskType: string,
+      taskId: string,
+      executionRunId?: string
+    ) =>
+      [
+        ...queryKeys.taskResources.all,
+        taskType,
+        taskId,
+        'strategy-events',
+        executionRunId ?? null,
+      ] as const,
+    logComponents: (
+      taskType: string,
+      taskId: string,
+      executionRunId?: string
+    ) =>
+      [
+        ...queryKeys.taskResources.all,
+        taskType,
+        taskId,
+        'log-components',
+        executionRunId ?? null,
+      ] as const,
   },
 
   // System settings keys
@@ -104,77 +145,40 @@ export const queryKeys = {
     all: ['system-settings'] as const,
     detail: () => [...queryKeys.systemSettings.all, 'detail'] as const,
   },
-};
 
-// Cache invalidation helpers
-export const cacheInvalidation = {
-  // Invalidate all configuration queries
-  invalidateConfigurations: () => {
-    return queryClient.invalidateQueries({
-      queryKey: queryKeys.configurations.all,
-    });
+  userSettings: {
+    all: ['user-settings'] as const,
+    detail: () => [...queryKeys.userSettings.all, 'detail'] as const,
   },
 
-  // Invalidate specific configuration
-  invalidateConfiguration: (id: string) => {
-    return queryClient.invalidateQueries({
-      queryKey: queryKeys.configurations.detail(id),
-    });
-  },
-
-  // Invalidate all backtest task queries
-  invalidateBacktestTasks: () => {
-    return queryClient.invalidateQueries({
-      queryKey: queryKeys.backtestTasks.all,
-    });
-  },
-
-  // Invalidate specific backtest task
-  invalidateBacktestTask: (id: string) => {
-    return queryClient.invalidateQueries({
-      queryKey: queryKeys.backtestTasks.detail(id),
-    });
-  },
-
-  // Invalidate all trading task queries
-  invalidateTradingTasks: () => {
-    return queryClient.invalidateQueries({
-      queryKey: queryKeys.tradingTasks.all,
-    });
-  },
-
-  // Invalidate specific trading task
-  invalidateTradingTask: (id: string) => {
-    return queryClient.invalidateQueries({
-      queryKey: queryKeys.tradingTasks.detail(id),
-    });
-  },
-
-  // Invalidate task executions
-  invalidateExecutions: (taskType: string, taskId: string) => {
-    return queryClient.invalidateQueries({
-      queryKey: queryKeys.executions.list(taskType, taskId),
-    });
+  marketConfig: {
+    all: ['market-config'] as const,
+    instruments: () => [...queryKeys.marketConfig.all, 'instruments'] as const,
+    granularities: () =>
+      [...queryKeys.marketConfig.all, 'granularities'] as const,
+    tickDataRange: (instrument: string) =>
+      [...queryKeys.marketConfig.all, 'tick-data-range', instrument] as const,
   },
 };
 
-// Prefetch helpers for optimistic loading
-// These will be implemented when converting hooks to React Query
 export const prefetchHelpers = {
-  // Prefetch configuration details
-  prefetchConfiguration: () => {
-    // TODO: Implementation when we convert hooks to React Query
-  },
+  prefetchConfiguration: (id: string) =>
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.configurations.detail(id),
+      queryFn: () => configurationsApi.get(id),
+    }),
 
-  // Prefetch backtest task details
-  prefetchBacktestTask: () => {
-    // TODO: Implementation when we convert hooks to React Query
-  },
+  prefetchBacktestTask: (id: string) =>
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.backtestTasks.detail(id),
+      queryFn: () => backtestTasksApi.get(id),
+    }),
 
-  // Prefetch trading task details
-  prefetchTradingTask: () => {
-    // TODO: Implementation when we convert hooks to React Query
-  },
+  prefetchTradingTask: (id: string) =>
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.tradingTasks.detail(id),
+      queryFn: () => tradingTasksApi.get(id),
+    }),
 };
 
 export default queryClient;

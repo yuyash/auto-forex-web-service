@@ -8,6 +8,7 @@ import {
   broadcastAuthLogout,
   handleAuthErrorStatus,
   AUTH_LOGOUT_EVENT,
+  shouldBroadcastAuthLogoutForHttp,
 } from '../../../src/utils/authEvents';
 
 describe('isAuthErrorStatus', () => {
@@ -53,9 +54,11 @@ describe('handleAuthErrorStatus', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns true and broadcasts for auth error statuses', () => {
+  it('returns true and broadcasts for refresh auth failures', () => {
     const spy = vi.spyOn(window, 'dispatchEvent');
-    expect(handleAuthErrorStatus(401)).toBe(true);
+    expect(
+      handleAuthErrorStatus(401, { url: '/api/accounts/auth/refresh' })
+    ).toBe(true);
     expect(spy).toHaveBeenCalled();
   });
 
@@ -63,5 +66,31 @@ describe('handleAuthErrorStatus', () => {
     const spy = vi.spyOn(window, 'dispatchEvent');
     expect(handleAuthErrorStatus(404)).toBe(false);
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('returns false for unrelated 401 responses', () => {
+    const spy = vi.spyOn(window, 'dispatchEvent');
+    expect(handleAuthErrorStatus(401, { url: '/api/tasks/123/' })).toBe(false);
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+describe('shouldBroadcastAuthLogoutForHttp', () => {
+  it('accepts refresh endpoint failures', () => {
+    expect(
+      shouldBroadcastAuthLogoutForHttp({
+        status: 401,
+        url: '/api/accounts/auth/refresh',
+      })
+    ).toBe(true);
+  });
+
+  it('rejects generic unauthorized responses', () => {
+    expect(
+      shouldBroadcastAuthLogoutForHttp({
+        status: 401,
+        url: '/api/trading/tasks/',
+      })
+    ).toBe(false);
   });
 });

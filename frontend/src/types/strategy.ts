@@ -126,3 +126,13 @@ export interface Account {
   is_default?: boolean;
   jurisdiction?: string;
 }
+
+export interface AccountUpsertData {
+  account_id: string;
+  api_token: string;
+  api_type?: 'practice' | 'live';
+  jurisdiction?: string;
+  currency?: string;
+  is_active?: boolean;
+  is_default?: boolean;
+}

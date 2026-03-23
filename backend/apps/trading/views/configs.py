@@ -1,15 +1,15 @@
 """Views for strategy configuration management."""
 
+from typing import cast
 from uuid import UUID
 
-from django.db import models
+from django.db import IntegrityError, models
 from django.db.models import ProtectedError
 from drf_spectacular.utils import extend_schema, inline_serializer
-from rest_framework import serializers, status
+from rest_framework import generics, serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
 from apps.trading.models import StrategyConfiguration
 from apps.trading.serializers import (
@@ -17,15 +17,36 @@ from apps.trading.serializers import (
     StrategyConfigDetailSerializer,
     StrategyConfigListSerializer,
 )
+from apps.trading.services.config_usage import list_configuration_tasks
 from apps.trading.views.pagination import StandardPagination
 
 
-class StrategyConfigView(APIView):
+class StrategyConfigView(generics.ListCreateAPIView):
     """List and create strategy configurations."""
 
     permission_classes = [IsAuthenticated]
     pagination_class = StandardPagination
     serializer_class = StrategyConfigListSerializer
+
+    def get_queryset(self):
+        request = cast(Request, self.request)
+
+        strategy_type = request.query_params.get("strategy_type")
+        search = request.query_params.get("search")
+
+        queryset = StrategyConfiguration.objects.filter(user=request.user.pk)
+        if strategy_type:
+            queryset = queryset.filter(strategy_type=strategy_type)
+        if search:
+            queryset = queryset.filter(
+                models.Q(name__icontains=search) | models.Q(description__icontains=search)
+            )
+        return queryset.order_by("-created_at")
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return StrategyConfigCreateSerializer
+        return StrategyConfigListSerializer
 
     @extend_schema(
         operation_id="trading_strategy_configs_list",
@@ -42,25 +63,8 @@ class StrategyConfigView(APIView):
             ),
         },
     )
-    def get(self, request: Request) -> Response:
-        from apps.trading.models import StrategyConfiguration
-
-        strategy_type = request.query_params.get("strategy_type")
-        search = request.query_params.get("search")
-
-        queryset = StrategyConfiguration.objects.filter(user=request.user.pk)
-        if strategy_type:
-            queryset = queryset.filter(strategy_type=strategy_type)
-        if search:
-            queryset = queryset.filter(
-                models.Q(name__icontains=search) | models.Q(description__icontains=search)
-            )
-
-        queryset = queryset.order_by("-created_at")
-        paginator = self.pagination_class()
-        paginated_queryset = paginator.paginate_queryset(queryset, request)
-        serializer = StrategyConfigListSerializer(paginated_queryset, many=True)
-        return paginator.get_paginated_response(serializer.data)
+    def get(self, request: Request, *args, **kwargs) -> Response:
+        return super().get(request, *args, **kwargs)
 
     @extend_schema(
         operation_id="trading_strategy_configs_create",
@@ -74,26 +78,25 @@ class StrategyConfigView(APIView):
             ),
         },
     )
-    def post(self, request: Request) -> Response:
+    def post(self, request: Request, *args, **kwargs) -> Response:
         serializer = StrategyConfigCreateSerializer(data=request.data, context={"request": request})
-        if serializer.is_valid():
-            try:
-                config = serializer.save()
-                response_serializer = StrategyConfigDetailSerializer(config)
-                return Response(response_serializer.data, status=status.HTTP_201_CREATED)
-            except Exception as e:
-                error_message = str(e)
-                if "unique_user_config_name" in error_message or "duplicate key" in error_message:
-                    return Response(
-                        {"name": ["A configuration with this name already exists"]},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-                raise
+        serializer.is_valid(raise_exception=True)
+        try:
+            config = serializer.save()
+        except IntegrityError as exc:
+            if "unique_user_config_name" in str(exc) or "duplicate key" in str(exc):
+                return Response(
+                    {"name": ["A configuration with this name already exists"]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            raise
 
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        response_serializer = StrategyConfigDetailSerializer(config)
+        headers = self.get_success_headers(response_serializer.data)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 
-class StrategyConfigDetailView(APIView):
+class StrategyConfigDetailView(generics.RetrieveUpdateDestroyAPIView):
     """Retrieve, update, and delete a strategy configuration."""
 
     permission_classes = [IsAuthenticated]
@@ -105,8 +108,6 @@ class StrategyConfigDetailView(APIView):
         responses={200: StrategyConfigDetailSerializer},
     )
     def get(self, request: Request, config_id: UUID) -> Response:
-        from apps.trading.serializers import StrategyConfigDetailSerializer
-
         try:
             config = StrategyConfiguration.objects.get(id=config_id, user=request.user.pk)
         except StrategyConfiguration.DoesNotExist:
@@ -122,11 +123,6 @@ class StrategyConfigDetailView(APIView):
         responses={200: StrategyConfigDetailSerializer},
     )
     def put(self, request: Request, config_id: UUID) -> Response:
-        from apps.trading.serializers import (
-            StrategyConfigCreateSerializer,
-            StrategyConfigDetailSerializer,
-        )
-
         try:
             config = StrategyConfiguration.objects.get(id=config_id, user=request.user.pk)
         except StrategyConfiguration.DoesNotExist:
@@ -175,3 +171,39 @@ class StrategyConfigDetailView(APIView):
             )
 
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class StrategyConfigTasksView(generics.GenericAPIView):
+    """List tasks using a strategy configuration."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        operation_id="trading_strategy_config_tasks",
+        tags=["Trading"],
+        responses={
+            200: inline_serializer(
+                "StrategyConfigTaskUsageList",
+                fields={
+                    "results": serializers.ListField(
+                        child=inline_serializer(
+                            "StrategyConfigTaskUsage",
+                            fields={
+                                "id": serializers.CharField(),
+                                "task_type": serializers.CharField(),
+                                "name": serializers.CharField(),
+                                "status": serializers.CharField(),
+                            },
+                        )
+                    )
+                },
+            )
+        },
+    )
+    def get(self, request: Request, config_id: UUID) -> Response:
+        try:
+            config = StrategyConfiguration.objects.get(id=config_id, user=request.user.pk)
+        except StrategyConfiguration.DoesNotExist:
+            return Response({"error": "Configuration not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({"results": list_configuration_tasks(config=config)})

@@ -90,3 +90,30 @@ export async function fetchMetrics(opts: {
     results,
   };
 }
+
+export async function fetchPaginatedMetrics(opts: {
+  taskId: string;
+  taskType: TaskType;
+  since?: string;
+  until?: string;
+  executionRunId?: string;
+  interval?: number;
+  pageSize?: number;
+}): Promise<MetricPoint[]> {
+  const pageSize = opts.pageSize ?? 250;
+  const results: MetricPoint[] = [];
+  let page = 1;
+
+  while (true) {
+    const response = await fetchMetrics({
+      ...opts,
+      page,
+      pageSize,
+    });
+    results.push(...response.results);
+    if (!response.next) {
+      return results;
+    }
+    page += 1;
+  }
+}

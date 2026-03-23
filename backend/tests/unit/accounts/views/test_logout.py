@@ -1,6 +1,6 @@
 """Unit tests for UserLogoutView (mocked dependencies)."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
@@ -70,17 +70,44 @@ class TestUserLogoutView:
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_post_invalid_token(self) -> None:
-        """Test logout with invalid token."""
+        """Test logout without an authenticated user."""
         request = self.factory.post("/api/auth/logout")
         request.META["HTTP_AUTHORIZATION"] = "Bearer invalid_token"
         view = UserLogoutView()
+        request.user = MagicMock(is_authenticated=False)
 
-        with patch("apps.accounts.views.logout.JWTService") as mock_jwt:
-            mock_jwt.return_value.get_user_from_token.return_value = None
-
-            response = view.post(request)
+        response = view.post(request)
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_post_success_clears_refresh_cookie(self) -> None:
+        """Test successful logout clears the refresh-token cookie."""
+        from apps.accounts.models import User
+
+        request = self.factory.post("/api/auth/logout")
+        request.META["HTTP_AUTHORIZATION"] = "Bearer valid_token"
+        request.user = MagicMock(
+            spec=User,
+            is_authenticated=True,
+            email="test@example.com",
+            id=1,
+            pk=1,
+        )
+        view = UserLogoutView()
+
+        active_sessions = MagicMock()
+        active_sessions.count.return_value = 0
+
+        with (
+            patch("apps.accounts.views.logout.UserSession") as mock_sessions,
+            patch("apps.accounts.views.logout.JWTService") as mock_jwt,
+        ):
+            mock_sessions.objects.filter.return_value = active_sessions
+            mock_jwt.revoke_all_refresh_tokens.return_value = 1
+            response = view.post(request)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.cookies["refresh_token"].value == ""
 
     def test_permission_classes(self) -> None:
         """Test view has IsAuthenticated permission."""

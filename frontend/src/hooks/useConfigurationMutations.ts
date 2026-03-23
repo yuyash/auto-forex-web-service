@@ -1,161 +1,64 @@
-// Configuration mutation hooks
-import { useState, useCallback } from 'react';
 import { configurationsApi } from '../services/api';
-import { invalidateConfigurationsCache } from './useConfigurations';
 import type {
   StrategyConfig,
   StrategyConfigCreateData,
   StrategyConfigUpdateData,
 } from '../types';
+import {
+  clearConfigurationTasksCache,
+  removeConfigurationCaches,
+  upsertConfigurationCaches,
+} from './configurationMutationCache';
+import { useWrappedMutation } from './useWrappedMutation';
 
-interface MutationState<T> {
-  data: T | null;
-  isLoading: boolean;
-  error: Error | null;
-}
-
-interface MutationResult<TData, TVariables> extends MutationState<TData> {
-  mutate: (variables: TVariables) => Promise<TData>;
-  reset: () => void;
-}
-
-/**
- * Hook to create a new configuration
- */
 export function useCreateConfiguration(options?: {
   onSuccess?: (data: StrategyConfig) => void;
   onError?: (error: Error) => void;
-}): MutationResult<StrategyConfig, StrategyConfigCreateData> {
-  const [state, setState] = useState<MutationState<StrategyConfig>>({
-    data: null,
-    isLoading: false,
-    error: null,
-  });
-
-  const mutate = useCallback(
-    async (variables: StrategyConfigCreateData) => {
-      try {
-        setState({ data: null, isLoading: true, error: null });
-        const result = await configurationsApi.create(variables);
-        setState({ data: result, isLoading: false, error: null });
-        invalidateConfigurationsCache();
-        options?.onSuccess?.(result);
-        return result;
-      } catch (err) {
-        const error = err as Error;
-        setState({ data: null, isLoading: false, error });
-        options?.onError?.(error);
-        throw error;
-      }
-    },
-    [options]
+}) {
+  return useWrappedMutation(
+    (variables: StrategyConfigCreateData) =>
+      configurationsApi.create(variables),
+    {
+      onSuccess: async (data) => {
+        upsertConfigurationCaches(data);
+        options?.onSuccess?.(data);
+      },
+      onError: (error) => options?.onError?.(error),
+    }
   );
-
-  const reset = useCallback(() => {
-    setState({ data: null, isLoading: false, error: null });
-  }, []);
-
-  return {
-    ...state,
-    mutate,
-    reset,
-  };
 }
 
-/**
- * Hook to update a configuration
- */
 export function useUpdateConfiguration(options?: {
   onSuccess?: (data: StrategyConfig) => void;
   onError?: (error: Error) => void;
-}): MutationResult<
-  StrategyConfig,
-  { id: string; data: StrategyConfigUpdateData }
-> {
-  const [state, setState] = useState<MutationState<StrategyConfig>>({
-    data: null,
-    isLoading: false,
-    error: null,
-  });
-
-  const mutate = useCallback(
-    async (variables: { id: string; data: StrategyConfigUpdateData }) => {
-      try {
-        setState({ data: null, isLoading: true, error: null });
-        const result = await configurationsApi.update(
-          variables.id,
-          variables.data
-        );
-        setState({ data: result, isLoading: false, error: null });
-        invalidateConfigurationsCache();
-        options?.onSuccess?.(result);
-        return result;
-      } catch (err) {
-        const error = err as Error;
-        setState({ data: null, isLoading: false, error });
-        options?.onError?.(error);
-        throw error;
-      }
-    },
-    [options]
+}) {
+  return useWrappedMutation(
+    (variables: { id: string; data: StrategyConfigUpdateData }) =>
+      configurationsApi.update(variables.id, variables.data),
+    {
+      onSuccess: async (data, variables) => {
+        upsertConfigurationCaches({ ...data, id: variables.id });
+        clearConfigurationTasksCache(variables.id);
+        options?.onSuccess?.(data);
+      },
+      onError: (error) => options?.onError?.(error),
+    }
   );
-
-  const reset = useCallback(() => {
-    setState({ data: null, isLoading: false, error: null });
-  }, []);
-
-  return {
-    ...state,
-    mutate,
-    reset,
-  };
 }
 
-/**
- * Hook to delete a configuration
- */
 export function useDeleteConfiguration(options?: {
   onSuccess?: () => void;
   onError?: (error: Error) => void;
-}): MutationResult<void, string> {
-  const [state, setState] = useState<MutationState<void>>({
-    data: null,
-    isLoading: false,
-    error: null,
-  });
-
-  const mutate = useCallback(
-    async (id: string) => {
-      try {
-        setState({ data: null, isLoading: true, error: null });
-        await configurationsApi.delete(id);
-        setState({ data: undefined, isLoading: false, error: null });
-        invalidateConfigurationsCache();
-        options?.onSuccess?.();
-      } catch (err) {
-        const error = err as Error;
-        setState({ data: null, isLoading: false, error });
-        options?.onError?.(error);
-        throw error;
-      }
+}) {
+  return useWrappedMutation((id: string) => configurationsApi.delete(id), {
+    onSuccess: async (_, id) => {
+      removeConfigurationCaches(id);
+      options?.onSuccess?.();
     },
-    [options]
-  );
-
-  const reset = useCallback(() => {
-    setState({ data: null, isLoading: false, error: null });
-  }, []);
-
-  return {
-    ...state,
-    mutate,
-    reset,
-  };
+    onError: (error) => options?.onError?.(error),
+  });
 }
 
-/**
- * Combined hook for all configuration mutations
- */
 export function useConfigurationMutations() {
   const createMutation = useCreateConfiguration();
   const updateMutation = useUpdateConfiguration();
@@ -165,11 +68,9 @@ export function useConfigurationMutations() {
     createConfiguration: createMutation.mutate,
     isCreating: createMutation.isLoading,
     createError: createMutation.error,
-
     updateConfiguration: updateMutation.mutate,
     isUpdating: updateMutation.isLoading,
     updateError: updateMutation.error,
-
     deleteConfiguration: deleteMutation.mutate,
     isDeleting: deleteMutation.isLoading,
     deleteError: deleteMutation.error,

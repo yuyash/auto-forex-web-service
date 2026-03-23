@@ -14,21 +14,15 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
+import { useRegister } from '../hooks/useAuthMutations';
+import { ApiError } from '../api/apiClient';
+import { logger } from '../utils/logger';
 
 interface RegisterFormData {
   username: string;
   email: string;
   password: string;
   confirmPassword: string;
-}
-
-interface RegisterResponse {
-  message: string;
-  user: {
-    id: number;
-    email: string;
-    username: string;
-  };
 }
 
 interface ErrorResponse {
@@ -48,6 +42,7 @@ const RegisterPage = () => {
   const { t } = useTranslation('common');
   const navigate = useNavigate();
   const { systemSettings, systemSettingsLoading } = useAuth();
+  const registerMutation = useRegister();
 
   const [formData, setFormData] = useState<RegisterFormData>({
     username: '',
@@ -181,24 +176,24 @@ const RegisterPage = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('/api/accounts/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username: formData.username,
-          email: formData.email,
-          password: formData.password,
-          password_confirm: formData.confirmPassword,
-        }),
+      const registerData = await registerMutation.mutate({
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
+        password_confirm: formData.confirmPassword,
       });
 
-      const data: RegisterResponse | ErrorResponse = await response.json();
+      setSuccessMessage(
+        registerData.message || t('auth.registrationSuccessful')
+      );
 
-      if (!response.ok) {
-        // Handle error response
-        const errorData = data as ErrorResponse;
+      // Redirect to login page after 2 seconds
+      setTimeout(() => {
+        navigate('/login');
+      }, 2000);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        const errorData = (error.body ?? {}) as ErrorResponse;
         if (errorData.error) {
           setErrors({ general: errorData.error });
         } else {
@@ -210,19 +205,9 @@ const RegisterPage = () => {
         }
         return;
       }
-
-      // Success - show message and redirect to login
-      const registerData = data as RegisterResponse;
-      setSuccessMessage(
-        registerData.message || t('auth.registrationSuccessful')
-      );
-
-      // Redirect to login page after 2 seconds
-      setTimeout(() => {
-        navigate('/login');
-      }, 2000);
-    } catch (error) {
-      console.error('Registration error:', error);
+      logger.error('Registration error', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       setErrors({
         general: t('errors.unexpectedError'),
       });

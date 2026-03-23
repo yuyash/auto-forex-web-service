@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
+from django.core.cache import cache
 from django.db.models import Case, F, Sum, Value, When
 
 from apps.trading.models.positions import Position
@@ -233,6 +234,58 @@ def compute_task_summary(
     )
 
 
+def compute_cached_task_summary(
+    task_type: str,
+    task_id: str,
+    execution_id=None,
+) -> TaskSummary:
+    """Compute a cached task summary keyed by task/state freshness."""
+    from apps.trading.services.execution_snapshots import get_summary_snapshot
+
+    task_obj = _get_task(task_type, task_id)
+    persisted_snapshot = get_summary_snapshot(
+        task=task_obj,
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=str(execution_id) if execution_id is not None else None,
+    )
+    if persisted_snapshot is not None:
+        return persisted_snapshot
+
+    state = _get_state(task_type, task_id, execution_id)
+    snapshot_cache_key = _build_task_summary_snapshot_cache_key(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=execution_id,
+        task_obj=task_obj,
+    )
+    if snapshot_cache_key:
+        cached_snapshot = cache.get(snapshot_cache_key)
+        if isinstance(cached_snapshot, TaskSummary):
+            return cached_snapshot
+
+    cache_key = _build_task_summary_cache_key(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=execution_id,
+        task_obj=task_obj,
+        state=state,
+    )
+    cached = cache.get(cache_key)
+    if isinstance(cached, TaskSummary):
+        return cached
+
+    summary = compute_task_summary(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=execution_id,
+    )
+    cache.set(cache_key, summary, TASK_SUMMARY_CACHE_TTL_SECONDS)
+    if snapshot_cache_key:
+        cache.set(snapshot_cache_key, summary, TASK_SUMMARY_SNAPSHOT_CACHE_TTL_SECONDS)
+    return summary
+
+
 def _get_task(task_type: str, task_id: str):
     """Retrieve the task object by type and ID."""
     try:
@@ -246,6 +299,42 @@ def _get_task(task_type: str, task_id: str):
             return TradingTask.objects.filter(pk=task_id).first()
     except Exception:
         return None
+
+
+def _get_state(task_type: str, task_id: str, execution_id=None):
+    from apps.trading.models.state import ExecutionState
+
+    state_filter: dict = {"task_type": task_type, "task_id": task_id}
+    if execution_id is not None:
+        state_filter["execution_id"] = execution_id
+    return ExecutionState.objects.filter(**state_filter).order_by("-updated_at").first()
+
+
+def _build_task_summary_cache_key(
+    *, task_type: str, task_id: str, execution_id, task_obj, state
+) -> str:
+    task_updated_at = getattr(task_obj, "updated_at", None)
+    task_updated_at_key = task_updated_at.isoformat() if task_updated_at else "na"
+    state_updated_at = getattr(state, "updated_at", None)
+    state_updated_at_key = state_updated_at.isoformat() if state_updated_at else "na"
+    execution_key = str(execution_id or "latest")
+    return (
+        f"task-summary:{task_type}:{task_id}:{execution_key}:"
+        f"{task_updated_at_key}:{state_updated_at_key}"
+    )
+
+
+def _build_task_summary_snapshot_cache_key(
+    *, task_type: str, task_id: str, execution_id, task_obj
+) -> str | None:
+    if execution_id is None or not task_obj:
+        return None
+    current_execution_id = getattr(task_obj, "execution_id", None)
+    if str(current_execution_id or "") != str(execution_id):
+        return None
+    if not _is_terminal_status(getattr(task_obj, "status", None)):
+        return None
+    return f"task-summary-snapshot:{task_type}:{task_id}:{execution_id}"
 
 
 def _compute_progress(task_type: str, task_obj, state) -> int:
@@ -297,3 +386,11 @@ def _abs_units():
         When(units__lt=0, then=-F("units")),
         default=F("units"),
     )
+
+
+TASK_SUMMARY_CACHE_TTL_SECONDS = 30
+TASK_SUMMARY_SNAPSHOT_CACHE_TTL_SECONDS = 60 * 60 * 24
+
+
+def _is_terminal_status(status: str | None) -> bool:
+    return status in {"completed", "stopped", "failed"}

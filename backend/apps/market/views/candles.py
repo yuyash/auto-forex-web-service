@@ -126,6 +126,29 @@ class CandleDataView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        if from_time or to_time:
+            try:
+                from_dt = (
+                    datetime.fromisoformat(from_time.replace("Z", "+00:00")) if from_time else None
+                )
+                to_dt = datetime.fromisoformat(to_time.replace("Z", "+00:00")) if to_time else None
+            except ValueError:
+                return Response(
+                    {"error": "Invalid time format"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            now = datetime.now(UTC)
+            if to_dt is not None and to_dt > now:
+                to_dt = now
+                to_time = to_dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+            if from_dt is not None and to_dt is not None and from_dt > to_dt:
+                return Response(
+                    {"error": "from_time must be before or equal to to_time"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         # Convert 'before'/'after' timestamps to RFC3339 format for OANDA API
         # OANDA API behavior (verified with curl tests):
         # - 'to' + 'count': Returns 'count' candles ENDING AT 'to'

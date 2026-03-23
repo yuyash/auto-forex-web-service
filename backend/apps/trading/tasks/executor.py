@@ -7,6 +7,8 @@ strategies, manages state, and handles lifecycle events.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from decimal import InvalidOperation
 from decimal import Decimal
 from logging import Logger, getLogger
 from typing import List, cast
@@ -21,6 +23,11 @@ from apps.trading.events.handler import EventHandler as _EventHandlerCompat
 from apps.trading.models import BacktestTask, TradingEvent, TradingTask
 from apps.trading.models.state import ExecutionState
 from apps.trading.order import OrderService, OrderServiceError
+from apps.trading.services.runtime_metrics import (
+    RuntimeMetricsTracker,
+    config_decimal,
+    config_int,
+)
 from apps.trading.services.unrealized_pnl import update_unrealized_pnl
 from apps.trading.tasks.source import TickDataSource
 from apps.trading.tasks.state import StateManager
@@ -111,6 +118,7 @@ class TaskExecutor:
             task_id=str(task.pk),
             execution_id=str(task.execution_id) if task.execution_id else None,
         )
+        self._runtime_metrics = self._create_runtime_metrics_tracker()
 
         logger.info(
             "TaskExecutor initialized: instrument=%s, pip_size=%s, initial_balance=%s",
@@ -145,6 +153,33 @@ class TaskExecutor:
         if isinstance(self.task, BacktestTask):
             return TaskType.BACKTEST
         return TaskType.TRADING
+
+    def _create_runtime_metrics_tracker(self) -> RuntimeMetricsTracker:
+        """Create a tracker for strategy-agnostic runtime metrics."""
+        raw_config_dict = getattr(self.task.config, "config_dict", {}) or {}
+        config_dict = raw_config_dict if isinstance(raw_config_dict, dict) else {}
+        account_currency = getattr(self.task, "account_currency", "") or getattr(
+            getattr(self.task, "oanda_account", None), "currency", ""
+        )
+        atr_period = config_int(config_dict, "atr_period", 14)
+
+        return RuntimeMetricsTracker(
+            instrument=self.instrument,
+            pip_size=Decimal(str(self.pip_size)),
+            account_currency=str(account_currency or ""),
+            margin_rate=config_decimal(config_dict, "margin_rate", "0.04") or Decimal("0.04"),
+            atr_period=atr_period,
+            atr_baseline_period=(
+                config_int(config_dict, "atr_baseline_period", 0)
+                if "atr_baseline_period" in config_dict
+                else (
+                    config_int(config_dict, "atr_baseline_lookback", 0)
+                    if "atr_baseline_lookback" in config_dict
+                    else None
+                )
+            ),
+            volatility_lock_multiplier=config_decimal(config_dict, "volatility_lock_multiplier"),
+        )
 
     def handle_events(self, state: ExecutionState, events: List[TradingEvent]) -> None:
         """Handle events from strategy execution.
@@ -188,6 +223,8 @@ class TaskExecutor:
                     exc_info=True,
                 )
                 self._mark_event_processing_error(trading_event, str(e))
+
+        self._refresh_open_positions_cache()
 
         logger.debug(
             "Processed %s events for trading task %s (open positions: %s)",
@@ -385,6 +422,7 @@ class TaskExecutor:
         state = result.state
         self.save_events(result.events)
         self.save_state(state)
+        self._refresh_open_positions_cache()
         logger.info("Engine started, events_count=%d", len(result.events))
         return state
 
@@ -490,13 +528,57 @@ class TaskExecutor:
             loop.stopped_early = True
             return True
 
+        tick_timestamp = self._coerce_tick_timestamp(tick.timestamp)
         loop.state.ticks_processed += 1
-        loop.state.last_tick_timestamp = tick.timestamp
+        loop.state.last_tick_timestamp = tick_timestamp
         loop.state.last_tick_price = tick.mid
         loop.state.last_tick_bid = tick.bid
         loop.state.last_tick_ask = tick.ask
+        self._update_common_metrics(loop.state, tick)
         self._buffer_tick_metrics(loop.state, tick)
         return False
+
+    @staticmethod
+    def _coerce_tick_timestamp(value) -> datetime:
+        """Normalize tick timestamps to timezone-aware datetimes."""
+        if isinstance(value, datetime):
+            return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+        timestamp_str = str(value).strip()
+        if timestamp_str.endswith("Z"):
+            timestamp_str = timestamp_str[:-1] + "+00:00"
+        parsed = datetime.fromisoformat(timestamp_str)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        return parsed
+
+    def _refresh_open_positions_cache(self) -> None:
+        """Refresh cached open positions used by common metric calculation."""
+        positions = self.order_service.get_open_positions(instrument=self.instrument)
+        self._runtime_metrics.sync_open_positions(positions)
+
+    def _update_common_metrics(self, state: ExecutionState, tick) -> None:
+        """Merge strategy-agnostic runtime metrics into state.strategy_state.metrics."""
+        strategy_state = state.strategy_state if isinstance(state.strategy_state, dict) else {}
+        existing_metrics = (
+            dict(strategy_state.get("metrics", {}))
+            if isinstance(strategy_state.get("metrics"), dict)
+            else {}
+        )
+        try:
+            current_balance = Decimal(str(state.current_balance))
+        except (InvalidOperation, TypeError, ValueError):
+            current_balance = Decimal("0")
+        common_metrics = self._runtime_metrics.build_metrics(
+            timestamp=self._coerce_tick_timestamp(tick.timestamp),
+            bid=Decimal(str(tick.bid)),
+            ask=Decimal(str(tick.ask)),
+            mid=Decimal(str(tick.mid)),
+            current_balance=current_balance,
+        )
+        existing_metrics.update(common_metrics)
+        strategy_state["metrics"] = existing_metrics
+        state.strategy_state = strategy_state
 
     def _replay_unprocessed_events(self, state: ExecutionState) -> None:
         """Replay pending events that were persisted before a crash."""
@@ -619,7 +701,7 @@ class TaskExecutor:
         metrics = (state.strategy_state or {}).get("metrics", {})
         if not metrics:
             return
-        self._metrics_aggregator.record(tick.timestamp, metrics)
+        self._metrics_aggregator.record(self._coerce_tick_timestamp(tick.timestamp), metrics)
 
     def _persist_batch_progress(self, loop: ExecutionLoopState) -> None:
         """Persist state/metrics and emit periodic telemetry."""

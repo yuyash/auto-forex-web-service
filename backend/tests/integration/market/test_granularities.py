@@ -1,7 +1,6 @@
 """Integration tests for granularities API."""
 
 from typing import Any
-from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from rest_framework import status
@@ -32,9 +31,8 @@ class TestSupportedGranularitiesAPIIntegration:
         assert "H1" in granularities
         assert "D" in granularities
 
-    @patch("apps.market.views.granularities.v20.Context")
-    def test_get_granularities_with_account(self, mock_context: Mock, user: Any) -> None:
-        """Test fetching granularities with active account."""
+    def test_get_granularities_with_account(self, user: Any) -> None:
+        """Test fetching granularities with active account returns standard list."""
         OandaAccounts.objects.create(
             user=user,
             account_id="101-001-1234567-001",
@@ -42,22 +40,13 @@ class TestSupportedGranularitiesAPIIntegration:
             is_active=True,
         )
 
-        mock_instrument = MagicMock()
-        mock_instrument.name = "EUR_USD"
-        mock_response = MagicMock()
-        mock_response.status = 200
-        mock_response.body = {"instruments": [mock_instrument]}
-        mock_api = MagicMock()
-        mock_api.account.instruments.return_value = mock_response
-        mock_context.return_value = mock_api
-
         client = APIClient()
         client.force_authenticate(user=user)
 
         response = client.get("/api/market/candles/granularities/")
 
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["source"] in ["oanda", "standard"]
+        assert response.data["source"] in ["oanda", "standard", "cache"]
 
     def test_get_granularities_unauthenticated(self) -> None:
         """Test that unauthenticated users cannot access granularities."""

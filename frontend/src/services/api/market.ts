@@ -1,8 +1,5 @@
-/**
- * Market API service for direct HTTP requests to /api/market/ endpoints.
- */
-
-import { apiConfig, getAuthHeaders } from '../../api/apiConfig';
+import { api } from '../../api/apiClient';
+import type { Granularity } from '../../types/chart';
 
 export interface TickDataRange {
   instrument: string;
@@ -11,27 +8,38 @@ export interface TickDataRange {
   max_timestamp: string | null;
 }
 
+export interface CandlesResponse {
+  candles?: unknown[];
+}
+
+export interface GranularityOption {
+  value: Granularity;
+  label: string;
+}
+
+interface InstrumentsResponse {
+  instruments?: string[];
+}
+
+interface GranularitiesResponse {
+  granularities?: GranularityOption[];
+}
+
 /**
  * Fetch the available tick data date range for a given instrument.
  */
 export async function fetchTickDataRange(
   instrument: string
 ): Promise<TickDataRange> {
-  const base = apiConfig.BASE || '';
-  const url = `${base}/api/market/ticks/range/?instrument=${encodeURIComponent(instrument)}`;
-  const headers = await getAuthHeaders();
-
-  const response = await fetch(url, {
-    method: 'GET',
-    headers,
-    credentials: apiConfig.WITH_CREDENTIALS ? 'include' : 'same-origin',
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Failed to fetch tick data range: ${response.status} ${response.statusText}`
-    );
-  }
-
-  return response.json() as Promise<TickDataRange>;
+  return api.get<TickDataRange>('/api/market/ticks/range/', { instrument });
 }
+
+export const marketApi = {
+  getSupportedInstruments: () =>
+    api.get<InstrumentsResponse>('/api/market/instruments/'),
+  getSupportedGranularities: () =>
+    api.get<GranularitiesResponse>('/api/market/candles/granularities/'),
+  getCandles: (params: Record<string, string | number | undefined>) =>
+    api.get<CandlesResponse>('/api/market/candles/', params),
+  getTickDataRange: fetchTickDataRange,
+};

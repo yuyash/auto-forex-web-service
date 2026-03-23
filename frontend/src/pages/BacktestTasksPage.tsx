@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
 import {
   Box,
@@ -25,13 +25,15 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import {
-  useBacktestTasks,
-  invalidateBacktestTasksCache,
-} from '../hooks/useBacktestTasks';
+import { shouldPollTaskStatus } from '../hooks/taskResourceQueries';
+import { useBacktestTasks } from '../hooks/useBacktestTasks';
 import { TaskStatus } from '../types/common';
 import BacktestTaskCard from '../components/backtest/BacktestTaskCard';
 import { LoadingSpinner, Breadcrumbs } from '../components/common';
+import { useSequentialPolling } from '../hooks/useSequentialPolling';
+import { usePollingPolicy } from '../hooks/usePollingPolicy';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { logger } from '../utils/logger';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -71,15 +73,7 @@ export default function BacktestTasksPage() {
   const [sortBy, setSortBy] = useState('-created_at');
   const [page, setPage] = useState(1);
   const pageSize = 20;
-
-  // Force refetch when navigating back after a deletion
-  useEffect(() => {
-    if (location.state?.deleted) {
-      invalidateBacktestTasksCache();
-      // Clear the state so it doesn't re-trigger on subsequent renders
-      navigate(location.pathname, { replace: true, state: {} });
-    }
-  }, [location.state?.deleted, navigate, location.pathname]);
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, 400);
 
   // Determine status filter based on active tab
   const getStatusFilter = (): TaskStatus | undefined => {
@@ -95,48 +89,58 @@ export default function BacktestTasksPage() {
     }
   };
 
-  const { data, isLoading, error, refetch } = useBacktestTasks({
+  const { data, isLoading, error, refresh } = useBacktestTasks({
     page,
     page_size: pageSize,
-    search: searchQuery || undefined,
+    search: debouncedSearchQuery || undefined,
     status: getStatusFilter(),
     ordering: sortBy,
   });
 
-  // Auto-refresh every 10 seconds when there are running tasks
-  // This ensures status changes are detected across all pages
-  const autoRefreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null
+  useEffect(() => {
+    if (location.state?.deleted) {
+      void refresh();
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.pathname, location.state?.deleted, navigate, refresh]);
+
+  const hasRunningTasks = !!data?.results.some((task) =>
+    shouldPollTaskStatus(task.status)
+  );
+  const pollingPolicy = usePollingPolicy({
+    enabled: hasRunningTasks,
+    baseIntervalMs: 10000,
+  });
+
+  useSequentialPolling(
+    async () => {
+      logger.debug('Auto-refreshing backtest task list');
+      const result = await refresh();
+      if (
+        result &&
+        typeof result === 'object' &&
+        'error' in result &&
+        (result as { error?: unknown }).error
+      ) {
+        pollingPolicy.registerFailure();
+      } else {
+        pollingPolicy.resetFailures();
+      }
+      return result;
+    },
+    {
+      enabled: pollingPolicy.isActive,
+      intervalMs: pollingPolicy.intervalMs,
+      onError: (error) => {
+        logger.warn('Backtest task auto-refresh failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
+    }
   );
 
-  useEffect(() => {
-    const hasRunningTasks = data?.results.some(
-      (task) => task.status === TaskStatus.RUNNING
-    );
-
-    // Clear existing interval
-    if (autoRefreshIntervalRef.current) {
-      clearInterval(autoRefreshIntervalRef.current);
-      autoRefreshIntervalRef.current = null;
-    }
-
-    // Set up auto-refresh if there are running tasks
-    if (hasRunningTasks) {
-      autoRefreshIntervalRef.current = setInterval(() => {
-        console.log('[BacktestTasksPage] Auto-refreshing task list');
-        refetch();
-      }, 10000); // 10 seconds
-    }
-
-    return () => {
-      if (autoRefreshIntervalRef.current) {
-        clearInterval(autoRefreshIntervalRef.current);
-      }
-    };
-  }, [data?.results, refetch]);
-
   const handleRefresh = () => {
-    refetch();
+    void refresh();
   };
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {

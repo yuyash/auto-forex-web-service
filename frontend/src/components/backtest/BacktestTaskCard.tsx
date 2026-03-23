@@ -16,6 +16,10 @@ import {
   MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import {
+  shouldEnableRealtimeTaskUpdates,
+  shouldPollTaskStatus,
+} from '../../hooks/taskResourceQueries';
 import type { BacktestTask } from '../../types/backtestTask';
 import { TaskStatus, TaskType } from '../../types/common';
 import { StatusBadge } from '../tasks/display/StatusBadge';
@@ -25,16 +29,22 @@ import { TaskControlButtons } from '../common/TaskControlButtons';
 import BacktestTaskActions from './BacktestTaskActions';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
 import { BacktestStopDialog } from '../tasks/actions/BacktestStopDialog';
-import { useTaskPolling } from '../../hooks/useTaskPolling';
+import { useBacktestTask } from '../../hooks/useBacktestTasks';
 import { useTaskSummary } from '../../hooks/useTaskSummary';
 import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
+import {
+  useDeleteBacktestTask,
+  usePauseBacktestTask,
+  useResumeBacktestTask,
+  useRerunBacktestTask,
+  useStartBacktestTask,
+  useStopBacktestTask,
+} from '../../hooks/useBacktestTaskMutations';
 import { useToast } from '../common';
-import { backtestTasksApi } from '../../services/api';
-import { invalidateBacktestTasksCache } from '../../hooks/useBacktestTasks';
-import { api } from '../../api/apiClient';
+import { logger } from '../../utils/logger';
 
 interface BacktestTaskCardProps {
   task: BacktestTask;
@@ -56,23 +66,31 @@ export default function BacktestTaskCard({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const startTask = useStartBacktestTask();
+  const stopTask = useStopBacktestTask();
+  const resumeTask = useResumeBacktestTask();
+  const pauseTask = usePauseBacktestTask();
+  const restartTask = useRerunBacktestTask();
+  const deleteTask = useDeleteBacktestTask();
 
   // Fetch strategies for display names
   const { strategies } = useStrategies();
 
   // Poll for updates when task is running or optimistically set to running (Requirements 1.2, 4.5)
   const pollingEnabled =
-    task.status === TaskStatus.RUNNING ||
-    optimisticStatus === TaskStatus.RUNNING;
+    shouldPollTaskStatus(task.status) ||
+    shouldPollTaskStatus(optimisticStatus ?? undefined) ||
+    shouldEnableRealtimeTaskUpdates(task.status) ||
+    shouldEnableRealtimeTaskUpdates(optimisticStatus ?? undefined);
 
-  const { status: polledStatus } = useTaskPolling(task.id, 'backtest', {
+  const { data: polledTask } = useBacktestTask(task.id, {
     enabled: pollingEnabled,
-    pollStatus: true,
-    interval: 5000, // Poll every 5 seconds for running tasks
+    enablePolling: pollingEnabled,
+    pollingInterval: 5000,
   });
 
   // Use polled status if available, otherwise use task status
-  const currentStatus = polledStatus?.status || task.status;
+  const currentStatus = polledTask?.status || task.status;
 
   // Clear optimistic status when actual status matches (derived state pattern)
   const displayStatus: TaskStatus =
@@ -83,22 +101,19 @@ export default function BacktestTaskCard({
   // Trigger refresh when polled status differs from task prop status
   // This ensures parent component gets updated data
   useEffect(() => {
-    if (polledStatus && polledStatus.status !== task.status) {
-      console.log('[BacktestTaskCard] Status changed via polling:', {
+    if (polledTask && polledTask.status !== task.status) {
+      logger.debug('Backtest task status changed via polling', {
         taskId: task.id,
         propStatus: task.status,
-        polledStatus: polledStatus.status,
+        polledStatus: polledTask.status,
       });
       // Clear optimistic status since we have real status now
       setOptimisticStatus(null);
 
-      // Invalidate cache to force fresh data fetch
-      invalidateBacktestTasksCache();
-
       // Notify parent to refetch task list
       onRefresh?.();
     }
-  }, [polledStatus, task.status, task.id, onRefresh]);
+  }, [polledTask, task.status, task.id, onRefresh]);
 
   // Use original task data (polledStatus only provides status, not full task details)
   const currentTask = task;
@@ -118,12 +133,15 @@ export default function BacktestTaskCard({
   const handleStart = async (taskId: string) => {
     setIsLoading(true);
     try {
-      await backtestTasksApi.start(taskId);
+      await startTask.mutate(taskId);
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess(t('backtest:toast.startedSuccessfully'));
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to start task:', error);
+      logger.error('Failed to start backtest task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       setOptimisticStatus(null);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to start task';
@@ -140,12 +158,15 @@ export default function BacktestTaskCard({
     setStopDialogOpen(false);
     setIsLoading(true);
     try {
-      await backtestTasksApi.stop(taskId);
+      await stopTask.mutate(taskId);
       setOptimisticStatus(TaskStatus.STOPPED);
       showSuccess(t('backtest:toast.stoppedSuccessfully'));
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to stop task:', error);
+      logger.error('Failed to stop backtest task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       setOptimisticStatus(null);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to stop task';
@@ -165,12 +186,15 @@ export default function BacktestTaskCard({
   const handleResume = async (taskId: string) => {
     setIsLoading(true);
     try {
-      await backtestTasksApi.resume(taskId);
+      await resumeTask.mutate(taskId);
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess(t('backtest:toast.resumedSuccessfully'));
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to resume task:', error);
+      logger.error('Failed to resume backtest task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       setOptimisticStatus(null);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to resume task';
@@ -183,15 +207,42 @@ export default function BacktestTaskCard({
     }
   };
 
+  const handlePause = async (taskId: string) => {
+    setIsLoading(true);
+    try {
+      await pauseTask.mutate(taskId);
+      setOptimisticStatus(TaskStatus.PAUSED);
+      showSuccess(t('backtest:toast.pausedSuccessfully'));
+      onRefresh?.();
+    } catch (error) {
+      logger.error('Failed to pause backtest task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      setOptimisticStatus(null);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to pause task';
+      showError(errorMessage, 8000, {
+        label: 'Retry',
+        onClick: () => handlePause(taskId),
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleRestart = async (taskId: string) => {
     setIsLoading(true);
     try {
-      await backtestTasksApi.restart(taskId);
+      await restartTask.mutate(taskId);
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess(t('backtest:toast.restartedSuccessfully'));
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to restart task:', error);
+      logger.error('Failed to restart backtest task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       setOptimisticStatus(null);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to restart task';
@@ -211,13 +262,15 @@ export default function BacktestTaskCard({
   const handleDeleteConfirm = async () => {
     setIsDeleting(true);
     try {
-      await api.delete(`/api/trading/tasks/backtest/${String(task.id)}/`);
-      invalidateBacktestTasksCache();
+      await deleteTask.mutate(String(task.id));
       showSuccess(t('backtest:toast.deletedSuccessfully'));
       setDeleteDialogOpen(false);
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to delete task:', error);
+      logger.error('Failed to delete backtest task', {
+        taskId: task.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to delete task';
       showError(errorMessage);
@@ -327,6 +380,7 @@ export default function BacktestTaskCard({
             status={displayStatus}
             onStart={handleStart}
             onStop={handleStopRequest}
+            onPause={handlePause}
             onResume={handleResume}
             onRestart={handleRestart}
             onDelete={handleDelete}

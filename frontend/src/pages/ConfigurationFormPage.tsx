@@ -14,6 +14,7 @@ import ConfigurationForm from '../components/configurations/ConfigurationForm';
 import { useConfiguration } from '../hooks/useConfigurations';
 import { useConfigurationMutations } from '../hooks/useConfigurationMutations';
 import type { StrategyConfigCreateData } from '../types/configuration';
+import { logger } from '../utils/logger';
 
 const ConfigurationFormPage = () => {
   const { t } = useTranslation(['configuration', 'common']);
@@ -51,7 +52,9 @@ const ConfigurationFormPage = () => {
       await createConfiguration(data);
       navigate('/configurations');
     } catch (err: unknown) {
-      console.error('Failed to save configuration:', err);
+      logger.error('Failed to save configuration', {
+        error: err instanceof Error ? err.message : String(err),
+      });
 
       // Type assertion for error object with data property
       const error = err as {

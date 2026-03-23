@@ -1,7 +1,7 @@
 /**
  * Integration tests for AuthContext.
  *
- * Verifies login, logout, token refresh, localStorage persistence,
+ * Verifies login, logout, token refresh, bootstrap persistence,
  * system settings fetch, and forced-logout via custom event.
  */
 
@@ -11,11 +11,21 @@ import userEvent from '@testing-library/user-event';
 import { AuthProvider, useAuth } from '../../../src/contexts/AuthContext';
 import { AUTH_LOGOUT_EVENT } from '../../../src/utils/authEvents';
 import type { User } from '../../../src/types/auth';
+import { ApiError } from '../../../src/api/apiClient';
+import { authApi } from '../../../src/services/api';
 
 // Mock the api module to avoid side-effects on import
 vi.mock('../../../src/api', () => ({
   setAuthToken: vi.fn(),
   clearAuthToken: vi.fn(),
+}));
+
+vi.mock('../../../src/services/api', () => ({
+  authApi: {
+    getPublicSettings: vi.fn(),
+    refresh: vi.fn(),
+    logout: vi.fn(),
+  },
 }));
 
 const TEST_USER: User = {
@@ -28,7 +38,6 @@ const TEST_USER: User = {
 };
 
 const TEST_TOKEN = 'access-token-abc';
-const TEST_REFRESH = 'refresh-token-xyz';
 
 /** Helper component that exposes auth context values for assertions. */
 function AuthConsumer({
@@ -52,7 +61,7 @@ function AuthConsumer({
       </span>
       <button
         data-testid="login-btn"
-        onClick={() => auth.login(TEST_TOKEN, TEST_REFRESH, TEST_USER)}
+        onClick={() => auth.login(TEST_TOKEN, TEST_USER)}
       >
         Login
       </button>
@@ -77,36 +86,25 @@ function renderWithAuth() {
   );
 }
 
-let fetchSpy: ReturnType<typeof vi.spyOn>;
-
-function mockFetch(overrides: Record<string, () => Response> = {}) {
-  fetchSpy.mockImplementation(async (input: RequestInfo | URL) => {
-    const url = typeof input === 'string' ? input : input.toString();
-    if (overrides[url]) return overrides[url]();
-
-    // Default: public settings
-    if (url === '/api/accounts/settings/public') {
-      return new Response(
-        JSON.stringify({ login_enabled: true, registration_enabled: true }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-    return new Response('{}', {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  });
-}
+const authApiMock = vi.mocked(authApi);
 
 describe('AuthContext', () => {
   beforeEach(() => {
     localStorage.clear();
-    fetchSpy = vi.spyOn(globalThis, 'fetch');
-    mockFetch();
+    authApiMock.getPublicSettings.mockResolvedValue({
+      login_enabled: true,
+      registration_enabled: true,
+    });
+    authApiMock.refresh.mockRejectedValue(
+      new ApiError('/api/accounts/auth/refresh', 401, 'Unauthorized', null)
+    );
+    authApiMock.logout.mockResolvedValue({
+      message: 'Logged out successfully.',
+      sessions_terminated: 0,
+    });
   });
 
   afterEach(() => {
-    fetchSpy.mockRestore();
     vi.restoreAllMocks();
   });
 
@@ -114,7 +112,9 @@ describe('AuthContext', () => {
 
   it('starts unauthenticated when localStorage is empty', async () => {
     renderWithAuth();
-    expect(screen.getByTestId('authenticated').textContent).toBe('false');
+    await waitFor(() => {
+      expect(screen.getByTestId('authenticated').textContent).toBe('false');
+    });
     expect(screen.getByTestId('user').textContent).toBe('none');
   });
 
@@ -126,9 +126,7 @@ describe('AuthContext', () => {
   });
 
   it('handles system settings fetch failure gracefully', async () => {
-    mockFetch({
-      '/api/accounts/settings/public': () => new Response('', { status: 500 }),
-    });
+    authApiMock.getPublicSettings.mockRejectedValueOnce(new Error('boom'));
     renderWithAuth();
     await waitFor(() => {
       expect(screen.getByTestId('settings-loading').textContent).toBe('false');
@@ -138,7 +136,7 @@ describe('AuthContext', () => {
 
   // ── Login ──────────────────────────────────────────────────────
 
-  it('updates state and localStorage on login', async () => {
+  it('updates state and user storage on login', async () => {
     const user = userEvent.setup();
     renderWithAuth();
 
@@ -146,8 +144,6 @@ describe('AuthContext', () => {
 
     expect(screen.getByTestId('authenticated').textContent).toBe('true');
     expect(screen.getByTestId('user').textContent).toBe('test@example.com');
-    expect(localStorage.getItem('token')).toBe(TEST_TOKEN);
-    expect(localStorage.getItem('refresh_token')).toBe(TEST_REFRESH);
     expect(JSON.parse(localStorage.getItem('user')!)).toEqual(TEST_USER);
   });
 
@@ -163,7 +159,7 @@ describe('AuthContext', () => {
 
   // ── Logout ─────────────────────────────────────────────────────
 
-  it('clears state and localStorage on logout', async () => {
+  it('clears state and persisted user on logout', async () => {
     const user = userEvent.setup();
     renderWithAuth();
 
@@ -176,33 +172,21 @@ describe('AuthContext', () => {
 
     expect(screen.getByTestId('authenticated').textContent).toBe('false');
     expect(screen.getByTestId('user').textContent).toBe('none');
-    expect(localStorage.getItem('token')).toBeNull();
-    expect(localStorage.getItem('refresh_token')).toBeNull();
     expect(localStorage.getItem('user')).toBeNull();
   });
 
-  it('calls logout API endpoint', async () => {
+  it('calls logout API service', async () => {
     const user = userEvent.setup();
     renderWithAuth();
 
     await user.click(screen.getByTestId('login-btn'));
     await user.click(screen.getByTestId('logout-btn'));
 
-    const logoutCall = fetchSpy.mock.calls.find(
-      ([url]) => url === '/api/accounts/auth/logout'
-    );
-    expect(logoutCall).toBeDefined();
+    expect(authApiMock.logout).toHaveBeenCalled();
   });
 
   it('clears state even if logout API fails', async () => {
-    mockFetch({
-      '/api/accounts/settings/public': () =>
-        new Response(
-          JSON.stringify({ login_enabled: true, registration_enabled: true }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        ),
-      '/api/accounts/auth/logout': () => new Response('', { status: 500 }),
-    });
+    authApiMock.logout.mockRejectedValueOnce(new Error('boom'));
 
     const user = userEvent.setup();
     renderWithAuth();
@@ -213,49 +197,48 @@ describe('AuthContext', () => {
     expect(screen.getByTestId('authenticated').textContent).toBe('false');
   });
 
-  // ── Restore from localStorage ──────────────────────────────────
+  // ── Restore from persisted user + refresh cookie bootstrap ────
 
-  it('restores auth state from localStorage on mount', async () => {
-    localStorage.setItem('token', TEST_TOKEN);
-    localStorage.setItem('refresh_token', TEST_REFRESH);
+  it('restores auth state by refreshing on mount', async () => {
     localStorage.setItem('user', JSON.stringify(TEST_USER));
+    authApiMock.refresh.mockResolvedValueOnce({
+      token: TEST_TOKEN,
+      user: TEST_USER,
+    });
 
     renderWithAuth();
 
-    expect(screen.getByTestId('authenticated').textContent).toBe('true');
+    expect(screen.getByTestId('user').textContent).toBe('none');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('authenticated').textContent).toBe('true');
+    });
     expect(screen.getByTestId('user').textContent).toBe('test@example.com');
   });
 
   it('handles corrupted localStorage gracefully', async () => {
-    localStorage.setItem('token', TEST_TOKEN);
     localStorage.setItem('user', 'not-valid-json');
 
     renderWithAuth();
 
-    expect(screen.getByTestId('authenticated').textContent).toBe('false');
-    expect(localStorage.getItem('token')).toBeNull();
+    await waitFor(() => {
+      expect(screen.getByTestId('authenticated').textContent).toBe('false');
+    });
+    expect(localStorage.getItem('user')).toBeNull();
   });
 
   // ── Token refresh ──────────────────────────────────────────────
 
   it('refreshes token successfully', async () => {
     const newUser: User = { ...TEST_USER, email: 'refreshed@example.com' };
-    mockFetch({
-      '/api/accounts/settings/public': () =>
-        new Response(
-          JSON.stringify({ login_enabled: true, registration_enabled: true }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        ),
-      '/api/accounts/auth/refresh': () =>
-        new Response(
-          JSON.stringify({
-            token: 'new-token',
-            refresh_token: 'new-refresh',
-            user: newUser,
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        ),
-    });
+    authApiMock.refresh
+      .mockRejectedValueOnce(
+        new ApiError('/api/accounts/auth/refresh', 401, 'Unauthorized', null)
+      )
+      .mockResolvedValueOnce({
+        token: 'new-token',
+        user: newUser,
+      });
 
     const user = userEvent.setup();
     renderWithAuth();
@@ -270,18 +253,13 @@ describe('AuthContext', () => {
         'refreshed@example.com'
       );
     });
-    expect(localStorage.getItem('token')).toBe('new-token');
+    expect(JSON.parse(localStorage.getItem('user')!)).toEqual(newUser);
   });
 
   it('logs out when token refresh fails', async () => {
-    mockFetch({
-      '/api/accounts/settings/public': () =>
-        new Response(
-          JSON.stringify({ login_enabled: true, registration_enabled: true }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        ),
-      '/api/accounts/auth/refresh': () => new Response('', { status: 401 }),
-    });
+    authApiMock.refresh.mockRejectedValue(
+      new ApiError('/api/accounts/auth/refresh', 401, 'Unauthorized', null)
+    );
 
     const user = userEvent.setup();
     renderWithAuth();
@@ -291,6 +269,24 @@ describe('AuthContext', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('authenticated').textContent).toBe('false');
+    });
+  });
+
+  it('keeps the session on transient refresh failures', async () => {
+    authApiMock.refresh
+      .mockRejectedValueOnce(
+        new ApiError('/api/accounts/auth/refresh', 401, 'Unauthorized', null)
+      )
+      .mockRejectedValueOnce(new Error('network'));
+
+    const user = userEvent.setup();
+    renderWithAuth();
+
+    await user.click(screen.getByTestId('login-btn'));
+    await user.click(screen.getByTestId('refresh-btn'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('authenticated').textContent).toBe('true');
     });
   });
 

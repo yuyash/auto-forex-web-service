@@ -68,14 +68,14 @@ def test_user(db):
 
 @pytest.fixture
 def auth_tokens(api_client, test_user):
-    """Login and return (access_token, refresh_token) tuple."""
+    """Login and return (access_token, refresh_token_cookie) tuple."""
     resp = api_client.post(
         "/api/accounts/auth/login",
         {"email": test_user.email, "password": E2E_PASSWORD},
         format="json",
     )
     assert resp.status_code == 200, resp.data
-    return resp.data["token"], resp.data["refresh_token"]
+    return resp.data["token"], resp.cookies["refresh_token"].value
 
 
 @pytest.fixture

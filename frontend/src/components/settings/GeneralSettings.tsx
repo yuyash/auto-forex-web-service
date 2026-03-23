@@ -21,6 +21,11 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useAccessibility } from '../../hooks/useAccessibility';
 import { useToast } from '../common/useToast';
 import type { ThemeMode } from '../../contexts/AccessibilityContextDefinition';
+import {
+  useUpdateUserSettings,
+  useUserSettings,
+} from '../../hooks/useUserSettings';
+import { logger } from '../../utils/logger';
 
 const TIMEZONES = [
   'UTC',
@@ -64,11 +69,18 @@ interface UserSettings {
 
 const GeneralSettings = () => {
   const { t, i18n } = useTranslation(['settings', 'common']);
-  const { token, user, login } = useAuth();
+  const { user, token, login } = useAuth();
   const { themeMode, setThemeMode } = useAccessibility();
   const { showSuccess, showError } = useToast();
+  const {
+    data,
+    error: settingsError,
+    isLoading: settingsLoading,
+  } = useUserSettings({
+    enabled: Boolean(token),
+  });
+  const updateUserSettings = useUpdateUserSettings();
 
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [settings, setSettings] = useState<UserSettings>({
     timezone: user?.timezone || 'UTC',
@@ -76,75 +88,66 @@ const GeneralSettings = () => {
     notification_enabled: true,
   });
 
-  const fetchSettings = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch('/api/accounts/settings/', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) throw new Error('Failed to fetch settings');
-      const data = await response.json();
-      const userData =
-        data && typeof data === 'object' && 'user' in data
-          ? (data as { user?: Partial<UserSettings> }).user
-          : undefined;
-      const settingsData =
-        data && typeof data === 'object' && 'settings' in data
-          ? (data as { settings?: Partial<UserSettings> }).settings
-          : undefined;
-      setSettings({
-        timezone:
-          (userData as { timezone?: string } | undefined)?.timezone ||
-          user?.timezone ||
-          'UTC',
-        language:
-          (userData as { language?: string } | undefined)?.language ||
-          user?.language ||
-          'en',
-        notification_enabled:
-          (settingsData as { notification_enabled?: boolean } | undefined)
-            ?.notification_enabled ?? true,
-      });
-    } catch (error) {
-      console.error('Error fetching settings:', error);
-      showError(t('common:errors.fetchFailed'));
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (!data) {
+      return;
     }
-  };
+
+    const userData =
+      data && typeof data === 'object' && 'user' in data
+        ? (data as { user?: Partial<UserSettings> }).user
+        : undefined;
+    const settingsData =
+      data && typeof data === 'object' && 'settings' in data
+        ? (data as { settings?: Partial<UserSettings> }).settings
+        : undefined;
+    setSettings({
+      timezone:
+        (userData as { timezone?: string } | undefined)?.timezone ||
+        user?.timezone ||
+        'UTC',
+      language:
+        (userData as { language?: string } | undefined)?.language ||
+        user?.language ||
+        'en',
+      notification_enabled:
+        (settingsData as { notification_enabled?: boolean } | undefined)
+          ?.notification_enabled ?? true,
+    });
+  }, [data, user?.language, user?.timezone]);
 
   useEffect(() => {
-    fetchSettings();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+    if (!token || settingsLoading || !settingsError) {
+      return;
+    }
+
+    logger.error('Error fetching settings', {
+      error:
+        settingsError instanceof Error
+          ? settingsError.message
+          : 'Failed to load user settings',
+    });
+    showError(t('common:errors.fetchFailed'));
+  }, [settingsError, settingsLoading, showError, t, token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const response = await fetch('/api/accounts/settings/', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(settings),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to save settings');
-      }
-      const data = await response.json();
+      const data = await updateUserSettings.mutate(
+        settings as unknown as Record<string, unknown>
+      );
       if (data.user && user && token) {
-        const currentRefreshToken = localStorage.getItem('refresh_token') || '';
-        login(token, currentRefreshToken, data.user);
+        login(token, data.user);
       }
       if (settings.language !== i18n.language) {
         await i18n.changeLanguage(settings.language);
       }
       showSuccess(t('settings:messages.saveSuccess'));
     } catch (error) {
-      console.error('Error saving settings:', error);
+      logger.error('Error saving settings', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       showError(
         error instanceof Error
           ? error.message
@@ -164,7 +167,7 @@ const GeneralSettings = () => {
     }
   };
 
-  if (loading) {
+  if (settingsLoading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" py={4}>
         <CircularProgress />

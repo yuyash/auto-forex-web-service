@@ -8,11 +8,13 @@ This module exposes a class-based API (instantiate where used).
 from __future__ import annotations
 
 import secrets
+from hashlib import sha256
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 import jwt
 from django.conf import settings
+from django.db import transaction
 
 if TYPE_CHECKING:
     pass
@@ -20,6 +22,16 @@ if TYPE_CHECKING:
 
 class JWTService:
     """Service for generating and validating JWTs."""
+
+    @staticmethod
+    def hash_refresh_token(token: str) -> str:
+        """Return a deterministic digest for refresh-token storage and lookup."""
+        return sha256(token.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _is_sha256_digest(value: str) -> bool:
+        """Return True when the value matches the persisted digest format."""
+        return len(value) == 64 and all(ch in "0123456789abcdef" for ch in value)
 
     def __init__(
         self,
@@ -108,13 +120,14 @@ class JWTService:
         from apps.accounts.models import RefreshToken
 
         token_value = secrets.token_urlsafe(48)
+        token_hash = self.hash_refresh_token(token_value)
         expires_at = datetime.now(UTC) + timedelta(
             seconds=int(getattr(settings, "REFRESH_TOKEN_EXPIRATION", 604800)),
         )
 
         RefreshToken.objects.create(
             user=user,
-            token=token_value,
+            token=token_hash,
             expires_at=expires_at,
             ip_address=ip_address,
             user_agent=user_agent or "",
@@ -138,42 +151,60 @@ class JWTService:
         """
         from apps.accounts.models import RefreshToken
 
-        try:
-            rt = RefreshToken.objects.select_related("user").get(token=refresh_token_value)
-        except RefreshToken.DoesNotExist:
-            return None
+        token_hash = self.hash_refresh_token(refresh_token_value)
 
-        # --- Family revocation: detect reuse of a revoked token ----------
-        if rt.revoked_at is not None:
-            # Someone is replaying an already-used token → compromise assumed.
-            self.revoke_all_refresh_tokens(rt.user)
-            import logging
-
-            logging.getLogger(__name__).warning(
-                "Refresh token reuse detected for user %s — all tokens revoked",
-                rt.user_id,
+        with transaction.atomic():
+            rt = (
+                RefreshToken.objects.select_for_update()
+                .select_related("user")
+                .filter(token=token_hash)
+                .first()
             )
-            return None
+            if rt is None:
+                # Temporary rollout compatibility for rows created before the
+                # hashing migration. Once all environments are migrated, these
+                # rows should no longer exist.
+                rt = (
+                    RefreshToken.objects.select_for_update()
+                    .select_related("user")
+                    .filter(token=refresh_token_value)
+                    .first()
+                )
+            if rt is None:
+                return None
 
-        # Normal expiry check
-        if not rt.is_valid:
-            return None
+            # --- Family revocation: detect reuse of a revoked token ----------
+            if rt.revoked_at is not None:
+                # Someone is replaying an already-used token -> compromise assumed.
+                self.revoke_all_refresh_tokens(rt.user)
+                import logging
 
-        user = rt.user
-        if not user.is_active or getattr(user, "is_locked", False):
-            return None
+                logging.getLogger(__name__).warning(
+                    "Refresh token reuse detected for user %s - all tokens revoked",
+                    rt.user_id,
+                )
+                return None
 
-        # Revoke old token
-        rt.revoke()
+            # Normal expiry check
+            if not rt.is_valid:
+                return None
 
-        # Issue new pair
-        new_access = self.generate_token(user)
-        new_refresh = self.create_refresh_token(
-            user,
-            ip_address=ip_address,
-            user_agent=user_agent,
-        )
-        return new_access, new_refresh, user
+            user = rt.user
+            if not user.is_active or getattr(user, "is_locked", False):
+                return None
+
+            # Revoke old token while the row lock is held to serialize rotation.
+            rt.revoke()
+
+            # Issue new pair within the same transaction so competing refreshes
+            # observe the revoked state after the first rotation commits.
+            new_access = self.generate_token(user)
+            new_refresh = self.create_refresh_token(
+                user,
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            return new_access, new_refresh, user
 
     @staticmethod
     def revoke_all_refresh_tokens(user: Any) -> int:

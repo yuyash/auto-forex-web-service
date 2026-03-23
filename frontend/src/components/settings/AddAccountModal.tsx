@@ -17,6 +17,8 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { useCreateAccount } from '../../hooks/useAccountMutations';
+import { logger } from '../../utils/logger';
 
 interface AccountFormData {
   account_id: string;
@@ -28,16 +30,15 @@ interface AddAccountModalProps {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  token: string;
 }
 
 const AddAccountModal = ({
   open,
   onClose,
   onSuccess,
-  token,
 }: AddAccountModalProps) => {
   const { t } = useTranslation(['settings', 'common']);
+  const createAccount = useCreateAccount();
 
   const [formData, setFormData] = useState<AccountFormData>({
     account_id: '',
@@ -109,27 +110,15 @@ const AddAccountModal = ({
     setError(null);
 
     try {
-      const response = await fetch('/api/market/accounts/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.message || errorData.error || 'Failed to add account'
-        );
-      }
+      await createAccount.mutate(formData);
 
       // Success
       onSuccess();
       handleClose();
     } catch (err) {
-      console.error('Error adding account:', err);
+      logger.error('Error adding account', {
+        error: err instanceof Error ? err.message : String(err),
+      });
       setError(
         err instanceof Error ? err.message : t('settings:messages.saveError')
       );

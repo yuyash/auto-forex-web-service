@@ -10,6 +10,7 @@ from rest_framework.routers import DefaultRouter
 from apps.trading.views import (
     BacktestTaskViewSet,
     StrategyConfigDetailView,
+    StrategyConfigTasksView,
     StrategyConfigView,
     StrategyDefaultsView,
     StrategyView,
@@ -43,5 +44,10 @@ urlpatterns = [
         "strategy-configs/<uuid:config_id>/",
         StrategyConfigDetailView.as_view(),
         name="strategy_config_detail",
+    ),
+    path(
+        "strategy-configs/<uuid:config_id>/tasks/",
+        StrategyConfigTasksView.as_view(),
+        name="strategy_config_tasks",
     ),
 ]

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 
 import {
   Box,
@@ -28,16 +28,17 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import {
-  useTradingTasks,
-  invalidateTradingTasksCache,
-} from '../hooks/useTradingTasks';
-import { useConfigurations } from '../hooks/useConfigurations';
+import { shouldPollTaskStatus } from '../hooks/taskResourceQueries';
+import { useTradingTasks } from '../hooks/useTradingTasks';
 import { TaskStatus } from '../types/common';
 import TradingTaskCard from '../components/trading/TradingTaskCard';
 import { Breadcrumbs } from '../components/common';
 import { LoadingSpinner } from '../components/common';
-import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
+import { ConfigurationSelector } from '../components/tasks/forms/ConfigurationSelector';
+import { useSequentialPolling } from '../hooks/useSequentialPolling';
+import { usePollingPolicy } from '../hooks/usePollingPolicy';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { logger } from '../utils/logger';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -78,15 +79,7 @@ export default function TradingTasksPage() {
   const [configFilter, setConfigFilter] = useState<string | ''>('');
   const [page, setPage] = useState(1);
   const pageSize = 20;
-
-  // Force refetch when navigating back after a deletion
-  useEffect(() => {
-    if (location.state?.deleted) {
-      invalidateTradingTasksCache();
-      // Clear the state so it doesn't re-trigger on subsequent renders
-      navigate(location.pathname, { replace: true, state: {} });
-    }
-  }, [location.state?.deleted, navigate, location.pathname]);
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, 400);
 
   // Determine status filter based on active tab
   const getStatusFilter = (): TaskStatus | undefined => {
@@ -102,58 +95,60 @@ export default function TradingTasksPage() {
     }
   };
 
-  const { data, isLoading, error, refetch } = useTradingTasks({
+  const { data, isLoading, error, refresh } = useTradingTasks({
     page,
     page_size: pageSize,
-    search: searchQuery || undefined,
+    search: debouncedSearchQuery || undefined,
     status: getStatusFilter(),
     config_id: configFilter || undefined,
     ordering: sortBy,
   });
 
-  // Auto-refresh every 10 seconds when there are running tasks
-  // This ensures status changes are detected across all pages
-  const autoRefreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
-    null
+  useEffect(() => {
+    if (location.state?.deleted) {
+      void refresh();
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.pathname, location.state?.deleted, navigate, refresh]);
+
+  const hasRunningTasks = !!data?.results.some((task) =>
+    shouldPollTaskStatus(task.status)
+  );
+  const pollingPolicy = usePollingPolicy({
+    enabled: hasRunningTasks,
+    baseIntervalMs: 10000,
+  });
+
+  useSequentialPolling(
+    async () => {
+      logger.debug('Auto-refreshing trading task list');
+      const result = await refresh();
+      if (
+        result &&
+        typeof result === 'object' &&
+        'error' in result &&
+        (result as { error?: unknown }).error
+      ) {
+        pollingPolicy.registerFailure();
+      } else {
+        pollingPolicy.resetFailures();
+      }
+      return result;
+    },
+    {
+      enabled: pollingPolicy.isActive,
+      intervalMs: pollingPolicy.intervalMs,
+      onError: (error) => {
+        logger.warn('Trading task auto-refresh failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      },
+    }
   );
 
-  useEffect(() => {
-    const hasRunningTasks = data?.results.some(
-      (task) =>
-        task.status === TaskStatus.RUNNING || task.status === TaskStatus.PAUSED
-    );
-
-    // Clear existing interval
-    if (autoRefreshIntervalRef.current) {
-      clearInterval(autoRefreshIntervalRef.current);
-      autoRefreshIntervalRef.current = null;
-    }
-
-    // Set up auto-refresh if there are running tasks
-    if (hasRunningTasks) {
-      autoRefreshIntervalRef.current = setInterval(() => {
-        console.log('[TradingTasksPage] Auto-refreshing task list');
-        refetch();
-      }, 10000); // 10 seconds
-    }
-
-    return () => {
-      if (autoRefreshIntervalRef.current) {
-        clearInterval(autoRefreshIntervalRef.current);
-      }
-    };
-  }, [data?.results, refetch]);
-
   const handleRefresh = () => {
-    refetch();
+    void refresh();
   };
-
-  // Fetch configurations for filter dropdown and strategies
-  const { data: configurationsData } = useConfigurations({
-    page: 1,
-    page_size: 100, // Get enough for dropdown
-  });
-  const { strategies } = useStrategies();
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -167,13 +162,6 @@ export default function TradingTasksPage() {
 
   const handleSortChange = (event: { target: { value: string } }) => {
     setSortBy(event.target.value);
-    setPage(1);
-  };
-
-  const handleConfigFilterChange = (event: {
-    target: { value: string | '' };
-  }) => {
-    setConfigFilter(event.target.value);
     setPage(1);
   };
 
@@ -287,25 +275,16 @@ export default function TradingTasksPage() {
               />
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
-              <FormControl fullWidth>
-                <InputLabel>{t('common:labels.configuration')}</InputLabel>
-                <Select
-                  value={configFilter}
-                  onChange={handleConfigFilterChange}
-                  label={t('common:labels.configuration')}
-                >
-                  <MenuItem value="">
-                    {t('trading:filters.allConfigurations')}
-                  </MenuItem>
-                  {configurationsData?.results.map((config) => (
-                    <MenuItem key={config.id} value={config.id}>
-                      {config.name} (
-                      {getStrategyDisplayName(strategies, config.strategy_type)}
-                      )
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <ConfigurationSelector
+                value={configFilter}
+                onChange={(value) => {
+                  setConfigFilter(value);
+                  setPage(1);
+                }}
+                label={t('common:labels.configuration')}
+                allowEmptySelection
+                emptySelectionLabel={t('trading:filters.allConfigurations')}
+              />
             </Grid>
             <Grid size={{ xs: 12, md: 4 }}>
               <FormControl fullWidth>

@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  fetchAllTrades,
-  fetchTradesSince,
-} from '../../../../utils/fetchAllTrades';
 import type { TaskSummary } from '../../../../hooks/useTaskSummary';
+import { useSequentialPolling } from '../../../../hooks/useSequentialPolling';
+import { usePollingPolicy } from '../../../../hooks/usePollingPolicy';
+import {
+  fetchTaskTrendReplay,
+  type TaskTrendReplayPosition,
+  type TaskTrendReplayTrade,
+} from '../../../../services/api/taskResources';
 import { parseUtcTimestamp } from './shared';
 import type { ReplaySummary, ReplayTrade } from './shared';
 import type { TaskType } from '../../../../types/common';
@@ -20,12 +23,17 @@ interface UseTaskTrendReplayDataParams {
   pollingIntervalMs: number;
   refreshTailCandles: () => Promise<number>;
   summary?: TaskSummary;
+  loadedTimeRange?: {
+    from?: string | null;
+    to?: string | null;
+  };
 }
 
 const CANDLE_REFRESH_INTERVAL_MS = 60_000;
+const MAX_EAGER_REPLAY_TRADE_COUNT = 1_000;
 
 function mapRawTrades(
-  rawTrades: Array<Record<string, unknown>>,
+  rawTrades: Array<Record<string, unknown> | TaskTrendReplayTrade>,
   instrument: string,
   startSequence = 0
 ): ReplayTrade[] {
@@ -85,7 +93,7 @@ function mapRawTrades(
 }
 
 function getLatestTradeUpdatedAt(
-  rawTrades: Array<Record<string, unknown>>
+  rawTrades: Array<Record<string, unknown> | TaskTrendReplayTrade>
 ): string | null {
   let latest: string | null = null;
   for (const trade of rawTrades) {
@@ -95,6 +103,13 @@ function getLatestTradeUpdatedAt(
     }
   }
   return latest;
+}
+
+function toReplayErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+  return 'Failed to refresh replay data. Showing the latest available trades.';
 }
 
 export function useTaskTrendReplayData({
@@ -107,9 +122,13 @@ export function useTaskTrendReplayData({
   pollingIntervalMs,
   refreshTailCandles,
   summary,
+  loadedTimeRange,
 }: UseTaskTrendReplayDataParams) {
   const [trades, setTrades] = useState<ReplayTrade[]>([]);
+  const [positions, setPositions] = useState<TaskTrendReplayPosition[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const hasLoadedOnce = useRef(false);
   const tradeSinceRef = useRef<string | null>(null);
   const lastCandleFetchRef = useRef<number>(0);
@@ -133,6 +152,11 @@ export function useTaskTrendReplayData({
       openPositions: serverOpenPositionCount,
     };
   }, [latestExecution, summary, trades.length]);
+  const expectedTotalTrades = replaySummary.totalTrades;
+  const shouldUseWindowedInitialFetch =
+    expectedTotalTrades > MAX_EAGER_REPLAY_TRADE_COUNT &&
+    !!loadedTimeRange?.from &&
+    !!loadedTimeRange?.to;
 
   const fetchReplayData = useCallback(async () => {
     const isInitialLoad = !hasLoadedOnce.current;
@@ -155,14 +179,31 @@ export function useTaskTrendReplayData({
         const useIncrementalTrades =
           !isInitialLoad && tradeSinceRef.current !== null;
 
-        const rawTrades = useIncrementalTrades
-          ? await fetchTradesSince(
-              String(taskId),
-              taskType,
-              tradeSinceRef.current!,
-              executionRunId
-            )
-          : await fetchAllTrades(String(taskId), taskType, executionRunId);
+        if (isInitialLoad && expectedTotalTrades === 0) {
+          setTrades([]);
+          setPositions([]);
+          setErrorMessage(null);
+          setWarningMessage(null);
+          return;
+        }
+
+        const replayPayload = await fetchTaskTrendReplay(
+          taskType,
+          String(taskId),
+          {
+            execution_id: executionRunId,
+            since: useIncrementalTrades
+              ? (tradeSinceRef.current ?? undefined)
+              : undefined,
+            range_from: loadedTimeRange?.from ?? undefined,
+            range_to: loadedTimeRange?.to ?? undefined,
+            page: 1,
+            page_size:
+              expectedTotalTrades > MAX_EAGER_REPLAY_TRADE_COUNT ? 500 : 1000,
+          }
+        );
+        const rawTrades = replayPayload.trades;
+        const incomingPositions = replayPayload.positions;
 
         const latestUpdatedAt = getLatestTradeUpdatedAt(rawTrades);
         if (
@@ -189,6 +230,19 @@ export function useTaskTrendReplayData({
             });
             return mergedTrades;
           });
+          setPositions((prev) => {
+            const mergedById = new Map(
+              prev.map((position) => [position.id, position])
+            );
+            for (const position of incomingPositions) {
+              mergedById.set(position.id, position);
+            }
+            return Array.from(mergedById.values()).sort(
+              (a, b) =>
+                new Date(b.entry_time).getTime() -
+                new Date(a.entry_time).getTime()
+            );
+          });
         } else if (!useIncrementalTrades) {
           const fullTrades = mapRawTrades(rawTrades, instrument).sort(
             (a, b) =>
@@ -208,33 +262,65 @@ export function useTaskTrendReplayData({
             }
             return fullTrades;
           });
+          setPositions(
+            [...incomingPositions].sort(
+              (a, b) =>
+                new Date(b.entry_time).getTime() -
+                new Date(a.entry_time).getTime()
+            )
+          );
+        }
+        setErrorMessage(null);
+        if (shouldUseWindowedInitialFetch) {
+          setWarningMessage(
+            'Showing replay trades for the loaded chart range to avoid fetching the full execution history.'
+          );
+        } else if (replayPayload.meta.has_more_trades) {
+          setWarningMessage(
+            'Showing the latest replay trades first because this execution has a large trade history.'
+          );
+        } else {
+          setWarningMessage(null);
         }
       } catch (tradeError) {
-        console.warn('Failed to refresh trade data:', tradeError);
+        setErrorMessage(toReplayErrorMessage(tradeError));
       }
     } catch (error) {
-      console.warn('Failed to load replay data:', error);
+      setErrorMessage(toReplayErrorMessage(error));
     } finally {
       hasLoadedOnce.current = true;
       setIsRefreshing(false);
     }
-  }, [executionRunId, instrument, refreshTailCandles, taskId, taskType]);
+  }, [
+    executionRunId,
+    expectedTotalTrades,
+    instrument,
+    loadedTimeRange?.from,
+    loadedTimeRange?.to,
+    refreshTailCandles,
+    shouldUseWindowedInitialFetch,
+    taskId,
+    taskType,
+  ]);
 
   useEffect(() => {
     void fetchReplayData();
   }, [fetchReplayData]);
-
-  useEffect(() => {
-    if (!enableRealTimeUpdates) return;
-    const interval = setInterval(() => {
-      void fetchReplayData();
-    }, pollingIntervalMs);
-    return () => clearInterval(interval);
-  }, [enableRealTimeUpdates, fetchReplayData, pollingIntervalMs]);
+  const pollingPolicy = usePollingPolicy({
+    enabled: enableRealTimeUpdates,
+    baseIntervalMs: pollingIntervalMs,
+  });
+  useSequentialPolling(fetchReplayData, {
+    enabled: pollingPolicy.isActive,
+    intervalMs: pollingPolicy.intervalMs,
+  });
 
   useEffect(() => {
     setTrades([]);
+    setPositions([]);
     setIsRefreshing(false);
+    setErrorMessage(null);
+    setWarningMessage(null);
     hasLoadedOnce.current = false;
     tradeSinceRef.current = null;
     lastCandleFetchRef.current = 0;
@@ -242,7 +328,10 @@ export function useTaskTrendReplayData({
 
   return {
     trades,
+    positions,
     isRefreshing,
+    errorMessage,
+    warningMessage,
     replaySummary,
     fetchReplayData,
   };

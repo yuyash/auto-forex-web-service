@@ -5,6 +5,7 @@ export interface AuthLogoutDetail {
   status?: number;
   message?: string;
   context?: string;
+  url?: string;
 }
 
 const AUTH_ERROR_STATUSES = new Set([401, 419, 4401, 4403]);
@@ -12,6 +13,35 @@ const AUTH_CLOSE_CODES = new Set([4001, 4401, 4403]);
 
 export const isAuthErrorStatus = (status: number): boolean =>
   AUTH_ERROR_STATUSES.has(status);
+
+const SESSION_EXPIRY_PATHS = ['/api/accounts/auth/refresh'];
+
+function normalizePath(url?: string): string | null {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    return new URL(url, window.location.origin).pathname;
+  } catch {
+    return url.startsWith('/') ? url : null;
+  }
+}
+
+export const shouldBroadcastAuthLogoutForHttp = (
+  detail?: AuthLogoutDetail
+): boolean => {
+  if (!detail?.status || !isAuthErrorStatus(detail.status)) {
+    return false;
+  }
+
+  if (detail.context === 'auth_refresh') {
+    return true;
+  }
+
+  const path = normalizePath(detail.url);
+  return path !== null && SESSION_EXPIRY_PATHS.includes(path);
+};
 
 export const broadcastAuthLogout = (detail?: AuthLogoutDetail) => {
   if (
@@ -30,11 +60,17 @@ export const handleAuthErrorStatus = (
   status: number,
   detail?: AuthLogoutDetail
 ): boolean => {
-  if (!isAuthErrorStatus(status)) {
+  const logoutDetail = {
+    ...detail,
+    status,
+    source: detail?.source ?? 'http',
+  };
+
+  if (!shouldBroadcastAuthLogoutForHttp(logoutDetail)) {
     return false;
   }
 
-  broadcastAuthLogout({ ...detail, status, source: detail?.source ?? 'http' });
+  broadcastAuthLogout(logoutDetail);
   return true;
 };
 
@@ -119,6 +155,12 @@ export const installAuthFetchInterceptor = () => {
       handleAuthErrorStatus(response.status, {
         source: 'http',
         status: response.status,
+        url:
+          input instanceof Request
+            ? input.url
+            : input instanceof URL
+              ? input.toString()
+              : String(input),
       });
     }
 

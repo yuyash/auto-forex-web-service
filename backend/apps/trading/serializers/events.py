@@ -145,6 +145,11 @@ class PositionSerializer(serializers.Serializer):
 
     def get_trade_ids(self, obj: object) -> list[str]:
         """Return the IDs of trades linked to this position."""
+        if isinstance(obj, dict) and "trade_ids" in obj:
+            raw_trade_ids = cast(dict[str, Any], obj).get("trade_ids") or []
+            return [str(trade_id) for trade_id in raw_trade_ids]
+        if not self.context.get("include_trade_ids", False):
+            return []
         if hasattr(obj, "prefetched_trade_ids"):
             return obj.prefetched_trade_ids  # type: ignore[return-value]
         if hasattr(obj, "trades"):

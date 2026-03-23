@@ -18,6 +18,10 @@ import {
   Warning as WarningIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import {
+  shouldEnableRealtimeTaskUpdates,
+  shouldPollTaskStatus,
+} from '../../hooks/taskResourceQueries';
 import type { TradingTask } from '../../types/tradingTask';
 import { TaskStatus } from '../../types/common';
 import { StatusBadge } from '../tasks/display/StatusBadge';
@@ -25,14 +29,21 @@ import { StatCard } from '../tasks/display/StatCard';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import TradingTaskActions from './TradingTaskActions';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
-import { useTaskPolling } from '../../hooks/useTaskPolling';
 import { useToast } from '../common';
+import { useTradingTask } from '../../hooks/useTradingTasks';
 import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
-import { invalidateTradingTasksCache } from '../../hooks/useTradingTasks';
-import { api } from '../../api/apiClient';
+import {
+  useDeleteTradingTask,
+  usePauseTradingTask,
+  useRestartTradingTask,
+  useResumeTradingTask,
+  useStartTradingTask,
+  useStopTradingTask,
+} from '../../hooks/useTradingTaskMutations';
+import { logger } from '../../utils/logger';
 
 interface TradingTaskCardProps {
   task: TradingTask;
@@ -52,6 +63,12 @@ export default function TradingTaskCard({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const prevTaskRef = useRef<TradingTask>(task);
+  const startTask = useStartTradingTask();
+  const stopTask = useStopTradingTask();
+  const resumeTask = useResumeTradingTask();
+  const pauseTask = usePauseTradingTask();
+  const restartTask = useRestartTradingTask();
+  const deleteTask = useDeleteTradingTask();
 
   const { t } = useTranslation(['trading', 'common']);
   const { showError, showSuccess, showWarning, showInfo } = useToast();
@@ -61,19 +78,19 @@ export default function TradingTaskCard({
 
   // Poll for updates when task is running or paused (more frequent for live trading) (Requirements 1.2, 4.5)
   const pollingEnabled =
-    task.status === TaskStatus.RUNNING ||
-    task.status === TaskStatus.PAUSED ||
-    optimisticStatus === TaskStatus.RUNNING ||
-    optimisticStatus === TaskStatus.PAUSED;
+    shouldPollTaskStatus(task.status) ||
+    shouldPollTaskStatus(optimisticStatus ?? undefined) ||
+    shouldEnableRealtimeTaskUpdates(task.status) ||
+    shouldEnableRealtimeTaskUpdates(optimisticStatus ?? undefined);
 
-  const { status: polledStatus } = useTaskPolling(task.id, 'trading', {
+  const { data: polledTask } = useTradingTask(task.id, {
     enabled: pollingEnabled,
-    pollStatus: true,
-    interval: 3000, // Poll every 3 seconds for live trading (more frequent)
+    enablePolling: pollingEnabled,
+    pollingInterval: 3000,
   });
 
   // Use polled status if available, otherwise use task status
-  const currentStatus = polledStatus?.status || task.status;
+  const currentStatus = polledTask?.status || task.status;
 
   // Clear optimistic status when actual status matches (derived state pattern)
   const displayStatus: TaskStatus =
@@ -87,22 +104,19 @@ export default function TradingTaskCard({
   // Trigger refresh when polled status differs from task prop status
   // This ensures parent component gets updated data
   useEffect(() => {
-    if (polledStatus && polledStatus.status !== task.status) {
-      console.log('[TradingTaskCard] Status changed via polling:', {
+    if (polledTask && polledTask.status !== task.status) {
+      logger.debug('Trading task status changed via polling', {
         taskId: task.id,
         propStatus: task.status,
-        polledStatus: polledStatus.status,
+        polledStatus: polledTask.status,
       });
       // Clear optimistic status since we have real status now
       setOptimisticStatus(null);
 
-      // Invalidate cache to force fresh data fetch
-      invalidateTradingTasksCache();
-
       // Notify parent to refetch task list
       onRefresh?.();
     }
-  }, [polledStatus, task.status, task.id, onRefresh]);
+  }, [polledTask, task.status, task.id, onRefresh]);
 
   // Show toast notifications for status changes and trades
   useEffect(() => {
@@ -168,12 +182,15 @@ export default function TradingTaskCard({
   const handleStart = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await api.post(`/api/trading/tasks/trading/${String(taskId)}/start/`, {});
+      await startTask.mutate(String(taskId));
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess(t('trading:toast.startedSuccessfully'));
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to start task:', error);
+      logger.error('Failed to start trading task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       setOptimisticStatus(null);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to start task';
@@ -189,12 +206,15 @@ export default function TradingTaskCard({
   const handleStop = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await api.post(`/api/trading/tasks/trading/${String(taskId)}/stop/`, {});
+      await stopTask.mutate({ id: String(taskId) });
       setOptimisticStatus(TaskStatus.STOPPED);
       showSuccess(t('trading:toast.stoppedSuccessfully'));
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to stop task:', error);
+      logger.error('Failed to stop trading task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       setOptimisticStatus(null);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to stop task';
@@ -207,15 +227,15 @@ export default function TradingTaskCard({
   const handleResume = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await api.post(
-        `/api/trading/tasks/trading/${String(taskId)}/resume/`,
-        {}
-      );
+      await resumeTask.mutate(String(taskId));
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess(t('trading:toast.resumedSuccessfully'));
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to resume task:', error);
+      logger.error('Failed to resume trading task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       setOptimisticStatus(null);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to resume task';
@@ -228,18 +248,42 @@ export default function TradingTaskCard({
     }
   };
 
+  const handlePause = async (taskId: string | number) => {
+    setIsLoading(true);
+    try {
+      await pauseTask.mutate(String(taskId));
+      setOptimisticStatus(TaskStatus.PAUSED);
+      showSuccess(t('trading:toast.pausedSuccessfully'));
+      onRefresh?.();
+    } catch (error) {
+      logger.error('Failed to pause trading task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      setOptimisticStatus(null);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to pause task';
+      showError(errorMessage, 8000, {
+        label: 'Retry',
+        onClick: () => handlePause(taskId),
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleRestart = async (taskId: string | number) => {
     setIsLoading(true);
     try {
-      await api.post(
-        `/api/trading/tasks/trading/${String(taskId)}/restart/`,
-        {}
-      );
+      await restartTask.mutate(String(taskId));
       setOptimisticStatus(TaskStatus.RUNNING);
       showSuccess(t('trading:toast.restartedSuccessfully'));
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to restart task:', error);
+      logger.error('Failed to restart trading task', {
+        taskId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       setOptimisticStatus(null);
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to restart task';
@@ -259,13 +303,15 @@ export default function TradingTaskCard({
   const handleDeleteConfirm = async () => {
     setIsDeleting(true);
     try {
-      await api.delete(`/api/trading/tasks/trading/${String(task.id)}/`);
-      invalidateTradingTasksCache();
+      await deleteTask.mutate(String(task.id));
       showSuccess(t('trading:toast.deletedSuccessfully'));
       setDeleteDialogOpen(false);
       onRefresh?.();
     } catch (error) {
-      console.error('Failed to delete task:', error);
+      logger.error('Failed to delete trading task', {
+        taskId: task.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
       const errorMessage =
         error instanceof Error ? error.message : 'Failed to delete task';
       showError(errorMessage);
@@ -396,6 +442,7 @@ export default function TradingTaskCard({
             status={displayStatus}
             onStart={handleStart}
             onStop={handleStop}
+            onPause={handlePause}
             onResume={handleResume}
             onRestart={handleRestart}
             onDelete={handleDelete}

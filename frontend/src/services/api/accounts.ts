@@ -1,36 +1,65 @@
-// OANDA Accounts API service (Market app)
 import { api } from '../../api/apiClient';
 import { withRetry } from '../../api/client';
-import type { OandaAccounts, OandaAccountsRequest } from '../../api/types';
+import type { BackendAccount } from './contracts';
+import type { Account, AccountUpsertData } from '../../types/strategy';
+
+export interface AccountListParams {
+  page?: number;
+  page_size?: number;
+  search?: string;
+}
+
+function toAccount(account: BackendAccount): Account {
+  return {
+    ...account,
+    id: account.id ?? 0,
+    account_id: account.account_id,
+    api_type: account.api_type ?? 'practice',
+    currency: account.currency ?? 'USD',
+    balance: account.balance ?? '0',
+    margin_used: account.margin_used ?? '0',
+    margin_available: account.margin_available ?? '0',
+    unrealized_pnl: account.unrealized_pnl ?? '0',
+    is_active: account.is_active ?? false,
+  };
+}
 
 export const accountsApi = {
-  // List all accounts for the authenticated user
-  list: async () => {
-    return withRetry(() => api.get<OandaAccounts[]>('/api/market/accounts/'));
+  list: async (params?: AccountListParams) => {
+    return (
+      await withRetry(() =>
+        api.get<BackendAccount[]>(
+          '/api/market/accounts/',
+          params as Record<string, unknown>
+        )
+      )
+    ).map(toAccount);
   },
 
-  // Get a single account by ID
   get: async (id: number) => {
-    return withRetry(() =>
-      api.get<OandaAccounts>(`/api/market/accounts/${id}/`)
+    return toAccount(
+      await withRetry(() =>
+        api.get<BackendAccount>(`/api/market/accounts/${id}/`)
+      )
     );
   },
 
-  // Create a new account
-  create: async (data: OandaAccountsRequest) => {
-    return withRetry(() =>
-      api.post<OandaAccounts>('/api/market/accounts/', data)
+  create: async (data: AccountUpsertData) => {
+    return toAccount(
+      await withRetry(() =>
+        api.post<BackendAccount>('/api/market/accounts/', data)
+      )
     );
   },
 
-  // Update an existing account
-  update: async (id: number, data: OandaAccountsRequest) => {
-    return withRetry(() =>
-      api.put<OandaAccounts>(`/api/market/accounts/${id}/`, data)
+  update: async (id: number, data: AccountUpsertData) => {
+    return toAccount(
+      await withRetry(() =>
+        api.put<BackendAccount>(`/api/market/accounts/${id}/`, data)
+      )
     );
   },
 
-  // Delete an account
   delete: async (id: number) => {
     return withRetry(() => api.delete(`/api/market/accounts/${id}/`));
   },

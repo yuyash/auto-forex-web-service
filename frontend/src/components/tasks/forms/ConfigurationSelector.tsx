@@ -11,7 +11,10 @@ import {
   InputAdornment,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
-import type { StrategyConfig } from '../../../types/configuration';
+import {
+  useConfiguration,
+  useConfigurations,
+} from '../../../hooks/useConfigurations';
 import {
   useStrategies,
   getStrategyDisplayName,
@@ -20,56 +23,53 @@ import {
 interface ConfigurationSelectorProps {
   value: string | undefined;
   onChange: (value: string) => void;
-  configurations: StrategyConfig[];
-  isLoading?: boolean;
   error?: string;
   label?: string;
   required?: boolean;
   disabled?: boolean;
   helperText?: string;
   strategyTypeFilter?: string;
+  allowEmptySelection?: boolean;
+  emptySelectionLabel?: string;
 }
 
 export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
   value,
   onChange,
-  configurations,
-  isLoading = false,
   error,
   label = 'Strategy Configuration',
   required = false,
   disabled = false,
   helperText,
   strategyTypeFilter,
+  allowEmptySelection = false,
+  emptySelectionLabel = 'All configurations',
 }) => {
   const [searchTerm, setSearchTerm] = React.useState('');
   const { strategies } = useStrategies();
+  const { data: configurationsData, isLoading } = useConfigurations({
+    page: 1,
+    page_size: 50,
+    search: searchTerm || undefined,
+    strategy_type: strategyTypeFilter,
+  });
+  const { data: selectedConfiguration } = useConfiguration(value || undefined);
 
   const filteredConfigurations = React.useMemo(() => {
-    let filtered = configurations;
-
-    // Filter by strategy type if provided
-    if (strategyTypeFilter) {
-      filtered = filtered.filter(
-        (config) => config.strategy_type === strategyTypeFilter
-      );
+    const configurations = configurationsData?.results ?? [];
+    if (
+      value &&
+      selectedConfiguration &&
+      !configurations.some((config) => config.id === value)
+    ) {
+      return [selectedConfiguration, ...configurations];
     }
+    return configurations;
+  }, [configurationsData?.results, selectedConfiguration, value]);
 
-    // Filter by search term
-    if (searchTerm) {
-      const lowerSearch = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (config) =>
-          config.name.toLowerCase().includes(lowerSearch) ||
-          config.strategy_type.toLowerCase().includes(lowerSearch) ||
-          config.description?.toLowerCase().includes(lowerSearch)
-      );
-    }
-
-    return filtered;
-  }, [configurations, searchTerm, strategyTypeFilter]);
-
-  const selectedConfig = configurations.find((c) => c.id === value);
+  const selectedConfig =
+    filteredConfigurations.find((config) => config.id === value) ??
+    selectedConfiguration;
 
   return (
     <FormControl
@@ -86,7 +86,7 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
         label={label}
         onChange={(e) => {
           const val = e.target.value;
-          if (typeof val === 'string' && val !== '') {
+          if (typeof val === 'string') {
             onChange(val);
           }
         }}
@@ -129,6 +129,10 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
           />
         </Box>
 
+        {allowEmptySelection && (
+          <MenuItem value="">{emptySelectionLabel}</MenuItem>
+        )}
+
         {/* Hidden MenuItem to keep the selected value visible while configurations are loading */}
         {value &&
           !isLoading &&
@@ -139,23 +143,28 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
           )}
 
         {isLoading ? (
-          <>
-            {/* Keep selected value visible during loading */}
-            {value && (
-              <MenuItem value={value} sx={{ display: 'none' }}>
+          [
+            value ? (
+              <MenuItem
+                key="selected-loading-value"
+                value={value}
+                sx={{ display: 'none' }}
+              >
                 {selectedConfig?.name || 'Loading...'}
               </MenuItem>
-            )}
-            <MenuItem disabled>
+            ) : null,
+            <MenuItem key="loading-state" disabled>
               <CircularProgress size={20} sx={{ mr: 1 }} />
               Loading configurations...
-            </MenuItem>
-          </>
+            </MenuItem>,
+          ]
         ) : filteredConfigurations.length === 0 ? (
           <MenuItem disabled>
             {searchTerm
               ? 'No configurations found'
-              : 'No configurations available'}
+              : allowEmptySelection
+                ? 'Type to search configurations'
+                : 'No configurations available'}
           </MenuItem>
         ) : (
           filteredConfigurations.map((config) => (

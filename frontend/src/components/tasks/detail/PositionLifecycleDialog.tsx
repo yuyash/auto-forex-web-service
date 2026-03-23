@@ -6,7 +6,7 @@
  * Supports searching by position ID prefix (truncated UUID).
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Dialog,
@@ -39,7 +39,8 @@ import {
   TrendingUp as LongIcon,
   TrendingDown as ShortIcon,
 } from '@mui/icons-material';
-import { useTaskLogs, type TaskLog } from '../../../hooks/useTaskLogs';
+import type { TaskLog } from '../../../hooks/useTaskLogs';
+import { fetchPaginatedTaskResource } from '../../../services/api/taskResources';
 import { TaskType } from '../../../types/common';
 import type { TaskPosition } from '../../../hooks/useTaskPositions';
 
@@ -96,6 +97,9 @@ export const PositionLifecycleDialog: React.FC<
   const [activePositionId, setActivePositionId] = useState(
     initialPositionId ?? ''
   );
+  const [logs, setLogs] = useState<TaskLog[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
   // Reset search when dialog opens with a new position
   React.useEffect(() => {
@@ -113,15 +117,59 @@ export const PositionLifecycleDialog: React.FC<
     [activePositionId]
   );
 
-  const { logs, isLoading, error } = useTaskLogs({
-    taskId: open && activePositionId ? taskId : '',
-    taskType,
+  useEffect(() => {
+    if (!open || !activePositionId) {
+      setLogs([]);
+      setError(null);
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchLogs = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const results = await fetchPaginatedTaskResource<TaskLog>(
+          taskType,
+          taskId,
+          'logs',
+          {
+            ...(executionRunId ? { execution_id: executionRunId } : {}),
+            ...(componentFilter
+              ? { component: componentFilter.join(',') }
+              : {}),
+            position_id: activePositionId,
+          }
+        );
+        if (!cancelled) {
+          setLogs(results);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err : new Error('Failed to load logs')
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void fetchLogs();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activePositionId,
+    componentFilter,
     executionRunId,
-    component: componentFilter,
-    positionId: activePositionId || undefined,
-    page: 1,
-    pageSize: 100,
-  });
+    open,
+    taskId,
+    taskType,
+  ]);
 
   // Sort logs chronologically (oldest first for timeline)
   const sortedLogs = useMemo(

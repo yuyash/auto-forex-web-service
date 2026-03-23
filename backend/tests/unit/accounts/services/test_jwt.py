@@ -1,5 +1,9 @@
 """Unit tests for JWTService (mocked dependencies)."""
 
+import contextlib
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from hashlib import sha256
 from unittest.mock import MagicMock, patch
 
 from apps.accounts.services.jwt import JWTService
@@ -143,3 +147,99 @@ class TestJWTService:
             new_token = service.refresh_token("token")
 
         assert new_token is None
+
+    def test_hash_refresh_token_is_deterministic(self) -> None:
+        """Test refresh-token hashing is stable."""
+        token = "refresh-token-value"
+
+        hashed = JWTService.hash_refresh_token(token)
+
+        assert hashed == sha256(token.encode("utf-8")).hexdigest()
+
+    def test_create_refresh_token_stores_hashed_value(self) -> None:
+        """Test DB storage uses a digest instead of the raw token."""
+        service = JWTService()
+        mock_user = MagicMock()
+        mock_user.id = 1
+
+        with patch("apps.accounts.models.RefreshToken.objects.create") as mock_create:
+            refresh_token = service.create_refresh_token(mock_user)
+
+        assert isinstance(refresh_token, str)
+        assert refresh_token
+        mock_create.assert_called_once()
+        assert mock_create.call_args.kwargs["token"] == JWTService.hash_refresh_token(refresh_token)
+        assert mock_create.call_args.kwargs["token"] != refresh_token
+
+    def test_rotate_refresh_token_allows_only_one_success_during_overlap(self) -> None:
+        """Overlapping refresh attempts should yield one success and one replay failure."""
+
+        class FakeRefreshToken:
+            def __init__(self, user: MagicMock) -> None:
+                self.user = user
+                self.user_id = user.id
+                self.revoked_at = None
+
+            @property
+            def is_valid(self) -> bool:
+                return self.revoked_at is None
+
+            def revoke(self) -> None:
+                self.revoked_at = object()
+                revoke_event.set()
+
+        service = JWTService()
+        user = MagicMock()
+        user.id = 1
+        user.is_active = True
+        user.is_locked = False
+        refresh_token = "shared-refresh-token"
+        fake_rt = FakeRefreshToken(user)
+        revoke_event = threading.Event()
+        lookup_lock = threading.Lock()
+        lookup_count = 0
+
+        lookup_qs = MagicMock()
+        lookup_qs.select_related.return_value = lookup_qs
+        lookup_qs.filter.return_value = lookup_qs
+
+        def first_side_effect() -> FakeRefreshToken:
+            nonlocal lookup_count
+            with lookup_lock:
+                lookup_count += 1
+                current_lookup = lookup_count
+
+            if current_lookup == 2:
+                assert revoke_event.wait(timeout=1), "first refresh attempt never revoked the token"
+            return fake_rt
+
+        lookup_qs.first.side_effect = first_side_effect
+        manager = MagicMock()
+        manager.select_for_update.return_value = lookup_qs
+
+        with (
+            patch(
+                "apps.accounts.services.jwt.transaction.atomic",
+                return_value=contextlib.nullcontext(),
+            ),
+            patch("apps.accounts.models.RefreshToken.objects", manager),
+            patch.object(service, "generate_token", return_value="new-access") as mock_access,
+            patch.object(
+                service,
+                "create_refresh_token",
+                return_value="new-refresh",
+            ) as mock_refresh,
+            patch.object(service, "revoke_all_refresh_tokens") as mock_revoke_family,
+        ):
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                futures = [
+                    executor.submit(service.rotate_refresh_token, refresh_token),
+                    executor.submit(service.rotate_refresh_token, refresh_token),
+                ]
+                results = [future.result() for future in futures]
+
+        assert results.count(("new-access", "new-refresh", user)) == 1
+        assert results.count(None) == 1
+        assert mock_access.call_count == 1
+        assert mock_refresh.call_count == 1
+        mock_revoke_family.assert_called_once_with(user)

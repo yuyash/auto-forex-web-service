@@ -94,6 +94,14 @@ class UserRegistrationView(APIView):
         """Handle user registration."""
         system_settings = PublicAccountSettings.get_settings()
         if not system_settings.registration_enabled:
+            self.security_events.log_security_event(
+                event_type="registration_blocked",
+                description="Registration attempt blocked because registration is disabled",
+                severity="warning",
+                ip_address=self.get_client_ip(request),
+                user_agent=request.META.get("HTTP_USER_AGENT", ""),
+                details={"status_code": status.HTTP_503_SERVICE_UNAVAILABLE},
+            )
             logger.warning(
                 "Registration attempt blocked - registration is disabled",
                 extra={"ip_address": self.get_client_ip(request)},
@@ -150,4 +158,12 @@ class UserRegistrationView(APIView):
                 status=status.HTTP_201_CREATED,
             )
 
+        self.security_events.log_security_event(
+            event_type="registration_failed",
+            description="Registration attempt failed validation",
+            severity="warning",
+            ip_address=self.get_client_ip(request),
+            user_agent=request.META.get("HTTP_USER_AGENT", ""),
+            details={"status_code": status.HTTP_400_BAD_REQUEST},
+        )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

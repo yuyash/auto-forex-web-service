@@ -190,14 +190,14 @@ def _recover_task(
     try:
         service.start_task(task)
         logger.info(f"[RECOVERY:{source}] Task re-submitted - task_id={task.pk}")
+        return True
     except Exception:
         logger.exception(f"[RECOVERY:{source}] Failed to re-submit task - task_id={task.pk}")
         model_class.objects.filter(pk=task.pk).update(
             status=TaskStatus.FAILED,
             error_message=f"Recovery failed after crash (source={source})",
         )
-
-    return True
+        return False
 
 
 def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, source: str) -> bool:
@@ -228,6 +228,7 @@ def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, sou
             task.pk,
             task.execution_id,
         )
+        return True
     except Exception:
         logger.exception(
             "[RECOVERY:%s] Failed to resume trading task - task_id=%s",
@@ -238,8 +239,7 @@ def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, sou
             status=TaskStatus.FAILED,
             error_message=f"Recovery failed after crash (source={source})",
         )
-
-    return True
+        return False
 
 
 # ---------------------------------------------------------------------------
