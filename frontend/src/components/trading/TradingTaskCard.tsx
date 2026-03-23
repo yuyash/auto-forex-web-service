@@ -18,6 +18,10 @@ import {
   Warning as WarningIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import {
+  shouldEnableRealtimeTaskUpdates,
+  shouldPollTaskStatus,
+} from '../../hooks/taskResourceQueries';
 import type { TradingTask } from '../../types/tradingTask';
 import { TaskStatus } from '../../types/common';
 import { StatusBadge } from '../tasks/display/StatusBadge';
@@ -74,10 +78,10 @@ export default function TradingTaskCard({
 
   // Poll for updates when task is running or paused (more frequent for live trading) (Requirements 1.2, 4.5)
   const pollingEnabled =
-    task.status === TaskStatus.RUNNING ||
-    task.status === TaskStatus.PAUSED ||
-    optimisticStatus === TaskStatus.RUNNING ||
-    optimisticStatus === TaskStatus.PAUSED;
+    shouldPollTaskStatus(task.status) ||
+    shouldPollTaskStatus(optimisticStatus ?? undefined) ||
+    shouldEnableRealtimeTaskUpdates(task.status) ||
+    shouldEnableRealtimeTaskUpdates(optimisticStatus ?? undefined);
 
   const { data: polledTask } = useTradingTask(task.id, {
     enabled: pollingEnabled,

@@ -1,0 +1,222 @@
+"""Runtime metrics computed independently from strategy implementations."""
+
+from __future__ import annotations
+
+from collections.abc import Iterable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
+from typing import Any
+
+from apps.trading.models.positions import Position
+from apps.trading.utils import quote_to_account_rate
+
+
+@dataclass(slots=True)
+class _Candle:
+    bucket_start_epoch: int
+    close_price: Decimal
+    high_price: Decimal
+    low_price: Decimal
+
+
+class RuntimeMetricsTracker:
+    """Track common runtime metrics such as margin ratio and ATR."""
+
+    def __init__(
+        self,
+        *,
+        instrument: str,
+        pip_size: Decimal,
+        account_currency: str,
+        margin_rate: Decimal,
+        atr_period: int,
+        atr_baseline_period: int | None = None,
+        volatility_lock_multiplier: Decimal | None = None,
+    ) -> None:
+        self.instrument = instrument
+        self.pip_size = pip_size
+        self.account_currency = account_currency
+        self.margin_rate = margin_rate
+        self.atr_period = max(1, atr_period)
+        self.atr_baseline_period = (
+            max(1, atr_baseline_period) if atr_baseline_period is not None else None
+        )
+        self.volatility_lock_multiplier = volatility_lock_multiplier
+        self._open_positions: dict[str, Position] = {}
+        self._completed_candles: list[_Candle] = []
+        self._current_candle: _Candle | None = None
+
+    def sync_open_positions(self, positions: Iterable[Position]) -> None:
+        """Replace the in-memory open position cache with current open positions."""
+        self._open_positions = {
+            str(position.id): position for position in positions if position.is_open
+        }
+
+    def build_metrics(
+        self,
+        *,
+        timestamp: datetime,
+        bid: Decimal,
+        ask: Decimal,
+        mid: Decimal,
+        current_balance: Decimal,
+    ) -> dict[str, str]:
+        """Update rolling state for a tick and return common metrics."""
+        self._record_tick(timestamp=timestamp, mid=mid)
+
+        metrics: dict[str, str] = {
+            "margin_ratio": str(
+                self._calculate_margin_ratio(
+                    bid=bid,
+                    ask=ask,
+                    mid=mid,
+                    current_balance=current_balance,
+                )
+            )
+        }
+
+        current_atr = self._calculate_atr(self.atr_period)
+        metrics["current_atr"] = str(current_atr)
+
+        if self.atr_baseline_period is not None:
+            baseline_atr = self._calculate_atr(self.atr_baseline_period)
+            metrics["baseline_atr"] = str(baseline_atr)
+            if self.volatility_lock_multiplier is not None and baseline_atr > 0:
+                metrics["volatility_threshold"] = str(
+                    baseline_atr * self.volatility_lock_multiplier
+                )
+
+        return metrics
+
+    def _record_tick(self, *, timestamp: datetime, mid: Decimal) -> None:
+        if not isinstance(timestamp, datetime):
+            timestamp_str = str(timestamp).strip()
+            if timestamp_str.endswith("Z"):
+                timestamp_str = timestamp_str[:-1] + "+00:00"
+            timestamp = datetime.fromisoformat(timestamp_str)
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=UTC)
+        bucket_start_epoch = int(timestamp.timestamp()) // 60 * 60
+        current = self._current_candle
+
+        if current is None:
+            self._current_candle = _Candle(
+                bucket_start_epoch=bucket_start_epoch,
+                close_price=mid,
+                high_price=mid,
+                low_price=mid,
+            )
+            return
+
+        if current.bucket_start_epoch == bucket_start_epoch:
+            current.close_price = mid
+            if mid > current.high_price:
+                current.high_price = mid
+            if mid < current.low_price:
+                current.low_price = mid
+            return
+
+        self._completed_candles.append(current)
+        self._current_candle = _Candle(
+            bucket_start_epoch=bucket_start_epoch,
+            close_price=mid,
+            high_price=mid,
+            low_price=mid,
+        )
+
+        max_candles = max(self.atr_period, self.atr_baseline_period or 0) + 2
+        if len(self._completed_candles) > max_candles:
+            self._completed_candles = self._completed_candles[-max_candles:]
+
+    def _calculate_margin_ratio(
+        self,
+        *,
+        bid: Decimal,
+        ask: Decimal,
+        mid: Decimal,
+        current_balance: Decimal,
+    ) -> Decimal:
+        positions = list(self._open_positions.values())
+        if not positions:
+            return Decimal("0")
+
+        long_units = sum(
+            abs(position.units) for position in positions if position.direction == "long"
+        )
+        short_units = sum(
+            abs(position.units) for position in positions if position.direction == "short"
+        )
+        total_units = max(long_units, short_units)
+        if total_units <= 0 or mid <= 0:
+            return Decimal("0")
+
+        conv = quote_to_account_rate(self.instrument, mid, self.account_currency)
+        unrealized = Decimal("0")
+        for position in positions:
+            units = Decimal(str(abs(position.units)))
+            entry_price = Decimal(str(position.entry_price))
+            if position.direction == "long":
+                unrealized += (bid - entry_price) * units * conv
+            else:
+                unrealized += (entry_price - ask) * units * conv
+
+        nav = current_balance + unrealized
+        if nav <= 0:
+            return Decimal("0")
+
+        required_margin = mid * Decimal(str(total_units)) * self.margin_rate * conv
+        return required_margin / nav
+
+    def _calculate_atr(self, period: int) -> Decimal:
+        candles = self._candles_for_atr()
+        if len(candles) < 2:
+            return Decimal("0")
+
+        true_ranges: list[Decimal] = []
+        for index in range(1, len(candles)):
+            current = candles[index]
+            previous_close = candles[index - 1].close_price
+            true_ranges.append(
+                max(
+                    current.high_price - current.low_price,
+                    abs(current.high_price - previous_close),
+                    abs(current.low_price - previous_close),
+                )
+                / self.pip_size
+            )
+
+        window = true_ranges[-max(1, period) :]
+        if not window:
+            return Decimal("0")
+        return sum(window, Decimal("0")) / Decimal(len(window))
+
+    def _candles_for_atr(self) -> list[_Candle]:
+        candles = list(self._completed_candles)
+        if self._current_candle is not None:
+            candles.append(self._current_candle)
+        return candles
+
+
+def config_decimal(
+    config_dict: dict[str, Any], key: str, default: str | None = None
+) -> Decimal | None:
+    """Read a Decimal-like config value from a config dict."""
+    raw = config_dict.get(key, default)
+    if raw is None:
+        return None
+    try:
+        return Decimal(str(raw))
+    except (InvalidOperation, TypeError, ValueError):
+        if default is None:
+            return None
+        return Decimal(default)
+
+
+def config_int(config_dict: dict[str, Any], key: str, default: int) -> int:
+    """Read an int-like config value from a config dict."""
+    raw = config_dict.get(key, default)
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default

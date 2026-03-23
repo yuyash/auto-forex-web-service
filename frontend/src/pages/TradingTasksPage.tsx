@@ -28,6 +28,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { shouldPollTaskStatus } from '../hooks/taskResourceQueries';
 import { useTradingTasks } from '../hooks/useTradingTasks';
 import { TaskStatus } from '../types/common';
 import TradingTaskCard from '../components/trading/TradingTaskCard';
@@ -110,9 +111,8 @@ export default function TradingTasksPage() {
     }
   }, [location.pathname, location.state?.deleted, navigate, refresh]);
 
-  const hasRunningTasks = !!data?.results.some(
-    (task) =>
-      task.status === TaskStatus.RUNNING || task.status === TaskStatus.PAUSED
+  const hasRunningTasks = !!data?.results.some((task) =>
+    shouldPollTaskStatus(task.status)
   );
   const pollingPolicy = usePollingPolicy({
     enabled: hasRunningTasks,

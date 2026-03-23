@@ -22,6 +22,10 @@ import {
 } from '@mui/material';
 import { useTradingTask } from '../../hooks/useTradingTasks';
 import {
+  shouldEnableRealtimeTaskUpdates,
+  shouldPollTaskStatus,
+} from '../../hooks/taskResourceQueries';
+import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
@@ -125,9 +129,7 @@ export const TradingTaskDetail: React.FC = () => {
     TaskType.TRADING,
     task?.execution_id,
     {
-      polling:
-        currentStatus === TaskStatus.STARTING ||
-        currentStatus === TaskStatus.RUNNING,
+      polling: shouldPollTaskStatus(currentStatus),
       interval: statusPollingIntervalMs,
     }
   );
@@ -321,10 +323,9 @@ export const TradingTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={
-                currentStatus === TaskStatus.STARTING ||
-                currentStatus === TaskStatus.RUNNING
-              }
+              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
+                currentStatus
+              )}
             />
           </LazyTabPanel>
         )}
@@ -345,10 +346,9 @@ export const TradingTaskDetail: React.FC = () => {
               latestExecution={detailTask.latest_execution}
               summary={s}
               currentTick={polledTick ?? null}
-              enableRealTimeUpdates={
-                currentStatus === TaskStatus.STARTING ||
-                currentStatus === TaskStatus.RUNNING
-              }
+              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
+                currentStatus
+              )}
               pipSize={
                 detailTask.pip_size ? parseFloat(detailTask.pip_size) : null
               }
@@ -365,10 +365,9 @@ export const TradingTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={
-                currentStatus === TaskStatus.STARTING ||
-                currentStatus === TaskStatus.RUNNING
-              }
+              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
+                currentStatus
+              )}
               currentPrice={
                 polledTick?.price != null ? parseFloat(polledTick.price) : null
               }
@@ -387,10 +386,9 @@ export const TradingTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={
-                currentStatus === TaskStatus.STARTING ||
-                currentStatus === TaskStatus.RUNNING
-              }
+              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
+                currentStatus
+              )}
               pipSize={
                 detailTask.pip_size ? parseFloat(detailTask.pip_size) : null
               }
@@ -406,10 +404,9 @@ export const TradingTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={
-                currentStatus === TaskStatus.STARTING ||
-                currentStatus === TaskStatus.RUNNING
-              }
+              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
+                currentStatus
+              )}
             />
           </LazyTabPanel>
         )}
@@ -422,10 +419,9 @@ export const TradingTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={
-                currentStatus === TaskStatus.STARTING ||
-                currentStatus === TaskStatus.RUNNING
-              }
+              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
+                currentStatus
+              )}
             />
           </LazyTabPanel>
         )}
@@ -438,10 +434,9 @@ export const TradingTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={
-                currentStatus === TaskStatus.STARTING ||
-                currentStatus === TaskStatus.RUNNING
-              }
+              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
+                currentStatus
+              )}
             />
           </LazyTabPanel>
         )}

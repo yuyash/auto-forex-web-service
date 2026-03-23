@@ -143,18 +143,21 @@ export const ConfigurationSelector: React.FC<ConfigurationSelectorProps> = ({
           )}
 
         {isLoading ? (
-          <>
-            {/* Keep selected value visible during loading */}
-            {value && (
-              <MenuItem value={value} sx={{ display: 'none' }}>
+          [
+            value ? (
+              <MenuItem
+                key="selected-loading-value"
+                value={value}
+                sx={{ display: 'none' }}
+              >
                 {selectedConfig?.name || 'Loading...'}
               </MenuItem>
-            )}
-            <MenuItem disabled>
+            ) : null,
+            <MenuItem key="loading-state" disabled>
               <CircularProgress size={20} sx={{ mr: 1 }} />
               Loading configurations...
-            </MenuItem>
-          </>
+            </MenuItem>,
+          ]
         ) : filteredConfigurations.length === 0 ? (
           <MenuItem disabled>
             {searchTerm

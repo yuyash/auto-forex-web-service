@@ -55,7 +55,18 @@ type TaskListParams = BacktestTaskListParams | TradingTaskListParams;
 type TaskEntity = BacktestTask | TradingTask;
 
 export function shouldPollTaskStatus(status: string | undefined): boolean {
-  return status === 'starting' || status === 'running' || status === 'paused';
+  return (
+    status === 'starting' ||
+    status === 'running' ||
+    status === 'paused' ||
+    status === 'stopping'
+  );
+}
+
+export function shouldEnableRealtimeTaskUpdates(
+  status: string | undefined
+): boolean {
+  return status === 'starting' || status === 'running' || status === 'stopping';
 }
 
 export function createTaskListQuery<TTask extends TaskEntity>(

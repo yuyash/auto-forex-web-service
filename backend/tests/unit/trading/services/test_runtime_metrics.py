@@ -1,0 +1,81 @@
+"""Tests for strategy-agnostic runtime metrics."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from types import SimpleNamespace
+from uuid import uuid4
+
+from apps.trading.services.runtime_metrics import RuntimeMetricsTracker
+
+
+def _position(
+    *,
+    direction: str,
+    units: int,
+    entry_price: str,
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=uuid4(),
+        direction=direction,
+        units=units,
+        entry_price=Decimal(entry_price),
+        is_open=True,
+    )
+
+
+class TestRuntimeMetricsTracker:
+    """Tests for common runtime metric generation."""
+
+    def test_build_metrics_includes_margin_ratio_from_open_positions(self):
+        tracker = RuntimeMetricsTracker(
+            instrument="USD_JPY",
+            pip_size=Decimal("0.01"),
+            account_currency="JPY",
+            margin_rate=Decimal("0.04"),
+            atr_period=14,
+        )
+        tracker.sync_open_positions(
+            [
+                _position(direction="long", units=1000, entry_price="150.00"),
+                _position(direction="short", units=-500, entry_price="150.20"),
+            ]
+        )
+
+        metrics = tracker.build_metrics(
+            timestamp=datetime(2026, 3, 22, 10, 0, tzinfo=UTC),
+            bid=Decimal("150.10"),
+            ask=Decimal("150.12"),
+            mid=Decimal("150.11"),
+            current_balance=Decimal("100000"),
+        )
+
+        assert Decimal(metrics["margin_ratio"]) > Decimal("0")
+        assert Decimal(metrics["margin_ratio"]) < Decimal("1")
+
+    def test_build_metrics_includes_current_atr_without_strategy_specific_metrics(self):
+        tracker = RuntimeMetricsTracker(
+            instrument="USD_JPY",
+            pip_size=Decimal("0.01"),
+            account_currency="JPY",
+            margin_rate=Decimal("0.04"),
+            atr_period=2,
+            atr_baseline_period=3,
+            volatility_lock_multiplier=Decimal("2"),
+        )
+
+        start = datetime(2026, 3, 22, 10, 0, tzinfo=UTC)
+        prices = ["150.00", "150.20", "150.05", "150.35"]
+        for index, price in enumerate(prices):
+            metrics = tracker.build_metrics(
+                timestamp=start + timedelta(minutes=index),
+                bid=Decimal(price) - Decimal("0.01"),
+                ask=Decimal(price) + Decimal("0.01"),
+                mid=Decimal(price),
+                current_balance=Decimal("100000"),
+            )
+
+        assert Decimal(metrics["current_atr"]) > Decimal("0")
+        assert Decimal(metrics["baseline_atr"]) > Decimal("0")
+        assert Decimal(metrics["volatility_threshold"]) > Decimal("0")

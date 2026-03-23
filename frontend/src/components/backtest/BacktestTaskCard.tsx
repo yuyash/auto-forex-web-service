@@ -16,6 +16,10 @@ import {
   MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import {
+  shouldEnableRealtimeTaskUpdates,
+  shouldPollTaskStatus,
+} from '../../hooks/taskResourceQueries';
 import type { BacktestTask } from '../../types/backtestTask';
 import { TaskStatus, TaskType } from '../../types/common';
 import { StatusBadge } from '../tasks/display/StatusBadge';
@@ -74,8 +78,10 @@ export default function BacktestTaskCard({
 
   // Poll for updates when task is running or optimistically set to running (Requirements 1.2, 4.5)
   const pollingEnabled =
-    task.status === TaskStatus.RUNNING ||
-    optimisticStatus === TaskStatus.RUNNING;
+    shouldPollTaskStatus(task.status) ||
+    shouldPollTaskStatus(optimisticStatus ?? undefined) ||
+    shouldEnableRealtimeTaskUpdates(task.status) ||
+    shouldEnableRealtimeTaskUpdates(optimisticStatus ?? undefined);
 
   const { data: polledTask } = useBacktestTask(task.id, {
     enabled: pollingEnabled,
