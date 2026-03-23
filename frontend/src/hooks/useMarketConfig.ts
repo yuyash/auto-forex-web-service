@@ -1,4 +1,3 @@
-import { logger } from '../utils/logger';
 import {
   type GranularityOption,
   type TickDataRange,
@@ -54,15 +53,6 @@ const FALLBACK_GRANULARITIES: GranularityOption[] = [
 export const useSupportedInstruments = () => {
   const query = useSimpleQueryState(createSupportedInstrumentsQuery());
 
-  if (query.error) {
-    logger.error('Failed to fetch instruments', {
-      error:
-        query.error instanceof Error
-          ? query.error.message
-          : String(query.error),
-    });
-  }
-
   return mapQueryStateFields(query, (data, state) => ({
     instruments: data ?? FALLBACK_INSTRUMENTS,
     error: state.error instanceof Error ? state.error.message : null,
@@ -76,15 +66,6 @@ export const useSupportedInstruments = () => {
 export const useSupportedGranularities = () => {
   const query = useSimpleQueryState(createSupportedGranularitiesQuery());
 
-  if (query.error) {
-    logger.error('Failed to fetch granularities', {
-      error:
-        query.error instanceof Error
-          ? query.error.message
-          : String(query.error),
-    });
-  }
-
   return mapQueryStateFields(query, (data, state) => ({
     granularities: data ?? FALLBACK_GRANULARITIES,
     error: state.error instanceof Error ? state.error.message : null,
@@ -97,16 +78,6 @@ export const useSupportedGranularities = () => {
  */
 export const useTickDataRange = (instrument?: string) => {
   const query = useSimpleQueryState(createTickDataRangeQuery(instrument));
-
-  if (query.error) {
-    logger.error('Failed to fetch tick data range', {
-      instrument,
-      error:
-        query.error instanceof Error
-          ? query.error.message
-          : String(query.error),
-    });
-  }
 
   return mapQueryStateFields(query, (data, state) => ({
     dataRange: (data as TickDataRange | undefined) ?? null,

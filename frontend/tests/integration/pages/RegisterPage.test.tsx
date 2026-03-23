@@ -6,15 +6,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
-import { AuthProvider } from '../../../src/contexts/AuthContext';
-import { I18nextProvider } from 'react-i18next';
-import i18n from '../../../src/i18n/config';
 import { ApiError } from '../../../src/api/apiClient';
 import { authApi } from '../../../src/services/api';
 import { useRegister } from '../../../src/hooks/useAuthMutations';
 import RegisterPage from '../../../src/pages/RegisterPage';
+import { createAuthPageWrapper } from '../../utils/authPageTestUtils';
 
 vi.mock('../../../src/api', () => ({
   setAuthToken: vi.fn(),
@@ -33,6 +29,13 @@ vi.mock('../../../src/hooks/useAuthMutations', () => ({
   useRegister: vi.fn(),
 }));
 
+vi.mock('../../../src/utils/persistentState', () => ({
+  readRawStoredValue: vi.fn(() => null),
+  readStoredValue: vi.fn((_key, _schema, fallback) => fallback),
+  removeStoredValue: vi.fn(),
+  writeStoredValue: vi.fn(),
+}));
+
 async function getEnabledSubmitButton() {
   const button = await screen.findByRole('button', {
     name: /register|sign up/i,
@@ -44,20 +47,9 @@ async function getEnabledSubmitButton() {
 }
 
 async function renderRegisterPage() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  const rendered = render(<RegisterPage />, {
+    wrapper: createAuthPageWrapper('/register').wrapper,
   });
-  const rendered = render(
-    <QueryClientProvider client={queryClient}>
-      <I18nextProvider i18n={i18n}>
-        <MemoryRouter initialEntries={['/register']}>
-          <AuthProvider>
-            <RegisterPage />
-          </AuthProvider>
-        </MemoryRouter>
-      </I18nextProvider>
-    </QueryClientProvider>
-  );
   await waitFor(() => {
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   });

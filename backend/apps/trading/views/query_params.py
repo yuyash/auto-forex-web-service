@@ -634,6 +634,10 @@ def _build_query_serializer_alias(endpoint: str) -> type[serializers.Serializer]
     return get_query_group_spec(endpoint).build_serializer()
 
 
+def _parse_endpoint_group(endpoint: str, request: Request) -> dict[str, object]:
+    return get_query_group_spec(endpoint).parse(request)
+
+
 def _resolve_date_range_group(
     start_key: str,
     end_key: str,
@@ -883,7 +887,7 @@ class MetricsQueryParams:
         default_page_size: int,
         max_page_size: int,
     ) -> MetricsQueryParams:
-        parsed = QUERY_GROUP_SPECS["metrics"].parse(request)
+        parsed = _parse_endpoint_group("metrics", request)
         return cls(
             execution=_build_execution_scoped_query(
                 request,
@@ -913,7 +917,7 @@ class LogsQueryParams:
         default_page_size: int,
         max_page_size: int,
     ) -> LogsQueryParams:
-        parsed = QUERY_GROUP_SPECS["logs"].parse(request)
+        parsed = _parse_endpoint_group("logs", request)
         level_param = cast(str, parsed["level"])
         component_param = cast(str, parsed["component"])
         return cls(
@@ -952,7 +956,7 @@ class EventsQueryParams:
         default_page_size: int = 100,
         max_page_size: int = 1000,
     ) -> EventsQueryParams:
-        parsed = QUERY_GROUP_SPECS["events"].parse(request)
+        parsed = _parse_endpoint_group("events", request)
         scope = cast(str, parsed["scope"]) or "all"
         return cls(
             execution=_build_execution_scoped_query(
@@ -988,7 +992,7 @@ class TradesQueryParams:
         default_page_size: int = 100,
         max_page_size: int = 1000,
     ) -> TradesQueryParams:
-        parsed = QUERY_GROUP_SPECS["trades"].parse(request)
+        parsed = _parse_endpoint_group("trades", request)
         return cls(
             execution=_build_execution_scoped_query(
                 request,
@@ -1022,7 +1026,7 @@ class OrdersQueryParams:
         default_page_size: int = 100,
         max_page_size: int = 1000,
     ) -> OrdersQueryParams:
-        parsed = QUERY_GROUP_SPECS["orders"].parse(request)
+        parsed = _parse_endpoint_group("orders", request)
         return cls(
             execution=_build_execution_scoped_query(
                 request,
@@ -1047,7 +1051,7 @@ class LogComponentsQueryParams:
         *,
         default_execution_id: UUID | None,
     ) -> LogComponentsQueryParams:
-        parsed = QUERY_GROUP_SPECS["log_components"].parse(request)
+        parsed = _parse_endpoint_group("log_components", request)
         return cls(
             execution_id=cast(UUID | None, parsed["execution_id"]) or default_execution_id,
         )
@@ -1065,7 +1069,7 @@ class StrategyEventsQueryParams:
         *,
         default_execution_id: UUID | None,
     ) -> StrategyEventsQueryParams:
-        parsed = QUERY_GROUP_SPECS["strategy_events"].parse(request)
+        parsed = _parse_endpoint_group("strategy_events", request)
         root_entry_id = cast(int | None, parsed["root_entry_id"])
         return cls(
             execution_id=cast(UUID | None, parsed["execution_id"]) or default_execution_id,
@@ -1084,7 +1088,7 @@ class SummaryQueryParams:
         *,
         default_execution_id: UUID | None,
     ) -> SummaryQueryParams:
-        parsed = QUERY_GROUP_SPECS["summary"].parse(request)
+        parsed = _parse_endpoint_group("summary", request)
         return cls(
             execution_id=cast(UUID | None, parsed["execution_id"]) or default_execution_id,
         )
@@ -1103,7 +1107,7 @@ class ExecutionsQueryParams:
         default_page_size: int,
         max_page_size: int,
     ) -> ExecutionsQueryParams:
-        parsed = QUERY_GROUP_SPECS["executions"].parse(request)
+        parsed = _parse_endpoint_group("executions", request)
         pagination = PaginationParams.from_request(
             request,
             default_page_size=default_page_size,
@@ -1121,7 +1125,7 @@ class ExecutionDetailQueryParams:
 
     @classmethod
     def from_request(cls, request: Request) -> ExecutionDetailQueryParams:
-        parsed = QUERY_GROUP_SPECS["execution_detail"].parse(request)
+        parsed = _parse_endpoint_group("execution_detail", request)
         return cls(include_metrics=cast(bool, parsed["include_metrics"]))
 
 
