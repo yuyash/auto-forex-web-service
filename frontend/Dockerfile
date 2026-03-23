@@ -1,8 +1,12 @@
 # Frontend Dockerfile for Auto Forex Trader
 # Multi-stage build: Node for building, Nginx for serving
+#
+# The builder stage is pinned to linux/amd64 because it only produces
+# static files (HTML/JS/CSS) that are architecture-independent.
+# This avoids slow QEMU emulation of Node.js during multi-arch builds.
 
-# Stage 1: Build the React application
-FROM node:20-alpine AS builder
+# Stage 1: Build the React application (always on amd64 — output is static files)
+FROM --platform=linux/amd64 node:20-alpine AS builder
 
 # Set work directory
 WORKDIR /app
@@ -20,7 +24,7 @@ COPY . .
 # Build the application
 RUN npm run build
 
-# Stage 2: Serve with Nginx
+# Stage 2: Serve with Nginx (multi-arch — inherits target platform)
 FROM nginx:alpine
 
 # Copy built files from builder stage
