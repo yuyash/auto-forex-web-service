@@ -48,11 +48,11 @@ function useBacktestControls(): TaskControlActions {
   const restart = useRerunBacktestTask();
 
   const isLoading =
-    start.isPending ||
-    stop.isPending ||
-    pause.isPending ||
-    resume.isPending ||
-    restart.isPending;
+    start.isLoading ||
+    stop.isLoading ||
+    pause.isLoading ||
+    resume.isLoading ||
+    restart.isLoading;
 
   return {
     onStart: useCallback((id: string) => start.mutate(id), [start]),
@@ -72,11 +72,11 @@ function useTradingControls(): TaskControlActions {
   const restart = useRestartTradingTask();
 
   const isLoading =
-    start.isPending ||
-    stop.isPending ||
-    pause.isPending ||
-    resume.isPending ||
-    restart.isPending;
+    start.isLoading ||
+    stop.isLoading ||
+    pause.isLoading ||
+    resume.isLoading ||
+    restart.isLoading;
 
   return {
     onStart: useCallback((id: string) => start.mutate(id), [start]),

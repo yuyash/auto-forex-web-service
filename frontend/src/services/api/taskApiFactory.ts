@@ -30,7 +30,7 @@ export interface TaskApi<TFrontend, TListParams, TCreateData, TUpdateData> {
   partialUpdate: (id: string, data: TUpdateData) => Promise<TFrontend>;
   delete: (id: string) => Promise<void>;
   start: (id: string) => Promise<TFrontend>;
-  stop: (...args: never[]) => Promise<Record<string, unknown>>;
+  stop: (id: string, ...args: unknown[]) => Promise<Record<string, unknown>>;
   pause: (id: string) => Promise<TFrontend>;
   resume: (id: string) => Promise<TFrontend>;
   restart: (id: string) => Promise<TFrontend>;
@@ -49,7 +49,7 @@ export interface TaskApi<TFrontend, TListParams, TCreateData, TUpdateData> {
 export function createTaskApi<
   TBackend,
   TFrontend,
-  TListParams extends Record<string, unknown> | undefined,
+  TListParams extends object | undefined,
   TCreateData,
   TUpdateData,
 >(opts: {
@@ -60,7 +60,8 @@ export function createTaskApi<
 }): TaskApi<TFrontend, TListParams, TCreateData, TUpdateData> {
   const { basePath: BASE, transform } = opts;
   const mapParams =
-    opts.mapListParams ?? ((p: TListParams) => p as Record<string, unknown>);
+    opts.mapListParams ??
+    ((p: TListParams) => p as unknown as Record<string, unknown>);
 
   function toPaginated(
     result: BackendPaginated<TBackend>
