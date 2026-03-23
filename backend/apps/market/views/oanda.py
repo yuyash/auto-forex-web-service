@@ -83,12 +83,11 @@ class OandaAccountView(APIView):
         responses={200: OandaAccountsSerializer(many=True)},
     )
     def get(self, request: Request) -> Response:
-        if not request.user.is_authenticated:
-            return Response(
-                {"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED
-            )
-
-        accounts = OandaAccounts.objects.filter(user_id=request.user.id).order_by("-created_at")
+        accounts = (
+            OandaAccounts.objects.filter(user_id=request.user.id)
+            .select_related("user")
+            .order_by("-created_at")
+        )
         serializer = self.serializer_class(accounts, many=True)
         logger.info(
             "User %s retrieved %s OANDA accounts",
@@ -110,11 +109,6 @@ class OandaAccountView(APIView):
         responses={201: OandaAccountsSerializer},
     )
     def post(self, request: Request) -> Response:
-        if not request.user.is_authenticated:
-            return Response(
-                {"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED
-            )
-
         serializer = self.serializer_class(data=request.data, context={"request": request})
         if serializer.is_valid():
             account = create_oanda_account(serializer)
@@ -162,11 +156,8 @@ class OandaAccountDetailView(APIView):
     serializer_class = OandaAccountsSerializer
 
     def get_object(self, request: Request, account_id: int) -> OandaAccounts | None:
-        if not request.user.is_authenticated:
-            return None
         try:
-            account = OandaAccounts.objects.get(id=account_id, user_id=request.user.id)
-            return account
+            return OandaAccounts.objects.get(id=account_id, user_id=request.user.id)
         except OandaAccounts.DoesNotExist:
             return None
 
@@ -176,10 +167,6 @@ class OandaAccountDetailView(APIView):
         responses={200: OandaAccountDetailResponseSerializer},
     )
     def get(self, request: Request, account_id: int) -> Response:
-        if not request.user.is_authenticated:
-            return Response(
-                {"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED
-            )
         account = self.get_object(request, account_id)
         if account is None:
             return Response(
@@ -235,10 +222,6 @@ class OandaAccountDetailView(APIView):
         responses={200: OandaAccountsSerializer},
     )
     def put(self, request: Request, account_id: int) -> Response:
-        if not request.user.is_authenticated:
-            return Response(
-                {"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED
-            )
         account = self.get_object(request, account_id)
         if account is None:
             return Response(
@@ -275,10 +258,6 @@ class OandaAccountDetailView(APIView):
         },
     )
     def delete(self, request: Request, account_id: int) -> Response:
-        if not request.user.is_authenticated:
-            return Response(
-                {"error": "Authentication required."}, status=status.HTTP_401_UNAUTHORIZED
-            )
         account = self.get_object(request, account_id)
         if account is None:
             return Response(

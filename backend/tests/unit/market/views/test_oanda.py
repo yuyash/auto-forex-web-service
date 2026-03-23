@@ -12,24 +12,21 @@ class TestOandaAccountViewUnit:
     """Pure unit tests for OandaAccountView."""
 
     def test_get_requires_authentication(self) -> None:
-        """Test that GET requires authentication."""
+        """Test that GET requires authentication (via DRF permission)."""
         factory = APIRequestFactory()
         request = factory.get("/api/market/accounts/")
-        request.user = MagicMock(is_authenticated=False)
-
-        view = OandaAccountView()
-        response = view.get(request)
+        # Anonymous user — no force_authenticate
+        view = OandaAccountView.as_view()
+        response = view(request)
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_post_requires_authentication(self) -> None:
-        """Test that POST requires authentication."""
+        """Test that POST requires authentication (via DRF permission)."""
         factory = APIRequestFactory()
         request = factory.post("/api/market/accounts/", {})
-        request.user = MagicMock(is_authenticated=False)
-
-        view = OandaAccountView()
-        response = view.post(request)
+        view = OandaAccountView.as_view()
+        response = view(request)
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -45,7 +42,7 @@ class TestOandaAccountViewUnit:
         # Mock queryset
         mock_qs = MagicMock()
         mock_qs.count.return_value = 0
-        mock_accounts.objects.filter.return_value.order_by.return_value = mock_qs
+        mock_accounts.objects.filter.return_value.select_related.return_value.order_by.return_value = mock_qs
 
         factory = APIRequestFactory()
         request = factory.get("/api/market/accounts/")

@@ -1,7 +1,6 @@
 import { tradingTasksApi } from '../services/api';
 import type {
   TradingTask,
-  TradingTaskCopyData,
   TradingTaskCreateData,
   TradingTaskUpdateData,
 } from '../types';
@@ -9,13 +8,21 @@ import {
   invalidateTaskDerivedCaches,
   patchTaskDerivedCaches,
   patchTaskStatusCache,
-  removeTaskCaches,
-  removeTaskListEntry,
   upsertTaskCaches,
 } from './taskMutationCache';
+import {
+  createCopyHook,
+  createDeleteHook,
+  createPauseHook,
+  createRestartHook,
+  createResumeHook,
+  createStartHook,
+} from './useTaskMutationFactory';
 import { useWrappedMutation } from './useWrappedMutation';
 
 export type StopMode = 'immediate' | 'graceful' | 'graceful_close';
+
+// --- hooks that need custom create/update logic (not generic) -------------
 
 export function useCreateTradingTask(options?: {
   onSuccess?: (data: TradingTask) => void;
@@ -67,53 +74,7 @@ export function useUpdateTradingTask(options?: {
   );
 }
 
-export function useDeleteTradingTask(options?: {
-  onSuccess?: () => void;
-  onError?: (error: Error) => void;
-}) {
-  return useWrappedMutation((id: string) => tradingTasksApi.delete(id), {
-    onSuccess: async (_, id) => {
-      removeTaskCaches('trading', id);
-      removeTaskListEntry('trading', id);
-      options?.onSuccess?.();
-    },
-    onError: (error) => options?.onError?.(error),
-  });
-}
-
-export function useCopyTradingTask(options?: {
-  onSuccess?: (data: TradingTask) => void;
-  onError?: (error: Error) => void;
-}) {
-  return useWrappedMutation(
-    (variables: { id: string; data: TradingTaskCopyData }) =>
-      tradingTasksApi.copy(variables.id, variables.data),
-    {
-      onSuccess: async (data) => {
-        upsertTaskCaches('trading', data);
-        patchTaskDerivedCaches('trading', data);
-        await invalidateTaskDerivedCaches('trading', data.id);
-        options?.onSuccess?.(data);
-      },
-      onError: (error) => options?.onError?.(error),
-    }
-  );
-}
-
-export function useStartTradingTask(options?: {
-  onSuccess?: (data: TradingTask) => void;
-  onError?: (error: Error) => void;
-}) {
-  return useWrappedMutation((id: string) => tradingTasksApi.start(id), {
-    onSuccess: async (data) => {
-      upsertTaskCaches('trading', data);
-      patchTaskDerivedCaches('trading', data);
-      await invalidateTaskDerivedCaches('trading', data.id);
-      options?.onSuccess?.(data);
-    },
-    onError: (error) => options?.onError?.(error),
-  });
-}
+// --- stop needs a custom status-patch + mode parameter --------------------
 
 export function useStopTradingTask(options?: {
   onSuccess?: (data: Record<string, unknown>) => void;
@@ -133,46 +94,34 @@ export function useStopTradingTask(options?: {
   );
 }
 
-export function usePauseTradingTask(options?: {
-  onSuccess?: (data: TradingTask) => void;
-  onError?: (error: Error) => void;
-}) {
-  return useWrappedMutation((id: string) => tradingTasksApi.pause(id), {
-    onSuccess: async (data) => {
-      upsertTaskCaches('trading', data);
-      patchTaskDerivedCaches('trading', data);
-      await invalidateTaskDerivedCaches('trading', data.id);
-      options?.onSuccess?.(data);
-    },
-    onError: (error) => options?.onError?.(error),
-  });
-}
+// --- lifecycle hooks via factory ------------------------------------------
 
-export function useResumeTradingTask(options?: {
-  onSuccess?: (data: TradingTask) => void;
-  onError?: (error: Error) => void;
-}) {
-  return useWrappedMutation((id: string) => tradingTasksApi.resume(id), {
-    onSuccess: async (data) => {
-      upsertTaskCaches('trading', data);
-      patchTaskDerivedCaches('trading', data);
-      await invalidateTaskDerivedCaches('trading', data.id);
-      options?.onSuccess?.(data);
-    },
-    onError: (error) => options?.onError?.(error),
-  });
-}
+export const useDeleteTradingTask = createDeleteHook<TradingTask>(
+  'trading',
+  tradingTasksApi
+);
 
-export function useRestartTradingTask(options?: {
-  onSuccess?: (data: TradingTask) => void;
-  onError?: (error: Error) => void;
-}) {
-  return useWrappedMutation((id: string) => tradingTasksApi.restart(id), {
-    onSuccess: async (data) => {
-      upsertTaskCaches('trading', data);
-      await invalidateTaskDerivedCaches('trading', data.id);
-      options?.onSuccess?.(data);
-    },
-    onError: (error) => options?.onError?.(error),
-  });
-}
+export const useCopyTradingTask = createCopyHook<TradingTask>(
+  'trading',
+  tradingTasksApi as Parameters<typeof createCopyHook<TradingTask>>[1]
+);
+
+export const useStartTradingTask = createStartHook<TradingTask>(
+  'trading',
+  tradingTasksApi
+);
+
+export const usePauseTradingTask = createPauseHook<TradingTask>(
+  'trading',
+  tradingTasksApi
+);
+
+export const useResumeTradingTask = createResumeHook<TradingTask>(
+  'trading',
+  tradingTasksApi
+);
+
+export const useRestartTradingTask = createRestartHook<TradingTask>(
+  'trading',
+  tradingTasksApi
+);
