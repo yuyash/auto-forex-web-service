@@ -163,15 +163,17 @@ function buildRequestBounds(
   granularity: Granularity | string
 ): TimeRange {
   const granularitySeconds = getGranularitySeconds(granularity);
+  const nowSec = Math.floor(Date.now() / 1000);
+  const maxAllowedTo = floorToGranularity(nowSec, granularitySeconds);
   return {
     from: Math.max(0, floorToGranularity(bounds.from ?? 0, granularitySeconds)),
     to:
       bounds.to != null
-        ? ceilToGranularity(bounds.to, granularitySeconds)
-        : ceilToGranularity(
-            Math.floor(Date.now() / 1000) + granularitySeconds * 2,
-            granularitySeconds
-          ),
+        ? Math.min(
+            ceilToGranularity(bounds.to, granularitySeconds),
+            maxAllowedTo
+          )
+        : maxAllowedTo,
   };
 }
 
@@ -212,10 +214,15 @@ export function useWindowedCandles({
     () => isoToSec(initialFocusTime),
     [initialFocusTime]
   );
+  const initialFocusTimeRef = useRef<number | null>(initialFocusTimeSec);
 
   useEffect(() => {
     candlesRef.current = candles;
   }, [candles]);
+
+  useEffect(() => {
+    initialFocusTimeRef.current = initialFocusTimeSec;
+  }, [initialFocusTimeSec]);
 
   useEffect(() => {
     loadedRangesRef.current = loadedRanges;
@@ -518,14 +525,14 @@ export function useWindowedCandles({
     setDataRanges([]);
     setError(null);
     setErrorCode(null);
-    if (initialFocusTimeSec != null) {
+    if (initialFocusTimeRef.current != null) {
       const granularitySeconds = GRANULARITY_SECONDS[String(granularity)] ?? 60;
       const leftCount = Math.floor(Math.max(1, initialCount) * 0.75);
       const rightCount = Math.max(1, initialCount - leftCount);
       const focusedRange = alignRangeToGranularity(
         {
-          from: initialFocusTimeSec - leftCount * granularitySeconds,
-          to: initialFocusTimeSec + rightCount * granularitySeconds,
+          from: initialFocusTimeRef.current - leftCount * granularitySeconds,
+          to: initialFocusTimeRef.current + rightCount * granularitySeconds,
         },
         granularity
       );
@@ -552,8 +559,10 @@ export function useWindowedCandles({
       const from = isoToSec(startTime);
       const to = isoToSec(endTime);
       if (from != null && to != null) {
+        const requestBounds = buildRequestBounds(bounds, granularity);
         const initialTo = Math.min(
           to,
+          requestBounds.to,
           from +
             Math.max(1, edgeCount - 1) *
               (GRANULARITY_SECONDS[String(granularity)] ?? 60)
@@ -588,7 +597,6 @@ export function useWindowedCandles({
     edgeCount,
     endTime,
     initialCount,
-    initialFocusTimeSec,
     instrument,
     granularity,
     replaceWithCountWindow,

@@ -100,4 +100,89 @@ describe('useWindowedCandles', () => {
       },
     ]);
   });
+
+  it('does not request candles with a future to_time', async () => {
+    const now = new Date();
+    const start = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+    start.setUTCMinutes(0, 0, 0);
+
+    mockGet.mockResolvedValue({
+      candles: [],
+    });
+
+    renderHook(() =>
+      useWindowedCandles({
+        instrument: 'USD_JPY',
+        granularity: 'H1',
+        startTime: start.toISOString(),
+        endTime: '2099-03-23T06:00:00.000Z',
+        initialCount: 10,
+        edgeCount: 10,
+      })
+    );
+
+    await waitFor(() => {
+      expect(mockGet).toHaveBeenCalled();
+    });
+
+    const candleRequest = mockGet.mock.calls.find(
+      ([path, query]) => path === '/api/market/candles/' && query?.from_time
+    );
+
+    expect(candleRequest?.[1]).toMatchObject({
+      from_time: start.toISOString(),
+    });
+    const requestedTo = new Date(String(candleRequest?.[1]?.to_time));
+    const flooredNow = new Date(now);
+    flooredNow.setUTCMinutes(0, 0, 0);
+    expect(requestedTo.getTime()).toBeLessThanOrEqual(flooredNow.getTime());
+  });
+
+  it('does not clear existing candles when only initialFocusTime changes', async () => {
+    mockGet.mockResolvedValue({
+      candles: [
+        {
+          time: iso('2026-03-23T00:00:00Z'),
+          open: 1,
+          high: 1,
+          low: 1,
+          close: 1,
+        },
+        {
+          time: iso('2026-03-23T01:00:00Z'),
+          open: 2,
+          high: 2,
+          low: 2,
+          close: 2,
+        },
+      ],
+    });
+
+    const { result, rerender } = renderHook(
+      ({ initialFocusTime }: { initialFocusTime?: string }) =>
+        useWindowedCandles({
+          instrument: 'USD_JPY',
+          granularity: 'H1',
+          initialFocusTime,
+          initialCount: 10,
+          edgeCount: 10,
+        }),
+      {
+        initialProps: {
+          initialFocusTime: '2026-03-23T01:00:00Z',
+        },
+      }
+    );
+
+    await waitFor(() => expect(result.current.isInitialLoading).toBe(false));
+    expect(result.current.candles).toHaveLength(2);
+
+    rerender({
+      initialFocusTime: '2026-03-23T02:00:00Z',
+    });
+
+    expect(result.current.isInitialLoading).toBe(false);
+    expect(result.current.candles).toHaveLength(2);
+    expect(mockGet).toHaveBeenCalledTimes(1);
+  });
 });

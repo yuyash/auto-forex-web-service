@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 from rest_framework import status as http_status
@@ -228,6 +229,39 @@ class TestCandleDataViewSuccess:
         response = view.get(request)
 
         assert response.status_code == http_status.HTTP_429_TOO_MANY_REQUESTS
+
+    @patch("apps.market.views.candles.datetime")
+    @patch("apps.market.views.candles.v20")
+    @patch("apps.market.views.candles.OandaAccounts")
+    def test_future_to_time_is_clamped_to_now(self, MockAccounts, mock_v20, mock_datetime):
+        account = MagicMock()
+        account.api_hostname = "api-fxpractice.oanda.com"
+        account.get_api_token.return_value = "token"
+        MockAccounts.objects.filter.return_value.first.return_value = account
+
+        mock_datetime.fromisoformat.side_effect = datetime.fromisoformat
+        mock_datetime.now.return_value = datetime(2026, 3, 23, 3, 5, 24, tzinfo=UTC)
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.body = {"candles": []}
+
+        mock_context = MagicMock()
+        mock_context.instrument.candles.return_value = mock_response
+        mock_v20.Context.return_value = mock_context
+
+        view = _build_view()
+        request = _make_request(
+            "?instrument=USD_JPY&granularity=H1&from_time=2026-03-23T02:00:00.000Z"
+            "&to_time=2026-03-23T06:00:00.000Z"
+        )
+
+        response = view.get(request)
+
+        assert response.status_code == http_status.HTTP_200_OK
+        _, kwargs = mock_context.instrument.candles.call_args
+        assert kwargs["fromTime"] == "2026-03-23T02:00:00.000Z"
+        assert kwargs["toTime"] == "2026-03-23T03:05:24.000000Z"
 
 
 class TestGetGranularitySeconds:

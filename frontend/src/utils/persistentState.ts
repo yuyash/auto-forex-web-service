@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+export function readRawStoredValue(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
 export function readStoredValue<T>(
   key: string,
   schema: z.ZodType<T>,
@@ -40,6 +48,14 @@ export function readStoredStringValue<T extends string>(
 export function writeStoredValue<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // ignore storage write failures
+  }
+}
+
+export function writeRawStoredValue(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
   } catch {
     // ignore storage write failures
   }
