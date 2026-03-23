@@ -1,7 +1,7 @@
 export const AUTH_LOGOUT_EVENT = 'auth:logout';
 
 export interface AuthLogoutDetail {
-  source?: 'http' | 'ws';
+  source?: 'http';
   status?: number;
   message?: string;
   context?: string;
@@ -9,7 +9,6 @@ export interface AuthLogoutDetail {
 }
 
 const AUTH_ERROR_STATUSES = new Set([401, 419, 4401, 4403]);
-const AUTH_CLOSE_CODES = new Set([4001, 4401, 4403]);
 
 export const isAuthErrorStatus = (status: number): boolean =>
   AUTH_ERROR_STATUSES.has(status);
@@ -71,32 +70,6 @@ export const handleAuthErrorStatus = (
   }
 
   broadcastAuthLogout(logoutDetail);
-  return true;
-};
-
-export const handleWebSocketAuthClose = (
-  event: CloseEvent,
-  detail?: AuthLogoutDetail
-): boolean => {
-  const reason = event.reason?.toLowerCase?.() ?? '';
-  const isAuthClose =
-    AUTH_CLOSE_CODES.has(event.code) ||
-    reason.includes('unauthorized') ||
-    reason.includes('forbidden') ||
-    reason.includes('token') ||
-    reason.includes('authentication');
-
-  if (!isAuthClose) {
-    return false;
-  }
-
-  broadcastAuthLogout({
-    ...detail,
-    source: 'ws',
-    status: detail?.status ?? event.code,
-    message: detail?.message ?? (event.reason || undefined),
-  });
-
   return true;
 };
 
