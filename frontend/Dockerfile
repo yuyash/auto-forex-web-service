@@ -7,12 +7,12 @@ FROM node:20-alpine AS builder
 # Set work directory
 WORKDIR /app
 
-# Copy package files and npm config
-COPY package*.json ./
-COPY .npmrc ./
+# Copy package files and npm config first (better layer caching)
+COPY package*.json .npmrc ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies with cache mount for faster rebuilds
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 
 # Copy source code
 COPY . .
