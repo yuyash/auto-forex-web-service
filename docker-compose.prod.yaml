@@ -146,6 +146,13 @@ services:
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key required}
       OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:?OANDA token encryption key required}
+      # Daily tick data loading (optional — task skips if DATABASE/TABLE are empty)
+      LOAD_DATA_DATABASE: ${LOAD_DATA_DATABASE:-}
+      LOAD_DATA_TABLE: ${LOAD_DATA_TABLE:-}
+      LOAD_DATA_INSTRUMENT: ${LOAD_DATA_INSTRUMENT:-C:USD-JPY}
+      LOAD_DATA_AWS_PROFILE: ${LOAD_DATA_AWS_PROFILE:-}
+      LOAD_DATA_ROLE_ARN: ${LOAD_DATA_ROLE_ARN:-}
+      LOAD_DATA_OUTPUT_BUCKET: ${LOAD_DATA_OUTPUT_BUCKET:-}
     volumes:
       # See note in backend service: avoid shadowing the Django `config` package.
       - ./logs:/app/logs

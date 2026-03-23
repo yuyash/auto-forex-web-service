@@ -373,6 +373,35 @@ npm run build
 
 ### Monitoring Logs
 
+#### Loading Historical Tick Data
+
+The system can load tick data from AWS Athena or CSV files. A Celery Beat task runs daily at 02:00 UTC to fetch the previous day's data automatically when configured.
+
+```bash
+# Load from Athena (specific date range)
+# Local:
+cd backend
+uv run python manage.py load_data \
+  --start 2026-03-01 --end 2026-03-22 \
+  --database your_db --table your_table \
+  --instrument C:USD-JPY
+
+# Docker:
+docker compose exec backend python manage.py load_data \
+  --start 2026-03-01 --end 2026-03-22 \
+  --database your_db --table your_table \
+  --instrument C:USD-JPY
+
+# Load from CSV
+uv run python manage.py load_data --from-csv /path/to/ticks.csv
+
+# Trigger the daily Celery task manually (fetches yesterday)
+docker compose exec celery python -c \
+  "from apps.market.tasks import load_daily_tick_data; load_daily_tick_data.delay()"
+```
+
+To enable automatic daily loading, set `LOAD_DATA_DATABASE` and `LOAD_DATA_TABLE` in your `.env` file. See `.env.example` for all options.
+
 #### Local Development
 
 ```bash
