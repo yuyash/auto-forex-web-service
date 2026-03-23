@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 
+from celery.schedules import crontab
+
 
 def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
     """Return Celery settings derived from the Redis configuration."""
@@ -24,15 +26,20 @@ def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
         ),
         "CELERY_TASK_DEFAULT_QUEUE": os.getenv("CELERY_TASK_DEFAULT_QUEUE", "default"),
         "CELERY_TASK_ROUTES": {
+            # System queue: control-plane tasks (supervisors, recovery, health)
             "market.tasks.ensure_tick_pubsub_running": {"queue": "system"},
+            "trading.tasks.recover_orphaned_tasks": {"queue": "system"},
+            # Market queue: data ingestion and streaming
             "market.tasks.publish_oanda_ticks": {"queue": "market"},
             "market.tasks.subscribe_ticks_to_db": {"queue": "market"},
+            "market.tasks.load_daily_tick_data": {"queue": "market"},
+            # Backtest queue: historical data replay
             "market.tasks.publish_ticks_for_backtest": {"queue": "backtest"},
-            "trading.tasks.run_trading_task": {"queue": "trading"},
-            "trading.tasks.stop_trading_task": {"queue": "trading"},
             "trading.tasks.run_backtest_task": {"queue": "backtest"},
             "trading.tasks.stop_backtest_task": {"queue": "backtest"},
-            "trading.tasks.recover_orphaned_tasks": {"queue": "system"},
+            # Trading queue: live execution
+            "trading.tasks.run_trading_task": {"queue": "trading"},
+            "trading.tasks.stop_trading_task": {"queue": "trading"},
         },
         "CELERY_BEAT_SCHEDULE": {
             "recover-orphaned-tasks": {
@@ -44,6 +51,11 @@ def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
                 "task": "accounts.tasks.cleanup_expired_refresh_tokens",
                 "schedule": 3600,
                 "options": {"queue": "default"},
+            },
+            "load-daily-tick-data": {
+                "task": "market.tasks.load_daily_tick_data",
+                "schedule": crontab(hour=2, minute=0),  # Daily at 02:00 UTC
+                "options": {"queue": "market"},
             },
         },
     }

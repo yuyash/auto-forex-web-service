@@ -14,6 +14,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from apps.trading.enums import EventType
+from apps.trading.events.parsing import parse_datetime, parse_decimal, parse_optional_decimal
 
 if TYPE_CHECKING:
     from apps.trading.dataclasses.context import EventContext
@@ -253,47 +254,17 @@ class InitialEntryEvent(StrategyEvent):
 
     @classmethod
     def from_dict(cls, event_dict: dict[str, Any]) -> "InitialEntryEvent":
-        from decimal import Decimal as D
-
-        price_raw = event_dict.get("price", "0")
-        price = D(str(price_raw)) if price_raw else D("0")
-
-        timestamp_raw = event_dict.get("timestamp")
-        timestamp = None
-        if timestamp_raw:
-            if isinstance(timestamp_raw, datetime):
-                timestamp = timestamp_raw
-            else:
-                try:
-                    timestamp = datetime.fromisoformat(str(timestamp_raw))
-                except (ValueError, TypeError):
-                    pass
-
-        entry_time_raw = event_dict.get("entry_time")
-        entry_time = None
-        if entry_time_raw:
-            if isinstance(entry_time_raw, datetime):
-                entry_time = entry_time_raw
-            else:
-                try:
-                    entry_time = datetime.fromisoformat(str(entry_time_raw))
-                except (ValueError, TypeError):
-                    pass
-
-        planned_exit_raw = event_dict.get("planned_exit_price")
-        planned_exit_price = D(str(planned_exit_raw)) if planned_exit_raw else None
-
         return cls(
             event_type=EventType.INITIAL_ENTRY,
-            timestamp=timestamp,
+            timestamp=parse_datetime(event_dict.get("timestamp")),
             layer_number=int(event_dict.get("layer_number", 1)),
             direction=str(event_dict.get("direction", "")),
-            price=price,
+            price=parse_decimal(event_dict.get("price", "0")),
             units=int(event_dict.get("units", 0)),
-            entry_time=entry_time,
+            entry_time=parse_datetime(event_dict.get("entry_time")),
             retracement_count=int(event_dict.get("retracement_count", 1)),
             entry_id=event_dict.get("entry_id"),
-            planned_exit_price=planned_exit_price,
+            planned_exit_price=parse_optional_decimal(event_dict.get("planned_exit_price")),
             planned_exit_price_formula=event_dict.get("planned_exit_price_formula"),
         )
 
@@ -394,47 +365,17 @@ class RetracementEvent(StrategyEvent):
 
     @classmethod
     def from_dict(cls, event_dict: dict[str, Any]) -> "RetracementEvent":
-        from decimal import Decimal as D
-
-        price_raw = event_dict.get("price", "0")
-        price = D(str(price_raw)) if price_raw else D("0")
-
-        timestamp_raw = event_dict.get("timestamp")
-        timestamp = None
-        if timestamp_raw:
-            if isinstance(timestamp_raw, datetime):
-                timestamp = timestamp_raw
-            else:
-                try:
-                    timestamp = datetime.fromisoformat(str(timestamp_raw))
-                except (ValueError, TypeError):
-                    pass
-
-        entry_time_raw = event_dict.get("entry_time")
-        entry_time = None
-        if entry_time_raw:
-            if isinstance(entry_time_raw, datetime):
-                entry_time = entry_time_raw
-            else:
-                try:
-                    entry_time = datetime.fromisoformat(str(entry_time_raw))
-                except (ValueError, TypeError):
-                    pass
-
-        planned_exit_raw = event_dict.get("planned_exit_price")
-        planned_exit_price = D(str(planned_exit_raw)) if planned_exit_raw else None
-
         return cls(
             event_type=EventType.RETRACEMENT,
-            timestamp=timestamp,
+            timestamp=parse_datetime(event_dict.get("timestamp")),
             layer_number=int(event_dict.get("layer_number", 1)),
             direction=str(event_dict.get("direction", "")),
-            price=price,
+            price=parse_decimal(event_dict.get("price", "0")),
             units=int(event_dict.get("units", 0)),
-            entry_time=entry_time,
+            entry_time=parse_datetime(event_dict.get("entry_time")),
             retracement_count=int(event_dict.get("retracement_count", 1)),
             entry_id=event_dict.get("entry_id"),
-            planned_exit_price=planned_exit_price,
+            planned_exit_price=parse_optional_decimal(event_dict.get("planned_exit_price")),
             planned_exit_price_formula=event_dict.get("planned_exit_price_formula"),
         )
 
@@ -551,65 +492,18 @@ class TakeProfitEvent(StrategyEvent):
 
     @classmethod
     def from_dict(cls, event_dict: dict[str, Any]) -> "TakeProfitEvent":
-        from decimal import Decimal as D
-
-        entry_price_raw = event_dict.get("entry_price", "0")
-        entry_price = D(str(entry_price_raw)) if entry_price_raw else D("0")
-
-        exit_price_raw = event_dict.get("exit_price", "0")
-        exit_price = D(str(exit_price_raw)) if exit_price_raw else D("0")
-
-        pnl_raw = event_dict.get("pnl", "0")
-        pnl = D(str(pnl_raw)) if pnl_raw else D("0")
-
-        pips_raw = event_dict.get("pips", "0")
-        pips = D(str(pips_raw)) if pips_raw else D("0")
-
-        timestamp_raw = event_dict.get("timestamp")
-        timestamp = None
-        if timestamp_raw:
-            if isinstance(timestamp_raw, datetime):
-                timestamp = timestamp_raw
-            else:
-                try:
-                    timestamp = datetime.fromisoformat(str(timestamp_raw))
-                except (ValueError, TypeError):
-                    pass
-
-        entry_time_raw = event_dict.get("entry_time")
-        entry_time = None
-        if entry_time_raw:
-            if isinstance(entry_time_raw, datetime):
-                entry_time = entry_time_raw
-            else:
-                try:
-                    entry_time = datetime.fromisoformat(str(entry_time_raw))
-                except (ValueError, TypeError):
-                    pass
-
-        exit_time_raw = event_dict.get("exit_time")
-        exit_time = None
-        if exit_time_raw:
-            if isinstance(exit_time_raw, datetime):
-                exit_time = exit_time_raw
-            else:
-                try:
-                    exit_time = datetime.fromisoformat(str(exit_time_raw))
-                except (ValueError, TypeError):
-                    pass
-
         return cls(
             event_type=EventType.TAKE_PROFIT,
-            timestamp=timestamp,
+            timestamp=parse_datetime(event_dict.get("timestamp")),
             layer_number=int(event_dict.get("layer_number", 1)),
             direction=str(event_dict.get("direction", "")),
-            entry_price=entry_price,
-            exit_price=exit_price,
+            entry_price=parse_decimal(event_dict.get("entry_price", "0")),
+            exit_price=parse_decimal(event_dict.get("exit_price", "0")),
             units=int(event_dict.get("units", 0)),
-            pnl=pnl,
-            pips=pips,
-            entry_time=entry_time,
-            exit_time=exit_time,
+            pnl=parse_decimal(event_dict.get("pnl", "0")),
+            pips=parse_decimal(event_dict.get("pips", "0")),
+            entry_time=parse_datetime(event_dict.get("entry_time")),
+            exit_time=parse_datetime(event_dict.get("exit_time")),
             retracement_count=int(event_dict.get("retracement_count", 1)),
             entry_id=event_dict.get("entry_id"),
             position_id=event_dict.get("position_id"),
@@ -685,48 +579,18 @@ class OpenPositionEvent(StrategyEvent):
 
     @classmethod
     def from_dict(cls, event_dict: dict[str, Any]) -> "OpenPositionEvent":
-        from decimal import Decimal as D
-
-        price_raw = event_dict.get("price", "0")
-        price = D(str(price_raw)) if price_raw else D("0")
-
-        timestamp_raw = event_dict.get("timestamp")
-        timestamp = None
-        if timestamp_raw:
-            if isinstance(timestamp_raw, datetime):
-                timestamp = timestamp_raw
-            else:
-                try:
-                    timestamp = datetime.fromisoformat(str(timestamp_raw))
-                except (ValueError, TypeError):
-                    pass
-
-        entry_time_raw = event_dict.get("entry_time")
-        entry_time = None
-        if entry_time_raw:
-            if isinstance(entry_time_raw, datetime):
-                entry_time = entry_time_raw
-            else:
-                try:
-                    entry_time = datetime.fromisoformat(str(entry_time_raw))
-                except (ValueError, TypeError):
-                    pass
-
-        planned_exit_raw = event_dict.get("planned_exit_price")
-        planned_exit_price = D(str(planned_exit_raw)) if planned_exit_raw else None
-
         return cls(
             event_type=EventType.OPEN_POSITION,
-            timestamp=timestamp,
+            timestamp=parse_datetime(event_dict.get("timestamp")),
             layer_number=int(event_dict.get("layer_number", 1)),
             direction=str(event_dict.get("direction", "")),
-            price=price,
+            price=parse_decimal(event_dict.get("price", "0")),
             units=int(event_dict.get("units", 0)),
-            entry_time=entry_time,
+            entry_time=parse_datetime(event_dict.get("entry_time")),
             retracement_count=int(event_dict.get("retracement_count", 1)),
             entry_id=event_dict.get("entry_id"),
             strategy_event_type=str(event_dict.get("strategy_event_type", "")),
-            planned_exit_price=planned_exit_price,
+            planned_exit_price=parse_optional_decimal(event_dict.get("planned_exit_price")),
             planned_exit_price_formula=event_dict.get("planned_exit_price_formula"),
             description=str(event_dict.get("description", "")),
         )
@@ -806,65 +670,18 @@ class ClosePositionEvent(StrategyEvent):
 
     @classmethod
     def from_dict(cls, event_dict: dict[str, Any]) -> "ClosePositionEvent":
-        from decimal import Decimal as D
-
-        entry_price_raw = event_dict.get("entry_price", "0")
-        entry_price = D(str(entry_price_raw)) if entry_price_raw else D("0")
-
-        exit_price_raw = event_dict.get("exit_price", "0")
-        exit_price = D(str(exit_price_raw)) if exit_price_raw else D("0")
-
-        pnl_raw = event_dict.get("pnl", "0")
-        pnl = D(str(pnl_raw)) if pnl_raw else D("0")
-
-        pips_raw = event_dict.get("pips", "0")
-        pips = D(str(pips_raw)) if pips_raw else D("0")
-
-        timestamp_raw = event_dict.get("timestamp")
-        timestamp = None
-        if timestamp_raw:
-            if isinstance(timestamp_raw, datetime):
-                timestamp = timestamp_raw
-            else:
-                try:
-                    timestamp = datetime.fromisoformat(str(timestamp_raw))
-                except (ValueError, TypeError):
-                    pass
-
-        entry_time_raw = event_dict.get("entry_time")
-        entry_time = None
-        if entry_time_raw:
-            if isinstance(entry_time_raw, datetime):
-                entry_time = entry_time_raw
-            else:
-                try:
-                    entry_time = datetime.fromisoformat(str(entry_time_raw))
-                except (ValueError, TypeError):
-                    pass
-
-        exit_time_raw = event_dict.get("exit_time")
-        exit_time = None
-        if exit_time_raw:
-            if isinstance(exit_time_raw, datetime):
-                exit_time = exit_time_raw
-            else:
-                try:
-                    exit_time = datetime.fromisoformat(str(exit_time_raw))
-                except (ValueError, TypeError):
-                    pass
-
         return cls(
             event_type=EventType.CLOSE_POSITION,
-            timestamp=timestamp,
+            timestamp=parse_datetime(event_dict.get("timestamp")),
             layer_number=int(event_dict.get("layer_number", 1)),
             direction=str(event_dict.get("direction", "")),
-            entry_price=entry_price,
-            exit_price=exit_price,
+            entry_price=parse_decimal(event_dict.get("entry_price", "0")),
+            exit_price=parse_decimal(event_dict.get("exit_price", "0")),
             units=int(event_dict.get("units", 0)),
-            pnl=pnl,
-            pips=pips,
-            entry_time=entry_time,
-            exit_time=exit_time,
+            pnl=parse_decimal(event_dict.get("pnl", "0")),
+            pips=parse_decimal(event_dict.get("pips", "0")),
+            entry_time=parse_datetime(event_dict.get("entry_time")),
+            exit_time=parse_datetime(event_dict.get("exit_time")),
             retracement_count=int(event_dict.get("retracement_count", 1)),
             entry_id=event_dict.get("entry_id"),
             position_id=event_dict.get("position_id"),
@@ -931,33 +748,11 @@ class AddLayerEvent(StrategyEvent):
 
     @classmethod
     def from_dict(cls, event_dict: dict[str, Any]) -> "AddLayerEvent":
-        timestamp_raw = event_dict.get("timestamp")
-        timestamp = None
-        if timestamp_raw:
-            if isinstance(timestamp_raw, datetime):
-                timestamp = timestamp_raw
-            else:
-                try:
-                    timestamp = datetime.fromisoformat(str(timestamp_raw))
-                except (ValueError, TypeError):
-                    pass
-
-        add_time_raw = event_dict.get("add_time")
-        add_time = None
-        if add_time_raw:
-            if isinstance(add_time_raw, datetime):
-                add_time = add_time_raw
-            else:
-                try:
-                    add_time = datetime.fromisoformat(str(add_time_raw))
-                except (ValueError, TypeError):
-                    pass
-
         return cls(
             event_type=EventType.ADD_LAYER,
-            timestamp=timestamp,
+            timestamp=parse_datetime(event_dict.get("timestamp")),
             layer_number=int(event_dict.get("layer_number", 1)),
-            add_time=add_time,
+            add_time=parse_datetime(event_dict.get("add_time")),
         )
 
 
@@ -1025,45 +820,12 @@ class RemoveLayerEvent(StrategyEvent):
 
     @classmethod
     def from_dict(cls, event_dict: dict[str, Any]) -> "RemoveLayerEvent":
-        timestamp_raw = event_dict.get("timestamp")
-        timestamp = None
-        if timestamp_raw:
-            if isinstance(timestamp_raw, datetime):
-                timestamp = timestamp_raw
-            else:
-                try:
-                    timestamp = datetime.fromisoformat(str(timestamp_raw))
-                except (ValueError, TypeError):
-                    pass
-
-        add_time_raw = event_dict.get("add_time")
-        add_time = None
-        if add_time_raw:
-            if isinstance(add_time_raw, datetime):
-                add_time = add_time_raw
-            else:
-                try:
-                    add_time = datetime.fromisoformat(str(add_time_raw))
-                except (ValueError, TypeError):
-                    pass
-
-        remove_time_raw = event_dict.get("remove_time")
-        remove_time = None
-        if remove_time_raw:
-            if isinstance(remove_time_raw, datetime):
-                remove_time = remove_time_raw
-            else:
-                try:
-                    remove_time = datetime.fromisoformat(str(remove_time_raw))
-                except (ValueError, TypeError):
-                    pass
-
         return cls(
             event_type=EventType.REMOVE_LAYER,
-            timestamp=timestamp,
+            timestamp=parse_datetime(event_dict.get("timestamp")),
             layer_number=int(event_dict.get("layer_number", 1)),
-            add_time=add_time,
-            remove_time=remove_time,
+            add_time=parse_datetime(event_dict.get("add_time")),
+            remove_time=parse_datetime(event_dict.get("remove_time")),
         )
 
 
@@ -1136,31 +898,12 @@ class VolatilityLockEvent(StrategyEvent):
 
     @classmethod
     def from_dict(cls, event_dict: dict[str, Any]) -> "VolatilityLockEvent":
-        from decimal import Decimal as D
-
-        atr_value_raw = event_dict.get("atr_value")
-        atr_value = D(str(atr_value_raw)) if atr_value_raw else None
-
-        threshold_raw = event_dict.get("threshold")
-        threshold = D(str(threshold_raw)) if threshold_raw else None
-
-        timestamp_raw = event_dict.get("timestamp")
-        timestamp = None
-        if timestamp_raw:
-            if isinstance(timestamp_raw, datetime):
-                timestamp = timestamp_raw
-            else:
-                try:
-                    timestamp = datetime.fromisoformat(str(timestamp_raw))
-                except (ValueError, TypeError):
-                    pass
-
         return cls(
             event_type=EventType.VOLATILITY_LOCK,
-            timestamp=timestamp,
+            timestamp=parse_datetime(event_dict.get("timestamp")),
             reason=str(event_dict.get("reason", "")),
-            atr_value=atr_value,
-            threshold=threshold,
+            atr_value=parse_optional_decimal(event_dict.get("atr_value")),
+            threshold=parse_optional_decimal(event_dict.get("threshold")),
         )
 
 
@@ -1223,28 +966,12 @@ class VolatilityHedgeNeutralizeEvent(StrategyEvent):
 
     @classmethod
     def from_dict(cls, event_dict: dict[str, Any]) -> "VolatilityHedgeNeutralizeEvent":
-        from decimal import Decimal as D
-
-        atr_value_raw = event_dict.get("atr_value")
-        atr_value = D(str(atr_value_raw)) if atr_value_raw else None
-        threshold_raw = event_dict.get("threshold")
-        threshold = D(str(threshold_raw)) if threshold_raw else None
-        timestamp_raw = event_dict.get("timestamp")
-        timestamp = None
-        if timestamp_raw:
-            if isinstance(timestamp_raw, datetime):
-                timestamp = timestamp_raw
-            else:
-                try:
-                    timestamp = datetime.fromisoformat(str(timestamp_raw))
-                except (ValueError, TypeError):
-                    pass
         return cls(
             event_type=EventType.VOLATILITY_HEDGE_NEUTRALIZE,
-            timestamp=timestamp,
+            timestamp=parse_datetime(event_dict.get("timestamp")),
             reason=str(event_dict.get("reason", "")),
-            atr_value=atr_value,
-            threshold=threshold,
+            atr_value=parse_optional_decimal(event_dict.get("atr_value")),
+            threshold=parse_optional_decimal(event_dict.get("threshold")),
             hedge_instructions=list(event_dict.get("hedge_instructions", [])),
         )
 
@@ -1331,31 +1058,12 @@ class MarginProtectionEvent(StrategyEvent):
 
     @classmethod
     def from_dict(cls, event_dict: dict[str, Any]) -> "MarginProtectionEvent":
-        from decimal import Decimal as D
-
-        current_margin_raw = event_dict.get("current_margin")
-        current_margin = D(str(current_margin_raw)) if current_margin_raw else None
-
-        threshold_raw = event_dict.get("threshold")
-        threshold = D(str(threshold_raw)) if threshold_raw else None
-
-        timestamp_raw = event_dict.get("timestamp")
-        timestamp = None
-        if timestamp_raw:
-            if isinstance(timestamp_raw, datetime):
-                timestamp = timestamp_raw
-            else:
-                try:
-                    timestamp = datetime.fromisoformat(str(timestamp_raw))
-                except (ValueError, TypeError):
-                    pass
-
         return cls(
             event_type=EventType.MARGIN_PROTECTION,
-            timestamp=timestamp,
+            timestamp=parse_datetime(event_dict.get("timestamp")),
             reason=str(event_dict.get("reason", "")),
-            current_margin=current_margin,
-            threshold=threshold,
+            current_margin=parse_optional_decimal(event_dict.get("current_margin")),
+            threshold=parse_optional_decimal(event_dict.get("threshold")),
             positions_closed=event_dict.get("positions_closed"),
             units_to_close=event_dict.get("units_to_close"),
         )
@@ -1437,25 +1145,12 @@ class GenericStrategyEvent(StrategyEvent):
         try:
             event_type = EventType(event_type_str)
         except ValueError:
-            # If not a valid EventType, use the string as-is
             event_type = event_type_str
 
-        timestamp_raw = event_dict.get("timestamp")
-        timestamp = None
-        if timestamp_raw:
-            if isinstance(timestamp_raw, datetime):
-                timestamp = timestamp_raw
-            else:
-                try:
-                    timestamp = datetime.fromisoformat(str(timestamp_raw))
-                except (ValueError, TypeError):
-                    pass
-
-        # Extract data (everything except event_type and timestamp)
         data = {k: v for k, v in event_dict.items() if k not in {"event_type", "timestamp"}}
 
         return cls(
             event_type=event_type,
-            timestamp=timestamp,
+            timestamp=parse_datetime(event_dict.get("timestamp")),
             data=data,
         )

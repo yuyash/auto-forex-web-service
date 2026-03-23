@@ -65,7 +65,7 @@ class TestCandleDataViewValidation:
 class TestCandleDataViewNoAccount:
     """Tests for missing OANDA account."""
 
-    @patch("apps.market.views.candles.OandaAccounts")
+    @patch("apps.market.views.account_helpers.OandaAccounts")
     def test_no_account_returns_400(self, MockAccounts):
         MockAccounts.objects.filter.return_value.first.return_value = None
         MockAccounts.DoesNotExist = Exception
@@ -99,7 +99,7 @@ class TestCandleDataViewSuccess:
     """Tests for successful candle fetching."""
 
     @patch("apps.market.views.candles.v20")
-    @patch("apps.market.views.candles.OandaAccounts")
+    @patch("apps.market.views.account_helpers.OandaAccounts")
     def test_default_fetch_returns_candles(self, MockAccounts, mock_v20):
         account = MagicMock()
         account.api_hostname = "api-fxpractice.oanda.com"
@@ -138,7 +138,7 @@ class TestCandleDataViewSuccess:
         assert response.data["candles"][0]["open"] == 1.10000
 
     @patch("apps.market.views.candles.v20")
-    @patch("apps.market.views.candles.OandaAccounts")
+    @patch("apps.market.views.account_helpers.OandaAccounts")
     def test_skips_incomplete_candles(self, MockAccounts, mock_v20):
         account = MagicMock()
         account.api_hostname = "api-fxpractice.oanda.com"
@@ -165,7 +165,7 @@ class TestCandleDataViewSuccess:
         assert len(response.data["candles"]) == 0
 
     @patch("apps.market.views.candles.v20")
-    @patch("apps.market.views.candles.OandaAccounts")
+    @patch("apps.market.views.account_helpers.OandaAccounts")
     def test_oanda_bad_request_returns_400(self, MockAccounts, mock_v20):
         account = MagicMock()
         account.api_hostname = "api-fxpractice.oanda.com"
@@ -188,7 +188,7 @@ class TestCandleDataViewSuccess:
         assert response.status_code == http_status.HTTP_400_BAD_REQUEST
 
     @patch("apps.market.views.candles.v20")
-    @patch("apps.market.views.candles.OandaAccounts")
+    @patch("apps.market.views.account_helpers.OandaAccounts")
     def test_oanda_unauthorized_returns_502(self, MockAccounts, mock_v20):
         account = MagicMock()
         account.api_hostname = "api-fxpractice.oanda.com"
@@ -212,7 +212,7 @@ class TestCandleDataViewSuccess:
         assert response.data["error_code"] == "OANDA_AUTH_FAILED"
 
     @patch("apps.market.views.candles.v20")
-    @patch("apps.market.views.candles.OandaAccounts")
+    @patch("apps.market.views.account_helpers.OandaAccounts")
     def test_rate_limit_returns_429(self, MockAccounts, mock_v20):
         account = MagicMock()
         account.api_hostname = "api-fxpractice.oanda.com"
@@ -232,7 +232,7 @@ class TestCandleDataViewSuccess:
 
     @patch("apps.market.views.candles.datetime")
     @patch("apps.market.views.candles.v20")
-    @patch("apps.market.views.candles.OandaAccounts")
+    @patch("apps.market.views.account_helpers.OandaAccounts")
     def test_future_to_time_is_clamped_to_now(self, MockAccounts, mock_v20, mock_datetime):
         account = MagicMock()
         account.api_hostname = "api-fxpractice.oanda.com"
@@ -265,16 +265,17 @@ class TestCandleDataViewSuccess:
 
 
 class TestGetGranularitySeconds:
-    """Tests for _get_granularity_seconds."""
+    """Tests for _GRANULARITY_SECONDS lookup."""
 
     def test_known_granularities(self):
-        view = _build_view()
+        from apps.market.views.candles import _GRANULARITY_SECONDS
 
-        assert view._get_granularity_seconds("M1") == 60
-        assert view._get_granularity_seconds("H1") == 3600
-        assert view._get_granularity_seconds("D") == 86400
-        assert view._get_granularity_seconds("S5") == 5
+        assert _GRANULARITY_SECONDS["M1"] == 60
+        assert _GRANULARITY_SECONDS["H1"] == 3600
+        assert _GRANULARITY_SECONDS["D"] == 86400
+        assert _GRANULARITY_SECONDS["S5"] == 5
 
     def test_unknown_granularity_defaults_to_3600(self):
-        view = _build_view()
-        assert view._get_granularity_seconds("UNKNOWN") == 3600
+        from apps.market.views.candles import _GRANULARITY_SECONDS
+
+        assert _GRANULARITY_SECONDS.get("UNKNOWN", 3600) == 3600

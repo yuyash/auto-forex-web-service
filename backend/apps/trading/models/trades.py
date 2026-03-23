@@ -83,11 +83,6 @@ class Trade(models.Model):
         blank=True,
         help_text="Number of retracements in the layer at the time of this trade",
     )
-    description = models.TextField(
-        blank=True,
-        default="",
-        help_text="Strategy decision description (e.g., first layer take-profit, add position due to pip gap)",
-    )
     position = models.ForeignKey(
         "trading.Position",
         on_delete=models.SET_NULL,

@@ -11,22 +11,9 @@ import {
 } from './taskResourceQueries';
 import { usePollingPolicy } from './usePollingPolicy';
 import { useTaskDetail, useTaskList } from './useTaskCollections';
+import type { QueryStateResult } from './useTaskCollections';
 
-interface UseTradingTasksResult {
-  data: PaginatedResponse<TradingTask> | null;
-  isLoading: boolean;
-  error: Error | null;
-  refresh: () => Promise<unknown>;
-}
-
-interface UseTradingTaskResult {
-  data: TradingTask | null;
-  isLoading: boolean;
-  error: Error | null;
-  refresh: () => Promise<unknown>;
-}
-
-interface UseTradingTaskOptions {
+interface UseTaskOptions {
   enabled?: boolean;
   enablePolling?: boolean;
   pollingInterval?: number;
@@ -34,7 +21,7 @@ interface UseTradingTaskOptions {
 
 export function useTradingTasks(
   params?: TradingTaskListParams
-): UseTradingTasksResult {
+): QueryStateResult<PaginatedResponse<TradingTask>> {
   return useTaskList<PaginatedResponse<TradingTask>>(
     createTaskListQuery<TradingTask>(TaskType.TRADING, params)
   );
@@ -42,8 +29,8 @@ export function useTradingTasks(
 
 export function useTradingTask(
   id?: string,
-  options?: UseTradingTaskOptions
-): UseTradingTaskResult {
+  options?: UseTaskOptions
+): QueryStateResult<TradingTask> {
   const pollingPolicy = usePollingPolicy({
     enabled: Boolean(id) && options?.enablePolling === true,
     baseIntervalMs: options?.pollingInterval ?? 3000,

@@ -9,6 +9,7 @@ from apps.market.tasks.backtest import (
     BacktestTickPublisherRunner,
     publish_ticks_for_backtest,
 )
+from apps.market.tasks.load_data import load_daily_tick_data
 from apps.market.tasks.publisher import TickPublisherRunner, publish_oanda_ticks
 from apps.market.tasks.subscriber import TickSubscriberRunner, subscribe_ticks_to_db
 from apps.market.tasks.supervisor import TickSupervisorRunner, ensure_tick_pubsub_running
@@ -30,6 +31,7 @@ __all__: List[str] = [
     "supervisor_runner",
     # Task functions (for Celery autodiscovery)
     "ensure_tick_pubsub_running",
+    "load_daily_tick_data",
     "publish_oanda_ticks",
     "publish_ticks_for_backtest",
     "subscribe_ticks_to_db",

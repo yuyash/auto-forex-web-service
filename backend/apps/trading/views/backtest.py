@@ -19,6 +19,21 @@ from apps.trading.views.task_base import TaskViewSetBase
 logger: Logger = logging.getLogger(name=__name__)
 
 
+def _integrity_constraint_id(exc: IntegrityError) -> str:
+    """Extract the constraint name from an IntegrityError without leaking internals.
+
+    Checks the psycopg2 diagnostic first, then falls back to the first
+    exception arg (which Django uses to wrap the constraint name).
+    The return value is only used for ``in`` checks — never sent to clients.
+    """
+    pg_diag = getattr(getattr(exc, "__cause__", None), "diag", None)
+    name = getattr(pg_diag, "constraint_name", None)
+    if name:
+        return name
+    # Fallback: Django wraps the constraint name as the first arg.
+    return str(exc.args[0]) if exc.args else ""
+
+
 @extend_schema_view(
     list=extend_schema(tags=["Trading"]),
     create=extend_schema(tags=["Trading"], responses={201: BacktestTaskSerializer}),
@@ -98,7 +113,8 @@ class BacktestTaskViewSet(TaskViewSetBase):
             serializer.save(user=self.request.user)
         except IntegrityError as exc:
             logger.error("IntegrityError creating backtest task: %s", exc)
-            if "unique_user_backtest_task_name" in str(exc):
+            exc_text = _integrity_constraint_id(exc)
+            if "unique_user_backtest_task_name" in exc_text:
                 raise ValidationError(
                     {"name": ["A backtest task with this name already exists."]}
                 ) from exc

@@ -1,5 +1,6 @@
 """Views for strategy configuration management."""
 
+import logging
 from typing import cast
 from uuid import UUID
 
@@ -19,6 +20,22 @@ from apps.trading.serializers import (
 )
 from apps.trading.services.config_usage import list_configuration_tasks
 from apps.trading.views.pagination import StandardPagination
+
+logger = logging.getLogger(__name__)
+
+
+def _integrity_constraint_id(exc: IntegrityError) -> str:
+    """Extract the constraint name from an IntegrityError without leaking internals.
+
+    Checks the psycopg2 diagnostic first, then falls back to the first
+    exception arg (which Django uses to wrap the constraint name).
+    The return value is only used for ``in`` checks — never sent to clients.
+    """
+    pg_diag = getattr(getattr(exc, "__cause__", None), "diag", None)
+    name = getattr(pg_diag, "constraint_name", None)
+    if name:
+        return name
+    return str(exc.args[0]) if exc.args else ""
 
 
 class StrategyConfigView(generics.ListCreateAPIView):
@@ -84,7 +101,9 @@ class StrategyConfigView(generics.ListCreateAPIView):
         try:
             config = serializer.save()
         except IntegrityError as exc:
-            if "unique_user_config_name" in str(exc) or "duplicate key" in str(exc):
+            logger.warning("IntegrityError creating config: %s", exc)
+            exc_text = _integrity_constraint_id(exc)
+            if "unique_user_config_name" in exc_text or "duplicate key" in exc_text:
                 return Response(
                     {"name": ["A configuration with this name already exists"]},
                     status=status.HTTP_400_BAD_REQUEST,

@@ -12,6 +12,7 @@ import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1_000;
+const MAX_BACKOFF_MS = 30_000;
 
 interface RetryMeta {
   __retryCount?: number;
@@ -27,7 +28,7 @@ function getBackoffMs(
       return seconds * 1_000;
     }
   }
-  return INITIAL_BACKOFF_MS * Math.pow(2, attempt);
+  return Math.min(INITIAL_BACKOFF_MS * Math.pow(2, attempt), MAX_BACKOFF_MS);
 }
 
 function sleep(ms: number): Promise<void> {

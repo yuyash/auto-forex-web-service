@@ -197,6 +197,7 @@ class TradingTask(UUIDModel):
             models.Index(fields=["created_at"]),
             models.Index(fields=["execution_id"]),
             models.Index(fields=["status", "created_at"]),
+            models.Index(fields=["user", "-created_at"]),
         ]
         ordering = ["-created_at"]
 

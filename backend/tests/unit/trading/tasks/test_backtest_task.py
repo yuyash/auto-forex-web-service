@@ -8,7 +8,7 @@ from uuid import uuid4
 
 import pytest
 
-from apps.trading.enums import TaskStatus
+from apps.trading.enums import TaskStatus, TaskType
 
 
 class _DoesNotExist(Exception):
@@ -80,7 +80,7 @@ class TestRunBacktestTask:
         mock_model.objects.filter.return_value.update.return_value = 1
         mock_model.DoesNotExist = _DoesNotExist
         mock_exec.side_effect = RuntimeError("boom")
-        with patch("apps.trading.tasks.backtest.handle_exception") as mock_handle:
+        with patch("apps.trading.tasks.backtest.handle_task_exception") as mock_handle:
             with pytest.raises(RuntimeError, match="boom"):
                 run_backtest_task.__wrapped__(task.pk)
             mock_handle.assert_called_once()
@@ -122,19 +122,33 @@ class TestExecuteBacktest:
 
 class TestHandleExceptionBacktest:
     def test_with_task_none(self):
-        from apps.trading.tasks.backtest import handle_exception
+        from apps.trading.tasks.task_runner import handle_task_exception
 
-        handle_exception(uuid4(), None, RuntimeError("test"))
+        handle_task_exception(
+            task_id=uuid4(),
+            task=None,
+            error=RuntimeError("test"),
+            task_type=TaskType.BACKTEST,
+            task_label="Backtest",
+            component="test",
+        )
 
-    @patch("apps.trading.tasks.backtest.finalize_task_terminal_lifecycle")
+    @patch("apps.trading.tasks.task_runner.finalize_task_terminal_lifecycle")
     def test_with_task_updates_status(self, mock_finalize_terminal):
-        from apps.trading.tasks.backtest import handle_exception
+        from apps.trading.tasks.task_runner import handle_task_exception
 
         task_id = uuid4()
         execution_id = uuid4()
         task = MagicMock(pk=task_id, execution_id=execution_id)
         mock_finalize_terminal.return_value = 1
-        handle_exception(task_id, task, ValueError("bad"))
+        handle_task_exception(
+            task_id=task_id,
+            task=task,
+            error=ValueError("bad"),
+            task_type=TaskType.BACKTEST,
+            task_label="Backtest",
+            component="test",
+        )
         mock_finalize_terminal.assert_called_once()
 
 

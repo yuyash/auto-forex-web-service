@@ -129,10 +129,20 @@ class OandaAccounts(models.Model):
         self.api_token = encrypted_token.decode()
 
     def get_api_token(self) -> str:
+        """Decrypt the OANDA API token, trying fallback keys if needed."""
         encrypted = self.api_token.encode()
-        for cipher in self._get_decryption_ciphers():
+        for key_index, cipher in enumerate(self._get_decryption_ciphers()):
             try:
                 decrypted_token = cipher.decrypt(encrypted)
+                if key_index > 0:
+                    import logging
+
+                    logging.getLogger(__name__).info(
+                        "OANDA token for account %s decrypted with fallback key index %d "
+                        "— consider re-encrypting with the primary key",
+                        self.account_id,
+                        key_index,
+                    )
                 return decrypted_token.decode().strip()
             except InvalidToken:
                 continue

@@ -3,6 +3,11 @@ services:
   postgres:
     image: postgres:17-alpine
     container_name: postgres
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
     environment:
       POSTGRES_DB: auto-forex
       POSTGRES_USER: postgres
@@ -25,6 +30,11 @@ services:
   redis:
     image: redis:7-alpine
     container_name: redis
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
     command: >
       sh -c "
       if [ -n \"$${REDIS_PASSWORD}\" ]; then
@@ -59,6 +69,11 @@ services:
   backend:
     image: ${DOCKERHUB_USERNAME}/forex-trading-backend:latest
     container_name: backend
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '2.0'
     depends_on:
       postgres:
         condition: service_healthy
@@ -107,6 +122,11 @@ services:
   celery:
     image: ${DOCKERHUB_USERNAME}/forex-trading-backend:latest
     container_name: celery
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '4.0'
     depends_on:
       - backend
       - redis
@@ -126,14 +146,18 @@ services:
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key required}
       OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:?OANDA token encryption key required}
+      # Daily tick data loading (optional — task skips if DATABASE/TABLE are empty)
+      LOAD_DATA_DATABASE: ${LOAD_DATA_DATABASE:-}
+      LOAD_DATA_TABLE: ${LOAD_DATA_TABLE:-}
+      LOAD_DATA_INSTRUMENT: ${LOAD_DATA_INSTRUMENT:-C:USD-JPY}
+      LOAD_DATA_AWS_PROFILE: ${LOAD_DATA_AWS_PROFILE:-}
+      LOAD_DATA_ROLE_ARN: ${LOAD_DATA_ROLE_ARN:-}
+      LOAD_DATA_OUTPUT_BUCKET: ${LOAD_DATA_OUTPUT_BUCKET:-}
     volumes:
       # See note in backend service: avoid shadowing the Django `config` package.
       - ./logs:/app/logs
       - ${HOME}/.aws:/root/.aws:ro
-    command: celery -A config worker -l info --concurrency=8 -Q default,trading,market,backtest,system
-    mem_limit: 6g
-    memswap_limit: 8g
-    oom_score_adj: -500
+    command: celery -A config worker -l info --concurrency=8 --max-tasks-per-child=50 -Q default,trading,market,backtest,system
     restart: unless-stopped
     networks:
       - forex_network

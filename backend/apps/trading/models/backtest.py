@@ -159,6 +159,7 @@ class BacktestTask(UUIDModel):
             models.Index(fields=["user", "config"]),
             models.Index(fields=["execution_id"]),
             models.Index(fields=["status", "created_at"]),
+            models.Index(fields=["user", "-created_at"]),
         ]
         constraints = [
             models.UniqueConstraint(

@@ -13,7 +13,7 @@ It provides real-time market data streaming, modular strategy execution, positio
 
 ```
 .
-├── backend/              # Django 5.2 LTS application (REST API, WebSocket, Celery workers)
+├── backend/              # Django 5.2 LTS application (REST API, Celery workers)
 ├── frontend/             # React 19 + TypeScript + Vite SPA
 ├── nginx/                # Reverse proxy configs (dev & prod Dockerfiles, conf.d/)
 ├── docs/                 # Generated OpenAPI schema (openapi.json), GitHub Pages API docs
@@ -21,7 +21,7 @@ It provides real-time market data streaming, modular strategy execution, positio
 ├── docker-compose.prod.yaml  # Production stack (pulls pre-built images from DockerHub)
 ├── .github/              # GitHub Actions workflows & Dependabot
 ├── .pre-commit-config.yaml
-├── .env.example          # Secrets-only template (DB_PASSWORD, SECRET_KEY, JWT_SECRET_KEY, REDIS_PASSWORD)
+├── .env.example          # Secrets and optional config (DB, JWT, Redis, Athena data loading)
 └── DEVELOPMENT.md        # Detailed local & Docker dev setup guide
 ```
 
@@ -32,8 +32,8 @@ The system runs as a set of Docker containers on a single host:
 | Service     | Role                                                  |
 | ----------- | ----------------------------------------------------- |
 | nginx       | Reverse proxy, SSL termination (prod), static files   |
-| backend     | Django + Daphne (ASGI) — REST API & WebSocket server  |
-| celery      | Async task workers (queues: default, trading, market) |
+| backend     | Django + Daphne (ASGI) — REST API server              |
+| celery      | Async task workers (queues: default, trading, market, backtest, system) |
 | celery-beat | Periodic task scheduler (django-celery-beat)          |
 | frontend    | React SPA served by its own Nginx container           |
 | postgres    | PostgreSQL 17                                         |
@@ -148,6 +148,26 @@ On every push (pre-push stage):
 | `build-and-deploy.yml` | Push/PR → main, develop         | Build multi-arch Docker images, push to DockerHub, deploy to production on `main` push                     |
 | `version-bump.yml`     | Push → main                     | Auto-bump version (major/minor/patch) from conventional commits, create PR                                 |
 | `api-docs.yml`         | Push → main (API-related paths) | Generate OpenAPI schema, deploy Swagger UI to GitHub Pages                                                 |
+
+### Periodic Tasks (Celery Beat)
+
+| Task                              | Schedule         | Queue    | Description                                                    |
+| --------------------------------- | ---------------- | -------- | -------------------------------------------------------------- |
+| `recover_orphaned_tasks`          | Every 5 minutes  | system   | Detect and re-queue tasks stuck in RUNNING/STARTING            |
+| `cleanup_expired_refresh_tokens`  | Every hour       | default  | Remove expired JWT refresh tokens                              |
+| `load_daily_tick_data`            | Daily at 02:00 UTC | market | Fetch previous day's tick data from Athena (if configured)     |
+
+The `load_daily_tick_data` task is opt-in: it runs only when `LOAD_DATA_DATABASE` and `LOAD_DATA_TABLE` are set in the environment. See `.env.example` for all available options. It can also be triggered manually:
+
+```bash
+# Via management command (specific date range)
+python manage.py load_data --start 2026-03-22 --end 2026-03-22 \
+  --database mydb --table mytable --instrument C:USD-JPY
+
+# Via Celery (fetches yesterday's data)
+docker compose exec celery python -c \
+  "from apps.market.tasks import load_daily_tick_data; load_daily_tick_data.delay()"
+```
 
 ## Commit and Push
 

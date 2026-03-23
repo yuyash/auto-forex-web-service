@@ -5,6 +5,7 @@ from django.test import RequestFactory
 from unittest.mock import MagicMock, patch
 
 from apps.accounts.middlewares.logging import HTTPAccessLoggingMiddleware
+from apps.accounts.middlewares.utils import get_client_ip
 
 
 class TestHTTPAccessLoggingMiddleware:
@@ -22,25 +23,19 @@ class TestHTTPAccessLoggingMiddleware:
 
     def test_get_client_ip_with_x_forwarded_for(self) -> None:
         """Test extracting client IP from X-Forwarded-For header."""
-        get_response = MagicMock()
-        middleware = HTTPAccessLoggingMiddleware(get_response)
-
         request = MagicMock()
         request.META = {"HTTP_X_FORWARDED_FOR": "203.0.113.1, 198.51.100.1"}
 
-        ip = middleware._get_client_ip(request)
+        ip = get_client_ip(request)
 
         assert ip == "203.0.113.1"
 
     def test_get_client_ip_without_x_forwarded_for(self) -> None:
         """Test extracting client IP from REMOTE_ADDR."""
-        get_response = MagicMock()
-        middleware = HTTPAccessLoggingMiddleware(get_response)
-
         request = MagicMock()
         request.META = {"REMOTE_ADDR": "192.168.1.1"}
 
-        ip = middleware._get_client_ip(request)
+        ip = get_client_ip(request)
 
         assert ip == "192.168.1.1"
 

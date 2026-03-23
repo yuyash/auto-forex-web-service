@@ -34,6 +34,10 @@ ORPHAN_HEARTBEAT_THRESHOLD = timedelta(minutes=5)
 # Statuses that indicate a task *should* be actively running.
 _ACTIVE_STATUSES = [TaskStatus.RUNNING, TaskStatus.STARTING]
 
+# Maximum number of orphaned tasks to process per recovery run to avoid
+# unbounded memory usage if many tasks are stuck.
+_MAX_RECOVERY_BATCH = 100
+
 
 def _instance_key(task: BacktestTask | TradingTask) -> str:
     return f"{task.pk}:{task.execution_id}"
@@ -65,18 +69,28 @@ def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
     service = TaskService()
     counts: dict[str, int] = {"backtest": 0, "trading": 0}
 
-    # --- Backtest tasks ---
-    orphaned_backtest = BacktestTask.objects.filter(status__in=_ACTIVE_STATUSES)
+    # --- Backtest tasks (bounded queryset) ---
+    orphaned_backtest = list(
+        BacktestTask.objects.filter(
+            status__in=_ACTIVE_STATUSES,
+        ).order_by("started_at")[:_MAX_RECOVERY_BATCH]
+    )
+    backtest_heartbeats = _prefetch_heartbeats(orphaned_backtest, "trading.tasks.run_backtest_task")
     for task in orphaned_backtest:
-        if not _is_orphaned(task, "trading.tasks.run_backtest_task", cutoff):
+        if not _is_orphaned_prefetched(task, backtest_heartbeats, cutoff):
             continue
         if _recover_task(task, TaskType.BACKTEST, service, source):
             counts["backtest"] += 1
 
-    # --- Trading tasks ---
-    orphaned_trading = TradingTask.objects.filter(status__in=_ACTIVE_STATUSES)
+    # --- Trading tasks (bounded queryset) ---
+    orphaned_trading = list(
+        TradingTask.objects.filter(
+            status__in=_ACTIVE_STATUSES,
+        ).order_by("started_at")[:_MAX_RECOVERY_BATCH]
+    )
+    trading_heartbeats = _prefetch_heartbeats(orphaned_trading, "trading.tasks.run_trading_task")
     for task in orphaned_trading:
-        if not _is_orphaned(task, "trading.tasks.run_trading_task", cutoff):
+        if not _is_orphaned_prefetched(task, trading_heartbeats, cutoff):
             continue
         if _recover_task(task, TaskType.TRADING, service, source):
             counts["trading"] += 1
@@ -84,11 +98,14 @@ def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
     total = counts["backtest"] + counts["trading"]
     if total:
         logger.warning(
-            f"[RECOVERY:{source}] Recovered {total} orphaned task(s) "
-            f"(backtest={counts['backtest']}, trading={counts['trading']})"
+            "[RECOVERY:%s] Recovered %d orphaned task(s) (backtest=%d, trading=%d)",
+            source,
+            total,
+            counts["backtest"],
+            counts["trading"],
         )
     else:
-        logger.info(f"[RECOVERY:{source}] No orphaned tasks found")
+        logger.info("[RECOVERY:%s] No orphaned tasks found", source)
 
     return counts
 
@@ -96,6 +113,50 @@ def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+
+def _prefetch_heartbeats(
+    tasks: list[BacktestTask | TradingTask],
+    celery_task_name: str,
+) -> dict[str, CeleryTaskStatus]:
+    """Fetch all CeleryTaskStatus rows for a batch of tasks in one query."""
+    if not tasks:
+        return {}
+    keys = [_instance_key(t) for t in tasks]
+    return {
+        cts.instance_key: cts
+        for cts in CeleryTaskStatus.objects.filter(
+            task_name=celery_task_name,
+            instance_key__in=keys,
+        )
+    }
+
+
+def _is_orphaned_prefetched(
+    task: BacktestTask | TradingTask,
+    heartbeats: dict[str, CeleryTaskStatus],
+    cutoff: datetime,
+) -> bool:
+    """Return True if the task has no recent heartbeat (using prefetched data)."""
+    cts = heartbeats.get(_instance_key(task))
+
+    if cts is None:
+        logger.info(
+            "[RECOVERY] No CeleryTaskStatus row for task_id=%s — treating as orphaned",
+            task.pk,
+        )
+        return True
+
+    if cts.last_heartbeat_at is None or cts.last_heartbeat_at < cutoff:
+        logger.info(
+            "[RECOVERY] Stale heartbeat for task_id=%s — last_heartbeat=%s, cutoff=%s",
+            task.pk,
+            cts.last_heartbeat_at,
+            cutoff,
+        )
+        return True
+
+    return False
 
 
 def _is_orphaned(
@@ -110,22 +171,23 @@ def _is_orphaned(
     ).first()
 
     if cts is None:
-        # No tracking row at all — definitely orphaned.
         logger.info(
-            f"[RECOVERY] No CeleryTaskStatus row for task_id={task.pk} "
-            f"({celery_task_name}) — treating as orphaned"
+            "[RECOVERY] No CeleryTaskStatus row for task_id=%s (%s) — treating as orphaned",
+            task.pk,
+            celery_task_name,
         )
         return True
 
     if cts.last_heartbeat_at is None or cts.last_heartbeat_at < cutoff:
         logger.info(
-            f"[RECOVERY] Stale heartbeat for task_id={task.pk} "
-            f"({celery_task_name}) — last_heartbeat={cts.last_heartbeat_at}, "
-            f"cutoff={cutoff}"
+            "[RECOVERY] Stale heartbeat for task_id=%s (%s) — last_heartbeat=%s, cutoff=%s",
+            task.pk,
+            celery_task_name,
+            cts.last_heartbeat_at,
+            cutoff,
         )
         return True
 
-    # Heartbeat is recent — task is still alive.
     return False
 
 
@@ -135,16 +197,15 @@ def _recover_task(
     service: Any,
     source: str,
 ) -> bool:
-    """Reset an orphaned task to CREATED and re-submit it.
-
-    Returns:
-        True if the task was actually recovered, False if another process
-        already handled it.
-    """
+    """Reset an orphaned task to CREATED and re-submit it."""
     logger.warning(
-        f"[RECOVERY:{source}] Recovering orphaned task - "
-        f"task_id={task.pk}, type={task_type}, "
-        f"old_status={task.status}, execution_id={task.execution_id}"
+        "[RECOVERY:%s] Recovering orphaned task - task_id=%s, type=%s, "
+        "old_status=%s, execution_id=%s",
+        source,
+        task.pk,
+        task_type,
+        task.status,
+        task.execution_id,
     )
 
     model_class = type(task)
@@ -166,7 +227,7 @@ def _recover_task(
     )
 
     if rows == 0:
-        logger.info(f"[RECOVERY:{source}] Task already transitioned - task_id={task.pk}")
+        logger.info("[RECOVERY:%s] Task already transitioned - task_id=%s", source, task.pk)
         return False
 
     CeleryTaskStatus.objects.filter(
@@ -189,10 +250,10 @@ def _recover_task(
     task.refresh_from_db()
     try:
         service.start_task(task)
-        logger.info(f"[RECOVERY:{source}] Task re-submitted - task_id={task.pk}")
+        logger.info("[RECOVERY:%s] Task re-submitted - task_id=%s", source, task.pk)
         return True
     except Exception:
-        logger.exception(f"[RECOVERY:{source}] Failed to re-submit task - task_id={task.pk}")
+        logger.exception("[RECOVERY:%s] Failed to re-submit task - task_id=%s", source, task.pk)
         model_class.objects.filter(pk=task.pk).update(
             status=TaskStatus.FAILED,
             error_message=f"Recovery failed after crash (source={source})",
@@ -202,7 +263,17 @@ def _recover_task(
 
 def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, source: str) -> bool:
     """Resume an orphaned trading task in the same execution run."""
-    # Ensure stale heartbeat rows from the dead worker do not affect the resumed run.
+    # Optimistic lock: verify the task is still in a recoverable state before
+    # proceeding.  Without this, concurrent recovery runs could both attempt
+    # to resume the same task.
+    rows = TradingTask.objects.filter(
+        pk=task.pk,
+        status__in=_ACTIVE_STATUSES,
+    ).update(status=TaskStatus.STARTING)
+    if rows == 0:
+        logger.info("[RECOVERY:%s] Trading task already transitioned - task_id=%s", source, task.pk)
+        return False
+
     CeleryTaskStatus.objects.filter(
         task_name="trading.tasks.run_trading_task",
         instance_key=_instance_key(task),
@@ -243,7 +314,7 @@ def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, sou
 
 
 # ---------------------------------------------------------------------------
-# Celery Beat task (方法3)
+# Celery Beat task
 # ---------------------------------------------------------------------------
 
 
