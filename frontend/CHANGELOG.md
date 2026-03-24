@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.15.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.15.3...frontend-v1.15.4) (2026-03-24)
+
+
+### Bug Fixes
+
+* **strategy:** correct snowball cycle grouping and remove duplicate i… ([#171](https://github.com/yuyash/auto-forex-web-service/issues/171)) ([967e3d7](https://github.com/yuyash/auto-forex-web-service/commit/967e3d719d16cbc62db6088d6a1750ec785f2869))
+* **strategy:** correct snowball cycle grouping and remove duplicate initial entries ([967e3d7](https://github.com/yuyash/auto-forex-web-service/commit/967e3d719d16cbc62db6088d6a1750ec785f2869))
+
 ## [1.15.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.15.2...frontend-v1.15.3) (2026-03-24)
 
 
