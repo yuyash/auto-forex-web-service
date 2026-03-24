@@ -73,7 +73,7 @@ class QueryFieldSpec:
         if self.kind == "uuid":
             return _parse_execution_id_value(value)
         if self.kind == "int":
-            default = self.default if isinstance(self.default, int) else 1
+            default = self.default if isinstance(self.default, int) else None
             return _parse_positive_int(
                 value,
                 field_name=self.name,
@@ -211,6 +211,7 @@ UNTIL_SPEC = QueryFieldSpec(
 INTERVAL_SPEC = QueryFieldSpec(
     name="interval",
     kind="int",
+    default=1,
     max_value=1440,
     help_text=(
         "Aggregation interval in minutes. Default 1. When greater than 1, "
@@ -715,9 +716,9 @@ def _parse_positive_int(
     value: str | None,
     *,
     field_name: str,
-    default: int,
+    default: int | None,
     max_value: int | None = None,
-) -> int:
+) -> int | None:
     if value is None:
         return default
     try:
