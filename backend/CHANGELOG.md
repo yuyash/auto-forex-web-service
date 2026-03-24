@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.15.4...backend-v1.16.0) (2026-03-24)
+
+
+### Features
+
+* **strategy:** add display cycle splitting and OHLC chart visualization ([#179](https://github.com/yuyash/auto-forex-web-service/issues/179)) ([20f97ab](https://github.com/yuyash/auto-forex-web-service/commit/20f97ab49f1f48126bf51cd35118b511b98e7192))
+
 ## [1.15.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.15.3...backend-v1.15.4) (2026-03-24)
 
 
