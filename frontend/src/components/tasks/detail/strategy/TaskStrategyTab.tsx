@@ -668,7 +668,6 @@ export function TaskStrategyTab({
                     stepCount: run.steps.length,
                   })}
                 </Typography>
-                <StrategyRunMiniChart steps={run.steps} compact t={t} />
               </Box>
             ))}
           </Box>
@@ -733,7 +732,15 @@ export function TaskStrategyTab({
                 >
                   {t('common:strategyVisualization.singleRunFlowChartHelp')}
                 </Typography>
-                <StrategyRunMiniChart steps={selectedRun.steps} t={t} />
+                <Box sx={{ overflowX: 'auto' }}>
+                  <Box
+                    sx={{
+                      minWidth: Math.max(selectedRun.steps.length * 80, 300),
+                    }}
+                  >
+                    <StrategyRunMiniChart steps={selectedRun.steps} t={t} />
+                  </Box>
+                </Box>
               </Paper>
 
               <Typography variant="subtitle1" sx={{ mb: 1 }}>
