@@ -58,8 +58,6 @@ class JWTService:
 
         payload = {
             "user_id": user.id,
-            "email": user.email,
-            "username": user.username,
             "is_staff": user.is_staff,
             "iat": int(now.timestamp()),
             "exp": int(expiration.timestamp()),

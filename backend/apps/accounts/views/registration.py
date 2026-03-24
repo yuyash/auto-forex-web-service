@@ -11,6 +11,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.middlewares.utils import get_client_ip
 from apps.accounts.models import PublicAccountSettings
 from apps.accounts.serializers import UserRegistrationSerializer
 from apps.accounts.services.email import AccountEmailService
@@ -47,15 +48,6 @@ class UserRegistrationView(APIView):
             base_url = f"{scheme}://{host}"
 
         return f"{base_url}/verify-email?token={token}"
-
-    def get_client_ip(self, request: Request) -> str:
-        """Get client IP address from request."""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip: str = x_forwarded_for.split(",")[0].strip()
-        else:
-            ip = str(request.META.get("REMOTE_ADDR", ""))
-        return ip
 
     @extend_schema(
         operation_id="auth_register",
@@ -98,13 +90,13 @@ class UserRegistrationView(APIView):
                 event_type="registration_blocked",
                 description="Registration attempt blocked because registration is disabled",
                 severity="warning",
-                ip_address=self.get_client_ip(request),
+                ip_address=get_client_ip(request),
                 user_agent=request.META.get("HTTP_USER_AGENT", ""),
                 details={"status_code": status.HTTP_503_SERVICE_UNAVAILABLE},
             )
             logger.warning(
                 "Registration attempt blocked - registration is disabled",
-                extra={"ip_address": self.get_client_ip(request)},
+                extra={"ip_address": get_client_ip(request)},
             )
             return Response(
                 {"error": "Registration is currently disabled."},
@@ -119,7 +111,7 @@ class UserRegistrationView(APIView):
             self.security_events.log_account_created(
                 username=user.username,
                 email=user.email,
-                ip_address=self.get_client_ip(request),
+                ip_address=get_client_ip(request),
             )
 
             token = user.generate_verification_token()
@@ -162,7 +154,7 @@ class UserRegistrationView(APIView):
             event_type="registration_failed",
             description="Registration attempt failed validation",
             severity="warning",
-            ip_address=self.get_client_ip(request),
+            ip_address=get_client_ip(request),
             user_agent=request.META.get("HTTP_USER_AGENT", ""),
             details={"status_code": status.HTTP_400_BAD_REQUEST},
         )

@@ -67,47 +67,6 @@ class SecurityMonitoringMiddleware:
         is_blocked, _ = RateLimiter.is_ip_blocked(ip_address)
         return is_blocked
 
-    def _create_user_session(
-        self,
-        user: User,
-        ip_address: str,
-        user_agent: str,
-    ) -> None:
-        """Create user session record."""
-        session_key = f"{user.pk}_{ip_address}_{timezone.now().timestamp()}"
-
-        UserSession.objects.create(
-            user=user,
-            session_key=session_key,
-            ip_address=ip_address,
-            user_agent=user_agent,
-        )
-
-        logger.info(
-            "Created session for user %s from %s",
-            user.email,
-            ip_address,
-            extra={
-                "user_id": user.pk,
-                "email": user.email,
-                "ip_address": ip_address,
-            },
-        )
-
-    def _create_or_update_user_session(
-        self,
-        user: User,
-        ip_address: str,
-        user_agent: str,
-    ) -> None:
-        """Create a user session record if one does not already exist."""
-        existing_session = UserSession.objects.filter(
-            user=user, ip_address=ip_address, is_active=True
-        ).exists()
-
-        if not existing_session:
-            self._create_user_session(user, ip_address, user_agent)
-
     def _create_or_update_user_session(
         self,
         user: User,

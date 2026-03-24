@@ -10,6 +10,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.middlewares.utils import get_client_ip
 from apps.accounts.models import User, UserSession
 from apps.accounts.services.events import SecurityEventService
 from apps.accounts.services.jwt import JWTService
@@ -33,15 +34,6 @@ class UserLogoutView(APIView):
         """Initialize view with security event service."""
         super().__init__(**kwargs)
         self.security_events = SecurityEventService()
-
-    def get_client_ip(self, request: Request) -> str:
-        """Get client IP address from request."""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip: str = x_forwarded_for.split(",")[0].strip()
-        else:
-            ip = str(request.META.get("REMOTE_ADDR", ""))
-        return ip
 
     @extend_schema(
         operation_id="auth_logout",
@@ -74,7 +66,7 @@ class UserLogoutView(APIView):
             return clear_refresh_cookie(response)
         auth_user = cast(User, user_obj)
 
-        ip_address = self.get_client_ip(request)
+        ip_address = get_client_ip(request)
 
         active_sessions = UserSession.objects.filter(user=auth_user, is_active=True)
         for session in active_sessions:
