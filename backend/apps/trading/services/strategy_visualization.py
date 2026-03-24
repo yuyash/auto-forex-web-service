@@ -45,6 +45,77 @@ class VisualizationEvent:
     details: dict[str, Any]
 
 
+def _build_groups_from_parent_chain(
+    events: list[VisualizationEvent],
+) -> dict[int, list[VisualizationEvent]]:
+    """Rebuild groups by walking parent_entry_id chains to find the root.
+
+    The root of a chain is an entry whose parent_entry_id is None (i.e. an
+    Initial Entry or a trend re-entry that starts a new cycle).  Every event
+    that can be traced back to the same root via parent_entry_id belongs to
+    the same group.
+
+    For trend re-entries (basket=trend, parent_entry_id=None) we need to
+    decide whether they start a new group or belong to an existing one.
+    A trend re-entry belongs to an existing group when there are still open
+    counter entries whose chain traces back to a *different* root in the
+    same direction — but in the snowball model, trend re-entries always
+    start a new group because the previous trend entry was closed (TP).
+
+    However, the *counter* entries that were opened while the old trend
+    entry was alive should stay in the old group.  The parent_entry_id
+    chain already handles this correctly: counter entries point back to
+    the trend entry (or to each other) that was alive when they were
+    created.
+
+    Close events share the same entry_id as the open event they close,
+    so they belong to the same group as the corresponding open event.
+    """
+    # Map entry_id -> root entry_id (the top of the parent chain)
+    entry_to_root: dict[int, int] = {}
+    # Map entry_id -> parent_entry_id for chain walking
+    parent_map: dict[int, int | None] = {}
+
+    # First pass: build parent_map from open events
+    for event in events:
+        if event.event_type == "open_position" and event.entry_id is not None:
+            parent_map[event.entry_id] = event.parent_entry_id
+
+    # Walk chains to find roots
+    def find_root(eid: int) -> int:
+        if eid in entry_to_root:
+            return entry_to_root[eid]
+        visited = [eid]
+        current: int = eid
+        while parent_map.get(current) is not None:
+            current = parent_map[current]  # type: ignore[assignment]
+            if current in entry_to_root:
+                root = entry_to_root[current]
+                for v in visited:
+                    entry_to_root[v] = root
+                return root
+            visited.append(current)
+        # current is the root
+        for v in visited:
+            entry_to_root[v] = current
+        return current
+
+    for eid in parent_map:
+        find_root(eid)
+
+    # Group events by root entry_id
+    groups: dict[int, list[VisualizationEvent]] = defaultdict(list)
+    for event in events:
+        if event.entry_id is not None and event.entry_id in entry_to_root:
+            root = entry_to_root[event.entry_id]
+            groups[root].append(event)
+        elif event.entry_id is not None:
+            # Open event with no parent chain (shouldn't happen, but be safe)
+            groups[event.entry_id].append(event)
+
+    return dict(groups)
+
+
 class StrategyVisualizationService:
     """Build strategy visualization responses for task detail pages."""
 
@@ -83,24 +154,46 @@ class StrategyVisualizationService:
         )
 
         normalized = [self._normalize_event(e) for e in trading_events + strategy_events]
-        grouped = [event for event in normalized if event.visual_group_id]
-        if not grouped:
-            return {
-                **self._unsupported(strategy_type=strategy_type),
-                "message": (
-                    "Strategy visualization is unavailable for executions recorded "
-                    "before the visualization schema update."
-                ),
+
+        # Rebuild groups from parent_entry_id chains instead of visual_group_id
+        chain_groups = _build_groups_from_parent_chain(normalized)
+        if not chain_groups:
+            # Fallback: try legacy visual_group_id grouping
+            grouped = [event for event in normalized if event.visual_group_id]
+            if not grouped:
+                return {
+                    **self._unsupported(strategy_type=strategy_type),
+                    "message": (
+                        "Strategy visualization is unavailable for executions recorded "
+                        "before the visualization schema update."
+                    ),
+                }
+            by_group: dict[str, list[VisualizationEvent]] = defaultdict(list)
+            for event in grouped:
+                by_group[event.visual_group_id].append(event)
+            chain_groups = {
+                int(gid) if gid.isdigit() else hash(gid): evts for gid, evts in by_group.items()
             }
 
-        by_group: dict[str, list[VisualizationEvent]] = defaultdict(list)
-        for event in grouped:
-            by_group[event.visual_group_id].append(event)
+        # Sort groups by start time and assign sequential group_id
+        sorted_roots = sorted(
+            chain_groups.keys(),
+            key=lambda root: min(
+                (e.event_timestamp or e.created_at for e in chain_groups[root]),
+                default=datetime.min,
+            ),
+        )
 
-        groups = [
-            self._build_snowball_group(group_id=group_id, events=events, task=task)
-            for group_id, events in by_group.items()
-        ]
+        groups = []
+        for seq, root_eid in enumerate(sorted_roots, start=1):
+            group = self._build_snowball_group(
+                group_id=str(seq),
+                root_entry_id=root_eid,
+                events=chain_groups[root_eid],
+                task=task,
+            )
+            groups.append(group)
+
         if root_entry_id is not None:
             groups = [
                 group
@@ -161,6 +254,7 @@ class StrategyVisualizationService:
         self,
         *,
         group_id: str,
+        root_entry_id: int,
         events: list[VisualizationEvent],
         task: Any,
     ) -> dict[str, Any]:
@@ -170,11 +264,15 @@ class StrategyVisualizationService:
         )
         first = ordered[0]
         last = ordered[-1]
+
+        # The root event is the Initial Entry (the one whose entry_id == root_entry_id)
         root_event = next(
             (
                 event
                 for event in ordered
-                if event.entry_id is not None and event.entry_id == event.root_entry_id
+                if event.entry_id is not None
+                and event.entry_id == root_entry_id
+                and event.event_type == "open_position"
             ),
             first,
         )
@@ -182,7 +280,7 @@ class StrategyVisualizationService:
         root_closed = any(
             event.event_type == "close_position"
             and event.entry_id is not None
-            and event.entry_id == root_event.root_entry_id
+            and event.entry_id == root_entry_id
             for event in ordered
         )
         intervened = any(
@@ -210,7 +308,7 @@ class StrategyVisualizationService:
 
         return {
             "group_id": group_id,
-            "root_entry_id": root_event.root_entry_id,
+            "root_entry_id": root_entry_id,
             "started_at": _dt_to_str(first.event_timestamp or first.created_at),
             "ended_at": _dt_to_str(last.event_timestamp or last.created_at)
             if root_closed or intervened
