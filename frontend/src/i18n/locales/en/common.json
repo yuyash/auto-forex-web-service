@@ -141,6 +141,8 @@
     "runTypeHelp": "Displayed cycles are reconstructed into separate trend and counter cycles. One Initial Entry parent group can produce multiple cycles.",
     "sortOldest": "Oldest First",
     "sortNewest": "Newest First",
+    "filterTrendOnly": "Trend Only",
+    "filterCounterOnly": "Counter Only",
     "runMeta": "root entry id {{rootEntryId}} / {{stepCount}} steps",
     "selectedRunHelp": "Root entry id is {{rootEntryId}}. The left list is sorted by start time descending, not by entry id.",
     "trendRunType": "Trend Cycle",
