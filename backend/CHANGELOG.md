@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.15.0...backend-v1.15.1) (2026-03-24)
+
+
+### Bug Fixes
+
+* resolve backend code quality issues ([#160](https://github.com/yuyash/auto-forex-web-service/issues/160)) ([def2e22](https://github.com/yuyash/auto-forex-web-service/commit/def2e22766e4192779932619406516f10ffc42b6))
+
 ## [1.15.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.14.6...backend-v1.15.0) (2026-03-23)
 
 
