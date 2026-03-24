@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -443,6 +443,39 @@ export function TaskStrategyTab({
 
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(360);
+  const isDragging = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleResizeStart = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      isDragging.current = true;
+      const startX = e.clientX;
+      const startWidth = sidebarWidth;
+
+      const onMove = (ev: PointerEvent) => {
+        if (!isDragging.current) return;
+        const containerWidth =
+          containerRef.current?.getBoundingClientRect().width ?? 800;
+        const newWidth = Math.min(
+          Math.max(startWidth + (ev.clientX - startX), 240),
+          containerWidth * 0.6
+        );
+        setSidebarWidth(newWidth);
+      };
+
+      const onUp = () => {
+        isDragging.current = false;
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+      };
+
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    },
+    [sidebarWidth]
+  );
 
   const displayedRuns = useMemo(
     () => (sortOrder === 'asc' ? displayRuns : [...displayRuns].reverse()),
@@ -542,14 +575,28 @@ export function TaskStrategyTab({
       </Typography>
 
       <Box
+        ref={containerRef}
         sx={{
           display: 'grid',
-          gap: 2,
-          gridTemplateColumns: { xs: '1fr', lg: '360px minmax(0,1fr)' },
+          gap: 0,
+          gridTemplateColumns: {
+            xs: '1fr',
+            lg: `${sidebarWidth}px 8px minmax(0,1fr)`,
+          },
+          alignItems: 'start',
         }}
       >
-        <Paper variant="outlined">
-          <Box sx={{ p: 2 }}>
+        <Paper
+          variant="outlined"
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            maxHeight: { lg: 'calc(100vh - 200px)' },
+            position: { lg: 'sticky' },
+            top: { lg: 16 },
+          }}
+        >
+          <Box sx={{ p: 2, flexShrink: 0 }}>
             <Typography variant="subtitle1">{t('common:strategy')}</Typography>
             <Typography variant="body2" color="text.secondary">
               {t('common:strategyVisualization.runTypeHelp')}
@@ -574,7 +621,16 @@ export function TaskStrategyTab({
             </Stack>
           </Box>
           <Divider />
-          <Box sx={{ p: 1.5, display: 'grid', gap: 1.25 }}>
+          <Box
+            sx={{
+              p: 1.5,
+              display: 'grid',
+              gap: 1.25,
+              overflowY: 'auto',
+              flexGrow: 1,
+              minHeight: 0,
+            }}
+          >
             {displayedRuns.map((run) => (
               <Box
                 key={run.id}
@@ -646,6 +702,37 @@ export function TaskStrategyTab({
             ))}
           </Box>
         </Paper>
+
+        {/* Resize handle */}
+        <Box
+          onPointerDown={handleResizeStart}
+          sx={{
+            display: { xs: 'none', lg: 'flex' },
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 8,
+            cursor: 'col-resize',
+            userSelect: 'none',
+            touchAction: 'none',
+            position: 'sticky',
+            top: 16,
+            alignSelf: 'stretch',
+            maxHeight: 'calc(100vh - 200px)',
+            '&:hover > div, &:active > div': {
+              bgcolor: 'primary.main',
+            },
+          }}
+        >
+          <Box
+            sx={{
+              width: 3,
+              height: 40,
+              borderRadius: 1.5,
+              bgcolor: 'divider',
+              transition: 'background-color 120ms ease',
+            }}
+          />
+        </Box>
 
         <Paper variant="outlined" sx={{ minWidth: 0 }}>
           {selectedRun ? (
