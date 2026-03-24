@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.15.3...backend-v1.15.4) (2026-03-24)
+
+
+### Bug Fixes
+
+* strategy grouping parent chain ([#175](https://github.com/yuyash/auto-forex-web-service/issues/175)) ([19461d6](https://github.com/yuyash/auto-forex-web-service/commit/19461d62e3d0329d3d3360142eb206b8ee9ff944))
+
 ## [1.15.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.15.2...backend-v1.15.3) (2026-03-24)
 
 
