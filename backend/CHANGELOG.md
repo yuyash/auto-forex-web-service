@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.15.2...backend-v1.15.3) (2026-03-24)
+
+
+### Bug Fixes
+
+* trigger deployment ([#169](https://github.com/yuyash/auto-forex-web-service/issues/169)) ([9d3cafd](https://github.com/yuyash/auto-forex-web-service/commit/9d3cafd7bbcfea767429c7313dceb9a0e33806bc))
+
 ## [1.15.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.15.1...backend-v1.15.2) (2026-03-24)
 
 
