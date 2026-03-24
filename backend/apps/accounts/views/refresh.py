@@ -10,6 +10,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.middlewares.utils import get_client_ip
 from apps.accounts.services.jwt import JWTService
 from apps.accounts.utils.cookies import clear_refresh_cookie, set_refresh_cookie
 
@@ -27,13 +28,6 @@ class TokenRefreshView(APIView):
 
     permission_classes = [AllowAny]
     authentication_classes: list = []
-
-    def get_client_ip(self, request: Request) -> str:
-        """Get client IP address from request."""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            return x_forwarded_for.split(",")[0].strip()
-        return str(request.META.get("REMOTE_ADDR", ""))
 
     @extend_schema(
         operation_id="auth_token_refresh",
@@ -84,7 +78,7 @@ class TokenRefreshView(APIView):
             )
             return clear_refresh_cookie(response)
 
-        ip_address = self.get_client_ip(request)
+        ip_address = get_client_ip(request)
         user_agent = request.META.get("HTTP_USER_AGENT", "")
 
         result = JWTService().rotate_refresh_token(

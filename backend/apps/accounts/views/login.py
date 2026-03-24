@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.middlewares import RateLimiter
+from apps.accounts.middlewares.utils import get_client_ip
 from apps.accounts.models import PublicAccountSettings, User, WhitelistedEmail
 from apps.accounts.serializers import UserLoginSerializer
 from apps.accounts.services.events import SecurityEventService
@@ -41,15 +42,6 @@ class UserLoginView(APIView):
         """Initialize view with security event service."""
         super().__init__(**kwargs)
         self.security_events = SecurityEventService()
-
-    def get_client_ip(self, request: Request) -> str:
-        """Get client IP address from request."""
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            ip: str = x_forwarded_for.split(",")[0].strip()
-        else:
-            ip = str(request.META.get("REMOTE_ADDR", ""))
-        return ip
 
     # pylint: disable=too-many-branches,too-many-statements
     @extend_schema(
@@ -90,20 +82,20 @@ class UserLoginView(APIView):
                 event_type="login_blocked",
                 description="Login attempt blocked because login is disabled",
                 severity="warning",
-                ip_address=self.get_client_ip(request),
+                ip_address=get_client_ip(request),
                 user_agent=request.META.get("HTTP_USER_AGENT", ""),
                 details={"status_code": status.HTTP_503_SERVICE_UNAVAILABLE},
             )
             logger.warning(
                 "Login attempt blocked - login is disabled",
-                extra={"ip_address": self.get_client_ip(request)},
+                extra={"ip_address": get_client_ip(request)},
             )
             return Response(
                 {"error": "Login is currently disabled."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
-        ip_address = self.get_client_ip(request)
+        ip_address = get_client_ip(request)
         email = request.data.get("email", "").lower()
         is_admin_user = False
 

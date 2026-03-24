@@ -5,6 +5,7 @@ from unittest.mock import patch
 from rest_framework import status
 from rest_framework.test import APIRequestFactory
 
+from apps.accounts.middlewares.utils import get_client_ip
 from apps.accounts.views.registration import UserRegistrationView
 
 
@@ -35,9 +36,8 @@ class TestUserRegistrationView:
     def test_get_client_ip_with_x_forwarded_for(self) -> None:
         """Test extracting client IP from X-Forwarded-For header."""
         request = self.factory.post("/", HTTP_X_FORWARDED_FOR="203.0.113.1, 198.51.100.1")
-        view = UserRegistrationView()
 
-        ip = view.get_client_ip(request)
+        ip = get_client_ip(request)
 
         assert ip == "203.0.113.1"
 
@@ -45,9 +45,8 @@ class TestUserRegistrationView:
         """Test extracting client IP from REMOTE_ADDR."""
         request = self.factory.post("/")
         request.META["REMOTE_ADDR"] = "192.168.1.1"
-        view = UserRegistrationView()
 
-        ip = view.get_client_ip(request)
+        ip = get_client_ip(request)
 
         assert ip == "192.168.1.1"
 

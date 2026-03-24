@@ -69,7 +69,7 @@ MARKET_REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 # =============================================================================
 
 PASSWORD_HASHERS = [
-    "django.contrib.auth.hashers.MD5PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
 ]
 
 # =============================================================================

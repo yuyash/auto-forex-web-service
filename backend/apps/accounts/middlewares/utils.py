@@ -3,11 +3,12 @@
 from typing import Any, cast
 
 from django.http import HttpRequest
+from rest_framework.request import Request
 
 from apps.accounts.models import User
 
 
-def get_client_ip(request: HttpRequest) -> str:
+def get_client_ip(request: HttpRequest | Request) -> str:
     """Extract the client IP address from the request.
 
     Checks ``X-Forwarded-For`` first (set by reverse proxies like nginx),

@@ -96,7 +96,11 @@ def build_secret_settings(*, debug: bool) -> dict[str, Any]:
         for key in os.getenv("OANDA_TOKEN_ENCRYPTION_FALLBACK_KEYS", "").split(",")
         if key.strip()
     ]
-    if legacy_oanda_key.decode("utf-8") != oanda_key:
+    # Only add the legacy SECRET_KEY-derived key as a fallback in non-production
+    # environments. In production, fallback keys must be explicitly configured
+    # via OANDA_TOKEN_ENCRYPTION_FALLBACK_KEYS to avoid silent breakage when
+    # SECRET_KEY is rotated.
+    if is_non_production_env and legacy_oanda_key.decode("utf-8") != oanda_key:
         oanda_fallback_keys.append(legacy_oanda_key.decode("utf-8"))
 
     validated_fallback_keys: list[str] = []
