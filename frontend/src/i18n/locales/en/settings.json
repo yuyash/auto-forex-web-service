@@ -117,5 +117,10 @@
     "dataRefresh": "Data Refresh",
     "healthCheckInterval": "OANDA Health Check Interval",
     "healthCheckInfo": "Controls how often the application checks the OANDA API connection status shown in the footer. Lower values provide faster detection but increase network traffic."
+  },
+  "version": {
+    "title": "Version Information",
+    "frontend": "Frontend",
+    "backend": "Backend"
   }
 }

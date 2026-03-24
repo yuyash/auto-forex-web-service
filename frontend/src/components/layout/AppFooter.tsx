@@ -2,11 +2,9 @@ import { Box, Chip, Stack, Tooltip } from '@mui/material';
 import {
   Circle as CircleIcon,
   TrendingUp as TrendingUpIcon,
-  Info as InfoIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAppSettings } from '../../hooks/useAppSettings';
-import { useBackendHealth } from '../../hooks/useBackendHealth';
 import { useOandaAccounts } from '../../hooks/useOandaAccounts';
 import { useOandaHealthStatus } from '../../hooks/useOandaHealthStatus';
 import { useTradingTasks } from '../../hooks/useTradingTasks';
@@ -29,7 +27,6 @@ const AppFooter = () => {
   const { t } = useTranslation('common');
   const { settings: appSettings } = useAppSettings();
   const { hasAccounts } = useOandaAccounts();
-  const { data: backendHealth } = useBackendHealth();
   const { data: oandaData } = useOandaHealthStatus({
     enabled: hasAccounts,
     refreshIntervalMs: appSettings.healthCheckIntervalSeconds * 1000,
@@ -40,8 +37,6 @@ const AppFooter = () => {
     page_size: 3,
     status: TaskStatus.RUNNING,
   });
-
-  const backendVersion = backendHealth?.version ?? '';
 
   const oandaHealth: OandaHealthStatus | null = !hasAccounts
     ? {
@@ -70,11 +65,9 @@ const AppFooter = () => {
         })()
       : null;
 
-  // Derive connection status from OANDA health
   const derivedConnectionStatus: OandaConnectionState =
     oandaHealth === null ? 'checking' : oandaHealth.state;
 
-  // Format last checked time for tooltip
   const formatLastChecked = (date?: Date): string => {
     if (!date) return 'Never';
     return date.toLocaleTimeString('en-US', {
@@ -85,7 +78,6 @@ const AppFooter = () => {
     });
   };
 
-  // Build tooltip text for connection status
   const connectionTooltip = oandaHealth
     ? `${oandaHealth.message}\nLast checked: ${formatLastChecked(oandaHealth.lastChecked)}`
     : 'Checking connection...';
@@ -125,26 +117,6 @@ const AppFooter = () => {
         justifyContent="flex-start"
         flexWrap="wrap"
       >
-        {/* Version Info */}
-        {(() => {
-          const versionLabel = backendVersion
-            ? `v${__APP_VERSION__} / v${backendVersion}`
-            : `v${__APP_VERSION__}`;
-          const tooltipText = backendVersion
-            ? `Frontend v${__APP_VERSION__} / Backend v${backendVersion}`
-            : `Frontend v${__APP_VERSION__}`;
-          return (
-            <Tooltip title={tooltipText} arrow>
-              <Chip
-                icon={<InfoIcon />}
-                label={versionLabel}
-                variant="outlined"
-                size="small"
-              />
-            </Tooltip>
-          );
-        })()}
-
         {/* Connection Status */}
         <Tooltip title={connectionTooltip} arrow>
           <Chip
