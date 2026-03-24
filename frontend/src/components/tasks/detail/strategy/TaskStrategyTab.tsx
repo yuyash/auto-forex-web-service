@@ -172,100 +172,72 @@ function buildDisplayRuns(
 
   for (const group of groups) {
     const trendSteps = group.steps.filter(isTrendStep);
-    const rootTrendStep =
-      trendSteps.find(
-        (step) =>
-          step.event_type === 'open_position' &&
-          step.basket === 'trend' &&
-          step.entry_id != null &&
-          group.root_entry_id != null &&
-          Number(step.entry_id) === Number(group.root_entry_id)
-      ) ??
-      trendSteps[0] ??
-      null;
-    let currentTrendSteps: StrategyVisualizationStep[] = [];
-    for (const step of trendSteps) {
-      const startsNewTrendRun =
-        step.event_type === 'open_position' && step.basket === 'trend';
-      if (startsNewTrendRun && currentTrendSteps.length > 0) {
-        runs.push({
-          id: `${group.group_id}:trend:${runs.length + 1}`,
-          parentGroupId: group.group_id,
-          runType: 'trend',
-          status: buildDisplayRunStatus(currentTrendSteps, group.status),
-          startedAt: currentTrendSteps[0]?.timestamp ?? null,
-          endedAt:
-            currentTrendSteps[currentTrendSteps.length - 1]?.timestamp ?? null,
-          rootEntryId: group.root_entry_id,
-          rootDirection: group.root_direction,
-          steps: currentTrendSteps,
-        });
-        currentTrendSteps = [];
-      }
-      currentTrendSteps.push(step);
-    }
-    if (currentTrendSteps.length > 0) {
+
+    // Build a single trend run per group (one Initial entry → one trend cycle)
+    if (trendSteps.length > 0) {
       runs.push({
-        id: `${group.group_id}:trend:${runs.length + 1}`,
+        id: `${group.group_id}:trend:1`,
         parentGroupId: group.group_id,
         runType: 'trend',
-        status: buildDisplayRunStatus(currentTrendSteps, group.status),
-        startedAt: currentTrendSteps[0]?.timestamp ?? null,
-        endedAt:
-          currentTrendSteps[currentTrendSteps.length - 1]?.timestamp ?? null,
+        status: buildDisplayRunStatus(trendSteps, group.status),
+        startedAt: trendSteps[0]?.timestamp ?? null,
+        endedAt: trendSteps[trendSteps.length - 1]?.timestamp ?? null,
         rootEntryId: group.root_entry_id,
         rootDirection: group.root_direction,
-        steps: currentTrendSteps,
+        steps: trendSteps,
       });
     }
 
-    let currentCounterSteps: StrategyVisualizationStep[] = [];
-    const openCounterEntries = new Set<number>();
-    for (const step of group.steps.filter(isCounterStep)) {
-      currentCounterSteps.push(step);
-      if (step.event_type === 'open_position' && step.entry_id != null) {
-        openCounterEntries.add(Number(step.entry_id));
+    // Build counter runs — do NOT include the root trend step.
+    // Split into sub-runs when all open counter entries have been closed.
+    const counterSteps = group.steps.filter(isCounterStep);
+    if (counterSteps.length > 0) {
+      let currentCounterSteps: StrategyVisualizationStep[] = [];
+      const openCounterEntries = new Set<number>();
+      let counterRunIndex = 0;
+      for (const step of counterSteps) {
+        currentCounterSteps.push(step);
+        if (step.event_type === 'open_position' && step.entry_id != null) {
+          openCounterEntries.add(Number(step.entry_id));
+        }
+        if (step.event_type === 'close_position' && step.entry_id != null) {
+          openCounterEntries.delete(Number(step.entry_id));
+        }
+        if (openCounterEntries.size === 0 && currentCounterSteps.length > 0) {
+          counterRunIndex += 1;
+          runs.push({
+            id: `${group.group_id}:counter:${counterRunIndex}`,
+            parentGroupId: group.group_id,
+            runType: 'counter',
+            status: buildDisplayRunStatus(currentCounterSteps, group.status),
+            startedAt: currentCounterSteps[0]?.timestamp ?? null,
+            endedAt:
+              currentCounterSteps[currentCounterSteps.length - 1]?.timestamp ??
+              null,
+            rootEntryId: group.root_entry_id,
+            rootDirection: group.root_direction,
+            steps: currentCounterSteps,
+          });
+          currentCounterSteps = [];
+          openCounterEntries.clear();
+        }
       }
-      if (step.event_type === 'close_position' && step.entry_id != null) {
-        openCounterEntries.delete(Number(step.entry_id));
-      }
-      if (openCounterEntries.size === 0 && currentCounterSteps.length > 0) {
-        const counterRunSteps =
-          rootTrendStep != null
-            ? [rootTrendStep, ...currentCounterSteps]
-            : [...currentCounterSteps];
+      if (currentCounterSteps.length > 0) {
+        counterRunIndex += 1;
         runs.push({
-          id: `${group.group_id}:counter:${runs.length + 1}`,
+          id: `${group.group_id}:counter:${counterRunIndex}`,
           parentGroupId: group.group_id,
           runType: 'counter',
-          status: buildDisplayRunStatus(counterRunSteps, group.status),
-          startedAt: counterRunSteps[0]?.timestamp ?? null,
+          status: buildDisplayRunStatus(currentCounterSteps, group.status),
+          startedAt: currentCounterSteps[0]?.timestamp ?? null,
           endedAt:
-            counterRunSteps[counterRunSteps.length - 1]?.timestamp ?? null,
+            currentCounterSteps[currentCounterSteps.length - 1]?.timestamp ??
+            null,
           rootEntryId: group.root_entry_id,
           rootDirection: group.root_direction,
-          steps: counterRunSteps,
+          steps: currentCounterSteps,
         });
-        currentCounterSteps = [];
-        openCounterEntries.clear();
       }
-    }
-    if (currentCounterSteps.length > 0) {
-      const counterRunSteps =
-        rootTrendStep != null
-          ? [rootTrendStep, ...currentCounterSteps]
-          : [...currentCounterSteps];
-      runs.push({
-        id: `${group.group_id}:counter:${runs.length + 1}`,
-        parentGroupId: group.group_id,
-        runType: 'counter',
-        status: buildDisplayRunStatus(counterRunSteps, group.status),
-        startedAt: counterRunSteps[0]?.timestamp ?? null,
-        endedAt: counterRunSteps[counterRunSteps.length - 1]?.timestamp ?? null,
-        rootEntryId: group.root_entry_id,
-        rootDirection: group.root_direction,
-        steps: counterRunSteps,
-      });
     }
   }
 
@@ -663,6 +635,8 @@ export function TaskStrategyTab({
                   color="text.secondary"
                   sx={{ display: 'block', mt: 0.5 }}
                 >
+                  {`group_id: ${run.parentGroupId}`}
+                  {' | '}
                   {t('common:strategyVisualization.runMeta', {
                     rootEntryId: formatValue(run.rootEntryId),
                     stepCount: run.steps.length,
