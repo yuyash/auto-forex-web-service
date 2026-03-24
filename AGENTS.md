@@ -145,7 +145,7 @@ On every push (pre-push stage):
 | Workflow               | Trigger                         | What it does                                                                                               |
 | ---------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | `test.yml`             | PR → main, develop              | Lint + type-check + unit/integration tests (backend & frontend), coverage ≥ 60%, Docker Compose validation |
-| `build-and-deploy.yml` | Push/PR → main, develop         | Build multi-arch Docker images, push to DockerHub, deploy to production on `main` push                     |
+| `build-and-deploy.yml` | Push/PR → main, develop; tag push | Build multi-arch Docker images, push to DockerHub, deploy to production on release tag |
 | `release-please.yml`   | Push → main                     | Auto-bump version via release-please, create release PR with changelog                                     |
 | `api-docs.yml`         | Push → main (API-related paths) | Generate OpenAPI schema, deploy Swagger UI to GitHub Pages                                                 |
 
