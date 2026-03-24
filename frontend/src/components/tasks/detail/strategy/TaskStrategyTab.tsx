@@ -17,38 +17,19 @@ import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { useTaskStrategyEvents } from '../../../../hooks/useTaskStrategyEvents';
 import { TaskType } from '../../../../types/common';
-import type { StrategyVisualizationStep } from '../../../../types/strategyVisualization';
+import type {
+  DisplayCycle,
+  DisplayCycleStep,
+  StrategyVisualizationStep,
+} from '../../../../types/strategyVisualization';
+import { StrategyGroupChart } from './StrategyGroupChart';
 
-interface TaskStrategyTabProps {
+export interface TaskStrategyTabProps {
   taskId: string | number;
   taskType: TaskType;
+  instrument?: string;
   executionRunId?: string;
   enableRealTimeUpdates?: boolean;
-}
-
-interface ParentRunGroup {
-  group_id: string;
-  root_entry_id?: number | null;
-  started_at?: string | null;
-  ended_at?: string | null;
-  status: string;
-  root_direction?: string | null;
-  root_basket?: string | null;
-  checks?: Record<string, unknown>;
-  steps: StrategyVisualizationStep[];
-}
-
-interface DisplayRun {
-  id: string;
-  parentGroupId: string;
-  runType: 'trend' | 'counter';
-  displayLabel: string;
-  status: string;
-  startedAt?: string | null;
-  endedAt?: string | null;
-  rootEntryId?: number | null;
-  rootDirection?: string | null;
-  steps: StrategyVisualizationStep[];
 }
 
 function formatDateTime(value?: string | null): string {
@@ -82,7 +63,7 @@ function localizeLabel(
 }
 
 function getLayerRetracementLabel(
-  step: StrategyVisualizationStep
+  step: StrategyVisualizationStep | DisplayCycleStep
 ): string | null {
   const layer = step.layer_number;
   const retracement = step.retracement_count;
@@ -106,10 +87,12 @@ function getStatusColor(status: string): 'success' | 'warning' | 'default' {
 }
 
 function getStepTone(
-  step: StrategyVisualizationStep,
+  step: StrategyVisualizationStep | DisplayCycleStep,
   themeMode: 'light' | 'dark'
 ): string {
-  if (step.validation_status === 'fail') {
+  const validationStatus =
+    'validation_status' in step ? step.validation_status : undefined;
+  if (validationStatus === 'fail') {
     return themeMode === 'dark' ? '#f87171' : '#dc2626';
   }
   if (step.kind.includes('trend_tp')) {
@@ -128,133 +111,21 @@ function getStepTone(
   return themeMode === 'dark' ? '#60a5fa' : '#2563eb';
 }
 
-function isTrendStep(step: StrategyVisualizationStep): boolean {
-  return step.basket === 'trend' || step.kind === 'trend_tp';
-}
-
-function isCounterStep(step: StrategyVisualizationStep): boolean {
-  return step.basket === 'counter' || step.kind === 'counter_tp';
-}
-
-function buildDisplayRunStatus(
-  steps: StrategyVisualizationStep[],
-  parentStatus: string
-): string {
-  const hasProtection = steps.some((step) =>
-    ['shrink', 'rebalance', 'lock_hedge_neutralize'].includes(step.kind)
-  );
-  if (hasProtection || parentStatus === 'intervened') {
-    return 'intervened';
-  }
-
-  const opened = new Set(
-    steps
-      .filter(
-        (step) => step.event_type === 'open_position' && step.entry_id != null
-      )
-      .map((step) => Number(step.entry_id))
-  );
-  const closed = new Set(
-    steps
-      .filter(
-        (step) => step.event_type === 'close_position' && step.entry_id != null
-      )
-      .map((step) => Number(step.entry_id))
-  );
-  const hasOpenLeft = Array.from(opened).some(
-    (entryId) => !closed.has(entryId)
-  );
-  return hasOpenLeft ? 'active' : 'completed';
-}
-
-function buildDisplayRuns(
-  groups: ParentRunGroup[],
+/**
+ * Convert backend display_cycles into labelled cycles for rendering.
+ * Assigns sequential display labels based on sorted order.
+ */
+function labelDisplayCycles(
+  cycles: DisplayCycle[],
   t: (key: string, options?: Record<string, unknown>) => string
-): DisplayRun[] {
-  const runs: Omit<DisplayRun, 'displayLabel'>[] = [];
-
-  for (const group of groups) {
-    const trendSteps = group.steps.filter(isTrendStep);
-
-    // Build a single trend run per group (one Initial entry → one trend cycle)
-    if (trendSteps.length > 0) {
-      runs.push({
-        id: `${group.group_id}:trend:1`,
-        parentGroupId: group.group_id,
-        runType: 'trend',
-        status: buildDisplayRunStatus(trendSteps, group.status),
-        startedAt: trendSteps[0]?.timestamp ?? null,
-        endedAt: trendSteps[trendSteps.length - 1]?.timestamp ?? null,
-        rootEntryId: group.root_entry_id,
-        rootDirection: group.root_direction,
-        steps: trendSteps,
-      });
-    }
-
-    // Build counter runs — do NOT include the root trend step.
-    // Split into sub-runs when all open counter entries have been closed.
-    const counterSteps = group.steps.filter(isCounterStep);
-    if (counterSteps.length > 0) {
-      let currentCounterSteps: StrategyVisualizationStep[] = [];
-      const openCounterEntries = new Set<number>();
-      let counterRunIndex = 0;
-      for (const step of counterSteps) {
-        currentCounterSteps.push(step);
-        if (step.event_type === 'open_position' && step.entry_id != null) {
-          openCounterEntries.add(Number(step.entry_id));
-        }
-        if (step.event_type === 'close_position' && step.entry_id != null) {
-          openCounterEntries.delete(Number(step.entry_id));
-        }
-        if (openCounterEntries.size === 0 && currentCounterSteps.length > 0) {
-          counterRunIndex += 1;
-          runs.push({
-            id: `${group.group_id}:counter:${counterRunIndex}`,
-            parentGroupId: group.group_id,
-            runType: 'counter',
-            status: buildDisplayRunStatus(currentCounterSteps, group.status),
-            startedAt: currentCounterSteps[0]?.timestamp ?? null,
-            endedAt:
-              currentCounterSteps[currentCounterSteps.length - 1]?.timestamp ??
-              null,
-            rootEntryId: group.root_entry_id,
-            rootDirection: group.root_direction,
-            steps: currentCounterSteps,
-          });
-          currentCounterSteps = [];
-          openCounterEntries.clear();
-        }
-      }
-      if (currentCounterSteps.length > 0) {
-        counterRunIndex += 1;
-        runs.push({
-          id: `${group.group_id}:counter:${counterRunIndex}`,
-          parentGroupId: group.group_id,
-          runType: 'counter',
-          status: buildDisplayRunStatus(currentCounterSteps, group.status),
-          startedAt: currentCounterSteps[0]?.timestamp ?? null,
-          endedAt:
-            currentCounterSteps[currentCounterSteps.length - 1]?.timestamp ??
-            null,
-          rootEntryId: group.root_entry_id,
-          rootDirection: group.root_direction,
-          steps: currentCounterSteps,
-        });
-      }
-    }
-  }
-
-  const oldestFirst = [...runs].sort((a, b) => {
-    const aTime = a.startedAt ? new Date(a.startedAt).getTime() : 0;
-    const bTime = b.startedAt ? new Date(b.startedAt).getTime() : 0;
-    return aTime - bTime;
-  });
-
-  return oldestFirst.map((run, index) => ({
-    ...run,
-    displayLabel: t(`common:strategyVisualization.${run.runType}RunLabel`, {
-      number: index + 1,
-    }),
+): DisplayCycle[] {
+  // cycles from the API are already sorted by started_at ascending
+  return cycles.map((cycle, index) => ({
+    ...cycle,
+    displayLabel: t(
+      `common:strategyVisualization.${cycle.cycle_type}RunLabel`,
+      { number: index + 1 }
+    ),
   }));
 }
 
@@ -263,7 +134,7 @@ function StrategyRunMiniChart({
   compact = false,
   t,
 }: {
-  steps: StrategyVisualizationStep[];
+  steps: (StrategyVisualizationStep | DisplayCycleStep)[];
   compact?: boolean;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
@@ -362,9 +233,13 @@ function StepRow({
   step,
   t,
 }: {
-  step: StrategyVisualizationStep;
+  step: StrategyVisualizationStep | DisplayCycleStep;
   t: (key: string, options?: Record<string, unknown>) => string;
 }) {
+  const price =
+    'price' in step
+      ? ((step as StrategyVisualizationStep).price ?? step.entry_price)
+      : step.entry_price;
   return (
     <Box
       sx={{
@@ -407,7 +282,7 @@ function StepRow({
       </Box>
       <Typography variant="body2" color="text.secondary">
         {t('common:strategyVisualization.stepPriceLine', {
-          price: formatValue(step.price ?? step.entry_price),
+          price: formatValue(price),
           exit: formatValue(step.actual_exit_price ?? step.exit_price),
         })}
       </Typography>
@@ -418,6 +293,7 @@ function StepRow({
 export function TaskStrategyTab({
   taskId,
   taskType,
+  instrument,
   executionRunId,
   enableRealTimeUpdates = false,
 }: TaskStrategyTabProps) {
@@ -430,19 +306,12 @@ export function TaskStrategyTab({
     enableRealTimeUpdates,
   });
 
-  const parentGroups = useMemo<ParentRunGroup[]>(() => {
+  // Use display_cycles from the API response directly (backend handles splitting)
+  const displayCycles = useMemo<DisplayCycle[]>(() => {
     if (data?.view_model.kind !== 'snowball_runs') return [];
-    return [...data.view_model.groups].sort((a, b) => {
-      const aTime = a.started_at ? new Date(a.started_at).getTime() : 0;
-      const bTime = b.started_at ? new Date(b.started_at).getTime() : 0;
-      return aTime - bTime;
-    });
-  }, [data]);
-
-  const displayRuns = useMemo(
-    () => buildDisplayRuns(parentGroups, t),
-    [parentGroups, t]
-  );
+    const raw = data.view_model.display_cycles ?? [];
+    return labelDisplayCycles(raw, t);
+  }, [data, t]);
 
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [runTypeFilter, setRunTypeFilter] = useState<
@@ -485,13 +354,14 @@ export function TaskStrategyTab({
     [sidebarWidth]
   );
 
-  const displayedRuns = useMemo(() => {
-    let runs = sortOrder === 'asc' ? displayRuns : [...displayRuns].reverse();
+  const displayedCycles = useMemo(() => {
+    let cycles =
+      sortOrder === 'asc' ? displayCycles : [...displayCycles].reverse();
     if (runTypeFilter !== 'all') {
-      runs = runs.filter((run) => run.runType === runTypeFilter);
+      cycles = cycles.filter((c) => c.cycle_type === runTypeFilter);
     }
-    return runs;
-  }, [displayRuns, sortOrder, runTypeFilter]);
+    return cycles;
+  }, [displayCycles, sortOrder, runTypeFilter]);
 
   const handleSelectRun = useCallback(
     (id: string) => {
@@ -507,23 +377,24 @@ export function TaskStrategyTab({
     setMobileShowDetail(false);
   }, []);
 
-  const selectedRun =
-    displayedRuns.find((run) => run.id === selectedRunId) ??
-    displayedRuns[0] ??
+  const selectedCycle =
+    displayedCycles.find((c) => c.cycle_id === selectedRunId) ??
+    displayedCycles[0] ??
     null;
 
   const summary = useMemo(
     () => ({
-      totalRuns: displayRuns.length,
-      activeRuns: displayRuns.filter((run) => run.status === 'active').length,
-      completedRuns: displayRuns.filter((run) => run.status === 'completed')
+      totalRuns: displayCycles.length,
+      activeRuns: displayCycles.filter((c) => c.status === 'active').length,
+      completedRuns: displayCycles.filter((c) => c.status === 'completed')
         .length,
-      intervenedRuns: displayRuns.filter((run) => run.status === 'intervened')
+      intervenedRuns: displayCycles.filter((c) => c.status === 'intervened')
         .length,
-      counterRuns: displayRuns.filter((run) => run.runType === 'counter')
+      trendRuns: displayCycles.filter((c) => c.cycle_type === 'trend').length,
+      counterRuns: displayCycles.filter((c) => c.cycle_type === 'counter')
         .length,
     }),
-    [displayRuns]
+    [displayCycles]
   );
 
   const getUnavailableMessage = () => {
@@ -590,6 +461,9 @@ export function TaskStrategyTab({
         />
         <Chip
           label={`${t('common:strategyVisualization.summary.intervenedRuns')}: ${summary.intervenedRuns}`}
+        />
+        <Chip
+          label={`${t('common:strategyVisualization.summary.trendRuns')}: ${summary.trendRuns}`}
         />
         <Chip
           label={`${t('common:strategyVisualization.summary.counterRuns')}: ${summary.counterRuns}`}
@@ -683,75 +557,85 @@ export function TaskStrategyTab({
               minHeight: 0,
             }}
           >
-            {displayedRuns.map((run) => (
-              <Box
-                key={run.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => handleSelectRun(run.id)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    handleSelectRun(run.id);
-                  }
-                }}
-                sx={{
-                  p: 1.5,
-                  borderRadius: 2,
-                  border: '1px solid',
-                  borderColor:
-                    run.id === selectedRun?.id ? 'primary.main' : 'divider',
-                  bgcolor:
-                    run.id === selectedRun?.id
-                      ? alpha(theme.palette.primary.main, 0.08)
-                      : 'background.paper',
-                  cursor: 'pointer',
-                  transition:
-                    'border-color 120ms ease, background-color 120ms ease',
-                  '&:hover': {
-                    borderColor: 'primary.main',
-                    bgcolor: alpha(theme.palette.primary.main, 0.05),
-                  },
-                }}
-              >
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  sx={{ mb: 1, alignItems: 'center', flexWrap: 'wrap' }}
-                >
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                    {run.displayLabel}
-                  </Typography>
-                  <Chip
-                    size="small"
-                    label={localizeLabel(run.status, t)}
-                    color={getStatusColor(run.status)}
-                  />
-                  <Chip
-                    size="small"
-                    variant="outlined"
-                    label={t(
-                      `common:strategyVisualization.${run.runType}RunType`
-                    )}
-                  />
-                </Stack>
-                <Typography variant="body2" color="text.secondary">
-                  {formatDateTime(run.startedAt)}
-                </Typography>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: 'block', mt: 0.5 }}
-                >
-                  {`group_id: ${run.parentGroupId}`}
-                  {' | '}
-                  {t('common:strategyVisualization.runMeta', {
-                    rootEntryId: formatValue(run.rootEntryId),
-                    stepCount: run.steps.length,
-                  })}
-                </Typography>
+            {displayedCycles.length === 0 ? (
+              <Box sx={{ p: 2 }}>
+                <Alert severity="info">
+                  {t('common:strategyVisualization.noGroupedRuns')}
+                </Alert>
               </Box>
-            ))}
+            ) : (
+              displayedCycles.map((cycle) => (
+                <Box
+                  key={cycle.cycle_id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleSelectRun(cycle.cycle_id)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      handleSelectRun(cycle.cycle_id);
+                    }
+                  }}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    border: '1px solid',
+                    borderColor:
+                      cycle.cycle_id === selectedCycle?.cycle_id
+                        ? 'primary.main'
+                        : 'divider',
+                    bgcolor:
+                      cycle.cycle_id === selectedCycle?.cycle_id
+                        ? alpha(theme.palette.primary.main, 0.08)
+                        : 'background.paper',
+                    cursor: 'pointer',
+                    transition:
+                      'border-color 120ms ease, background-color 120ms ease',
+                    '&:hover': {
+                      borderColor: 'primary.main',
+                      bgcolor: alpha(theme.palette.primary.main, 0.05),
+                    },
+                  }}
+                >
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ mb: 1, alignItems: 'center', flexWrap: 'wrap' }}
+                  >
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                      {cycle.display_label}
+                    </Typography>
+                    <Chip
+                      size="small"
+                      label={localizeLabel(cycle.status, t)}
+                      color={getStatusColor(cycle.status)}
+                    />
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      label={t(
+                        `common:strategyVisualization.${cycle.cycle_type}RunType`
+                      )}
+                    />
+                  </Stack>
+                  <Typography variant="body2" color="text.secondary">
+                    {formatDateTime(cycle.started_at)}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: 'block', mt: 0.5 }}
+                  >
+                    {`group_id: ${cycle.parent_group_id}`}
+                    {' | '}
+                    {t('common:strategyVisualization.runMeta', {
+                      rootEntryId: formatValue(cycle.root_entry_id),
+                      stepCount: cycle.steps.length,
+                    })}
+                  </Typography>
+                </Box>
+              ))
+            )}
           </Box>
         </Paper>
 
@@ -786,7 +670,7 @@ export function TaskStrategyTab({
           />
         </Box>
 
-        {/* Detail panel — on mobile, shown only when a run is selected */}
+        {/* Detail panel — on mobile, shown only when a cycle is selected */}
         <Paper
           variant="outlined"
           sx={{
@@ -794,7 +678,7 @@ export function TaskStrategyTab({
             display: isMobile && !mobileShowDetail ? 'none' : 'block',
           }}
         >
-          {selectedRun ? (
+          {selectedCycle ? (
             <Box sx={{ p: 2 }}>
               {isMobile ? (
                 <IconButton
@@ -811,36 +695,38 @@ export function TaskStrategyTab({
                 spacing={1}
                 sx={{ mb: 1, flexWrap: 'wrap' }}
               >
-                <Typography variant="h6">{selectedRun.displayLabel}</Typography>
+                <Typography variant="h6">
+                  {selectedCycle.display_label}
+                </Typography>
                 <Chip
-                  label={localizeLabel(selectedRun.status, t)}
+                  label={localizeLabel(selectedCycle.status, t)}
                   size="small"
-                  color={getStatusColor(selectedRun.status)}
+                  color={getStatusColor(selectedCycle.status)}
                 />
                 <Chip
                   label={t(
-                    `common:strategyVisualization.${selectedRun.runType}RunType`
+                    `common:strategyVisualization.${selectedCycle.cycle_type}RunType`
                   )}
                   size="small"
                   variant="outlined"
                 />
-                {selectedRun.rootDirection ? (
+                {selectedCycle.root_direction ? (
                   <Chip
-                    label={localizeLabel(selectedRun.rootDirection, t)}
+                    label={localizeLabel(selectedCycle.root_direction, t)}
                     size="small"
                     variant="outlined"
                   />
                 ) : null}
               </Stack>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                {`${formatDateTime(selectedRun.startedAt)} -> ${formatDateTime(selectedRun.endedAt)}`}
+                {`${formatDateTime(selectedCycle.started_at)} -> ${formatDateTime(selectedCycle.ended_at)}`}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 {t('common:strategyVisualization.selectedRunHelp', {
-                  rootEntryId: formatValue(selectedRun.rootEntryId),
+                  rootEntryId: formatValue(selectedCycle.root_entry_id),
                 })}{' '}
                 {t(
-                  `common:strategyVisualization.${selectedRun.runType}RunSelectedHelp`
+                  `common:strategyVisualization.${selectedCycle.cycle_type}RunSelectedHelp`
                 )}
               </Typography>
 
@@ -865,22 +751,44 @@ export function TaskStrategyTab({
                 <Box sx={{ overflowX: 'auto' }}>
                   <Box
                     sx={{
-                      minWidth: Math.max(selectedRun.steps.length * 80, 300),
+                      minWidth: Math.max(selectedCycle.steps.length * 80, 300),
                     }}
                   >
-                    <StrategyRunMiniChart steps={selectedRun.steps} t={t} />
+                    <StrategyRunMiniChart steps={selectedCycle.steps} t={t} />
                   </Box>
                 </Box>
               </Paper>
+
+              {instrument ? (
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    mb: 2,
+                    bgcolor: alpha(theme.palette.primary.main, 0.03),
+                  }}
+                >
+                  <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                    {t('common:strategyVisualization.ohlcChart')}
+                  </Typography>
+                  <StrategyGroupChart
+                    instrument={instrument}
+                    startTime={selectedCycle.started_at ?? ''}
+                    endTime={selectedCycle.ended_at}
+                    steps={selectedCycle.steps}
+                    height={300}
+                  />
+                </Paper>
+              ) : null}
 
               <Typography variant="subtitle1" sx={{ mb: 1 }}>
                 {t('common:strategyVisualization.timeline')}
               </Typography>
               <Divider sx={{ mb: 1 }} />
-              {selectedRun.steps.map((step, index) => (
-                <React.Fragment key={`${selectedRun.id}-${index}`}>
+              {selectedCycle.steps.map((step, index) => (
+                <React.Fragment key={`${selectedCycle.cycle_id}-${index}`}>
                   <StepRow step={step} t={t} />
-                  {index < selectedRun.steps.length - 1 ? <Divider /> : null}
+                  {index < selectedCycle.steps.length - 1 ? <Divider /> : null}
                 </React.Fragment>
               ))}
             </Box>

@@ -352,6 +352,7 @@ export const BacktestTaskDetail: React.FC = () => {
             <TaskStrategyTab
               taskId={taskId}
               taskType={TaskType.BACKTEST}
+              instrument={detailTask.instrument}
               executionRunId={activeExecutionId}
               enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
                 currentStatus
