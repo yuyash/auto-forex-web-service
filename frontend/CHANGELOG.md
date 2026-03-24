@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.17.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.16.0...frontend-v1.17.0) (2026-03-24)
+
+
+### Features
+
+* **strategy:** add mobile responsive layout and trend/counter filter ([#177](https://github.com/yuyash/auto-forex-web-service/issues/177)) ([67dc1c4](https://github.com/yuyash/auto-forex-web-service/commit/67dc1c4625aa185895cdbe2d9e4cbba4ef5b2021))
+
 ## [1.16.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.15.4...frontend-v1.16.0) (2026-03-24)
 
 
