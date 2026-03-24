@@ -127,34 +127,19 @@ const AppFooter = () => {
       >
         {/* Version Info */}
         {(() => {
-          const versionMismatch =
-            backendVersion !== '' && backendVersion !== __APP_VERSION__;
-          const versionDetail = backendVersion
+          const versionLabel = backendVersion
+            ? `v${__APP_VERSION__} / v${backendVersion}`
+            : `v${__APP_VERSION__}`;
+          const tooltipText = backendVersion
             ? `Frontend v${__APP_VERSION__} / Backend v${backendVersion}`
             : `Frontend v${__APP_VERSION__}`;
-          const tooltipText = versionMismatch
-            ? t('status.versionMismatch', {
-                frontend: __APP_VERSION__,
-                backend: backendVersion,
-                defaultValue: `Version mismatch: ${versionDetail}`,
-              })
-            : versionDetail;
           return (
             <Tooltip title={tooltipText} arrow>
               <Chip
                 icon={<InfoIcon />}
-                label={`v${__APP_VERSION__}`}
+                label={versionLabel}
                 variant="outlined"
                 size="small"
-                sx={
-                  versionMismatch
-                    ? {
-                        color: 'error.main',
-                        borderColor: 'error.main',
-                        '& .MuiChip-icon': { color: 'error.main' },
-                      }
-                    : undefined
-                }
               />
             </Tooltip>
           );
