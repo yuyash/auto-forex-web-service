@@ -141,6 +141,8 @@
     "runTypeHelp": "表示上のサイクルは順行と逆行に分けて再構成しています。1 つの Initial Entry 親グループから複数のサイクルが作られることがあります。",
     "sortOldest": "古い順",
     "sortNewest": "新しい順",
+    "filterTrendOnly": "順行側のみ表示",
+    "filterCounterOnly": "逆行側のみ表示",
     "runMeta": "root entry id {{rootEntryId}} / {{stepCount}} steps",
     "selectedRunHelp": "親エントリIDは {{rootEntryId}} です。左の一覧はエントリID順ではなく、開始時刻の降順です。",
     "trendRunType": "順行サイクル",

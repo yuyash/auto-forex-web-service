@@ -5,11 +5,14 @@ import {
   Chip,
   CircularProgress,
   Divider,
+  IconButton,
   Paper,
   Stack,
   Typography,
   alpha,
+  useMediaQuery,
 } from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { useTaskStrategyEvents } from '../../../../hooks/useTaskStrategyEvents';
@@ -442,10 +445,15 @@ export function TaskStrategyTab({
   );
 
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [runTypeFilter, setRunTypeFilter] = useState<
+    'all' | 'trend' | 'counter'
+  >('all');
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(360);
   const isDragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
+  const [mobileShowDetail, setMobileShowDetail] = useState(false);
 
   const handleResizeStart = useCallback(
     (e: React.PointerEvent) => {
@@ -477,10 +485,27 @@ export function TaskStrategyTab({
     [sidebarWidth]
   );
 
-  const displayedRuns = useMemo(
-    () => (sortOrder === 'asc' ? displayRuns : [...displayRuns].reverse()),
-    [displayRuns, sortOrder]
+  const displayedRuns = useMemo(() => {
+    let runs = sortOrder === 'asc' ? displayRuns : [...displayRuns].reverse();
+    if (runTypeFilter !== 'all') {
+      runs = runs.filter((run) => run.runType === runTypeFilter);
+    }
+    return runs;
+  }, [displayRuns, sortOrder, runTypeFilter]);
+
+  const handleSelectRun = useCallback(
+    (id: string) => {
+      setSelectedRunId(id);
+      if (isMobile) {
+        setMobileShowDetail(true);
+      }
+    },
+    [isMobile]
   );
+
+  const handleBackToList = useCallback(() => {
+    setMobileShowDetail(false);
+  }, []);
 
   const selectedRun =
     displayedRuns.find((run) => run.id === selectedRunId) ??
@@ -586,10 +611,11 @@ export function TaskStrategyTab({
           alignItems: 'start',
         }}
       >
+        {/* Sidebar — hidden on mobile when detail is shown */}
         <Paper
           variant="outlined"
           sx={{
-            display: 'flex',
+            display: isMobile && mobileShowDetail ? 'none' : 'flex',
             flexDirection: 'column',
             maxHeight: { lg: 'calc(100vh - 200px)' },
             position: { lg: 'sticky' },
@@ -619,6 +645,32 @@ export function TaskStrategyTab({
                 onClick={() => setSortOrder('desc')}
               />
             </Stack>
+            <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+              <Chip
+                size="small"
+                clickable
+                color={runTypeFilter === 'trend' ? 'primary' : 'default'}
+                variant={runTypeFilter === 'trend' ? 'filled' : 'outlined'}
+                label={t('common:strategyVisualization.filterTrendOnly')}
+                onClick={() =>
+                  setRunTypeFilter((prev) =>
+                    prev === 'trend' ? 'all' : 'trend'
+                  )
+                }
+              />
+              <Chip
+                size="small"
+                clickable
+                color={runTypeFilter === 'counter' ? 'primary' : 'default'}
+                variant={runTypeFilter === 'counter' ? 'filled' : 'outlined'}
+                label={t('common:strategyVisualization.filterCounterOnly')}
+                onClick={() =>
+                  setRunTypeFilter((prev) =>
+                    prev === 'counter' ? 'all' : 'counter'
+                  )
+                }
+              />
+            </Stack>
           </Box>
           <Divider />
           <Box
@@ -636,11 +688,11 @@ export function TaskStrategyTab({
                 key={run.id}
                 role="button"
                 tabIndex={0}
-                onClick={() => setSelectedRunId(run.id)}
+                onClick={() => handleSelectRun(run.id)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
-                    setSelectedRunId(run.id);
+                    handleSelectRun(run.id);
                   }
                 }}
                 sx={{
@@ -734,9 +786,26 @@ export function TaskStrategyTab({
           />
         </Box>
 
-        <Paper variant="outlined" sx={{ minWidth: 0 }}>
+        {/* Detail panel — on mobile, shown only when a run is selected */}
+        <Paper
+          variant="outlined"
+          sx={{
+            minWidth: 0,
+            display: isMobile && !mobileShowDetail ? 'none' : 'block',
+          }}
+        >
           {selectedRun ? (
             <Box sx={{ p: 2 }}>
+              {isMobile ? (
+                <IconButton
+                  onClick={handleBackToList}
+                  size="small"
+                  aria-label={t('common:actions.back')}
+                  sx={{ mb: 1 }}
+                >
+                  <ArrowBackIcon />
+                </IconButton>
+              ) : null}
               <Stack
                 direction="row"
                 spacing={1}
