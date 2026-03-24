@@ -12,8 +12,103 @@ jobs:
   release-please:
     name: Release Please
     runs-on: ubuntu-latest
-
+    outputs:
+      releases_created: ${{ steps.release.outputs.releases_created }}
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy:
+    name: Deploy to Production Server
+    runs-on: ubuntu-latest
+    needs: [release-please]
+    if: needs.release-please.outputs.releases_created == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        env:
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p ${SSH_PORT} -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts 2>&1 || echo "StrictHostKeyChecking no" >> ~/.ssh/config
+
+      - name: Deploy to production server
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          ssh -p ${SSH_PORT} ${SERVER_USER}@${SERVER_HOST} "mkdir -p ${DEPLOY_PATH}/certbot/conf ${DEPLOY_PATH}/certbot/www ${DEPLOY_PATH}/certbot/work ${DEPLOY_PATH}/certbot/logs ${DEPLOY_PATH}/logs"
+
+          scp -P ${SSH_PORT} docker-compose.prod.yaml ${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/docker-compose.yaml
+
+          scp -P ${SSH_PORT} -r nginx ${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/
+
+          ssh -p ${SSH_PORT} ${SERVER_USER}@${SERVER_HOST} 'bash -se' << EOF
+            set -euo pipefail
+            cd ${DEPLOY_PATH}
+
+          if [ ! -f .env ]; then
+            echo ".env is missing in ${DEPLOY_PATH}. Create it before deploying."
+            exit 1
+          fi
+
+          if ! grep -q "DOCKERHUB_USERNAME" .env; then
+            echo "DOCKERHUB_USERNAME=${DOCKERHUB_USERNAME}" >> .env
+          fi
+
+          docker compose config > /dev/null
+          docker compose pull
+          docker compose down
+          docker compose up -d
+
+          echo "Waiting for PostgreSQL to be healthy..."
+          sleep 15
+
+          docker image prune -af
+          docker compose ps
+          EOF
+
+      - name: Verify deployment
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+        run: |
+          ssh -p ${SSH_PORT} ${SERVER_USER}@${SERVER_HOST} 'bash -se' << EOF
+            set -euo pipefail
+            cd ${DEPLOY_PATH}
+
+            sleep 10
+
+            RUNNING_COUNT=\$(docker compose ps --status running --format json | wc -l)
+            TOTAL_COUNT=\$(docker compose ps --format json | wc -l)
+
+            echo "Running services: \${RUNNING_COUNT}/\${TOTAL_COUNT}"
+
+            if [ "\${RUNNING_COUNT}" -eq "\${TOTAL_COUNT}" ] && [ "\${RUNNING_COUNT}" -gt 0 ]; then
+              echo "✅ Deployment successful - all services are running"
+              docker compose ps
+              exit 0
+            else
+              echo "❌ Deployment failed - not all services are running"
+              docker compose ps
+              echo ""
+              echo "Recent logs:"
+              docker compose logs --tail=50
+              exit 1
+            fi
+          EOF
