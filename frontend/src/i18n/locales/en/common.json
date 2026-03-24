@@ -93,8 +93,7 @@
     "activeTasks": "{{count}} active tasks",
     "loading": "Loading...",
     "updating": "Updating...",
-    "checking": "Checking...",
-    "versionMismatch": "Version mismatch: Frontend v{{frontend}} / Backend v{{backend}}"
+    "checking": "Checking..."
   },
   "labels": {
     "name": "Name",

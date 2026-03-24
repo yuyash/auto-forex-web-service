@@ -15,11 +15,5 @@
       "bump-minor-pre-major": false,
       "bump-patch-for-minor-pre-major": false
     }
-  },
-  "linked-versions": [
-    {
-      "tag": "v",
-      "components": ["backend", "frontend"]
-    }
-  ]
+  }
 }

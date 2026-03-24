@@ -117,5 +117,10 @@
     "dataRefresh": "データ更新",
     "healthCheckInterval": "OANDAヘルスチェック間隔",
     "healthCheckInfo": "フッターに表示されるOANDA API接続状態の確認頻度を制御します。値を小さくすると検出が速くなりますが、ネットワークトラフィックが増加します。"
+  },
+  "version": {
+    "title": "バージョン情報",
+    "frontend": "フロントエンド",
+    "backend": "バックエンド"
   }
 }

@@ -19,6 +19,7 @@ import { LightMode, DarkMode, SettingsBrightness } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAccessibility } from '../../hooks/useAccessibility';
+import { useBackendHealth } from '../../hooks/useBackendHealth';
 import { useToast } from '../common/useToast';
 import type { ThemeMode } from '../../contexts/AccessibilityContextDefinition';
 import {
@@ -72,6 +73,7 @@ const GeneralSettings = () => {
   const { user, token, login } = useAuth();
   const { themeMode, setThemeMode } = useAccessibility();
   const { showSuccess, showError } = useToast();
+  const { data: backendHealth } = useBackendHealth();
   const {
     data,
     error: settingsError,
@@ -293,6 +295,22 @@ const GeneralSettings = () => {
             {submitting ? <CircularProgress size={24} /> : t('common:save')}
           </Button>
         </Box>
+      </Box>
+
+      <Divider sx={{ my: 3 }} />
+
+      {/* Version Info */}
+      <Typography variant="h6" gutterBottom>
+        {t('settings:version.title')}
+      </Typography>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Typography variant="body2" color="text.secondary">
+          {t('settings:version.frontend')}: v{__APP_VERSION__}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {t('settings:version.backend')}:{' '}
+          {backendHealth?.version ? `v${backendHealth.version}` : '—'}
+        </Typography>
       </Box>
     </Box>
   );

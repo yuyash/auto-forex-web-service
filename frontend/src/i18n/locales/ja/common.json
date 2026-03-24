@@ -93,8 +93,7 @@
     "activeTasks": "{{count}} 件のアクティブタスク",
     "loading": "読み込み中...",
     "updating": "更新中...",
-    "checking": "確認中...",
-    "versionMismatch": "バージョン不一致: フロントエンド v{{frontend}} / バックエンド v{{backend}}"
+    "checking": "確認中..."
   },
   "labels": {
     "name": "名前",
