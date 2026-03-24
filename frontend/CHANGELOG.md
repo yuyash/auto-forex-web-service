@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.16.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.15.4...frontend-v1.16.0) (2026-03-24)
+
+
+### Features
+
+* **strategy:** add resizable sidebar and independent scroll to strat… ([#173](https://github.com/yuyash/auto-forex-web-service/issues/173)) ([8ff523a](https://github.com/yuyash/auto-forex-web-service/commit/8ff523ae32b9e7171d5d75ec82f9a11af01e4c8f))
+* **strategy:** add resizable sidebar and independent scroll to strategy tab ([8ff523a](https://github.com/yuyash/auto-forex-web-service/commit/8ff523ae32b9e7171d5d75ec82f9a11af01e4c8f))
+
 ## [1.15.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.15.3...frontend-v1.15.4) (2026-03-24)
 
 
