@@ -202,15 +202,18 @@ class StrategyVisualizationService:
             ]
         groups.sort(key=lambda group: group["started_at"] or "", reverse=True)
 
+        display_cycles = self._split_display_cycles(groups)
+
         return {
             "strategy_type": strategy_type,
             "supported": True,
             "execution_id": str(execution_id) if execution_id else None,
             "generated_at": _dt_to_str(max((e.created_at for e in normalized), default=None)),
-            "summary": self._build_summary(groups=groups),
+            "summary": self._build_summary(groups=groups, display_cycles=display_cycles),
             "view_model": {
                 "kind": "snowball_runs",
                 "groups": groups,
+                "display_cycles": display_cycles,
             },
         }
 
@@ -327,6 +330,188 @@ class StrategyVisualizationService:
             "protection_events": protection_events,
         }
 
+    def _split_counter_sub_cycles(
+        self,
+        counter_steps: list[dict[str, Any]],
+    ) -> list[list[dict[str, Any]]]:
+        """Split counter steps into sub-cycles at points where all open entries are closed.
+
+        逆行ステップを、全オープンカウンターエントリーがクローズされた
+        時点でサブサイクルに分割する。
+
+        Preconditions:
+        - counter_steps is sorted chronologically
+        - Each step has basket="counter" or kind="counter_tp"
+
+        Postconditions:
+        - Each element of the returned list is a list of steps forming one sub-cycle
+        - The last sub-cycle may have open entries remaining (active)
+
+        Loop invariants:
+        - open_entries is the set of entry_ids currently open in the current sub-cycle
+        - current_steps is the list of steps belonging to the current sub-cycle
+        """
+        sub_cycles: list[list[dict[str, Any]]] = []
+        current_steps: list[dict[str, Any]] = []
+        open_entries: set[int] = set()
+
+        for step in counter_steps:
+            current_steps.append(step)
+
+            if step["event_type"] == "open_position" and step["entry_id"] is not None:
+                open_entries.add(step["entry_id"])
+
+            if step["event_type"] == "close_position" and step["entry_id"] is not None:
+                open_entries.discard(step["entry_id"])
+
+            # Sub-cycle complete when all open entries have been closed
+            if len(open_entries) == 0 and len(current_steps) > 0:
+                sub_cycles.append(current_steps)
+                current_steps = []
+                open_entries = set()
+
+        # Remaining steps form the last (possibly active) sub-cycle
+        if current_steps:
+            sub_cycles.append(current_steps)
+
+        return sub_cycles
+
+    def _build_display_cycle(
+        self,
+        *,
+        parent_group_id: str,
+        cycle_type: str,
+        cycle_index: int,
+        steps: list[dict[str, Any]],
+        parent_status: str,
+        root_entry_id: int | None,
+        root_direction: str | None,
+    ) -> dict[str, Any]:
+        """Build a single DisplayCycle dict from a list of steps.
+
+        ディスプレイサイクルを構築する。cycle_id生成、ステータス算出、
+        cycle_summary算出を行う。
+
+        Preconditions:
+        - steps is non-empty
+        - steps is sorted chronologically
+
+        Postconditions:
+        - Returned dict conforms to the DisplayCycle schema
+        - status is correctly derived from step contents
+        """
+        cycle_id = f"{parent_group_id}:{cycle_type}:{cycle_index}"
+
+        # ステータス算出
+        has_protection = any(
+            s["kind"] in ("shrink", "rebalance", "lock_hedge_neutralize") for s in steps
+        )
+        if has_protection or parent_status == "intervened":
+            status = "intervened"
+        else:
+            opened = {
+                s["entry_id"]
+                for s in steps
+                if s["event_type"] == "open_position" and s["entry_id"] is not None
+            }
+            closed = {
+                s["entry_id"]
+                for s in steps
+                if s["event_type"] == "close_position" and s["entry_id"] is not None
+            }
+            has_open_left = bool(opened - closed)
+            status = "active" if has_open_left else "completed"
+
+        # サイクルサマリー算出
+        retracement_values = [v for s in steps if (v := s.get("retracement_count")) is not None]
+        layer_values = [v for s in steps if (v := s.get("layer_number")) is not None]
+        cycle_summary: dict[str, Any] = {
+            "step_count": len(steps),
+            "open_count": sum(1 for s in steps if s["event_type"] == "open_position"),
+            "close_count": sum(1 for s in steps if s["event_type"] == "close_position"),
+            "max_retracement": max(retracement_values) if retracement_values else None,
+            "max_layer": max(layer_values) if layer_values else None,
+            "validation_fail_count": sum(1 for s in steps if s.get("validation_status") == "fail"),
+        }
+
+        return {
+            "cycle_id": cycle_id,
+            "parent_group_id": parent_group_id,
+            "cycle_type": cycle_type,
+            "display_label": f"{cycle_type}_cycle_{cycle_index}",
+            "status": status,
+            "started_at": steps[0].get("timestamp"),
+            "ended_at": steps[-1].get("timestamp") if status != "active" else None,
+            "root_entry_id": root_entry_id,
+            "root_direction": root_direction,
+            "steps": steps,
+            "cycle_summary": cycle_summary,
+        }
+
+    def _split_display_cycles(
+        self,
+        groups: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Split each parent group into trend cycles and counter sub-cycles.
+
+        各親グループを順行サイクルと逆行サブサイクルに分割する。
+
+        Preconditions:
+        - groups is a list of parent groups built by _build_snowball_group()
+        - Each group's steps are sorted chronologically
+
+        Postconditions:
+        - Each element of the returned list is a DisplayCycle dict
+        - All cycles are sorted by started_at in ascending order
+        - Each cycle's cycle_id is unique
+        """
+        cycles: list[dict[str, Any]] = []
+
+        for group in groups:
+            steps = group["steps"]
+            parent_group_id = group["group_id"]
+            parent_status = group["status"]
+
+            # 順行ステップの抽出
+            trend_steps = [s for s in steps if s["basket"] == "trend" or s["kind"] == "trend_tp"]
+
+            if trend_steps:
+                cycles.append(
+                    self._build_display_cycle(
+                        parent_group_id=parent_group_id,
+                        cycle_type="trend",
+                        cycle_index=1,
+                        steps=trend_steps,
+                        parent_status=parent_status,
+                        root_entry_id=group.get("root_entry_id"),
+                        root_direction=group.get("root_direction"),
+                    )
+                )
+
+            # 逆行ステップの抽出とサブサイクル分割
+            counter_steps = [
+                s for s in steps if s["basket"] == "counter" or s["kind"] == "counter_tp"
+            ]
+
+            if counter_steps:
+                sub_cycles = self._split_counter_sub_cycles(counter_steps)
+                for idx, sub_steps in enumerate(sub_cycles, start=1):
+                    cycles.append(
+                        self._build_display_cycle(
+                            parent_group_id=parent_group_id,
+                            cycle_type="counter",
+                            cycle_index=idx,
+                            steps=sub_steps,
+                            parent_status=parent_status,
+                            root_entry_id=group.get("root_entry_id"),
+                            root_direction=group.get("root_direction"),
+                        )
+                    )
+
+        # 全サイクルを開始時刻の昇順でソート
+        cycles.sort(key=lambda c: c["started_at"] or "")
+        return cycles
+
     def _build_checks(self, events: list[VisualizationEvent]) -> dict[str, Any]:
         trend_tps = [
             event
@@ -398,7 +583,12 @@ class StrategyVisualizationService:
             "validation_status": event.validation_status or "not_applicable",
         }
 
-    def _build_summary(self, *, groups: list[dict[str, Any]]) -> dict[str, Any]:
+    def _build_summary(
+        self,
+        *,
+        groups: list[dict[str, Any]],
+        display_cycles: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         open_position_count = 0
         closed_position_count = 0
         counter_add_count = 0
@@ -422,6 +612,8 @@ class StrategyVisualizationService:
             open_position_count += len(opened - closed)
             closed_position_count += len(closed)
 
+        cycles = display_cycles or []
+
         return {
             "group_count": len(groups),
             "active_group_count": sum(1 for group in groups if group["status"] == "active"),
@@ -432,4 +624,7 @@ class StrategyVisualizationService:
             "counter_add_count": counter_add_count,
             "counter_close_count": counter_close_count,
             "protection_event_count": protection_event_count,
+            "display_cycle_count": len(cycles),
+            "trend_cycle_count": sum(1 for c in cycles if c.get("cycle_type") == "trend"),
+            "counter_cycle_count": sum(1 for c in cycles if c.get("cycle_type") == "counter"),
         }

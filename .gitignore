@@ -194,6 +194,9 @@ static_root/
 # Kiro
 .kiro
 
+# VS Code (personal settings)
+.vscode/
+
 # Pytest+cov
 coverage.xml
 

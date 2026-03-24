@@ -322,6 +322,7 @@ export const TradingTaskDetail: React.FC = () => {
             <TaskStrategyTab
               taskId={taskId}
               taskType={TaskType.TRADING}
+              instrument={detailTask.instrument}
               executionRunId={activeExecutionId}
               enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
                 currentStatus

@@ -8,6 +8,9 @@ export interface StrategyVisualizationSummary {
   counter_add_count?: number;
   counter_close_count?: number;
   protection_event_count?: number;
+  display_cycle_count?: number;
+  trend_cycle_count?: number;
+  counter_cycle_count?: number;
 }
 
 export interface StrategyVisualizationStep {
@@ -59,9 +62,57 @@ export interface UnsupportedViewModel {
   groups: [];
 }
 
+export interface CycleSummary {
+  step_count: number;
+  open_count: number;
+  close_count: number;
+  max_retracement: number | null;
+  max_layer: number | null;
+  validation_fail_count: number;
+}
+
+export interface DisplayCycleStep {
+  kind: string;
+  event_type: 'open_position' | 'close_position';
+  entry_id: number | null;
+  parent_entry_id: number | null;
+  timestamp: string | null;
+  basket: 'trend' | 'counter';
+  direction: 'long' | 'short' | null;
+  step: number | null;
+  entry_price: string | null;
+  exit_price: string | null;
+  units: string | null;
+  layer_number: number | null;
+  retracement_count: number | null;
+  description: string;
+  expected_interval_pips: string | null;
+  actual_interval_pips: string | null;
+  expected_tp_pips: string | null;
+  actual_tp_pips: string | null;
+  expected_exit_price: string | null;
+  actual_exit_price: string | null;
+  validation_status: 'pass' | 'fail' | 'not_applicable';
+}
+
+export interface DisplayCycle {
+  cycle_id: string;
+  parent_group_id: string;
+  cycle_type: 'trend' | 'counter';
+  display_label: string;
+  status: 'active' | 'completed' | 'intervened';
+  started_at: string | null;
+  ended_at: string | null;
+  root_entry_id: number | null;
+  root_direction: 'long' | 'short' | null;
+  steps: DisplayCycleStep[];
+  cycle_summary: CycleSummary;
+}
+
 export interface SnowballRunsViewModel {
   kind: 'snowball_runs';
   groups: SnowballRunGroup[];
+  display_cycles?: DisplayCycle[];
 }
 
 export interface FloorLayersViewModel {

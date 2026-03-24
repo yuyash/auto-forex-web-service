@@ -160,6 +160,8 @@
     "otherLane": "その他",
     "noLaneSteps": "このレーンにはステップがありません。",
     "timeline": "タイムライン",
+    "ohlcChart": "OHLCチャート",
+    "chartLoadError": "チャートデータの読み込みに失敗しました。下のタイムラインとフローチャートには影響ありません。",
     "stepPriceLine": "price {{price}} / exit {{exit}}",
     "labels": {
       "open_position": "ポジション作成",
@@ -187,6 +189,7 @@
       "intervenedRuns": "介入サイクル",
       "counterAdds": "逆行追加回数",
       "counterRuns": "逆行サイクル数",
+      "trendRuns": "順行サイクル数",
       "help": "表示上のサイクルは順行と逆行で分離しています。進行中サイクルはまだ終了していないサイクル、完了サイクルは通常終了したサイクル、介入サイクルは縮退やリバランスなど保護動作が入ったサイクルを表します。",
       "runTypeHelp": "順行サイクルと逆行サイクルは別々の単位として数えています。"
     }
