@@ -4,6 +4,7 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useRef,
 } from 'react';
 import type { ReactNode } from 'react';
 import type { User, SystemSettings, AuthContextType } from '../types/auth';
@@ -63,6 +64,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [systemSettingsLoadingState, setSystemSettingsLoading] =
     useState<boolean>(true);
   const [authBootstrapLoading, setAuthBootstrapLoading] = useState(true);
+  const tokenRef = useRef<string | null>(null);
 
   useEffect(() => {
     const storedUser = readStoredValue('user', persistedUserSchema, null);
@@ -82,6 +84,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const clearSessionState = useCallback(() => {
     setToken(null);
+    tokenRef.current = null;
     setUser(null);
     clearPersistedAuth();
   }, [clearPersistedAuth]);
@@ -107,6 +110,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = useCallback((newToken: string, newUser: User) => {
     setToken(newToken);
+    tokenRef.current = newToken;
     setUser(newUser);
     writeStoredValue('user', newUser);
     setAuthToken(newToken);
@@ -138,7 +142,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return false;
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        clearSessionState();
+        // Only clear session if we actually had a token — avoids wiping
+        // a freshly-set token when the bootstrap refresh races with login.
+        if (tokenRef.current) {
+          clearSessionState();
+          tokenRef.current = null;
+        }
         return false;
       }
       logger.warn('Token refresh failed', {
