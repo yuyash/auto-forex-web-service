@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.15.0...frontend-v1.15.1) (2026-03-24)
+
+
+### Bug Fixes
+
+* strategy events root entry id default ([#163](https://github.com/yuyash/auto-forex-web-service/issues/163)) ([523e8a6](https://github.com/yuyash/auto-forex-web-service/commit/523e8a6ab3162e2eef92be0e2002f89c232d3e48))
+
 ## [1.15.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.14.6...frontend-v1.15.0) (2026-03-23)
 
 
