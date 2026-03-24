@@ -228,13 +228,13 @@ export const snapToCandleTimeInLoadedRange = (
   candleTimes: number[]
 ): UTCTimestamp | null => {
   if (candleTimes.length === 0) return null;
-  if (
-    timeSec < candleTimes[0] ||
-    timeSec > candleTimes[candleTimes.length - 1]
-  ) {
-    return null;
-  }
-  return snapToCandleTime(timeSec, candleTimes);
+  // Clamp to the loaded candle range so markers at the edges still render.
+  // lightweight-charts hides markers outside the visible viewport on its own.
+  const clamped = Math.max(
+    candleTimes[0],
+    Math.min(timeSec, candleTimes[candleTimes.length - 1])
+  );
+  return snapToCandleTime(clamped, candleTimes);
 };
 
 export const findFirstCandleAtOrAfter = (
