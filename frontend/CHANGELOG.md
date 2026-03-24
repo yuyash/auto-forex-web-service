@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.15.1...frontend-v1.15.2) (2026-03-24)
+
+
+### Bug Fixes
+
+* **ui:** strategy tab cycle list overflow and flow chart scrolling ([#166](https://github.com/yuyash/auto-forex-web-service/issues/166)) ([d36c7f6](https://github.com/yuyash/auto-forex-web-service/commit/d36c7f6d967fb93600d3787547cff4d95140f867))
+
 ## [1.15.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.15.0...frontend-v1.15.1) (2026-03-24)
 
 
