@@ -43,15 +43,6 @@ export function useTaskExecutions(
     () => refreshTaskExecutions(taskId, taskType, params),
     {
       policy: pollingPolicy,
-      shouldPoll: (data) =>
-        Boolean(
-          data?.results?.some(
-            (execution) =>
-              execution.status === 'running' ||
-              execution.status === 'starting' ||
-              execution.status === 'stopping'
-          )
-        ),
     }
   );
 
