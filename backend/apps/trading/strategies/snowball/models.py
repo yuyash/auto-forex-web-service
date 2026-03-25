@@ -254,28 +254,95 @@ class BasketEntry:
 
 
 @dataclass
+class SnowballCycle:
+    """A single trading cycle: one initial entry through to its close.
+
+    Each cycle tracks its own counter entries, layer/retracement counters,
+    and hedge entries independently.
+    """
+
+    cycle_id: int  # = initial entry's entry_id
+    direction: str  # "long" or "short"
+    initial_entry: dict[str, Any] = field(default_factory=dict)
+    counter_entries: list[dict[str, Any]] = field(default_factory=list)
+    hedge_entries: list[dict[str, Any]] = field(default_factory=list)
+    add_count: int = 0
+    freeze_count: int = 0
+    cycle_base_units: int = 1000
+    completed: bool = False
+
+    def all_entries(self) -> list[dict[str, Any]]:
+        """Return all entries in this cycle (initial + counter + hedge)."""
+        entries: list[dict[str, Any]] = []
+        if self.initial_entry:
+            entries.append(self.initial_entry)
+        entries.extend(self.counter_entries)
+        entries.extend(self.hedge_entries)
+        return entries
+
+    def counter_non_hedge(self) -> list[dict[str, Any]]:
+        """Return counter entries excluding hedges."""
+        return [e for e in self.counter_entries if not e.get("is_hedge")]
+
+    def remove_entry(self, entry_id: int) -> None:
+        """Remove an entry by entry_id from counter or hedge lists."""
+        self.counter_entries = [
+            e for e in self.counter_entries if int(e.get("entry_id", 0)) != entry_id
+        ]
+        self.hedge_entries = [
+            e for e in self.hedge_entries if int(e.get("entry_id", 0)) != entry_id
+        ]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "cycle_id": self.cycle_id,
+            "direction": self.direction,
+            "initial_entry": dict(self.initial_entry) if self.initial_entry else {},
+            "counter_entries": [dict(e) for e in self.counter_entries],
+            "hedge_entries": [dict(e) for e in self.hedge_entries],
+            "add_count": self.add_count,
+            "freeze_count": self.freeze_count,
+            "cycle_base_units": self.cycle_base_units,
+            "completed": self.completed,
+        }
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> "SnowballCycle":
+        return SnowballCycle(
+            cycle_id=_to_int(data.get("cycle_id", 0), 0),
+            direction=_to_str(data.get("direction"), "long"),
+            initial_entry=dict(data.get("initial_entry", {})),
+            counter_entries=[dict(e) for e in data.get("counter_entries", [])],
+            hedge_entries=[dict(e) for e in data.get("hedge_entries", [])],
+            add_count=_to_int(data.get("add_count", 0), 0),
+            freeze_count=_to_int(data.get("freeze_count", 0), 0),
+            cycle_base_units=_to_int(data.get("cycle_base_units", 1000), 1000),
+            completed=bool(data.get("completed", False)),
+        )
+
+
+# ---------------------------------------------------------------------------
+# State
+# ---------------------------------------------------------------------------
+
+
+@dataclass
 class SnowballStrategyState:
     """Mutable runtime state for Snowball strategy."""
 
     protection_level: ProtectionLevel = ProtectionLevel.NORMAL
     initialised: bool = False
 
-    # Basket tracking
-    trend_basket: list[dict[str, Any]] = field(default_factory=list)
-    counter_basket: list[dict[str, Any]] = field(default_factory=list)
-
-    # Counter-trend cycle tracking
-    add_count: int = 0  # current adds within this cycle (max r_max - 1)
-    freeze_count: int = 0  # how many times r_max has been reached
-    cycle_base_units: int = 1000  # base units for current cycle
+    # Cycle-based tracking (replaces trend_basket / counter_basket)
+    cycles: list[SnowballCycle] = field(default_factory=list)
 
     # Next entry id
     next_entry_id: int = 1
 
     # Lock state
     lock_hedge_ids: list[int] = field(default_factory=list)
-    lock_entered_at: str | None = None  # ISO timestamp when lock started
-    cooldown_until: str | None = None  # ISO timestamp when cooldown expires
+    lock_entered_at: str | None = None
+    cooldown_until: str | None = None
 
     # Price tracking
     last_bid: Decimal | None = None
@@ -287,15 +354,37 @@ class SnowballStrategyState:
     # Metrics
     metrics: dict[str, Any] = field(default_factory=dict)
 
+    # ------------------------------------------------------------------
+    # Convenience accessors
+    # ------------------------------------------------------------------
+
+    def active_cycles(self) -> list[SnowballCycle]:
+        """Return cycles that are not yet completed."""
+        return [c for c in self.cycles if not c.completed]
+
+    def all_entries(self) -> list[dict[str, Any]]:
+        """Return every entry across all active cycles."""
+        entries: list[dict[str, Any]] = []
+        for c in self.active_cycles():
+            entries.extend(c.all_entries())
+        return entries
+
+    def find_cycle(self, cycle_id: int) -> SnowballCycle | None:
+        """Find a cycle by its cycle_id."""
+        for c in self.cycles:
+            if c.cycle_id == cycle_id:
+                return c
+        return None
+
+    # ------------------------------------------------------------------
+    # Legacy compatibility: read old trend_basket/counter_basket format
+    # ------------------------------------------------------------------
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "protection_level": self.protection_level.value,
             "initialised": self.initialised,
-            "trend_basket": list(self.trend_basket),
-            "counter_basket": list(self.counter_basket),
-            "add_count": self.add_count,
-            "freeze_count": self.freeze_count,
-            "cycle_base_units": self.cycle_base_units,
+            "cycles": [c.to_dict() for c in self.cycles],
             "next_entry_id": self.next_entry_id,
             "lock_hedge_ids": list(self.lock_hedge_ids),
             "lock_entered_at": self.lock_entered_at,
@@ -313,16 +402,20 @@ class SnowballStrategyState:
         def _dec_or_none(v: Any) -> Decimal | None:
             return _to_decimal(v, "0") if v is not None else None
 
+        # New format: cycles list
+        raw_cycles = data.get("cycles")
+        if raw_cycles is not None:
+            cycles = [SnowballCycle.from_dict(c) for c in raw_cycles]
+        else:
+            # Legacy migration: rebuild cycles from trend_basket / counter_basket
+            cycles = _migrate_legacy_baskets(data)
+
         return SnowballStrategyState(
             protection_level=ProtectionLevel(
                 data.get("protection_level", ProtectionLevel.NORMAL.value)
             ),
             initialised=bool(data.get("initialised", False)),
-            trend_basket=list(data.get("trend_basket", [])),
-            counter_basket=list(data.get("counter_basket", [])),
-            add_count=_to_int(data.get("add_count", 0), 0),
-            freeze_count=_to_int(data.get("freeze_count", 0), 0),
-            cycle_base_units=_to_int(data.get("cycle_base_units", 1000), 1000),
+            cycles=cycles,
             next_entry_id=max(1, _to_int(data.get("next_entry_id", 1), 1)),
             lock_hedge_ids=[_to_int(i, 0) for i in (data.get("lock_hedge_ids") or [])],
             lock_entered_at=data.get("lock_entered_at"),
@@ -340,3 +433,48 @@ class SnowballStrategyState:
         if not isinstance(raw, dict):
             return cls()
         return cls.from_dict(raw)
+
+
+def _migrate_legacy_baskets(data: dict[str, Any]) -> list[SnowballCycle]:
+    """Rebuild SnowballCycle list from old trend_basket/counter_basket format.
+
+    Each trend_basket entry becomes the initial_entry of a cycle.
+    Counter entries are assigned to cycles by matching root_entry_id.
+    """
+    trend_entries = list(data.get("trend_basket", []))
+    counter_entries = list(data.get("counter_basket", []))
+    add_count = _to_int(data.get("add_count", 0), 0)
+    freeze_count = _to_int(data.get("freeze_count", 0), 0)
+    cycle_base_units = _to_int(data.get("cycle_base_units", 1000), 1000)
+
+    cycles: list[SnowballCycle] = []
+    cycle_by_entry_id: dict[int, SnowballCycle] = {}
+
+    for te in trend_entries:
+        eid = _to_int(te.get("entry_id", 0), 0)
+        direction = _to_str(te.get("direction"), "long")
+        cycle = SnowballCycle(
+            cycle_id=eid,
+            direction=direction,
+            initial_entry=dict(te),
+            add_count=add_count,
+            freeze_count=freeze_count,
+            cycle_base_units=cycle_base_units,
+        )
+        cycles.append(cycle)
+        cycle_by_entry_id[eid] = cycle
+
+    for ce in counter_entries:
+        root_eid = _to_int(ce.get("root_entry_id", 0), 0)
+        target = cycle_by_entry_id.get(root_eid)
+        if target is None and cycles:
+            # Fallback: assign to first cycle with matching direction
+            direction = _to_str(ce.get("direction"), "long")
+            target = next((c for c in cycles if c.direction == direction), cycles[0])
+        if target is not None:
+            if ce.get("is_hedge"):
+                target.hedge_entries.append(dict(ce))
+            else:
+                target.counter_entries.append(dict(ce))
+
+    return cycles

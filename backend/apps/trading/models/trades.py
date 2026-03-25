@@ -91,6 +91,16 @@ class Trade(models.Model):
         related_name="trades",
         help_text="Position this trade belongs to",
     )
+    cycle_id = models.UUIDField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text=(
+            "Cycle identifier grouping all trades from one Initial Entry "
+            "through to its close. Equal to the Trade.id of the cycle's "
+            "first open trade. NULL for strategies that do not use cycles."
+        ),
+    )
     order = models.ForeignKey(
         "trading.Order",
         on_delete=models.SET_NULL,
@@ -118,6 +128,7 @@ class Trade(models.Model):
             models.Index(fields=["task_type", "task_id", "execution_id", "-timestamp"]),
             models.Index(fields=["task_type", "task_id", "instrument"]),
             models.Index(fields=["execution_method"]),
+            models.Index(fields=["task_type", "task_id", "cycle_id", "timestamp"]),
         ]
 
     def __str__(self) -> str:
