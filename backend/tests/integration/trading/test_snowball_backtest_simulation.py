@@ -222,9 +222,9 @@ class TestSnowballBacktestSimulation:
             ("strategy_started", None, None),
             ("open_position", "snowball_initial", 1),
             ("open_position", "snowball_initial", 1),
+            ("open_position", "snowball_counter", 1),
             ("open_position", "snowball_counter", 2),
-            ("open_position", "snowball_counter", 3),
-            ("close_position", None, 3),
+            ("close_position", None, 2),
             ("open_position", "snowball_counter", 1),
             ("close_position", None, 1),
             ("open_position", "snowball_initial", 1),
@@ -275,7 +275,7 @@ class TestSnowballBacktestSimulation:
         assert state.strategy_state["cycles"][0]["add_count"] == 0
         assert state.strategy_state["cycles"][0]["freeze_count"] == 1
         assert state.strategy_state["cycles"][0]["cycle_base_units"] == 1500
-        assert counter_add_retracements == [2, 3]
+        assert counter_add_retracements == [1, 2]
 
     def test_spread_guard_blocks_initialisation_through_executor(self) -> None:
         base = datetime(2026, 1, 1, tzinfo=UTC)
@@ -506,6 +506,6 @@ class TestSnowballBacktestSimulation:
         assert state.ticks_processed == 4
         assert state.strategy_state["cycles"][0]["add_count"] == 2
         assert counter_adds == [
-            (2, 7, 5.0),
-            (3, 11, 10.0),
+            (1, 7, 5.0),
+            (2, 11, 10.0),
         ]

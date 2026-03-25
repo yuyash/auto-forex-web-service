@@ -14,7 +14,7 @@ import type {
   TradingTaskListParams,
 } from '../types';
 import { TaskType } from '../types/common';
-import type { StrategyVisualizationResponse } from '../types/strategyVisualization';
+import type { StrategyCyclesResponse } from '../types/strategyVisualization';
 import { handleAuthErrorStatus } from '../utils/authEvents';
 import type { TaskSummary } from './useTaskSummary';
 
@@ -249,7 +249,7 @@ export function createTaskStrategyEventsQuery(
   taskId: string | number,
   taskType: TaskType,
   executionRunId?: string
-): UseQueryOptions<StrategyVisualizationResponse | null> {
+): UseQueryOptions<StrategyCyclesResponse | null> {
   return {
     queryKey: queryKeys.taskResources.strategyEvents(
       taskType,
@@ -264,7 +264,7 @@ export function createTaskStrategyEventsQuery(
         return null;
       }
       try {
-        return await fetchTaskResourceObject<StrategyVisualizationResponse>(
+        return await fetchTaskResourceObject<StrategyCyclesResponse>(
           taskType,
           taskId,
           'strategy-events',
@@ -279,9 +279,7 @@ export function createTaskStrategyEventsQuery(
           });
         }
         throw new Error(
-          err instanceof Error
-            ? err.message
-            : 'Failed to load strategy visualization'
+          err instanceof Error ? err.message : 'Failed to load strategy cycles'
         );
       }
     },

@@ -1,7 +1,7 @@
 import { queryClient, queryKeys } from '../config/reactQuery';
 import type { PaginatedResponse, TaskExecution } from '../types';
 import { TaskType } from '../types/common';
-import type { StrategyVisualizationResponse } from '../types/strategyVisualization';
+import type { StrategyCyclesResponse } from '../types/strategyVisualization';
 import type { TaskSummary } from './useTaskSummary';
 
 export function getTaskExecutionsKey(
@@ -133,7 +133,7 @@ export function patchTaskStrategyEventsExecution(
   taskType: TaskType,
   executionId: string | null
 ): void {
-  queryClient.setQueriesData<StrategyVisualizationResponse | null | undefined>(
+  queryClient.setQueriesData<StrategyCyclesResponse | null | undefined>(
     { queryKey: queryKeys.taskResources.strategyEvents(taskType, taskId) },
     (cached) => {
       if (!cached) {
@@ -142,7 +142,6 @@ export function patchTaskStrategyEventsExecution(
       return {
         ...cached,
         execution_id: executionId,
-        generated_at: executionId ? cached.generated_at : null,
       };
     }
   );
@@ -156,7 +155,7 @@ export function patchTaskStrategyEventsLifecycle(
     clearVisualization?: boolean;
   }
 ): void {
-  queryClient.setQueriesData<StrategyVisualizationResponse | null | undefined>(
+  queryClient.setQueriesData<StrategyCyclesResponse | null | undefined>(
     { queryKey: queryKeys.taskResources.strategyEvents(taskType, taskId) },
     (cached) => {
       if (!cached) {
@@ -164,21 +163,19 @@ export function patchTaskStrategyEventsLifecycle(
       }
       if (options.clearVisualization) {
         return {
-          ...cached,
           execution_id: options.executionId,
-          generated_at: null,
-          message: undefined,
-          summary: {},
-          view_model: {
-            kind: 'unsupported',
-            groups: [],
+          cycles: [],
+          summary: {
+            cycle_count: 0,
+            active_count: 0,
+            completed_count: 0,
+            total_trades: 0,
           },
         };
       }
       return {
         ...cached,
         execution_id: options.executionId,
-        generated_at: null,
       };
     }
   );

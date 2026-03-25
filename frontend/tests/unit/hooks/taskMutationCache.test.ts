@@ -12,7 +12,7 @@ import type {
   TaskExecution,
   TradingTask,
 } from '../../../src/types';
-import type { StrategyVisualizationResponse } from '../../../src/types/strategyVisualization';
+import type { StrategyCyclesResponse } from '../../../src/types/strategyVisualization';
 
 function buildTradingTask(overrides?: Partial<TradingTask>): TradingTask {
   return {
@@ -80,15 +80,14 @@ describe('taskMutationCache', () => {
       'task-1'
     );
     const executionsKey = queryKeys.tradingTasks.executions('task-1');
-    queryClient.setQueryData<StrategyVisualizationResponse>(queryKey, {
-      strategy_type: 'snowball',
-      supported: true,
+    queryClient.setQueryData<StrategyCyclesResponse>(queryKey, {
       execution_id: 'run-old',
-      generated_at: '2026-03-22T00:00:00Z',
-      summary: { group_count: 2 },
-      view_model: {
-        kind: 'snowball_runs',
-        groups: [],
+      cycles: [],
+      summary: {
+        cycle_count: 0,
+        active_count: 0,
+        completed_count: 0,
+        total_trades: 0,
       },
     });
     queryClient.setQueryData(summaryKey, {
@@ -109,13 +108,9 @@ describe('taskMutationCache', () => {
     });
 
     expect(
-      queryClient.getQueryData<StrategyVisualizationResponse>(queryKey)
+      queryClient.getQueryData<StrategyCyclesResponse>(queryKey)
     ).toMatchObject({
       execution_id: 'run-new',
-      generated_at: null,
-      view_model: {
-        kind: 'snowball_runs',
-      },
     });
     expect(queryClient.getQueryData(summaryKey)).toMatchObject({
       task: { status: TaskStatus.RUNNING },
@@ -135,15 +130,26 @@ describe('taskMutationCache', () => {
       TaskType.BACKTEST,
       'task-2'
     );
-    queryClient.setQueryData<StrategyVisualizationResponse>(queryKey, {
-      strategy_type: 'snowball',
-      supported: true,
+    queryClient.setQueryData<StrategyCyclesResponse>(queryKey, {
       execution_id: 'run-old',
-      generated_at: '2026-03-22T00:00:00Z',
-      summary: { group_count: 2 },
-      view_model: {
-        kind: 'snowball_runs',
-        groups: [{ group_id: 'g-1', status: 'active', steps: [] }],
+      cycles: [
+        {
+          cycle_id: 'c-1',
+          direction: 'buy',
+          status: 'active',
+          started_at: null,
+          ended_at: null,
+          trade_count: 0,
+          open_count: 0,
+          close_count: 0,
+          trades: [],
+        },
+      ],
+      summary: {
+        cycle_count: 1,
+        active_count: 1,
+        completed_count: 0,
+        total_trades: 0,
       },
     });
 
@@ -169,14 +175,15 @@ describe('taskMutationCache', () => {
     });
 
     expect(
-      queryClient.getQueryData<StrategyVisualizationResponse>(queryKey)
+      queryClient.getQueryData<StrategyCyclesResponse>(queryKey)
     ).toMatchObject({
       execution_id: null,
-      generated_at: null,
-      summary: {},
-      view_model: {
-        kind: 'unsupported',
-        groups: [],
+      cycles: [],
+      summary: {
+        cycle_count: 0,
+        active_count: 0,
+        completed_count: 0,
+        total_trades: 0,
       },
     });
   });

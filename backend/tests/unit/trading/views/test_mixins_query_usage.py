@@ -53,20 +53,17 @@ def test_strategy_events_uses_strategy_events_query_params():
 
     with (
         patch("apps.trading.views.mixins.StrategyEventsQueryParams.from_request") as from_request,
-        patch(
-            "apps.trading.services.strategy_visualization.StrategyVisualizationService.build"
-        ) as build,
+        patch("apps.trading.services.strategy_cycles.StrategyCyclesService.build") as build,
     ):
         from_request.return_value = SimpleNamespace(
             execution_id="exec-1",
-            root_entry_id=42,
         )
-        build.return_value = {"supported": True}
+        build.return_value = {"cycles": [], "summary": {}}
 
         response = view.strategy_events(request, pk=1)
 
     from_request.assert_called_once_with(request, default_execution_id="exec-1")
-    assert response.data == {"supported": True}
+    assert response.data == {"cycles": [], "summary": {}}
 
 
 def test_summary_uses_summary_query_params():
