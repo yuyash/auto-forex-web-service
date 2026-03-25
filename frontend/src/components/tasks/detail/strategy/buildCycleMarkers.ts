@@ -1,6 +1,6 @@
 import type { Time } from 'lightweight-charts';
 import type { CycleTrade } from '../../../../types/strategyVisualization';
-import { snapToCandleTimeInLoadedRange } from '../taskTrendPanel/shared';
+import { snapToCandleTime } from '../taskTrendPanel/shared';
 
 export interface CycleChartMarker {
   time: Time;
@@ -9,6 +9,9 @@ export interface CycleChartMarker {
   shape: 'arrowUp' | 'arrowDown' | 'circle';
   text: string;
 }
+
+/** Maximum allowed distance (seconds) between a trade and its snapped candle. */
+const MAX_SNAP_DISTANCE_SEC = 2 * 86400;
 
 export function buildCycleMarkers(
   trades: CycleTrade[],
@@ -21,8 +24,9 @@ export function buildCycleMarkers(
   for (const trade of trades) {
     if (!trade.timestamp) continue;
     const tradeSec = Math.floor(new Date(trade.timestamp).getTime() / 1000);
-    const snapped = snapToCandleTimeInLoadedRange(tradeSec, candleTimes);
+    const snapped = snapToCandleTime(tradeSec, candleTimes);
     if (snapped == null) continue;
+    if (Math.abs(Number(snapped) - tradeSec) > MAX_SNAP_DISTANCE_SEC) continue;
 
     const isOpen = trade.execution_method === 'open_position';
     const isBuy = trade.direction === 'buy';
