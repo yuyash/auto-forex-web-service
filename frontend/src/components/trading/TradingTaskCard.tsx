@@ -99,7 +99,7 @@ export default function TradingTaskCard({
       : currentStatus;
 
   // Use original task data (polledStatus only provides status, not full task details)
-  const currentTask = task;
+  const currentTask = polledTask || task;
 
   // Trigger refresh when polled status differs from task prop status
   // This ensures parent component gets updated data

@@ -18,7 +18,7 @@ describe('taskResourceQueries polling helpers', () => {
     expect(shouldEnableRealtimeTaskUpdates('starting')).toBe(true);
     expect(shouldEnableRealtimeTaskUpdates('running')).toBe(true);
     expect(shouldEnableRealtimeTaskUpdates('stopping')).toBe(true);
-    expect(shouldEnableRealtimeTaskUpdates('paused')).toBe(false);
+    expect(shouldEnableRealtimeTaskUpdates('paused')).toBe(true);
     expect(shouldEnableRealtimeTaskUpdates('completed')).toBe(false);
   });
 });

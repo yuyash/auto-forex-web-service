@@ -19,20 +19,30 @@ import { useTradingTasks } from '../../hooks/useTradingTasks';
 import { StatusBadge } from '../tasks/display/StatusBadge';
 import { TaskStatus } from '../../types/common';
 import { useTranslation } from 'react-i18next';
+import { usePollingPolicy } from '../../hooks/usePollingPolicy';
+import { useSequentialPolling } from '../../hooks/useSequentialPolling';
 
 const ActiveTasksWidget = () => {
   const { t } = useTranslation('dashboard');
   const navigate = useNavigate();
 
   // Fetch running backtest tasks
-  const { data: backtestData, isLoading: backtestLoading } = useBacktestTasks({
+  const {
+    data: backtestData,
+    isLoading: backtestLoading,
+    refresh: refreshBacktest,
+  } = useBacktestTasks({
     status: TaskStatus.RUNNING,
     page: 1,
     page_size: 3,
   });
 
   // Fetch running trading tasks
-  const { data: tradingData, isLoading: tradingLoading } = useTradingTasks({
+  const {
+    data: tradingData,
+    isLoading: tradingLoading,
+    refresh: refreshTrading,
+  } = useTradingTasks({
     status: TaskStatus.RUNNING,
     page: 1,
     page_size: 3,
@@ -43,6 +53,22 @@ const ActiveTasksWidget = () => {
   const totalActive = backtestTasks.length + tradingTasks.length;
 
   const isLoading = backtestLoading || tradingLoading;
+
+  // Poll for updates when there are active tasks
+  const pollingPolicy = usePollingPolicy({
+    enabled: totalActive > 0,
+    baseIntervalMs: 15_000,
+  });
+
+  useSequentialPolling(
+    async () => {
+      await Promise.all([refreshBacktest(), refreshTrading()]);
+    },
+    {
+      enabled: pollingPolicy.isActive,
+      intervalMs: pollingPolicy.intervalMs,
+    }
+  );
 
   return (
     <Paper elevation={2} sx={{ p: 3, height: '100%' }}>

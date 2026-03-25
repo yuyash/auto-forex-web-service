@@ -9,6 +9,8 @@ import { useOandaAccounts } from '../../hooks/useOandaAccounts';
 import { useOandaHealthStatus } from '../../hooks/useOandaHealthStatus';
 import { useTradingTasks } from '../../hooks/useTradingTasks';
 import { TaskStatus } from '../../types/common';
+import { usePollingPolicy } from '../../hooks/usePollingPolicy';
+import { useSequentialPolling } from '../../hooks/useSequentialPolling';
 
 interface StrategyStatus {
   isActive: boolean;
@@ -32,11 +34,30 @@ const AppFooter = () => {
     refreshIntervalMs: appSettings.healthCheckIntervalSeconds * 1000,
     activeCheck: false,
   });
-  const { data: activeTradingTasks } = useTradingTasks({
-    page: 1,
-    page_size: 3,
-    status: TaskStatus.RUNNING,
+  const { data: activeTradingTasks, refresh: refreshTradingTasks } =
+    useTradingTasks({
+      page: 1,
+      page_size: 3,
+      status: TaskStatus.RUNNING,
+    });
+
+  // Poll for active trading task updates
+  const hasActiveTasks =
+    activeTradingTasks != null && activeTradingTasks.count > 0;
+  const footerPollingPolicy = usePollingPolicy({
+    enabled: hasActiveTasks,
+    baseIntervalMs: 15_000,
   });
+
+  useSequentialPolling(
+    async () => {
+      await refreshTradingTasks();
+    },
+    {
+      enabled: footerPollingPolicy.isActive,
+      intervalMs: footerPollingPolicy.intervalMs,
+    }
+  );
 
   const oandaHealth: OandaHealthStatus | null = !hasAccounts
     ? {

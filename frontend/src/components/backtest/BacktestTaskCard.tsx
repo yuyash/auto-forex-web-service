@@ -116,7 +116,7 @@ export default function BacktestTaskCard({
   }, [polledTask, task.status, task.id, onRefresh]);
 
   // Use original task data (polledStatus only provides status, not full task details)
-  const currentTask = task;
+  const currentTask = polledTask || task;
 
   const handleActionsClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -298,7 +298,10 @@ export default function BacktestTaskCard({
   };
 
   // Get progress from summary endpoint
-  const summaryData = useTaskSummary(task.id, TaskType.BACKTEST);
+  const summaryData = useTaskSummary(task.id, TaskType.BACKTEST, undefined, {
+    polling: pollingEnabled,
+    interval: 5000,
+  });
   const progress = summaryData.summary.task.progress;
 
   return (
