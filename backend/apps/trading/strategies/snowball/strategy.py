@@ -190,6 +190,7 @@ class SnowballStrategy(Strategy):
         step: int,
         close_price: Decimal,
         role: str,
+        layer_number: int = 1,
         lot_k: int | None = None,
         description: str = "",
         planned_exit_price_formula: str | None = None,
@@ -203,9 +204,7 @@ class SnowballStrategy(Strategy):
         """Create an OpenPositionEvent and the corresponding entry dict."""
         eid = self._next_id(ss)
         price = tick.ask if direction == "long" else tick.bid
-        is_initial = role == "initial"
-        layer = 1 if is_initial else 0  # counter layer set by caller via cycle.freeze_count
-        ret = 1 if is_initial else (lot_k if lot_k is not None else 1)
+        ret = 1 if role == "initial" else (lot_k if lot_k is not None else 1)
         entry = BasketEntry(
             entry_id=eid,
             step=step,
@@ -217,8 +216,8 @@ class SnowballStrategy(Strategy):
         )
         entry_dict = entry.to_dict()
         if root_entry_id is None:
-            root_entry_id = eid if is_initial else None
-        entry_dict["layer_number"] = layer
+            root_entry_id = eid if role == "initial" else None
+        entry_dict["layer_number"] = layer_number
         entry_dict["retracement_count"] = ret
         entry_dict["role"] = role
         entry_dict["root_entry_id"] = root_entry_id
@@ -237,7 +236,7 @@ class SnowballStrategy(Strategy):
         event = OpenPositionEvent(
             event_type=EventType.OPEN_POSITION,
             timestamp=tick.timestamp,
-            layer_number=layer,
+            layer_number=layer_number,
             direction=direction,
             price=price,
             units=units,
@@ -620,6 +619,7 @@ class SnowballStrategy(Strategy):
                 step=step_k + 1,
                 close_price=close_price,
                 role="counter",
+                layer_number=cycle.freeze_count + 1,
                 lot_k=ret_number,
                 description=(
                     f"Counter add ({direction.upper()}) | "
@@ -634,8 +634,6 @@ class SnowballStrategy(Strategy):
                 expected_tp_pips=tp,
                 validation_status="pass",
             )
-            entry_dict["layer_number"] = cycle.freeze_count + 1
-            entry_dict["retracement_count"] = ret_number
             cycle.counter_entries.append(entry_dict)
             cycle.add_count = 1
             events.append(evt)
@@ -688,6 +686,7 @@ class SnowballStrategy(Strategy):
             step=int(latest.get("step", 1)) + 1,
             close_price=close_price,
             role="counter",
+            layer_number=cycle.freeze_count + 1,
             lot_k=ret_number,
             description=(
                 f"Counter add ({direction.upper()}) | "
@@ -706,8 +705,6 @@ class SnowballStrategy(Strategy):
             expected_tp_pips=tp,
             validation_status="pass",
         )
-        entry_dict["layer_number"] = cycle.freeze_count + 1
-        entry_dict["retracement_count"] = ret_number
         cycle.counter_entries.append(entry_dict)
         cycle.add_count += 1
 
