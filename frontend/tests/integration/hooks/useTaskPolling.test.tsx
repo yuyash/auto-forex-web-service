@@ -126,6 +126,7 @@ describe('task polling hooks', () => {
       await vi.advanceTimersByTimeAsync(1000);
     });
 
-    expect(tradingTasksApi.getExecutions).toHaveBeenCalledTimes(2);
+    // Polling continues regardless of execution status
+    expect(tradingTasksApi.getExecutions).toHaveBeenCalledTimes(3);
   });
 });
