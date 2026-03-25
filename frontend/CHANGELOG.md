@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.1...frontend-v1.18.2) (2026-03-25)
+
+
+### Bug Fixes
+
+* strategy tab refresh and chart viewport ([#184](https://github.com/yuyash/auto-forex-web-service/issues/184)) ([db5b2c3](https://github.com/yuyash/auto-forex-web-service/commit/db5b2c3f78692f39d8f39dc15953d4f75d030c77))
+
 ## [1.18.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.0...frontend-v1.18.1) (2026-03-25)
 
 
