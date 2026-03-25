@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.2...frontend-v1.18.3) (2026-03-25)
+
+
+### Bug Fixes
+
+* **frontend:** comprehensive realtime task status updates ([#186](https://github.com/yuyash/auto-forex-web-service/issues/186)) ([7290e46](https://github.com/yuyash/auto-forex-web-service/commit/7290e46184ffc3ab523b07e7dc88c79651a895dc))
+
 ## [1.18.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.1...frontend-v1.18.2) (2026-03-25)
 
 
