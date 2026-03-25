@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.5...frontend-v1.18.6) (2026-03-25)
+
+
+### Bug Fixes
+
+* **frontend:** always poll execution history when polling is enabled ([#193](https://github.com/yuyash/auto-forex-web-service/issues/193)) ([f4b4c8a](https://github.com/yuyash/auto-forex-web-service/commit/f4b4c8ae8e8a424178862788c71b3fab1d67b716))
+
 ## [1.18.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.4...frontend-v1.18.5) (2026-03-25)
 
 
