@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.3...frontend-v1.18.4) (2026-03-25)
+
+
+### Bug Fixes
+
+* cycle based snowball strategy ([#188](https://github.com/yuyash/auto-forex-web-service/issues/188)) ([4cbd2be](https://github.com/yuyash/auto-forex-web-service/commit/4cbd2be327178526c0828d871bc77c43e31a05de))
+
 ## [1.18.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.2...frontend-v1.18.3) (2026-03-25)
 
 
