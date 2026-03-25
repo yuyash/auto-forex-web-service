@@ -56,7 +56,7 @@ def _normalize_entry(entry: dict[str, Any]) -> dict[str, Any]:
             "units",
             "layer_number",
             "retracement_count",
-            "basket",
+            "role",
             "root_entry_id",
             "parent_entry_id",
             "visual_group_id",
@@ -200,8 +200,8 @@ class TestSnowballBacktestSimulation:
         ]
 
         assert state.ticks_processed == 5
-        assert state.strategy_state["add_count"] == 1
-        assert state.strategy_state["freeze_count"] == 0
+        assert state.strategy_state["cycles"][0]["add_count"] == 1
+        assert state.strategy_state["cycles"][0]["freeze_count"] == 0
         assert state.current_balance > task.initial_balance
         assert (
             Position.objects.filter(
@@ -220,14 +220,14 @@ class TestSnowballBacktestSimulation:
         )
         assert event_summary == [
             ("strategy_started", None, None),
-            ("open_position", "snowball_trend", 1),
-            ("open_position", "snowball_trend", 1),
+            ("open_position", "snowball_initial", 1),
+            ("open_position", "snowball_initial", 1),
             ("open_position", "snowball_counter", 2),
             ("open_position", "snowball_counter", 3),
             ("close_position", None, 3),
-            ("close_position", None, 1),
-            ("open_position", "snowball_trend", 1),
             ("open_position", "snowball_counter", 1),
+            ("close_position", None, 1),
+            ("open_position", "snowball_initial", 1),
             ("strategy_stopped", None, None),
         ]
 
@@ -266,15 +266,15 @@ class TestSnowballBacktestSimulation:
                 execution_id=task.execution_id,
                 event_type="open_position",
             )
-            .exclude(details__strategy_event_type="snowball_trend")
+            .exclude(details__strategy_event_type="snowball_initial")
             .order_by("created_at", "id")
             .values_list("details__retracement_count", flat=True)
         )
 
         assert state.ticks_processed == 4
-        assert state.strategy_state["add_count"] == 0
-        assert state.strategy_state["freeze_count"] == 1
-        assert state.strategy_state["cycle_base_units"] == 1500
+        assert state.strategy_state["cycles"][0]["add_count"] == 0
+        assert state.strategy_state["cycles"][0]["freeze_count"] == 1
+        assert state.strategy_state["cycles"][0]["cycle_base_units"] == 1500
         assert counter_add_retracements == [2, 3]
 
     def test_spread_guard_blocks_initialisation_through_executor(self) -> None:
@@ -314,8 +314,7 @@ class TestSnowballBacktestSimulation:
 
         assert state.ticks_processed == 2
         assert state.strategy_state["initialised"] is False
-        assert state.strategy_state["trend_basket"] == []
-        assert state.strategy_state["counter_basket"] == []
+        assert state.strategy_state["cycles"] == []
         assert Position.objects.filter(task_id=task.pk, execution_id=task.execution_id).count() == 0
         assert Trade.objects.filter(task_id=task.pk, execution_id=task.execution_id).count() == 0
         assert events == ["strategy_started", "strategy_stopped"]
@@ -379,14 +378,17 @@ class TestSnowballBacktestSimulation:
 
         assert resumed_state.ticks_processed == full_state.ticks_processed
         assert resumed_state.current_balance == full_state.current_balance
-        assert resumed_state.strategy_state["add_count"] == full_state.strategy_state["add_count"]
         assert (
-            resumed_state.strategy_state["freeze_count"]
-            == full_state.strategy_state["freeze_count"]
+            resumed_state.strategy_state["cycles"][0]["add_count"]
+            == full_state.strategy_state["cycles"][0]["add_count"]
         )
         assert (
-            resumed_state.strategy_state["cycle_base_units"]
-            == full_state.strategy_state["cycle_base_units"]
+            resumed_state.strategy_state["cycles"][0]["freeze_count"]
+            == full_state.strategy_state["cycles"][0]["freeze_count"]
+        )
+        assert (
+            resumed_state.strategy_state["cycles"][0]["cycle_base_units"]
+            == full_state.strategy_state["cycles"][0]["cycle_base_units"]
         )
         # Compare strategy-level metrics only; runtime metrics (current_atr,
         # baseline_atr, margin_ratio, volatility_threshold) depend on candle
@@ -402,11 +404,23 @@ class TestSnowballBacktestSimulation:
         }
         assert resumed_metrics == full_metrics
         assert [
-            _normalize_entry(entry) for entry in resumed_state.strategy_state["trend_basket"]
-        ] == [_normalize_entry(entry) for entry in full_state.strategy_state["trend_basket"]]
+            _normalize_entry(entry)
+            for cycle in resumed_state.strategy_state["cycles"]
+            for entry in [cycle["initial_entry"]]
+            if entry
+        ] == [
+            _normalize_entry(entry)
+            for cycle in full_state.strategy_state["cycles"]
+            for entry in [cycle["initial_entry"]]
+            if entry
+        ]
         assert [
-            _normalize_entry(entry) for entry in resumed_state.strategy_state["counter_basket"]
-        ] == [_normalize_entry(entry) for entry in full_state.strategy_state["counter_basket"]]
+            _normalize_entry(entry)
+            for entry in resumed_state.strategy_state["cycles"][0]["counter_entries"]
+        ] == [
+            _normalize_entry(entry)
+            for entry in full_state.strategy_state["cycles"][0]["counter_entries"]
+        ]
         assert (
             Position.objects.filter(
                 task_id=resumed_task.pk,
@@ -490,7 +504,7 @@ class TestSnowballBacktestSimulation:
         )
 
         assert state.ticks_processed == 4
-        assert state.strategy_state["add_count"] == 2
+        assert state.strategy_state["cycles"][0]["add_count"] == 2
         assert counter_adds == [
             (2, 7, 5.0),
             (3, 11, 10.0),

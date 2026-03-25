@@ -28,6 +28,7 @@ export interface TaskTrade {
   execution_method_display?: string;
   description?: string;
   commission?: string;
+  cycle_id?: string | null;
   updated_at?: string | null;
 }
 

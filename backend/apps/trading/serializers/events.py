@@ -105,6 +105,7 @@ class TradeSerializer(serializers.Serializer):
     description = serializers.CharField(required=False, allow_blank=True, default="")
     timestamp = serializers.DateTimeField()
     position_id = serializers.UUIDField(required=False, allow_null=True)
+    cycle_id = serializers.UUIDField(required=False, allow_null=True)
     updated_at = serializers.DateTimeField(required=False, allow_null=True)
 
     def get_execution_method_display(self, obj: object) -> str:

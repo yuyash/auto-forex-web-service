@@ -184,7 +184,7 @@ class TestCounterBasketAdds:
         counter_opens = [o for o in opens if "counter" in (o.strategy_event_type or "")]
         assert len(counter_opens) == 1
         # First counter add: lot_k=2 (trend=1), add_count=1
-        assert state.strategy_state["add_count"] == 1
+        assert state.strategy_state["cycles"][0]["add_count"] == 1
 
     def test_second_counter_add(self):
         """Counter adds use lot_k=2,3,4... (trend entry is position 1)."""
@@ -194,13 +194,15 @@ class TestCounterBasketAdds:
 
         # First add — lot_k=2 (trend entry is position 1)
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
-        assert state.strategy_state["add_count"] == 1
+        assert state.strategy_state["cycles"][0]["add_count"] == 1
 
         # Second add — 10 more pips from latest counter entry, lot_k=3
         s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.79", "149.81"), state=state)
-        assert state.strategy_state["add_count"] == 2
+        assert state.strategy_state["cycles"][0]["add_count"] == 2
 
-        counter = [e for e in state.strategy_state["counter_basket"] if not e.get("is_hedge")]
+        counter = [
+            e for e in state.strategy_state["cycles"][0]["counter_entries"] if not e.get("is_hedge")
+        ]
         assert len(counter) == 2
         # lot_k=2 → 2000, lot_k=3 → 3000
         assert int(counter[0]["units"]) == 2000
@@ -230,10 +232,12 @@ class TestCounterCloseResetsAddCount:
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
         s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.79", "149.81"), state=state)
         s.on_tick(tick=_tick(T0 + timedelta(seconds=180), "149.69", "149.71"), state=state)
-        assert state.strategy_state["add_count"] == 3
+        assert state.strategy_state["cycles"][0]["add_count"] == 3
 
         # Now price reverses — latest counter entry (long) has close_price set
-        counter = [e for e in state.strategy_state["counter_basket"] if not e.get("is_hedge")]
+        counter = [
+            e for e in state.strategy_state["cycles"][0]["counter_entries"] if not e.get("is_hedge")
+        ]
         latest = max(counter, key=lambda e: int(e.get("step", 0)))
         close_price = Decimal(str(latest["close_price"]))
 
@@ -248,7 +252,7 @@ class TestCounterCloseResetsAddCount:
         closes = _close_events(result)
         assert len(closes) >= 1
         # add_count resets to 0 after TP close
-        assert state.strategy_state["add_count"] == 0
+        assert state.strategy_state["cycles"][0]["add_count"] == 0
 
     def test_next_add_after_close_restarts_from_lot1(self):
         """After TP close resets add_count, the next add uses lot_k=1 (1000 units)."""
@@ -266,7 +270,9 @@ class TestCounterCloseResetsAddCount:
         s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.79", "149.81"), state=state)
 
         # Close latest via TP
-        counter = [e for e in state.strategy_state["counter_basket"] if not e.get("is_hedge")]
+        counter = [
+            e for e in state.strategy_state["cycles"][0]["counter_entries"] if not e.get("is_hedge")
+        ]
         latest = max(counter, key=lambda e: int(e.get("step", 0)))
         cp = Decimal(str(latest["close_price"]))
         s.on_tick(
@@ -275,10 +281,12 @@ class TestCounterCloseResetsAddCount:
             ),
             state=state,
         )
-        assert state.strategy_state["add_count"] == 0
+        assert state.strategy_state["cycles"][0]["add_count"] == 0
 
         # Now drop again — next add should restart from lot_k=1, 1000 units
-        remaining = [e for e in state.strategy_state["counter_basket"] if not e.get("is_hedge")]
+        remaining = [
+            e for e in state.strategy_state["cycles"][0]["counter_entries"] if not e.get("is_hedge")
+        ]
         if remaining:
             latest_remaining = max(remaining, key=lambda e: int(e.get("step", 0)))
             ep = Decimal(str(latest_remaining["entry_price"]))
@@ -322,10 +330,12 @@ class TestReversalScenario:
 
         # Phase 1: adverse (drop) — add counter entries
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
-        assert state.strategy_state["add_count"] == 1
+        assert state.strategy_state["cycles"][0]["add_count"] == 1
 
         # Phase 2: favourable (rise) — close counter TP
-        counter = [e for e in state.strategy_state["counter_basket"] if not e.get("is_hedge")]
+        counter = [
+            e for e in state.strategy_state["cycles"][0]["counter_entries"] if not e.get("is_hedge")
+        ]
         if counter:
             latest = max(counter, key=lambda e: int(e.get("step", 0)))
             cp = Decimal(str(latest["close_price"]))
@@ -337,10 +347,12 @@ class TestReversalScenario:
                 ),
                 state=state,
             )
-            assert state.strategy_state["add_count"] == 0
+            assert state.strategy_state["cycles"][0]["add_count"] == 0
 
         # Phase 3: adverse again — should add from step 1
-        remaining = [e for e in state.strategy_state["counter_basket"] if not e.get("is_hedge")]
+        remaining = [
+            e for e in state.strategy_state["cycles"][0]["counter_entries"] if not e.get("is_hedge")
+        ]
         if remaining:
             ref = Decimal(str(max(remaining, key=lambda e: int(e.get("step", 0)))["entry_price"]))
         else:
@@ -384,7 +396,7 @@ class TestRMaxCycleReset:
                 state=state,
             )
 
-        assert state.strategy_state["add_count"] == 3
+        assert state.strategy_state["cycles"][0]["add_count"] == 3
 
         # Next tick should trigger cycle reset (add_count >= r_max)
         price = Decimal("150.00") - Decimal("0.30")
@@ -394,8 +406,8 @@ class TestRMaxCycleReset:
         )
         signals = _signal_events(result, "snowball_cycle_reset")
         assert len(signals) == 0
-        assert state.strategy_state["add_count"] == 0
-        assert state.strategy_state["freeze_count"] == 1
+        assert state.strategy_state["cycles"][0]["add_count"] == 0
+        assert state.strategy_state["cycles"][0]["freeze_count"] == 1
 
 
 # ==================================================================
@@ -411,8 +423,8 @@ class TestFMaxExhaustion:
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
 
         # Force state to f_max exceeded
-        state.strategy_state["freeze_count"] = 2  # > f_max=1
-        state.strategy_state["add_count"] = 0
+        state.strategy_state["cycles"][0]["freeze_count"] = 2  # > f_max=1
+        state.strategy_state["cycles"][0]["add_count"] = 0
 
         price = Decimal("149.50")
         result = s.on_tick(
@@ -448,7 +460,8 @@ class TestEmergencyStop:
             "units": 5000000,
             "opened_at": T0.isoformat(),
         }
-        state.strategy_state["trend_basket"].append(big_entry)
+        # Add big entry into the LONG cycle's counter_entries to blow margin
+        state.strategy_state["cycles"][0]["counter_entries"].append(big_entry)
 
         result = s.on_tick(
             tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"),
@@ -485,7 +498,7 @@ class TestShrinkMode:
             "units": 1000,
             "opened_at": T0.isoformat(),
         }
-        state.strategy_state["counter_basket"].append(counter_entry)
+        state.strategy_state["cycles"][0]["counter_entries"].append(counter_entry)
         # Stub margin ratio to 75 (between m_th=70 and emergency=95)
         s._margin_ratio = lambda _state, _ss: Decimal("75")  # type: ignore[method-assign]
 
@@ -564,7 +577,7 @@ class TestRebalance:
 
         # Add imbalanced counter entries (all long)
         for i in range(3):
-            state.strategy_state["counter_basket"].append(
+            state.strategy_state["cycles"][0]["counter_entries"].append(
                 {
                     "entry_id": 20 + i,
                     "step": i + 2,
@@ -638,7 +651,8 @@ class TestMonotonicIncrease:
         assert len(long_closes) >= 1
 
         # No counter adds (short side is losing but not enough pips yet)
-        counter = state.strategy_state.get("counter_basket", [])
+        cycles = state.strategy_state.get("cycles", [])
+        counter = cycles[0].get("counter_entries", []) if cycles else []
         non_hedge = [e for e in counter if not e.get("is_hedge")]
         # With only 11 pips move and n_pips_head=30, no counter add
         assert len(non_hedge) == 0
@@ -719,7 +733,9 @@ class TestWeightedAvgTpMode:
 
         # First counter add
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
-        counter = [e for e in state.strategy_state["counter_basket"] if not e.get("is_hedge")]
+        counter = [
+            e for e in state.strategy_state["cycles"][0]["counter_entries"] if not e.get("is_hedge")
+        ]
         assert len(counter) == 1
         # For weighted_avg with single entry, close_price = entry_price of losing trend
         # (the initial trend entry price)
@@ -744,11 +760,11 @@ class TestManualIntervalMode:
 
         # First add at 5 pips
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.94", "149.96"), state=state)
-        assert state.strategy_state["add_count"] == 1
+        assert state.strategy_state["cycles"][0]["add_count"] == 1
 
         # Second add needs 10 more pips from latest entry
         s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.84", "149.86"), state=state)
-        assert state.strategy_state["add_count"] == 2
+        assert state.strategy_state["cycles"][0]["add_count"] == 2
 
 
 # ==================================================================
@@ -772,9 +788,9 @@ class TestPostRMaxBaseFactor:
         # Add 2 entries to hit r_max
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.94", "149.96"), state=state)
         s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.89", "149.91"), state=state)
-        assert state.strategy_state["add_count"] == 2
+        assert state.strategy_state["cycles"][0]["add_count"] == 2
 
         # Trigger cycle reset
         s.on_tick(tick=_tick(T0 + timedelta(seconds=180), "149.80", "149.82"), state=state)
-        assert state.strategy_state["freeze_count"] == 1
-        assert state.strategy_state["cycle_base_units"] == 1500  # 1000 * 1.5
+        assert state.strategy_state["cycles"][0]["freeze_count"] == 1
+        assert state.strategy_state["cycles"][0]["cycle_base_units"] == 1500  # 1000 * 1.5

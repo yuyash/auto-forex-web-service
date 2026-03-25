@@ -192,7 +192,7 @@ class TestSnowballOnTickInit:
 
         ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
         assert ss.initialised is True
-        assert len(ss.trend_basket) >= 1
+        assert len(ss.active_cycles()) >= 1
         assert result.events  # should emit open events
 
     def test_second_tick_does_not_reinitialise(self):

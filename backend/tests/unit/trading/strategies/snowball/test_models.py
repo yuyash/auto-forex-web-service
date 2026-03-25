@@ -7,6 +7,7 @@ import pytest
 from apps.trading.strategies.snowball.enums import ProtectionLevel
 from apps.trading.strategies.snowball.models import (
     BasketEntry,
+    SnowballCycle,
     SnowballStrategyConfig,
     SnowballStrategyState,
 )
@@ -104,22 +105,27 @@ class TestSnowballStrategyState:
         ss = SnowballStrategyState()
         assert ss.protection_level == ProtectionLevel.NORMAL
         assert ss.initialised is False
-        assert ss.add_count == 0
-        assert ss.trend_basket == []
-        assert ss.counter_basket == []
+        assert ss.cycles == []
 
     def test_to_dict_roundtrip(self):
-        ss = SnowballStrategyState(
-            initialised=True,
+        cycle = SnowballCycle(
+            cycle_id=1,
+            direction="long",
+            initial_entry={"entry_id": 1, "direction": "long"},
             add_count=3,
             freeze_count=1,
+        )
+        ss = SnowballStrategyState(
+            initialised=True,
+            cycles=[cycle],
             protection_level=ProtectionLevel.SHRINK,
         )
         d = ss.to_dict()
         ss2 = SnowballStrategyState.from_dict(d)
         assert ss2.initialised is True
-        assert ss2.add_count == 3
-        assert ss2.freeze_count == 1
+        assert len(ss2.cycles) == 1
+        assert ss2.cycles[0].add_count == 3
+        assert ss2.cycles[0].freeze_count == 1
         assert ss2.protection_level == ProtectionLevel.SHRINK
 
     def test_from_strategy_state_none(self):
@@ -127,6 +133,18 @@ class TestSnowballStrategyState:
         assert ss.initialised is False
 
     def test_from_strategy_state_dict(self):
-        ss = SnowballStrategyState.from_strategy_state({"initialised": True, "add_count": 2})
+        ss = SnowballStrategyState.from_strategy_state(
+            {
+                "initialised": True,
+                "cycles": [
+                    {
+                        "cycle_id": 1,
+                        "direction": "long",
+                        "initial_entry": {"entry_id": 1},
+                        "add_count": 2,
+                    }
+                ],
+            }
+        )
         assert ss.initialised is True
-        assert ss.add_count == 2
+        assert ss.cycles[0].add_count == 2

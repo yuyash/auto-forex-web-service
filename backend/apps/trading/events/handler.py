@@ -64,6 +64,10 @@ class EventHandler:
             "exit": self._dispatch_unhandled_category,
             "risk": self._dispatch_unhandled_category,
         }
+        # Maps strategy-internal entry_id → Trade.cycle_id (UUID).
+        # Populated by handle_open_position so that subsequent close
+        # trades and child entries can inherit the correct cycle_id.
+        self._entry_id_to_cycle_id: dict[int, str] = {}
 
     @staticmethod
     def _event_type_key(strategy_event: StrategyEvent) -> str:
@@ -236,8 +240,9 @@ class EventHandler:
         position: Position | None = None,
         order: Order | None = None,
         description: str = "",
-    ) -> None:
-        Trade.objects.create(
+        cycle_id: str | None = None,
+    ) -> Trade:
+        trade = Trade.objects.create(
             task_type=self.order_service.task_type.value,
             task_id=self._task_pk,
             execution_id=self._execution_id,
@@ -253,7 +258,9 @@ class EventHandler:
             position=position,
             order=order,
             description=description,
+            cycle_id=cycle_id,
         )
+        return trade
 
     def handle_event(self, trading_event: TradingEvent) -> EventExecutionResult:
         """Handle a single trading event by executing appropriate order.
@@ -349,6 +356,42 @@ class EventHandler:
         )
         return EventExecutionResult(realized_pnl_delta=Decimal("0"))
 
+    def _resolve_cycle_id_for_open(self, event: OpenPositionEvent) -> str | None:
+        """Determine the cycle_id for a new open trade.
+
+        - If parent_entry_id is None this is a cycle-starting entry
+          (Initial Entry or Trend re-entry).  The cycle_id will be the
+          Trade.id of the trade we are about to create — the caller must
+          back-fill it after creation.
+        - Otherwise, look up the root_entry_id in the mapping to find
+          the cycle_id of the cycle this entry belongs to.
+
+        Returns None when the entry starts a new cycle (caller must
+        set cycle_id = trade.id after creation).
+        """
+        root_eid = getattr(event, "root_entry_id", None)
+        parent_eid = getattr(event, "parent_entry_id", None)
+
+        if parent_eid is None:
+            # New cycle — cycle_id will be this trade's own id.
+            return None
+
+        # Child entry — inherit cycle_id from root.
+        if root_eid is not None and root_eid in self._entry_id_to_cycle_id:
+            return self._entry_id_to_cycle_id[root_eid]
+
+        # Fallback: try parent chain.
+        if parent_eid in self._entry_id_to_cycle_id:
+            return self._entry_id_to_cycle_id[parent_eid]
+
+        logger.warning(
+            "Could not resolve cycle_id for entry_id=%s (root=%s, parent=%s)",
+            event.entry_id,
+            root_eid,
+            parent_eid,
+        )
+        return None
+
     def handle_open_position(self, event: OpenPositionEvent) -> Position:
         """Open position for execution.
 
@@ -375,8 +418,10 @@ class EventHandler:
             planned_exit_price_formula=getattr(event, "planned_exit_price_formula", None),
         )
 
+        cycle_id = self._resolve_cycle_id_for_open(event)
+
         self._cache_position(event.layer_number, position)
-        self._record_trade(
+        trade = self._record_trade(
             direction=direction,
             units=event.units,
             instrument=position.instrument,
@@ -389,7 +434,19 @@ class EventHandler:
             position=position,
             order=order,
             description=getattr(event, "description", ""),
+            cycle_id=cycle_id,
         )
+
+        # New cycle: back-fill cycle_id = trade's own id.
+        if cycle_id is None:
+            trade.cycle_id = str(trade.id)
+            trade.save(update_fields=["cycle_id"])
+            cycle_id = str(trade.id)
+
+        # Register mapping so child entries and close events can look up
+        # the cycle_id by their root_entry_id or entry_id.
+        if event.entry_id is not None:
+            self._entry_id_to_cycle_id[event.entry_id] = cycle_id
 
         logger.info(
             "Open position executed: layer=%s, direction=%s, units=%s, count=%s, position_id=%s",
@@ -429,6 +486,18 @@ class EventHandler:
         )
 
         return position
+
+    def _resolve_cycle_id_for_close(self, event: ClosePositionEvent) -> str | None:
+        """Look up cycle_id for a close trade from the entry being closed."""
+        eid = getattr(event, "entry_id", None)
+        if eid is not None and eid in self._entry_id_to_cycle_id:
+            return self._entry_id_to_cycle_id[eid]
+
+        root_eid = getattr(event, "root_entry_id", None)
+        if root_eid is not None and root_eid in self._entry_id_to_cycle_id:
+            return self._entry_id_to_cycle_id[root_eid]
+
+        return None
 
     def handle_close_position(self, event: ClosePositionEvent) -> Decimal:
         """Close one or more positions.
@@ -501,6 +570,7 @@ class EventHandler:
                 position=position,
                 order=close_order,
                 description=getattr(event, "description", ""),
+                cycle_id=self._resolve_cycle_id_for_close(event),
             )
 
             self._prune_closed_position(event.layer_number, closed_position)
@@ -899,4 +969,5 @@ class EventHandler:
         self.position_map.clear()
         self.layer_position_ids.clear()
         self._position_cache.clear()
+        self._entry_id_to_cycle_id.clear()
         logger.debug("Position map cleared")
