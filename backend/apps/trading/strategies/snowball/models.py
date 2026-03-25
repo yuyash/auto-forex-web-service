@@ -3,32 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
 
+from apps.trading.enums import Direction
 from apps.trading.strategies.snowball.enums import ProtectionLevel
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _to_decimal(value: Any, default: str) -> Decimal:
-    try:
-        return Decimal(str(value))
-    except (InvalidOperation, TypeError, ValueError):
-        return Decimal(default)
-
-
-def _to_int(value: Any, default: int) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _to_str(value: Any, default: str) -> str:
-    return str(value).strip().lower() if value is not None else default
+if TYPE_CHECKING:
+    from apps.trading.dataclasses.tick import Tick
+    from apps.trading.events import ClosePositionEvent, OpenPositionEvent, StrategyEvent
 
 
 # ---------------------------------------------------------------------------
@@ -93,49 +77,49 @@ class SnowballStrategyConfig:
     pip_size: Decimal
 
     @staticmethod
-    def from_dict(raw: dict[str, Any]) -> "SnowballStrategyConfig":
+    def from_dict(raw: dict[str, Any]) -> SnowballStrategyConfig:
         """Create config from a parameters dictionary."""
         manual_raw = raw.get("manual_intervals", [])
         manual_intervals: list[Decimal] = []
         if isinstance(manual_raw, list):
             for v in manual_raw:
-                manual_intervals.append(_to_decimal(v, "30"))
+                manual_intervals.append(_parse_decimal(v, "30"))
 
         return SnowballStrategyConfig(
-            base_units=_to_int(raw.get("base_units", 1000), 1000),
-            m_pips=_to_decimal(raw.get("m_pips", "50"), "50"),
-            trend_lot_size=_to_int(raw.get("trend_lot_size", 1), 1),
-            r_max=_to_int(raw.get("r_max", 7), 7),
-            f_max=_to_int(raw.get("f_max", 3), 3),
-            post_r_max_base_factor=_to_decimal(raw.get("post_r_max_base_factor", "1"), "1"),
-            n_pips_head=_to_decimal(raw.get("n_pips_head", "30"), "30"),
-            n_pips_tail=_to_decimal(raw.get("n_pips_tail", "14"), "14"),
-            n_pips_flat_steps=_to_int(raw.get("n_pips_flat_steps", 2), 2),
-            n_pips_gamma=_to_decimal(raw.get("n_pips_gamma", "1.4"), "1.4"),
-            interval_mode=_to_str(raw.get("interval_mode"), "constant"),
+            base_units=_parse_int(raw.get("base_units", 1000), 1000),
+            m_pips=_parse_decimal(raw.get("m_pips", "50"), "50"),
+            trend_lot_size=_parse_int(raw.get("trend_lot_size", 1), 1),
+            r_max=_parse_int(raw.get("r_max", 7), 7),
+            f_max=_parse_int(raw.get("f_max", 3), 3),
+            post_r_max_base_factor=_parse_decimal(raw.get("post_r_max_base_factor", "1"), "1"),
+            n_pips_head=_parse_decimal(raw.get("n_pips_head", "30"), "30"),
+            n_pips_tail=_parse_decimal(raw.get("n_pips_tail", "14"), "14"),
+            n_pips_flat_steps=_parse_int(raw.get("n_pips_flat_steps", 2), 2),
+            n_pips_gamma=_parse_decimal(raw.get("n_pips_gamma", "1.4"), "1.4"),
+            interval_mode=_parse_str(raw.get("interval_mode"), "constant"),
             manual_intervals=manual_intervals,
-            counter_tp_mode=_to_str(raw.get("counter_tp_mode"), "weighted_avg"),
-            counter_tp_pips=_to_decimal(raw.get("counter_tp_pips", "25"), "25"),
-            counter_tp_step_amount=_to_decimal(raw.get("counter_tp_step_amount", "2.5"), "2.5"),
-            counter_tp_multiplier=_to_decimal(raw.get("counter_tp_multiplier", "1.2"), "1.2"),
-            round_step_pips=_to_decimal(raw.get("round_step_pips", "0.1"), "0.1"),
+            counter_tp_mode=_parse_str(raw.get("counter_tp_mode"), "weighted_avg"),
+            counter_tp_pips=_parse_decimal(raw.get("counter_tp_pips", "25"), "25"),
+            counter_tp_step_amount=_parse_decimal(raw.get("counter_tp_step_amount", "2.5"), "2.5"),
+            counter_tp_multiplier=_parse_decimal(raw.get("counter_tp_multiplier", "1.2"), "1.2"),
+            round_step_pips=_parse_decimal(raw.get("round_step_pips", "0.1"), "0.1"),
             dynamic_tp_enabled=bool(raw.get("dynamic_tp_enabled", False)),
-            atr_period=_to_int(raw.get("atr_period", 14), 14),
-            atr_timeframe=_to_str(raw.get("atr_timeframe"), "M1").upper(),
-            atr_baseline_lookback=_to_int(raw.get("atr_baseline_lookback", 96), 96),
-            m_pips_min=_to_decimal(raw.get("m_pips_min", "12"), "12"),
-            m_pips_max=_to_decimal(raw.get("m_pips_max", "80"), "80"),
+            atr_period=_parse_int(raw.get("atr_period", 14), 14),
+            atr_timeframe=_parse_str(raw.get("atr_timeframe"), "M1").upper(),
+            atr_baseline_lookback=_parse_int(raw.get("atr_baseline_lookback", 96), 96),
+            m_pips_min=_parse_decimal(raw.get("m_pips_min", "12"), "12"),
+            m_pips_max=_parse_decimal(raw.get("m_pips_max", "80"), "80"),
             rebalance_enabled=bool(raw.get("rebalance_enabled", False)),
-            rebalance_start_ratio=_to_decimal(raw.get("rebalance_start_ratio", "60"), "60"),
-            rebalance_end_ratio=_to_decimal(raw.get("rebalance_end_ratio", "50"), "50"),
+            rebalance_start_ratio=_parse_decimal(raw.get("rebalance_start_ratio", "60"), "60"),
+            rebalance_end_ratio=_parse_decimal(raw.get("rebalance_end_ratio", "50"), "50"),
             shrink_enabled=bool(raw.get("shrink_enabled", True)),
-            m_th=_to_decimal(raw.get("m_th", "70"), "70"),
+            m_th=_parse_decimal(raw.get("m_th", "70"), "70"),
             lock_enabled=bool(raw.get("lock_enabled", True)),
-            n_th=_to_decimal(raw.get("n_th", "85"), "85"),
-            cooldown_sec=_to_int(raw.get("cooldown_sec", 300), 300),
+            n_th=_parse_decimal(raw.get("n_th", "85"), "85"),
+            cooldown_sec=_parse_int(raw.get("cooldown_sec", 300), 300),
             spread_guard_enabled=bool(raw.get("spread_guard_enabled", False)),
-            spread_guard_pips=_to_decimal(raw.get("spread_guard_pips", "2.5"), "2.5"),
-            pip_size=_to_decimal(raw.get("pip_size", "0.01"), "0.01"),
+            spread_guard_pips=_parse_decimal(raw.get("spread_guard_pips", "2.5"), "2.5"),
+            pip_size=_parse_decimal(raw.get("pip_size", "0.01"), "0.01"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -205,51 +189,327 @@ class SnowballStrategyConfig:
 
 
 # ---------------------------------------------------------------------------
-# Basket entry
+# Entry
 # ---------------------------------------------------------------------------
 
 
 @dataclass
-class BasketEntry:
-    """A single position within a basket."""
+class Entry:
+    """A single position entry within a cycle."""
 
     entry_id: int
     step: int  # 1-based step within the current cycle
-    direction: str  # "long" or "short"
+    direction: Direction
     entry_price: Decimal
     close_price: Decimal  # target close price
     units: int
-    opened_at: str  # ISO timestamp
+    opened_at: datetime
+    role: Literal["initial", "counter", "hedge"]
+    layer_number: int = 1
+    retracement_count: int = 1
+    root_entry_id: int | None = None
+    parent_entry_id: int | None = None
     position_id: str | None = None
+
+    # Validation fields
+    expected_interval_pips: Decimal | None = None
+    actual_interval_pips: Decimal | None = None
+    expected_tp_pips: Decimal | None = None
+    validation_status: str = ""
+
+    # ------------------------------------------------------------------
+    # Factory
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def open(
+        cls,
+        *,
+        state: SnowballStrategyState,
+        tick: Tick,
+        direction: Direction,
+        units: int,
+        step: int,
+        close_price: Decimal,
+        role: Literal["initial", "counter", "hedge"],
+        layer_number: int = 1,
+        retracement_count: int = 1,
+        root_entry_id: int | None = None,
+        parent_entry_id: int | None = None,
+    ) -> Entry:
+        """Factory: allocate an ID from state and build an Entry at the tick price."""
+        eid = state.allocate_id()
+        price = tick.ask if direction == Direction.LONG else tick.bid
+        if root_entry_id is None and role == "initial":
+            root_entry_id = eid
+        return cls(
+            entry_id=eid,
+            step=step,
+            direction=direction,
+            entry_price=price,
+            close_price=close_price,
+            units=units,
+            opened_at=tick.timestamp,
+            role=role,
+            layer_number=layer_number,
+            retracement_count=retracement_count,
+            root_entry_id=root_entry_id,
+            parent_entry_id=parent_entry_id,
+        )
+
+    # ------------------------------------------------------------------
+    # Computed properties
+    # ------------------------------------------------------------------
+
+    @property
+    def is_long(self) -> bool:
+        return self.direction == Direction.LONG
+
+    @property
+    def is_short(self) -> bool:
+        return self.direction == Direction.SHORT
+
+    @property
+    def is_initial(self) -> bool:
+        return self.role == "initial"
+
+    @property
+    def is_counter(self) -> bool:
+        return self.role == "counter"
+
+    @property
+    def is_hedge(self) -> bool:
+        return self.role == "hedge"
+
+    # ------------------------------------------------------------------
+    # Price helpers
+    # ------------------------------------------------------------------
+
+    def exit_price(self, tick: Tick) -> Decimal:
+        """Return the exit price for this entry given a tick.
+
+        Long positions exit at bid, short positions exit at ask.
+        """
+        return tick.bid if self.is_long else tick.ask
+
+    def unrealised_loss_pips(self, mid_price: Decimal, pip_size: Decimal) -> Decimal:
+        """Return unrealised loss in pips (positive = losing).
+
+        Args:
+            mid_price: Current mid price.
+            pip_size: Pip size for the instrument.
+        """
+        if self.is_long:
+            return (self.entry_price - mid_price) / pip_size
+        return (mid_price - self.entry_price) / pip_size
+
+    # ------------------------------------------------------------------
+    # Event generation
+    # ------------------------------------------------------------------
+
+    def apply_metadata_to(
+        self,
+        event: "StrategyEvent",
+        *,
+        close_reason: str = "",
+        actual_tp_pips: Decimal | None = None,
+        actual_exit_price: Decimal | None = None,
+    ) -> None:
+        """Write snowball-specific metadata from this entry onto a strategy event."""
+        event.strategy_type = "snowball"
+        event.basket = self.role
+        event.root_entry_id = self.root_entry_id
+        event.parent_entry_id = self.parent_entry_id
+        event.visual_group_id = str(self.root_entry_id) if self.root_entry_id is not None else ""
+        event.step = self.step
+        event.close_reason = close_reason
+        event.validation_status = self.validation_status
+        event.expected_interval_pips = self.expected_interval_pips
+        event.actual_interval_pips = self.actual_interval_pips
+        event.expected_tp_pips = self.expected_tp_pips
+        event.actual_tp_pips = actual_tp_pips
+        event.expected_exit_price = self.close_price
+        event.actual_exit_price = actual_exit_price
+
+    def to_open_event(
+        self,
+        *,
+        timestamp: datetime,
+        planned_exit_price_formula: str | None = None,
+        description: str = "",
+    ) -> "OpenPositionEvent":
+        """Create an OpenPositionEvent from this entry."""
+        from apps.trading.enums import EventType
+        from apps.trading.events import OpenPositionEvent
+
+        event = OpenPositionEvent(
+            event_type=EventType.OPEN_POSITION,
+            timestamp=timestamp,
+            layer_number=self.layer_number,
+            direction=self.direction.value,
+            price=self.entry_price,
+            units=self.units,
+            entry_id=self.entry_id,
+            retracement_count=self.retracement_count,
+            strategy_event_type=f"snowball_{self.role}",
+            planned_exit_price=self.close_price,
+            planned_exit_price_formula=planned_exit_price_formula,
+            description=description,
+        )
+        self.apply_metadata_to(event)
+        return event
+
+    def to_close_event(
+        self,
+        tick: Tick,
+        *,
+        instrument: str,
+        pip_size: Decimal,
+        account_currency: str,
+        description: str = "",
+        close_reason: str = "",
+        actual_tp_pips: Decimal | None = None,
+        validation_status: str = "",
+    ) -> "ClosePositionEvent":
+        """Create a ClosePositionEvent from this entry."""
+        from apps.trading.enums import EventType
+        from apps.trading.events import ClosePositionEvent
+        from apps.trading.utils import quote_to_account_rate
+
+        exit_px = self.exit_price(tick)
+        conv = quote_to_account_rate(instrument, tick.mid, account_currency)
+        pnl = (exit_px - self.entry_price) * Decimal(str(self.units)) * conv
+        if self.is_short:
+            pnl = -pnl
+
+        event = ClosePositionEvent(
+            event_type=EventType.CLOSE_POSITION,
+            timestamp=tick.timestamp,
+            layer_number=self.layer_number,
+            direction=self.direction.value,
+            entry_price=self.entry_price,
+            exit_price=exit_px,
+            units=self.units,
+            pnl=pnl,
+            pips=abs(exit_px - self.entry_price) / pip_size,
+            entry_id=self.entry_id,
+            position_id=self.position_id,
+            retracement_count=self.retracement_count,
+            description=description,
+        )
+        orig_vs = self.validation_status
+        if validation_status:
+            self.validation_status = validation_status
+        self.apply_metadata_to(
+            event,
+            close_reason=close_reason,
+            actual_tp_pips=actual_tp_pips,
+            actual_exit_price=exit_px,
+        )
+        self.validation_status = orig_vs
+        return event
+
+    # ------------------------------------------------------------------
+    # Entry serialisation
+    # ------------------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "entry_id": self.entry_id,
             "step": self.step,
-            "direction": self.direction,
+            "direction": self.direction.value,
             "entry_price": str(self.entry_price),
             "close_price": str(self.close_price),
             "units": self.units,
-            "opened_at": self.opened_at,
+            "opened_at": self.opened_at.isoformat(),
+            "role": self.role,
+            "layer_number": self.layer_number,
+            "retracement_count": self.retracement_count,
+            "root_entry_id": self.root_entry_id,
+            "parent_entry_id": self.parent_entry_id,
             "position_id": self.position_id,
+            "expected_interval_pips": (
+                str(self.expected_interval_pips)
+                if self.expected_interval_pips is not None
+                else None
+            ),
+            "actual_interval_pips": (
+                str(self.actual_interval_pips) if self.actual_interval_pips is not None else None
+            ),
+            "expected_tp_pips": (
+                str(self.expected_tp_pips) if self.expected_tp_pips is not None else None
+            ),
+            "validation_status": self.validation_status,
         }
 
     @staticmethod
-    def from_dict(d: dict[str, Any]) -> "BasketEntry":
-        return BasketEntry(
-            entry_id=_to_int(d.get("entry_id", 0), 0),
-            step=_to_int(d.get("step", 1), 1),
-            direction=_to_str(d.get("direction"), "long"),
-            entry_price=_to_decimal(d.get("entry_price", "0"), "0"),
-            close_price=_to_decimal(d.get("close_price", "0"), "0"),
-            units=_to_int(d.get("units", 0), 0),
-            opened_at=str(d.get("opened_at", "")),
+    def from_dict(d: dict[str, Any]) -> Entry:
+        raw_direction = d.get("direction", "long")
+        direction = (
+            raw_direction
+            if isinstance(raw_direction, Direction)
+            else Direction(str(raw_direction).strip().lower())
+        )
+
+        raw_opened = d.get("opened_at", "")
+        if isinstance(raw_opened, datetime):
+            opened_at = raw_opened
+        else:
+            opened_str = str(raw_opened).strip()
+            if not opened_str:
+                from datetime import UTC
+
+                opened_at = datetime(2000, 1, 1, tzinfo=UTC)
+            else:
+                if opened_str.endswith("Z"):
+                    opened_str = opened_str[:-1] + "+00:00"
+                opened_at = datetime.fromisoformat(opened_str)
+
+        return Entry(
+            entry_id=_parse_int(d.get("entry_id", 0), 0),
+            step=_parse_int(d.get("step", 1), 1),
+            direction=direction,
+            entry_price=_parse_decimal(d.get("entry_price", "0"), "0"),
+            close_price=_parse_decimal(d.get("close_price", "0"), "0"),
+            units=_parse_int(d.get("units", 0), 0),
+            opened_at=opened_at,
+            role=d.get("role", "counter"),
+            layer_number=_parse_int(d.get("layer_number", 1), 1),
+            retracement_count=_parse_int(d.get("retracement_count", 1), 1),
+            root_entry_id=(
+                _parse_int(d["root_entry_id"], 0) if d.get("root_entry_id") is not None else None
+            ),
+            parent_entry_id=(
+                _parse_int(d["parent_entry_id"], 0)
+                if d.get("parent_entry_id") is not None
+                else None
+            ),
             position_id=d.get("position_id"),
+            expected_interval_pips=(
+                _parse_decimal(d["expected_interval_pips"], "0")
+                if d.get("expected_interval_pips") not in (None, "")
+                else None
+            ),
+            actual_interval_pips=(
+                _parse_decimal(d["actual_interval_pips"], "0")
+                if d.get("actual_interval_pips") not in (None, "")
+                else None
+            ),
+            expected_tp_pips=(
+                _parse_decimal(d["expected_tp_pips"], "0")
+                if d.get("expected_tp_pips") not in (None, "")
+                else None
+            ),
+            validation_status=str(d.get("validation_status", "")),
         )
 
 
+# Backward-compatible alias so existing imports keep working
+BasketEntry = Entry
+
+
 # ---------------------------------------------------------------------------
-# State
+# Cycle
 # ---------------------------------------------------------------------------
 
 
@@ -262,44 +522,60 @@ class SnowballCycle:
     """
 
     cycle_id: int  # = initial entry's entry_id
-    direction: str  # "long" or "short"
-    initial_entry: dict[str, Any] = field(default_factory=dict)
-    counter_entries: list[dict[str, Any]] = field(default_factory=list)
-    hedge_entries: list[dict[str, Any]] = field(default_factory=list)
+    direction: Direction
+    initial_entry: Entry | None = None
+    counter_entries: list[Entry] = field(default_factory=list)
+    hedge_entries: list[Entry] = field(default_factory=list)
     add_count: int = 0
     freeze_count: int = 0
     cycle_base_units: int = 1000
     completed: bool = False
 
-    def all_entries(self) -> list[dict[str, Any]]:
+    # ------------------------------------------------------------------
+    # Computed properties
+    # ------------------------------------------------------------------
+
+    @property
+    def is_long(self) -> bool:
+        return self.direction == Direction.LONG
+
+    @property
+    def is_short(self) -> bool:
+        return self.direction == Direction.SHORT
+
+    # ------------------------------------------------------------------
+    # Entry accessors
+    # ------------------------------------------------------------------
+
+    def all_entries(self) -> list[Entry]:
         """Return all entries in this cycle (initial + counter + hedge)."""
-        entries: list[dict[str, Any]] = []
-        if self.initial_entry:
+        entries: list[Entry] = []
+        if self.initial_entry is not None:
             entries.append(self.initial_entry)
         entries.extend(self.counter_entries)
         entries.extend(self.hedge_entries)
         return entries
 
-    def counter_non_hedge(self) -> list[dict[str, Any]]:
+    def counter_non_hedge(self) -> list[Entry]:
         """Return counter entries excluding hedges."""
-        return [e for e in self.counter_entries if not e.get("is_hedge")]
+        return [e for e in self.counter_entries if not e.is_hedge]
 
     def remove_entry(self, entry_id: int) -> None:
         """Remove an entry by entry_id from counter or hedge lists."""
-        self.counter_entries = [
-            e for e in self.counter_entries if int(e.get("entry_id", 0)) != entry_id
-        ]
-        self.hedge_entries = [
-            e for e in self.hedge_entries if int(e.get("entry_id", 0)) != entry_id
-        ]
+        self.counter_entries = [e for e in self.counter_entries if e.entry_id != entry_id]
+        self.hedge_entries = [e for e in self.hedge_entries if e.entry_id != entry_id]
+
+    # ------------------------------------------------------------------
+    # Serialisation
+    # ------------------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "cycle_id": self.cycle_id,
-            "direction": self.direction,
-            "initial_entry": dict(self.initial_entry) if self.initial_entry else {},
-            "counter_entries": [dict(e) for e in self.counter_entries],
-            "hedge_entries": [dict(e) for e in self.hedge_entries],
+            "direction": self.direction.value,
+            "initial_entry": self.initial_entry.to_dict() if self.initial_entry is not None else {},
+            "counter_entries": [e.to_dict() for e in self.counter_entries],
+            "hedge_entries": [e.to_dict() for e in self.hedge_entries],
             "add_count": self.add_count,
             "freeze_count": self.freeze_count,
             "cycle_base_units": self.cycle_base_units,
@@ -307,16 +583,28 @@ class SnowballCycle:
         }
 
     @staticmethod
-    def from_dict(data: dict[str, Any]) -> "SnowballCycle":
+    def from_dict(data: dict[str, Any]) -> SnowballCycle:
+        raw_direction = data.get("direction", "long")
+        direction = (
+            raw_direction
+            if isinstance(raw_direction, Direction)
+            else Direction(str(raw_direction).strip().lower())
+        )
+
+        raw_initial = data.get("initial_entry", {})
+        initial_entry: Entry | None = None
+        if raw_initial:
+            initial_entry = Entry.from_dict(raw_initial)
+
         return SnowballCycle(
-            cycle_id=_to_int(data.get("cycle_id", 0), 0),
-            direction=_to_str(data.get("direction"), "long"),
-            initial_entry=dict(data.get("initial_entry", {})),
-            counter_entries=[dict(e) for e in data.get("counter_entries", [])],
-            hedge_entries=[dict(e) for e in data.get("hedge_entries", [])],
-            add_count=_to_int(data.get("add_count", 0), 0),
-            freeze_count=_to_int(data.get("freeze_count", 0), 0),
-            cycle_base_units=_to_int(data.get("cycle_base_units", 1000), 1000),
+            cycle_id=_parse_int(data.get("cycle_id", 0), 0),
+            direction=direction,
+            initial_entry=initial_entry,
+            counter_entries=[Entry.from_dict(e) for e in data.get("counter_entries", [])],
+            hedge_entries=[Entry.from_dict(e) for e in data.get("hedge_entries", [])],
+            add_count=_parse_int(data.get("add_count", 0), 0),
+            freeze_count=_parse_int(data.get("freeze_count", 0), 0),
+            cycle_base_units=_parse_int(data.get("cycle_base_units", 1000), 1000),
             completed=bool(data.get("completed", False)),
         )
 
@@ -333,7 +621,7 @@ class SnowballStrategyState:
     protection_level: ProtectionLevel = ProtectionLevel.NORMAL
     initialised: bool = False
 
-    # Cycle-based tracking (replaces trend_basket / counter_basket)
+    # Cycle-based tracking
     cycles: list[SnowballCycle] = field(default_factory=list)
 
     # Next entry id
@@ -352,19 +640,25 @@ class SnowballStrategyState:
     account_nav: Decimal = Decimal("0")
 
     # Metrics
-    metrics: dict[str, Any] = field(default_factory=dict)
+    metrics: dict[str, str | int | float] = field(default_factory=dict)
 
     # ------------------------------------------------------------------
     # Convenience accessors
     # ------------------------------------------------------------------
 
+    def allocate_id(self) -> int:
+        """Allocate and return the next entry ID."""
+        eid = self.next_entry_id
+        self.next_entry_id += 1
+        return eid
+
     def active_cycles(self) -> list[SnowballCycle]:
         """Return cycles that are not yet completed."""
         return [c for c in self.cycles if not c.completed]
 
-    def all_entries(self) -> list[dict[str, Any]]:
+    def all_entries(self) -> list[Entry]:
         """Return every entry across all active cycles."""
-        entries: list[dict[str, Any]] = []
+        entries: list[Entry] = []
         for c in self.active_cycles():
             entries.extend(c.all_entries())
         return entries
@@ -377,7 +671,7 @@ class SnowballStrategyState:
         return None
 
     # ------------------------------------------------------------------
-    # Legacy compatibility: read old trend_basket/counter_basket format
+    # Serialisation
     # ------------------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
@@ -398,17 +692,12 @@ class SnowballStrategyState:
         }
 
     @staticmethod
-    def from_dict(data: dict[str, Any]) -> "SnowballStrategyState":
-        def _dec_or_none(v: Any) -> Decimal | None:
-            return _to_decimal(v, "0") if v is not None else None
+    def from_dict(data: dict[str, Any]) -> SnowballStrategyState:
+        def _dec_or_none(v: object) -> Decimal | None:
+            return _parse_decimal(v, "0") if v is not None else None
 
-        # New format: cycles list
         raw_cycles = data.get("cycles")
-        if raw_cycles is not None:
-            cycles = [SnowballCycle.from_dict(c) for c in raw_cycles]
-        else:
-            # Legacy migration: rebuild cycles from trend_basket / counter_basket
-            cycles = _migrate_legacy_baskets(data)
+        cycles = [SnowballCycle.from_dict(c) for c in raw_cycles] if raw_cycles is not None else []
 
         return SnowballStrategyState(
             protection_level=ProtectionLevel(
@@ -416,65 +705,43 @@ class SnowballStrategyState:
             ),
             initialised=bool(data.get("initialised", False)),
             cycles=cycles,
-            next_entry_id=max(1, _to_int(data.get("next_entry_id", 1), 1)),
-            lock_hedge_ids=[_to_int(i, 0) for i in (data.get("lock_hedge_ids") or [])],
+            next_entry_id=max(1, _parse_int(data.get("next_entry_id", 1), 1)),
+            lock_hedge_ids=[_parse_int(i, 0) for i in (data.get("lock_hedge_ids") or [])],
             lock_entered_at=data.get("lock_entered_at"),
             cooldown_until=data.get("cooldown_until"),
             last_bid=_dec_or_none(data.get("last_bid")),
             last_ask=_dec_or_none(data.get("last_ask")),
             last_mid=_dec_or_none(data.get("last_mid")),
-            account_balance=_to_decimal(data.get("account_balance", "0"), "0"),
-            account_nav=_to_decimal(data.get("account_nav", "0"), "0"),
+            account_balance=_parse_decimal(data.get("account_balance", "0"), "0"),
+            account_nav=_parse_decimal(data.get("account_nav", "0"), "0"),
             metrics=dict(data.get("metrics", {})) if isinstance(data.get("metrics"), dict) else {},
         )
 
     @classmethod
-    def from_strategy_state(cls, raw: Any) -> "SnowballStrategyState":
+    def from_strategy_state(cls, raw: dict[str, Any] | None) -> SnowballStrategyState:
         if not isinstance(raw, dict):
             return cls()
         return cls.from_dict(raw)
 
 
-def _migrate_legacy_baskets(data: dict[str, Any]) -> list[SnowballCycle]:
-    """Rebuild SnowballCycle list from old trend_basket/counter_basket format.
+# ---------------------------------------------------------------------------
+# Private parsing helpers (used only within this module)
+# ---------------------------------------------------------------------------
 
-    Each trend_basket entry becomes the initial_entry of a cycle.
-    Counter entries are assigned to cycles by matching root_entry_id.
-    """
-    trend_entries = list(data.get("trend_basket", []))
-    counter_entries = list(data.get("counter_basket", []))
-    add_count = _to_int(data.get("add_count", 0), 0)
-    freeze_count = _to_int(data.get("freeze_count", 0), 0)
-    cycle_base_units = _to_int(data.get("cycle_base_units", 1000), 1000)
 
-    cycles: list[SnowballCycle] = []
-    cycle_by_entry_id: dict[int, SnowballCycle] = {}
+def _parse_decimal(value: object, default: str) -> Decimal:
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal(default)
 
-    for te in trend_entries:
-        eid = _to_int(te.get("entry_id", 0), 0)
-        direction = _to_str(te.get("direction"), "long")
-        cycle = SnowballCycle(
-            cycle_id=eid,
-            direction=direction,
-            initial_entry=dict(te),
-            add_count=add_count,
-            freeze_count=freeze_count,
-            cycle_base_units=cycle_base_units,
-        )
-        cycles.append(cycle)
-        cycle_by_entry_id[eid] = cycle
 
-    for ce in counter_entries:
-        root_eid = _to_int(ce.get("root_entry_id", 0), 0)
-        target = cycle_by_entry_id.get(root_eid)
-        if target is None and cycles:
-            # Fallback: assign to first cycle with matching direction
-            direction = _to_str(ce.get("direction"), "long")
-            target = next((c for c in cycles if c.direction == direction), cycles[0])
-        if target is not None:
-            if ce.get("is_hedge"):
-                target.hedge_entries.append(dict(ce))
-            else:
-                target.counter_entries.append(dict(ce))
+def _parse_int(value: object, default: int) -> int:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
 
-    return cycles
+
+def _parse_str(value: object, default: str) -> str:
+    return str(value).strip().lower() if value is not None else default
