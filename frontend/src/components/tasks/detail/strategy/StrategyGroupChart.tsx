@@ -39,9 +39,24 @@ export function StrategyGroupChart({
     typeof createSeriesMarkers<Time>
   > | null>(null);
 
+  const granularity = useMemo(() => {
+    if (!startTime) return 'M1';
+    const startSec = Math.floor(new Date(startTime).getTime() / 1000);
+    const endSec = endTime
+      ? Math.floor(new Date(endTime).getTime() / 1000)
+      : startSec + 3600;
+    const spanSec = Math.max(60, endSec - startSec);
+    if (spanSec > 30 * 86400) return 'D';
+    if (spanSec > 7 * 86400) return 'H4';
+    if (spanSec > 2 * 86400) return 'H1';
+    if (spanSec > 12 * 3600) return 'M15';
+    if (spanSec > 4 * 3600) return 'M5';
+    return 'M1';
+  }, [startTime, endTime]);
+
   const { candles, isInitialLoading, error } = useWindowedCandles({
     instrument,
-    granularity: 'M1',
+    granularity,
     startTime,
     endTime: endTime ?? undefined,
     initialCount: 500,
