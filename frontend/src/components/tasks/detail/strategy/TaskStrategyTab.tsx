@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { useTaskStrategyEvents } from '../../../../hooks/useTaskStrategyEvents';
 import { TaskType } from '../../../../types/common';
 import type { StrategyCycle } from '../../../../types/strategyVisualization';
+import { StrategyGroupChart } from './StrategyGroupChart';
 
 export interface TaskStrategyTabProps {
   taskId: string | number;
@@ -41,6 +42,7 @@ function getStatusColor(status: string): 'success' | 'warning' | 'default' {
 export function TaskStrategyTab({
   taskId,
   taskType,
+  instrument,
   executionRunId,
   enableRealTimeUpdates = false,
 }: TaskStrategyTabProps) {
@@ -370,6 +372,25 @@ export function TaskStrategyTab({
                 closes
               </Typography>
 
+              {instrument ? (
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    mb: 2,
+                    bgcolor: alpha(theme.palette.primary.main, 0.03),
+                  }}
+                >
+                  <StrategyGroupChart
+                    instrument={instrument}
+                    startTime={selectedCycle.started_at ?? ''}
+                    endTime={selectedCycle.ended_at}
+                    trades={selectedCycle.trades}
+                    height={300}
+                  />
+                </Paper>
+              ) : null}
+
               <Typography variant="subtitle1" sx={{ mb: 1 }}>
                 Trades
               </Typography>
@@ -406,7 +427,7 @@ export function TaskStrategyTab({
                         variant="body2"
                         sx={{ fontFamily: 'monospace' }}
                       >
-                        {trade.units} @ {trade.price}
+                        {trade.units} @ {Number(trade.price).toFixed(2)}
                       </Typography>
                       {trade.layer_index != null ? (
                         <Typography variant="caption" color="text.secondary">

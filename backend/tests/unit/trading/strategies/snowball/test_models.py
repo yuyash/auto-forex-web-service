@@ -1,9 +1,11 @@
 """Unit tests for Snowball strategy models."""
 
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
 
+from apps.trading.enums import Direction
 from apps.trading.strategies.snowball.enums import ProtectionLevel
 from apps.trading.strategies.snowball.models import (
     BasketEntry,
@@ -86,16 +88,17 @@ class TestBasketEntry:
         entry = BasketEntry(
             entry_id=1,
             step=2,
-            direction="long",
+            direction=Direction.LONG,
             entry_price=Decimal("150.00"),
             close_price=Decimal("150.50"),
             units=1000,
-            opened_at="2026-01-01T00:00:00+00:00",
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="initial",
         )
         d = entry.to_dict()
         restored = BasketEntry.from_dict(d)
         assert restored.entry_id == 1
-        assert restored.direction == "long"
+        assert restored.direction == Direction.LONG
         assert restored.units == 1000
         assert restored.entry_price == Decimal("150.00")
 
@@ -108,10 +111,20 @@ class TestSnowballStrategyState:
         assert ss.cycles == []
 
     def test_to_dict_roundtrip(self):
+        initial = BasketEntry(
+            entry_id=1,
+            step=1,
+            direction=Direction.LONG,
+            entry_price=Decimal("150.00"),
+            close_price=Decimal("150.50"),
+            units=1000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="initial",
+        )
         cycle = SnowballCycle(
             cycle_id=1,
-            direction="long",
-            initial_entry={"entry_id": 1, "direction": "long"},
+            direction=Direction.LONG,
+            initial_entry=initial,
             add_count=3,
             freeze_count=1,
         )

@@ -275,6 +275,12 @@ class EventHandler:
             OrderServiceError: If order execution fails
         """
         strategy_event = StrategyEvent.from_dict(trading_event.details)
+        # Restore cycle-tracking fields from TradingEvent model columns
+        # (these are not stored in the details JSON).
+        if trading_event.root_entry_id is not None:
+            strategy_event.root_entry_id = trading_event.root_entry_id
+        if trading_event.parent_entry_id is not None:
+            strategy_event.parent_entry_id = trading_event.parent_entry_id
         event_key = self._event_type_key(strategy_event)
         event_handler = self._event_dispatch.get(event_key)
         if event_handler:
