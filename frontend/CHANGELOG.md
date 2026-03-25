@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.4...frontend-v1.18.5) (2026-03-25)
+
+
+### Bug Fixes
+
+* cycle id assignment and chart ([#190](https://github.com/yuyash/auto-forex-web-service/issues/190)) ([d3f7700](https://github.com/yuyash/auto-forex-web-service/commit/d3f77005565781c4b3629d3f12bfc3d9b542b9d4))
+
 ## [1.18.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.3...frontend-v1.18.4) (2026-03-25)
 
 
