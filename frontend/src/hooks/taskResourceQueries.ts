@@ -66,7 +66,12 @@ export function shouldPollTaskStatus(status: string | undefined): boolean {
 export function shouldEnableRealtimeTaskUpdates(
   status: string | undefined
 ): boolean {
-  return status === 'starting' || status === 'running' || status === 'stopping';
+  return (
+    status === 'starting' ||
+    status === 'running' ||
+    status === 'paused' ||
+    status === 'stopping'
+  );
 }
 
 export function createTaskListQuery<TTask extends TaskEntity>(
