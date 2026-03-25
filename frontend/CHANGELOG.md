@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.6...frontend-v1.18.7) (2026-03-25)
+
+
+### Bug Fixes
+
+* **frontend:** fix chart marker positions and auto-select granularity ([#195](https://github.com/yuyash/auto-forex-web-service/issues/195)) ([5801f0c](https://github.com/yuyash/auto-forex-web-service/commit/5801f0c041a52286eedc95bf2598da39be631f82))
+
 ## [1.18.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.5...frontend-v1.18.6) (2026-03-25)
 
 
