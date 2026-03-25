@@ -252,6 +252,8 @@ export function createTaskStrategyEventsQuery(
       executionRunId
     ),
     enabled: Boolean(taskId),
+    staleTime: 0,
+    refetchOnMount: 'always',
     queryFn: async () => {
       if (!taskId) {
         return null;

@@ -560,20 +560,20 @@ export function useWindowedCandles({
       const to = isoToSec(endTime);
       if (from != null && to != null) {
         const requestBounds = buildRequestBounds(bounds, granularity);
-        const initialTo = Math.min(
-          to,
-          requestBounds.to,
-          from +
-            Math.max(1, edgeCount - 1) *
-              (GRANULARITY_SECONDS[String(granularity)] ?? 60)
-        );
+        const granSec = GRANULARITY_SECONDS[String(granularity)] ?? 60;
+        // Load the most recent portion of the task range so the chart
+        // opens showing the latest data.  The user can scroll left to
+        // fetch older candles on demand.
+        const clampedTo = Math.min(to, requestBounds.to);
+        const windowSize = Math.max(1, edgeCount - 1) * granSec;
+        const initialFrom = Math.max(from, clampedTo - windowSize);
         setIsInitialLoading(true);
         void (async () => {
           try {
             const initialRange = alignRangeToGranularity(
               {
-                from,
-                to: initialTo,
+                from: initialFrom,
+                to: clampedTo,
               },
               granularity
             );
