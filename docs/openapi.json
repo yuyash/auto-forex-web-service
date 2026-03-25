@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.16.0",
+        "version": "1.16.1",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -3100,7 +3100,7 @@
         "/api/trading/tasks/backtest/{id}/strategy-events/": {
             "get": {
                 "operationId": "trading_tasks_backtest_strategy_events_retrieve",
-                "description": "Retrieve strategy visualization data.",
+                "description": "Retrieve strategy cycles built from Trade.cycle_id.",
                 "parameters": [
                     {
                         "in": "query",
@@ -3145,7 +3145,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TaskStrategyVisualizationResponse"
+                                    "$ref": "#/components/schemas/TaskStrategyCyclesResponse"
                                 }
                             }
                         },
@@ -4680,7 +4680,7 @@
         "/api/trading/tasks/trading/{id}/strategy-events/": {
             "get": {
                 "operationId": "trading_tasks_trading_strategy_events_retrieve",
-                "description": "Retrieve strategy visualization data.",
+                "description": "Retrieve strategy cycles built from Trade.cycle_id.",
                 "parameters": [
                     {
                         "in": "query",
@@ -4725,7 +4725,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TaskStrategyVisualizationResponse"
+                                    "$ref": "#/components/schemas/TaskStrategyCyclesResponse"
                                 }
                             }
                         },
@@ -8348,37 +8348,23 @@
                     "results"
                 ]
             },
-            "TaskStrategyVisualizationResponse": {
+            "TaskStrategyCyclesResponse": {
                 "type": "object",
                 "properties": {
-                    "strategy_type": {
-                        "type": "string"
-                    },
-                    "supported": {
-                        "type": "boolean"
-                    },
                     "execution_id": {
                         "type": "string",
                         "nullable": true
                     },
-                    "generated_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "nullable": true
+                    "cycles": {
+                        "type": "array",
+                        "items": {}
                     },
-                    "summary": {},
-                    "view_model": {},
-                    "message": {
-                        "type": "string"
-                    }
+                    "summary": {}
                 },
                 "required": [
+                    "cycles",
                     "execution_id",
-                    "generated_at",
-                    "strategy_type",
-                    "summary",
-                    "supported",
-                    "view_model"
+                    "summary"
                 ]
             },
             "TaskSummary": {

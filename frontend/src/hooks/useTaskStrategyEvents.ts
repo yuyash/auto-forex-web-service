@@ -1,7 +1,7 @@
 import { refreshTaskStrategyEvents } from './taskResourceCache';
 import { createTaskStrategyEventsQuery } from './taskResourceQueries';
 import { TaskType } from '../types/common';
-import type { StrategyVisualizationResponse } from '../types/strategyVisualization';
+import type { StrategyCyclesResponse } from '../types/strategyVisualization';
 import { usePollingPolicy } from './usePollingPolicy';
 import { usePolledTaskResource } from './useTaskCollections';
 
@@ -14,7 +14,7 @@ interface UseTaskStrategyEventsOptions {
 }
 
 interface UseTaskStrategyEventsResult {
-  data: StrategyVisualizationResponse | null;
+  data: StrategyCyclesResponse | null;
   isLoading: boolean;
   error: Error | null;
   refresh: () => Promise<unknown>;

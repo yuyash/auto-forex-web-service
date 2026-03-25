@@ -403,36 +403,31 @@ class TaskSubResourceMixin:
         parameters=[StrategyEventsQueryParamsSchemaSerializer],
         responses={
             200: inline_serializer(
-                "TaskStrategyVisualizationResponse",
+                "TaskStrategyCyclesResponse",
                 fields={
-                    "strategy_type": serializers.CharField(),
-                    "supported": serializers.BooleanField(),
                     "execution_id": serializers.CharField(allow_null=True),
-                    "generated_at": serializers.DateTimeField(allow_null=True),
+                    "cycles": serializers.ListField(child=serializers.JSONField()),
                     "summary": serializers.JSONField(),
-                    "view_model": serializers.JSONField(),
-                    "message": serializers.CharField(required=False),
                 },
             )
         },
-        description="Retrieve strategy visualization data.",
+        description="Retrieve strategy cycles built from Trade.cycle_id.",
     )
     @action(detail=True, methods=["get"], url_path="strategy-events")
     def strategy_events(self, request: Request, pk: int | None = None) -> Response:
-        from apps.trading.services.strategy_visualization import (
-            StrategyVisualizationService,
-        )
+        from apps.trading.services.strategy_cycles import StrategyCyclesService
 
         task = self.get_object()  # type: ignore[attr-defined]
         query = StrategyEventsQueryParams.from_request(
             request,
             default_execution_id=task.execution_id,
         )
-        response = StrategyVisualizationService().build(
+        cycle_id = request.query_params.get("cycle_id")
+        response = StrategyCyclesService().build(
             task=task,
             task_type=self.task_type_label,
             execution_id=query.execution_id,
-            root_entry_id=query.root_entry_id,
+            cycle_id=cycle_id,
         )
         return Response(response)
 

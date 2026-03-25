@@ -590,6 +590,7 @@ class SnowballStrategy(Strategy):
             units = lot_k * cycle.cycle_base_units
             tp = counter_tp_pips(step_k, cfg)
             new_price = tick.ask if direction == "long" else tick.bid
+            ret_number = cycle.add_count + 1  # R1, R2, R3...
 
             close_price, exit_formula = self._compute_counter_tp(
                 cfg,
@@ -602,11 +603,12 @@ class SnowballStrategy(Strategy):
             )
 
             logger.info(
-                "Counter first add #%d (%s) in cycle %d: L%d/R1, units=%d, adverse=%.1f pips",
+                "Counter first add #%d (%s) in cycle %d: L%d/R%d, units=%d, adverse=%.1f pips",
                 lot_k,
                 direction.upper(),
                 cycle.cycle_id,
                 cycle.freeze_count + 1,
+                ret_number,
                 units,
                 loss,
             )
@@ -618,10 +620,10 @@ class SnowballStrategy(Strategy):
                 step=step_k + 1,
                 close_price=close_price,
                 role="counter",
-                lot_k=lot_k,
+                lot_k=ret_number,
                 description=(
-                    f"Counter add #{lot_k} ({direction.upper()}) | "
-                    f"L{cycle.freeze_count + 1}/R1, units={units}, "
+                    f"Counter add ({direction.upper()}) | "
+                    f"L{cycle.freeze_count + 1}/R{ret_number}, units={units}, "
                     f"adverse={loss:.1f} pips, TP={close_price:.5f}"
                 ),
                 planned_exit_price_formula=exit_formula,
@@ -633,7 +635,7 @@ class SnowballStrategy(Strategy):
                 validation_status="pass",
             )
             entry_dict["layer_number"] = cycle.freeze_count + 1
-            entry_dict["retracement_count"] = lot_k
+            entry_dict["retracement_count"] = ret_number
             cycle.counter_entries.append(entry_dict)
             cycle.add_count = 1
             events.append(evt)
@@ -657,6 +659,7 @@ class SnowballStrategy(Strategy):
         units = lot_k * cycle.cycle_base_units
         tp = counter_tp_pips(step_k, cfg)
         new_price = tick.ask if direction == "long" else tick.bid
+        ret_number = cycle.add_count + 1
 
         close_price, exit_formula = self._compute_counter_tp(
             cfg,
@@ -669,12 +672,11 @@ class SnowballStrategy(Strategy):
         )
 
         logger.info(
-            "Counter add #%d (%s) in cycle %d: L%d/R%d, units=%d, adverse=%.1f pips",
-            lot_k,
+            "Counter add (%s) in cycle %d: L%d/R%d, units=%d, adverse=%.1f pips",
             direction.upper(),
             cycle.cycle_id,
             cycle.freeze_count + 1,
-            cycle.add_count + 1,
+            ret_number,
             units,
             adverse,
         )
@@ -686,10 +688,10 @@ class SnowballStrategy(Strategy):
             step=int(latest.get("step", 1)) + 1,
             close_price=close_price,
             role="counter",
-            lot_k=lot_k,
+            lot_k=ret_number,
             description=(
-                f"Counter add #{lot_k} ({direction.upper()}) | "
-                f"L{cycle.freeze_count + 1}/R{cycle.add_count + 1}, units={units}, "
+                f"Counter add ({direction.upper()}) | "
+                f"L{cycle.freeze_count + 1}/R{ret_number}, units={units}, "
                 f"adverse={adverse:.1f} pips, TP={close_price:.5f}"
             ),
             planned_exit_price_formula=exit_formula,
@@ -705,7 +707,7 @@ class SnowballStrategy(Strategy):
             validation_status="pass",
         )
         entry_dict["layer_number"] = cycle.freeze_count + 1
-        entry_dict["retracement_count"] = lot_k
+        entry_dict["retracement_count"] = ret_number
         cycle.counter_entries.append(entry_dict)
         cycle.add_count += 1
 
