@@ -7,6 +7,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: read
 
 jobs:
   release-please:
@@ -27,6 +28,33 @@ jobs:
     if: needs.release-please.outputs.releases_created == 'true'
 
     steps:
+      - name: Wait for Build workflow to succeed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Waiting for Build workflow to complete on ${{ github.sha }}..."
+          for i in $(seq 1 60); do
+            STATUS=$(gh run list \
+              --repo ${{ github.repository }} \
+              --workflow build.yml \
+              --commit ${{ github.sha }} \
+              --json status,conclusion \
+              --jq '.[0] | "\(.status) \(.conclusion)"')
+
+            if [[ "$STATUS" == "completed success" ]]; then
+              echo "✅ Build succeeded"
+              exit 0
+            elif [[ "$STATUS" == *"failure"* || "$STATUS" == *"cancelled"* ]]; then
+              echo "❌ Build failed or cancelled: $STATUS"
+              exit 1
+            fi
+
+            echo "Attempt $i/60 - Build status: $STATUS"
+            sleep 30
+          done
+          echo "❌ Timed out waiting for Build workflow"
+          exit 1
+
       - name: Checkout code
         uses: actions/checkout@v5
 
