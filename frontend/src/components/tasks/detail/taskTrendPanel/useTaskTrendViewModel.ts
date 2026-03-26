@@ -106,6 +106,7 @@ export function useTaskTrendViewModel(
         tradeTable.setPage(0);
       },
       onResetZoom: chartState.fitContent,
+      onReloadCandles: () => void candleState.replaceWithCountWindow(),
     },
     chartSectionProps: {
       chartContainerRef: chartState.chartContainerRef,

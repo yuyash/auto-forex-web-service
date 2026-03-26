@@ -11,6 +11,7 @@ import {
   Typography,
 } from '@mui/material';
 import ZoomOutMapIcon from '@mui/icons-material/ZoomOutMap';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import { useTranslation } from 'react-i18next';
 import type { ReplaySummary } from './shared';
@@ -31,6 +32,7 @@ interface TaskTrendToolbarProps {
   onGranularityChange: (event: SelectChangeEvent<string>) => void;
   onFollow: () => void;
   onResetZoom: () => void;
+  onReloadCandles: () => void;
 }
 
 export function TaskTrendToolbar({
@@ -49,6 +51,7 @@ export function TaskTrendToolbar({
   onGranularityChange,
   onFollow,
   onResetZoom,
+  onReloadCandles,
 }: TaskTrendToolbarProps) {
   const { t } = useTranslation('common');
 
@@ -213,6 +216,16 @@ export function TaskTrendToolbar({
       <Tooltip title="Reset zoom (show all)">
         <IconButton onClick={onResetZoom} sx={{ height: 32, width: 32 }}>
           <ZoomOutMapIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+
+      <Tooltip title={t('tables.trend.reloadCandles')}>
+        <IconButton
+          onClick={onReloadCandles}
+          disabled={isCandleRefreshing}
+          sx={{ height: 32, width: 32 }}
+        >
+          <RefreshIcon fontSize="small" />
         </IconButton>
       </Tooltip>
     </Box>
