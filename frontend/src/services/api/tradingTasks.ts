@@ -8,16 +8,16 @@ import type { BackendTradingTask } from './contracts';
 import { createTaskApi } from './taskApiFactory';
 
 interface TradingTaskCreateRequest {
-  config: string;
-  oanda_account: string;
+  config_id: string;
+  account_id: string;
   name: string;
   description?: string;
   sell_on_stop?: boolean;
 }
 
 interface TradingTaskUpdateRequest {
-  config?: string;
-  oanda_account?: string;
+  config_id?: string;
+  account_id?: string;
   name?: string;
   description?: string;
   sell_on_stop?: boolean;

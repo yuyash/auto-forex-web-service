@@ -31,8 +31,8 @@ export function useCreateTradingTask(options?: {
   return useWrappedMutation(
     (variables: TradingTaskCreateData) =>
       tradingTasksApi.create({
-        config: variables.config_id,
-        oanda_account: variables.account_id,
+        config_id: variables.config_id,
+        account_id: variables.account_id,
         name: variables.name,
         description: variables.description,
         sell_on_stop: variables.sell_on_stop,
@@ -56,8 +56,8 @@ export function useUpdateTradingTask(options?: {
   return useWrappedMutation(
     (variables: { id: string; data: TradingTaskUpdateData }) =>
       tradingTasksApi.partialUpdate(variables.id, {
-        config: variables.data.config,
-        oanda_account: variables.data.account_id,
+        config_id: variables.data.config,
+        account_id: variables.data.account_id,
         name: variables.data.name,
         description: variables.data.description,
         sell_on_stop: variables.data.sell_on_stop,
