@@ -282,7 +282,10 @@ export function TaskStrategyTab({
                     </Typography>
                     <Chip
                       size="small"
-                      label={cycle.status}
+                      label={
+                        cycle.status.charAt(0).toUpperCase() +
+                        cycle.status.slice(1)
+                      }
                       color={getStatusColor(cycle.status)}
                     />
                     <Chip
@@ -357,7 +360,10 @@ export function TaskStrategyTab({
                   {selectedCycle.direction.toUpperCase()} Cycle
                 </Typography>
                 <Chip
-                  label={selectedCycle.status}
+                  label={
+                    selectedCycle.status.charAt(0).toUpperCase() +
+                    selectedCycle.status.slice(1)
+                  }
                   size="small"
                   color={getStatusColor(selectedCycle.status)}
                 />
