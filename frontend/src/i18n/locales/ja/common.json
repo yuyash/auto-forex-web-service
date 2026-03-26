@@ -415,6 +415,7 @@
       "polling": "ポーリング",
       "granularity": "時間足",
       "follow": "追従",
+      "reloadCandles": "ローソク足を再読み込み",
       "trades": "取引",
       "longPositions": "買い建玉",
       "shortPositions": "売り建玉",

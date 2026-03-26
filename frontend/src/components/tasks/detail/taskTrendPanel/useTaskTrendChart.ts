@@ -587,6 +587,7 @@ export function useTaskTrendChart({
     AUTO_FOLLOW_CANDLES,
     candleDataRanges,
     candles,
+    chartInstance,
     currentTick?.timestamp,
     enableRealTimeUpdates,
     granularity,

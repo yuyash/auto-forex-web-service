@@ -415,6 +415,7 @@
       "polling": "Polling",
       "granularity": "Granularity",
       "follow": "Follow",
+      "reloadCandles": "Reload candles",
       "trades": "Trades",
       "longPositions": "Long Positions",
       "shortPositions": "Short Positions",
