@@ -390,12 +390,61 @@ class EventHandler:
         if parent_eid in self._entry_id_to_cycle_id:
             return self._entry_id_to_cycle_id[parent_eid]
 
+        # DB fallback: look up cycle_id from existing TradingEvent records.
+        # This handles the case where the EventHandler was re-created (e.g.
+        # after a task resume) and the in-memory mapping was lost.
+        cycle_id = self._resolve_cycle_id_from_db(root_eid, parent_eid)
+        if cycle_id is not None:
+            # Cache for future lookups within this session.
+            if root_eid is not None:
+                self._entry_id_to_cycle_id[root_eid] = cycle_id
+            if parent_eid is not None:
+                self._entry_id_to_cycle_id[parent_eid] = cycle_id
+            return cycle_id
+
         logger.warning(
             "Could not resolve cycle_id for entry_id=%s (root=%s, parent=%s)",
             event.entry_id,
             root_eid,
             parent_eid,
         )
+        return None
+
+    def _resolve_cycle_id_from_db(self, root_eid: int | None, parent_eid: int | None) -> str | None:
+        """Look up cycle_id from Trade records by matching entry_id in TradingEvent."""
+        try:
+            for eid in (root_eid, parent_eid):
+                if eid is None:
+                    continue
+                te = (
+                    TradingEvent.objects.filter(
+                        task_type=self.order_service.task_type,
+                        task_id=self._task_pk,
+                        execution_id=self._execution_id,
+                        entry_id=eid,
+                        event_type="open_position",
+                    )
+                    .values_list("event_timestamp", flat=True)
+                    .first()
+                )
+                if te is None:
+                    continue
+                trade = (
+                    Trade.objects.filter(
+                        task_type=self.order_service.task_type.value,
+                        task_id=self._task_pk,
+                        execution_id=self._execution_id,
+                        timestamp=te,
+                        execution_method="open_position",
+                        cycle_id__isnull=False,
+                    )
+                    .values_list("cycle_id", flat=True)
+                    .first()
+                )
+                if trade is not None:
+                    return str(trade)
+        except (TypeError, ValueError):
+            pass
         return None
 
     def handle_open_position(self, event: OpenPositionEvent) -> Position:

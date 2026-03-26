@@ -186,9 +186,10 @@ docker compose exec celery python -c \
 
 - **NEVER commit directly to `main`.** Always create a feature/fix branch first, then commit there.
 - **NEVER reuse a branch that has already been merged and deleted from the remote.** After a PR is merged, the branch is deleted. If you need to make further changes, create a **new branch** from the latest `main`.
+- **NEVER use `--no-verify` with `git commit` or `git push`.** Pre-commit and pre-push hooks exist to catch formatting, linting, and type errors. Skipping them causes CI failures. If a hook fails, fix the underlying issue instead of bypassing the hook.
 - **Before creating a branch**, always run `git fetch origin main && git checkout main && git reset --hard origin/main` to ensure you are on the latest `main`.
 - **Before pushing**, verify the remote branch does not already exist from a previous (now-merged) PR. If `git push` says "everything up-to-date" or the branch points to the same commit as `main`, you likely have a stale branch — delete it and create a new one.
-- **If `git commit` appears to succeed but `git log` shows no new commit**, the pre-commit hook's stash/unstash may have interfered. Use `git status` to check for staged changes and retry with `git commit --no-verify` if hooks are causing issues, then verify with `git log --oneline -1`.
+- **If `git commit` appears to succeed but `git log` shows no new commit**, the pre-commit hook's stash/unstash may have interfered. Run `git add -A` and retry `git commit` (without `--no-verify`). Then verify with `git log --oneline -1`.
 
 ### Commit Messages
 
