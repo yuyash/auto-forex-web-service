@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.16](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.15...frontend-v1.18.16) (2026-03-26)
+
+
+### Bug Fixes
+
+* **frontend:** centre chart on task end and always fetch metrics overlay ([#217](https://github.com/yuyash/auto-forex-web-service/issues/217)) ([5f54a79](https://github.com/yuyash/auto-forex-web-service/commit/5f54a792c9e7bd935c05324d88ff5bf9b7d980a0))
+
 ## [1.18.15](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.14...frontend-v1.18.15) (2026-03-26)
 
 
