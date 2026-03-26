@@ -1,5 +1,11 @@
-import { useEffect, useRef, useMemo } from 'react';
-import { Box, CircularProgress, Alert } from '@mui/material';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Box,
+  CircularProgress,
+  Alert,
+  ToggleButton,
+  ToggleButtonGroup,
+} from '@mui/material';
 import {
   CandlestickSeries,
   createChart,
@@ -28,6 +34,22 @@ interface StrategyGroupChartProps {
   height?: number;
 }
 
+const GRANULARITY_OPTIONS = ['M1', 'M5', 'M15', 'H1', 'H4', 'D'] as const;
+
+function autoGranularity(startTime: string, endTime: string | null): string {
+  const startSec = Math.floor(new Date(startTime).getTime() / 1000);
+  const endSec = endTime
+    ? Math.floor(new Date(endTime).getTime() / 1000)
+    : startSec + 3600;
+  const span = Math.max(60, endSec - startSec);
+  if (span > 30 * 86400) return 'D';
+  if (span > 7 * 86400) return 'H4';
+  if (span > 2 * 86400) return 'H1';
+  if (span > 12 * 3600) return 'M15';
+  if (span > 4 * 3600) return 'M5';
+  return 'M1';
+}
+
 export function StrategyGroupChart({
   instrument,
   startTime,
@@ -45,20 +67,16 @@ export function StrategyGroupChart({
   > | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
 
-  const granularity = useMemo(() => {
-    if (!startTime) return 'M1';
-    const startSec = Math.floor(new Date(startTime).getTime() / 1000);
-    const endSec = endTime
-      ? Math.floor(new Date(endTime).getTime() / 1000)
-      : startSec + 3600;
-    const spanSec = Math.max(60, endSec - startSec);
-    if (spanSec > 30 * 86400) return 'D';
-    if (spanSec > 7 * 86400) return 'H4';
-    if (spanSec > 2 * 86400) return 'H1';
-    if (spanSec > 12 * 3600) return 'M15';
-    if (spanSec > 4 * 3600) return 'M5';
-    return 'M1';
-  }, [startTime, endTime]);
+  const defaultGranularity = useMemo(
+    () => (startTime ? autoGranularity(startTime, endTime) : 'M1'),
+    [startTime, endTime]
+  );
+  const [granularity, setGranularity] = useState(defaultGranularity);
+
+  // Reset granularity when cycle changes
+  useEffect(() => {
+    setGranularity(defaultGranularity);
+  }, [defaultGranularity]);
 
   const { candles, isInitialLoading, error } = useWindowedCandles({
     instrument,
@@ -75,7 +93,6 @@ export function StrategyGroupChart({
     [trades, candleTimes]
   );
 
-  // Padded visible range: cycle period + 10% on each side
   const paddedRange = useMemo(() => {
     if (!startTime || candles.length === 0) return null;
     const startSec = Math.floor(new Date(startTime).getTime() / 1000);
@@ -84,13 +101,29 @@ export function StrategyGroupChart({
       : candles[candles.length - 1].time;
     const span = endSec - startSec;
     const pad = Math.max(60, Math.floor(span * 0.1));
-    return {
-      from: (startSec - pad) as Time,
-      to: (endSec + pad) as Time,
-    };
+    return { from: (startSec - pad) as Time, to: (endSec + pad) as Time };
   }, [startTime, endTime, candles]);
 
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  // Destroy chart when key inputs change so it's fully recreated
+  const destroyChart = useCallback(() => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    chartRef.current?.remove();
+    chartRef.current = null;
+    seriesRef.current = null;
+    markersRef.current = null;
+  }, []);
+
+  // Recreate chart when granularity or theme changes
+  useEffect(() => {
+    destroyChart();
+  }, [granularity, isDark, destroyChart]);
+
+  useEffect(() => {
+    return destroyChart;
+  }, [destroyChart]);
 
   useEffect(() => {
     if (!containerRef.current || candles.length === 0) return;
@@ -128,8 +161,6 @@ export function StrategyGroupChart({
         borderUpColor: upColor,
         borderDownColor: downColor,
       });
-
-      // Attach adaptive time scale for proper time labels
       const adaptive = new AdaptiveTimeScale(
         { timezone },
         isDark ? '#d1d4dc' : '#334155',
@@ -141,7 +172,6 @@ export function StrategyGroupChart({
       seriesRef.current = series;
       markersRef.current = createSeriesMarkers(series, []);
 
-      // Resize observer for responsive width
       const observer = new ResizeObserver(() => {
         const w = container.clientWidth;
         if (w > 0) chart.applyOptions({ width: w });
@@ -150,43 +180,26 @@ export function StrategyGroupChart({
       observerRef.current = observer;
     }
 
-    const series = seriesRef.current;
-    if (series) {
-      series.setData(
-        candles.map(
-          (c) =>
-            ({
-              time: c.time as Time,
-              open: c.open,
-              high: c.high,
-              low: c.low,
-              close: c.close,
-            }) as CandlestickData<Time>
-        )
-      );
-    }
-    if (markersRef.current) {
-      markersRef.current.setMarkers(markers);
-    }
+    seriesRef.current?.setData(
+      candles.map(
+        (c) =>
+          ({
+            time: c.time as Time,
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close,
+          }) as CandlestickData<Time>
+      )
+    );
+    markersRef.current?.setMarkers(markers);
 
-    // Set padded visible range instead of fitContent
     if (paddedRange && chartRef.current) {
       chartRef.current.timeScale().setVisibleRange(paddedRange);
     } else {
       chartRef.current?.timeScale().fitContent();
     }
   }, [candles, markers, height, isDark, paddedRange, timezone]);
-
-  useEffect(() => {
-    return () => {
-      observerRef.current?.disconnect();
-      observerRef.current = null;
-      chartRef.current?.remove();
-      chartRef.current = null;
-      seriesRef.current = null;
-      markersRef.current = null;
-    };
-  }, []);
 
   if (isInitialLoading) {
     return (
@@ -204,5 +217,28 @@ export function StrategyGroupChart({
     return <Alert severity="info">No chart data available</Alert>;
   }
 
-  return <Box ref={containerRef} sx={{ width: '100%' }} />;
+  return (
+    <Box>
+      <ToggleButtonGroup
+        value={granularity}
+        exclusive
+        onChange={(_, v) => {
+          if (v) setGranularity(v);
+        }}
+        size="small"
+        sx={{ mb: 1 }}
+      >
+        {GRANULARITY_OPTIONS.map((g) => (
+          <ToggleButton
+            key={g}
+            value={g}
+            sx={{ px: 1.5, py: 0.25, fontSize: '0.75rem' }}
+          >
+            {g}
+          </ToggleButton>
+        ))}
+      </ToggleButtonGroup>
+      <Box ref={containerRef} sx={{ width: '100%' }} />
+    </Box>
+  );
 }
