@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.16.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.16.4...backend-v1.16.5) (2026-03-26)
+
+
+### Bug Fixes
+
+* **strategy:** DB fallback for cycle_id, granularity selector, chart … ([#204](https://github.com/yuyash/auto-forex-web-service/issues/204)) ([794a7cc](https://github.com/yuyash/auto-forex-web-service/commit/794a7cc1911528b910fc953b0c126d7023db6567))
+* **strategy:** DB fallback for cycle_id, granularity selector, chart fixes ([794a7cc](https://github.com/yuyash/auto-forex-web-service/commit/794a7cc1911528b910fc953b0c126d7023db6567))
+
 ## [1.16.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.16.3...backend-v1.16.4) (2026-03-26)
 
 
