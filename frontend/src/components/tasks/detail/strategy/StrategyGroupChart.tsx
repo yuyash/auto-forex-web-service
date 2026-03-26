@@ -3,9 +3,13 @@ import {
   Box,
   CircularProgress,
   Alert,
+  IconButton,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
 } from '@mui/material';
+import ZoomOutMapIcon from '@mui/icons-material/ZoomOutMap';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import {
   CandlestickSeries,
   createChart,
@@ -78,14 +82,15 @@ export function StrategyGroupChart({
     setGranularity(defaultGranularity);
   }, [defaultGranularity]);
 
-  const { candles, isInitialLoading, error } = useWindowedCandles({
-    instrument,
-    granularity,
-    startTime,
-    endTime: endTime ?? undefined,
-    initialCount: 500,
-    edgeCount: 200,
-  });
+  const { candles, isInitialLoading, error, replaceWithCountWindow } =
+    useWindowedCandles({
+      instrument,
+      granularity,
+      startTime,
+      endTime: endTime ?? undefined,
+      initialCount: 500,
+      edgeCount: 200,
+    });
 
   const candleTimes = useMemo(() => candles.map((c) => c.time), [candles]);
   const markers = useMemo(
@@ -201,6 +206,19 @@ export function StrategyGroupChart({
     }
   }, [candles, markers, height, isDark, paddedRange, timezone]);
 
+  const handleResetZoom = useCallback(() => {
+    if (paddedRange && chartRef.current) {
+      chartRef.current.timeScale().setVisibleRange(paddedRange);
+    } else {
+      chartRef.current?.timeScale().fitContent();
+    }
+  }, [paddedRange]);
+
+  const handleReload = useCallback(() => {
+    destroyChart();
+    void replaceWithCountWindow();
+  }, [destroyChart, replaceWithCountWindow]);
+
   if (isInitialLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -219,25 +237,36 @@ export function StrategyGroupChart({
 
   return (
     <Box>
-      <ToggleButtonGroup
-        value={granularity}
-        exclusive
-        onChange={(_, v) => {
-          if (v) setGranularity(v);
-        }}
-        size="small"
-        sx={{ mb: 1 }}
-      >
-        {GRANULARITY_OPTIONS.map((g) => (
-          <ToggleButton
-            key={g}
-            value={g}
-            sx={{ px: 1.5, py: 0.25, fontSize: '0.75rem' }}
-          >
-            {g}
-          </ToggleButton>
-        ))}
-      </ToggleButtonGroup>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+        <ToggleButtonGroup
+          value={granularity}
+          exclusive
+          onChange={(_, v) => {
+            if (v) setGranularity(v);
+          }}
+          size="small"
+        >
+          {GRANULARITY_OPTIONS.map((g) => (
+            <ToggleButton
+              key={g}
+              value={g}
+              sx={{ px: 1.5, py: 0.25, fontSize: '0.75rem' }}
+            >
+              {g}
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
+        <Tooltip title="Reset zoom">
+          <IconButton onClick={handleResetZoom} size="small">
+            <ZoomOutMapIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Reload candles">
+          <IconButton onClick={handleReload} size="small">
+            <RefreshIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Box>
       <Box ref={containerRef} sx={{ width: '100%' }} />
     </Box>
   );

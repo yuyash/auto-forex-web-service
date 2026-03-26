@@ -388,6 +388,7 @@ export function TaskStrategyTab({
                   }}
                 >
                   <StrategyGroupChart
+                    key={selectedCycle.cycle_id}
                     instrument={instrument}
                     startTime={selectedCycle.started_at ?? ''}
                     endTime={selectedCycle.ended_at}
