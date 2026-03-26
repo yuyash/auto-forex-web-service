@@ -452,15 +452,21 @@ export class AdaptiveTimeScale implements ISeriesPrimitive<Time> {
         ? formatIntradayLabel
         : interval.format;
 
+    // Use pixel-based spacing to keep labels evenly distributed on screen.
+    // The previous seconds-based check caused uneven spacing around market-
+    // close gaps where real-time distance is large but pixel distance is
+    // small (or vice-versa).
+    const minLabelPx = isWideRange ? 50 : 60;
+
     const labels: TickLabel[] = [];
     let lastDateStr = '';
-    let lastLabelSec = Number.NEGATIVE_INFINITY;
+    let lastLabelX = Number.NEGATIVE_INFINITY;
 
     for (const point of visiblePoints) {
       if (point.sec < fromSec || point.sec > toSec) continue;
       const date = new Date(point.sec * 1000);
       if (!skipAlignment && !interval.isAligned(date, tz)) continue;
-      if (labels.length > 0 && point.sec - lastLabelSec < interval.approxSec) {
+      if (labels.length > 0 && Math.abs(point.x - lastLabelX) < minLabelPx) {
         continue;
       }
 
@@ -468,7 +474,7 @@ export class AdaptiveTimeScale implements ISeriesPrimitive<Time> {
       const formatted = formatFn(date, tz, lastDateStr);
       labels.push({ x, line1: formatted.line1, line2: formatted.line2 });
       lastDateStr = formatted.nextDateStr;
-      lastLabelSec = point.sec;
+      lastLabelX = x;
     }
 
     return labels;
