@@ -9,6 +9,8 @@ export interface CycleTrade {
   description?: string;
   timestamp: string | null;
   position_id?: string | null;
+  volatility?: string | null;
+  margin_ratio?: string | null;
 }
 
 export interface StrategyCycle {

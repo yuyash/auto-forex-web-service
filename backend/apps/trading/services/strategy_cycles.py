@@ -6,6 +6,7 @@ Builds cycle list from Trade.cycle_id.
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
@@ -61,11 +62,19 @@ class StrategyCyclesService:
                 "summary": _empty_summary(),
             }
 
+        # Look up metrics (volatility, margin) at each trade timestamp
+        metrics_by_minute = _load_metrics_for_trades(
+            task_type=task_type,
+            task_id=str(task.pk),
+            execution_id=str(execution_id),
+            trades=rows,
+        )
+
         by_cycle: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for row in rows:
             by_cycle[str(row["cycle_id"])].append(row)
 
-        cycles = [_build_cycle(cid, trades) for cid, trades in by_cycle.items()]
+        cycles = [_build_cycle(cid, trades, metrics_by_minute) for cid, trades in by_cycle.items()]
         cycles.sort(key=lambda c: c["started_at"] or "")
 
         return {
@@ -75,7 +84,58 @@ class StrategyCyclesService:
         }
 
 
-def _build_cycle(cycle_id: str, trades: list[dict[str, Any]]) -> dict[str, Any]:
+def _load_metrics_for_trades(
+    *,
+    task_type: str,
+    task_id: str,
+    execution_id: str,
+    trades: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Load minute-level metrics closest to each trade timestamp.
+
+    Returns a dict keyed by ISO-formatted minute bucket → metrics dict.
+    """
+    from apps.trading.models.metrics import Metrics
+
+    if not trades:
+        return {}
+
+    # Collect unique minute buckets for all trade timestamps
+    minute_keys: set[str] = set()
+    for t in trades:
+        ts = t.get("timestamp")
+        if ts:
+            bucket = ts.replace(second=0, microsecond=0)
+            minute_keys.add(bucket.isoformat())
+
+    if not minute_keys:
+        return {}
+
+    # Find the time range and query metrics in one go
+    timestamps = [t["timestamp"] for t in trades if t.get("timestamp")]
+    min_ts = min(timestamps) - timedelta(minutes=1)
+    max_ts = max(timestamps) + timedelta(minutes=1)
+
+    rows = Metrics.objects.filter(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=execution_id,
+        timestamp__gte=min_ts,
+        timestamp__lte=max_ts,
+    ).values_list("timestamp", "metrics")
+
+    result: dict[str, dict[str, Any]] = {}
+    for ts, metrics in rows:
+        if isinstance(metrics, dict):
+            key = ts.replace(second=0, microsecond=0).isoformat()
+            result[key] = metrics
+
+    return result
+
+
+def _build_cycle(
+    cycle_id: str, trades: list[dict[str, Any]], metrics_by_minute: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
     first = trades[0]
     last = trades[-1]
     direction = str(first.get("direction") or "")
@@ -111,11 +171,13 @@ def _build_cycle(cycle_id: str, trades: list[dict[str, Any]]) -> dict[str, Any]:
         "trade_count": len(trades),
         "open_count": len(opens),
         "close_count": len(closes),
-        "trades": [_serialize_trade(t) for t in trades],
+        "trades": [_serialize_trade(t, metrics_by_minute) for t in trades],
     }
 
 
-def _serialize_trade(t: dict[str, Any]) -> dict[str, Any]:
+def _serialize_trade(
+    t: dict[str, Any], metrics_by_minute: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
     direction = t.get("direction")
     if direction is not None:
         direction = (
@@ -125,6 +187,19 @@ def _serialize_trade(t: dict[str, Any]) -> dict[str, Any]:
             if str(direction).lower() == "short"
             else direction
         )
+
+    # Look up metrics at the trade's minute bucket
+    volatility = None
+    margin_ratio = None
+    ts = t.get("timestamp")
+    if ts:
+        bucket_key = ts.replace(second=0, microsecond=0).isoformat()
+        metrics = metrics_by_minute.get(bucket_key, {})
+        if metrics.get("current_atr") is not None:
+            volatility = str(metrics["current_atr"])
+        if metrics.get("margin_ratio") is not None:
+            margin_ratio = str(metrics["margin_ratio"])
+
     return {
         "id": str(t["id"]),
         "direction": direction,
@@ -136,6 +211,8 @@ def _serialize_trade(t: dict[str, Any]) -> dict[str, Any]:
         "description": t.get("description", ""),
         "timestamp": t["timestamp"].isoformat() if t.get("timestamp") else None,
         "position_id": str(t["position_id"]) if t.get("position_id") else None,
+        "volatility": volatility,
+        "margin_ratio": margin_ratio,
     }
 
 

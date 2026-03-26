@@ -226,3 +226,52 @@ class StrategyConfigTasksView(generics.GenericAPIView):
             return Response({"error": "Configuration not found"}, status=status.HTTP_404_NOT_FOUND)
 
         return Response({"results": list_configuration_tasks(config=config)})
+
+
+class StrategyConfigCopyView(generics.GenericAPIView):
+    """Copy a strategy configuration with optional new name and description."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        operation_id="trading_strategy_config_copy",
+        tags=["Trading"],
+        request=inline_serializer(
+            "StrategyConfigCopyRequest",
+            fields={
+                "name": serializers.CharField(required=False),
+                "description": serializers.CharField(required=False),
+            },
+        ),
+        responses={201: StrategyConfigDetailSerializer},
+    )
+    def post(self, request: Request, config_id: UUID) -> Response:
+        try:
+            config = StrategyConfiguration.objects.get(id=config_id, user=request.user.pk)
+        except StrategyConfiguration.DoesNotExist:
+            return Response({"error": "Configuration not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        new_name = request.data.get("name") or f"{config.name} (copy)"
+        new_description = request.data.get("description", config.description)
+
+        try:
+            copy = StrategyConfiguration.objects.create(
+                user=request.user,
+                name=new_name,
+                strategy_type=config.strategy_type,
+                parameters=config.parameters,
+                description=new_description,
+            )
+        except IntegrityError as exc:
+            exc_text = _integrity_constraint_id(exc)
+            if "unique_user_config_name" in exc_text or "duplicate key" in exc_text:
+                return Response(
+                    {"name": ["A configuration with this name already exists"]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            raise
+
+        return Response(
+            StrategyConfigDetailSerializer(copy).data,
+            status=status.HTTP_201_CREATED,
+        )

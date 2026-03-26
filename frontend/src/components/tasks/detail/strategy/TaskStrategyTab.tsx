@@ -446,6 +446,22 @@ export function TaskStrategyTab({
                           R{trade.retracement_count}
                         </Typography>
                       ) : null}
+                      {trade.volatility != null ? (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={`ATR ${Number(trade.volatility).toFixed(5)}`}
+                          sx={{ fontSize: '0.7rem' }}
+                        />
+                      ) : null}
+                      {trade.margin_ratio != null ? (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={`Margin ${(Number(trade.margin_ratio) * 100).toFixed(1)}%`}
+                          sx={{ fontSize: '0.7rem' }}
+                        />
+                      ) : null}
                     </Stack>
                     {trade.description ? (
                       <Typography

@@ -9,6 +9,7 @@ This package organizes trading views into logical modules:
 
 from .backtest import BacktestTaskViewSet
 from .configs import (
+    StrategyConfigCopyView,
     StrategyConfigDetailView,
     StrategyConfigTasksView,
     StrategyConfigView,
@@ -27,6 +28,7 @@ __all__ = [
     "StrategyConfigView",
     "StrategyConfigDetailView",
     "StrategyConfigTasksView",
+    "StrategyConfigCopyView",
     # Tasks
     "BacktestTaskViewSet",
     "TradingTaskViewSet",
