@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.16.3...backend-v1.16.4) (2026-03-26)
+
+
+### Bug Fixes
+
+* chart marker positions ([#197](https://github.com/yuyash/auto-forex-web-service/issues/197)) ([a9794a3](https://github.com/yuyash/auto-forex-web-service/commit/a9794a331f766c403e76d6e294c262943f8f4d66))
+
 ## [1.16.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.16.2...backend-v1.16.3) (2026-03-25)
 
 
