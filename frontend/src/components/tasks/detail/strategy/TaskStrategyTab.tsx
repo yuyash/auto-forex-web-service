@@ -394,6 +394,9 @@ export function TaskStrategyTab({
                     endTime={selectedCycle.ended_at}
                     trades={selectedCycle.trades}
                     height={300}
+                    taskId={taskId}
+                    taskType={taskType}
+                    executionRunId={executionRunId}
                   />
                 </Paper>
               ) : null}

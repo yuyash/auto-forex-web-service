@@ -28,7 +28,9 @@ import {
   createTooltipTimeFormatter,
 } from '../../../../utils/adaptiveTimeScalePlugin';
 import type { CycleTrade } from '../../../../types/strategyVisualization';
+import type { TaskType } from '../../../../types/common';
 import { buildCycleMarkers } from './buildCycleMarkers';
+import { useMetricsOverlay } from '../MetricsOverlayChart';
 
 interface StrategyGroupChartProps {
   instrument: string;
@@ -36,6 +38,9 @@ interface StrategyGroupChartProps {
   endTime: string | null;
   trades: CycleTrade[];
   height?: number;
+  taskId?: string | number;
+  taskType?: TaskType;
+  executionRunId?: string;
 }
 
 const GRANULARITY_OPTIONS = ['M1', 'M5', 'M15', 'H1', 'H4', 'D'] as const;
@@ -60,6 +65,9 @@ export function StrategyGroupChart({
   endTime,
   trades,
   height = 300,
+  taskId,
+  taskType,
+  executionRunId,
 }: StrategyGroupChartProps) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -70,6 +78,8 @@ export function StrategyGroupChart({
     typeof createSeriesMarkers<Time>
   > | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
+  // Expose chart instance as state so the metrics overlay hook can react to it
+  const [chartInstance, setChartInstance] = useState<IChartApi | null>(null);
 
   const defaultGranularity = useMemo(
     () => (startTime ? autoGranularity(startTime, endTime) : 'M1'),
@@ -119,6 +129,7 @@ export function StrategyGroupChart({
     chartRef.current = null;
     seriesRef.current = null;
     markersRef.current = null;
+    setChartInstance(null);
   }, []);
 
   // Recreate chart when granularity or theme changes
@@ -176,6 +187,7 @@ export function StrategyGroupChart({
       chartRef.current = chart;
       seriesRef.current = series;
       markersRef.current = createSeriesMarkers(series, []);
+      setChartInstance(chart);
 
       const observer = new ResizeObserver(() => {
         const w = container.clientWidth;
@@ -205,6 +217,15 @@ export function StrategyGroupChart({
       chartRef.current?.timeScale().fitContent();
     }
   }, [candles, markers, height, isDark, paddedRange, timezone]);
+
+  // Attach metrics overlay (ATR / Margin Ratio) when task context is available
+  useMetricsOverlay({
+    taskId: taskId ? String(taskId) : '',
+    taskType: taskType ?? ('' as TaskType),
+    executionRunId,
+    chart: chartInstance,
+    candleTimestamps: candleTimes as number[],
+  });
 
   const handleResetZoom = useCallback(() => {
     if (paddedRange && chartRef.current) {
