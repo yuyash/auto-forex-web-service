@@ -92,14 +92,36 @@ export function StrategyGroupChart({
     setGranularity(defaultGranularity);
   }, [defaultGranularity]);
 
+  // Calculate edgeCount to cover the full cycle range so the initial load
+  // fetches candles from start to end instead of only the most recent portion.
+  const fullRangeEdgeCount = useMemo(() => {
+    if (!startTime) return 500;
+    const GRANULARITY_SECONDS: Record<string, number> = {
+      M1: 60,
+      M5: 300,
+      M15: 900,
+      H1: 3600,
+      H4: 14400,
+      D: 86400,
+    };
+    const granSec = GRANULARITY_SECONDS[granularity] ?? 60;
+    const startSec = Math.floor(new Date(startTime).getTime() / 1000);
+    const endSec = endTime
+      ? Math.floor(new Date(endTime).getTime() / 1000)
+      : Math.floor(Date.now() / 1000);
+    const span = Math.max(60, endSec - startSec);
+    // Add 10% padding on each side
+    return Math.ceil((span / granSec) * 1.2) + 10;
+  }, [startTime, endTime, granularity]);
+
   const { candles, isInitialLoading, error, replaceWithCountWindow } =
     useWindowedCandles({
       instrument,
       granularity,
       startTime,
       endTime: endTime ?? undefined,
-      initialCount: 500,
-      edgeCount: 200,
+      initialCount: fullRangeEdgeCount,
+      edgeCount: fullRangeEdgeCount,
     });
 
   const candleTimes = useMemo(() => candles.map((c) => c.time), [candles]);

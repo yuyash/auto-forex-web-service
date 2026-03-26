@@ -141,7 +141,7 @@ def _build_cycle(
     direction = str(first.get("direction") or "")
 
     opens = [t for t in trades if t["execution_method"] == "open_position"]
-    closes = [t for t in trades if t["execution_method"] == "close_position"]
+    closes = [t for t in trades if t["execution_method"] != "open_position"]
     open_ids = {str(t["position_id"]) for t in opens if t.get("position_id")}
     close_ids = {str(t["position_id"]) for t in closes if t.get("position_id")}
     has_open_remaining = bool(open_ids - close_ids)
