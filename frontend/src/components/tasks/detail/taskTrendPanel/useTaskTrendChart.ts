@@ -504,23 +504,28 @@ export function useTaskTrendChart({
           reportChartError('Failed to position the chart at the current tick.');
         }
       } else if (!enableRealTimeUpdates && startTimeSec != null) {
+        // For completed / non-realtime tasks, centre the view around the
+        // end of the task so the most recent activity is visible.  Fall
+        // back to the start when no end time is available.
+        const anchorSec = endTimeSec ?? startTimeSec;
         const totalSpanSeconds = AUTO_FOLLOW_CANDLES * granularitySeconds;
-        const gapAroundStart = findGapAroundTime(
-          startTimeSec,
+        const halfSpan = Math.floor(totalSpanSeconds / 2);
+        const gapAroundAnchor = findGapAroundTime(
+          anchorSec,
           times,
           granularitySeconds * 6
         );
-        const initialFrom = gapAroundStart
-          ? Math.max(startTimeSec, gapAroundStart.from)
-          : startTimeSec;
-        const requiredGapSpan = gapAroundStart
-          ? gapAroundStart.to - initialFrom
+        const viewFrom = gapAroundAnchor
+          ? Math.max(anchorSec - halfSpan, gapAroundAnchor.from)
+          : anchorSec - halfSpan;
+        const requiredGapSpan = gapAroundAnchor
+          ? gapAroundAnchor.to - viewFrom
           : 0;
-        const initialSpanSeconds = Math.max(totalSpanSeconds, requiredGapSpan);
+        const viewSpan = Math.max(totalSpanSeconds, requiredGapSpan);
         try {
           chartRef.current?.timeScale().setVisibleRange({
-            from: initialFrom as Time,
-            to: (initialFrom + initialSpanSeconds) as Time,
+            from: viewFrom as Time,
+            to: (viewFrom + viewSpan) as Time,
           });
           reportChartError(null);
         } catch {
@@ -590,6 +595,7 @@ export function useTaskTrendChart({
     chartInstance,
     currentTick?.timestamp,
     enableRealTimeUpdates,
+    endTimeSec,
     granularity,
     granularitySeconds,
     reportChartError,

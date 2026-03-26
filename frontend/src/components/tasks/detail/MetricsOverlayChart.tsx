@@ -148,7 +148,6 @@ export function useMetricsOverlay({
     enabled: enableRealTimeUpdates,
     baseIntervalMs: pollingIntervalMs,
   });
-  const isPageVisible = pollingPolicy.isActive;
   const seriesRef = useRef<ReturnType<typeof attachSeries> | null>(null);
   const attachedToChart = useRef<IChartApi | null>(null);
   const [snapshots, setSnapshots] = useState<MetricPoint[]>([]);
@@ -224,7 +223,7 @@ export function useMetricsOverlay({
 
   // Initial fetch for the full candle range
   useEffect(() => {
-    if (!candleTimestamps || candleTimestamps.length === 0 || !isPageVisible) {
+    if (!candleTimestamps || candleTimestamps.length === 0) {
       return;
     }
     let cancelled = false;
@@ -244,18 +243,11 @@ export function useMetricsOverlay({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    taskId,
-    taskType,
-    executionRunId,
-    fetchWindow,
-    expandRange,
-    isPageVisible,
-  ]);
+  }, [taskId, taskType, executionRunId, fetchWindow, expandRange]);
 
   // Viewport-driven fetch on scroll/zoom (debounced)
   useEffect(() => {
-    if (!chart || !isPageVisible) return;
+    if (!chart) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const handler = () => {
       const tr = chart.timeScale().getVisibleRange();
@@ -282,7 +274,7 @@ export function useMetricsOverlay({
       if (timer) clearTimeout(timer);
       chart.timeScale().unsubscribeVisibleTimeRangeChange(handler);
     };
-  }, [chart, fetchWindow, isCovered, expandRange, isPageVisible]);
+  }, [chart, fetchWindow, isCovered, expandRange]);
 
   // Real-time incremental polling
   useSequentialPolling(
