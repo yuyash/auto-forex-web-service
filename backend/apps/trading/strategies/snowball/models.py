@@ -529,6 +529,7 @@ class SnowballCycle:
     add_count: int = 0
     freeze_count: int = 0
     cycle_base_units: int = 1000
+    counter_close_count: int = 0
     completed: bool = False
 
     # ------------------------------------------------------------------
@@ -579,6 +580,7 @@ class SnowballCycle:
             "add_count": self.add_count,
             "freeze_count": self.freeze_count,
             "cycle_base_units": self.cycle_base_units,
+            "counter_close_count": self.counter_close_count,
             "completed": self.completed,
         }
 
@@ -605,6 +607,7 @@ class SnowballCycle:
             add_count=_parse_int(data.get("add_count", 0), 0),
             freeze_count=_parse_int(data.get("freeze_count", 0), 0),
             cycle_base_units=_parse_int(data.get("cycle_base_units", 1000), 1000),
+            counter_close_count=_parse_int(data.get("counter_close_count", 0), 0),
             completed=bool(data.get("completed", False)),
         )
 

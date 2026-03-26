@@ -367,6 +367,13 @@ export function TaskStrategyTab({
                 {formatDateTime(selectedCycle.started_at)} →{' '}
                 {formatDateTime(selectedCycle.ended_at)}
               </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ mb: 1, display: 'block', fontFamily: 'monospace' }}
+              >
+                {selectedCycle.cycle_id}
+              </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 {selectedCycle.open_count} opens, {selectedCycle.close_count}{' '}
                 closes

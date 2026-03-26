@@ -341,7 +341,7 @@ class SnowballStrategy(Strategy):
             )
             cycle.remove_entry(entry.entry_id)
             cycle.add_count = 0
-            ss.metrics["counter_close_count"] = int(ss.metrics.get("counter_close_count", 0)) + 1
+            cycle.counter_close_count += 1
 
         return events
 
@@ -392,7 +392,7 @@ class SnowballStrategy(Strategy):
             if loss < interval:
                 return events
 
-            prior_closes = int(ss.metrics.get("counter_close_count", 0))
+            prior_closes = cycle.counter_close_count
             lot_k = (cycle.add_count + 2) if prior_closes == 0 else (cycle.add_count + 1)
             units = lot_k * cycle.cycle_base_units
             tp = counter_tp_pips(step_k, cfg)
@@ -462,7 +462,7 @@ class SnowballStrategy(Strategy):
         if adverse < interval:
             return events
 
-        prior_closes = int(ss.metrics.get("counter_close_count", 0))
+        prior_closes = cycle.counter_close_count
         lot_k = (cycle.add_count + 2) if prior_closes == 0 else (cycle.add_count + 1)
         units = lot_k * cycle.cycle_base_units
         tp = counter_tp_pips(step_k, cfg)
