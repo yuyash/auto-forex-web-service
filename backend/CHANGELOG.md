@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.17.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.16.5...backend-v1.17.0) (2026-03-26)
+
+
+### Features
+
+* **trading:** add sequence_number to preserve event ordering within … ([#206](https://github.com/yuyash/auto-forex-web-service/issues/206)) ([31f686e](https://github.com/yuyash/auto-forex-web-service/commit/31f686ead46296962ef7fa849ed9ff90afee4746))
+* **trading:** add sequence_number to preserve event ordering within same tick ([31f686e](https://github.com/yuyash/auto-forex-web-service/commit/31f686ead46296962ef7fa849ed9ff90afee4746))
+
 ## [1.16.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.16.4...backend-v1.16.5) (2026-03-26)
 
 
