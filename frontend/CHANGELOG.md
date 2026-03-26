@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.14](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.13...frontend-v1.18.14) (2026-03-26)
+
+
+### Bug Fixes
+
+* **frontend:** show time axis labels for H4 and Daily candles ([#213](https://github.com/yuyash/auto-forex-web-service/issues/213)) ([7d4e6fc](https://github.com/yuyash/auto-forex-web-service/commit/7d4e6fc262f615e7a702811b890af0989d7e2eec))
+
 ## [1.18.13](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.12...frontend-v1.18.13) (2026-03-26)
 
 
