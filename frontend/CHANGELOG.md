@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.15](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.14...frontend-v1.18.15) (2026-03-26)
+
+
+### Bug Fixes
+
+* **frontend:** use pixel-based spacing for time axis labels ([#215](https://github.com/yuyash/auto-forex-web-service/issues/215)) ([6f5e978](https://github.com/yuyash/auto-forex-web-service/commit/6f5e978840a582b7a5efc8b2aeb99796cd655b68))
+
 ## [1.18.14](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.13...frontend-v1.18.14) (2026-03-26)
 
 
