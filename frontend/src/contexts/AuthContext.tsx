@@ -17,6 +17,7 @@ import { useSequentialPolling } from '../hooks/useSequentialPolling';
 import { authApi } from '../services/api';
 import { ApiError } from '../api/apiClient';
 import { logger } from '../utils/logger';
+import { resetQueryClient } from '../config/reactQuery';
 import {
   readRawStoredValue,
   readStoredValue,
@@ -87,6 +88,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     tokenRef.current = null;
     setUser(null);
     clearPersistedAuth();
+    // Replace the QueryClient instance so the new session starts with a
+    // completely empty cache.  This is stronger than queryClient.clear()
+    // because even if a stale reference survives somewhere, the
+    // QueryClientProvider will be pointing at the new instance.
+    resetQueryClient();
   }, [clearPersistedAuth]);
 
   const fetchSystemSettings = useCallback(async () => {
@@ -109,6 +115,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = useCallback((newToken: string, newUser: User) => {
+    // Replace the QueryClient so any data cached under the previous
+    // (or anonymous) session is discarded before the new user's
+    // components start fetching.
+    resetQueryClient();
     setToken(newToken);
     tokenRef.current = newToken;
     setUser(newUser);

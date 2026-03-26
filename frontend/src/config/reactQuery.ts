@@ -4,39 +4,86 @@ import { backtestTasksApi } from '../services/api/backtestTasks';
 import { configurationsApi } from '../services/api/configurations';
 import { tradingTasksApi } from '../services/api/tradingTasks';
 
-export const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      // Stale time: how long data is considered fresh
-      staleTime: 5 * 60 * 1000, // 5 minutes for most queries
+/** Default options shared by every QueryClient instance. */
+const defaultQueryClientOptions = {
+  queries: {
+    // Stale time: how long data is considered fresh
+    staleTime: 5 * 60 * 1000, // 5 minutes for most queries
 
-      // Cache time: how long inactive data stays in cache
-      gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
+    // Cache time: how long inactive data stays in cache
+    gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
 
-      // Retry configuration - disabled to prevent 429 errors when server is down
-      retry: false, // Don't retry failed requests
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+    // Retry configuration - disabled to prevent 429 errors when server is down
+    retry: false as const, // Don't retry failed requests
+    retryDelay: (attemptIndex: number) =>
+      Math.min(1000 * 2 ** attemptIndex, 30000),
 
-      // Refetch configuration
-      refetchOnWindowFocus: false, // Don't refetch on window focus by default
-      refetchOnReconnect: false, // Don't refetch when reconnecting to prevent 429
-      refetchOnMount: true, // Refetch on component mount
+    // Refetch configuration
+    refetchOnWindowFocus: false, // Don't refetch on window focus by default
+    refetchOnReconnect: false, // Don't refetch when reconnecting to prevent 429
+    refetchOnMount: true as const, // Refetch on component mount
 
-      // Background refetching
-      refetchInterval: false, // No automatic background refetching by default
+    // Background refetching
+    refetchInterval: false as const, // No automatic background refetching by default
 
-      // Error handling
-      throwOnError: false, // Don't throw errors, handle them in components
-    },
-    mutations: {
-      // Retry configuration for mutations
-      retry: 0, // Don't retry mutations by default
-
-      // Error handling
-      throwOnError: false,
-    },
+    // Error handling
+    throwOnError: false, // Don't throw errors, handle them in components
   },
-});
+  mutations: {
+    // Retry configuration for mutations
+    retry: 0, // Don't retry mutations by default
+
+    // Error handling
+    throwOnError: false,
+  },
+} as const;
+
+function createQueryClient(): QueryClient {
+  return new QueryClient({ defaultOptions: defaultQueryClientOptions });
+}
+
+/**
+ * The active QueryClient instance.
+ *
+ * This is replaced with a fresh instance whenever the authenticated user
+ * changes (login / logout) so that one user's cached data can never leak
+ * into another user's session — even if `queryClient.clear()` is somehow
+ * skipped.
+ *
+ * Code that runs *outside* React components (e.g. mutation-cache helpers)
+ * imports this mutable binding.  React components should prefer the
+ * `useQueryClient()` hook which reads from the nearest
+ * `<QueryClientProvider>`.
+ */
+export let queryClient: QueryClient = createQueryClient();
+
+/** Subscribers notified when the active QueryClient is replaced. */
+type Listener = (client: QueryClient) => void;
+const listeners = new Set<Listener>();
+
+/** Subscribe to QueryClient replacements. Returns an unsubscribe function. */
+export function onQueryClientChange(listener: Listener): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/**
+ * Replace the active QueryClient with a brand-new instance.
+ *
+ * Call this on login and logout so that:
+ * - The old user's cached data is discarded (the old client is GC'd).
+ * - The new user starts with a completely empty cache.
+ *
+ * The QueryProvider subscribes to this change and re-renders with the new
+ * client, so all downstream `useQueryClient()` consumers automatically
+ * pick up the new instance.
+ */
+export function resetQueryClient(): void {
+  queryClient = createQueryClient();
+  listeners.forEach((fn) => fn(queryClient));
+}
 
 // Query key factory for consistent cache keys
 export const queryKeys = {
