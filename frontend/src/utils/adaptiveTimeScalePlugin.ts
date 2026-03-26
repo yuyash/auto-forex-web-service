@@ -434,6 +434,24 @@ export class AdaptiveTimeScale implements ISeriesPrimitive<Time> {
       }
     }
 
+    // Detect the actual data-point spacing so we can skip the isAligned
+    // check when the chosen interval is finer than the candle granularity.
+    // For H4 / D candles the alignment predicates (e.g. H===0) may never
+    // match due to timezone offsets, producing zero labels.
+    let dataStepSec = 0;
+    if (visiblePoints.length >= 2) {
+      dataStepSec = visiblePoints[1].sec - visiblePoints[0].sec;
+    }
+    const skipAlignment = dataStepSec > 0 && interval.approxSec <= dataStepSec;
+
+    // When alignment is skipped the chosen interval's format may be wrong
+    // (e.g. formatDateOnlyLabel for H4 data hides the time component).
+    // Pick a format that matches the actual data granularity instead.
+    const formatFn =
+      skipAlignment && dataStepSec < 86400
+        ? formatIntradayLabel
+        : interval.format;
+
     const labels: TickLabel[] = [];
     let lastDateStr = '';
     let lastLabelSec = Number.NEGATIVE_INFINITY;
@@ -441,13 +459,13 @@ export class AdaptiveTimeScale implements ISeriesPrimitive<Time> {
     for (const point of visiblePoints) {
       if (point.sec < fromSec || point.sec > toSec) continue;
       const date = new Date(point.sec * 1000);
-      if (!interval.isAligned(date, tz)) continue;
+      if (!skipAlignment && !interval.isAligned(date, tz)) continue;
       if (labels.length > 0 && point.sec - lastLabelSec < interval.approxSec) {
         continue;
       }
 
       const x = point.x;
-      const formatted = interval.format(date, tz, lastDateStr);
+      const formatted = formatFn(date, tz, lastDateStr);
       labels.push({ x, line1: formatted.line1, line2: formatted.line2 });
       lastDateStr = formatted.nextDateStr;
       lastLabelSec = point.sec;
