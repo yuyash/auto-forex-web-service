@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.9](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.8...frontend-v1.18.9) (2026-03-26)
+
+
+### Bug Fixes
+
+* **frontend:** responsive chart width, proper time labels, padded range ([#200](https://github.com/yuyash/auto-forex-web-service/issues/200)) ([d036a2d](https://github.com/yuyash/auto-forex-web-service/commit/d036a2d190c6d98baa8af906e751fbda527216fb))
+
 ## [1.18.8](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.7...frontend-v1.18.8) (2026-03-26)
 
 
