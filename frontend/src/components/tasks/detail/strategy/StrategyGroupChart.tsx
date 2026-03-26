@@ -12,6 +12,11 @@ import {
 import { useTheme } from '@mui/material/styles';
 import { useWindowedCandles } from '../../../../hooks/useWindowedCandles';
 import { getCandleColors } from '../../../../utils/candleColors';
+import {
+  AdaptiveTimeScale,
+  createSuppressedTickMarkFormatter,
+  createTooltipTimeFormatter,
+} from '../../../../utils/adaptiveTimeScalePlugin';
 import type { CycleTrade } from '../../../../types/strategyVisualization';
 import { buildCycleMarkers } from './buildCycleMarkers';
 
@@ -38,6 +43,7 @@ export function StrategyGroupChart({
   const markersRef = useRef<ReturnType<
     typeof createSeriesMarkers<Time>
   > | null>(null);
+  const observerRef = useRef<ResizeObserver | null>(null);
 
   const granularity = useMemo(() => {
     if (!startTime) return 'M1';
@@ -69,22 +75,49 @@ export function StrategyGroupChart({
     [trades, candleTimes]
   );
 
+  // Padded visible range: cycle period + 10% on each side
+  const paddedRange = useMemo(() => {
+    if (!startTime || candles.length === 0) return null;
+    const startSec = Math.floor(new Date(startTime).getTime() / 1000);
+    const endSec = endTime
+      ? Math.floor(new Date(endTime).getTime() / 1000)
+      : candles[candles.length - 1].time;
+    const span = endSec - startSec;
+    const pad = Math.max(60, Math.floor(span * 0.1));
+    return {
+      from: (startSec - pad) as Time,
+      to: (endSec + pad) as Time,
+    };
+  }, [startTime, endTime, candles]);
+
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
   useEffect(() => {
     if (!containerRef.current || candles.length === 0) return;
 
     if (!chartRef.current) {
+      const container = containerRef.current;
       const { upColor, downColor } = getCandleColors();
-      const chart = createChart(containerRef.current, {
+      const chart = createChart(container, {
         height,
+        width: container.clientWidth,
         layout: {
           background: { color: isDark ? '#131722' : '#ffffff' },
           textColor: isDark ? '#d1d4dc' : '#334155',
         },
         grid: {
-          vertLines: { color: isDark ? '#2a2e39' : '#e2e8f0' },
+          vertLines: { visible: false },
           horzLines: { color: isDark ? '#2a2e39' : '#e2e8f0' },
         },
-        timeScale: { timeVisible: true, secondsVisible: false },
+        timeScale: {
+          borderColor: isDark ? '#2a2e39' : '#cbd5e1',
+          timeVisible: true,
+          secondsVisible: false,
+          tickMarkFormatter: createSuppressedTickMarkFormatter(),
+        },
+        localization: {
+          timeFormatter: createTooltipTimeFormatter({ timezone }),
+        },
         rightPriceScale: { borderColor: isDark ? '#2a2e39' : '#cbd5e1' },
       });
       const series = chart.addSeries(CandlestickSeries, {
@@ -95,9 +128,26 @@ export function StrategyGroupChart({
         borderUpColor: upColor,
         borderDownColor: downColor,
       });
+
+      // Attach adaptive time scale for proper time labels
+      const adaptive = new AdaptiveTimeScale(
+        { timezone },
+        isDark ? '#d1d4dc' : '#334155',
+        isDark ? '#2a2e39' : '#e2e8f0'
+      );
+      series.attachPrimitive(adaptive);
+
       chartRef.current = chart;
       seriesRef.current = series;
       markersRef.current = createSeriesMarkers(series, []);
+
+      // Resize observer for responsive width
+      const observer = new ResizeObserver(() => {
+        const w = container.clientWidth;
+        if (w > 0) chart.applyOptions({ width: w });
+      });
+      observer.observe(container);
+      observerRef.current = observer;
     }
 
     const series = seriesRef.current;
@@ -118,11 +168,19 @@ export function StrategyGroupChart({
     if (markersRef.current) {
       markersRef.current.setMarkers(markers);
     }
-    chartRef.current?.timeScale().fitContent();
-  }, [candles, markers, height, isDark]);
+
+    // Set padded visible range instead of fitContent
+    if (paddedRange && chartRef.current) {
+      chartRef.current.timeScale().setVisibleRange(paddedRange);
+    } else {
+      chartRef.current?.timeScale().fitContent();
+    }
+  }, [candles, markers, height, isDark, paddedRange, timezone]);
 
   useEffect(() => {
     return () => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
       chartRef.current?.remove();
       chartRef.current = null;
       seriesRef.current = null;
