@@ -113,6 +113,13 @@ class TradingEvent(models.Model):
     validation_status = models.CharField(max_length=32, blank=True, default="", db_index=True)
 
     details = models.JSONField(default=dict, blank=True)
+    sequence_number = models.PositiveIntegerField(
+        default=0,
+        help_text=(
+            "Monotonically increasing counter within a single tick batch. "
+            "Preserves the logical ordering of events that share the same timestamp."
+        ),
+    )
     is_processed = models.BooleanField(
         default=False,
         db_index=True,
@@ -213,6 +220,7 @@ class TradingEvent(models.Model):
                 getattr(event, "validation_tolerance_pips", None)
             ),
             validation_status=str(getattr(event, "validation_status", "") or ""),
+            sequence_number=getattr(event, "sequence_number", 0) or 0,
             details=event.to_dict(),
         )
 
@@ -281,6 +289,13 @@ class StrategyEventRecord(models.Model):
     validation_status = models.CharField(max_length=32, blank=True, default="", db_index=True)
 
     details = models.JSONField(default=dict, blank=True)
+    sequence_number = models.PositiveIntegerField(
+        default=0,
+        help_text=(
+            "Monotonically increasing counter within a single tick batch. "
+            "Preserves the logical ordering of events that share the same timestamp."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
@@ -365,5 +380,6 @@ class StrategyEventRecord(models.Model):
                 getattr(event, "validation_tolerance_pips", None)
             ),
             validation_status=str(getattr(event, "validation_status", "") or ""),
+            sequence_number=getattr(event, "sequence_number", 0) or 0,
             details=event.to_dict(),
         )

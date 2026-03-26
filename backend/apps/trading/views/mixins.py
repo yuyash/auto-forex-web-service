@@ -460,7 +460,7 @@ class TaskSubResourceMixin:
             task_type=self.task_type_label,
             task_id=task.pk,
             execution_id=query.execution.execution_id,
-        ).order_by("timestamp")
+        ).order_by("timestamp", "sequence_number")
         if query.direction:
             if query.direction == "buy":
                 queryset = queryset.filter(direction="long")

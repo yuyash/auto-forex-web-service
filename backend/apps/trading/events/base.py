@@ -54,6 +54,7 @@ class StrategyEvent(ABC):
 
     event_type: EventType
     timestamp: datetime | None = None
+    sequence_number: int = 0
     strategy_type: str = ""
     visual_group_id: str = ""
     root_entry_id: int | None = None

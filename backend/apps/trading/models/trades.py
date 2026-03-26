@@ -109,6 +109,13 @@ class Trade(models.Model):
         related_name="trades",
         help_text="Order that resulted in this trade",
     )
+    sequence_number = models.PositiveIntegerField(
+        default=0,
+        help_text=(
+            "Monotonically increasing counter within a single tick batch. "
+            "Preserves the logical ordering of events that share the same timestamp."
+        ),
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         help_text="Timestamp when this record was created",
@@ -122,7 +129,7 @@ class Trade(models.Model):
         db_table = "trades"
         verbose_name = "Trade"
         verbose_name_plural = "Trades"
-        ordering = ["timestamp"]
+        ordering = ["timestamp", "sequence_number"]
         indexes = [
             models.Index(fields=["task_type", "task_id", "-timestamp"]),
             models.Index(fields=["task_type", "task_id", "execution_id", "-timestamp"]),

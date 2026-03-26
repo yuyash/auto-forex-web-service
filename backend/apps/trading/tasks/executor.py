@@ -305,7 +305,8 @@ class TaskExecutor:
         strategy_records: list[StrategyEventRecord] = []
         strategy_type = str(getattr(self.task.config, "strategy_type", "") or "")
 
-        for event in events:
+        for seq, event in enumerate(events):
+            event.sequence_number = seq
             event_type = str(getattr(getattr(event, "event_type", None), "value", event.event_type))
             event_scope = EventType.scope_of(event_type)
             execution_event_type = EventType.execution_event_type_for(event_type)
