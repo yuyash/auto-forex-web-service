@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.18.12](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.11...frontend-v1.18.12) (2026-03-26)
+
+
+### Bug Fixes
+
+* **frontend:** fix OHLC chart not rendering after recreation and add … ([#209](https://github.com/yuyash/auto-forex-web-service/issues/209)) ([fb1d4c3](https://github.com/yuyash/auto-forex-web-service/commit/fb1d4c35c3bd3cb4c7f9818f5ea247abb5960763))
+* **frontend:** fix OHLC chart not rendering after recreation and add reload button ([fb1d4c3](https://github.com/yuyash/auto-forex-web-service/commit/fb1d4c35c3bd3cb4c7f9818f5ea247abb5960763))
+
 ## [1.18.11](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.10...frontend-v1.18.11) (2026-03-26)
 
 
