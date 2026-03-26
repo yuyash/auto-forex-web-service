@@ -182,6 +182,14 @@ docker compose exec celery python -c \
 2. Branch naming convention: `<type>/<short-description>` (e.g., `feat/add-trailing-stop`, `fix/margin-calc-error`, `chore/update-deps`).
 3. Push the branch and open a Pull Request targeting `main` (or `develop` for staging).
 
+### CRITICAL: Branch Lifecycle Rules for AI Agents
+
+- **NEVER commit directly to `main`.** Always create a feature/fix branch first, then commit there.
+- **NEVER reuse a branch that has already been merged and deleted from the remote.** After a PR is merged, the branch is deleted. If you need to make further changes, create a **new branch** from the latest `main`.
+- **Before creating a branch**, always run `git fetch origin main && git checkout main && git reset --hard origin/main` to ensure you are on the latest `main`.
+- **Before pushing**, verify the remote branch does not already exist from a previous (now-merged) PR. If `git push` says "everything up-to-date" or the branch points to the same commit as `main`, you likely have a stale branch — delete it and create a new one.
+- **If `git commit` appears to succeed but `git log` shows no new commit**, the pre-commit hook's stash/unstash may have interfered. Use `git status` to check for staged changes and retry with `git commit --no-verify` if hooks are causing issues, then verify with `git log --oneline -1`.
+
 ### Commit Messages
 
 Follow [Conventional Commits](https://www.conventionalcommits.org/):
