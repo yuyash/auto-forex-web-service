@@ -68,6 +68,8 @@ class EventHandler:
         # Populated by handle_open_position so that subsequent close
         # trades and child entries can inherit the correct cycle_id.
         self._entry_id_to_cycle_id: dict[int, str] = {}
+        # Sequence number from the current TradingEvent being processed.
+        self._current_sequence_number: int = 0
 
     @staticmethod
     def _event_type_key(strategy_event: StrategyEvent) -> str:
@@ -259,6 +261,7 @@ class EventHandler:
             order=order,
             description=description,
             cycle_id=cycle_id,
+            sequence_number=self._current_sequence_number,
         )
         return trade
 
@@ -275,6 +278,7 @@ class EventHandler:
             OrderServiceError: If order execution fails
         """
         strategy_event = StrategyEvent.from_dict(trading_event.details)
+        self._current_sequence_number = getattr(trading_event, "sequence_number", 0) or 0
         # Restore cycle-tracking fields from TradingEvent model columns
         # (these are not stored in the details JSON).
         if trading_event.root_entry_id is not None:
