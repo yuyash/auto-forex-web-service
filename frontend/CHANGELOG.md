@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.10](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.9...frontend-v1.18.10) (2026-03-26)
+
+
+### Bug Fixes
+
+* **frontend:** independent scroll for strategy sidebar and detail panel ([#202](https://github.com/yuyash/auto-forex-web-service/issues/202)) ([ab99336](https://github.com/yuyash/auto-forex-web-service/commit/ab993363c1a74122f420206f4f328e451a58a139))
+
 ## [1.18.9](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.8...frontend-v1.18.9) (2026-03-26)
 
 
