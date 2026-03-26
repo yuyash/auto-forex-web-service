@@ -165,6 +165,7 @@ export function TaskStrategyTab({
             lg: `${sidebarWidth}px 8px minmax(0,1fr)`,
           },
           alignItems: 'start',
+          maxHeight: { lg: 'calc(100vh - 200px)' },
         }}
       >
         {/* Sidebar */}
@@ -174,8 +175,7 @@ export function TaskStrategyTab({
             display: isMobile && mobileShowDetail ? 'none' : 'flex',
             flexDirection: 'column',
             maxHeight: { lg: 'calc(100vh - 200px)' },
-            position: { lg: 'sticky' },
-            top: { lg: 16 },
+            overflowY: { lg: 'auto' },
           }}
         >
           <Box sx={{ p: 2, flexShrink: 0 }}>
@@ -311,10 +311,7 @@ export function TaskStrategyTab({
             cursor: 'col-resize',
             userSelect: 'none',
             touchAction: 'none',
-            position: 'sticky',
-            top: 16,
             alignSelf: 'stretch',
-            maxHeight: 'calc(100vh - 200px)',
             '&:hover > div, &:active > div': { bgcolor: 'primary.main' },
           }}
         >
@@ -335,6 +332,8 @@ export function TaskStrategyTab({
           sx={{
             minWidth: 0,
             display: isMobile && !mobileShowDetail ? 'none' : 'block',
+            maxHeight: { lg: 'calc(100vh - 200px)' },
+            overflowY: { lg: 'auto' },
           }}
         >
           {selectedCycle ? (
