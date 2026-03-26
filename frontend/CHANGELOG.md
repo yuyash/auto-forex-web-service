@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.13](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.12...frontend-v1.18.13) (2026-03-26)
+
+
+### Bug Fixes
+
+* **frontend:** fix strategy tab OHLC chart not rendering on cycle switch ([#211](https://github.com/yuyash/auto-forex-web-service/issues/211)) ([5a5c127](https://github.com/yuyash/auto-forex-web-service/commit/5a5c127e775e3a432387047f70da514fbdaed36e))
+
 ## [1.18.12](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.11...frontend-v1.18.12) (2026-03-26)
 
 
