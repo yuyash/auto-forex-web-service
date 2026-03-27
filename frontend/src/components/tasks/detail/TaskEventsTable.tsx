@@ -203,17 +203,46 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
+      <Box
+        sx={{
+          mb: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <Typography variant="h6">{t('tables.events.title')}</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Tooltip title={t('common:columnConfig.configureColumns')}>
+            <IconButton
+              size="small"
+              onClick={() => setColConfigOpen(true)}
+              aria-label={t('common:columnConfig.configureColumns')}
+            >
+              <SettingsIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <TableSelectionToolbar
+            selectedCount={selection.selectedRowIds.size}
+            onCopy={handleCopy}
+            onSelectAll={() => selection.selectAllOnPage(pageRowIds)}
+            onReset={selection.resetSelection}
+            onReload={handleReload}
+            isReloading={isReloading}
+          />
+        </Box>
+      </Box>
       <Box
         sx={{
           mb: 2,
           display: 'flex',
-          gap: 2,
+          gap: 1.5,
           alignItems: 'center',
+          flexWrap: 'wrap',
         }}
       >
-        <Typography variant="h6">{t('tables.events.title')}</Typography>
-        <FormControl sx={{ minWidth: 170 }}>
+        <FormControl sx={{ minWidth: { xs: 140, sm: 170 } }} size="small">
           <InputLabel>{t('tables.events.category')}</InputLabel>
           <Select
             value={sourceFilter}
@@ -228,7 +257,7 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
             </MenuItem>
           </Select>
         </FormControl>
-        <FormControl sx={{ minWidth: 150 }}>
+        <FormControl sx={{ minWidth: { xs: 130, sm: 150 } }} size="small">
           <InputLabel>{t('tables.events.severityFilter')}</InputLabel>
           <Select
             value={severityFilter}
@@ -242,24 +271,6 @@ export const TaskEventsTable: React.FC<TaskEventsTableProps> = ({
             <MenuItem value="critical">Critical</MenuItem>
           </Select>
         </FormControl>
-        <Box sx={{ flex: 1 }} />
-        <Tooltip title={t('common:columnConfig.configureColumns')}>
-          <IconButton
-            size="small"
-            onClick={() => setColConfigOpen(true)}
-            aria-label={t('common:columnConfig.configureColumns')}
-          >
-            <SettingsIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <TableSelectionToolbar
-          selectedCount={selection.selectedRowIds.size}
-          onCopy={handleCopy}
-          onSelectAll={() => selection.selectAllOnPage(pageRowIds)}
-          onReset={selection.resetSelection}
-          onReload={handleReload}
-          isReloading={isReloading}
-        />
       </Box>
 
       <DataTable
