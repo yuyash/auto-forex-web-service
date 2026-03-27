@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.18.7](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.18.6...backend-v1.18.7) (2026-03-27)
+
+
+### Bug Fixes
+
+* **market:** increase OANDA candle API timeout and handle V20Timeout … ([#246](https://github.com/yuyash/auto-forex-web-service/issues/246)) ([1dccc0b](https://github.com/yuyash/auto-forex-web-service/commit/1dccc0b08921928d69d6f623d2e312f949149296))
+* **market:** increase OANDA candle API timeout and handle V20Timeout gracefully ([1dccc0b](https://github.com/yuyash/auto-forex-web-service/commit/1dccc0b08921928d69d6f623d2e312f949149296))
+
 ## [1.18.6](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.18.5...backend-v1.18.6) (2026-03-27)
 
 
