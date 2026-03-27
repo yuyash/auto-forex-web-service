@@ -45,11 +45,9 @@ interface StrategyGroupChartProps {
 
 const GRANULARITY_OPTIONS = ['M1', 'M5', 'M15', 'H1', 'H4', 'D'] as const;
 
-function autoGranularity(startTime: string, endTime: string | null): string {
+function autoGranularity(startTime: string, endTime: string): string {
   const startSec = Math.floor(new Date(startTime).getTime() / 1000);
-  const endSec = endTime
-    ? Math.floor(new Date(endTime).getTime() / 1000)
-    : startSec + 3600;
+  const endSec = Math.floor(new Date(endTime).getTime() / 1000);
   const span = Math.max(60, endSec - startSec);
   if (span > 30 * 86400) return 'D';
   if (span > 7 * 86400) return 'H4';
@@ -81,9 +79,15 @@ export function StrategyGroupChart({
   // Expose chart instance as state so the metrics overlay hook can react to it
   const [chartInstance, setChartInstance] = useState<IChartApi | null>(null);
 
+  // For active cycles (endTime is null), use the current time as the
+  // effective end so that autoGranularity and the candle range cover the
+  // full period.  The value is refreshed on every reload.
+  const [nowIso, setNowIso] = useState(() => new Date().toISOString());
+  const effectiveEndTime = endTime ?? nowIso;
+
   const defaultGranularity = useMemo(
-    () => (startTime ? autoGranularity(startTime, endTime) : 'M1'),
-    [startTime, endTime]
+    () => (startTime ? autoGranularity(startTime, effectiveEndTime) : 'M1'),
+    [startTime, effectiveEndTime]
   );
   const [granularity, setGranularity] = useState(defaultGranularity);
 
@@ -106,20 +110,18 @@ export function StrategyGroupChart({
     };
     const granSec = GRANULARITY_SECONDS[granularity] ?? 60;
     const startSec = Math.floor(new Date(startTime).getTime() / 1000);
-    const endSec = endTime
-      ? Math.floor(new Date(endTime).getTime() / 1000)
-      : Math.floor(Date.now() / 1000);
+    const endSec = Math.floor(new Date(effectiveEndTime).getTime() / 1000);
     const span = Math.max(60, endSec - startSec);
     // Add 10% padding on each side
     return Math.ceil((span / granSec) * 1.2) + 10;
-  }, [startTime, endTime, granularity]);
+  }, [startTime, effectiveEndTime, granularity]);
 
   const { candles, isInitialLoading, error, replaceWithCountWindow } =
     useWindowedCandles({
       instrument,
       granularity,
       startTime,
-      endTime: endTime ?? undefined,
+      endTime: effectiveEndTime,
       initialCount: fullRangeEdgeCount,
       edgeCount: fullRangeEdgeCount,
     });
@@ -133,13 +135,11 @@ export function StrategyGroupChart({
   const paddedRange = useMemo(() => {
     if (!startTime || candles.length === 0) return null;
     const startSec = Math.floor(new Date(startTime).getTime() / 1000);
-    const endSec = endTime
-      ? Math.floor(new Date(endTime).getTime() / 1000)
-      : candles[candles.length - 1].time;
+    const endSec = Math.floor(new Date(effectiveEndTime).getTime() / 1000);
     const span = endSec - startSec;
     const pad = Math.max(60, Math.floor(span * 0.1));
     return { from: (startSec - pad) as Time, to: (endSec + pad) as Time };
-  }, [startTime, endTime, candles]);
+  }, [startTime, effectiveEndTime, candles]);
 
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -261,9 +261,12 @@ export function StrategyGroupChart({
   }, [paddedRange]);
 
   const handleReload = useCallback(() => {
+    // Refresh the effective end time for active cycles so the chart
+    // extends to the current moment.
+    if (!endTime) setNowIso(new Date().toISOString());
     destroyChart();
     void replaceWithCountWindow();
-  }, [destroyChart, replaceWithCountWindow]);
+  }, [destroyChart, replaceWithCountWindow, endTime]);
 
   if (isInitialLoading) {
     return (
