@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.18](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.17...frontend-v1.18.18) (2026-03-27)
+
+
+### Bug Fixes
+
+* strategy tab scroll ([#221](https://github.com/yuyash/auto-forex-web-service/issues/221)) ([b5da99c](https://github.com/yuyash/auto-forex-web-service/commit/b5da99c7dfa4c2993505d3064fbfc44ad83c2b06))
+
 ## [1.18.17](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.16...frontend-v1.18.17) (2026-03-27)
 
 
