@@ -37,7 +37,17 @@
     "defaultAccountDescription": "デフォルトアカウントはマーケットデータと最新ティックデータの収集に使用されます。デフォルトに設定できるアカウントは1つだけです。",
     "defaultAccountInfo": "デフォルトアカウントはマーケットデータの取得と分析用ティックデータの収集に使用されます。ローソク足チャートはデフォルトアカウントを使用して価格データを表示します。デフォルトアカウントはいつでも切り替えることができます。",
     "leaveBlankToKeepToken": "既存のトークンを保持する場合は空欄にしてください",
-    "confirmDelete": "このアカウントを削除してもよろしいですか？"
+    "confirmDelete": "このアカウントを削除してもよろしいですか？",
+    "marketStatus": "マーケット状態",
+    "marketOpen": "マーケットオープン",
+    "marketClosed": "マーケットクローズ",
+    "orderType": "注文タイプ",
+    "marketOrder": "マーケットオーダー",
+    "limitOrder": "指値注文",
+    "stopOrder": "逆指値注文",
+    "enableTakeProfit": "テイクプロフィット",
+    "enableStopLoss": "ストップロス",
+    "loadingAccountData": "アカウントデータを読み込み中..."
   },
   "preferences": {
     "title": "ユーザー環境設定",

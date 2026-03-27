@@ -1,5 +1,6 @@
 import { Box, Divider, Grid, Link, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { Link as RouterLink } from 'react-router-dom';
 import { StatusBadge } from '../../tasks/display/StatusBadge';
 import { ExecutionHistoryTable } from '../../tasks/display/ExecutionHistoryTable';
 import type { TaskSummary } from '../../../hooks/useTaskSummary';
@@ -108,9 +109,14 @@ export function TradingOverviewTab({
               <Typography variant="caption" color="text.secondary">
                 {t('common:labels.oandaAccount')}
               </Typography>
-              <Typography variant="body1">
+              <Link
+                component={RouterLink}
+                to={`/oanda-accounts/${task.account_id}`}
+                variant="body1"
+                sx={{ display: 'block' }}
+              >
                 {task.account_name || 'N/A'}
-              </Typography>
+              </Link>
             </Box>
             <Box>
               <Typography variant="caption" color="text.secondary">

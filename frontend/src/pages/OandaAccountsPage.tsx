@@ -21,6 +21,7 @@ import {
   CircularProgress,
   Alert,
   Container,
+  Tooltip,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -28,6 +29,7 @@ import {
   Delete as DeleteIcon,
   Visibility,
   VisibilityOff,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -41,6 +43,7 @@ import {
   useUpdateAccount,
 } from '../hooks/useAccountMutations';
 import { useAccounts, useAccount } from '../hooks/useAccounts';
+import { useQueryClient } from '@tanstack/react-query';
 import { logger } from '../utils/logger';
 
 interface AccountFormData {
@@ -89,7 +92,9 @@ function LiveAccountCard({
   onDelete: (a: Account) => void;
 }) {
   const { t } = useTranslation(['settings', 'common']);
-  const { data: liveAccount } = useAccount(account.id, { enabled: true });
+  const { data: liveAccount, isLoading } = useAccount(account.id, {
+    enabled: true,
+  });
   const a = liveAccount ?? account;
 
   return (
@@ -106,9 +111,12 @@ function LiveAccountCard({
             alignItems="flex-start"
             mb={2}
           >
-            <Typography variant="h6" component="div" noWrap>
-              {a.account_id}
-            </Typography>
+            <Box display="flex" alignItems="center" gap={1}>
+              <Typography variant="h6" component="div" noWrap>
+                {a.account_id}
+              </Typography>
+              {isLoading && <CircularProgress size={14} />}
+            </Box>
             <Chip
               label={
                 a.api_type === 'practice'
@@ -206,6 +214,7 @@ function LiveAccountCard({
 export default function OandaAccountsPage() {
   const { t } = useTranslation(['settings', 'common']);
   const { showSuccess, showError } = useToast();
+  const queryClient = useQueryClient();
   const {
     data: rawAccounts,
     isLoading: loading,
@@ -357,14 +366,25 @@ export default function OandaAccountsPage() {
         mb={2}
       >
         <Typography variant="h4">{t('settings:accounts.title')}</Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={handleAddClick}
-        >
-          {t('settings:accounts.addAccount')}
-        </Button>
+        <Box display="flex" gap={1}>
+          <Tooltip title={t('common:actions.reload')}>
+            <IconButton
+              onClick={() =>
+                queryClient.invalidateQueries({ queryKey: ['accounts'] })
+              }
+            >
+              <RefreshIcon />
+            </IconButton>
+          </Tooltip>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={handleAddClick}
+          >
+            {t('settings:accounts.addAccount')}
+          </Button>
+        </Box>
       </Box>
 
       <Alert severity="info" sx={{ mb: 3 }}>
