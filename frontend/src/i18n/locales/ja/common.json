@@ -13,6 +13,7 @@
     "trading": "トレーディング",
     "profile": "プロフィール",
     "accounts": "アカウント",
+    "oandaAccounts": "OANDAアカウント",
     "orders": "注文",
     "positions": "ポジション",
     "strategy": "戦略",
@@ -285,7 +286,8 @@
     "events": "イベント",
     "users": "ユーザー管理",
     "configurations": "設定構成",
-    "trading": "トレーディング"
+    "trading": "トレーディング",
+    "oandaAccounts": "OANDAアカウント"
   },
   "accessibility": {
     "skipToMainContent": "メインコンテンツへスキップ",

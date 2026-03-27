@@ -21,6 +21,7 @@ import {
   Tune as ConfigIcon,
   Assignment as BacktestTaskIcon,
   PlayCircleOutline as TradingTaskIcon,
+  AccountBalance as AccountBalanceIcon,
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -138,6 +139,30 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
 
         {/* Spacer to push right side icons to the right */}
         <Box sx={{ flexGrow: 1 }} />
+
+        {/* Right side - OANDA Accounts & Settings */}
+        {isDesktop && (
+          <Box sx={{ display: 'flex', gap: 1, mr: 1 }}>
+            <Button
+              color="inherit"
+              startIcon={<AccountBalanceIcon />}
+              component={RouterLink}
+              to="/oanda-accounts"
+              sx={{ textTransform: 'none' }}
+            >
+              {t('navigation.oandaAccounts')}
+            </Button>
+            <Button
+              color="inherit"
+              startIcon={<Settings />}
+              component={RouterLink}
+              to="/settings"
+              sx={{ textTransform: 'none' }}
+            >
+              {t('navigation.settings')}
+            </Button>
+          </Box>
+        )}
 
         {/* Right side icons */}
         <Box

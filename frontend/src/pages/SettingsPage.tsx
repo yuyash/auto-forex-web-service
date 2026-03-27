@@ -3,7 +3,6 @@ import { Container, Typography, Box, Tabs, Tab, Paper } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Breadcrumbs } from '../components/common';
 import {
-  AccountManagement,
   GeneralSettings,
   DisplaySettings,
   DataSettings,
@@ -70,11 +69,6 @@ const SettingsPage = () => {
               id="settings-tab-2"
               aria-controls="settings-tabpanel-2"
             />
-            <Tab
-              label={t('tabs.accounts')}
-              id="settings-tab-3"
-              aria-controls="settings-tabpanel-3"
-            />
           </Tabs>
         </Box>
 
@@ -96,13 +90,6 @@ const SettingsPage = () => {
         <TabPanel value={tabValue} index={2}>
           <Paper sx={{ p: 3 }}>
             <DataSettings />
-          </Paper>
-        </TabPanel>
-
-        {/* Accounts Tab */}
-        <TabPanel value={tabValue} index={3}>
-          <Paper sx={{ p: 3 }}>
-            <AccountManagement />
           </Paper>
         </TabPanel>
       </Box>
