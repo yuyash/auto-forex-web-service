@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.19.0...frontend-v1.19.1) (2026-03-27)
+
+
+### Bug Fixes
+
+* **frontend:** move OANDA accounts to user menu and add breadcrumbs ([#235](https://github.com/yuyash/auto-forex-web-service/issues/235)) ([9af21b9](https://github.com/yuyash/auto-forex-web-service/commit/9af21b9450c21e7c195cb4751f1bdcb8f7209b03))
+
 ## [1.19.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.21...frontend-v1.19.0) (2026-03-27)
 
 
