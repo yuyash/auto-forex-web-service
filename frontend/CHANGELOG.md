@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.19.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.19.1...frontend-v1.19.2) (2026-03-27)
+
+
+### Bug Fixes
+
+* **frontend:** i18n breadcrumbs, section titles, and close selected p… ([#237](https://github.com/yuyash/auto-forex-web-service/issues/237)) ([d522ef7](https://github.com/yuyash/auto-forex-web-service/commit/d522ef7d07bdd2abf34cdd3bd22f3fcdb89facd6))
+* **frontend:** i18n breadcrumbs, section titles, and close selected positions ([d522ef7](https://github.com/yuyash/auto-forex-web-service/commit/d522ef7d07bdd2abf34cdd3bd22f3fcdb89facd6))
+
 ## [1.19.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.19.0...frontend-v1.19.1) (2026-03-27)
 
 
