@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.19.3...frontend-v1.19.4) (2026-03-27)
+
+
+### Bug Fixes
+
+* trading task initial balance and default instrument ([#242](https://github.com/yuyash/auto-forex-web-service/issues/242)) ([3cc01e8](https://github.com/yuyash/auto-forex-web-service/commit/3cc01e899f3ea467382f9462ff1536162996d0f9))
+
 ## [1.19.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.19.2...frontend-v1.19.3) (2026-03-27)
 
 

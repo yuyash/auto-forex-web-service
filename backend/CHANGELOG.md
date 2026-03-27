@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.18.4...backend-v1.18.5) (2026-03-27)
+
+
+### Bug Fixes
+
+* trading task initial balance and default instrument ([#242](https://github.com/yuyash/auto-forex-web-service/issues/242)) ([3cc01e8](https://github.com/yuyash/auto-forex-web-service/commit/3cc01e899f3ea467382f9462ff1536162996d0f9))
+
 ## [1.18.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.18.3...backend-v1.18.4) (2026-03-27)
 
 
