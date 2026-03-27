@@ -46,6 +46,8 @@ const OandaAccountDetailPage = lazy(
   () => import('./pages/OandaAccountDetailPage')
 );
 
+const OandaAccountsPage = lazy(() => import('./pages/OandaAccountsPage'));
+
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 
 // Loading fallback component
@@ -146,8 +148,9 @@ function AppRoutes() {
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/oanda-accounts" element={<OandaAccountsPage />} />
             <Route
-              path="/settings/accounts/:id"
+              path="/oanda-accounts/:id"
               element={<OandaAccountDetailPage />}
             />
             <Route path="/configurations" element={<ConfigurationsPage />} />

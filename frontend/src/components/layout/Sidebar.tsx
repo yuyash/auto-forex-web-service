@@ -18,6 +18,7 @@ import {
   Tune as ConfigIcon,
   Assignment as BacktestTaskIcon,
   PlayCircleOutline as TradingTaskIcon,
+  AccountBalance as AccountBalanceIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
@@ -52,6 +53,11 @@ const navigationItems: NavigationItem[] = [
     labelKey: 'navigation.tradingTasks',
     icon: <TradingTaskIcon />,
     dividerAfter: true,
+  },
+  {
+    path: '/oanda-accounts',
+    labelKey: 'navigation.oandaAccounts',
+    icon: <AccountBalanceIcon />,
   },
   {
     path: '/settings',

@@ -31,6 +31,7 @@
     "positionMode": "ポジションモード",
     "hedgingEnabled": "ヘッジ有効",
     "oandaAccountFlags": "OANDAアカウントフラグ / パラメータ",
+    "rawData": "RAWデータ",
     "accountDetails": "アカウント詳細",
     "setAsDefault": "デフォルトアカウントに設定",
     "defaultAccountDescription": "デフォルトアカウントはマーケットデータと最新ティックデータの収集に使用されます。デフォルトに設定できるアカウントは1つだけです。",

@@ -31,6 +31,7 @@
     "positionMode": "Position Mode",
     "hedgingEnabled": "Hedging Enabled",
     "oandaAccountFlags": "OANDA Account Flags / Parameters",
+    "rawData": "RAW Data",
     "accountDetails": "Account Details",
     "setAsDefault": "Set as default account",
     "defaultAccountDescription": "The default account is used to collect market data and latest tick data. Only one account can be set as default at a time.",

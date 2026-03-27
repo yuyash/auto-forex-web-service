@@ -13,6 +13,7 @@
     "trading": "Trading",
     "profile": "Profile",
     "accounts": "Accounts",
+    "oandaAccounts": "OANDA Accounts",
     "orders": "Orders",
     "positions": "Positions",
     "strategy": "Strategy",
@@ -285,7 +286,8 @@
     "events": "Events",
     "users": "User Management",
     "configurations": "Configurations",
-    "trading": "Trading"
+    "trading": "Trading",
+    "oandaAccounts": "OANDA Accounts"
   },
   "accessibility": {
     "skipToMainContent": "Skip to main content",
