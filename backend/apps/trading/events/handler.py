@@ -572,19 +572,22 @@ class EventHandler:
                 return cid
 
         # DB lookup: find the open_position trade that created this position
-        open_trade = (
-            Trade.objects.filter(
-                task_type=self.order_service.task_type.value,
-                task_id=self._task_pk,
-                execution_id=self._execution_id,
-                position_id=position.id,
-                execution_method="open_position",
-                cycle_id__isnull=False,
+        try:
+            open_trade = (
+                Trade.objects.filter(
+                    task_type=self.order_service.task_type.value,
+                    task_id=self._task_pk,
+                    execution_id=self._execution_id,
+                    position_id=position.id,
+                    execution_method="open_position",
+                    cycle_id__isnull=False,
+                )
+                .values_list("cycle_id", flat=True)
+                .first()
             )
-            .values_list("cycle_id", flat=True)
-            .first()
-        )
-        return str(open_trade) if open_trade else None
+            return str(open_trade) if open_trade else None
+        except Exception:
+            return None
 
     def handle_close_position(self, event: ClosePositionEvent) -> Decimal:
         """Close one or more positions.
