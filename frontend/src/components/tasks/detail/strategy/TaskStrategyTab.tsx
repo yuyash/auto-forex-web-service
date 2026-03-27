@@ -145,9 +145,21 @@ export function TaskStrategyTab({
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box
+      sx={{
+        p: 3,
+        display: 'flex',
+        flexDirection: 'column',
+        height: { lg: 'calc(100vh - 160px)' },
+        overflow: 'hidden',
+      }}
+    >
       {summary ? (
-        <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap' }}>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ mb: 2, flexWrap: 'wrap', flexShrink: 0 }}
+        >
           <Chip label={`Cycles: ${summary.cycle_count}`} />
           <Chip label={`Active: ${summary.active_count}`} />
           <Chip label={`Completed: ${summary.completed_count}`} />
@@ -164,8 +176,9 @@ export function TaskStrategyTab({
             xs: '1fr',
             lg: `${sidebarWidth}px 8px minmax(0,1fr)`,
           },
-          alignItems: 'start',
-          maxHeight: { lg: 'calc(100vh - 200px)' },
+          alignItems: 'stretch',
+          flex: 1,
+          minHeight: 0,
         }}
       >
         {/* Sidebar */}
@@ -174,8 +187,8 @@ export function TaskStrategyTab({
           sx={{
             display: isMobile && mobileShowDetail ? 'none' : 'flex',
             flexDirection: 'column',
-            maxHeight: { lg: 'calc(100vh - 200px)' },
-            overflowY: { lg: 'auto' },
+            overflowY: 'auto',
+            minHeight: 0,
           }}
         >
           <Box sx={{ p: 2, flexShrink: 0 }}>
@@ -344,8 +357,8 @@ export function TaskStrategyTab({
           sx={{
             minWidth: 0,
             display: isMobile && !mobileShowDetail ? 'none' : 'block',
-            maxHeight: { lg: 'calc(100vh - 200px)' },
-            overflowY: { lg: 'auto' },
+            overflowY: 'auto',
+            minHeight: 0,
           }}
         >
           {selectedCycle ? (
