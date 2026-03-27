@@ -234,7 +234,7 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
           label: t('breadcrumbs.oandaAccounts'),
           path: '/oanda-accounts',
         },
-        { label: 'Account Details' },
+        { label: t('breadcrumbs.accountDetails') },
       ];
     } else {
       // Default fallback

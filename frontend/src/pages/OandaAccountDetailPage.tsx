@@ -116,6 +116,7 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
   );
   const [closeUnits, setCloseUnits] = useState('');
   const [closing, setClosing] = useState(false);
+  const [closingSelected, setClosingSelected] = useState(false);
   const [openDialogOpen, setOpenDialogOpen] = useState(false);
   const [openForm, setOpenForm] = useState({
     instrument: '',
@@ -308,6 +309,36 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
     }
   };
 
+  const handleCloseSelected = async () => {
+    const selectedIds = [...selection.selectedRowIds];
+    if (selectedIds.length === 0) return;
+    setClosingSelected(true);
+    let successCount = 0;
+    for (const id of selectedIds) {
+      try {
+        await oandaMarketApi.closePosition(id, {
+          account_id: accountDbId,
+        });
+        successCount++;
+      } catch {
+        // continue closing remaining
+      }
+    }
+    if (successCount > 0) {
+      showSuccess(`${successCount} position(s) closed`);
+      selection.resetSelection();
+      queryClient.invalidateQueries({
+        queryKey: ['oanda-positions', accountDbId],
+      });
+    }
+    if (successCount < selectedIds.length) {
+      showError(
+        `${selectedIds.length - successCount} position(s) failed to close`
+      );
+    }
+    setClosingSelected(false);
+  };
+
   const handleOpenPosition = async () => {
     if (!openForm.instrument.trim() || !openForm.units.trim()) return;
     setOpening(true);
@@ -362,6 +393,20 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
             onClick={() => setOpenDialogOpen(true)}
           >
             {t('actions.add')}
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            color="error"
+            startIcon={<CloseIcon />}
+            onClick={handleCloseSelected}
+            disabled={selection.selectedRowIds.size === 0 || closingSelected}
+          >
+            {closingSelected ? (
+              <CircularProgress size={16} />
+            ) : (
+              t('actions.close')
+            )}
           </Button>
           <TableSelectionToolbar
             selectedCount={selection.selectedRowIds.size}
@@ -969,6 +1014,9 @@ export default function OandaAccountDetailPage() {
       {/* Positions */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
+          <Typography variant="h6" gutterBottom>
+            {t('common:navigation.positions')}
+          </Typography>
           <PositionsTable accountDbId={account.id} />
         </CardContent>
       </Card>
@@ -976,6 +1024,9 @@ export default function OandaAccountDetailPage() {
       {/* Orders */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
+          <Typography variant="h6" gutterBottom>
+            {t('common:navigation.orders')}
+          </Typography>
           <OrdersTable accountDbId={account.id} />
         </CardContent>
       </Card>
