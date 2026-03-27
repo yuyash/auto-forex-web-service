@@ -177,6 +177,26 @@ function buildRequestBounds(
   };
 }
 
+function buildTrailingRange(
+  rightEdgeSec: number,
+  count: number,
+  granularity: Granularity | string,
+  bounds: { from?: number; to?: number }
+): TimeRange {
+  const granularitySeconds = getGranularitySeconds(granularity);
+  const safeCount = Math.max(1, count);
+  return clampRange(
+    alignRangeToGranularity(
+      {
+        from: rightEdgeSec - Math.max(0, safeCount - 1) * granularitySeconds,
+        to: rightEdgeSec,
+      },
+      granularity
+    ),
+    buildRequestBounds(bounds, granularity)
+  );
+}
+
 export function useWindowedCandles({
   instrument,
   granularity,
@@ -215,6 +235,10 @@ export function useWindowedCandles({
     [initialFocusTime]
   );
   const initialFocusTimeRef = useRef<number | null>(initialFocusTimeSec);
+  const granularitySeconds = useMemo(
+    () => getGranularitySeconds(granularity),
+    [granularity]
+  );
 
   useEffect(() => {
     candlesRef.current = candles;
@@ -245,6 +269,15 @@ export function useWindowedCandles({
     [accountId, granularity, instrument]
   );
 
+  const requestCandleRange = useCallback(
+    async (range: TimeRange) =>
+      requestCandles({
+        from_time: new Date(range.from * 1000).toISOString(),
+        to_time: new Date(range.to * 1000).toISOString(),
+      }),
+    [requestCandles]
+  );
+
   const setRequestError = useCallback((err: unknown, fallback: string) => {
     setErrorCode(getApiErrorCode(err));
     setError(
@@ -266,10 +299,7 @@ export function useWindowedCandles({
   const requestRangeOrBridgeGap = useCallback(
     async (range: TimeRange) => {
       const alignedRange = alignRangeToGranularity(range, granularity);
-      const directChunk = await requestCandles({
-        from_time: new Date(alignedRange.from * 1000).toISOString(),
-        to_time: new Date(alignedRange.to * 1000).toISOString(),
-      });
+      const directChunk = await requestCandleRange(alignedRange);
       if (directChunk.length > 0) {
         return {
           candles: directChunk,
@@ -283,15 +313,35 @@ export function useWindowedCandles({
         };
       }
 
+      const windowSeconds = Math.max(1, edgeCount) * granularitySeconds;
+      const requestBounds = buildRequestBounds(bounds, granularity);
+      const beforeRange = clampRange(
+        alignRangeToGranularity(
+          {
+            from: alignedRange.from - windowSeconds,
+            to: alignedRange.from,
+          },
+          granularity
+        ),
+        requestBounds
+      );
+      const afterRange = clampRange(
+        alignRangeToGranularity(
+          {
+            from: alignedRange.to,
+            to: alignedRange.to + windowSeconds,
+          },
+          granularity
+        ),
+        requestBounds
+      );
       const [beforeChunk, afterChunk] = await Promise.all([
-        requestCandles({
-          count: edgeCount,
-          before: alignedRange.from,
-        }),
-        requestCandles({
-          count: edgeCount,
-          after: alignedRange.to,
-        }),
+        beforeRange.to >= beforeRange.from
+          ? requestCandleRange(beforeRange)
+          : Promise.resolve([]),
+        afterRange.to >= afterRange.from
+          ? requestCandleRange(afterRange)
+          : Promise.resolve([]),
       ]);
       const bridgedCandles = mergeCandles(beforeChunk, afterChunk);
       if (bridgedCandles.length === 0) {
@@ -328,7 +378,7 @@ export function useWindowedCandles({
         dataRanges,
       };
     },
-    [edgeCount, granularity, requestCandles]
+    [bounds, edgeCount, granularity, granularitySeconds, requestCandleRange]
   );
 
   const ensureRange = useCallback(
@@ -385,15 +435,21 @@ export function useWindowedCandles({
       setError(null);
       setErrorCode(null);
       try {
-        const nextCandles = await requestCandles({ count });
+        const rightEdgeSec =
+          bounds.to ??
+          floorToGranularity(Math.floor(Date.now() / 1000), granularitySeconds);
+        const targetRange = buildTrailingRange(
+          rightEdgeSec,
+          count,
+          granularity,
+          bounds
+        );
+        const result = await requestRangeOrBridgeGap(targetRange);
+        const nextCandles = result.candles;
         setCandles(nextCandles);
         if (nextCandles.length > 0) {
-          const nextRange = {
-            from: nextCandles[0].time,
-            to: nextCandles[nextCandles.length - 1].time,
-          };
-          setLoadedRanges([nextRange]);
-          setDataRanges([nextRange]);
+          setLoadedRanges(mergeRanges([result.handledRange]));
+          setDataRanges(mergeRanges(result.dataRanges));
         } else {
           setLoadedRanges([]);
           setDataRanges([]);
@@ -406,7 +462,14 @@ export function useWindowedCandles({
         setIsInitialLoading(false);
       }
     },
-    [initialCount, requestCandles, setRequestError]
+    [
+      bounds,
+      granularity,
+      granularitySeconds,
+      initialCount,
+      requestRangeOrBridgeGap,
+      setRequestError,
+    ]
   );
 
   const fetchOlder = useCallback(async () => {
@@ -416,18 +479,23 @@ export function useWindowedCandles({
     setError(null);
     setErrorCode(null);
     try {
-      const incoming = await requestCandles({
-        count: edgeCount,
-        before: first.time,
-      });
+      const targetRange = clampRange(
+        alignRangeToGranularity(
+          {
+            from: first.time - Math.max(1, edgeCount) * granularitySeconds,
+            to: first.time - granularitySeconds,
+          },
+          granularity
+        ),
+        buildRequestBounds(bounds, granularity)
+      );
+      if (targetRange.to < targetRange.from) return 0;
+      const result = await requestRangeOrBridgeGap(targetRange);
+      const incoming = result.candles;
       if (incoming.length > 0) {
         setCandles((prev) => mergeCandles(prev, incoming));
-        const range = {
-          from: incoming[0].time,
-          to: incoming[incoming.length - 1].time,
-        };
-        mergeLoadedRange(range);
-        mergeDataRanges([range]);
+        mergeLoadedRange(result.handledRange);
+        mergeDataRanges(result.dataRanges);
       }
       return incoming.length;
     } catch (err) {
@@ -437,10 +505,13 @@ export function useWindowedCandles({
       setLoadingOlder(false);
     }
   }, [
+    bounds,
     edgeCount,
+    granularity,
+    granularitySeconds,
     mergeDataRanges,
     mergeLoadedRange,
-    requestCandles,
+    requestRangeOrBridgeGap,
     setRequestError,
   ]);
 
@@ -451,18 +522,23 @@ export function useWindowedCandles({
     setError(null);
     setErrorCode(null);
     try {
-      const incoming = await requestCandles({
-        count: edgeCount,
-        after: last.time,
-      });
+      const targetRange = clampRange(
+        alignRangeToGranularity(
+          {
+            from: last.time + granularitySeconds,
+            to: last.time + Math.max(1, edgeCount) * granularitySeconds,
+          },
+          granularity
+        ),
+        buildRequestBounds(bounds, granularity)
+      );
+      if (targetRange.to < targetRange.from) return 0;
+      const result = await requestRangeOrBridgeGap(targetRange);
+      const incoming = result.candles;
       if (incoming.length > 0) {
         setCandles((prev) => mergeCandles(prev, incoming));
-        const range = {
-          from: incoming[0].time,
-          to: incoming[incoming.length - 1].time,
-        };
-        mergeLoadedRange(range);
-        mergeDataRanges([range]);
+        mergeLoadedRange(result.handledRange);
+        mergeDataRanges(result.dataRanges);
       }
       return incoming.length;
     } catch (err) {
@@ -472,10 +548,13 @@ export function useWindowedCandles({
       setLoadingNewer(false);
     }
   }, [
+    bounds,
     edgeCount,
+    granularity,
+    granularitySeconds,
     mergeDataRanges,
     mergeLoadedRange,
-    requestCandles,
+    requestRangeOrBridgeGap,
     setRequestError,
   ]);
 
@@ -487,10 +566,7 @@ export function useWindowedCandles({
     setIsRefreshing(true);
     setErrorCode(null);
     try {
-      const incoming = await requestCandles({
-        from_time: new Date(from * 1000).toISOString(),
-        to_time: new Date(to * 1000).toISOString(),
-      });
+      const incoming = await requestCandleRange({ from, to });
       if (incoming.length > 0) {
         setCandles((prev) => mergeCandles(prev, incoming));
         mergeLoadedRange({ from, to });
@@ -512,7 +588,7 @@ export function useWindowedCandles({
     edgeCount,
     mergeDataRanges,
     mergeLoadedRange,
-    requestCandles,
+    requestCandleRange,
     setRequestError,
   ]);
 
