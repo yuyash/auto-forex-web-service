@@ -173,6 +173,7 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             "account_id",
             "name",
             "description",
+            "instrument",
             "sell_on_stop",
             "dry_run",
             "hedging_enabled",
@@ -180,6 +181,7 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "name": {"required": False},
             "description": {"required": False},
+            "instrument": {"required": False},
             "sell_on_stop": {"required": False},
             "dry_run": {"required": False},
             "hedging_enabled": {"required": False},
@@ -261,14 +263,18 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             TradingMode.HEDGING if hedging_enabled else TradingMode.NETTING,
         )
 
-        # Set instrument and pip_size from config if not explicitly provided
-        config = validated_data.get("config")
-        if config and config.parameters:
-            instrument = config.parameters.get("instrument")
-            if instrument:
-                validated_data.setdefault("instrument", instrument)
-                # Derive pip_size from instrument (JPY pairs use 0.01, others use 0.0001)
-                validated_data.setdefault("pip_size", pip_size_for_instrument(instrument))
+        # Set instrument: prefer explicit value, then fall back to config parameter
+        if not validated_data.get("instrument"):
+            config = validated_data.get("config")
+            if config and config.parameters:
+                instrument = config.parameters.get("instrument")
+                if instrument:
+                    validated_data["instrument"] = instrument
+
+        # Derive pip_size from instrument
+        instrument = validated_data.get("instrument")
+        if instrument:
+            validated_data.setdefault("pip_size", pip_size_for_instrument(instrument))
 
         return TradingTask.objects.create(**validated_data)
 

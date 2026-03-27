@@ -35,6 +35,7 @@ export interface TradingTaskCreateData {
   account_id: string;
   name: string;
   description?: string;
+  instrument?: string;
   sell_on_stop?: boolean;
   dry_run?: boolean;
   hedging_enabled?: boolean;
