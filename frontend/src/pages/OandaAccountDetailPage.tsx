@@ -28,10 +28,11 @@ import {
   Add as AddIcon,
   Close as CloseIcon,
 } from '@mui/icons-material';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAccount } from '../hooks/useAccounts';
 import { useToast } from '../components/common/useToast';
+import { Breadcrumbs } from '../components/common';
 import DataTable, { type Column } from '../components/common/DataTable';
 import { TableSelectionToolbar } from '../components/common/TableSelectionToolbar';
 import { useTableRowSelection } from '../hooks/useTableRowSelection';
@@ -792,11 +793,7 @@ export default function OandaAccountDetailPage() {
   if (error) {
     return (
       <Container maxWidth={false} sx={containerSx}>
-        <Box mb={2}>
-          <Button component={Link} to="/oanda-accounts" variant="outlined">
-            {t('common:actions.back')}
-          </Button>
-        </Box>
+        <Breadcrumbs />
         <Alert severity="error">{error}</Alert>
       </Container>
     );
@@ -805,11 +802,7 @@ export default function OandaAccountDetailPage() {
   if (!account) {
     return (
       <Container maxWidth={false} sx={containerSx}>
-        <Box mb={2}>
-          <Button component={Link} to="/oanda-accounts" variant="outlined">
-            {t('common:actions.back')}
-          </Button>
-        </Box>
+        <Breadcrumbs />
         <Alert severity="info">{t('common:messages.noData')}</Alert>
       </Container>
     );
@@ -817,6 +810,7 @@ export default function OandaAccountDetailPage() {
 
   return (
     <Container maxWidth={false} sx={containerSx}>
+      <Breadcrumbs />
       <Box
         display="flex"
         alignItems="center"
@@ -826,18 +820,13 @@ export default function OandaAccountDetailPage() {
         <Typography variant="h5">
           {t('settings:accounts.accountDetails')}: {account.account_id}
         </Typography>
-        <Box display="flex" gap={1}>
-          <Button
-            variant="outlined"
-            startIcon={<CodeIcon />}
-            onClick={() => setRawDataOpen(true)}
-          >
-            {t('settings:accounts.rawData')}
-          </Button>
-          <Button component={Link} to="/oanda-accounts" variant="outlined">
-            {t('common:actions.back')}
-          </Button>
-        </Box>
+        <Button
+          variant="outlined"
+          startIcon={<CodeIcon />}
+          onClick={() => setRawDataOpen(true)}
+        >
+          {t('settings:accounts.rawData')}
+        </Button>
       </Box>
 
       {/* Account Summary */}

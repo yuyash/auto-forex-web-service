@@ -64,6 +64,11 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
       { label: t('breadcrumbs.home'), path: homePath },
       { label: t('breadcrumbs.settings') },
     ],
+    // OANDA Accounts routes
+    '/oanda-accounts': [
+      { label: t('breadcrumbs.home'), path: homePath },
+      { label: t('breadcrumbs.oandaAccounts') },
+    ],
   };
 
   // If customPath is provided, use it directly
@@ -221,6 +226,15 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
         { label: t('breadcrumbs.home'), path: homePath },
         { label: 'Trading Tasks', path: '/trading-tasks' },
         { label: 'Edit Task' },
+      ];
+    } else if (location.pathname.match(/^\/oanda-accounts\/\d+$/)) {
+      breadcrumbs = [
+        { label: t('breadcrumbs.home'), path: homePath },
+        {
+          label: t('breadcrumbs.oandaAccounts'),
+          path: '/oanda-accounts',
+        },
+        { label: 'Account Details' },
       ];
     } else {
       // Default fallback
