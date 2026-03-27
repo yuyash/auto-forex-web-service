@@ -192,6 +192,29 @@
       "trendRuns": "Trend Cycles",
       "help": "Displayed cycles are separated into trend and counter units. Active cycles are still open, completed cycles ended normally, and intervened cycles had protective actions such as shrink or rebalance.",
       "runTypeHelp": "Trend cycles and counter cycles are counted as separate units."
+    },
+    "cycleList": {
+      "title": "Cycles",
+      "sortOldest": "Oldest",
+      "sortNewest": "Newest",
+      "filterActive": "Active",
+      "filterCompleted": "Completed",
+      "noCyclesFound": "No cycles found",
+      "tradeCount": "{{count}} trades",
+      "cycle": "Cycle",
+      "opens": "{{count}} opens",
+      "closes": "{{count}} closes",
+      "opensAndCloses": "{{opens}} opens, {{closes}} closes",
+      "trades": "Trades",
+      "back": "Back",
+      "resetZoom": "Reset zoom",
+      "reloadCandles": "Reload candles"
+    },
+    "chips": {
+      "cycles": "Cycles: {{count}}",
+      "active": "Active: {{count}}",
+      "completed": "Completed: {{count}}",
+      "trades": "Trades: {{count}}"
     }
   },
   "errors": {
