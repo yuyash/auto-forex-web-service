@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.21](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.20...frontend-v1.18.21) (2026-03-27)
+
+
+### Styles
+
+* **frontend:** wrap backtest form in Paper and add i18n to strategy… ([#230](https://github.com/yuyash/auto-forex-web-service/issues/230)) ([95d8ca2](https://github.com/yuyash/auto-forex-web-service/commit/95d8ca2beae55430a8f826ebe23d0f55f6886acf))
+
 ## [1.18.20](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.19...frontend-v1.18.20) (2026-03-27)
 
 
