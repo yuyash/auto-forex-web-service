@@ -558,6 +558,34 @@ class EventHandler:
 
         return None
 
+    def _resolve_cycle_id_for_position(self, position: Position) -> str | None:
+        """Look up cycle_id from the Trade that opened a position.
+
+        Protection handlers (shrink, lock, margin) don't carry entry_id
+        metadata, so we fall back to the Trade table to find which cycle
+        the position belongs to.
+        """
+        pos_id = str(position.id)
+        # Check in-memory cache first
+        for eid, cid in self._entry_id_to_cycle_id.items():
+            if cid and str(eid) == pos_id:
+                return cid
+
+        # DB lookup: find the open_position trade that created this position
+        open_trade = (
+            Trade.objects.filter(
+                task_type=self.order_service.task_type.value,
+                task_id=self._task_pk,
+                execution_id=self._execution_id,
+                position_id=position.id,
+                execution_method="open_position",
+                cycle_id__isnull=False,
+            )
+            .values_list("cycle_id", flat=True)
+            .first()
+        )
+        return str(open_trade) if open_trade else None
+
     def handle_close_position(self, event: ClosePositionEvent) -> Decimal:
         """Close one or more positions.
 
@@ -757,7 +785,8 @@ class EventHandler:
                     oanda_trade_id=position.oanda_trade_id,
                     position=position,
                     order=close_order,
-                    description=f"Volatility lock: close all positions ({event.reason})",
+                    description=f"[PROTECTION] Volatility lock: close all positions ({event.reason})",
+                    cycle_id=self._resolve_cycle_id_for_position(position),
                 )
                 logger.info(
                     "Closed position due to volatility: layer=%s, position_id=%s, pnl=%s",
@@ -949,7 +978,8 @@ class EventHandler:
                     oanda_trade_id=position.oanda_trade_id,
                     position=position,
                     order=close_order,
-                    description=f"Margin protection: forced close ({event.reason})",
+                    description=f"[PROTECTION] Margin protection: forced close ({event.reason})",
+                    cycle_id=self._resolve_cycle_id_for_position(position),
                 )
                 touched_positions += 1
                 if remaining_units is not None:

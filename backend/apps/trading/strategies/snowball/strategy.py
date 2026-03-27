@@ -662,7 +662,7 @@ class SnowballStrategy(Strategy):
                 timestamp=tick.timestamp,
                 description=(
                     f"Lock hedge ({hedge_dir.value.upper()}) | "
-                    f"units={hedge_units}, net={net}, ratio={ratio:.1f}%"
+                    f"[PROTECTION] units={hedge_units}, net={net}, ratio={ratio:.1f}%"
                 ),
             )
             open_evt.basket = "hedge"
@@ -712,7 +712,7 @@ class SnowballStrategy(Strategy):
                             self._close_entry(
                                 tick,
                                 e,
-                                description=f"Lock hedge unwound | ratio={ratio:.1f}%",
+                                description=f"[PROTECTION] Lock hedge unwound | ratio={ratio:.1f}%",
                                 close_reason="lock_hedge_neutralize",
                                 validation_status="not_applicable",
                             )
@@ -777,7 +777,7 @@ class SnowballStrategy(Strategy):
                     tick,
                     worst_entry,
                     description=(
-                        f"Shrink: close largest-loss counter | "
+                        f"[PROTECTION] Shrink: close largest-loss counter | "
                         f"loss={worst_loss:.1f} pips, ratio={ratio:.1f}%"
                     ),
                     close_reason="shrink",
@@ -823,7 +823,7 @@ class SnowballStrategy(Strategy):
                     tick,
                     entry,
                     description=(
-                        f"Rebalance: reduce {heavier.value.upper()} imbalance | "
+                        f"[PROTECTION] Rebalance: reduce {heavier.value.upper()} imbalance | "
                         f"LONG={long_units} vs SHORT={short_units}"
                     ),
                     close_reason="rebalance",

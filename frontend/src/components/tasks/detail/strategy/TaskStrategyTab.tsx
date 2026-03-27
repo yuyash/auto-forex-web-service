@@ -293,6 +293,15 @@ export function TaskStrategyTab({
                       variant="outlined"
                       label={`${cycle.trade_count} trades`}
                     />
+                    {cycle.has_protection ? (
+                      <Chip
+                        size="small"
+                        color="error"
+                        variant="filled"
+                        label={`⚠ ${cycle.protection_count ?? ''}`}
+                        sx={{ fontSize: '0.7rem' }}
+                      />
+                    ) : null}
                   </Stack>
                   <Typography variant="body2" color="text.secondary">
                     {formatDateTime(cycle.started_at)}
@@ -424,14 +433,25 @@ export function TaskStrategyTab({
                         label={
                           trade.execution_method === 'open_position'
                             ? 'OPEN'
-                            : 'CLOSE'
+                            : trade.execution_method === 'close_position'
+                              ? 'CLOSE'
+                              : trade.execution_method
+                                  .replace(/_/g, ' ')
+                                  .toUpperCase()
                         }
                         color={
                           trade.execution_method === 'open_position'
                             ? 'info'
-                            : 'default'
+                            : trade.execution_method === 'close_position'
+                              ? 'default'
+                              : 'error'
                         }
-                        variant="outlined"
+                        variant={
+                          trade.execution_method === 'open_position' ||
+                          trade.execution_method === 'close_position'
+                            ? 'outlined'
+                            : 'filled'
+                        }
                       />
                       <Chip
                         size="small"

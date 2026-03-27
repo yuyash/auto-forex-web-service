@@ -22,6 +22,8 @@ export interface StrategyCycle {
   trade_count: number;
   open_count: number;
   close_count: number;
+  has_protection?: boolean;
+  protection_count?: number;
   trades: CycleTrade[];
 }
 

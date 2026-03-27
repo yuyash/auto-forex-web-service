@@ -160,6 +160,15 @@ def _build_cycle(
     else:
         status = "completed"
 
+    _PROTECTION_METHODS = {"volatility_lock", "margin_protection", "shrink", "rebalance"}
+    protection_trades = [
+        t
+        for t in trades
+        if t["execution_method"] in _PROTECTION_METHODS
+        or str(t.get("description") or "").startswith("[PROTECTION]")
+    ]
+    has_protection = len(protection_trades) > 0
+
     return {
         "cycle_id": cycle_id,
         "direction": direction,
@@ -171,6 +180,8 @@ def _build_cycle(
         "trade_count": len(trades),
         "open_count": len(opens),
         "close_count": len(closes),
+        "has_protection": has_protection,
+        "protection_count": len(protection_trades),
         "trades": [_serialize_trade(t, metrics_by_minute) for t in trades],
     }
 
