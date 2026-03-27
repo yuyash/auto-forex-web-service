@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.18.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.18.2...backend-v1.18.3) (2026-03-27)
+
+
+### Bug Fixes
+
+* **trading:** change planned_exit_price_formula from CharField to Tex… ([#226](https://github.com/yuyash/auto-forex-web-service/issues/226)) ([53d8370](https://github.com/yuyash/auto-forex-web-service/commit/53d8370a42bd6339fa2775a12d78aee2b146db7a))
+* **trading:** change planned_exit_price_formula from CharField to TextField ([53d8370](https://github.com/yuyash/auto-forex-web-service/commit/53d8370a42bd6339fa2775a12d78aee2b146db7a))
+
 ## [1.18.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.18.1...backend-v1.18.2) (2026-03-27)
 
 
