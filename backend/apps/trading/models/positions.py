@@ -106,8 +106,7 @@ class Position(models.Model):
         blank=True,
         help_text="Planned exit price calculated at order time (e.g. take-profit target)",
     )
-    planned_exit_price_formula = models.CharField(
-        max_length=255,
+    planned_exit_price_formula = models.TextField(
         null=True,
         blank=True,
         help_text="Human-readable formula used to calculate planned_exit_price (e.g. '1.12345 + 0.00500')",
