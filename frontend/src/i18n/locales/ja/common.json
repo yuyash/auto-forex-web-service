@@ -287,7 +287,8 @@
     "users": "ユーザー管理",
     "configurations": "設定構成",
     "trading": "トレーディング",
-    "oandaAccounts": "OANDAアカウント"
+    "oandaAccounts": "OANDAアカウント",
+    "accountDetails": "アカウント詳細"
   },
   "accessibility": {
     "skipToMainContent": "メインコンテンツへスキップ",

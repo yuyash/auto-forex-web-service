@@ -287,7 +287,8 @@
     "users": "User Management",
     "configurations": "Configurations",
     "trading": "Trading",
-    "oandaAccounts": "OANDA Accounts"
+    "oandaAccounts": "OANDA Accounts",
+    "accountDetails": "Account Details"
   },
   "accessibility": {
     "skipToMainContent": "Skip to main content",
