@@ -96,13 +96,13 @@
   "explorer.excludeGitIgnore": true,
   "ruff.configuration": "backend/pyproject.toml",
   "ruff.interpreter": [
-    "backend/.venv/bin/python"
+    "${workspaceFolder}/backend/.venv/bin/python"
   ],
   "python.createEnvironment.contentButton": "show",
-  "python.defaultInterpreterPath": "backend/.venv/bin/python",
+  "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python",
   "python.testing.unittestEnabled": false,
   "python.testing.pytestEnabled": true,
-  "python.testing.pytestPath": "backend/.venv/bin/pytest",
+  "python.testing.pytestPath": "${workspaceFolder}/backend/.venv/bin/pytest",
   "python.testing.pytestArgs": [
     "tests"
   ],
