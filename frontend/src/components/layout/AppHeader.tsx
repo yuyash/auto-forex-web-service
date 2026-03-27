@@ -55,6 +55,11 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
     navigate('/settings');
   };
 
+  const handleOandaAccountsClick = () => {
+    handleUserMenuClose();
+    navigate('/oanda-accounts');
+  };
+
   const handleLogout = async () => {
     handleUserMenuClose();
     await logout();
@@ -140,30 +145,6 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
         {/* Spacer to push right side icons to the right */}
         <Box sx={{ flexGrow: 1 }} />
 
-        {/* Right side - OANDA Accounts & Settings */}
-        {isDesktop && (
-          <Box sx={{ display: 'flex', gap: 1, mr: 1 }}>
-            <Button
-              color="inherit"
-              startIcon={<AccountBalanceIcon />}
-              component={RouterLink}
-              to="/oanda-accounts"
-              sx={{ textTransform: 'none' }}
-            >
-              {t('navigation.oandaAccounts')}
-            </Button>
-            <Button
-              color="inherit"
-              startIcon={<Settings />}
-              component={RouterLink}
-              to="/settings"
-              sx={{ textTransform: 'none' }}
-            >
-              {t('navigation.settings')}
-            </Button>
-          </Box>
-        )}
-
         {/* Right side icons */}
         <Box
           sx={{
@@ -221,6 +202,12 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
                 <Settings fontSize="small" />
               </ListItemIcon>
               <ListItemText>{t('navigation.settings')}</ListItemText>
+            </MenuItem>
+            <MenuItem onClick={handleOandaAccountsClick}>
+              <ListItemIcon>
+                <AccountBalanceIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>{t('navigation.oandaAccounts')}</ListItemText>
             </MenuItem>
             <Divider />
             <MenuItem onClick={handleLogout}>
