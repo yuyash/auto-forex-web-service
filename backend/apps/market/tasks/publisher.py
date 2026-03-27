@@ -10,7 +10,6 @@ from typing import Any
 from celery import shared_task
 from django.conf import settings
 
-from apps.market.enums import ApiType
 from apps.market.models import CeleryTaskStatus, OandaAccounts
 from apps.market.services.celery import CeleryTaskService
 from apps.market.services.oanda import OandaService
@@ -67,12 +66,10 @@ class TickPublisherRunner:
         )
 
         redis_url = settings.MARKET_REDIS_URL
-        channel = settings.MARKET_TICK_CHANNEL
 
         logger.info(
-            "Publisher starting (account_id=%s, channel=%s, redis=%s, worker=%s)",
+            "Publisher starting (account_id=%s, redis=%s, worker=%s)",
             account_id,
-            channel,
             redis_url,
             lock_value(),
         )
@@ -104,23 +101,13 @@ class TickPublisherRunner:
         )
 
         # Start streaming
-        self._stream_ticks(client, lock_key, channel, instruments_list, account_id)
+        self._stream_ticks(client, lock_key, instruments_list, account_id)
 
     def _validate_account(self, client: Any, lock_key: str, account_id: int) -> bool:
-        """Validate account exists and is live."""
+        """Validate account exists."""
         if self.account is None:
             logger.error("Tick publisher cannot start: account %s not found", account_id)
             self._cleanup_and_stop(client, lock_key, "Account not found", failed=True)
-            return False
-
-        if self.account.api_type != ApiType.LIVE:
-            logger.warning(
-                "Tick publisher refusing to start for non-live account "
-                "(account_id=%s, api_type=%s)",
-                account_id,
-                self.account.api_type,
-            )
-            self._cleanup_and_stop(client, lock_key, "Non-live account")
             return False
 
         return True
@@ -129,13 +116,18 @@ class TickPublisherRunner:
         self,
         client: Any,
         lock_key: str,
-        channel: str,
         instruments_list: list[str],
         account_id: int,
     ) -> None:
-        """Stream ticks from OANDA to Redis."""
+        """Stream ticks from OANDA to Redis.
+
+        Each tick is published to ``live:{oanda_account_id}:{instrument}``
+        so that :class:`LiveTickDataSource` instances can subscribe to the
+        exact channel for their trading task.
+        """
         assert self.account is not None
         assert self.task_service is not None
+        oanda_account_id = self.account.account_id
 
         ticks_published = 0
         try:
@@ -162,8 +154,10 @@ class TickPublisherRunner:
                         if self.task_service.should_stop():
                             break
 
+                        instrument = str(tick.instrument)
+                        channel = f"live:{oanda_account_id}:{instrument}"
                         payload = {
-                            "instrument": str(tick.instrument),
+                            "instrument": instrument,
                             "timestamp": isoformat(tick.timestamp),
                             "bid": str(tick.bid),
                             "ask": str(tick.ask),
@@ -183,10 +177,10 @@ class TickPublisherRunner:
 
                         if ticks_published % 1000 == 0:
                             logger.info(
-                                "Publisher: %s ticks published so far (account_id=%s, channel=%s)",
+                                "Publisher: %s ticks published so far (account_id=%s, oanda_id=%s)",
                                 ticks_published,
                                 account_id,
-                                channel,
+                                oanda_account_id,
                             )
 
                         if ticks_published % 250 == 0:

@@ -118,10 +118,7 @@ class TestValidateAccount:
 
         assert result is False
 
-    @patch("apps.market.tasks.publisher.ApiType")
-    def test_returns_false_for_non_live_account(self, MockApiType):
-        MockApiType.LIVE = "live"
-
+    def test_returns_true_for_practice_account(self):
         runner = TickPublisherRunner()
         runner.account = MagicMock()
         runner.account.api_type = "practice"
@@ -129,12 +126,9 @@ class TestValidateAccount:
 
         result = runner._validate_account(MagicMock(), "lock:key", 1)
 
-        assert result is False
+        assert result is True
 
-    @patch("apps.market.tasks.publisher.ApiType")
-    def test_returns_true_for_live_account(self, MockApiType):
-        MockApiType.LIVE = "live"
-
+    def test_returns_true_for_live_account(self):
         runner = TickPublisherRunner()
         runner.account = MagicMock()
         runner.account.api_type = "live"

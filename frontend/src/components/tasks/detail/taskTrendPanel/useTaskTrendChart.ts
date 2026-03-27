@@ -493,11 +493,12 @@ export function useTaskTrendChart({
           }
           logicalCenter = lo;
         }
-        const half = AUTO_FOLLOW_CANDLES / 2;
+        const leftCandles = AUTO_FOLLOW_CANDLES * 0.75;
+        const rightCandles = AUTO_FOLLOW_CANDLES - leftCandles;
         try {
           chartRef.current?.timeScale().setVisibleLogicalRange({
-            from: logicalCenter - half,
-            to: logicalCenter + half,
+            from: logicalCenter - leftCandles,
+            to: logicalCenter + rightCandles,
           });
           reportChartError(null);
         } catch {
