@@ -180,6 +180,9 @@ export function StrategyGroupChart({
           vertLines: { visible: false },
           horzLines: { color: isDark ? '#2a2e39' : '#e2e8f0' },
         },
+        handleScroll: {
+          vertTouchDrag: false,
+        },
         timeScale: {
           borderColor: isDark ? '#2a2e39' : '#cbd5e1',
           timeVisible: true,

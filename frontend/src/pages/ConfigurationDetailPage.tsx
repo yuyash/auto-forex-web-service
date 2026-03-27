@@ -10,10 +10,14 @@ import {
   Paper,
   Typography,
 } from '@mui/material';
-import { Edit as EditIcon } from '@mui/icons-material';
+import {
+  Edit as EditIcon,
+  ContentCopy as ContentCopyIcon,
+} from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { Breadcrumbs } from '../components/common';
 import { useConfiguration } from '../hooks/useConfigurations';
+import { useCopyConfiguration } from '../hooks/useConfigurationMutations';
 import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
 import { STRATEGY_CONFIG_SCHEMAS } from '../components/configurations/strategyConfigSchemas';
 import type { ConfigProperty, ConfigSchema } from '../types/strategy';
@@ -48,6 +52,11 @@ export default function ConfigurationDetailPage() {
 
   const { data: configuration, isLoading, error } = useConfiguration(configId);
   const { strategies } = useStrategies();
+  const copyMutation = useCopyConfiguration({
+    onSuccess: (copied) => {
+      navigate(`/configurations/${copied.id}`);
+    },
+  });
 
   // Resolve the schema for the current strategy type.
   // The backend JSON schema is the single source of truth (includes group,
@@ -191,15 +200,24 @@ export default function ConfigurationDetailPage() {
               </Typography>
             </Box>
 
-            <Button
-              variant="contained"
-              startIcon={<EditIcon />}
-              onClick={() =>
-                navigate(`/configurations/${configuration.id}/edit`)
-              }
-            >
-              {t('common:actions.edit')}
-            </Button>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                variant="outlined"
+                startIcon={<ContentCopyIcon />}
+                onClick={() => copyMutation.mutate({ id: configuration.id })}
+              >
+                {t('common:actions.copy')}
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<EditIcon />}
+                onClick={() =>
+                  navigate(`/configurations/${configuration.id}/edit`)
+                }
+              >
+                {t('common:actions.edit')}
+              </Button>
+            </Box>
           </Box>
 
           <Paper elevation={2} sx={{ p: 3 }}>

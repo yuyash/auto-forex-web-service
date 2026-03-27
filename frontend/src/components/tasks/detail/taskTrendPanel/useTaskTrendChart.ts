@@ -263,7 +263,7 @@ export function useTaskTrendChart({
       handleScroll: {
         mouseWheel: true,
         pressedMouseMove: true,
-        vertTouchDrag: true,
+        vertTouchDrag: false,
         horzTouchDrag: true,
       },
       rightPriceScale: {
