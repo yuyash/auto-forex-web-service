@@ -96,7 +96,7 @@ export default function TradingTaskForm({
       config_id: initialData?.config_id || '',
       name: initialData?.name || '',
       description: initialData?.description || '',
-      instrument: initialData?.instrument || '',
+      instrument: initialData?.instrument || 'USD_JPY',
       dry_run: false,
       hedging_enabled: true,
       risk_acknowledged: false,

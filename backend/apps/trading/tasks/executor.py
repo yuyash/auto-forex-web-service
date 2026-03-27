@@ -136,8 +136,22 @@ class TaskExecutor:
         if isinstance(self.task, BacktestTask):
             return self.task.initial_balance
         else:
-            # For trading tasks, get balance from OANDA account
-            return self.task.oanda_account.balance
+            # For trading tasks, fetch live balance from OANDA API.
+            # The DB-stored balance may be stale (default 0).
+            try:
+                from apps.market.services.oanda import OandaService
+
+                client = OandaService(self.task.oanda_account)
+                details = client.get_account_details()
+                return details.balance
+            except Exception as e:
+                logger.warning(
+                    "Failed to fetch live balance from OANDA for account %s, "
+                    "falling back to DB value: %s",
+                    self.task.oanda_account.account_id,
+                    e,
+                )
+                return self.task.oanda_account.balance
 
     @property
     def task_type(self) -> TaskType:
