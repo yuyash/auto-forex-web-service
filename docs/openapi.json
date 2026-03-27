@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.18.2",
+        "version": "1.18.3",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -7268,6 +7268,12 @@
                         "type": "string",
                         "description": "Optional description of this trading task"
                     },
+                    "instrument": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Trading instrument (e.g., EUR_USD, USD_JPY)",
+                        "maxLength": 20
+                    },
                     "sell_on_stop": {
                         "type": "boolean",
                         "description": "Close all positions when task is stopped"
@@ -9026,6 +9032,12 @@
                     "description": {
                         "type": "string",
                         "description": "Optional description of this trading task"
+                    },
+                    "instrument": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Trading instrument (e.g., EUR_USD, USD_JPY)",
+                        "maxLength": 20
                     },
                     "sell_on_stop": {
                         "type": "boolean",

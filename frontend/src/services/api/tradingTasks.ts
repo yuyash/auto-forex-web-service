@@ -12,6 +12,7 @@ interface TradingTaskCreateRequest {
   account_id: string;
   name: string;
   description?: string;
+  instrument?: string;
   sell_on_stop?: boolean;
 }
 

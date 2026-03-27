@@ -41,6 +41,7 @@ import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
+import { useSupportedInstruments } from '../../hooks/useMarketConfig';
 
 const steps = [
   'trading:form.steps.account',
@@ -54,6 +55,7 @@ const tradingTaskSchema = z.object({
   config_id: z.string().min(1, 'Configuration is required'),
   name: z.string().min(1, 'Name is required').max(255),
   description: z.string().optional(),
+  instrument: z.string().min(1, 'Instrument is required'),
   dry_run: z.boolean().optional(),
   hedging_enabled: z.boolean().optional(),
   risk_acknowledged: z.boolean().optional(),
@@ -94,6 +96,7 @@ export default function TradingTaskForm({
       config_id: initialData?.config_id || '',
       name: initialData?.name || '',
       description: initialData?.description || '',
+      instrument: initialData?.instrument || '',
       dry_run: false,
       hedging_enabled: true,
       risk_acknowledged: false,
@@ -162,6 +165,8 @@ export default function TradingTaskForm({
 
   const { strategies } = useStrategies();
 
+  const { instruments } = useSupportedInstruments();
+
   const { data: selectedConfig } = useConfiguration(
     selectedConfigId || undefined
   );
@@ -192,7 +197,7 @@ export default function TradingTaskForm({
         fieldsToValidate = ['account_id'];
         break;
       case 1: // Configuration step
-        fieldsToValidate = ['config_id', 'name'];
+        fieldsToValidate = ['config_id', 'name', 'instrument'];
         break;
       default:
         // No validation needed for review step
@@ -240,6 +245,7 @@ export default function TradingTaskForm({
         config_id: completeData.config_id,
         name: completeData.name,
         description: completeData.description,
+        instrument: completeData.instrument,
         dry_run: completeData.dry_run,
         hedging_enabled:
           selectedAccount?.hedging_enabled === false
@@ -439,6 +445,42 @@ export default function TradingTaskForm({
 
               <Grid size={{ xs: 12 }}>
                 <Controller
+                  name="instrument"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth error={!!errors.instrument} required>
+                      <InputLabel>{t('common:labels.instrument')}</InputLabel>
+                      <Select
+                        {...field}
+                        label={t('common:labels.instrument')}
+                        value={field.value || ''}
+                      >
+                        <MenuItem value="">
+                          <em>
+                            {t(
+                              'trading:form.selectInstrument',
+                              'Select an instrument'
+                            )}
+                          </em>
+                        </MenuItem>
+                        {instruments.map((inst) => (
+                          <MenuItem key={inst} value={inst}>
+                            {inst.replace('_', '/')}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      {errors.instrument && (
+                        <FormHelperText>
+                          {errors.instrument.message}
+                        </FormHelperText>
+                      )}
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <Controller
                   name="name"
                   control={control}
                   render={({ field }) => (
@@ -612,6 +654,17 @@ export default function TradingTaskForm({
                       ) : (
                         t('common:status.loading')
                       )}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      {t('common:labels.instrument')}
+                    </Typography>
+                    <Typography variant="body1" gutterBottom>
+                      {formData.instrument
+                        ? formData.instrument.replace('_', '/')
+                        : '\u2014'}
                     </Typography>
                   </Box>
                 </Paper>
