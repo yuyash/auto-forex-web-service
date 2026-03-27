@@ -284,14 +284,28 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        """Check counter entries for step-based close targets."""
+        """Check counter entries for step-based close targets.
+
+        Only the entry with the highest step number is eligible for close
+        on any given tick.  After closing it, we return immediately so that
+        the next tick re-evaluates the new max-step entry.  This prevents
+        cascading partial closes within a single tick.
+        """
         if cycle.completed:
             return []
-        events: list[StrategyEvent] = []
 
-        for entry in list(cycle.counter_entries):
+        non_hedge = cycle.counter_non_hedge()
+        if not non_hedge:
+            return []
+
+        max_step = max(e.step for e in non_hedge)
+
+        for entry in non_hedge:
             if entry.is_hedge:
                 continue
+            if entry.step != max_step:
+                continue
+
             close_price = entry.close_price
             if close_price <= 0:
                 continue
@@ -302,14 +316,6 @@ class SnowballStrategy(Strategy):
             elif entry.is_short and tick.ask <= close_price:
                 hit = True
             if not hit:
-                continue
-
-            # Only close the latest step (highest step number)
-            non_hedge = cycle.counter_non_hedge()
-            if not non_hedge:
-                continue
-            max_step = max(e.step for e in non_hedge)
-            if entry.step != max_step:
                 continue
 
             exit_price = entry.exit_price(tick)
@@ -325,7 +331,11 @@ class SnowballStrategy(Strategy):
                 ret,
                 pips_gained,
             )
-            events.append(
+            cycle.remove_entry(entry.entry_id)
+            cycle.add_count = 0
+            cycle.counter_close_count += 1
+
+            return [
                 self._close_entry(
                     tick,
                     entry,
@@ -338,12 +348,9 @@ class SnowballStrategy(Strategy):
                     actual_tp_pips=pips_gained,
                     validation_status="pass",
                 )
-            )
-            cycle.remove_entry(entry.entry_id)
-            cycle.add_count = 0
-            cycle.counter_close_count += 1
+            ]
 
-        return events
+        return []
 
     def _process_cycle_counter_adds(
         self,
