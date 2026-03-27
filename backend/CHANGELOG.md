@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.6](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.18.5...backend-v1.18.6) (2026-03-27)
+
+
+### Bug Fixes
+
+* **frontend:** OANDA accounts UX improvements ([#244](https://github.com/yuyash/auto-forex-web-service/issues/244)) ([f14db1b](https://github.com/yuyash/auto-forex-web-service/commit/f14db1b22aab2f296203f66294e5833f24f28080))
+
 ## [1.18.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.18.4...backend-v1.18.5) (2026-03-27)
 
 
