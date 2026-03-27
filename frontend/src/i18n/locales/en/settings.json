@@ -37,7 +37,17 @@
     "defaultAccountDescription": "The default account is used to collect market data and latest tick data. Only one account can be set as default at a time.",
     "defaultAccountInfo": "The default account is used to fetch market data and collect tick data for analysis. The candle chart will use the default account to display price data. You can switch the default account at any time.",
     "leaveBlankToKeepToken": "Leave blank to keep existing token",
-    "confirmDelete": "Are you sure you want to delete this account?"
+    "confirmDelete": "Are you sure you want to delete this account?",
+    "marketStatus": "Market Status",
+    "marketOpen": "Market Open",
+    "marketClosed": "Market Closed",
+    "orderType": "Order Type",
+    "marketOrder": "Market Order",
+    "limitOrder": "Limit Order",
+    "stopOrder": "Stop Order",
+    "enableTakeProfit": "Take Profit",
+    "enableStopLoss": "Stop Loss",
+    "loadingAccountData": "Loading account data..."
   },
   "preferences": {
     "title": "User Preferences",

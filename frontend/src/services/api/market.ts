@@ -25,6 +25,16 @@ interface GranularitiesResponse {
   granularities?: GranularityOption[];
 }
 
+export interface MarketStatusResponse {
+  is_open: boolean;
+  current_session?: string;
+  next_event?: {
+    type: string;
+    time: string;
+  };
+  sessions?: Record<string, unknown>[];
+}
+
 /**
  * Fetch the available tick data date range for a given instrument.
  */
@@ -42,4 +52,6 @@ export const marketApi = {
   getCandles: (params: Record<string, string | number | undefined>) =>
     api.get<CandlesResponse>('/api/market/candles/', params),
   getTickDataRange: fetchTickDataRange,
+  getMarketStatus: () =>
+    api.get<MarketStatusResponse>('/api/market/market/status/'),
 };

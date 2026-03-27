@@ -92,7 +92,18 @@ class RedisTickDataSource(TickDataSource):
         # Trigger the publisher AFTER subscription is established
         if self.trigger_publisher:
             logger.info(f"Triggering publisher for channel: {self.channel}")
-            self.trigger_publisher()
+            # In Celery eager mode, apply_async runs synchronously.  If the
+            # publisher finishes before we start reading, all pub/sub messages
+            # are lost.  Run the callback in a daemon thread so that the
+            # iterator can consume messages as they arrive.
+            from celery import current_app
+
+            if getattr(current_app.conf, "task_always_eager", False):
+                import threading
+
+                threading.Thread(target=self.trigger_publisher, daemon=True).start()
+            else:
+                self.trigger_publisher()
 
         batch: list[Tick] = []
         max_reconnect_attempts = 3
