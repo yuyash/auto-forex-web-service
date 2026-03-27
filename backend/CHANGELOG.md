@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.18.3...backend-v1.18.4) (2026-03-27)
+
+
+### Bug Fixes
+
+* **trading:** add instrument selector to trading task creation form ([#240](https://github.com/yuyash/auto-forex-web-service/issues/240)) ([5f1220e](https://github.com/yuyash/auto-forex-web-service/commit/5f1220ecbd6c6da2516d33ac5065d96d5993a6bf))
+
 ## [1.18.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.18.2...backend-v1.18.3) (2026-03-27)
 
 
