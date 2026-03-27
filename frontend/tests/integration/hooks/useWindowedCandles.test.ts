@@ -22,28 +22,34 @@ describe('useWindowedCandles', () => {
 
   it('tracks actual data ranges separately from bridged unloaded gaps', async () => {
     mockGet.mockImplementation(async (_path, query) => {
-      if (query?.from_time) {
+      if (
+        query?.from_time === '2026-01-12T01:00:00.000Z' &&
+        query?.to_time === '2026-01-12T11:00:00.000Z'
+      ) {
         return { candles: [] };
       }
-      if (query?.before) {
+      if (
+        query?.from_time === '2026-01-11T15:00:00.000Z' &&
+        query?.to_time === '2026-01-12T01:00:00.000Z'
+      ) {
         return {
           candles: [
             {
-              time: iso('2026-01-09T19:00:00Z'),
+              time: iso('2026-01-11T19:00:00Z'),
               open: 1,
               high: 1,
               low: 1,
               close: 1,
             },
             {
-              time: iso('2026-01-09T20:00:00Z'),
+              time: iso('2026-01-11T20:00:00Z'),
               open: 1,
               high: 1,
               low: 1,
               close: 1,
             },
             {
-              time: iso('2026-01-09T21:00:00Z'),
+              time: iso('2026-01-11T21:00:00Z'),
               open: 1,
               high: 1,
               low: 1,
@@ -52,18 +58,21 @@ describe('useWindowedCandles', () => {
           ],
         };
       }
-      if (query?.after) {
+      if (
+        query?.from_time === '2026-01-12T11:00:00.000Z' &&
+        query?.to_time === '2026-01-12T21:00:00.000Z'
+      ) {
         return {
           candles: [
             {
-              time: iso('2026-01-14T12:00:00Z'),
+              time: iso('2026-01-12T12:00:00Z'),
               open: 1,
               high: 1,
               low: 1,
               close: 1,
             },
             {
-              time: iso('2026-01-14T13:00:00Z'),
+              time: iso('2026-01-12T13:00:00Z'),
               open: 1,
               high: 1,
               low: 1,
@@ -81,6 +90,7 @@ describe('useWindowedCandles', () => {
         granularity: 'H1',
         startTime: '2026-01-10T00:00:00Z',
         endTime: '2026-01-20T00:00:00Z',
+        initialFocusTime: '2026-01-12T08:00:00Z',
         initialCount: 10,
         edgeCount: 10,
       })
@@ -91,12 +101,12 @@ describe('useWindowedCandles', () => {
     expect(result.current.candles).toHaveLength(5);
     expect(result.current.dataRanges).toEqual([
       {
-        from: Math.floor(new Date('2026-01-09T19:00:00Z').getTime() / 1000),
-        to: Math.floor(new Date('2026-01-09T21:00:00Z').getTime() / 1000),
+        from: Math.floor(new Date('2026-01-11T19:00:00Z').getTime() / 1000),
+        to: Math.floor(new Date('2026-01-11T21:00:00Z').getTime() / 1000),
       },
       {
-        from: Math.floor(new Date('2026-01-14T12:00:00Z').getTime() / 1000),
-        to: Math.floor(new Date('2026-01-14T13:00:00Z').getTime() / 1000),
+        from: Math.floor(new Date('2026-01-12T12:00:00Z').getTime() / 1000),
+        to: Math.floor(new Date('2026-01-12T13:00:00Z').getTime() / 1000),
       },
     ]);
   });

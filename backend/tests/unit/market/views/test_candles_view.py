@@ -53,13 +53,42 @@ class TestCandleDataViewValidation:
 
         assert response.status_code == http_status.HTTP_400_BAD_REQUEST
 
-    def test_count_too_high_returns_400(self):
+    @patch("apps.market.views.account_helpers.OandaAccounts")
+    @patch("apps.market.views.candles.v20")
+    def test_count_above_oanda_limit_is_paginated(self, mock_v20, MockAccounts):
+        account = MagicMock()
+        account.api_hostname = "api-fxpractice.oanda.com"
+        account.get_api_token.return_value = "token"
+        MockAccounts.objects.filter.return_value.first.return_value = account
+
+        candle = MagicMock()
+        candle.complete = True
+        candle.mid.o = "1.10000"
+        candle.mid.h = "1.10100"
+        candle.mid.l = "1.09900"
+        candle.mid.c = "1.10050"
+        candle.volume = 100
+        candle.time = "2024-01-01T00:00:00.000000000Z"
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.body = {"candles": [candle] * 5000}
+
+        final_response = MagicMock()
+        final_response.status = 200
+        final_response.body = {"candles": [candle]}
+
+        mock_context = MagicMock()
+        mock_context.instrument.candles.side_effect = [mock_response, final_response]
+        mock_v20.Context.return_value = mock_context
+
         view = _build_view()
         request = _make_request("?instrument=EUR_USD&count=5001")
 
         response = view.get(request)
 
-        assert response.status_code == http_status.HTTP_400_BAD_REQUEST
+        assert response.status_code == http_status.HTTP_200_OK
+        assert mock_context.instrument.candles.call_count == 2
 
 
 class TestCandleDataViewNoAccount:

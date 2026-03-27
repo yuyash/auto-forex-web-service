@@ -92,6 +92,17 @@ def _fetch_oanda_candles(
     return response.body.get("candles", []) if response.body else []
 
 
+def _parse_candle_time(raw_candle: Any) -> datetime | None:
+    """Parse a candle timestamp into a datetime when possible."""
+    raw_time = getattr(raw_candle, "time", None)
+    if not isinstance(raw_time, str):
+        return None
+    try:
+        return datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
 class CandleDataView(APIView):
     """API endpoint for fetching candle data."""
 
@@ -495,14 +506,18 @@ class CandleDataView(APIView):
 
             if direction == "forward":
                 all_candles.extend(batch)
-                last_dt = datetime.fromisoformat(batch[-1].time.replace("Z", "+00:00"))
+                last_dt = _parse_candle_time(batch[-1])
+                if last_dt is None:
+                    break
                 next_cursor = datetime.fromtimestamp(
                     last_dt.timestamp() + granularity_seconds,
                     tz=UTC,
                 ).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
             else:
                 all_candles = [*batch, *all_candles]
-                first_dt = datetime.fromisoformat(batch[0].time.replace("Z", "+00:00"))
+                first_dt = _parse_candle_time(batch[0])
+                if first_dt is None:
+                    break
                 next_cursor = datetime.fromtimestamp(
                     first_dt.timestamp() - 1,
                     tz=UTC,
