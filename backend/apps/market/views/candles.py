@@ -92,6 +92,17 @@ def _fetch_oanda_candles(
     return response.body.get("candles", []) if response.body else []
 
 
+def _parse_candle_time(raw_candle: Any) -> datetime | None:
+    """Parse a candle timestamp into a datetime when possible."""
+    raw_time = getattr(raw_candle, "time", None)
+    if not isinstance(raw_time, str):
+        return None
+    try:
+        return datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
 class CandleDataView(APIView):
     """API endpoint for fetching candle data."""
 
@@ -169,9 +180,9 @@ class CandleDataView(APIView):
         count_raw = request.query_params.get("count", "100")
         try:
             count_int = int(count_raw)
-            if count_int < 1 or count_int > 5000:
+            if count_int < 1:
                 return {}, Response(
-                    {"error": "count must be between 1 and 5000"},
+                    {"error": "count must be greater than or equal to 1"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         except ValueError:
@@ -296,19 +307,35 @@ class CandleDataView(APIView):
         # Cursor: older data
         cursor_time = self._unix_to_rfc3339(before, offset=-1)
         if cursor_time and not from_time and not to_time and not after:
-            return _fetch_oanda_candles(
-                api_context, instrument, toTime=cursor_time, count=count_int, **base
+            return self._fetch_count_paginated(
+                api_context,
+                instrument,
+                granularity,
+                count_int,
+                direction="backward",
+                cursor_time=cursor_time,
             )
 
         # Cursor: newer data
         cursor_time = self._unix_to_rfc3339(after, offset=1)
         if cursor_time and not from_time and not to_time and not before:
-            return _fetch_oanda_candles(
-                api_context, instrument, fromTime=cursor_time, count=count_int, **base
+            return self._fetch_count_paginated(
+                api_context,
+                instrument,
+                granularity,
+                count_int,
+                direction="forward",
+                cursor_time=cursor_time,
             )
 
         # Default: most recent
-        return _fetch_oanda_candles(api_context, instrument, count=count_int, **base)
+        return self._fetch_count_paginated(
+            api_context,
+            instrument,
+            granularity,
+            count_int,
+            direction="backward",
+        )
 
     def _fetch_range(
         self,
@@ -441,4 +468,63 @@ class CandleDataView(APIView):
             current_from = datetime.fromtimestamp(last_dt.timestamp() + granularity_seconds, tz=UTC)
 
         logger.info("Pagination complete: fetched %d total candles", len(all_candles))
+        return all_candles
+
+    def _fetch_count_paginated(
+        self,
+        api_context: v20.Context,
+        instrument: str,
+        granularity: str,
+        total_count: int,
+        *,
+        direction: str,
+        cursor_time: str | None = None,
+    ) -> list[Any]:
+        """Fetch candles in batches when count-based requests exceed OANDA's 5000 cap."""
+        max_batch_size = 5000
+        remaining = total_count
+        granularity_seconds = _GRANULARITY_SECONDS.get(granularity, 3600)
+        all_candles: list[Any] = []
+        next_cursor = cursor_time
+
+        while remaining > 0:
+            batch_size = min(remaining, max_batch_size)
+            params: dict[str, Any] = {
+                "granularity": granularity,
+                "count": batch_size,
+            }
+            if direction == "forward":
+                if next_cursor:
+                    params["fromTime"] = next_cursor
+            else:
+                if next_cursor:
+                    params["toTime"] = next_cursor
+
+            batch = _fetch_oanda_candles(api_context, instrument, **params)
+            if not batch:
+                break
+
+            if direction == "forward":
+                all_candles.extend(batch)
+                last_dt = _parse_candle_time(batch[-1])
+                if last_dt is None:
+                    break
+                next_cursor = datetime.fromtimestamp(
+                    last_dt.timestamp() + granularity_seconds,
+                    tz=UTC,
+                ).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+            else:
+                all_candles = [*batch, *all_candles]
+                first_dt = _parse_candle_time(batch[0])
+                if first_dt is None:
+                    break
+                next_cursor = datetime.fromtimestamp(
+                    first_dt.timestamp() - 1,
+                    tz=UTC,
+                ).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+            remaining -= len(batch)
+            if len(batch) < batch_size:
+                break
+
         return all_candles

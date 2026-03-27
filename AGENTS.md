@@ -155,18 +155,13 @@ On every push (pre-push stage):
 | --------------------------------- | ---------------- | -------- | -------------------------------------------------------------- |
 | `recover_orphaned_tasks`          | Every 5 minutes  | system   | Detect and re-queue tasks stuck in RUNNING/STARTING            |
 | `cleanup_expired_refresh_tokens`  | Every hour       | default  | Remove expired JWT refresh tokens                              |
-| `load_daily_tick_data`            | Daily at 02:00 UTC | market | Fetch previous day's tick data from Athena (if configured)     |
 
-The `load_daily_tick_data` task is opt-in: it runs only when `LOAD_DATA_DATABASE` and `LOAD_DATA_TABLE` are set in the environment. See `.env.example` for all available options. It can also be triggered manually:
+Historical tick data can still be loaded manually from Athena. See `.env.example` for the related environment variables. Example:
 
 ```bash
 # Via management command (specific date range)
 python manage.py load_data --start 2026-03-22 --end 2026-03-22 \
   --database mydb --table mytable --instrument C:USD-JPY
-
-# Via Celery (fetches yesterday's data)
-docker compose exec celery python -c \
-  "from apps.market.tasks import load_daily_tick_data; load_daily_tick_data.delay()"
 ```
 
 ## Commit and Push

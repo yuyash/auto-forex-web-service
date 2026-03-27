@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import os
 
-from celery.schedules import crontab
-
 
 def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
     """Return Celery settings derived from the Redis configuration."""
@@ -32,7 +30,6 @@ def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
             # Market queue: data ingestion and streaming
             "market.tasks.publish_oanda_ticks": {"queue": "market"},
             "market.tasks.subscribe_ticks_to_db": {"queue": "market"},
-            "market.tasks.load_daily_tick_data": {"queue": "market"},
             # Backtest queue: historical data replay
             "market.tasks.publish_ticks_for_backtest": {"queue": "backtest"},
             "trading.tasks.run_backtest_task": {"queue": "backtest"},
@@ -40,8 +37,6 @@ def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
             # Trading queue: live execution
             "trading.tasks.run_trading_task": {"queue": "trading"},
             "trading.tasks.stop_trading_task": {"queue": "trading"},
-            # Default queue: infrastructure tasks
-            "config.tasks.backup_database": {"queue": "default"},
         },
         "CELERY_BEAT_SCHEDULE": {
             "recover-orphaned-tasks": {
@@ -52,16 +47,6 @@ def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
             "cleanup-expired-refresh-tokens": {
                 "task": "accounts.tasks.cleanup_expired_refresh_tokens",
                 "schedule": 3600,
-                "options": {"queue": "default"},
-            },
-            "load-daily-tick-data": {
-                "task": "market.tasks.load_daily_tick_data",
-                "schedule": crontab(hour=2, minute=0),  # Daily at 02:00 UTC
-                "options": {"queue": "market"},
-            },
-            "backup-database": {
-                "task": "config.tasks.backup_database",
-                "schedule": crontab(hour=3, minute=0),  # Daily at 03:00 UTC
                 "options": {"queue": "default"},
             },
         },
