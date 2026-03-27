@@ -5,6 +5,8 @@ from logging import Logger, getLogger
 from typing import Any
 
 import v20
+from v20.errors import V20Timeout
+from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers, status
@@ -258,6 +260,7 @@ class CandleDataView(APIView):
                 hostname=account.api_hostname,
                 token=account.get_api_token(),
                 application="auto-forex-trading",
+                poll_timeout=int(getattr(settings, "OANDA_REST_TIMEOUT", 10)),
             )
 
             raw_candles = self._dispatch_fetch(api_context, params)
@@ -276,6 +279,15 @@ class CandleDataView(APIView):
         except OandaCandleFetchError as e:
             logger.error("Failed to fetch candles: status=%d, body=%s", e.status_code, e.body)
             return self._build_oanda_error_response(oanda_status=e.status_code, body=e.body)
+        except V20Timeout as e:
+            logger.warning("OANDA candle request timed out: %s", e)
+            return Response(
+                {
+                    "error": "OANDA API request timed out. Please try a smaller date range or try again later.",
+                    "error_code": "OANDA_TIMEOUT",
+                },
+                status=status.HTTP_504_GATEWAY_TIMEOUT,
+            )
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error fetching candles: %s", e, exc_info=True)
             if "429" in str(e) or "rate limit" in str(e).lower():

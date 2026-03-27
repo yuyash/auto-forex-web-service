@@ -138,6 +138,7 @@ MARKET_REDIS_URL = "redis://localhost:6379/3"
 OANDA_PRACTICE_API = "https://api-fxpractice.oanda.com"
 OANDA_LIVE_API = "https://api-fxtrade.oanda.com"
 OANDA_STREAM_TIMEOUT = 5  # Shorter timeout for tests
+OANDA_REST_TIMEOUT = 5
 
 # =============================================================================
 # Rate Limiting — disabled for tests
