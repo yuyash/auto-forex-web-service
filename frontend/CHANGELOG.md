@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.19](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.18...frontend-v1.18.19) (2026-03-27)
+
+
+### Bug Fixes
+
+* disable backup and Athena jobs ([#224](https://github.com/yuyash/auto-forex-web-service/issues/224)) ([044d78f](https://github.com/yuyash/auto-forex-web-service/commit/044d78f9e5177380a10daed64f03e59a2c7d1d76))
+
 ## [1.18.18](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.17...frontend-v1.18.18) (2026-03-27)
 
 
