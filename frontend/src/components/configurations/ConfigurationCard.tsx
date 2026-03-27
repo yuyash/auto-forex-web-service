@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import FolderIcon from '@mui/icons-material/Folder';
 import { useNavigate } from 'react-router-dom';
@@ -24,6 +25,7 @@ import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
+import { useCopyConfiguration } from '../../hooks/useConfigurationMutations';
 import { useTranslation } from 'react-i18next';
 
 interface ConfigurationCardProps {
@@ -37,6 +39,11 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const menuOpen = Boolean(anchorEl);
   const { strategies } = useStrategies();
+  const copyMutation = useCopyConfiguration({
+    onSuccess: (copied) => {
+      navigate(`/configurations/${copied.id}`);
+    },
+  });
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -60,6 +67,11 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
     handleMenuClose();
     // Navigate to tasks page filtered by this configuration
     navigate(`/backtest-tasks?config=${configuration.id}`);
+  };
+
+  const handleCopy = () => {
+    handleMenuClose();
+    copyMutation.mutate({ id: configuration.id });
   };
 
   const handleOpenDetail = () => {
@@ -217,6 +229,17 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
               <EditIcon fontSize="small" />
             </IconButton>
           </Tooltip>
+          <Tooltip title={t('common:actions.copy')}>
+            <IconButton
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCopy();
+              }}
+              sx={{ mr: 1 }}
+            >
+              <ContentCopyIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           <Tooltip title={t('configuration:card.deleteConfiguration')}>
             <IconButton
               color="error"
@@ -257,6 +280,12 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
             <FolderIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText>{t('common:actions.viewTasks')}</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={handleCopy}>
+          <ListItemIcon>
+            <ContentCopyIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>{t('common:actions.copy')}</ListItemText>
         </MenuItem>
         <MenuItem onClick={handleDelete} disabled={configuration.is_in_use}>
           <ListItemIcon>
