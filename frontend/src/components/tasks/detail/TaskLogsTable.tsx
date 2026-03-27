@@ -228,18 +228,60 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
+      <Box
+        sx={{
+          mb: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <Typography variant="h6">{t('tables.logs.title')}</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Tooltip title={t('tables.logs.resetFilters')}>
+            <IconButton
+              size="small"
+              onClick={() => {
+                setLevelFilter([]);
+                setComponentFilter([]);
+                setTimestampFrom('');
+                setTimestampTo('');
+                setPage(0);
+              }}
+            >
+              <FilterListOffIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={t('common:columnConfig.configureColumns')}>
+            <IconButton
+              size="small"
+              onClick={() => setColConfigOpen(true)}
+              aria-label={t('common:columnConfig.configureColumns')}
+            >
+              <SettingsIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <TableSelectionToolbar
+            selectedCount={selection.selectedRowIds.size}
+            onCopy={handleCopy}
+            onSelectAll={() => selection.selectAllOnPage(pageRowIds)}
+            onReset={selection.resetSelection}
+            onReload={handleReload}
+            isReloading={isReloading}
+          />
+        </Box>
+      </Box>
       <Box
         sx={{
           mb: 2,
           display: 'flex',
-          gap: 2,
+          gap: 1.5,
           alignItems: 'center',
           flexWrap: 'wrap',
         }}
       >
-        <Typography variant="h6">{t('tables.logs.title')}</Typography>
-        <FormControl sx={{ minWidth: 200 }} size="small">
+        <FormControl sx={{ minWidth: { xs: 140, sm: 200 } }} size="small">
           <InputLabel>{t('tables.logs.levelFilter')}</InputLabel>
           <Select
             multiple
@@ -266,7 +308,14 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
             <MenuItem value="CRITICAL">Critical</MenuItem>
           </Select>
         </FormControl>
-        <FormControl sx={{ minWidth: 350 }} size="small">
+        <FormControl
+          sx={{
+            minWidth: { xs: 160, sm: 250 },
+            maxWidth: { xs: '100%', sm: 350 },
+            flex: { xs: 1, sm: 'none' },
+          }}
+          size="small"
+        >
           <InputLabel>{t('tables.logs.componentFilter')}</InputLabel>
           <Select<string[]>
             multiple
@@ -304,7 +353,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
             setPage(0);
           }}
           slotProps={{ inputLabel: { shrink: true } }}
-          sx={{ minWidth: 200 }}
+          sx={{ minWidth: { xs: 160, sm: 200 } }}
         />
         <TextField
           label={t('tables.logs.timestampTo')}
@@ -316,39 +365,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
             setPage(0);
           }}
           slotProps={{ inputLabel: { shrink: true } }}
-          sx={{ minWidth: 200 }}
-        />
-        <Tooltip title={t('tables.logs.resetFilters')}>
-          <IconButton
-            size="small"
-            onClick={() => {
-              setLevelFilter([]);
-              setComponentFilter([]);
-              setTimestampFrom('');
-              setTimestampTo('');
-              setPage(0);
-            }}
-          >
-            <FilterListOffIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <Box sx={{ flex: 1 }} />
-        <Tooltip title={t('common:columnConfig.configureColumns')}>
-          <IconButton
-            size="small"
-            onClick={() => setColConfigOpen(true)}
-            aria-label={t('common:columnConfig.configureColumns')}
-          >
-            <SettingsIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <TableSelectionToolbar
-          selectedCount={selection.selectedRowIds.size}
-          onCopy={handleCopy}
-          onSelectAll={() => selection.selectAllOnPage(pageRowIds)}
-          onReset={selection.resetSelection}
-          onReload={handleReload}
-          isReloading={isReloading}
+          sx={{ minWidth: { xs: 160, sm: 200 } }}
         />
       </Box>
 

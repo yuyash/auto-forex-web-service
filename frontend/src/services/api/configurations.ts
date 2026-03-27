@@ -103,4 +103,21 @@ export const configurationsApi = {
     );
     return result.results;
   },
+
+  copy: async (
+    id: string,
+    data?: { name?: string; description?: string }
+  ): Promise<StrategyConfig> => {
+    if (!id) {
+      return Promise.reject(new Error('Invalid configuration ID'));
+    }
+    return toStrategyConfig(
+      await withRetry(() =>
+        api.post<BackendStrategyConfig>(
+          `/api/trading/strategy-configs/${id}/copy/`,
+          data ?? {}
+        )
+      )
+    );
+  },
 };

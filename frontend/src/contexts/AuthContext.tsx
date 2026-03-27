@@ -17,6 +17,7 @@ import { useSequentialPolling } from '../hooks/useSequentialPolling';
 import { authApi } from '../services/api';
 import { ApiError } from '../api/apiClient';
 import { logger } from '../utils/logger';
+import { resetQueryClient } from '../config/reactQuery';
 import {
   readRawStoredValue,
   readStoredValue,
@@ -65,6 +66,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     useState<boolean>(true);
   const [authBootstrapLoading, setAuthBootstrapLoading] = useState(true);
   const tokenRef = useRef<string | null>(null);
+  const userIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     const storedUser = readStoredValue('user', persistedUserSchema, null);
@@ -86,7 +88,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setToken(null);
     tokenRef.current = null;
     setUser(null);
+    userIdRef.current = null;
     clearPersistedAuth();
+    // Replace the QueryClient instance so the new session starts with a
+    // completely empty cache.  This is stronger than queryClient.clear()
+    // because even if a stale reference survives somewhere, the
+    // QueryClientProvider will be pointing at the new instance.
+    resetQueryClient();
   }, [clearPersistedAuth]);
 
   const fetchSystemSettings = useCallback(async () => {
@@ -109,6 +117,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = useCallback((newToken: string, newUser: User) => {
+    // Only replace the QueryClient when the authenticated user identity
+    // changes (login as a different user, or first login after logout).
+    // Token refreshes for the *same* user must NOT reset the cache —
+    // doing so destroys in-flight queries and causes render errors.
+    const previousUserId = userIdRef.current;
+    if (previousUserId !== null && previousUserId !== newUser.id) {
+      resetQueryClient();
+    }
+    userIdRef.current = newUser.id;
     setToken(newToken);
     tokenRef.current = newToken;
     setUser(newUser);

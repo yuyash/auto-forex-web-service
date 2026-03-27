@@ -9,6 +9,8 @@ export interface CycleTrade {
   description?: string;
   timestamp: string | null;
   position_id?: string | null;
+  volatility?: string | null;
+  margin_ratio?: string | null;
 }
 
 export interface StrategyCycle {
@@ -20,6 +22,8 @@ export interface StrategyCycle {
   trade_count: number;
   open_count: number;
   close_count: number;
+  has_protection?: boolean;
+  protection_count?: number;
   trades: CycleTrade[];
 }
 

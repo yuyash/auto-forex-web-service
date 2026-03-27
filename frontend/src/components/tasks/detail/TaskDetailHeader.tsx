@@ -40,16 +40,15 @@ interface TaskDetailHeaderProps {
 }
 
 function buildTickText(tick: TickInfo, pipSize?: string) {
-  const decimals = pipSize ? String(pipSize).split('.')[1]?.length || 5 : 5;
+  const pipSizeNum = pipSize ? parseFloat(pipSize) : 0.01;
 
   return {
-    decimals,
-    mid: tick.mid?.toFixed(decimals),
-    bid: tick.bid?.toFixed(decimals),
-    ask: tick.ask?.toFixed(decimals),
-    spread:
-      tick.ask != null && tick.bid != null
-        ? (tick.ask - tick.bid).toFixed(decimals)
+    mid: tick.mid?.toFixed(2),
+    bid: tick.bid?.toFixed(2),
+    ask: tick.ask?.toFixed(2),
+    spreadPips:
+      tick.ask != null && tick.bid != null && pipSizeNum > 0
+        ? ((tick.ask - tick.bid) / pipSizeNum).toFixed(1)
         : null,
   };
 }
@@ -183,7 +182,11 @@ export function TaskDetailHeader({
           </ActionButton>
         </Box>
 
-        <Typography variant="body2" color="text.secondary" sx={{ pl: '4px' }}>
+        <Typography
+          variant="body1"
+          color="text.secondary"
+          sx={{ pl: '4px', fontSize: { xs: '0.85rem', sm: '1rem' } }}
+        >
           {strategyName}
         </Typography>
 
@@ -209,7 +212,7 @@ export function TaskDetailHeader({
               variant="body2"
               color="text.secondary"
               component="span"
-              sx={{ fontSize: 'inherit' }}
+              sx={{ fontFamily: 'monospace', fontSize: 'inherit' }}
             >
               {instrument}:
             </Typography>
@@ -223,7 +226,7 @@ export function TaskDetailHeader({
             </Typography>
             {tickText.bid != null &&
               tickText.ask != null &&
-              tickText.spread && (
+              tickText.spreadPips && (
                 <>
                   <Typography
                     variant="caption"
@@ -247,7 +250,7 @@ export function TaskDetailHeader({
                     component="span"
                     sx={{ fontFamily: 'monospace', fontSize: 'inherit' }}
                   >
-                    Spd {tickText.spread}
+                    Spd {tickText.spreadPips} pips
                   </Typography>
                 </>
               )}

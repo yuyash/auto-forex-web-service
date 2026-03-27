@@ -59,6 +59,26 @@ export function useDeleteConfiguration(options?: {
   });
 }
 
+export function useCopyConfiguration(options?: {
+  onSuccess?: (data: StrategyConfig) => void;
+  onError?: (error: Error) => void;
+}) {
+  return useWrappedMutation(
+    (variables: { id: string; name?: string; description?: string }) =>
+      configurationsApi.copy(variables.id, {
+        name: variables.name,
+        description: variables.description,
+      }),
+    {
+      onSuccess: async (data) => {
+        upsertConfigurationCaches(data);
+        options?.onSuccess?.(data);
+      },
+      onError: (error) => options?.onError?.(error),
+    }
+  );
+}
+
 export function useConfigurationMutations() {
   const createMutation = useCreateConfiguration();
   const updateMutation = useUpdateConfiguration();

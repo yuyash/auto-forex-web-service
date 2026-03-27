@@ -527,7 +527,7 @@ const ConfigurationForm = ({
                       strategies.map((strategy) => (
                         <MenuItem key={strategy.id} value={strategy.id}>
                           <Box>
-                            <Typography variant="body1">
+                            <Typography variant="body2">
                               {t(
                                 `strategy:types.${strategy.id}`,
                                 strategy.name

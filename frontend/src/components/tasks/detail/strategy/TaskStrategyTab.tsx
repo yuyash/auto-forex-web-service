@@ -282,7 +282,10 @@ export function TaskStrategyTab({
                     </Typography>
                     <Chip
                       size="small"
-                      label={cycle.status}
+                      label={
+                        cycle.status.charAt(0).toUpperCase() +
+                        cycle.status.slice(1)
+                      }
                       color={getStatusColor(cycle.status)}
                     />
                     <Chip
@@ -290,6 +293,15 @@ export function TaskStrategyTab({
                       variant="outlined"
                       label={`${cycle.trade_count} trades`}
                     />
+                    {cycle.has_protection ? (
+                      <Chip
+                        size="small"
+                        color="error"
+                        variant="filled"
+                        label={`⚠ ${cycle.protection_count ?? ''}`}
+                        sx={{ fontSize: '0.7rem' }}
+                      />
+                    ) : null}
                   </Stack>
                   <Typography variant="body2" color="text.secondary">
                     {formatDateTime(cycle.started_at)}
@@ -357,7 +369,10 @@ export function TaskStrategyTab({
                   {selectedCycle.direction.toUpperCase()} Cycle
                 </Typography>
                 <Chip
-                  label={selectedCycle.status}
+                  label={
+                    selectedCycle.status.charAt(0).toUpperCase() +
+                    selectedCycle.status.slice(1)
+                  }
                   size="small"
                   color={getStatusColor(selectedCycle.status)}
                 />
@@ -394,6 +409,9 @@ export function TaskStrategyTab({
                     endTime={selectedCycle.ended_at}
                     trades={selectedCycle.trades}
                     height={300}
+                    taskId={taskId}
+                    taskType={taskType}
+                    executionRunId={executionRunId}
                   />
                 </Paper>
               ) : null}
@@ -415,14 +433,25 @@ export function TaskStrategyTab({
                         label={
                           trade.execution_method === 'open_position'
                             ? 'OPEN'
-                            : 'CLOSE'
+                            : trade.execution_method === 'close_position'
+                              ? 'CLOSE'
+                              : trade.execution_method
+                                  .replace(/_/g, ' ')
+                                  .toUpperCase()
                         }
                         color={
                           trade.execution_method === 'open_position'
                             ? 'info'
-                            : 'default'
+                            : trade.execution_method === 'close_position'
+                              ? 'default'
+                              : 'error'
                         }
-                        variant="outlined"
+                        variant={
+                          trade.execution_method === 'open_position' ||
+                          trade.execution_method === 'close_position'
+                            ? 'outlined'
+                            : 'filled'
+                        }
                       />
                       <Chip
                         size="small"
@@ -445,6 +474,22 @@ export function TaskStrategyTab({
                         <Typography variant="caption" color="text.secondary">
                           R{trade.retracement_count}
                         </Typography>
+                      ) : null}
+                      {trade.volatility != null ? (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={`ATR ${Number(trade.volatility).toFixed(5)}`}
+                          sx={{ fontSize: '0.7rem' }}
+                        />
+                      ) : null}
+                      {trade.margin_ratio != null ? (
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={`Margin ${(Number(trade.margin_ratio) * 100).toFixed(1)}%`}
+                          sx={{ fontSize: '0.7rem' }}
+                        />
                       ) : null}
                     </Stack>
                     {trade.description ? (
