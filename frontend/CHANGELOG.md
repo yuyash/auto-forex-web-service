@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.17](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.16...frontend-v1.18.17) (2026-03-27)
+
+
+### Bug Fixes
+
+* minor issues ([#219](https://github.com/yuyash/auto-forex-web-service/issues/219)) ([e217380](https://github.com/yuyash/auto-forex-web-service/commit/e2173802d95d68d7223d1b1abe2dde3ec6e42a5a))
+
 ## [1.18.16](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.15...frontend-v1.18.16) (2026-03-26)
 
 

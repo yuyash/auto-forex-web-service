@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.18.0...backend-v1.18.1) (2026-03-27)
+
+
+### Bug Fixes
+
+* minor issues ([#219](https://github.com/yuyash/auto-forex-web-service/issues/219)) ([e217380](https://github.com/yuyash/auto-forex-web-service/commit/e2173802d95d68d7223d1b1abe2dde3ec6e42a5a))
+
 ## [1.18.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.17.0...backend-v1.18.0) (2026-03-26)
 
 
