@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.19.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.21...frontend-v1.19.0) (2026-03-27)
+
+
+### Features
+
+* **frontend:** add independent OANDA accounts page with positions/tr… ([#233](https://github.com/yuyash/auto-forex-web-service/issues/233)) ([179b2bc](https://github.com/yuyash/auto-forex-web-service/commit/179b2bcba9bc8e4bd1800f4006416af6735a0caf))
+* **frontend:** add independent OANDA accounts page with positions/trades tables ([179b2bc](https://github.com/yuyash/auto-forex-web-service/commit/179b2bcba9bc8e4bd1800f4006416af6735a0caf))
+
 ## [1.18.21](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.20...frontend-v1.18.21) (2026-03-27)
 
 
