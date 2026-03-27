@@ -192,6 +192,29 @@
       "trendRuns": "順行サイクル数",
       "help": "表示上のサイクルは順行と逆行で分離しています。進行中サイクルはまだ終了していないサイクル、完了サイクルは通常終了したサイクル、介入サイクルは縮退やリバランスなど保護動作が入ったサイクルを表します。",
       "runTypeHelp": "順行サイクルと逆行サイクルは別々の単位として数えています。"
+    },
+    "cycleList": {
+      "title": "サイクル",
+      "sortOldest": "古い順",
+      "sortNewest": "新しい順",
+      "filterActive": "進行中",
+      "filterCompleted": "完了",
+      "noCyclesFound": "サイクルが見つかりません",
+      "tradeCount": "{{count}} トレード",
+      "cycle": "サイクル",
+      "opens": "{{count}} オープン",
+      "closes": "{{count}} クローズ",
+      "opensAndCloses": "{{opens}} オープン、{{closes}} クローズ",
+      "trades": "トレード",
+      "back": "戻る",
+      "resetZoom": "ズームリセット",
+      "reloadCandles": "キャンドル再読み込み"
+    },
+    "chips": {
+      "cycles": "サイクル: {{count}}",
+      "active": "進行中: {{count}}",
+      "completed": "完了: {{count}}",
+      "trades": "トレード: {{count}}"
     }
   },
   "errors": {

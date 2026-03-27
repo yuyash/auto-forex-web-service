@@ -160,10 +160,26 @@ export function TaskStrategyTab({
           spacing={1}
           sx={{ mb: 2, flexWrap: 'wrap', flexShrink: 0 }}
         >
-          <Chip label={`Cycles: ${summary.cycle_count}`} />
-          <Chip label={`Active: ${summary.active_count}`} />
-          <Chip label={`Completed: ${summary.completed_count}`} />
-          <Chip label={`Trades: ${summary.total_trades}`} />
+          <Chip
+            label={t('common:strategyVisualization.chips.cycles', {
+              count: summary.cycle_count,
+            })}
+          />
+          <Chip
+            label={t('common:strategyVisualization.chips.active', {
+              count: summary.active_count,
+            })}
+          />
+          <Chip
+            label={t('common:strategyVisualization.chips.completed', {
+              count: summary.completed_count,
+            })}
+          />
+          <Chip
+            label={t('common:strategyVisualization.chips.trades', {
+              count: summary.total_trades,
+            })}
+          />
         </Stack>
       ) : null}
 
@@ -192,14 +208,16 @@ export function TaskStrategyTab({
           }}
         >
           <Box sx={{ p: 2, flexShrink: 0 }}>
-            <Typography variant="subtitle1">Cycles</Typography>
+            <Typography variant="subtitle1">
+              {t('common:strategyVisualization.cycleList.title')}
+            </Typography>
             <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
               <Chip
                 size="small"
                 clickable
                 color={sortOrder === 'asc' ? 'primary' : 'default'}
                 variant={sortOrder === 'asc' ? 'filled' : 'outlined'}
-                label="Oldest"
+                label={t('common:strategyVisualization.cycleList.sortOldest')}
                 onClick={() => setSortOrder('asc')}
               />
               <Chip
@@ -207,7 +225,7 @@ export function TaskStrategyTab({
                 clickable
                 color={sortOrder === 'desc' ? 'primary' : 'default'}
                 variant={sortOrder === 'desc' ? 'filled' : 'outlined'}
-                label="Newest"
+                label={t('common:strategyVisualization.cycleList.sortNewest')}
                 onClick={() => setSortOrder('desc')}
               />
             </Stack>
@@ -217,7 +235,7 @@ export function TaskStrategyTab({
                 clickable
                 color={statusFilter === 'active' ? 'primary' : 'default'}
                 variant={statusFilter === 'active' ? 'filled' : 'outlined'}
-                label="Active"
+                label={t('common:strategyVisualization.cycleList.filterActive')}
                 onClick={() =>
                   setStatusFilter((p) => (p === 'active' ? 'all' : 'active'))
                 }
@@ -227,7 +245,9 @@ export function TaskStrategyTab({
                 clickable
                 color={statusFilter === 'completed' ? 'primary' : 'default'}
                 variant={statusFilter === 'completed' ? 'filled' : 'outlined'}
-                label="Completed"
+                label={t(
+                  'common:strategyVisualization.cycleList.filterCompleted'
+                )}
                 onClick={() =>
                   setStatusFilter((p) =>
                     p === 'completed' ? 'all' : 'completed'
@@ -249,7 +269,9 @@ export function TaskStrategyTab({
           >
             {displayedCycles.length === 0 ? (
               <Box sx={{ p: 2 }}>
-                <Alert severity="info">No cycles found</Alert>
+                <Alert severity="info">
+                  {t('common:strategyVisualization.cycleList.noCyclesFound')}
+                </Alert>
               </Box>
             ) : (
               displayedCycles.map((cycle) => (
@@ -304,7 +326,10 @@ export function TaskStrategyTab({
                     <Chip
                       size="small"
                       variant="outlined"
-                      label={`${cycle.trade_count} trades`}
+                      label={t(
+                        'common:strategyVisualization.cycleList.tradeCount',
+                        { count: cycle.trade_count }
+                      )}
                     />
                     {cycle.has_protection ? (
                       <Chip
@@ -367,7 +392,7 @@ export function TaskStrategyTab({
                 <IconButton
                   onClick={() => setMobileShowDetail(false)}
                   size="small"
-                  aria-label="Back"
+                  aria-label={t('common:strategyVisualization.cycleList.back')}
                   sx={{ mb: 1 }}
                 >
                   <ArrowBackIcon />
@@ -379,7 +404,8 @@ export function TaskStrategyTab({
                 sx={{ mb: 1, flexWrap: 'wrap' }}
               >
                 <Typography variant="h6">
-                  {selectedCycle.direction.toUpperCase()} Cycle
+                  {selectedCycle.direction.toUpperCase()}{' '}
+                  {t('common:strategyVisualization.cycleList.cycle')}
                 </Typography>
                 <Chip
                   label={
@@ -402,8 +428,10 @@ export function TaskStrategyTab({
                 {selectedCycle.cycle_id}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                {selectedCycle.open_count} opens, {selectedCycle.close_count}{' '}
-                closes
+                {t('common:strategyVisualization.cycleList.opensAndCloses', {
+                  opens: selectedCycle.open_count,
+                  closes: selectedCycle.close_count,
+                })}
               </Typography>
 
               {instrument ? (
@@ -430,7 +458,7 @@ export function TaskStrategyTab({
               ) : null}
 
               <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                Trades
+                {t('common:strategyVisualization.cycleList.trades')}
               </Typography>
               <Divider sx={{ mb: 1 }} />
               {selectedCycle.trades.map((trade, index) => (
@@ -528,7 +556,9 @@ export function TaskStrategyTab({
             </Box>
           ) : (
             <Box sx={{ p: 3 }}>
-              <Alert severity="info">No cycles found</Alert>
+              <Alert severity="info">
+                {t('common:strategyVisualization.cycleList.noCyclesFound')}
+              </Alert>
             </Box>
           )}
         </Paper>

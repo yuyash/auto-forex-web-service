@@ -894,7 +894,7 @@ export default function BacktestTaskForm({
       </Stepper>
 
       <form onSubmit={handleSubmit(onSubmit)}>
-        {getStepContent(activeStep)}
+        <Paper sx={{ p: 3 }}>{getStepContent(activeStep)}</Paper>
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
           <Button
