@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.20](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.19...frontend-v1.18.20) (2026-03-27)
+
+
+### Bug Fixes
+
+* **frontend:** use current time as end for active cycle charts ([#228](https://github.com/yuyash/auto-forex-web-service/issues/228)) ([a48e35c](https://github.com/yuyash/auto-forex-web-service/commit/a48e35c955c221cdba5d7666a8d86c7a52bc3d59))
+
 ## [1.18.19](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.18...frontend-v1.18.19) (2026-03-27)
 
 
