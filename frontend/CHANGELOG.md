@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.22.2...frontend-v1.22.3) (2026-03-28)
+
+
+### Refactoring
+
+* remove trend tab and all related components ([#260](https://github.com/yuyash/auto-forex-web-service/issues/260)) ([f26f56b](https://github.com/yuyash/auto-forex-web-service/commit/f26f56bd4d613e7ac05f3547b3268e5c0b20fccd))
+
 ## [1.22.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.22.1...frontend-v1.22.2) (2026-03-28)
 
 
