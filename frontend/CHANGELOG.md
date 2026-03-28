@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.21.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.20.0...frontend-v1.21.0) (2026-03-28)
+
+
+### Features
+
+* **strategy:** add select all / deselect all controls for trade sele… ([#252](https://github.com/yuyash/auto-forex-web-service/issues/252)) ([2dace27](https://github.com/yuyash/auto-forex-web-service/commit/2dace27e5ff8087c0f5317ef550b5166cc7d91c1))
+* **strategy:** add select all / deselect all controls for trade selection ([2dace27](https://github.com/yuyash/auto-forex-web-service/commit/2dace27e5ff8087c0f5317ef550b5166cc7d91c1))
+
 ## [1.20.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.19.5...frontend-v1.20.0) (2026-03-28)
 
 
