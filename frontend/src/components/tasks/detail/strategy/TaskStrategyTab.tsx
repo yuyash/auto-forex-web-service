@@ -56,6 +56,7 @@ export function TaskStrategyTab({
   });
 
   const cycles = useMemo<StrategyCycle[]>(() => data?.cycles ?? [], [data]);
+  const lastTickTimestamp = data?.last_tick_timestamp ?? null;
 
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [statusFilter, setStatusFilter] = useState<
@@ -418,7 +419,7 @@ export function TaskStrategyTab({
               </Stack>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 {formatDateTime(selectedCycle.started_at)} →{' '}
-                {formatDateTime(selectedCycle.ended_at)}
+                {formatDateTime(selectedCycle.ended_at ?? lastTickTimestamp)}
               </Typography>
               <Typography
                 variant="caption"
@@ -453,6 +454,7 @@ export function TaskStrategyTab({
                     taskId={taskId}
                     taskType={taskType}
                     executionRunId={executionRunId}
+                    lastTickTimestamp={lastTickTimestamp}
                   />
                 </Paper>
               ) : null}

@@ -41,6 +41,7 @@ interface StrategyGroupChartProps {
   taskId?: string | number;
   taskType?: TaskType;
   executionRunId?: string;
+  lastTickTimestamp?: string | null;
 }
 
 const GRANULARITY_OPTIONS = ['M1', 'M5', 'M15', 'H1', 'H4', 'D'] as const;
@@ -66,6 +67,7 @@ export function StrategyGroupChart({
   taskId,
   taskType,
   executionRunId,
+  lastTickTimestamp,
 }: StrategyGroupChartProps) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -79,11 +81,12 @@ export function StrategyGroupChart({
   // Expose chart instance as state so the metrics overlay hook can react to it
   const [chartInstance, setChartInstance] = useState<IChartApi | null>(null);
 
-  // For active cycles (endTime is null), use the current time as the
-  // effective end so that autoGranularity and the candle range cover the
-  // full period.  The value is refreshed on every reload.
-  const [nowIso, setNowIso] = useState(() => new Date().toISOString());
-  const effectiveEndTime = endTime ?? nowIso;
+  // For active cycles (endTime is null), use the last tick timestamp from
+  // the execution state so the chart range reflects the backtest's simulated
+  // time rather than the real wall-clock time.  Falls back to current time
+  // only when lastTickTimestamp is unavailable (e.g. live trading).
+  const fallbackEnd = lastTickTimestamp ?? new Date().toISOString();
+  const effectiveEndTime = endTime ?? fallbackEnd;
 
   const defaultGranularity = useMemo(
     () => (startTime ? autoGranularity(startTime, effectiveEndTime) : 'M1'),
@@ -261,12 +264,9 @@ export function StrategyGroupChart({
   }, [paddedRange]);
 
   const handleReload = useCallback(() => {
-    // Refresh the effective end time for active cycles so the chart
-    // extends to the current moment.
-    if (!endTime) setNowIso(new Date().toISOString());
     destroyChart();
     void replaceWithCountWindow();
-  }, [destroyChart, replaceWithCountWindow, endTime]);
+  }, [destroyChart, replaceWithCountWindow]);
 
   if (isInitialLoading) {
     return (
