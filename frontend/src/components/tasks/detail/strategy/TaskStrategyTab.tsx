@@ -265,54 +265,61 @@ export function TaskStrategyTab({
             minHeight: 0,
           }}
         >
-          <Box sx={{ p: 2, flexShrink: 0 }}>
-            <Typography variant="subtitle1">
+          <Box
+            sx={{
+              px: 1.5,
+              py: 1,
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.5,
+              flexWrap: 'wrap',
+            }}
+          >
+            <Typography variant="subtitle2" sx={{ mr: 0.5 }}>
               {t('common:strategyVisualization.cycleList.title')}
             </Typography>
-            <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
-              <Chip
-                size="small"
-                clickable
-                color={sortOrder === 'asc' ? 'primary' : 'default'}
-                variant={sortOrder === 'asc' ? 'filled' : 'outlined'}
-                label={t('common:strategyVisualization.cycleList.sortOldest')}
-                onClick={() => setSortOrder('asc')}
-              />
-              <Chip
-                size="small"
-                clickable
-                color={sortOrder === 'desc' ? 'primary' : 'default'}
-                variant={sortOrder === 'desc' ? 'filled' : 'outlined'}
-                label={t('common:strategyVisualization.cycleList.sortNewest')}
-                onClick={() => setSortOrder('desc')}
-              />
-            </Stack>
-            <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-              <Chip
-                size="small"
-                clickable
-                color={statusFilter === 'active' ? 'primary' : 'default'}
-                variant={statusFilter === 'active' ? 'filled' : 'outlined'}
-                label={t('common:strategyVisualization.cycleList.filterActive')}
-                onClick={() =>
-                  setStatusFilter((p) => (p === 'active' ? 'all' : 'active'))
-                }
-              />
-              <Chip
-                size="small"
-                clickable
-                color={statusFilter === 'completed' ? 'primary' : 'default'}
-                variant={statusFilter === 'completed' ? 'filled' : 'outlined'}
-                label={t(
-                  'common:strategyVisualization.cycleList.filterCompleted'
-                )}
-                onClick={() =>
-                  setStatusFilter((p) =>
-                    p === 'completed' ? 'all' : 'completed'
-                  )
-                }
-              />
-            </Stack>
+            <Chip
+              size="small"
+              clickable
+              color={sortOrder === 'asc' ? 'primary' : 'default'}
+              variant={sortOrder === 'asc' ? 'filled' : 'outlined'}
+              label={t('common:strategyVisualization.cycleList.sortOldest')}
+              onClick={() => setSortOrder('asc')}
+            />
+            <Chip
+              size="small"
+              clickable
+              color={sortOrder === 'desc' ? 'primary' : 'default'}
+              variant={sortOrder === 'desc' ? 'filled' : 'outlined'}
+              label={t('common:strategyVisualization.cycleList.sortNewest')}
+              onClick={() => setSortOrder('desc')}
+            />
+            <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
+            <Chip
+              size="small"
+              clickable
+              color={statusFilter === 'active' ? 'primary' : 'default'}
+              variant={statusFilter === 'active' ? 'filled' : 'outlined'}
+              label={t('common:strategyVisualization.cycleList.filterActive')}
+              onClick={() =>
+                setStatusFilter((p) => (p === 'active' ? 'all' : 'active'))
+              }
+            />
+            <Chip
+              size="small"
+              clickable
+              color={statusFilter === 'completed' ? 'primary' : 'default'}
+              variant={statusFilter === 'completed' ? 'filled' : 'outlined'}
+              label={t(
+                'common:strategyVisualization.cycleList.filterCompleted'
+              )}
+              onClick={() =>
+                setStatusFilter((p) =>
+                  p === 'completed' ? 'all' : 'completed'
+                )
+              }
+            />
           </Box>
           <Divider />
           <Box
