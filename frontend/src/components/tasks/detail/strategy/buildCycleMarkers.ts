@@ -1,6 +1,32 @@
-import type { Time } from 'lightweight-charts';
+import type { Time, UTCTimestamp } from 'lightweight-charts';
 import type { CycleTrade } from '../../../../types/strategyVisualization';
-import { snapToCandleTime } from '../taskTrendPanel/shared';
+
+/** Binary-search snap: find the candle time closest to `timeSec`. */
+function snapToCandleTime(
+  timeSec: number,
+  candleTimes: number[]
+): UTCTimestamp | null {
+  if (candleTimes.length === 0) return null;
+  let lo = 0;
+  let hi = candleTimes.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (candleTimes[mid] < timeSec) lo = mid + 1;
+    else hi = mid;
+  }
+  const candidates = [lo - 1, lo].filter(
+    (i) => i >= 0 && i < candleTimes.length
+  );
+  let best = candidates[0]!;
+  for (const i of candidates) {
+    if (
+      Math.abs(candleTimes[i] - timeSec) < Math.abs(candleTimes[best] - timeSec)
+    ) {
+      best = i;
+    }
+  }
+  return candleTimes[best] as UTCTimestamp;
+}
 
 export interface CycleChartMarker {
   time: Time;

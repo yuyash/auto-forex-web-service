@@ -7,7 +7,6 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TradingTaskDetail } from '../../../src/components/trading/TradingTaskDetail';
 import { TaskStatus } from '../../../src/types/common';
-import { buildTaskTrendViewModel } from '../../fixtures/taskTrendViewModel';
 import { createRouteQueryWrapper } from '../../utils/routeQueryTestUtils';
 
 const {
@@ -186,16 +185,6 @@ vi.mock('../../../src/components/tasks/detail/TaskTradesTable', () => ({
 }));
 vi.mock('../../../src/components/tasks/detail/TaskOrdersTable', () => ({
   TaskOrdersTable: () => <div data-testid="orders-table">Orders</div>,
-}));
-vi.mock('../../../src/components/tasks/detail/TaskTrendPanel', () => ({
-  TaskTrendPanel: () => {
-    const fixture = buildTaskTrendViewModel();
-    return (
-      <div data-testid="trend-panel">
-        Trend {fixture.toolbarProps.executionRunId}
-      </div>
-    );
-  },
 }));
 vi.mock('../../../src/components/tasks/actions/DeleteTaskDialog', () => ({
   DeleteTaskDialog: () => null,

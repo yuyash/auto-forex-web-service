@@ -35,7 +35,6 @@ import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
 import { TaskLogsTable } from '../tasks/detail/TaskLogsTable';
 import { TaskPositionsTable } from '../tasks/detail/TaskPositionsTable';
 import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
-import { TaskTrendPanel } from '../tasks/detail/TaskTrendPanel';
 import { TaskOrdersTable } from '../tasks/detail/TaskOrdersTable';
 import { useTaskSummary } from '../../hooks/useTaskSummary';
 import { TaskStatus, TaskType } from '../../types/common';
@@ -84,7 +83,6 @@ export const BacktestTaskDetail: React.FC = () => {
   const defaultTabs: TabItem[] = [
     { id: 'overview', label: t('backtest:tabs.overview'), visible: true },
     { id: 'strategy', label: t('backtest:tabs.strategy'), visible: true },
-    { id: 'trend', label: t('backtest:tabs.trend'), visible: true },
     { id: 'positions', label: t('backtest:tabs.positions'), visible: true },
     { id: 'trades', label: t('backtest:tabs.trades'), visible: true },
     { id: 'orders', label: t('backtest:tabs.orders'), visible: true },
@@ -100,10 +98,7 @@ export const BacktestTaskDetail: React.FC = () => {
 
   // Get tab from URL, default to 'overview'
   const tabParam = searchParams.get('tab') || 'overview';
-  const filteredVisibleTabs = isMobile
-    ? visibleTabs.filter((t) => t.id !== 'trend')
-    : visibleTabs;
-  const visibleTabIds = filteredVisibleTabs.map((t) => t.id);
+  const visibleTabIds = visibleTabs.map((t) => t.id);
 
   const {
     optimisticStatus,
@@ -321,7 +316,7 @@ export const BacktestTaskDetail: React.FC = () => {
       >
         <TaskDetailTabs
           activeTabIndex={activeTabIndex}
-          visibleTabs={filteredVisibleTabs}
+          visibleTabs={visibleTabs}
           onTabChange={handleTabChange}
           onConfigureTabs={() => setTabConfigOpen(true)}
           configureTabsLabel={t('common:tabConfig.configureTabs')}
@@ -360,34 +355,6 @@ export const BacktestTaskDetail: React.FC = () => {
               enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
                 currentStatus
               )}
-            />
-          </LazyTabPanel>
-        )}
-
-        {/* Trend Tab */}
-        {visibleTabIds.includes('trend') && (
-          <LazyTabPanel
-            value={activeTabIndex}
-            index={visibleTabIds.indexOf('trend')}
-          >
-            <TaskTrendPanel
-              key={`backtest-trend-${activeExecutionId ?? 'none'}`}
-              taskId={taskId}
-              taskType={TaskType.BACKTEST}
-              instrument={detailTask.instrument}
-              executionRunId={activeExecutionId}
-              startTime={detailTask.start_time}
-              endTime={detailTask.end_time}
-              latestExecution={detailTask.latest_execution}
-              summary={s}
-              currentTick={polledTick ?? null}
-              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
-                currentStatus
-              )}
-              pipSize={
-                detailTask.pip_size ? parseFloat(detailTask.pip_size) : null
-              }
-              configId={detailTask.config_id}
             />
           </LazyTabPanel>
         )}
