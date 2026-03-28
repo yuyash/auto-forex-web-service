@@ -83,7 +83,7 @@ describe('TaskTrendPanel', () => {
     expect(screen.getByText('trend-tables')).toBeInTheDocument();
   });
 
-  it('renders the initial loading state from the shared view-model fixture', () => {
+  it('renders the full layout during initial loading state', () => {
     mockUseTaskTrendViewModel.mockReturnValue(
       buildTaskTrendViewModel({
         candleState: {
@@ -101,6 +101,10 @@ describe('TaskTrendPanel', () => {
       />
     );
 
-    expect(screen.getByRole('progressbar')).toBeInTheDocument();
+    // The full layout is always rendered; the chart section handles its own loading overlay
+    expect(screen.getByText('trend-alerts')).toBeInTheDocument();
+    expect(screen.getByText('trend-toolbar')).toBeInTheDocument();
+    expect(screen.getByText('trend-chart')).toBeInTheDocument();
+    expect(screen.getByText('trend-tables')).toBeInTheDocument();
   });
 });

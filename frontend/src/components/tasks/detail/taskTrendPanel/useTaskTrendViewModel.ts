@@ -136,6 +136,7 @@ export function useTaskTrendViewModel(
       timezone: params.timezone,
       loadingOlder: candleState.loadingOlder,
       loadingNewer: candleState.loadingNewer,
+      isInitialLoading: candleState.isInitialLoading,
     },
     tablesSectionProps: {
       tradesTableProps: {
