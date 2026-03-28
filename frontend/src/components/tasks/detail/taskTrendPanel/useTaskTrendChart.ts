@@ -18,7 +18,7 @@ import {
 } from '../../../../utils/adaptiveTimeScalePlugin';
 import { SequencePositionLine } from '../../../../utils/SequencePositionLine';
 import { getCandleColors } from '../../../../utils/candleColors';
-import { findGapAroundTime, type CandlePoint } from './shared';
+import { type CandlePoint } from './shared';
 import type { TimeRange } from '../../../../utils/windowedRanges';
 
 interface UseTaskTrendChartParams {
@@ -467,16 +467,15 @@ export function useTaskTrendChart({
 
     if (candles.length > 0 && !hasInitialFit.current) {
       programmaticScrollRef.current = true;
+
+      // Always centre the initial view on the latest tick (or task end time)
+      // showing approximately 1 day of data regardless of task status.
       const tickTs = currentTick?.timestamp
         ? Math.floor(new Date(currentTick.timestamp).getTime() / 1000)
         : null;
+      const anchorSec = tickTs ?? endTimeSec ?? startTimeSec;
 
-      if (
-        enableRealTimeUpdates &&
-        tickTs &&
-        Number.isFinite(tickTs) &&
-        seriesRef.current
-      ) {
+      if (anchorSec && Number.isFinite(anchorSec) && seriesRef.current) {
         const data = seriesRef.current.data();
         let logicalCenter = 0;
         if (data.length > 0) {
@@ -488,13 +487,16 @@ export function useTaskTrendChart({
               typeof data[mid].time === 'number'
                 ? (data[mid].time as number)
                 : new Date(data[mid].time as string).getTime() / 1000;
-            if (midSec < tickTs) lo = mid + 1;
+            if (midSec < anchorSec) lo = mid + 1;
             else hi = mid;
           }
           logicalCenter = lo;
         }
-        const leftCandles = AUTO_FOLLOW_CANDLES * 0.75;
-        const rightCandles = AUTO_FOLLOW_CANDLES - leftCandles;
+        // 1 day at M1 = 1440 candles; use 75/25 split so the anchor sits
+        // slightly right of centre, giving more historical context.
+        const viewCandles = 1440;
+        const leftCandles = Math.floor(viewCandles * 0.75);
+        const rightCandles = viewCandles - leftCandles;
         try {
           chartRef.current?.timeScale().setVisibleLogicalRange({
             from: logicalCenter - leftCandles,
@@ -503,34 +505,6 @@ export function useTaskTrendChart({
           reportChartError(null);
         } catch {
           reportChartError('Failed to position the chart at the current tick.');
-        }
-      } else if (!enableRealTimeUpdates && startTimeSec != null) {
-        // For completed / non-realtime tasks, centre the view around the
-        // end of the task so the most recent activity is visible.  Fall
-        // back to the start when no end time is available.
-        const anchorSec = endTimeSec ?? startTimeSec;
-        const totalSpanSeconds = AUTO_FOLLOW_CANDLES * granularitySeconds;
-        const halfSpan = Math.floor(totalSpanSeconds / 2);
-        const gapAroundAnchor = findGapAroundTime(
-          anchorSec,
-          times,
-          granularitySeconds * 6
-        );
-        const viewFrom = gapAroundAnchor
-          ? Math.max(anchorSec - halfSpan, gapAroundAnchor.from)
-          : anchorSec - halfSpan;
-        const requiredGapSpan = gapAroundAnchor
-          ? gapAroundAnchor.to - viewFrom
-          : 0;
-        const viewSpan = Math.max(totalSpanSeconds, requiredGapSpan);
-        try {
-          chartRef.current?.timeScale().setVisibleRange({
-            from: viewFrom as Time,
-            to: (viewFrom + viewSpan) as Time,
-          });
-          reportChartError(null);
-        } catch {
-          reportChartError('Failed to position the chart at the task start.');
         }
       } else {
         try {
