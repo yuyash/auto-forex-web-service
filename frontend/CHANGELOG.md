@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.22.0...frontend-v1.22.1) (2026-03-28)
+
+
+### Bug Fixes
+
+* mobile nav trend tab chart loading ([#256](https://github.com/yuyash/auto-forex-web-service/issues/256)) ([ec338c8](https://github.com/yuyash/auto-forex-web-service/commit/ec338c8c1a3f5251b6f4025513afa676721bf74b))
+
 ## [1.22.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.21.0...frontend-v1.22.0) (2026-03-28)
 
 
