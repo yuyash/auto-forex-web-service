@@ -8,6 +8,7 @@ import { useWindowedTaskMarkers } from '../../../../hooks/useWindowedTaskMarkers
 import { TaskType } from '../../../../types/common';
 import { clampRange, type TimeRange } from '../../../../utils/windowedRanges';
 import type { TaskSummary } from '../../../../hooks/useTaskSummary';
+import { useTaskStrategyEvents } from '../../../../hooks/useTaskStrategyEvents';
 import { useMetricsOverlay } from '../MetricsOverlayChart';
 import {
   GRANULARITY_MINUTES,
@@ -67,6 +68,32 @@ export function useTaskTrendChartModel({
     baseIntervalMs: panelState.pollingIntervalMs,
   });
   const realTimeUpdatesEnabled = realTimePollingPolicy.isActive;
+
+  // Fetch strategy cycles to support active cycle filtering
+  const { data: strategyCyclesData } = useTaskStrategyEvents({
+    taskId,
+    taskType,
+    executionRunId,
+    enableRealTimeUpdates: realTimeUpdatesEnabled,
+    refreshInterval: panelState.pollingIntervalMs,
+  });
+
+  // Compute active cycle IDs grouped by direction
+  const activeCycleSets = useMemo(() => {
+    const longIds = new Set<string>();
+    const shortIds = new Set<string>();
+    for (const cycle of strategyCyclesData?.cycles ?? []) {
+      if (cycle.status !== 'active') continue;
+      const dir = cycle.direction.toLowerCase();
+      if (dir === 'long' || dir === 'buy') {
+        longIds.add(cycle.cycle_id);
+      } else if (dir === 'short' || dir === 'sell') {
+        shortIds.add(cycle.cycle_id);
+      }
+    }
+    return { long: longIds, short: shortIds };
+  }, [strategyCyclesData]);
+
   const { granularities, usingFallback: usingGranularityFallback } =
     useSupportedGranularities();
 
@@ -314,5 +341,6 @@ export function useTaskTrendChartModel({
     replayData,
     derivedData,
     chartState,
+    activeCycleSets,
   };
 }

@@ -82,6 +82,7 @@ export interface TaskTrendReplayTrade {
   description?: string;
   timestamp: string;
   position_id?: string | null;
+  cycle_id?: string | null;
   updated_at?: string | null;
 }
 

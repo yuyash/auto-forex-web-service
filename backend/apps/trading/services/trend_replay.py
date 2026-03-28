@@ -124,6 +124,7 @@ def _serialize_trade(trade: Trade) -> dict[str, Any]:
         "description": trade.description,
         "timestamp": trade.timestamp,
         "position_id": trade.position.pk if trade.position else None,
+        "cycle_id": str(trade.cycle_id) if trade.cycle_id else None,
         "updated_at": trade.updated_at,
     }
 

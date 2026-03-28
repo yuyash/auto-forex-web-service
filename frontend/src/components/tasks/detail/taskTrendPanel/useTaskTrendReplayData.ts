@@ -87,6 +87,10 @@ function mapRawTrades(
           trade.position_id === null || trade.position_id === undefined
             ? null
             : String(trade.position_id),
+        cycle_id:
+          trade.cycle_id === null || trade.cycle_id === undefined
+            ? null
+            : String(trade.cycle_id),
       };
     })
     .filter((trade): trade is ReplayTrade => trade !== null);

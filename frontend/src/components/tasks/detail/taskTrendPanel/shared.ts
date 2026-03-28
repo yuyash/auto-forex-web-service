@@ -19,6 +19,7 @@ export type ReplayTrade = {
   layer_index?: number | null;
   retracement_count?: number | null;
   position_id?: string | null;
+  cycle_id?: string | null;
 };
 
 export type TrendPosition = TaskPosition & { _status: 'open' | 'closed' };
