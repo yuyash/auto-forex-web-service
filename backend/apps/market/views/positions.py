@@ -224,6 +224,7 @@ class PositionView(APIView):
             return Response({"count": 0, "next": None, "previous": None, "results": []})
 
         all_positions = []
+        failed_accounts: list[str] = []
 
         for account in accounts:
             try:
@@ -261,7 +262,18 @@ class PositionView(APIView):
                     account.account_id,
                     str(e),
                 )
-                # Continue with other accounts
+                failed_accounts.append(str(account.account_id))
+
+        # If every account failed, report the upstream error to the caller.
+        if failed_accounts and len(failed_accounts) == len(accounts):
+            return Response(
+                {
+                    "error": "Failed to fetch positions from OANDA",
+                    "error_code": "OANDA_UPSTREAM_ERROR",
+                    "failed_accounts": failed_accounts,
+                },
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
 
         # Sort by open time (newest first)
         all_positions.sort(key=lambda x: str(x.get("open_time") or ""), reverse=True)
@@ -279,7 +291,14 @@ class PositionView(APIView):
 
         paginator = StandardPagination()
         page = paginator.paginate_queryset(all_positions, request)
-        return paginator.get_paginated_response(page)
+        response = paginator.get_paginated_response(page)
+
+        if failed_accounts:
+            response.data["warnings"] = [
+                f"Failed to fetch positions for account(s): {', '.join(failed_accounts)}"
+            ]
+
+        return response
 
 
 class PositionDetailView(APIView):
