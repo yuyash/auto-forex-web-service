@@ -132,7 +132,7 @@ export function useTaskTrendMarkers({
       return;
     }
     const candleTimes = candles.map((c) => Number(c.time));
-    const renderedTradeMarkers: ChartMarker[] = trades
+    const renderedTradeMarkers = trades
       .map((trade) => {
         const selected =
           trade.id === selectedTradeId || highlightedTradeIds.has(trade.id);
@@ -185,7 +185,7 @@ export function useTaskTrendMarkers({
             : `OPEN ${dirLabel} ${lotLabel}`.trim(),
         };
       })
-      .filter((marker): marker is ChartMarker => {
+      .filter((marker): marker is NonNullable<typeof marker> => {
         if (!marker || Number(marker.time) <= 0) {
           return false;
         }
