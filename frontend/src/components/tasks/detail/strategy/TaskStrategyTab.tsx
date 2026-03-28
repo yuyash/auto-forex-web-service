@@ -16,6 +16,7 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
 import ClearIcon from '@mui/icons-material/Clear';
+import SelectAllIcon from '@mui/icons-material/SelectAll';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { useTaskStrategyEvents } from '../../../../hooks/useTaskStrategyEvents';
@@ -167,6 +168,11 @@ export function TaskStrategyTab({
     displayedCycles.find((c) => c.cycle_id === selectedCycleId) ??
     displayedCycles[0] ??
     null;
+
+  const handleSelectAllTrades = useCallback(() => {
+    if (!selectedCycle) return;
+    setSelectedTradeIds(new Set(selectedCycle.trades.map((t) => t.id)));
+  }, [selectedCycle]);
 
   const summary = data?.summary;
 
@@ -520,8 +526,13 @@ export function TaskStrategyTab({
                 <Typography variant="subtitle1">
                   {t('common:strategyVisualization.cycleList.trades')}
                 </Typography>
+                <Tooltip title="Select all">
+                  <IconButton size="small" onClick={handleSelectAllTrades}>
+                    <SelectAllIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
                 {selectedTradeIds.size > 0 ? (
-                  <Tooltip title="Reset selection">
+                  <Tooltip title="Deselect all">
                     <IconButton
                       size="small"
                       onClick={handleResetTradeSelection}
@@ -529,6 +540,11 @@ export function TaskStrategyTab({
                       <ClearIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
+                ) : null}
+                {selectedTradeIds.size > 0 ? (
+                  <Typography variant="caption" color="text.secondary">
+                    {selectedTradeIds.size}/{selectedCycle.trades.length}
+                  </Typography>
                 ) : null}
               </Stack>
               <Divider sx={{ mb: 1 }} />
