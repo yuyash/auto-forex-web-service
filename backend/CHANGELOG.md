@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.8](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.18.7...backend-v1.18.8) (2026-03-28)
+
+
+### Bug Fixes
+
+* oanda error propagation ([#248](https://github.com/yuyash/auto-forex-web-service/issues/248)) ([8d90bc6](https://github.com/yuyash/auto-forex-web-service/commit/8d90bc61a40fc07af1b3f161e8febca62e910ebb))
+
 ## [1.18.7](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.18.6...backend-v1.18.7) (2026-03-27)
 
 
