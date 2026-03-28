@@ -9,7 +9,9 @@ import {
   Chip,
   IconButton,
   Tooltip,
+  useMediaQuery,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import Grid from '@mui/material/Grid';
 import {
   Visibility as ViewIcon,
@@ -58,6 +60,8 @@ export default function BacktestTaskCard({
   const { t } = useTranslation(['backtest', 'common']);
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [optimisticStatus, setOptimisticStatus] = useState<TaskStatus | null>(
     null
@@ -313,7 +317,7 @@ export default function BacktestTaskCard({
         transition: 'box-shadow 0.3s',
       }}
     >
-      <CardContent>
+      <CardContent sx={{ px: { xs: 1.5, sm: 2 }, py: { xs: 1.5, sm: 2 } }}>
         <Box
           sx={{
             display: 'flex',
@@ -329,7 +333,15 @@ export default function BacktestTaskCard({
             <Typography variant="h6" component="h2" sx={{ mb: 1.5 }}>
               {currentTask.name}
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                gap: 1,
+                alignItems: 'center',
+                mb: 1,
+                flexWrap: 'wrap',
+              }}
+            >
               <StatusBadge status={displayStatus} />
               {getStrategyDisplayName(
                 strategies,
@@ -341,9 +353,10 @@ export default function BacktestTaskCard({
                     currentTask.strategy_type
                   )}
                   variant="outlined"
+                  size={isMobile ? 'small' : 'medium'}
                 />
               )}
-              {currentTask.config_name && (
+              {!isMobile && currentTask.config_name && (
                 <Chip
                   label={currentTask.config_name}
                   variant="outlined"
@@ -388,7 +401,8 @@ export default function BacktestTaskCard({
             onRestart={handleRestart}
             onDelete={handleDelete}
             isLoading={isLoading}
-            showLabels={true}
+            showLabels={!isMobile}
+            size={isMobile ? 'medium' : 'small'}
           />
         </Box>
 
