@@ -458,23 +458,43 @@ export class AdaptiveTimeScale implements ISeriesPrimitive<Time> {
     // small (or vice-versa).
     const minLabelPx = isWideRange ? 50 : 60;
 
-    const labels: TickLabel[] = [];
-    let lastDateStr = '';
-    let lastLabelX = Number.NEGATIVE_INFINITY;
+    const generateLabels = (
+      useAlignment: boolean,
+      fmt: typeof formatFn
+    ): TickLabel[] => {
+      const result: TickLabel[] = [];
+      let prevDateStr = '';
+      let prevLabelX = Number.NEGATIVE_INFINITY;
 
-    for (const point of visiblePoints) {
-      if (point.sec < fromSec || point.sec > toSec) continue;
-      const date = new Date(point.sec * 1000);
-      if (!skipAlignment && !interval.isAligned(date, tz)) continue;
-      if (labels.length > 0 && Math.abs(point.x - lastLabelX) < minLabelPx) {
-        continue;
+      for (const point of visiblePoints) {
+        if (point.sec < fromSec || point.sec > toSec) continue;
+        const date = new Date(point.sec * 1000);
+        if (useAlignment && !interval.isAligned(date, tz)) continue;
+        if (result.length > 0 && Math.abs(point.x - prevLabelX) < minLabelPx) {
+          continue;
+        }
+
+        const formatted = fmt(date, tz, prevDateStr);
+        result.push({
+          x: point.x,
+          line1: formatted.line1,
+          line2: formatted.line2,
+        });
+        prevDateStr = formatted.nextDateStr;
+        prevLabelX = point.x;
       }
+      return result;
+    };
 
-      const x = point.x;
-      const formatted = formatFn(date, tz, lastDateStr);
-      labels.push({ x, line1: formatted.line1, line2: formatted.line2 });
-      lastDateStr = formatted.nextDateStr;
-      lastLabelX = x;
+    // First pass: use alignment if applicable
+    let labels = generateLabels(!skipAlignment, formatFn);
+
+    // Fallback: if alignment produced zero labels (e.g. H4 candles never
+    // land on midnight in the user's timezone), retry without alignment
+    // using an intraday format so the time component is visible.
+    if (labels.length === 0 && !skipAlignment) {
+      const fallbackFmt = dataStepSec < 86400 ? formatIntradayLabel : formatFn;
+      labels = generateLabels(false, fallbackFmt);
     }
 
     return labels;
