@@ -10,7 +10,9 @@ import {
   IconButton,
   Tooltip,
   Alert,
+  useMediaQuery,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import Grid from '@mui/material/Grid';
 import {
   Visibility as ViewIcon,
@@ -56,6 +58,8 @@ export default function TradingTaskCard({
 }: TradingTaskCardProps) {
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [optimisticStatus, setOptimisticStatus] = useState<TaskStatus | null>(
     null
   );
@@ -348,7 +352,7 @@ export default function TradingTaskCard({
           displayStatus === TaskStatus.RUNNING ? 'success.main' : 'divider',
       }}
     >
-      <CardContent>
+      <CardContent sx={{ px: { xs: 1.5, sm: 2 }, py: { xs: 1.5, sm: 2 } }}>
         {/* Risk Warning for Live Trading */}
         {displayStatus === TaskStatus.RUNNING &&
           currentTask.account_type === 'live' && (
@@ -397,16 +401,20 @@ export default function TradingTaskCard({
                   currentTask.strategy_type
                 )}
                 variant="outlined"
+                size={isMobile ? 'small' : 'medium'}
               />
-              <Chip
-                label={currentTask.config_name}
-                variant="outlined"
-                color="primary"
-              />
+              {!isMobile && (
+                <Chip
+                  label={currentTask.config_name}
+                  variant="outlined"
+                  color="primary"
+                />
+              )}
               <Chip
                 label={currentTask.account_name}
                 variant="outlined"
                 color="secondary"
+                size={isMobile ? 'small' : 'medium'}
               />
             </Box>
             {currentTask.description && (
@@ -447,7 +455,8 @@ export default function TradingTaskCard({
             onRestart={handleRestart}
             onDelete={handleDelete}
             isLoading={isLoading}
-            showLabels={true}
+            showLabels={!isMobile}
+            size={isMobile ? 'medium' : 'small'}
           />
         </Box>
 

@@ -180,8 +180,8 @@ export default function TradingTasksPage() {
   const totalPages = data ? Math.ceil(data.count / pageSize) : 0;
 
   return (
-    <Container maxWidth={false}>
-      <Box sx={{ py: 4 }}>
+    <Container maxWidth={false} sx={{ px: { xs: 1, sm: 3 } }}>
+      <Box sx={{ py: { xs: 2, sm: 4 } }}>
         <Breadcrumbs />
 
         {/* Header */}
@@ -190,12 +190,16 @@ export default function TradingTasksPage() {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            mb: 3,
+            mb: { xs: 2, sm: 3 },
             flexWrap: 'wrap',
-            gap: 2,
+            gap: 1,
           }}
         >
-          <Typography variant="h4" component="h1">
+          <Typography
+            variant="h4"
+            component="h1"
+            sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}
+          >
             {t('trading:pages.title')}
           </Typography>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>

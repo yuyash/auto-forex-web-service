@@ -100,7 +100,9 @@ export const BacktestTaskDetail: React.FC = () => {
 
   // Get tab from URL, default to 'overview'
   const tabParam = searchParams.get('tab') || 'overview';
-  const visibleTabIds = visibleTabs.map((t) => t.id);
+  const visibleTabIds = visibleTabs
+    .filter((t) => !(isMobile && t.id === 'trend'))
+    .map((t) => t.id);
 
   const {
     optimisticStatus,

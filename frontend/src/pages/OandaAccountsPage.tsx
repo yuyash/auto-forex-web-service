@@ -357,16 +357,25 @@ export default function OandaAccountsPage() {
   };
 
   return (
-    <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
+    <Container
+      maxWidth={false}
+      sx={{ mt: { xs: 2, sm: 4 }, mb: 4, px: { xs: 1, sm: 3 } }}
+    >
       <Breadcrumbs />
       <Box
         display="flex"
         justifyContent="space-between"
         alignItems="center"
         mb={2}
+        gap={1}
       >
-        <Typography variant="h4">{t('settings:accounts.title')}</Typography>
-        <Box display="flex" gap={1}>
+        <Typography
+          variant="h4"
+          sx={{ fontSize: { xs: '1.5rem', sm: '2.125rem' } }}
+        >
+          {t('settings:accounts.title')}
+        </Typography>
+        <Box display="flex" gap={0.5} flexShrink={0}>
           <Tooltip title={t('common:actions.reload')}>
             <IconButton
               onClick={() =>
@@ -381,6 +390,7 @@ export default function OandaAccountsPage() {
             color="primary"
             startIcon={<AddIcon />}
             onClick={handleAddClick}
+            sx={{ whiteSpace: 'nowrap', minWidth: 0, px: { xs: 1.5, sm: 2 } }}
           >
             {t('settings:accounts.addAccount')}
           </Button>
