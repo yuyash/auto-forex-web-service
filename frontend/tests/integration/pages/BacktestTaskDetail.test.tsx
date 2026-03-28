@@ -8,7 +8,6 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BacktestTaskDetail } from '../../../src/components/backtest/BacktestTaskDetail';
 import { TaskStatus } from '../../../src/types/common';
-import { buildTaskTrendViewModel } from '../../fixtures/taskTrendViewModel';
 import { createRouteQueryWrapper } from '../../utils/routeQueryTestUtils';
 
 const {
@@ -175,16 +174,6 @@ vi.mock('../../../src/components/tasks/detail/TaskLogsTable', () => ({
 vi.mock('../../../src/components/tasks/detail/TaskPositionsTable', () => ({
   TaskPositionsTable: () => <div data-testid="positions-table">Positions</div>,
 }));
-vi.mock('../../../src/components/tasks/detail/TaskTrendPanel', () => ({
-  TaskTrendPanel: () => {
-    const fixture = buildTaskTrendViewModel();
-    return (
-      <div data-testid="trend-panel">
-        Trend {fixture.toolbarProps.executionRunId}
-      </div>
-    );
-  },
-}));
 vi.mock('../../../src/components/tasks/TaskProgress', () => ({
   TaskProgress: () => <div>Progress</div>,
 }));
@@ -237,7 +226,6 @@ describe('BacktestTaskDetail', () => {
       expect(screen.getByText('Events')).toBeInTheDocument();
       expect(screen.getByText('Logs')).toBeInTheDocument();
       expect(screen.getByText('Positions')).toBeInTheDocument();
-      expect(screen.getByText('Trend')).toBeInTheDocument();
     });
   });
 
@@ -275,16 +263,6 @@ describe('BacktestTaskDetail', () => {
     await user.click(screen.getByText('Positions'));
     await waitFor(() => {
       expect(screen.getByTestId('positions-table')).toBeInTheDocument();
-    });
-  });
-
-  it('switches to Trend tab', async () => {
-    const user = userEvent.setup();
-    render(<BacktestTaskDetail />, { wrapper: createWrapper() });
-
-    await user.click(screen.getByText('Trend'));
-    await waitFor(() => {
-      expect(screen.getByTestId('trend-panel')).toBeInTheDocument();
     });
   });
 

@@ -34,7 +34,6 @@ import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
 import { TaskLogsTable } from '../tasks/detail/TaskLogsTable';
 import { TaskPositionsTable } from '../tasks/detail/TaskPositionsTable';
 import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
-import { TaskTrendPanel } from '../tasks/detail/TaskTrendPanel';
 import { TaskOrdersTable } from '../tasks/detail/TaskOrdersTable';
 import { useTaskSummary } from '../../hooks/useTaskSummary';
 import { TaskStatus, TaskType } from '../../types/common';
@@ -79,7 +78,6 @@ export const TradingTaskDetail: React.FC = () => {
   const defaultTabs: TabItem[] = [
     { id: 'overview', label: t('trading:tabs.overview'), visible: true },
     { id: 'strategy', label: t('trading:tabs.strategy'), visible: true },
-    { id: 'trend', label: t('trading:tabs.trend'), visible: true },
     { id: 'positions', label: t('trading:tabs.positions'), visible: true },
     { id: 'trades', label: t('trading:tabs.trades'), visible: true },
     { id: 'orders', label: t('trading:tabs.orders'), visible: true },
@@ -93,10 +91,7 @@ export const TradingTaskDetail: React.FC = () => {
     resetToDefaults,
   } = useTabConfig('trading_detail', defaultTabs);
   const tabParam = searchParams.get('tab') || 'overview';
-  const filteredVisibleTabs = isMobile
-    ? visibleTabs.filter((tab) => tab.id !== 'trend')
-    : visibleTabs;
-  const visibleTabIds = filteredVisibleTabs.map((tab) => tab.id);
+  const visibleTabIds = visibleTabs.map((tab) => tab.id);
 
   const {
     optimisticStatus,
@@ -292,7 +287,7 @@ export const TradingTaskDetail: React.FC = () => {
       >
         <TaskDetailTabs
           activeTabIndex={activeTabIndex}
-          visibleTabs={filteredVisibleTabs}
+          visibleTabs={visibleTabs}
           onTabChange={handleTabChange}
           onConfigureTabs={() => setTabConfigOpen(true)}
           configureTabsLabel={t('common:tabConfig.configureTabs')}
@@ -334,32 +329,6 @@ export const TradingTaskDetail: React.FC = () => {
           </LazyTabPanel>
         )}
 
-        {visibleTabIds.includes('trend') && (
-          <LazyTabPanel
-            value={activeTabIndex}
-            index={visibleTabIds.indexOf('trend')}
-          >
-            <TaskTrendPanel
-              key={`trading-trend-${activeExecutionId ?? 'none'}`}
-              taskId={taskId}
-              taskType={TaskType.TRADING}
-              instrument={detailTask.instrument}
-              executionRunId={activeExecutionId}
-              startTime={detailTask.started_at}
-              endTime={detailTask.completed_at}
-              latestExecution={detailTask.latest_execution}
-              summary={s}
-              currentTick={polledTick ?? null}
-              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
-                currentStatus
-              )}
-              pipSize={
-                detailTask.pip_size ? parseFloat(detailTask.pip_size) : null
-              }
-              configId={detailTask.config_id}
-            />
-          </LazyTabPanel>
-        )}
         {visibleTabIds.includes('positions') && (
           <LazyTabPanel
             value={activeTabIndex}
