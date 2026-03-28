@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.19.5...frontend-v1.20.0) (2026-03-28)
+
+
+### Features
+
+* strategy tab improvements ([#250](https://github.com/yuyash/auto-forex-web-service/issues/250)) ([5f60742](https://github.com/yuyash/auto-forex-web-service/commit/5f60742fe3d7e7ba0139c8df1634f95ba9e77952))
+
 ## [1.19.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.19.4...frontend-v1.19.5) (2026-03-27)
 
 
