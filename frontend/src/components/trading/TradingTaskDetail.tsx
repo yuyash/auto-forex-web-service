@@ -93,7 +93,9 @@ export const TradingTaskDetail: React.FC = () => {
     resetToDefaults,
   } = useTabConfig('trading_detail', defaultTabs);
   const tabParam = searchParams.get('tab') || 'overview';
-  const visibleTabIds = visibleTabs.map((tab) => tab.id);
+  const visibleTabIds = visibleTabs
+    .filter((tab) => !(isMobile && tab.id === 'trend'))
+    .map((tab) => tab.id);
 
   const {
     optimisticStatus,
