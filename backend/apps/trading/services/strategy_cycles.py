@@ -25,7 +25,7 @@ class StrategyCyclesService:
         from apps.trading.models.trades import Trade
 
         if not execution_id:
-            return {"cycles": [], "summary": _empty_summary()}
+            return {"cycles": [], "summary": _empty_summary(), "last_tick_timestamp": None}
 
         qs = Trade.objects.filter(
             task_type=task_type,
@@ -60,6 +60,7 @@ class StrategyCyclesService:
                 "execution_id": str(execution_id),
                 "cycles": [],
                 "summary": _empty_summary(),
+                "last_tick_timestamp": None,
             }
 
         # Look up metrics (volatility, margin) at each trade timestamp
@@ -77,11 +78,48 @@ class StrategyCyclesService:
         cycles = [_build_cycle(cid, trades, metrics_by_minute) for cid, trades in by_cycle.items()]
         cycles.sort(key=lambda c: c["started_at"] or "")
 
+        # Resolve the last tick timestamp from the execution state so the
+        # frontend can use it as the effective "now" for active (unclosed)
+        # cycles instead of the real wall-clock time.
+        last_tick_ts = _resolve_last_tick_timestamp(
+            task_type=task_type,
+            task_id=str(task.pk),
+            execution_id=str(execution_id),
+        )
+
         return {
             "execution_id": str(execution_id),
             "cycles": cycles,
             "summary": _build_summary(cycles),
+            "last_tick_timestamp": last_tick_ts,
         }
+
+
+def _resolve_last_tick_timestamp(
+    *,
+    task_type: str,
+    task_id: str,
+    execution_id: str,
+) -> str | None:
+    """Return the ISO-formatted last_tick_timestamp from ExecutionState.
+
+    This is the simulated "current time" for a running or completed backtest,
+    used by the frontend to anchor active-cycle charts instead of wall-clock time.
+    """
+    from apps.trading.models.state import ExecutionState as ExecutionStateModel
+
+    row = (
+        ExecutionStateModel.objects.filter(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+        )
+        .values_list("last_tick_timestamp", flat=True)
+        .first()
+    )
+    if row is not None:
+        return row.isoformat()
+    return None
 
 
 def _load_metrics_for_trades(

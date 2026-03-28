@@ -171,6 +171,7 @@ export function patchTaskStrategyEventsLifecycle(
             completed_count: 0,
             total_trades: 0,
           },
+          last_tick_timestamp: null,
         };
       }
       return {

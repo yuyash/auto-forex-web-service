@@ -10,6 +10,8 @@ import {
 } from '@mui/material';
 import ZoomOutMapIcon from '@mui/icons-material/ZoomOutMap';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import {
   CandlestickSeries,
   createChart,
@@ -41,6 +43,9 @@ interface StrategyGroupChartProps {
   taskId?: string | number;
   taskType?: TaskType;
   executionRunId?: string;
+  lastTickTimestamp?: string | null;
+  selectedTradeIds?: Set<string>;
+  onMarkerClick?: (tradeId: string) => void;
 }
 
 const GRANULARITY_OPTIONS = ['M1', 'M5', 'M15', 'H1', 'H4', 'D'] as const;
@@ -66,6 +71,9 @@ export function StrategyGroupChart({
   taskId,
   taskType,
   executionRunId,
+  lastTickTimestamp,
+  selectedTradeIds,
+  onMarkerClick,
 }: StrategyGroupChartProps) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -76,14 +84,16 @@ export function StrategyGroupChart({
     typeof createSeriesMarkers<Time>
   > | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
-  // Expose chart instance as state so the metrics overlay hook can react to it
   const [chartInstance, setChartInstance] = useState<IChartApi | null>(null);
 
-  // For active cycles (endTime is null), use the current time as the
-  // effective end so that autoGranularity and the candle range cover the
-  // full period.  The value is refreshed on every reload.
-  const [nowIso, setNowIso] = useState(() => new Date().toISOString());
-  const effectiveEndTime = endTime ?? nowIso;
+  // Marker visibility toggle (default: visible)
+  const [markersVisible, setMarkersVisible] = useState(true);
+
+  // Keep a ref to the built markers for click-to-trade mapping
+  const builtMarkersRef = useRef<ReturnType<typeof buildCycleMarkers>>([]);
+
+  const fallbackEnd = lastTickTimestamp ?? new Date().toISOString();
+  const effectiveEndTime = endTime ?? fallbackEnd;
 
   const defaultGranularity = useMemo(
     () => (startTime ? autoGranularity(startTime, effectiveEndTime) : 'M1'),
@@ -91,13 +101,10 @@ export function StrategyGroupChart({
   );
   const [granularity, setGranularity] = useState(defaultGranularity);
 
-  // Reset granularity when cycle changes
   useEffect(() => {
     setGranularity(defaultGranularity);
   }, [defaultGranularity]);
 
-  // Calculate edgeCount to cover the full cycle range so the initial load
-  // fetches candles from start to end instead of only the most recent portion.
   const fullRangeEdgeCount = useMemo(() => {
     if (!startTime) return 500;
     const GRANULARITY_SECONDS: Record<string, number> = {
@@ -112,7 +119,6 @@ export function StrategyGroupChart({
     const startSec = Math.floor(new Date(startTime).getTime() / 1000);
     const endSec = Math.floor(new Date(effectiveEndTime).getTime() / 1000);
     const span = Math.max(60, endSec - startSec);
-    // Add 10% padding on each side
     return Math.ceil((span / granSec) * 1.2) + 10;
   }, [startTime, effectiveEndTime, granularity]);
 
@@ -127,10 +133,16 @@ export function StrategyGroupChart({
     });
 
   const candleTimes = useMemo(() => candles.map((c) => c.time), [candles]);
-  const markers = useMemo(
-    () => buildCycleMarkers(trades, candleTimes),
-    [trades, candleTimes]
-  );
+  const markers = useMemo(() => {
+    const built = buildCycleMarkers(
+      trades,
+      candleTimes as number[],
+      selectedTradeIds,
+      markersVisible
+    );
+    builtMarkersRef.current = built;
+    return built;
+  }, [trades, candleTimes, selectedTradeIds, markersVisible]);
 
   const paddedRange = useMemo(() => {
     if (!startTime || candles.length === 0) return null;
@@ -143,7 +155,6 @@ export function StrategyGroupChart({
 
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  // Destroy chart when key inputs change so it's fully recreated
   const destroyChart = useCallback(() => {
     observerRef.current?.disconnect();
     observerRef.current = null;
@@ -154,7 +165,6 @@ export function StrategyGroupChart({
     setChartInstance(null);
   }, []);
 
-  // Recreate chart when granularity or theme changes
   useEffect(() => {
     destroyChart();
   }, [granularity, isDark, destroyChart]);
@@ -180,9 +190,7 @@ export function StrategyGroupChart({
           vertLines: { visible: false },
           horzLines: { color: isDark ? '#2a2e39' : '#e2e8f0' },
         },
-        handleScroll: {
-          vertTouchDrag: false,
-        },
+        handleScroll: { vertTouchDrag: false },
         timeScale: {
           borderColor: isDark ? '#2a2e39' : '#cbd5e1',
           timeVisible: true,
@@ -214,6 +222,29 @@ export function StrategyGroupChart({
       markersRef.current = createSeriesMarkers(series, []);
       setChartInstance(chart);
 
+      // Handle marker click → find closest trade
+      if (onMarkerClick) {
+        chart.subscribeClick((param) => {
+          if (!param.time || !param.point) return;
+          const clickedTime = Number(param.time);
+          // Find the marker closest to the clicked time
+          const built = builtMarkersRef.current;
+          let closest: (typeof built)[number] | null = null;
+          let closestDist = Infinity;
+          for (const m of built) {
+            const dist = Math.abs(Number(m.time) - clickedTime);
+            if (dist < closestDist) {
+              closestDist = dist;
+              closest = m;
+            }
+          }
+          // Only trigger if click is reasonably close to a marker
+          if (closest?.tradeId && closestDist < 120) {
+            onMarkerClick(closest.tradeId);
+          }
+        });
+      }
+
       const observer = new ResizeObserver(() => {
         const w = container.clientWidth;
         if (w > 0) chart.applyOptions({ width: w });
@@ -241,9 +272,8 @@ export function StrategyGroupChart({
     } else {
       chartRef.current?.timeScale().fitContent();
     }
-  }, [candles, markers, height, isDark, paddedRange, timezone]);
+  }, [candles, markers, height, isDark, paddedRange, timezone, onMarkerClick]);
 
-  // Attach metrics overlay (ATR / Margin Ratio) when task context is available
   useMetricsOverlay({
     taskId: taskId ? String(taskId) : '',
     taskType: taskType ?? ('' as TaskType),
@@ -261,12 +291,9 @@ export function StrategyGroupChart({
   }, [paddedRange]);
 
   const handleReload = useCallback(() => {
-    // Refresh the effective end time for active cycles so the chart
-    // extends to the current moment.
-    if (!endTime) setNowIso(new Date().toISOString());
     destroyChart();
     void replaceWithCountWindow();
-  }, [destroyChart, replaceWithCountWindow, endTime]);
+  }, [destroyChart, replaceWithCountWindow]);
 
   if (isInitialLoading) {
     return (
@@ -305,6 +332,19 @@ export function StrategyGroupChart({
             </ToggleButton>
           ))}
         </ToggleButtonGroup>
+        <Tooltip title={markersVisible ? 'Hide markers' : 'Show markers'}>
+          <IconButton
+            onClick={() => setMarkersVisible((v) => !v)}
+            size="small"
+            color={markersVisible ? 'primary' : 'default'}
+          >
+            {markersVisible ? (
+              <VisibilityIcon fontSize="small" />
+            ) : (
+              <VisibilityOffIcon fontSize="small" />
+            )}
+          </IconButton>
+        </Tooltip>
         <Tooltip title="Reset zoom">
           <IconButton onClick={handleResetZoom} size="small">
             <ZoomOutMapIcon fontSize="small" />

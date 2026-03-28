@@ -38,4 +38,5 @@ export interface StrategyCyclesResponse {
   execution_id: string | null;
   cycles: StrategyCycle[];
   summary: StrategyCyclesSummary;
+  last_tick_timestamp: string | null;
 }

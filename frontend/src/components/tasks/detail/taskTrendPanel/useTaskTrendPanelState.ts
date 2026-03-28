@@ -31,6 +31,12 @@ export function useTaskTrendPanelState({
   const [highlightedTradeIds, setHighlightedTradeIds] = useState<Set<string>>(
     new Set()
   );
+  const [markersVisible, setMarkersVisible] = useState(false);
+
+  // Active cycle filter: 'off' | 'long' | 'short'
+  const [activeCycleFilter, setActiveCycleFilter] = useState<
+    'off' | 'long' | 'short'
+  >('off');
   const chartClickedRef = useRef(false);
   const selectedPosRowRef = useRef<HTMLTableRowElement | null>(null);
 
@@ -136,6 +142,10 @@ export function useTaskTrendPanelState({
     setSelectedPosId,
     highlightedTradeIds,
     setHighlightedTradeIds,
+    markersVisible,
+    setMarkersVisible,
+    activeCycleFilter,
+    setActiveCycleFilter,
     chartClickedRef,
     selectedPosRowRef,
     chartHeight,
