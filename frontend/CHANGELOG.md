@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.21.0...frontend-v1.22.0) (2026-03-28)
+
+
+### Features
+
+* mobile page improvements ([#254](https://github.com/yuyash/auto-forex-web-service/issues/254)) ([ba2c436](https://github.com/yuyash/auto-forex-web-service/commit/ba2c43687c650222e8f760d0a6a2193b4aeece8a))
+
 ## [1.21.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.20.0...frontend-v1.21.0) (2026-03-28)
 
 
