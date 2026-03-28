@@ -1,5 +1,6 @@
 """Candle data views."""
 
+import time
 from datetime import UTC, datetime
 from logging import Logger, getLogger
 from typing import Any
@@ -87,11 +88,30 @@ def _fetch_oanda_candles(
     instrument: str,
     **params: Any,
 ) -> list[Any]:
-    """Single OANDA candle request with error handling."""
-    response = api_context.instrument.candles(instrument=instrument, **params)
-    if response.status != 200:
-        raise OandaCandleFetchError(status_code=int(response.status), body=response.body)
-    return response.body.get("candles", []) if response.body else []
+    """Single OANDA candle request with exponential-backoff retry on timeout."""
+    max_retries = int(getattr(settings, "OANDA_REST_MAX_RETRIES", 2))
+    base_delay: float = getattr(settings, "OANDA_REST_RETRY_BASE_DELAY", 1.0)
+    last_exc: V20Timeout | None = None
+
+    for attempt in range(1 + max_retries):
+        try:
+            response = api_context.instrument.candles(instrument=instrument, **params)
+            if response.status != 200:
+                raise OandaCandleFetchError(status_code=int(response.status), body=response.body)
+            return response.body.get("candles", []) if response.body else []
+        except V20Timeout as exc:
+            last_exc = exc
+            if attempt < max_retries:
+                wait = base_delay * (2**attempt)
+                logger.warning(
+                    "OANDA candle request timed out (attempt %d/%d), retrying in %.1fs",
+                    attempt + 1,
+                    1 + max_retries,
+                    wait,
+                )
+                time.sleep(wait)
+
+    raise last_exc  # type: ignore[misc]
 
 
 def _parse_candle_time(raw_candle: Any) -> datetime | None:

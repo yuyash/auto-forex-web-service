@@ -139,6 +139,7 @@ OANDA_PRACTICE_API = "https://api-fxpractice.oanda.com"
 OANDA_LIVE_API = "https://api-fxtrade.oanda.com"
 OANDA_STREAM_TIMEOUT = 5  # Shorter timeout for tests
 OANDA_REST_TIMEOUT = 5
+OANDA_REST_MAX_RETRIES = 0
 
 # =============================================================================
 # Rate Limiting — disabled for tests
