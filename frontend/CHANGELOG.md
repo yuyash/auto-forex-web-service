@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.22.1...frontend-v1.22.2) (2026-03-28)
+
+
+### Bug Fixes
+
+* **trend:** default chart to M1 with 1-day view centered on current tick ([#258](https://github.com/yuyash/auto-forex-web-service/issues/258)) ([96d860c](https://github.com/yuyash/auto-forex-web-service/commit/96d860cb416cdc8a2beac3aafacba747cd8ba42d))
+
 ## [1.22.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.22.0...frontend-v1.22.1) (2026-03-28)
 
 
