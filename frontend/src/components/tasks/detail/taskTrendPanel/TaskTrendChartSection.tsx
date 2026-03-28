@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, LinearProgress, Paper } from '@mui/material';
+import { Box, CircularProgress, LinearProgress, Paper } from '@mui/material';
 import { getTimezoneAbbr } from '../../../../utils/chartTimezone';
 
 interface TaskTrendChartSectionProps {
@@ -10,6 +10,7 @@ interface TaskTrendChartSectionProps {
   timezone: string;
   loadingOlder: boolean;
   loadingNewer: boolean;
+  isInitialLoading?: boolean;
 }
 
 export function TaskTrendChartSection({
@@ -20,6 +21,7 @@ export function TaskTrendChartSection({
   timezone,
   loadingOlder,
   loadingNewer,
+  isInitialLoading = false,
 }: TaskTrendChartSectionProps) {
   return (
     <Paper
@@ -33,6 +35,21 @@ export function TaskTrendChartSection({
         position: 'relative',
       }}
     >
+      {isInitialLoading && (
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 4,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: isDark ? 'rgba(19,23,34,0.6)' : 'rgba(255,255,255,0.6)',
+          }}
+        >
+          <CircularProgress />
+        </Box>
+      )}
       {(loadingOlder || loadingNewer) && (
         <Box
           sx={{

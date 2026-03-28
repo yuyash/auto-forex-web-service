@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Alert, Box, CircularProgress } from '@mui/material';
+import { Alert, Box } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { type TaskSummary } from '../../../hooks/useTaskSummary';
@@ -72,17 +72,6 @@ export const TaskTrendPanel: React.FC<TaskTrendPanelProps> = ({
     isDark,
     t,
   });
-
-  if (candleState.isInitialLoading) {
-    return (
-      <Box
-        ref={panelRootRef}
-        sx={{ p: 4, display: 'flex', justifyContent: 'center' }}
-      >
-        <CircularProgress />
-      </Box>
-    );
-  }
 
   if (panelState.candleErrorMessage && candleState.candles.length === 0) {
     return (

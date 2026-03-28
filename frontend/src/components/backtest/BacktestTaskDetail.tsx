@@ -100,9 +100,10 @@ export const BacktestTaskDetail: React.FC = () => {
 
   // Get tab from URL, default to 'overview'
   const tabParam = searchParams.get('tab') || 'overview';
-  const visibleTabIds = visibleTabs
-    .filter((t) => !(isMobile && t.id === 'trend'))
-    .map((t) => t.id);
+  const filteredVisibleTabs = isMobile
+    ? visibleTabs.filter((t) => t.id !== 'trend')
+    : visibleTabs;
+  const visibleTabIds = filteredVisibleTabs.map((t) => t.id);
 
   const {
     optimisticStatus,
@@ -320,7 +321,7 @@ export const BacktestTaskDetail: React.FC = () => {
       >
         <TaskDetailTabs
           activeTabIndex={activeTabIndex}
-          visibleTabs={visibleTabs}
+          visibleTabs={filteredVisibleTabs}
           onTabChange={handleTabChange}
           onConfigureTabs={() => setTabConfigOpen(true)}
           configureTabsLabel={t('common:tabConfig.configureTabs')}
