@@ -8,17 +8,24 @@ import {
   IconButton,
   Paper,
   Stack,
+  Tooltip,
   Typography,
   alpha,
   useMediaQuery,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import HistoryIcon from '@mui/icons-material/History';
+import ClearIcon from '@mui/icons-material/Clear';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { useTaskStrategyEvents } from '../../../../hooks/useTaskStrategyEvents';
 import { TaskType } from '../../../../types/common';
-import type { StrategyCycle } from '../../../../types/strategyVisualization';
+import type {
+  StrategyCycle,
+  CycleTrade,
+} from '../../../../types/strategyVisualization';
 import { StrategyGroupChart } from './StrategyGroupChart';
+import { PositionLifecycleDialog } from '../PositionLifecycleDialog';
 
 export interface TaskStrategyTabProps {
   taskId: string | number;
@@ -69,6 +76,36 @@ export function TaskStrategyTab({
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
 
+  // Task 2: Multi-select trades for chart marker highlighting
+  const [selectedTradeIds, setSelectedTradeIds] = useState<Set<string>>(
+    new Set()
+  );
+
+  // Task 3: Position lifecycle dialog state
+  const [lifecycleOpen, setLifecycleOpen] = useState(false);
+  const [lifecyclePositionId, setLifecyclePositionId] = useState('');
+
+  const handleOpenLifecycle = useCallback((positionId: string) => {
+    setLifecyclePositionId(positionId.slice(0, 8));
+    setLifecycleOpen(true);
+  }, []);
+
+  const handleToggleTradeSelection = useCallback((tradeId: string) => {
+    setSelectedTradeIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(tradeId)) {
+        next.delete(tradeId);
+      } else {
+        next.add(tradeId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleResetTradeSelection = useCallback(() => {
+    setSelectedTradeIds(new Set());
+  }, []);
+
   const handleResizeStart = useCallback(
     (e: React.PointerEvent) => {
       e.preventDefault();
@@ -107,10 +144,24 @@ export function TaskStrategyTab({
   const handleSelectCycle = useCallback(
     (id: string) => {
       setSelectedCycleId(id);
+      setSelectedTradeIds(new Set());
       if (isMobile) setMobileShowDetail(true);
     },
     [isMobile]
   );
+
+  // Task 2: Handle marker click from chart → highlight trade in list
+  const handleMarkerClick = useCallback((tradeId: string) => {
+    setSelectedTradeIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(tradeId)) {
+        next.delete(tradeId);
+      } else {
+        next.add(tradeId);
+      }
+      return next;
+    });
+  }, []);
 
   const selectedCycle =
     displayedCycles.find((c) => c.cycle_id === selectedCycleId) ??
@@ -455,106 +506,58 @@ export function TaskStrategyTab({
                     taskType={taskType}
                     executionRunId={executionRunId}
                     lastTickTimestamp={lastTickTimestamp}
+                    selectedTradeIds={selectedTradeIds}
+                    onMarkerClick={handleMarkerClick}
                   />
                 </Paper>
               ) : null}
 
-              <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                {t('common:strategyVisualization.cycleList.trades')}
-              </Typography>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{ mb: 1, alignItems: 'center' }}
+              >
+                <Typography variant="subtitle1">
+                  {t('common:strategyVisualization.cycleList.trades')}
+                </Typography>
+                {selectedTradeIds.size > 0 ? (
+                  <Tooltip title="Reset selection">
+                    <IconButton
+                      size="small"
+                      onClick={handleResetTradeSelection}
+                    >
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                ) : null}
+              </Stack>
               <Divider sx={{ mb: 1 }} />
-              {selectedCycle.trades.map((trade, index) => (
-                <React.Fragment key={trade.id}>
-                  <Box sx={{ py: 1, px: 0.5 }}>
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      sx={{ alignItems: 'center', flexWrap: 'wrap' }}
-                    >
-                      <Chip
-                        size="small"
-                        label={
-                          trade.execution_method === 'open_position'
-                            ? 'OPEN'
-                            : trade.execution_method === 'close_position'
-                              ? 'CLOSE'
-                              : trade.execution_method
-                                  .replace(/_/g, ' ')
-                                  .toUpperCase()
-                        }
-                        color={
-                          trade.execution_method === 'open_position'
-                            ? 'info'
-                            : trade.execution_method === 'close_position'
-                              ? 'default'
-                              : 'error'
-                        }
-                        variant={
-                          trade.execution_method === 'open_position' ||
-                          trade.execution_method === 'close_position'
-                            ? 'outlined'
-                            : 'filled'
-                        }
-                      />
-                      <Chip
-                        size="small"
-                        label={trade.direction === 'buy' ? 'BUY' : 'SELL'}
-                        color={trade.direction === 'buy' ? 'success' : 'error'}
-                        variant="outlined"
-                      />
-                      <Typography
-                        variant="body2"
-                        sx={{ fontFamily: 'monospace' }}
-                      >
-                        {trade.units} @ {Number(trade.price).toFixed(2)}
-                      </Typography>
-                      {trade.layer_index != null ? (
-                        <Typography variant="caption" color="text.secondary">
-                          L{trade.layer_index}
-                        </Typography>
-                      ) : null}
-                      {trade.retracement_count != null ? (
-                        <Typography variant="caption" color="text.secondary">
-                          R{trade.retracement_count}
-                        </Typography>
-                      ) : null}
-                      {trade.volatility != null ? (
-                        <Chip
-                          size="small"
-                          variant="outlined"
-                          label={`ATR ${Number(trade.volatility).toFixed(5)}`}
-                          sx={{ fontSize: '0.7rem' }}
-                        />
-                      ) : null}
-                      {trade.margin_ratio != null ? (
-                        <Chip
-                          size="small"
-                          variant="outlined"
-                          label={`Margin ${(Number(trade.margin_ratio) * 100).toFixed(1)}%`}
-                          sx={{ fontSize: '0.7rem' }}
-                        />
-                      ) : null}
-                    </Stack>
-                    {trade.description ? (
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ display: 'block', mt: 0.5 }}
-                      >
-                        {trade.description}
-                      </Typography>
+              {selectedCycle.trades.map((trade, index) => {
+                const isInitialEntry = trade.id === selectedCycle.cycle_id;
+                const isSelected = selectedTradeIds.has(trade.id);
+                const isOpen = trade.execution_method === 'open_position';
+                // Task 1: Initial entry always shows L1, R0
+                const displayLayer = isInitialEntry ? 1 : trade.layer_index;
+                const displayRet = isInitialEntry ? 0 : trade.retracement_count;
+
+                return (
+                  <React.Fragment key={trade.id}>
+                    <TradeRow
+                      trade={trade}
+                      isInitialEntry={isInitialEntry}
+                      isSelected={isSelected}
+                      isOpen={isOpen}
+                      displayLayer={displayLayer}
+                      displayRet={displayRet}
+                      onToggleSelection={handleToggleTradeSelection}
+                      onOpenLifecycle={handleOpenLifecycle}
+                    />
+                    {index < selectedCycle.trades.length - 1 ? (
+                      <Divider />
                     ) : null}
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ display: 'block' }}
-                    >
-                      {formatDateTime(trade.timestamp)}
-                    </Typography>
-                  </Box>
-                  {index < selectedCycle.trades.length - 1 ? <Divider /> : null}
-                </React.Fragment>
-              ))}
+                  </React.Fragment>
+                );
+              })}
             </Box>
           ) : (
             <Box sx={{ p: 3 }}>
@@ -565,6 +568,163 @@ export function TaskStrategyTab({
           )}
         </Paper>
       </Box>
+
+      {/* Task 3: Position lifecycle dialog */}
+      <PositionLifecycleDialog
+        open={lifecycleOpen}
+        onClose={() => setLifecycleOpen(false)}
+        taskId={String(taskId)}
+        taskType={taskType}
+        executionRunId={executionRunId}
+        initialPositionId={lifecyclePositionId}
+      />
+    </Box>
+  );
+}
+
+/** Individual trade row — extracted for clarity. */
+function TradeRow({
+  trade,
+  isInitialEntry,
+  isSelected,
+  isOpen,
+  displayLayer,
+  displayRet,
+  onToggleSelection,
+  onOpenLifecycle,
+}: {
+  trade: CycleTrade;
+  isInitialEntry: boolean;
+  isSelected: boolean;
+  isOpen: boolean;
+  displayLayer: number | null | undefined;
+  displayRet: number | null | undefined;
+  onToggleSelection: (id: string) => void;
+  onOpenLifecycle: (positionId: string) => void;
+}) {
+  return (
+    <Box
+      sx={{
+        py: 1,
+        px: 0.5,
+        cursor: 'pointer',
+        borderRadius: 1,
+        transition: 'background-color 120ms ease',
+        ...(isSelected && {
+          backgroundColor: 'rgba(245, 158, 11, 0.15)',
+        }),
+        '&:hover': {
+          backgroundColor: isSelected
+            ? 'rgba(245, 158, 11, 0.25)'
+            : 'action.hover',
+        },
+      }}
+      onClick={() => onToggleSelection(trade.id)}
+    >
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+      >
+        <Chip
+          size="small"
+          label={
+            trade.execution_method === 'open_position'
+              ? 'OPEN'
+              : trade.execution_method === 'close_position'
+                ? 'CLOSE'
+                : trade.execution_method.replace(/_/g, ' ').toUpperCase()
+          }
+          color={
+            trade.execution_method === 'open_position'
+              ? 'info'
+              : trade.execution_method === 'close_position'
+                ? 'default'
+                : 'error'
+          }
+          variant={
+            trade.execution_method === 'open_position' ||
+            trade.execution_method === 'close_position'
+              ? 'outlined'
+              : 'filled'
+          }
+        />
+        {isInitialEntry ? (
+          <Chip
+            size="small"
+            label="Initial"
+            color="primary"
+            variant="outlined"
+            sx={{ fontSize: '0.7rem' }}
+          />
+        ) : null}
+        <Chip
+          size="small"
+          label={trade.direction === 'buy' ? 'BUY' : 'SELL'}
+          color={trade.direction === 'buy' ? 'success' : 'error'}
+          variant="outlined"
+        />
+        <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+          {trade.units} @ {Number(trade.price).toFixed(2)}
+        </Typography>
+        {displayLayer != null ? (
+          <Typography variant="caption" color="text.secondary">
+            L{displayLayer}
+          </Typography>
+        ) : null}
+        {displayRet != null ? (
+          <Typography variant="caption" color="text.secondary">
+            R{displayRet}
+          </Typography>
+        ) : null}
+        {trade.volatility != null ? (
+          <Chip
+            size="small"
+            variant="outlined"
+            label={`ATR ${Number(trade.volatility).toFixed(5)}`}
+            sx={{ fontSize: '0.7rem' }}
+          />
+        ) : null}
+        {trade.margin_ratio != null ? (
+          <Chip
+            size="small"
+            variant="outlined"
+            label={`Margin ${(Number(trade.margin_ratio) * 100).toFixed(1)}%`}
+            sx={{ fontSize: '0.7rem' }}
+          />
+        ) : null}
+        {/* Task 3: Lifecycle button for OPEN trades with position_id */}
+        {isOpen && trade.position_id ? (
+          <Tooltip title="View position lifecycle">
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenLifecycle(trade.position_id!);
+              }}
+              sx={{ p: 0.25 }}
+            >
+              <HistoryIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        ) : null}
+      </Stack>
+      {trade.description ? (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: 'block', mt: 0.5 }}
+        >
+          {trade.description}
+        </Typography>
+      ) : null}
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ display: 'block' }}
+      >
+        {formatDateTime(trade.timestamp)}
+      </Typography>
     </Box>
   );
 }

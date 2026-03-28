@@ -95,8 +95,22 @@ export function useTaskTrendViewModel(
       granularityOptions: derivedData.granularityOptions,
       enableRealTimeUpdates: params.enableRealTimeUpdates ?? false,
       autoFollow: panelState.autoFollow,
+      markersVisible: panelState.markersVisible,
+      hasSelection:
+        panelState.selectedTradeId != null ||
+        panelState.highlightedTradeIds.size > 0 ||
+        panelState.selectedPosId != null,
       onPollingIntervalChange: panelState.setPollingIntervalMs,
       onGranularityChange: panelState.handleGranularityChange,
+      onToggleMarkers: () => panelState.setMarkersVisible((v: boolean) => !v),
+      onResetSelection: () => {
+        panelState.setSelectedTradeId(null);
+        panelState.setSelectedPosId(null);
+        panelState.setHighlightedTradeIds(new Set());
+        tradeTable.setSelectedRowIds(new Set());
+        longPositionsTable.resetSelection();
+        shortPositionsTable.resetSelection();
+      },
       onFollow: () => {
         panelState.setAutoFollow(true);
         panelState.setSelectedTradeId(null);

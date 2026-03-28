@@ -280,6 +280,7 @@ export function useTaskTrendChartModel({
     trades: replayData.trades,
     selectedTradeId: panelState.selectedTradeId,
     highlightedTradeIds: panelState.highlightedTradeIds,
+    markersVisible: panelState.markersVisible,
     startTimeSec,
     endTimeSec,
     markerDisplayCutoffSec,

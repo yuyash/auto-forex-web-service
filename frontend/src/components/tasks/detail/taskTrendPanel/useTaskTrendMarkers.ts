@@ -26,6 +26,7 @@ interface UseTaskTrendMarkersParams {
   trades: ReplayTrade[];
   selectedTradeId: string | null;
   highlightedTradeIds: Set<string>;
+  markersVisible: boolean;
   startTimeSec: number | null;
   endTimeSec: number | null;
   markerDisplayCutoffSec: number | null;
@@ -43,6 +44,7 @@ export function useTaskTrendMarkers({
   trades,
   selectedTradeId,
   highlightedTradeIds,
+  markersVisible,
   startTimeSec,
   endTimeSec,
   markerDisplayCutoffSec,
@@ -134,6 +136,8 @@ export function useTaskTrendMarkers({
       .map((trade) => {
         const selected =
           trade.id === selectedTradeId || highlightedTradeIds.has(trade.id);
+        // When markers are hidden, only render selected/highlighted trades
+        if (!markersVisible && !selected) return null;
         const units = Number(trade.units);
         const lots = Number.isFinite(units) ? Math.abs(units) / 1000 : null;
         const executionMethod = String(
@@ -181,8 +185,8 @@ export function useTaskTrendMarkers({
             : `OPEN ${dirLabel} ${lotLabel}`.trim(),
         };
       })
-      .filter((marker) => {
-        if (Number(marker.time) <= 0) {
+      .filter((marker): marker is ChartMarker => {
+        if (!marker || Number(marker.time) <= 0) {
           return false;
         }
         if (markerDisplayCutoffSec == null) {
@@ -193,8 +197,9 @@ export function useTaskTrendMarkers({
 
     try {
       programmaticScrollRef.current = true;
+      const eventMarkersToShow = markersVisible ? eventMarkers : [];
       markersRef.current.setMarkers(
-        [...eventMarkers, ...renderedTradeMarkers].sort(
+        [...eventMarkersToShow, ...renderedTradeMarkers].sort(
           (a, b) => Number(a.time) - Number(b.time)
         )
       );
@@ -212,6 +217,7 @@ export function useTaskTrendMarkers({
     highlightedTradeIds,
     markerDisplayCutoffSec,
     markersRef,
+    markersVisible,
     programmaticScrollRef,
     reportChartWarning,
     selectedTradeId,

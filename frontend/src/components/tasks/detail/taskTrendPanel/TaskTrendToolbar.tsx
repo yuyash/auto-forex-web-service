@@ -12,6 +12,9 @@ import {
 } from '@mui/material';
 import ZoomOutMapIcon from '@mui/icons-material/ZoomOutMap';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import ClearIcon from '@mui/icons-material/Clear';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import { useTranslation } from 'react-i18next';
 import type { ReplaySummary } from './shared';
@@ -28,8 +31,12 @@ interface TaskTrendToolbarProps {
   pollingIntervalOptions: Array<{ value: number; label: string }>;
   enableRealTimeUpdates: boolean;
   autoFollow: boolean;
+  markersVisible: boolean;
+  hasSelection: boolean;
   onPollingIntervalChange: (value: number) => void;
   onGranularityChange: (event: SelectChangeEvent<string>) => void;
+  onToggleMarkers: () => void;
+  onResetSelection: () => void;
   onFollow: () => void;
   onResetZoom: () => void;
   onReloadCandles: () => void;
@@ -47,8 +54,12 @@ export function TaskTrendToolbar({
   pollingIntervalOptions,
   enableRealTimeUpdates,
   autoFollow,
+  markersVisible,
+  hasSelection,
   onPollingIntervalChange,
   onGranularityChange,
+  onToggleMarkers,
+  onResetSelection,
   onFollow,
   onResetZoom,
   onReloadCandles,
@@ -212,6 +223,28 @@ export function TaskTrendToolbar({
           {t('tables.trend.follow')}
         </Button>
       )}
+
+      <Tooltip title={markersVisible ? 'Hide markers' : 'Show markers'}>
+        <IconButton
+          onClick={onToggleMarkers}
+          sx={{ height: 32, width: 32 }}
+          color={markersVisible ? 'primary' : 'default'}
+        >
+          {markersVisible ? (
+            <VisibilityIcon fontSize="small" />
+          ) : (
+            <VisibilityOffIcon fontSize="small" />
+          )}
+        </IconButton>
+      </Tooltip>
+
+      {hasSelection ? (
+        <Tooltip title="Reset selection">
+          <IconButton onClick={onResetSelection} sx={{ height: 32, width: 32 }}>
+            <ClearIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      ) : null}
 
       <Tooltip title="Reset zoom (show all)">
         <IconButton onClick={onResetZoom} sx={{ height: 32, width: 32 }}>
