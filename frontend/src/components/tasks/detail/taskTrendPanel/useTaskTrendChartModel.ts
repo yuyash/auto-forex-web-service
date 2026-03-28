@@ -97,15 +97,17 @@ export function useTaskTrendChartModel({
   const { granularities, usingFallback: usingGranularityFallback } =
     useSupportedGranularities();
 
+  // Determine the focus time for the initial chart view.
+  // Always center on the latest tick (running/paused) or end time (completed/stopped).
+  const initialFocusIso = currentTick?.timestamp ?? endTime;
+
   const candleState = useWindowedCandles({
     instrument,
     granularity: panelState.granularity,
     startTime,
     endTime,
-    initialFocusTime: realTimeUpdatesEnabled
-      ? currentTick?.timestamp
-      : undefined,
-    initialCount: 800,
+    initialFocusTime: initialFocusIso,
+    initialCount: 1440,
     edgeCount: 800,
     autoRefresh: false,
     refreshIntervalSeconds: Math.max(
@@ -282,19 +284,6 @@ export function useTaskTrendChartModel({
       : null,
     programmaticScrollRef: chartState.programmaticScrollRef,
   });
-
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => {
-      panelState.setGranularity(derivedData.recommendedGranularity);
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [
-    derivedData.recommendedGranularity,
-    endTime,
-    instrument,
-    panelState,
-    startTime,
-  ]);
 
   useEffect(() => {
     tradesRef.current = replayData.trades;
