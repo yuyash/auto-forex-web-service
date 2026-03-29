@@ -86,7 +86,7 @@ test.describe('Backtest Tasks', () => {
       const taskHelper = new TaskHelper(authenticatedPage);
 
       // Switch through tabs
-      for (const tabName of ['Events', 'Logs', 'Positions']) {
+      for (const tabName of ['Logs', 'Positions']) {
         await taskHelper.switchToTab(tabName);
         await authenticatedPage.waitForTimeout(500);
       }

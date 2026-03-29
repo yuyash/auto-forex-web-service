@@ -31,7 +31,6 @@ import {
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
 import { useAuth } from '../../contexts/AuthContext';
-import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
 import { TaskLogsTable } from '../tasks/detail/TaskLogsTable';
 import { TaskPositionsTable } from '../tasks/detail/TaskPositionsTable';
 import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
@@ -86,7 +85,6 @@ export const BacktestTaskDetail: React.FC = () => {
     { id: 'positions', label: t('backtest:tabs.positions'), visible: true },
     { id: 'trades', label: t('backtest:tabs.trades'), visible: true },
     { id: 'orders', label: t('backtest:tabs.orders'), visible: true },
-    { id: 'events', label: t('backtest:tabs.events'), visible: true },
     { id: 'logs', label: t('backtest:tabs.logs'), visible: true },
   ];
   const {
@@ -410,23 +408,6 @@ export const BacktestTaskDetail: React.FC = () => {
             index={visibleTabIds.indexOf('orders')}
           >
             <TaskOrdersTable
-              taskId={taskId}
-              taskType={TaskType.BACKTEST}
-              executionRunId={activeExecutionId}
-              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
-                currentStatus
-              )}
-            />
-          </LazyTabPanel>
-        )}
-
-        {/* Events Tab */}
-        {visibleTabIds.includes('events') && (
-          <LazyTabPanel
-            value={activeTabIndex}
-            index={visibleTabIds.indexOf('events')}
-          >
-            <TaskEventsTable
               taskId={taskId}
               taskType={TaskType.BACKTEST}
               executionRunId={activeExecutionId}
