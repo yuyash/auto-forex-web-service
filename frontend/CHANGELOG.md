@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.22.3...frontend-v1.23.0) (2026-03-29)
+
+
+### Features
+
+* margin atr display progress padding ([#262](https://github.com/yuyash/auto-forex-web-service/issues/262)) ([282af2d](https://github.com/yuyash/auto-forex-web-service/commit/282af2d95a5d44a656a4d2075914801f857c12c8))
+
 ## [1.22.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.22.2...frontend-v1.22.3) (2026-03-28)
 
 
