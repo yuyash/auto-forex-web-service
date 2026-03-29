@@ -30,7 +30,6 @@ import {
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
 import { useAuth } from '../../contexts/AuthContext';
-import { TaskEventsTable } from '../tasks/detail/TaskEventsTable';
 import { TaskLogsTable } from '../tasks/detail/TaskLogsTable';
 import { TaskPositionsTable } from '../tasks/detail/TaskPositionsTable';
 import { TaskTradesTable } from '../tasks/detail/TaskTradesTable';
@@ -81,7 +80,6 @@ export const TradingTaskDetail: React.FC = () => {
     { id: 'positions', label: t('trading:tabs.positions'), visible: true },
     { id: 'trades', label: t('trading:tabs.trades'), visible: true },
     { id: 'orders', label: t('trading:tabs.orders'), visible: true },
-    { id: 'events', label: t('trading:tabs.events'), visible: true },
     { id: 'logs', label: t('trading:tabs.logs'), visible: true },
   ];
   const {
@@ -374,21 +372,6 @@ export const TradingTaskDetail: React.FC = () => {
             index={visibleTabIds.indexOf('orders')}
           >
             <TaskOrdersTable
-              taskId={taskId}
-              taskType={TaskType.TRADING}
-              executionRunId={activeExecutionId}
-              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
-                currentStatus
-              )}
-            />
-          </LazyTabPanel>
-        )}
-        {visibleTabIds.includes('events') && (
-          <LazyTabPanel
-            value={activeTabIndex}
-            index={visibleTabIds.indexOf('events')}
-          >
-            <TaskEventsTable
               taskId={taskId}
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}

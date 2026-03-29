@@ -165,9 +165,6 @@ vi.mock('../../../src/components/common/TaskControlButtons', () => ({
 vi.mock('../../../src/components/tasks/display/StatusBadge', () => ({
   StatusBadge: ({ status }: { status: string }) => <span>{status}</span>,
 }));
-vi.mock('../../../src/components/tasks/detail/TaskEventsTable', () => ({
-  TaskEventsTable: () => <div data-testid="events-table">Events</div>,
-}));
 vi.mock('../../../src/components/tasks/detail/TaskLogsTable', () => ({
   TaskLogsTable: () => <div data-testid="logs-table">Logs</div>,
 }));
@@ -223,7 +220,6 @@ describe('BacktestTaskDetail', () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
     await waitFor(() => {
       expect(screen.getByText('Overview')).toBeInTheDocument();
-      expect(screen.getByText('Events')).toBeInTheDocument();
       expect(screen.getByText('Logs')).toBeInTheDocument();
       expect(screen.getByText('Positions')).toBeInTheDocument();
     });
@@ -233,16 +229,6 @@ describe('BacktestTaskDetail', () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
     await waitFor(() => {
       expect(screen.getByText('Task Information')).toBeInTheDocument();
-    });
-  });
-
-  it('switches to Events tab', async () => {
-    const user = userEvent.setup();
-    render(<BacktestTaskDetail />, { wrapper: createWrapper() });
-
-    await user.click(screen.getByText('Events'));
-    await waitFor(() => {
-      expect(screen.getByTestId('events-table')).toBeInTheDocument();
     });
   });
 

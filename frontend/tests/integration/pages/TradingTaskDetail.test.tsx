@@ -171,9 +171,6 @@ vi.mock('../../../src/components/common/TaskControlButtons', () => ({
 vi.mock('../../../src/components/tasks/display/StatusBadge', () => ({
   StatusBadge: ({ status }: { status: string }) => <span>{status}</span>,
 }));
-vi.mock('../../../src/components/tasks/detail/TaskEventsTable', () => ({
-  TaskEventsTable: () => <div data-testid="events-table">Events</div>,
-}));
 vi.mock('../../../src/components/tasks/detail/TaskLogsTable', () => ({
   TaskLogsTable: () => <div data-testid="logs-table">Logs</div>,
 }));

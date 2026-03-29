@@ -386,22 +386,6 @@
         "close": "Close"
       }
     },
-    "events": {
-      "title": "Task Events",
-      "timestamp": "Timestamp",
-      "eventType": "Event Type",
-      "severity": "Severity",
-      "description": "Description",
-      "category": "Category",
-      "severityFilter": "Severity Filter",
-      "allSeverities": "All Severities",
-      "taskEvents": "Task Events",
-      "tradingEvents": "Trading Events",
-      "strategyEvents": "Strategy Events",
-      "noEvents": "No events available",
-      "detailTitle": "Event Detail",
-      "copyJson": "Copy JSON"
-    },
     "logs": {
       "title": "Task Logs",
       "timestamp": "Timestamp",

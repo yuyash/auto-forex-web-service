@@ -386,22 +386,6 @@
         "close": "閉じる"
       }
     },
-    "events": {
-      "title": "タスクイベント",
-      "timestamp": "日時",
-      "eventType": "タイプ",
-      "severity": "重要度",
-      "description": "説明",
-      "category": "カテゴリ",
-      "severityFilter": "重要度フィルター",
-      "allSeverities": "すべての重要度",
-      "taskEvents": "タスクイベント",
-      "tradingEvents": "取引イベント",
-      "strategyEvents": "戦略イベント",
-      "noEvents": "イベントなし",
-      "detailTitle": "イベント詳細",
-      "copyJson": "JSONをコピー"
-    },
     "logs": {
       "title": "タスクログ",
       "timestamp": "日時",
