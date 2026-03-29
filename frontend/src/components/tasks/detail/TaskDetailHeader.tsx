@@ -33,6 +33,7 @@ interface TaskDetailHeaderProps {
   timezone: string;
   isMobile: boolean;
   progress: number;
+  currentAtr?: number | null;
   completedLabel: string;
   editLabel: string;
   deleteLabel: string;
@@ -106,6 +107,7 @@ export function TaskDetailHeader({
   timezone,
   isMobile,
   progress,
+  currentAtr,
   completedLabel,
   editLabel,
   deleteLabel,
@@ -291,10 +293,20 @@ export function TaskDetailHeader({
                     )}
                   </Typography>
                 )}
+                {currentAtr != null && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    component="span"
+                    sx={{ fontFamily: 'monospace', fontSize: 'inherit' }}
+                  >
+                    ATR {currentAtr.toFixed(5)}
+                  </Typography>
+                )}
               </Box>
             )}
 
-            {status === TaskStatus.RUNNING && (
+            {progress > 0 && (
               <Typography
                 variant="body2"
                 color="text.secondary"

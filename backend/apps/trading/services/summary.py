@@ -11,7 +11,7 @@ Computes a comprehensive summary for a given task including:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.core.cache import cache
 from django.db.models import Case, F, Sum, Value, When
@@ -56,6 +56,8 @@ class ExecutionInfo:
     account_currency: str | None
     current_balance_display: Decimal | None
     display_currency: str | None
+    margin_ratio: Decimal | None
+    current_atr: Decimal | None
 
 
 @dataclass(frozen=True)
@@ -154,6 +156,8 @@ def compute_task_summary(
     account_currency: str | None = None
     current_balance_display: Decimal | None = None
     display_currency: str | None = None
+    margin_ratio: Decimal | None = None
+    current_atr: Decimal | None = None
 
     from apps.trading.models.state import ExecutionState
 
@@ -169,6 +173,23 @@ def compute_task_summary(
         tick_bid = state.last_tick_bid
         tick_ask = state.last_tick_ask
         tick_mid = state.last_tick_price
+
+        # Extract margin_ratio and current_atr from strategy_state.metrics
+        ss = state.strategy_state if isinstance(state.strategy_state, dict) else {}
+        metrics_dict = ss.get("metrics") if isinstance(ss.get("metrics"), dict) else {}
+        if isinstance(metrics_dict, dict):
+            raw_mr = metrics_dict.get("margin_ratio")
+            if raw_mr is not None:
+                try:
+                    margin_ratio = Decimal(str(raw_mr))
+                except (InvalidOperation, TypeError, ValueError):
+                    pass  # nosec B110
+            raw_atr = metrics_dict.get("current_atr")
+            if raw_atr is not None:
+                try:
+                    current_atr = Decimal(str(raw_atr))
+                except (InvalidOperation, TypeError, ValueError):
+                    pass  # nosec B110
 
     # Task info
     status = ""
@@ -217,6 +238,8 @@ def compute_task_summary(
             account_currency=account_currency,
             current_balance_display=current_balance_display,
             display_currency=display_currency,
+            margin_ratio=margin_ratio,
+            current_atr=current_atr,
         ),
         tick=TickInfo(
             timestamp=tick_timestamp,

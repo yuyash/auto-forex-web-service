@@ -265,6 +265,16 @@ export function BacktestOverviewTab({
                 </Typography>
               </Box>
             )}
+            {summary.execution.marginRatio != null && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  {t('common:labels.marginRatio')}
+                </Typography>
+                <Typography variant="body1">
+                  {(summary.execution.marginRatio * 100).toFixed(1)}%
+                </Typography>
+              </Box>
+            )}
           </Box>
         </Grid>
 

@@ -102,6 +102,7 @@
     "description": "Description",
     "instrument": "Instrument",
     "pipSize": "Pip Size",
+    "marginRatio": "Margin Ratio",
     "status": "Status",
     "configuration": "Configuration",
     "strategyType": "Strategy Type",
@@ -385,22 +386,6 @@
         "noLogs": "No lifecycle logs found for this position.",
         "close": "Close"
       }
-    },
-    "events": {
-      "title": "Task Events",
-      "timestamp": "Timestamp",
-      "eventType": "Event Type",
-      "severity": "Severity",
-      "description": "Description",
-      "category": "Category",
-      "severityFilter": "Severity Filter",
-      "allSeverities": "All Severities",
-      "taskEvents": "Task Events",
-      "tradingEvents": "Trading Events",
-      "strategyEvents": "Strategy Events",
-      "noEvents": "No events available",
-      "detailTitle": "Event Detail",
-      "copyJson": "Copy JSON"
     },
     "logs": {
       "title": "Task Logs",
