@@ -102,6 +102,7 @@
     "description": "説明",
     "instrument": "通貨ペア",
     "pipSize": "Pipサイズ",
+    "marginRatio": "マージン比率",
     "status": "ステータス",
     "configuration": "設定構成",
     "strategyType": "戦略タイプ",

@@ -257,6 +257,7 @@ export const BacktestTaskDetail: React.FC = () => {
         timezone={timezone}
         isMobile={isMobile}
         progress={s.task.progress}
+        currentAtr={s.execution.currentAtr}
         completedLabel={t('backtest:detail.completed')}
         editLabel={t('common:actions.edit')}
         deleteLabel={t('common:actions.delete')}

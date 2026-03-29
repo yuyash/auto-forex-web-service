@@ -35,6 +35,8 @@ interface TaskSummaryResponse {
     account_currency?: string | null;
     current_balance_display?: string | number | null;
     display_currency?: string | null;
+    margin_ratio?: string | number | null;
+    current_atr?: string | number | null;
   };
   tick?: {
     timestamp?: string | null;
@@ -168,6 +170,14 @@ export function createTaskSummaryQuery(
                 ? parseFloat(String(d.execution.current_balance_display))
                 : null,
             displayCurrency: d.execution?.display_currency ?? null,
+            marginRatio:
+              d.execution?.margin_ratio != null
+                ? parseFloat(String(d.execution.margin_ratio))
+                : null,
+            currentAtr:
+              d.execution?.current_atr != null
+                ? parseFloat(String(d.execution.current_atr))
+                : null,
           },
           tick: {
             timestamp: d.tick?.timestamp ?? null,

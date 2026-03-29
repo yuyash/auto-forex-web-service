@@ -102,6 +102,7 @@
     "description": "Description",
     "instrument": "Instrument",
     "pipSize": "Pip Size",
+    "marginRatio": "Margin Ratio",
     "status": "Status",
     "configuration": "Configuration",
     "strategyType": "Strategy Type",

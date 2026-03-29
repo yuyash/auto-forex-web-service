@@ -222,6 +222,7 @@ export const TradingTaskDetail: React.FC = () => {
         timezone={timezone}
         isMobile={isMobile}
         progress={s.task.progress}
+        currentAtr={s.execution.currentAtr}
         completedLabel={t('trading:detail.completed')}
         editLabel={t('common:actions.edit')}
         deleteLabel={t('common:actions.delete')}

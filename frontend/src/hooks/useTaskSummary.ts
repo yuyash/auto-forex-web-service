@@ -41,6 +41,8 @@ export interface ExecutionInfo {
   accountCurrency: string | null;
   currentBalanceDisplay: number | null;
   displayCurrency: string | null;
+  marginRatio: number | null;
+  currentAtr: number | null;
 }
 
 export interface TaskInfo {
@@ -83,6 +85,8 @@ const INITIAL_SUMMARY: TaskSummary = {
     accountCurrency: null,
     currentBalanceDisplay: null,
     displayCurrency: null,
+    marginRatio: null,
+    currentAtr: null,
   },
   tick: { timestamp: null, bid: null, ask: null, mid: null },
   task: {
