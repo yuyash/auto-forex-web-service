@@ -558,7 +558,6 @@ export function TaskStrategyTab({
               {selectedCycle.trades.map((trade, index) => {
                 const isInitialEntry = trade.id === selectedCycle.cycle_id;
                 const isSelected = selectedTradeIds.has(trade.id);
-                const isOpen = trade.execution_method === 'open_position';
                 // Task 1: Initial entry always shows L1, R0
                 const displayLayer = isInitialEntry ? 1 : trade.layer_index;
                 const displayRet = isInitialEntry ? 0 : trade.retracement_count;
@@ -569,7 +568,6 @@ export function TaskStrategyTab({
                       trade={trade}
                       isInitialEntry={isInitialEntry}
                       isSelected={isSelected}
-                      isOpen={isOpen}
                       displayLayer={displayLayer}
                       displayRet={displayRet}
                       onToggleSelection={handleToggleTradeSelection}
@@ -610,7 +608,6 @@ function TradeRow({
   trade,
   isInitialEntry,
   isSelected,
-  isOpen,
   displayLayer,
   displayRet,
   onToggleSelection,
@@ -619,7 +616,6 @@ function TradeRow({
   trade: CycleTrade;
   isInitialEntry: boolean;
   isSelected: boolean;
-  isOpen: boolean;
   displayLayer: number | null | undefined;
   displayRet: number | null | undefined;
   onToggleSelection: (id: string) => void;
@@ -716,8 +712,8 @@ function TradeRow({
             sx={{ fontSize: '0.7rem' }}
           />
         ) : null}
-        {/* Task 3: Lifecycle button for OPEN trades with position_id */}
-        {isOpen && trade.position_id ? (
+        {/* Task 3: Lifecycle button for trades with position_id */}
+        {trade.position_id ? (
           <Tooltip title="View position lifecycle">
             <IconButton
               size="small"
