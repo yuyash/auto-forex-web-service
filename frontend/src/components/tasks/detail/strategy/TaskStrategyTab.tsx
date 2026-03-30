@@ -328,7 +328,6 @@ export function TaskStrategyTab({
               display: 'grid',
               gap: 1.25,
               overflowY: 'auto',
-              flexGrow: 1,
               minHeight: 0,
             }}
           >
