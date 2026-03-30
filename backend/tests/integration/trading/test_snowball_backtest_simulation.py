@@ -200,8 +200,8 @@ class TestSnowballBacktestSimulation:
         ]
 
         assert state.ticks_processed == 5
-        assert state.strategy_state["cycles"][0]["add_count"] == 1
-        assert state.strategy_state["cycles"][0]["freeze_count"] == 0
+        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 1
+        assert state.strategy_state["cycles"][0]["layer_index"] == 0
         assert state.current_balance > task.initial_balance
         assert (
             Position.objects.filter(
@@ -272,8 +272,8 @@ class TestSnowballBacktestSimulation:
         )
 
         assert state.ticks_processed == 4
-        assert state.strategy_state["cycles"][0]["add_count"] == 0
-        assert state.strategy_state["cycles"][0]["freeze_count"] == 1
+        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 0
+        assert state.strategy_state["cycles"][0]["layer_index"] == 1
         assert state.strategy_state["cycles"][0]["cycle_base_units"] == 1500
         assert counter_add_retracements == [1, 2]
 
@@ -379,12 +379,12 @@ class TestSnowballBacktestSimulation:
         assert resumed_state.ticks_processed == full_state.ticks_processed
         assert resumed_state.current_balance == full_state.current_balance
         assert (
-            resumed_state.strategy_state["cycles"][0]["add_count"]
-            == full_state.strategy_state["cycles"][0]["add_count"]
+            resumed_state.strategy_state["cycles"][0]["layer_retracement_count"]
+            == full_state.strategy_state["cycles"][0]["layer_retracement_count"]
         )
         assert (
-            resumed_state.strategy_state["cycles"][0]["freeze_count"]
-            == full_state.strategy_state["cycles"][0]["freeze_count"]
+            resumed_state.strategy_state["cycles"][0]["layer_index"]
+            == full_state.strategy_state["cycles"][0]["layer_index"]
         )
         assert (
             resumed_state.strategy_state["cycles"][0]["cycle_base_units"]
@@ -504,7 +504,7 @@ class TestSnowballBacktestSimulation:
         )
 
         assert state.ticks_processed == 4
-        assert state.strategy_state["cycles"][0]["add_count"] == 2
+        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 2
         assert counter_adds == [
             (1, 7, 5.0),
             (2, 11, 10.0),

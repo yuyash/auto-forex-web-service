@@ -125,8 +125,8 @@ class TestSnowballStrategyState:
             cycle_id=1,
             direction=Direction.LONG,
             initial_entry=initial,
-            add_count=3,
-            freeze_count=1,
+            layer_retracement_count=3,
+            layer_index=1,
         )
         ss = SnowballStrategyState(
             initialised=True,
@@ -137,8 +137,8 @@ class TestSnowballStrategyState:
         ss2 = SnowballStrategyState.from_dict(d)
         assert ss2.initialised is True
         assert len(ss2.cycles) == 1
-        assert ss2.cycles[0].add_count == 3
-        assert ss2.cycles[0].freeze_count == 1
+        assert ss2.cycles[0].layer_retracement_count == 3
+        assert ss2.cycles[0].layer_index == 1
         assert ss2.protection_level == ProtectionLevel.SHRINK
 
     def test_from_strategy_state_none(self):
@@ -154,10 +154,10 @@ class TestSnowballStrategyState:
                         "cycle_id": 1,
                         "direction": "long",
                         "initial_entry": {"entry_id": 1},
-                        "add_count": 2,
+                        "layer_retracement_count": 2,
                     }
                 ],
             }
         )
         assert ss.initialised is True
-        assert ss.cycles[0].add_count == 2
+        assert ss.cycles[0].layer_retracement_count == 2

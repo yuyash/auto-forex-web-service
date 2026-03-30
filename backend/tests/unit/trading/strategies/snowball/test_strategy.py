@@ -295,10 +295,10 @@ class TestSnowballLifecycle:
 class TestSnowballStateSerialization:
     def test_deserialize_state_passthrough(self):
         s = _strategy()
-        data = {"initialised": True, "add_count": 3}
+        data = {"initialised": True, "layer_retracement_count": 3}
         assert s.deserialize_state(data) == data
 
     def test_serialize_state_passthrough(self):
         s = _strategy()
-        data = {"initialised": True, "add_count": 3}
+        data = {"initialised": True, "layer_retracement_count": 3}
         assert s.serialize_state(data) == data
