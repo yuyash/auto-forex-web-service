@@ -368,6 +368,7 @@ class SnowballStrategy(Strategy):
             return events
 
         if cycle.layer_retracement_count >= cfg.r_max:
+            new_layer = cycle.layer_index + 2
             logger.info(
                 "Counter r_max reached (%d/%d) in cycle %d: layer_index %d -> %d",
                 cycle.layer_retracement_count,
@@ -379,6 +380,44 @@ class SnowballStrategy(Strategy):
             cycle.layer_retracement_count = 0
             cycle.layer_index += 1
             cycle.cycle_base_units = int(Decimal(str(cfg.base_units)) * cfg.post_r_max_base_factor)
+
+            initial = cycle.initial_entry
+            if initial is not None:
+                direction = cycle.direction
+                price = tick.ask if direction == Direction.LONG else tick.bid
+                if direction == Direction.LONG:
+                    close_price = price + cfg.m_pips * self.pip_size
+                    formula = f"{price} + {cfg.m_pips} * {self.pip_size}"
+                else:
+                    close_price = price - cfg.m_pips * self.pip_size
+                    formula = f"{price} - {cfg.m_pips} * {self.pip_size}"
+
+                layer_entry = Entry.open(
+                    state=ss,
+                    tick=tick,
+                    direction=direction,
+                    units=cfg.trend_lot_size * cycle.cycle_base_units,
+                    step=1,
+                    close_price=close_price,
+                    role="layer_initial",
+                    layer_number=new_layer,
+                    retracement_count=0,
+                    root_entry_id=initial.entry_id,
+                    parent_entry_id=initial.entry_id,
+                )
+                layer_entry.expected_tp_pips = cfg.m_pips
+                layer_entry.validation_status = "pass"
+                evt = layer_entry.to_open_event(
+                    timestamp=tick.timestamp,
+                    planned_exit_price_formula=formula,
+                    description=(
+                        f"Layer initial entry ({direction.value.upper()}) | "
+                        f"L{new_layer}/R0, units={layer_entry.units}, TP={close_price:.5f}"
+                    ),
+                )
+                cycle.layer_initial_entries[new_layer] = layer_entry
+                events.append(evt)
+
             return events
 
         # Check if initial entry is losing
@@ -391,6 +430,8 @@ class SnowballStrategy(Strategy):
 
         counter_non_hedge = cycle.counter_non_hedge()
         direction = cycle.direction
+        current_layer = cycle.layer_index + 1
+        layer_initial = cycle.initial_for_layer(current_layer)
 
         if not counter_non_hedge:
             # First counter add
@@ -417,8 +458,8 @@ class SnowballStrategy(Strategy):
                 units,
                 tp,
                 counter_non_hedge,
-                initial,
-                current_layer=cycle.layer_index + 1,
+                layer_initial,
+                current_layer=current_layer,
             )
 
             logger.info(
@@ -492,8 +533,8 @@ class SnowballStrategy(Strategy):
             units,
             tp,
             counter_non_hedge,
-            initial,
-            current_layer=cycle.layer_index + 1,
+            layer_initial,
+            current_layer=current_layer,
         )
 
         logger.info(
@@ -561,7 +602,7 @@ class SnowballStrategy(Strategy):
         units: int,
         tp: Decimal,
         counter_non_hedge: list[Entry],
-        initial_entry: Entry,
+        layer_initial: Entry | None,
         current_layer: int = 1,
     ) -> tuple[Decimal, str]:
         """Compute close_price and formula for a counter add."""
@@ -575,13 +616,12 @@ class SnowballStrategy(Strategy):
                 total_u += e.units
                 total_cost += e.entry_price * Decimal(str(e.units))
                 formula_parts.append(f"{e.entry_price} * {e.units}")
-            # Include initial entry only when it belongs to the current layer
-            if initial_entry.layer_number == current_layer:
-                ie_units = abs(initial_entry.units)
+            if layer_initial is not None:
+                ie_units = abs(layer_initial.units)
                 if ie_units > 0:
                     total_u += ie_units
-                    total_cost += initial_entry.entry_price * Decimal(str(ie_units))
-                    formula_parts.append(f"{initial_entry.entry_price} * {ie_units}")
+                    total_cost += layer_initial.entry_price * Decimal(str(ie_units))
+                    formula_parts.append(f"{layer_initial.entry_price} * {ie_units}")
             close_price = total_cost / Decimal(str(total_u)) if total_u > 0 else new_price
             exit_formula = f"({' + '.join(formula_parts)}) / {total_u}"
         else:

@@ -204,7 +204,7 @@ class Entry:
     close_price: Decimal  # target close price
     units: int
     opened_at: datetime
-    role: Literal["initial", "counter", "hedge"]
+    role: Literal["initial", "counter", "hedge", "layer_initial"]
     layer_number: int = 1
     retracement_count: int = 1
     root_entry_id: int | None = None
@@ -231,7 +231,7 @@ class Entry:
         units: int,
         step: int,
         close_price: Decimal,
-        role: Literal["initial", "counter", "hedge"],
+        role: Literal["initial", "counter", "hedge", "layer_initial"],
         layer_number: int = 1,
         retracement_count: int = 1,
         root_entry_id: int | None = None,
@@ -272,6 +272,10 @@ class Entry:
     @property
     def is_initial(self) -> bool:
         return self.role == "initial"
+
+    @property
+    def is_layer_initial(self) -> bool:
+        return self.role == "layer_initial"
 
     @property
     def is_counter(self) -> bool:
@@ -526,6 +530,7 @@ class SnowballCycle:
     initial_entry: Entry | None = None
     counter_entries: list[Entry] = field(default_factory=list)
     hedge_entries: list[Entry] = field(default_factory=list)
+    layer_initial_entries: dict[int, Entry] = field(default_factory=dict)
     layer_retracement_count: int = 0
     layer_index: int = 0
     cycle_base_units: int = 1000
@@ -549,10 +554,12 @@ class SnowballCycle:
     # ------------------------------------------------------------------
 
     def all_entries(self) -> list[Entry]:
-        """Return all entries in this cycle (initial + counter + hedge)."""
+        """Return all entries in this cycle (initial + layer initials + counter + hedge)."""
         entries: list[Entry] = []
         if self.initial_entry is not None:
             entries.append(self.initial_entry)
+        for _layer, entry in sorted(self.layer_initial_entries.items()):
+            entries.append(entry)
         entries.extend(self.counter_entries)
         entries.extend(self.hedge_entries)
         return entries
@@ -560,6 +567,12 @@ class SnowballCycle:
     def counter_non_hedge(self) -> list[Entry]:
         """Return counter entries excluding hedges."""
         return [e for e in self.counter_entries if not e.is_hedge]
+
+    def initial_for_layer(self, layer: int) -> Entry | None:
+        """Return the initial entry for the given layer number."""
+        if layer == 1:
+            return self.initial_entry
+        return self.layer_initial_entries.get(layer)
 
     def remove_entry(self, entry_id: int) -> None:
         """Remove an entry by entry_id from counter or hedge lists."""
@@ -577,6 +590,9 @@ class SnowballCycle:
             "initial_entry": self.initial_entry.to_dict() if self.initial_entry is not None else {},
             "counter_entries": [e.to_dict() for e in self.counter_entries],
             "hedge_entries": [e.to_dict() for e in self.hedge_entries],
+            "layer_initial_entries": {
+                str(k): v.to_dict() for k, v in self.layer_initial_entries.items()
+            },
             "layer_retracement_count": self.layer_retracement_count,
             "layer_index": self.layer_index,
             "cycle_base_units": self.cycle_base_units,
@@ -598,12 +614,19 @@ class SnowballCycle:
         if raw_initial:
             initial_entry = Entry.from_dict(raw_initial)
 
+        raw_layer_initials = data.get("layer_initial_entries", {})
+        layer_initial_entries: dict[int, Entry] = {}
+        for k, v in raw_layer_initials.items():
+            if v:
+                layer_initial_entries[int(k)] = Entry.from_dict(v)
+
         return SnowballCycle(
             cycle_id=_parse_int(data.get("cycle_id", 0), 0),
             direction=direction,
             initial_entry=initial_entry,
             counter_entries=[Entry.from_dict(e) for e in data.get("counter_entries", [])],
             hedge_entries=[Entry.from_dict(e) for e in data.get("hedge_entries", [])],
+            layer_initial_entries=layer_initial_entries,
             layer_retracement_count=_parse_int(
                 data.get("layer_retracement_count", data.get("add_count", 0)), 0
             ),
