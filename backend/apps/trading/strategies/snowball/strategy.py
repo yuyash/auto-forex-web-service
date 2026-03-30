@@ -414,6 +414,7 @@ class SnowballStrategy(Strategy):
                 tp,
                 counter_non_hedge,
                 initial,
+                current_layer=cycle.freeze_count + 1,
             )
 
             logger.info(
@@ -484,6 +485,7 @@ class SnowballStrategy(Strategy):
             tp,
             counter_non_hedge,
             initial,
+            current_layer=cycle.freeze_count + 1,
         )
 
         logger.info(
@@ -552,6 +554,7 @@ class SnowballStrategy(Strategy):
         tp: Decimal,
         counter_non_hedge: list[Entry],
         initial_entry: Entry,
+        current_layer: int = 1,
     ) -> tuple[Decimal, str]:
         """Compute close_price and formula for a counter add."""
         if cfg.counter_tp_mode == "weighted_avg":
@@ -559,15 +562,18 @@ class SnowballStrategy(Strategy):
             total_cost = new_price * Decimal(str(units))
             formula_parts = [f"{new_price} * {units}"]
             for e in counter_non_hedge:
+                if e.layer_number != current_layer:
+                    continue
                 total_u += e.units
                 total_cost += e.entry_price * Decimal(str(e.units))
                 formula_parts.append(f"{e.entry_price} * {e.units}")
-            # Include initial entry in weighted average
-            ie_units = abs(initial_entry.units)
-            if ie_units > 0:
-                total_u += ie_units
-                total_cost += initial_entry.entry_price * Decimal(str(ie_units))
-                formula_parts.append(f"{initial_entry.entry_price} * {ie_units}")
+            # Include initial entry only when it belongs to the current layer
+            if initial_entry.layer_number == current_layer:
+                ie_units = abs(initial_entry.units)
+                if ie_units > 0:
+                    total_u += ie_units
+                    total_cost += initial_entry.entry_price * Decimal(str(ie_units))
+                    formula_parts.append(f"{initial_entry.entry_price} * {ie_units}")
             close_price = total_cost / Decimal(str(total_u)) if total_u > 0 else new_price
             exit_formula = f"({' + '.join(formula_parts)}) / {total_u}"
         else:
