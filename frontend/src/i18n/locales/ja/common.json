@@ -130,6 +130,32 @@
     "confirmDelete": "このアイテムを削除してもよろしいですか？",
     "unsavedChanges": "保存されていない変更があります。本当に離れますか？"
   },
+  "taskActionDialog": {
+    "start": {
+      "title": "タスクを開始",
+      "message": "「{{taskName}}」を開始してもよろしいですか？",
+      "confirm": "開始",
+      "loading": "開始中..."
+    },
+    "pause": {
+      "title": "タスクを一時停止",
+      "message": "「{{taskName}}」を一時停止してもよろしいですか？",
+      "confirm": "一時停止",
+      "loading": "一時停止中..."
+    },
+    "resume": {
+      "title": "タスクを再開",
+      "message": "「{{taskName}}」を再開してもよろしいですか？",
+      "confirm": "再開",
+      "loading": "再開中..."
+    },
+    "restart": {
+      "title": "タスクを再起動",
+      "message": "「{{taskName}}」を再起動してもよろしいですか？新しい実行が開始されます。",
+      "confirm": "再起動",
+      "loading": "再起動中..."
+    }
+  },
   "strategyVisualization": {
     "noData": "ストラテジー可視化データがありません。",
     "unavailable": "ストラテジー可視化は利用できません。",

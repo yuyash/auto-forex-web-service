@@ -38,6 +38,8 @@ import { useTaskSummary } from '../../hooks/useTaskSummary';
 import { TaskStatus, TaskType } from '../../types/common';
 import type { TradingTask } from '../../types';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
+import { TaskActionConfirmDialog } from '../tasks/actions/TaskActionConfirmDialog';
+import { useTaskActionDialog } from '../../hooks/useTaskActionDialog';
 import {
   useDeleteTradingTask,
   usePauseTradingTask,
@@ -63,6 +65,7 @@ export const TradingTaskDetail: React.FC = () => {
   const taskId = id || '';
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [tabConfigOpen, setTabConfigOpen] = useState(false);
+  const { pendingAction, requestConfirm, cancelAction } = useTaskActionDialog();
   const deleteTask = useDeleteTradingTask();
   const startTask = useStartTradingTask();
   const stopTask = useStopTradingTask();
@@ -225,13 +228,7 @@ export const TradingTaskDetail: React.FC = () => {
         editLabel={t('common:actions.edit')}
         deleteLabel={t('common:actions.delete')}
         onStart={async (id) => {
-          const updatedTask = await startTask.mutate(id);
-          applyOptimisticStatus(updatedTask.status, [
-            TaskStatus.STARTING,
-            TaskStatus.RUNNING,
-            TaskStatus.FAILED,
-          ]);
-          await refreshTask();
+          requestConfirm('start', id);
         }}
         onStop={async (id) => {
           await stopTask.mutate({ id });
@@ -244,31 +241,13 @@ export const TradingTaskDetail: React.FC = () => {
           await refreshTask();
         }}
         onRestart={async (id) => {
-          const updatedTask = await restartTask.mutate(id);
-          applyOptimisticStatus(updatedTask.status, [
-            TaskStatus.STARTING,
-            TaskStatus.RUNNING,
-            TaskStatus.FAILED,
-          ]);
-          await refreshTask();
+          requestConfirm('restart', id);
         }}
         onResume={async (id) => {
-          const updatedTask = await resumeTask.mutate(id);
-          applyOptimisticStatus(updatedTask.status, [
-            TaskStatus.RUNNING,
-            TaskStatus.PAUSED,
-            TaskStatus.FAILED,
-          ]);
-          await refreshTask();
+          requestConfirm('resume', id);
         }}
         onPause={async (id) => {
-          const updatedTask = await pauseTask.mutate(id);
-          applyOptimisticStatus(updatedTask.status, [
-            TaskStatus.PAUSED,
-            TaskStatus.RUNNING,
-            TaskStatus.FAILED,
-          ]);
-          await refreshTask();
+          requestConfirm('pause', id);
         }}
         onEdit={() => navigate(`/trading-tasks/${taskId}/edit`)}
         onDelete={() => setDeleteDialogOpen(true)}
@@ -422,6 +401,48 @@ export const TradingTaskDetail: React.FC = () => {
         isLoading={deleteTask.isLoading}
         hasExecutionHistory={true}
       />
+      {pendingAction && (
+        <TaskActionConfirmDialog
+          open={true}
+          action={pendingAction.type}
+          taskName={task.name}
+          onCancel={cancelAction}
+          onConfirm={async () => {
+            const { type, taskId: actionTaskId } = pendingAction;
+            cancelAction();
+            if (type === 'start') {
+              const updatedTask = await startTask.mutate(actionTaskId);
+              applyOptimisticStatus(updatedTask.status, [
+                TaskStatus.STARTING,
+                TaskStatus.RUNNING,
+                TaskStatus.FAILED,
+              ]);
+            } else if (type === 'pause') {
+              const updatedTask = await pauseTask.mutate(actionTaskId);
+              applyOptimisticStatus(updatedTask.status, [
+                TaskStatus.PAUSED,
+                TaskStatus.RUNNING,
+                TaskStatus.FAILED,
+              ]);
+            } else if (type === 'resume') {
+              const updatedTask = await resumeTask.mutate(actionTaskId);
+              applyOptimisticStatus(updatedTask.status, [
+                TaskStatus.RUNNING,
+                TaskStatus.PAUSED,
+                TaskStatus.FAILED,
+              ]);
+            } else if (type === 'restart') {
+              const updatedTask = await restartTask.mutate(actionTaskId);
+              applyOptimisticStatus(updatedTask.status, [
+                TaskStatus.STARTING,
+                TaskStatus.RUNNING,
+                TaskStatus.FAILED,
+              ]);
+            }
+            await refreshTask();
+          }}
+        />
+      )}
     </Container>
   );
 };

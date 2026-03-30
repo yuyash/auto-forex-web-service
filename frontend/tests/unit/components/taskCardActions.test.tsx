@@ -60,6 +60,36 @@ vi.mock('react-i18next', () => ({
         'backtest:toast.resumedSuccessfully': 'Backtest resumed successfully',
         'backtest:toast.restartedSuccessfully':
           'Backtest restarted successfully',
+        'common:actions.cancel': 'Cancel',
+        'common:taskActionDialog.start.title': 'Start Task',
+        'common:taskActionDialog.start.confirm': 'Start',
+        'common:taskActionDialog.start.loading': 'Starting...',
+        'common:taskActionDialog.pause.title': 'Pause Task',
+        'common:taskActionDialog.pause.confirm': 'Pause',
+        'common:taskActionDialog.pause.loading': 'Pausing...',
+        'common:taskActionDialog.resume.title': 'Resume Task',
+        'common:taskActionDialog.resume.confirm': 'Resume',
+        'common:taskActionDialog.resume.loading': 'Resuming...',
+        'common:taskActionDialog.restart.title': 'Restart Task',
+        'common:taskActionDialog.restart.confirm': 'Restart',
+        'common:taskActionDialog.restart.loading': 'Restarting...',
+        'taskActionDialog.start.title': 'Start Task',
+        'taskActionDialog.start.confirm': 'Start',
+        'taskActionDialog.start.loading': 'Starting...',
+        'taskActionDialog.pause.title': 'Pause Task',
+        'taskActionDialog.pause.confirm': 'Pause',
+        'taskActionDialog.pause.loading': 'Pausing...',
+        'taskActionDialog.resume.title': 'Resume Task',
+        'taskActionDialog.resume.confirm': 'Resume',
+        'taskActionDialog.resume.loading': 'Resuming...',
+        'taskActionDialog.restart.title': 'Restart Task',
+        'taskActionDialog.restart.confirm': 'Restart',
+        'taskActionDialog.restart.loading': 'Restarting...',
+        'taskActionDialog.start.message': 'Are you sure you want to start?',
+        'taskActionDialog.pause.message': 'Are you sure you want to pause?',
+        'taskActionDialog.resume.message': 'Are you sure you want to resume?',
+        'taskActionDialog.restart.message': 'Are you sure you want to restart?',
+        'actions.cancel': 'Cancel',
       };
       return map[key] ?? ((options?.defaultValue as string | undefined) || key);
     },
@@ -245,6 +275,8 @@ describe('Task card control actions', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Start' }));
+    const confirmButtons = screen.getAllByRole('button', { name: 'Start' });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
 
     expect(mockTradingStart).toHaveBeenCalledWith('trading-1');
     expect(mockShowSuccess).toHaveBeenCalledWith(
@@ -279,6 +311,8 @@ describe('Task card control actions', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Pause' }));
+    const confirmButtons = screen.getAllByRole('button', { name: 'Pause' });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
 
     expect(mockTradingPause).toHaveBeenCalledWith('trading-1');
     expect(mockShowSuccess).toHaveBeenCalledWith('Trading paused successfully');
@@ -294,6 +328,8 @@ describe('Task card control actions', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Resume' }));
+    const confirmButtons = screen.getAllByRole('button', { name: 'Resume' });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
 
     expect(mockTradingResume).toHaveBeenCalledWith('trading-1');
     expect(mockShowSuccess).toHaveBeenCalledWith(
@@ -311,6 +347,8 @@ describe('Task card control actions', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Restart' }));
+    const confirmButtons = screen.getAllByRole('button', { name: 'Restart' });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
 
     expect(mockTradingRestart).toHaveBeenCalledWith('trading-1');
     expect(mockShowSuccess).toHaveBeenCalledWith(
@@ -328,6 +366,8 @@ describe('Task card control actions', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Start' }));
+    const confirmButtons = screen.getAllByRole('button', { name: 'Start' });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
 
     expect(mockBacktestStart).toHaveBeenCalledWith('backtest-1');
     expect(mockShowSuccess).toHaveBeenCalledWith(
@@ -363,6 +403,8 @@ describe('Task card control actions', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Pause' }));
+    const confirmButtons = screen.getAllByRole('button', { name: 'Pause' });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
 
     expect(mockBacktestPause).toHaveBeenCalledWith('backtest-1');
     expect(mockShowSuccess).toHaveBeenCalledWith(
@@ -380,6 +422,8 @@ describe('Task card control actions', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Resume' }));
+    const confirmButtons = screen.getAllByRole('button', { name: 'Resume' });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
 
     expect(mockBacktestResume).toHaveBeenCalledWith('backtest-1');
     expect(mockShowSuccess).toHaveBeenCalledWith(
@@ -397,6 +441,8 @@ describe('Task card control actions', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Restart' }));
+    const confirmButtons = screen.getAllByRole('button', { name: 'Restart' });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
 
     expect(mockBacktestRestart).toHaveBeenCalledWith('backtest-1');
     expect(mockShowSuccess).toHaveBeenCalledWith(

@@ -300,6 +300,10 @@ describe('BacktestTaskDetail', () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
 
     await user.click(screen.getByRole('button', { name: 'Start' }));
+    const startConfirmButtons = screen.getAllByRole('button', {
+      name: 'Start',
+    });
+    await user.click(startConfirmButtons[startConfirmButtons.length - 1]);
 
     await waitFor(() => {
       expect(mockBacktestStart).toHaveBeenCalledWith('1');
@@ -329,6 +333,8 @@ describe('BacktestTaskDetail', () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
 
     await user.click(screen.getByRole('button', { name: 'Pause' }));
+    const confirmButtons = screen.getAllByRole('button', { name: 'Pause' });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
 
     await waitFor(() => {
       expect(mockBacktestPause).toHaveBeenCalledWith('1');
@@ -348,6 +354,8 @@ describe('BacktestTaskDetail', () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
 
     await user.click(screen.getByRole('button', { name: 'Resume' }));
+    const confirmButtons = screen.getAllByRole('button', { name: 'Resume' });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
 
     await waitFor(() => {
       expect(mockBacktestResume).toHaveBeenCalledWith('1');
@@ -367,6 +375,8 @@ describe('BacktestTaskDetail', () => {
     render(<BacktestTaskDetail />, { wrapper: createWrapper() });
 
     await user.click(screen.getByRole('button', { name: 'Restart' }));
+    const confirmButtons = screen.getAllByRole('button', { name: 'Restart' });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
 
     await waitFor(() => {
       expect(mockBacktestRestart).toHaveBeenCalledWith('1');
