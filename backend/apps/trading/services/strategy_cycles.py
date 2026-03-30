@@ -245,15 +245,15 @@ def _serialize_trade(
         bucket_key = ts.replace(second=0, microsecond=0).isoformat()
         metrics = metrics_by_minute.get(bucket_key, {})
         if metrics.get("current_atr") is not None:
-            volatility = str(metrics["current_atr"])
+            volatility = f"{float(metrics['current_atr']):.3f}"
         if metrics.get("margin_ratio") is not None:
-            margin_ratio = str(metrics["margin_ratio"])
+            margin_ratio = f"{float(metrics['margin_ratio']):.3f}"
 
     return {
         "id": str(t["id"]),
         "direction": direction,
         "units": t["units"],
-        "price": str(t["price"]),
+        "price": f"{float(t['price']):.3f}",
         "execution_method": t["execution_method"],
         "layer_index": t.get("layer_index"),
         "retracement_count": t.get("retracement_count"),

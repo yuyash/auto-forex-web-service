@@ -188,7 +188,7 @@ class SnowballStrategy(Strategy):
             timestamp=tick.timestamp,
             planned_exit_price_formula=formula,
             description=(
-                f"Initial entry ({direction.value.upper()}) | units={units}, TP={close_price:.5f}"
+                f"Initial entry ({direction.value.upper()}) | units={units}, TP={close_price:.3f}"
             ),
         )
         cycle = SnowballCycle(
@@ -229,8 +229,8 @@ class SnowballStrategy(Strategy):
                 tick,
                 entry,
                 description=(
-                    f"TP ({direction.value.upper()}) | entry={entry.entry_price:.5f}, "
-                    f"exit={exit_price:.5f}, +{pips_gained:.1f} pips"
+                    f"TP ({direction.value.upper()}) | entry={entry.entry_price:.3f}, "
+                    f"exit={exit_price:.3f}, +{pips_gained:.1f} pips"
                 ),
                 close_reason="tp",
                 actual_tp_pips=pips_gained,
@@ -341,8 +341,8 @@ class SnowballStrategy(Strategy):
                     entry,
                     description=(
                         f"Counter TP step {entry.step} ({entry.direction.value.upper()}) | "
-                        f"L{layer}/R{ret}, entry={entry.entry_price:.5f}, "
-                        f"exit={exit_price:.5f}, +{pips_gained:.1f} pips"
+                        f"L{layer}/R{ret}, entry={entry.entry_price:.3f}, "
+                        f"exit={exit_price:.3f}, +{pips_gained:.1f} pips"
                     ),
                     close_reason="counter_tp",
                     actual_tp_pips=pips_gained,
@@ -412,7 +412,7 @@ class SnowballStrategy(Strategy):
                     planned_exit_price_formula=formula,
                     description=(
                         f"Layer initial entry ({direction.value.upper()}) | "
-                        f"L{new_layer}/R0, units={layer_entry.units}, TP={close_price:.5f}"
+                        f"L{new_layer}/R0, units={layer_entry.units}, TP={close_price:.3f}"
                     ),
                 )
                 cycle.layer_initial_entries[new_layer] = layer_entry
@@ -495,7 +495,7 @@ class SnowballStrategy(Strategy):
                 description=(
                     f"Counter add ({direction.value.upper()}) | "
                     f"L{cycle.layer_index + 1}/R{ret_number}, units={units}, "
-                    f"adverse={loss:.1f} pips, TP={close_price:.5f}"
+                    f"adverse={loss:.1f} pips, TP={close_price:.3f}"
                 ),
             )
             cycle.counter_entries.append(entry)
@@ -571,7 +571,7 @@ class SnowballStrategy(Strategy):
             description=(
                 f"Counter add ({direction.value.upper()}) | "
                 f"L{cycle.layer_index + 1}/R{ret_number}, units={units}, "
-                f"adverse={adverse:.1f} pips, TP={close_price:.5f}"
+                f"adverse={adverse:.1f} pips, TP={close_price:.3f}"
             ),
         )
         cycle.counter_entries.append(entry)
