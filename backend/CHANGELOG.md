@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.21.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.20.1...backend-v1.21.0) (2026-03-30)
+
+
+### Features
+
+* layer initial entries ([#270](https://github.com/yuyash/auto-forex-web-service/issues/270)) ([de22012](https://github.com/yuyash/auto-forex-web-service/commit/de22012872123b96e545e86ab3de98113569b585))
+
 ## [1.20.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.20.0...backend-v1.20.1) (2026-03-30)
 
 
