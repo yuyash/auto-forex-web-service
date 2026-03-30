@@ -267,6 +267,7 @@ class TestSnowballBacktestSimulation:
                 event_type="open_position",
             )
             .exclude(details__strategy_event_type="snowball_initial")
+            .exclude(details__strategy_event_type="snowball_layer_initial")
             .order_by("created_at", "id")
             .values_list("details__retracement_count", flat=True)
         )
