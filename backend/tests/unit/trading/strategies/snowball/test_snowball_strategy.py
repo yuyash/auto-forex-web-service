@@ -1,7 +1,7 @@
 """Comprehensive unit tests for SnowballStrategy tick-driven behavior.
 
 Covers: initialisation, trend basket rotation, counter basket adds/closes,
-add_count reset after TP, r_max cycle reset, f_max exhaustion, margin
+layer_retracement_count reset after TP, r_max cycle reset, f_max exhaustion, margin
 protection (shrink / lock / emergency), rebalance, spread guard, and
 dynamic TP (ATR) scenarios.
 """
@@ -184,7 +184,7 @@ class TestCounterBasketAdds:
         counter_opens = [o for o in opens if "counter" in (o.strategy_event_type or "")]
         assert len(counter_opens) == 1
         # First counter add: lot_k=2 (trend=1), add_count=1
-        assert state.strategy_state["cycles"][0]["add_count"] == 1
+        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 1
 
     def test_second_counter_add(self):
         """Counter adds use lot_k=2,3,4... (trend entry is position 1)."""
@@ -194,11 +194,11 @@ class TestCounterBasketAdds:
 
         # First add — lot_k=2 (trend entry is position 1)
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
-        assert state.strategy_state["cycles"][0]["add_count"] == 1
+        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 1
 
         # Second add — 10 more pips from latest counter entry, lot_k=3
         s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.79", "149.81"), state=state)
-        assert state.strategy_state["cycles"][0]["add_count"] == 2
+        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 2
 
         counter = [
             e for e in state.strategy_state["cycles"][0]["counter_entries"] if not e.get("is_hedge")
@@ -210,13 +210,13 @@ class TestCounterBasketAdds:
 
 
 # ==================================================================
-# 4. Counter close — TP hit resets add_count to 0
+# 4. Counter close — TP hit resets layer_retracement_count to 0
 # ==================================================================
 
 
 class TestCounterCloseResetsAddCount:
     def test_counter_tp_resets_add_count_to_zero(self):
-        """After a counter entry is closed at TP, add_count resets to 0
+        """After a counter entry is closed at TP, layer_retracement_count resets to 0
         so the next adverse add restarts from lot_k=1."""
         s = _strategy(
             n_pips_head="10",
@@ -232,7 +232,7 @@ class TestCounterCloseResetsAddCount:
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
         s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.79", "149.81"), state=state)
         s.on_tick(tick=_tick(T0 + timedelta(seconds=180), "149.69", "149.71"), state=state)
-        assert state.strategy_state["cycles"][0]["add_count"] == 3
+        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 3
 
         # Now price reverses — latest counter entry (long) has close_price set
         counter = [
@@ -251,11 +251,11 @@ class TestCounterCloseResetsAddCount:
 
         closes = _close_events(result)
         assert len(closes) >= 1
-        # add_count resets to 0 after TP close
-        assert state.strategy_state["cycles"][0]["add_count"] == 0
+        # layer_retracement_count resets to 0 after TP close
+        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 0
 
     def test_next_add_after_close_restarts_from_lot1(self):
-        """After TP close resets add_count, the next add uses lot_k=1 (1000 units)."""
+        """After TP close resets layer_retracement_count, the next add uses lot_k=1 (1000 units)."""
         s = _strategy(
             n_pips_head="10",
             interval_mode="constant",
@@ -281,7 +281,7 @@ class TestCounterCloseResetsAddCount:
             ),
             state=state,
         )
-        assert state.strategy_state["cycles"][0]["add_count"] == 0
+        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 0
 
         # Now drop again — next add should restart from lot_k=1, 1000 units
         remaining = [
@@ -330,7 +330,7 @@ class TestReversalScenario:
 
         # Phase 1: adverse (drop) — add counter entries
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
-        assert state.strategy_state["cycles"][0]["add_count"] == 1
+        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 1
 
         # Phase 2: favourable (rise) — close counter TP
         counter = [
@@ -347,7 +347,7 @@ class TestReversalScenario:
                 ),
                 state=state,
             )
-            assert state.strategy_state["cycles"][0]["add_count"] == 0
+            assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 0
 
         # Phase 3: adverse again — should add from step 1
         remaining = [
@@ -376,7 +376,7 @@ class TestReversalScenario:
 
 class TestRMaxCycleReset:
     def test_cycle_resets_at_r_max(self):
-        """When add_count reaches r_max, cycle resets."""
+        """When layer_retracement_count reaches r_max, cycle resets."""
         s = _strategy(
             r_max=3,
             n_pips_head="5",
@@ -396,7 +396,7 @@ class TestRMaxCycleReset:
                 state=state,
             )
 
-        assert state.strategy_state["cycles"][0]["add_count"] == 3
+        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 3
 
         # Next tick should trigger cycle reset (add_count >= r_max)
         price = Decimal("150.00") - Decimal("0.30")
@@ -406,8 +406,8 @@ class TestRMaxCycleReset:
         )
         signals = _signal_events(result, "snowball_cycle_reset")
         assert len(signals) == 0
-        assert state.strategy_state["cycles"][0]["add_count"] == 0
-        assert state.strategy_state["cycles"][0]["freeze_count"] == 1
+        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 0
+        assert state.strategy_state["cycles"][0]["layer_index"] == 1
 
 
 # ==================================================================
@@ -417,14 +417,14 @@ class TestRMaxCycleReset:
 
 class TestFMaxExhaustion:
     def test_no_adds_after_f_max_exceeded(self):
-        """Once freeze_count >= f_max, no more counter adds."""
+        """Once layer_index >= f_max, no more counter adds."""
         s = _strategy(r_max=2, f_max=1, n_pips_head="5", interval_mode="constant")
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
 
         # Force state to f_max exceeded
-        state.strategy_state["cycles"][0]["freeze_count"] = 2  # > f_max=1
-        state.strategy_state["cycles"][0]["add_count"] = 0
+        state.strategy_state["cycles"][0]["layer_index"] = 2  # > f_max=1
+        state.strategy_state["cycles"][0]["layer_retracement_count"] = 0
 
         price = Decimal("149.50")
         result = s.on_tick(
@@ -760,11 +760,11 @@ class TestManualIntervalMode:
 
         # First add at 5 pips
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.94", "149.96"), state=state)
-        assert state.strategy_state["cycles"][0]["add_count"] == 1
+        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 1
 
         # Second add needs 10 more pips from latest entry
         s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.84", "149.86"), state=state)
-        assert state.strategy_state["cycles"][0]["add_count"] == 2
+        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 2
 
 
 # ==================================================================
@@ -788,9 +788,9 @@ class TestPostRMaxBaseFactor:
         # Add 2 entries to hit r_max
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.94", "149.96"), state=state)
         s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.89", "149.91"), state=state)
-        assert state.strategy_state["cycles"][0]["add_count"] == 2
+        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 2
 
         # Trigger cycle reset
         s.on_tick(tick=_tick(T0 + timedelta(seconds=180), "149.80", "149.82"), state=state)
-        assert state.strategy_state["cycles"][0]["freeze_count"] == 1
+        assert state.strategy_state["cycles"][0]["layer_index"] == 1
         assert state.strategy_state["cycles"][0]["cycle_base_units"] == 1500  # 1000 * 1.5

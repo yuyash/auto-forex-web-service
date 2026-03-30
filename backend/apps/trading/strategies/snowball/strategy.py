@@ -332,7 +332,7 @@ class SnowballStrategy(Strategy):
                 pips_gained,
             )
             cycle.remove_entry(entry.entry_id)
-            cycle.add_count = 0
+            cycle.layer_retracement_count = 0
             cycle.counter_close_count += 1
 
             return [
@@ -364,20 +364,20 @@ class SnowballStrategy(Strategy):
         cfg = self.config
         events: list[StrategyEvent] = []
 
-        if cycle.freeze_count >= cfg.f_max:
+        if cycle.layer_index >= cfg.f_max:
             return events
 
-        if cycle.add_count >= cfg.r_max:
+        if cycle.layer_retracement_count >= cfg.r_max:
             logger.info(
-                "Counter r_max reached (%d/%d) in cycle %d: freeze_count %d -> %d",
-                cycle.add_count,
+                "Counter r_max reached (%d/%d) in cycle %d: layer_index %d -> %d",
+                cycle.layer_retracement_count,
                 cfg.r_max,
                 cycle.cycle_id,
-                cycle.freeze_count,
-                cycle.freeze_count + 1,
+                cycle.layer_index,
+                cycle.layer_index + 1,
             )
-            cycle.add_count = 0
-            cycle.freeze_count += 1
+            cycle.layer_retracement_count = 0
+            cycle.layer_index += 1
             cycle.cycle_base_units = int(Decimal(str(cfg.base_units)) * cfg.post_r_max_base_factor)
             return events
 
@@ -400,11 +400,15 @@ class SnowballStrategy(Strategy):
                 return events
 
             prior_closes = cycle.counter_close_count
-            lot_k = (cycle.add_count + 2) if prior_closes == 0 else (cycle.add_count + 1)
+            lot_k = (
+                (cycle.layer_retracement_count + 2)
+                if prior_closes == 0
+                else (cycle.layer_retracement_count + 1)
+            )
             units = lot_k * cycle.cycle_base_units
             tp = counter_tp_pips(step_k, cfg)
             new_price = tick.ask if direction == Direction.LONG else tick.bid
-            ret_number = cycle.add_count + 1  # R1, R2, R3...
+            ret_number = cycle.layer_retracement_count + 1  # R1, R2, R3...
 
             close_price, exit_formula = self._compute_counter_tp(
                 cfg,
@@ -414,6 +418,7 @@ class SnowballStrategy(Strategy):
                 tp,
                 counter_non_hedge,
                 initial,
+                current_layer=cycle.layer_index + 1,
             )
 
             logger.info(
@@ -421,7 +426,7 @@ class SnowballStrategy(Strategy):
                 lot_k,
                 direction.value.upper(),
                 cycle.cycle_id,
-                cycle.freeze_count + 1,
+                cycle.layer_index + 1,
                 ret_number,
                 units,
                 loss,
@@ -434,7 +439,7 @@ class SnowballStrategy(Strategy):
                 step=step_k + 1,
                 close_price=close_price,
                 role="counter",
-                layer_number=cycle.freeze_count + 1,
+                layer_number=cycle.layer_index + 1,
                 retracement_count=ret_number,
                 root_entry_id=initial.entry_id,
                 parent_entry_id=initial.entry_id,
@@ -448,12 +453,12 @@ class SnowballStrategy(Strategy):
                 planned_exit_price_formula=exit_formula,
                 description=(
                     f"Counter add ({direction.value.upper()}) | "
-                    f"L{cycle.freeze_count + 1}/R{ret_number}, units={units}, "
+                    f"L{cycle.layer_index + 1}/R{ret_number}, units={units}, "
                     f"adverse={loss:.1f} pips, TP={close_price:.5f}"
                 ),
             )
             cycle.counter_entries.append(entry)
-            cycle.add_count = 1
+            cycle.layer_retracement_count = 1
             events.append(evt)
             return events
 
@@ -464,17 +469,21 @@ class SnowballStrategy(Strategy):
         else:
             adverse = (tick.mid - latest.entry_price) / self.pip_size
 
-        step_k = cycle.add_count + 1
+        step_k = cycle.layer_retracement_count + 1
         interval = counter_interval_pips(step_k, cfg)
         if adverse < interval:
             return events
 
         prior_closes = cycle.counter_close_count
-        lot_k = (cycle.add_count + 2) if prior_closes == 0 else (cycle.add_count + 1)
+        lot_k = (
+            (cycle.layer_retracement_count + 2)
+            if prior_closes == 0
+            else (cycle.layer_retracement_count + 1)
+        )
         units = lot_k * cycle.cycle_base_units
         tp = counter_tp_pips(step_k, cfg)
         new_price = tick.ask if direction == Direction.LONG else tick.bid
-        ret_number = cycle.add_count + 1
+        ret_number = cycle.layer_retracement_count + 1
 
         close_price, exit_formula = self._compute_counter_tp(
             cfg,
@@ -484,13 +493,14 @@ class SnowballStrategy(Strategy):
             tp,
             counter_non_hedge,
             initial,
+            current_layer=cycle.layer_index + 1,
         )
 
         logger.info(
             "Counter add (%s) in cycle %d: L%d/R%d, units=%d, adverse=%.1f pips",
             direction.value.upper(),
             cycle.cycle_id,
-            cycle.freeze_count + 1,
+            cycle.layer_index + 1,
             ret_number,
             units,
             adverse,
@@ -503,7 +513,7 @@ class SnowballStrategy(Strategy):
             step=latest.step + 1,
             close_price=close_price,
             role="counter",
-            layer_number=cycle.freeze_count + 1,
+            layer_number=cycle.layer_index + 1,
             retracement_count=ret_number,
             root_entry_id=latest.root_entry_id
             if latest.root_entry_id is not None
@@ -519,12 +529,12 @@ class SnowballStrategy(Strategy):
             planned_exit_price_formula=exit_formula,
             description=(
                 f"Counter add ({direction.value.upper()}) | "
-                f"L{cycle.freeze_count + 1}/R{ret_number}, units={units}, "
+                f"L{cycle.layer_index + 1}/R{ret_number}, units={units}, "
                 f"adverse={adverse:.1f} pips, TP={close_price:.5f}"
             ),
         )
         cycle.counter_entries.append(entry)
-        cycle.add_count += 1
+        cycle.layer_retracement_count += 1
 
         # Update close prices for existing counter entries (non-weighted_avg only)
         if cfg.counter_tp_mode != "weighted_avg":
@@ -552,6 +562,7 @@ class SnowballStrategy(Strategy):
         tp: Decimal,
         counter_non_hedge: list[Entry],
         initial_entry: Entry,
+        current_layer: int = 1,
     ) -> tuple[Decimal, str]:
         """Compute close_price and formula for a counter add."""
         if cfg.counter_tp_mode == "weighted_avg":
@@ -559,15 +570,18 @@ class SnowballStrategy(Strategy):
             total_cost = new_price * Decimal(str(units))
             formula_parts = [f"{new_price} * {units}"]
             for e in counter_non_hedge:
+                if e.layer_number != current_layer:
+                    continue
                 total_u += e.units
                 total_cost += e.entry_price * Decimal(str(e.units))
                 formula_parts.append(f"{e.entry_price} * {e.units}")
-            # Include initial entry in weighted average
-            ie_units = abs(initial_entry.units)
-            if ie_units > 0:
-                total_u += ie_units
-                total_cost += initial_entry.entry_price * Decimal(str(ie_units))
-                formula_parts.append(f"{initial_entry.entry_price} * {ie_units}")
+            # Include initial entry only when it belongs to the current layer
+            if initial_entry.layer_number == current_layer:
+                ie_units = abs(initial_entry.units)
+                if ie_units > 0:
+                    total_u += ie_units
+                    total_cost += initial_entry.entry_price * Decimal(str(ie_units))
+                    formula_parts.append(f"{initial_entry.entry_price} * {ie_units}")
             close_price = total_cost / Decimal(str(total_u)) if total_u > 0 else new_price
             exit_formula = f"({' + '.join(formula_parts)}) / {total_u}"
         else:

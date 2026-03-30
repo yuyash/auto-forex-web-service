@@ -526,8 +526,8 @@ class SnowballCycle:
     initial_entry: Entry | None = None
     counter_entries: list[Entry] = field(default_factory=list)
     hedge_entries: list[Entry] = field(default_factory=list)
-    add_count: int = 0
-    freeze_count: int = 0
+    layer_retracement_count: int = 0
+    layer_index: int = 0
     cycle_base_units: int = 1000
     counter_close_count: int = 0
     completed: bool = False
@@ -577,8 +577,8 @@ class SnowballCycle:
             "initial_entry": self.initial_entry.to_dict() if self.initial_entry is not None else {},
             "counter_entries": [e.to_dict() for e in self.counter_entries],
             "hedge_entries": [e.to_dict() for e in self.hedge_entries],
-            "add_count": self.add_count,
-            "freeze_count": self.freeze_count,
+            "layer_retracement_count": self.layer_retracement_count,
+            "layer_index": self.layer_index,
             "cycle_base_units": self.cycle_base_units,
             "counter_close_count": self.counter_close_count,
             "completed": self.completed,
@@ -604,8 +604,10 @@ class SnowballCycle:
             initial_entry=initial_entry,
             counter_entries=[Entry.from_dict(e) for e in data.get("counter_entries", [])],
             hedge_entries=[Entry.from_dict(e) for e in data.get("hedge_entries", [])],
-            add_count=_parse_int(data.get("add_count", 0), 0),
-            freeze_count=_parse_int(data.get("freeze_count", 0), 0),
+            layer_retracement_count=_parse_int(
+                data.get("layer_retracement_count", data.get("add_count", 0)), 0
+            ),
+            layer_index=_parse_int(data.get("layer_index", data.get("freeze_count", 0)), 0),
             cycle_base_units=_parse_int(data.get("cycle_base_units", 1000), 1000),
             counter_close_count=_parse_int(data.get("counter_close_count", 0), 0),
             completed=bool(data.get("completed", False)),
