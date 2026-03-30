@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.23.0...frontend-v1.23.1) (2026-03-30)
+
+
+### Bug Fixes
+
+* **ui:** show lifecycle button on closed trades in strategy tab ([#264](https://github.com/yuyash/auto-forex-web-service/issues/264)) ([60275fd](https://github.com/yuyash/auto-forex-web-service/commit/60275fdf2f8d27ee18f3abb78a70227cdef90eb2))
+
 ## [1.23.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.22.3...frontend-v1.23.0) (2026-03-29)
 
 
