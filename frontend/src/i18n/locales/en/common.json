@@ -130,6 +130,32 @@
     "confirmDelete": "Are you sure you want to delete this item?",
     "unsavedChanges": "You have unsaved changes. Are you sure you want to leave?"
   },
+  "taskActionDialog": {
+    "start": {
+      "title": "Start Task",
+      "message": "Are you sure you want to start \"{{taskName}}\"?",
+      "confirm": "Start",
+      "loading": "Starting..."
+    },
+    "pause": {
+      "title": "Pause Task",
+      "message": "Are you sure you want to pause \"{{taskName}}\"?",
+      "confirm": "Pause",
+      "loading": "Pausing..."
+    },
+    "resume": {
+      "title": "Resume Task",
+      "message": "Are you sure you want to resume \"{{taskName}}\"?",
+      "confirm": "Resume",
+      "loading": "Resuming..."
+    },
+    "restart": {
+      "title": "Restart Task",
+      "message": "Are you sure you want to restart \"{{taskName}}\"? This will start a new execution run.",
+      "confirm": "Restart",
+      "loading": "Restarting..."
+    }
+  },
   "strategyVisualization": {
     "noData": "No strategy visualization data.",
     "unavailable": "Strategy visualization is unavailable.",

@@ -229,6 +229,10 @@ describe('TradingTaskDetail', () => {
     render(<TradingTaskDetail />, { wrapper: createWrapper() });
 
     await user.click(screen.getByRole('button', { name: 'Start' }));
+    const startConfirmButtons = screen.getAllByRole('button', {
+      name: 'Start',
+    });
+    await user.click(startConfirmButtons[startConfirmButtons.length - 1]);
 
     await waitFor(() => {
       expect(mockTradingStart).toHaveBeenCalledWith('1');
@@ -253,6 +257,10 @@ describe('TradingTaskDetail', () => {
     render(<TradingTaskDetail />, { wrapper: createWrapper() });
 
     await user.click(screen.getByRole('button', { name: 'Pause' }));
+    const pauseConfirmButtons = screen.getAllByRole('button', {
+      name: 'Pause',
+    });
+    await user.click(pauseConfirmButtons[pauseConfirmButtons.length - 1]);
 
     await waitFor(() => {
       expect(mockTradingPause).toHaveBeenCalledWith('1');
@@ -272,6 +280,10 @@ describe('TradingTaskDetail', () => {
     render(<TradingTaskDetail />, { wrapper: createWrapper() });
 
     await user.click(screen.getByRole('button', { name: 'Resume' }));
+    const resumeConfirmButtons = screen.getAllByRole('button', {
+      name: 'Resume',
+    });
+    await user.click(resumeConfirmButtons[resumeConfirmButtons.length - 1]);
 
     await waitFor(() => {
       expect(mockTradingResume).toHaveBeenCalledWith('1');
@@ -291,6 +303,10 @@ describe('TradingTaskDetail', () => {
     render(<TradingTaskDetail />, { wrapper: createWrapper() });
 
     await user.click(screen.getByRole('button', { name: 'Restart' }));
+    const restartConfirmButtons = screen.getAllByRole('button', {
+      name: 'Restart',
+    });
+    await user.click(restartConfirmButtons[restartConfirmButtons.length - 1]);
 
     await waitFor(() => {
       expect(mockTradingRestart).toHaveBeenCalledWith('1');

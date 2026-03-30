@@ -31,6 +31,8 @@ import { TaskControlButtons } from '../common/TaskControlButtons';
 import BacktestTaskActions from './BacktestTaskActions';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
 import { BacktestStopDialog } from '../tasks/actions/BacktestStopDialog';
+import { TaskActionConfirmDialog } from '../tasks/actions/TaskActionConfirmDialog';
+import { useTaskActionDialog } from '../../hooks/useTaskActionDialog';
 import { useBacktestTask } from '../../hooks/useBacktestTasks';
 import { useTaskSummary } from '../../hooks/useTaskSummary';
 import {
@@ -70,6 +72,7 @@ export default function BacktestTaskCard({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const { pendingAction, requestConfirm, cancelAction } = useTaskActionDialog();
   const startTask = useStartBacktestTask();
   const stopTask = useStopBacktestTask();
   const resumeTask = useResumeBacktestTask();
@@ -394,11 +397,11 @@ export default function BacktestTaskCard({
           <TaskControlButtons
             taskId={task.id}
             status={displayStatus}
-            onStart={handleStart}
+            onStart={(id) => requestConfirm('start', id)}
             onStop={handleStopRequest}
-            onPause={handlePause}
-            onResume={handleResume}
-            onRestart={handleRestart}
+            onPause={(id) => requestConfirm('pause', id)}
+            onResume={(id) => requestConfirm('resume', id)}
+            onRestart={(id) => requestConfirm('restart', id)}
             onDelete={handleDelete}
             isLoading={isLoading}
             showLabels={!isMobile}
@@ -523,6 +526,23 @@ export default function BacktestTaskCard({
         onCancel={() => setStopDialogOpen(false)}
         onConfirm={() => void handleStop(task.id)}
       />
+      {pendingAction && (
+        <TaskActionConfirmDialog
+          open={true}
+          action={pendingAction.type}
+          taskName={task.name}
+          isLoading={isLoading}
+          onCancel={cancelAction}
+          onConfirm={() => {
+            const { type, taskId } = pendingAction;
+            cancelAction();
+            if (type === 'start') void handleStart(taskId);
+            else if (type === 'pause') void handlePause(taskId);
+            else if (type === 'resume') void handleResume(taskId);
+            else if (type === 'restart') void handleRestart(taskId);
+          }}
+        />
+      )}
     </Card>
   );
 }

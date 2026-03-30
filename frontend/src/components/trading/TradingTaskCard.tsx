@@ -31,7 +31,9 @@ import { StatCard } from '../tasks/display/StatCard';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import TradingTaskActions from './TradingTaskActions';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
+import { TaskActionConfirmDialog } from '../tasks/actions/TaskActionConfirmDialog';
 import { useToast } from '../common';
+import { useTaskActionDialog } from '../../hooks/useTaskActionDialog';
 import { useTradingTask } from '../../hooks/useTradingTasks';
 import {
   useStrategies,
@@ -66,6 +68,7 @@ export default function TradingTaskCard({
   const [isLoading, setIsLoading] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const { pendingAction, requestConfirm, cancelAction } = useTaskActionDialog();
   const prevTaskRef = useRef<TradingTask>(task);
   const startTask = useStartTradingTask();
   const stopTask = useStopTradingTask();
@@ -448,11 +451,11 @@ export default function TradingTaskCard({
           <TaskControlButtons
             taskId={task.id}
             status={displayStatus}
-            onStart={handleStart}
+            onStart={(id) => requestConfirm('start', String(id))}
             onStop={handleStop}
-            onPause={handlePause}
-            onResume={handleResume}
-            onRestart={handleRestart}
+            onPause={(id) => requestConfirm('pause', String(id))}
+            onResume={(id) => requestConfirm('resume', String(id))}
+            onRestart={(id) => requestConfirm('restart', String(id))}
             onDelete={handleDelete}
             isLoading={isLoading}
             showLabels={!isMobile}
@@ -583,6 +586,23 @@ export default function TradingTaskCard({
         isLoading={isDeleting}
         hasExecutionHistory={true}
       />
+      {pendingAction && (
+        <TaskActionConfirmDialog
+          open={true}
+          action={pendingAction.type}
+          taskName={task.name}
+          isLoading={isLoading}
+          onCancel={cancelAction}
+          onConfirm={() => {
+            const { type, taskId } = pendingAction;
+            cancelAction();
+            if (type === 'start') void handleStart(taskId);
+            else if (type === 'pause') void handlePause(taskId);
+            else if (type === 'resume') void handleResume(taskId);
+            else if (type === 'restart') void handleRestart(taskId);
+          }}
+        />
+      )}
     </Card>
   );
 }
