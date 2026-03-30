@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.23.1...frontend-v1.24.0) (2026-03-30)
+
+
+### Features
+
+* **ui:** add confirmation dialogs for all task actions ([#268](https://github.com/yuyash/auto-forex-web-service/issues/268)) ([9df32b3](https://github.com/yuyash/auto-forex-web-service/commit/9df32b33f9ad27464a2134942edc1c8e1f83656c))
+
 ## [1.23.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.23.0...frontend-v1.23.1) (2026-03-30)
 
 
