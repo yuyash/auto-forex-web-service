@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.20.0...backend-v1.20.1) (2026-03-30)
+
+
+### Bug Fixes
+
+* snowball weighted avg layer rename ([#266](https://github.com/yuyash/auto-forex-web-service/issues/266)) ([f2e817f](https://github.com/yuyash/auto-forex-web-service/commit/f2e817f34386f42d3f6a86370cbed8656d2bd711))
+
 ## [1.20.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.19.0...backend-v1.20.0) (2026-03-29)
 
 
