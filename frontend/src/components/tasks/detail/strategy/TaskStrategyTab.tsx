@@ -16,6 +16,7 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
 import ClearIcon from '@mui/icons-material/Clear';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import SelectAllIcon from '@mui/icons-material/SelectAll';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
@@ -52,15 +53,14 @@ export function TaskStrategyTab({
   taskType,
   instrument,
   executionRunId,
-  enableRealTimeUpdates = false,
 }: TaskStrategyTabProps) {
   const { t } = useTranslation(['common']);
   const theme = useTheme();
-  const { data, isLoading, error } = useTaskStrategyEvents({
+  const { data, isLoading, error, refresh } = useTaskStrategyEvents({
     taskId,
     taskType,
     executionRunId,
-    enableRealTimeUpdates,
+    enableRealTimeUpdates: false,
   });
 
   const cycles = useMemo<StrategyCycle[]>(() => data?.cycles ?? [], [data]);
@@ -165,9 +165,7 @@ export function TaskStrategyTab({
   }, []);
 
   const selectedCycle =
-    displayedCycles.find((c) => c.cycle_id === selectedCycleId) ??
-    displayedCycles[0] ??
-    null;
+    displayedCycles.find((c) => c.cycle_id === selectedCycleId) ?? null;
 
   const handleSelectAllTrades = useCallback(() => {
     if (!selectedCycle) return;
@@ -216,7 +214,7 @@ export function TaskStrategyTab({
         <Stack
           direction="row"
           spacing={1}
-          sx={{ mb: 2, flexWrap: 'wrap', flexShrink: 0 }}
+          sx={{ mb: 2, flexWrap: 'wrap', flexShrink: 0, alignItems: 'center' }}
         >
           <Chip
             label={t('common:strategyVisualization.chips.cycles', {
@@ -238,6 +236,15 @@ export function TaskStrategyTab({
               count: summary.total_trades,
             })}
           />
+          <Tooltip title={t('common:actions.refresh')}>
+            <IconButton
+              size="small"
+              onClick={() => void refresh()}
+              aria-label={t('common:actions.refresh')}
+            >
+              <RefreshIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </Stack>
       ) : null}
 
@@ -582,7 +589,7 @@ export function TaskStrategyTab({
           ) : (
             <Box sx={{ p: 3 }}>
               <Alert severity="info">
-                {t('common:strategyVisualization.cycleList.noCyclesFound')}
+                {t('common:strategyVisualization.cycleList.selectCycle')}
               </Alert>
             </Box>
           )}

@@ -10,6 +10,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Box,
+  Button,
   Container,
   Paper,
   Typography,
@@ -123,12 +124,19 @@ export const TradingTaskDetail: React.FC = () => {
     }
   }, [actualStatus, clearOptimisticStatus, optimisticStatus]);
 
+  const selectedExecutionId = searchParams.get('execution');
+  const effectiveExecutionId = selectedExecutionId || task?.execution_id;
+  const isViewingHistorical =
+    selectedExecutionId != null &&
+    task?.execution_id != null &&
+    selectedExecutionId !== task.execution_id;
+
   const overviewSummary = useTaskSummary(
     taskId,
     TaskType.TRADING,
-    task?.execution_id,
+    effectiveExecutionId,
     {
-      polling: shouldPollTaskStatus(currentStatus),
+      polling: !isViewingHistorical && shouldPollTaskStatus(currentStatus),
       interval: statusPollingIntervalMs,
     }
   );
@@ -172,7 +180,9 @@ export const TradingTaskDetail: React.FC = () => {
     );
   }
   const detailTask = task as TradingTask;
-  const activeExecutionId = detailTask.execution_id;
+  const activeExecutionId = effectiveExecutionId;
+  const enableRealtime =
+    !isViewingHistorical && shouldEnableRealtimeTaskUpdates(currentStatus);
   const pnlCurrency = detailTask.instrument?.includes('_')
     ? detailTask.instrument.split('_')[1]
     : 'N/A';
@@ -207,6 +217,28 @@ export const TradingTaskDetail: React.FC = () => {
           {task.name}
         </Typography>
       </Breadcrumbs>
+
+      {isViewingHistorical && (
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => {
+                const tab = searchParams.get('tab') || 'overview';
+                setSearchParams({ tab });
+              }}
+            >
+              {t('common:actions.backToCurrent')}
+            </Button>
+          }
+        >
+          {t('trading:detail.viewingHistoricalExecution')}
+        </Alert>
+      )}
+
       <TaskDetailHeader
         taskId={taskId}
         taskName={detailTask.name}
@@ -300,9 +332,7 @@ export const TradingTaskDetail: React.FC = () => {
               taskType={TaskType.TRADING}
               instrument={detailTask.instrument}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
-                currentStatus
-              )}
+              enableRealTimeUpdates={enableRealtime}
             />
           </LazyTabPanel>
         )}
@@ -316,9 +346,7 @@ export const TradingTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
-                currentStatus
-              )}
+              enableRealTimeUpdates={enableRealtime}
               currentPrice={
                 polledTick?.price != null ? parseFloat(polledTick.price) : null
               }
@@ -337,9 +365,7 @@ export const TradingTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
-                currentStatus
-              )}
+              enableRealTimeUpdates={enableRealtime}
               pipSize={
                 detailTask.pip_size ? parseFloat(detailTask.pip_size) : null
               }
@@ -355,9 +381,7 @@ export const TradingTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
-                currentStatus
-              )}
+              enableRealTimeUpdates={enableRealtime}
             />
           </LazyTabPanel>
         )}
@@ -370,9 +394,7 @@ export const TradingTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
-                currentStatus
-              )}
+              enableRealTimeUpdates={enableRealtime}
             />
           </LazyTabPanel>
         )}

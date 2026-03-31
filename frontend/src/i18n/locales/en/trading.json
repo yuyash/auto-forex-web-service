@@ -56,7 +56,8 @@
     "openPositions": "Open Positions",
     "closedPositions": "Closed Positions",
     "ticksProcessed": "Ticks Processed",
-    "completed": "completed"
+    "completed": "completed",
+    "viewingHistoricalExecution": "You are viewing a past execution. The data shown below is from this historical run."
   },
   "form": {
     "selectTradingAccount": "Select Trading Account",

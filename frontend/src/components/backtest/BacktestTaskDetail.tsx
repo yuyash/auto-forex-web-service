@@ -11,6 +11,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Box,
+  Button,
   Container,
   Paper,
   Typography,
@@ -130,12 +131,19 @@ export const BacktestTaskDetail: React.FC = () => {
     }
   }, [actualStatus, clearOptimisticStatus, optimisticStatus]);
 
+  const selectedExecutionId = searchParams.get('execution');
+  const effectiveExecutionId = selectedExecutionId || task?.execution_id;
+  const isViewingHistorical =
+    selectedExecutionId != null &&
+    task?.execution_id != null &&
+    selectedExecutionId !== task.execution_id;
+
   const overviewSummary = useTaskSummary(
     taskId,
     TaskType.BACKTEST,
-    task?.execution_id,
+    effectiveExecutionId,
     {
-      polling: shouldPollTaskStatus(currentStatus),
+      polling: !isViewingHistorical && shouldPollTaskStatus(currentStatus),
       interval: statusPollingIntervalMs,
     }
   );
@@ -205,7 +213,9 @@ export const BacktestTaskDetail: React.FC = () => {
   }
 
   const detailTask = task as BacktestTask;
-  const activeExecutionId = detailTask.execution_id;
+  const activeExecutionId = effectiveExecutionId;
+  const enableRealtime =
+    !isViewingHistorical && shouldEnableRealtimeTaskUpdates(currentStatus);
   const pnlCurrency = detailTask.instrument?.includes('_')
     ? detailTask.instrument.split('_')[1]
     : 'N/A';
@@ -241,6 +251,27 @@ export const BacktestTaskDetail: React.FC = () => {
           {task.name}
         </Typography>
       </Breadcrumbs>
+
+      {isViewingHistorical && (
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => {
+                const tab = searchParams.get('tab') || 'overview';
+                setSearchParams({ tab });
+              }}
+            >
+              {t('common:actions.backToCurrent')}
+            </Button>
+          }
+        >
+          {t('backtest:detail.viewingHistoricalExecution')}
+        </Alert>
+      )}
 
       <TaskDetailHeader
         taskId={taskId}
@@ -330,9 +361,7 @@ export const BacktestTaskDetail: React.FC = () => {
               taskType={TaskType.BACKTEST}
               instrument={detailTask.instrument}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
-                currentStatus
-              )}
+              enableRealTimeUpdates={enableRealtime}
             />
           </LazyTabPanel>
         )}
@@ -347,9 +376,7 @@ export const BacktestTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.BACKTEST}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
-                currentStatus
-              )}
+              enableRealTimeUpdates={enableRealtime}
               currentPrice={
                 polledTick?.price != null ? parseFloat(polledTick.price) : null
               }
@@ -370,9 +397,7 @@ export const BacktestTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.BACKTEST}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
-                currentStatus
-              )}
+              enableRealTimeUpdates={enableRealtime}
               pipSize={
                 detailTask.pip_size ? parseFloat(detailTask.pip_size) : null
               }
@@ -390,9 +415,7 @@ export const BacktestTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.BACKTEST}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
-                currentStatus
-              )}
+              enableRealTimeUpdates={enableRealtime}
             />
           </LazyTabPanel>
         )}
@@ -407,9 +430,7 @@ export const BacktestTaskDetail: React.FC = () => {
               taskId={taskId}
               taskType={TaskType.BACKTEST}
               executionRunId={activeExecutionId}
-              enableRealTimeUpdates={shouldEnableRealtimeTaskUpdates(
-                currentStatus
-              )}
+              enableRealTimeUpdates={enableRealtime}
             />
           </LazyTabPanel>
         )}

@@ -455,10 +455,13 @@ class SnowballStrategy(Strategy):
         layer_initial = cycle.initial_for_layer(current_layer)
 
         if not counter_non_hedge:
-            # First counter add
+            # First counter add — measure distance from the current layer's
+            # initial entry so that L2/R1 is spaced from L2/R0, not L1/R0.
+            reference = layer_initial if layer_initial is not None else initial
+            layer_loss = reference.unrealised_loss_pips(tick.mid, self.pip_size)
             step_k = 1
             interval = counter_interval_pips(step_k, cfg)
-            if loss < interval:
+            if layer_loss < interval:
                 return events
 
             lot_k = cycle.layer_retracement_count + 2
@@ -486,7 +489,7 @@ class SnowballStrategy(Strategy):
                 cycle.layer_index + 1,
                 ret_number,
                 units,
-                loss,
+                layer_loss,
             )
             entry = Entry.open(
                 state=ss,
@@ -502,7 +505,7 @@ class SnowballStrategy(Strategy):
                 parent_entry_id=initial.entry_id,
             )
             entry.expected_interval_pips = interval
-            entry.actual_interval_pips = loss
+            entry.actual_interval_pips = layer_loss
             entry.expected_tp_pips = tp
             entry.validation_status = "pass"
             evt = entry.to_open_event(
@@ -511,7 +514,7 @@ class SnowballStrategy(Strategy):
                 description=(
                     f"Counter add ({direction.value.upper()}) | "
                     f"L{cycle.layer_index + 1}/R{ret_number}, units={units}, "
-                    f"adverse={loss:.1f} pips, TP={close_price:.3f}"
+                    f"adverse={layer_loss:.1f} pips, TP={close_price:.3f}"
                 ),
             )
             cycle.counter_entries.append(entry)

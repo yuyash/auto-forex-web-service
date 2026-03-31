@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Box,
@@ -29,7 +29,7 @@ import {
 } from '../../../hooks/useColumnConfig';
 import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
 import { StatusBadge } from './StatusBadge';
-import { TaskStatus, TaskType } from '../../../types/common';
+import { TaskType } from '../../../types/common';
 import type { TaskExecution } from '../../../types/execution';
 
 interface ExecutionHistoryTableProps {
@@ -44,7 +44,7 @@ export function ExecutionHistoryTable({
   instrument,
 }: ExecutionHistoryTableProps) {
   const { t } = useTranslation('common');
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [colConfigOpen, setColConfigOpen] = useState(false);
@@ -155,13 +155,19 @@ export function ExecutionHistoryTable({
         minWidth: 80,
         align: 'right' as const,
         render: (row: TaskExecution) => {
-          if (!row.metrics?.total_return)
+          if (row.metrics?.total_return == null)
             return (
               <Typography variant="body2" color="text.secondary">
                 -
               </Typography>
             );
           const v = parseFloat(String(row.metrics.total_return));
+          if (isNaN(v))
+            return (
+              <Typography variant="body2" color="text.secondary">
+                -
+              </Typography>
+            );
           return (
             <Chip
               label={`${v >= 0 ? '+' : ''}${v.toFixed(2)}%`}
@@ -179,8 +185,9 @@ export function ExecutionHistoryTable({
         minWidth: 90,
         align: 'right' as const,
         render: (row: TaskExecution) => {
-          if (!row.metrics?.total_pnl) return '-';
+          if (row.metrics?.total_pnl == null) return '-';
           const v = parseFloat(String(row.metrics.total_pnl));
+          if (isNaN(v)) return '-';
           const suffix = pnlCurrency ? ` ${pnlCurrency}` : '';
           return (
             <Typography
@@ -246,15 +253,10 @@ export function ExecutionHistoryTable({
 
   const handleRowClick = useCallback(
     (exec: TaskExecution) => {
-      if (
-        exec.status === TaskStatus.RUNNING ||
-        exec.status === TaskStatus.PAUSED
-      ) {
-        const prefix = taskType === TaskType.BACKTEST ? 'backtest' : 'trading';
-        navigate(`/${prefix}-tasks/${taskId}/running`);
-      }
+      const tab = searchParams.get('tab') || 'overview';
+      setSearchParams({ tab, execution: exec.id });
     },
-    [navigate, taskId, taskType]
+    [searchParams, setSearchParams]
   );
 
   return (

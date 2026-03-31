@@ -167,7 +167,8 @@
     "openPositions": "オープンポジション",
     "closedPositions": "クローズドポジション",
     "ticksProcessed": "処理ティック数",
-    "completed": "完了"
+    "completed": "完了",
+    "viewingHistoricalExecution": "過去の実行を表示しています。以下のデータはこの実行のものです。"
   },
   "form": {
     "selectConfiguration": "設定構成を選択",

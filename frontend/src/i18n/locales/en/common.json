@@ -78,7 +78,8 @@
     "deleting": "Deleting...",
     "newTask": "New Task",
     "createTask": "Create Task",
-    "updateTask": "Update Task"
+    "updateTask": "Update Task",
+    "backToCurrent": "Back to Current"
   },
   "status": {
     "active": "Active",
@@ -229,6 +230,7 @@
       "filterActive": "Active",
       "filterCompleted": "Completed",
       "noCyclesFound": "No cycles found",
+      "selectCycle": "Select a cycle from the list to view its details",
       "tradeCount": "{{count}} trades",
       "cycle": "Cycle",
       "opens": "{{count}} opens",
