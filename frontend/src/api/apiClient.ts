@@ -71,6 +71,7 @@ async function makeRequest<T>(
     url,
     headers: { ...authHeaders, ...options?.headers },
     withCredentials: apiConfig.WITH_CREDENTIALS,
+    timeout: 120_000,
   };
 
   if (options?.query) {

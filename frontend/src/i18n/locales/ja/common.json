@@ -230,6 +230,7 @@
       "filterActive": "進行中",
       "filterCompleted": "完了",
       "noCyclesFound": "サイクルが見つかりません",
+      "selectCycle": "リストからサイクルを選択して詳細を表示してください",
       "tradeCount": "{{count}} トレード",
       "cycle": "サイクル",
       "opens": "{{count}} オープン",

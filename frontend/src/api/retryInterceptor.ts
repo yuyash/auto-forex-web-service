@@ -1,9 +1,9 @@
 /**
- * Global Axios interceptor for 429 Too Many Requests.
+ * Global Axios retry interceptor.
  *
  * Automatically retries failed requests with exponential backoff
- * when the server returns 429.  Respects the Retry-After header
- * when present.
+ * for transient server errors (429, 502, 503, 504).
+ * Respects the Retry-After header when present.
  *
  * Call `installRetryInterceptor()` once at app startup.
  */
@@ -17,6 +17,8 @@ const MAX_BACKOFF_MS = 30_000;
 interface RetryMeta {
   __retryCount?: number;
 }
+
+const RETRYABLE_STATUS_CODES = new Set([429, 502, 503, 504]);
 
 function getBackoffMs(
   retryAfter: string | null | undefined,
@@ -40,7 +42,8 @@ export function installRetryInterceptor(): void {
     const config = error.config as
       | (InternalAxiosRequestConfig & RetryMeta)
       | undefined;
-    if (!config || error.response?.status !== 429) {
+    const status = error.response?.status;
+    if (!config || !status || !RETRYABLE_STATUS_CODES.has(status)) {
       return Promise.reject(error);
     }
 
