@@ -385,12 +385,6 @@ class SnowballStrategy(Strategy):
             if initial is not None:
                 direction = cycle.direction
                 price = tick.ask if direction == Direction.LONG else tick.bid
-                if direction == Direction.LONG:
-                    close_price = price + cfg.m_pips * self.pip_size
-                    formula = f"{price} + {cfg.m_pips} * {self.pip_size}"
-                else:
-                    close_price = price - cfg.m_pips * self.pip_size
-                    formula = f"{price} - {cfg.m_pips} * {self.pip_size}"
 
                 layer_entry = Entry.open(
                     state=ss,
@@ -398,15 +392,42 @@ class SnowballStrategy(Strategy):
                     direction=direction,
                     units=cfg.trend_lot_size * cycle.cycle_base_units,
                     step=1,
-                    close_price=close_price,
+                    close_price=Decimal("0"),  # placeholder, computed below
                     role="layer_initial",
                     layer_number=new_layer,
                     retracement_count=0,
                     root_entry_id=initial.entry_id,
                     parent_entry_id=initial.entry_id,
                 )
-                layer_entry.expected_tp_pips = cfg.m_pips
+
+                # Compute close_price as weighted average of previous layer's
+                # entries (initial/layer-initial + counters) plus this new entry.
+                prev_layer = new_layer - 1
+                prev_entries: list[tuple[Decimal, int]] = []
+                prev_initial = cycle.initial_for_layer(prev_layer)
+                if prev_initial is not None:
+                    prev_entries.append((prev_initial.entry_price, abs(prev_initial.units)))
+                for e in cycle.counter_entries:
+                    if e.layer_number == prev_layer and not e.is_hedge:
+                        prev_entries.append((e.entry_price, abs(e.units)))
+                prev_entries.append((layer_entry.entry_price, abs(layer_entry.units)))
+
+                total_cost = sum(p * Decimal(str(u)) for p, u in prev_entries)
+                total_units = sum(u for _, u in prev_entries)
+                if total_units > 0:
+                    close_price = total_cost / Decimal(str(total_units))
+                else:
+                    close_price = (
+                        price + cfg.m_pips * self.pip_size
+                        if direction == Direction.LONG
+                        else price - cfg.m_pips * self.pip_size
+                    )
+
+                layer_entry.close_price = close_price
+                tp_pips = abs(close_price - layer_entry.entry_price) / self.pip_size
+                layer_entry.expected_tp_pips = tp_pips
                 layer_entry.validation_status = "pass"
+                formula = f"weighted_avg(L{prev_layer} entries + L{new_layer} initial)"
                 evt = layer_entry.to_open_event(
                     timestamp=tick.timestamp,
                     planned_exit_price_formula=formula,
@@ -440,12 +461,7 @@ class SnowballStrategy(Strategy):
             if loss < interval:
                 return events
 
-            prior_closes = cycle.counter_close_count
-            lot_k = (
-                (cycle.layer_retracement_count + 2)
-                if prior_closes == 0
-                else (cycle.layer_retracement_count + 1)
-            )
+            lot_k = cycle.layer_retracement_count + 2
             units = lot_k * cycle.cycle_base_units
             tp = counter_tp_pips(step_k, cfg)
             new_price = tick.ask if direction == Direction.LONG else tick.bid
@@ -515,12 +531,7 @@ class SnowballStrategy(Strategy):
         if adverse < interval:
             return events
 
-        prior_closes = cycle.counter_close_count
-        lot_k = (
-            (cycle.layer_retracement_count + 2)
-            if prior_closes == 0
-            else (cycle.layer_retracement_count + 1)
-        )
+        lot_k = cycle.layer_retracement_count + 2
         units = lot_k * cycle.cycle_base_units
         tp = counter_tp_pips(step_k, cfg)
         new_price = tick.ask if direction == Direction.LONG else tick.bid
@@ -982,8 +993,15 @@ class SnowballStrategy(Strategy):
         # --- Per-cycle processing ---
         for cycle in list(ss.active_cycles()):
             events.extend(self._process_cycle_tp(ss, tick, cycle))
-            events.extend(self._process_cycle_counter_closes(ss, tick, cycle))
-            events.extend(self._process_cycle_counter_adds(ss, tick, cycle))
+            counter_close_events = self._process_cycle_counter_closes(ss, tick, cycle)
+            events.extend(counter_close_events)
+            # After a counter TP close the retracement count is reset to 0 and
+            # the counter list is empty, so the "first counter add" path would
+            # immediately re-enter on the same tick — creating an open/close
+            # loop that fires every tick.  The spec says "re-enter on the *next*
+            # adverse move", so we skip counter adds on the tick that closed.
+            if not counter_close_events:
+                events.extend(self._process_cycle_counter_adds(ss, tick, cycle))
 
         state.strategy_state = ss.to_dict()
         return StrategyResult(state=state, events=events)
