@@ -303,8 +303,8 @@ class TestCounterCloseResetsAddCount:
         opens = _open_events(result)
         counter_opens = [o for o in opens if "counter" in (o.strategy_event_type or "")]
         if counter_opens:
-            # lot_k=1 → 1000 units, Ret=1 (fresh restart after TP close)
-            assert counter_opens[0].units == 1000
+            # lot_k=2 → 2000 units, Ret=1 (fresh restart after TP close)
+            assert counter_opens[0].units == 2000
             assert counter_opens[0].retracement_count == 1
 
 
@@ -366,7 +366,7 @@ class TestReversalScenario:
         opens = _open_events(result)
         counter_opens = [o for o in opens if "counter" in (o.strategy_event_type or "")]
         if counter_opens:
-            assert counter_opens[0].units == 1000  # lot_k=1 (restart after TP close)
+            assert counter_opens[0].units == 2000  # lot_k=2 (restart after TP close)
 
 
 # ==================================================================
@@ -794,3 +794,156 @@ class TestPostRMaxBaseFactor:
         s.on_tick(tick=_tick(T0 + timedelta(seconds=180), "149.80", "149.82"), state=state)
         assert state.strategy_state["cycles"][0]["layer_index"] == 1
         assert state.strategy_state["cycles"][0]["cycle_base_units"] == 1500  # 1000 * 1.5
+
+
+# ==================================================================
+# Expected table validation: lot sizes, layer initial TP, counter TP
+# ==================================================================
+
+
+class TestExpectedTableValidation:
+    """Validate the full expected table for lot sizes, layer initial TP
+    (weighted_avg of previous layer), and counter TP (weighted_avg of
+    same-layer entries).
+
+    Uses manual intervals [30, 30, 25, 20, 16, 14, 12] with r_max=7,
+    f_max=3, counter_tp_mode=weighted_avg.
+    """
+
+    @staticmethod
+    def _make_strategy() -> SnowballStrategy:
+        return _strategy(
+            m_pips="50",
+            r_max=7,
+            f_max=3,
+            interval_mode="manual",
+            manual_intervals=["30", "30", "25", "20", "16", "14", "12"],
+            counter_tp_mode="weighted_avg",
+            post_r_max_base_factor="1",
+        )
+
+    def test_layer1_lot_sizes_and_tp(self):
+        """L1: lots = 1,2,3,4,5,6,7 and TP = weighted_avg of all L1 entries."""
+        s = self._make_strategy()
+        state = DummyState()
+
+        # Init at 100.00 (ask=100.02 so entry_price for LONG = ask = 100.02)
+        # We use bid=ask to simplify price matching
+        s.on_tick(tick=_tick(T0, "100.00", "100.00"), state=state)
+
+        # Expected L1 counter prices and lots (intervals: 30,30,25,20,16,14,12)
+        drops = [
+            ("99.70", "99.70", 2000),  # R1: -30 pips from initial
+            ("99.40", "99.40", 3000),  # R2: -30 pips from R1
+            ("99.15", "99.15", 4000),  # R3: -25 pips from R2
+            ("98.95", "98.95", 5000),  # R4: -20 pips from R3
+            ("98.79", "98.79", 6000),  # R5: -16 pips from R4
+            ("98.65", "98.65", 7000),  # R6: -14 pips from R5
+        ]
+
+        for i, (bid, ask, expected_units) in enumerate(drops, 1):
+            result = s.on_tick(
+                tick=_tick(T0 + timedelta(seconds=i * 60), bid, ask),
+                state=state,
+            )
+            opens = _open_events(result)
+            counter_opens = [o for o in opens if "counter" in (o.strategy_event_type or "")]
+            assert len(counter_opens) == 1, f"R{i}: expected 1 counter open"
+            assert counter_opens[0].units == expected_units, (
+                f"R{i}: expected {expected_units} units, got {counter_opens[0].units}"
+            )
+
+        # Verify layer_retracement_count = 6 (R1-R6)
+        cycle = state.strategy_state["cycles"][0]
+        assert cycle["layer_retracement_count"] == 6
+
+    def test_layer_progression_tp_is_weighted_avg(self):
+        """L2 initial TP = weighted_avg(all L1 entries + L2 initial)."""
+        s = self._make_strategy()
+        state = DummyState()
+
+        # Init at 100.00
+        s.on_tick(tick=_tick(T0, "100.00", "100.00"), state=state)
+
+        # Build up L1 R1-R7 (need all 7 to reach r_max)
+        # Intervals: 30, 30, 25, 20, 16, 14, 12
+        # Each price is measured from the PREVIOUS counter entry
+        l1_drops = [
+            "99.70",  # R1: initial(100.00) - 30 pips
+            "99.40",  # R2: R1(99.70) - 30 pips
+            "99.15",  # R3: R2(99.40) - 25 pips
+            "98.95",  # R4: R3(99.15) - 20 pips
+            "98.79",  # R5: R4(98.95) - 16 pips
+            "98.65",  # R6: R5(98.79) - 14 pips
+            "98.53",  # R7: R6(98.65) - 12 pips
+        ]
+        for i, price in enumerate(l1_drops, 1):
+            s.on_tick(tick=_tick(T0 + timedelta(seconds=i * 60), price, price), state=state)
+
+        # After R7: layer_retracement_count == 7 == r_max
+        cycle = state.strategy_state["cycles"][0]
+        assert cycle["layer_retracement_count"] == 7
+
+        # Next tick triggers layer progression (r_max check at start of counter_adds)
+        result = s.on_tick(
+            tick=_tick(T0 + timedelta(seconds=480), "98.41", "98.41"),
+            state=state,
+        )
+        opens = _open_events(result)
+        layer_initials = [o for o in opens if "layer_initial" in (o.strategy_event_type or "")]
+        assert len(layer_initials) == 1, "Expected 1 layer initial entry"
+
+        l2_init = layer_initials[0]
+        assert l2_init.units == 1000  # trend_lot_size * base_units
+
+        # Expected TP = weighted_avg(L1 all entries + L2 initial)
+        # L1: (100.00,1000), (99.70,2000), (99.40,3000), (99.15,4000),
+        #     (98.95,5000), (98.79,6000), (98.65,7000), (98.53,8000)
+        # L2 initial: (98.41, 1000)
+        l1_cost = (
+            Decimal("100.00") * 1000
+            + Decimal("99.70") * 2000
+            + Decimal("99.40") * 3000
+            + Decimal("99.15") * 4000
+            + Decimal("98.95") * 5000
+            + Decimal("98.79") * 6000
+            + Decimal("98.65") * 7000
+            + Decimal("98.53") * 8000
+        )
+        l2_init_cost = Decimal("98.41") * 1000
+        total_units = Decimal("37000")
+        expected_tp = (l1_cost + l2_init_cost) / total_units
+        actual_tp = l2_init.planned_exit_price
+        assert abs(actual_tp - expected_tp) < Decimal("0.001"), (
+            f"L2 initial TP: expected ~{expected_tp:.4f}, got {actual_tp}"
+        )
+
+    def test_layer2_counter_tp_uses_layer2_only(self):
+        """L2 counter TP = weighted_avg of L2 entries only (not L1)."""
+        s = self._make_strategy()
+        state = DummyState()
+
+        # Init + build L1 R1-R7 + trigger layer progression
+        s.on_tick(tick=_tick(T0, "100.00", "100.00"), state=state)
+        l1_drops = ["99.70", "99.40", "99.15", "98.95", "98.79", "98.65", "98.53"]
+        for i, price in enumerate(l1_drops, 1):
+            s.on_tick(tick=_tick(T0 + timedelta(seconds=i * 60), price, price), state=state)
+        # Trigger layer progression (L2 initial at 98.41)
+        s.on_tick(tick=_tick(T0 + timedelta(seconds=480), "98.41", "98.41"), state=state)
+
+        # L2/R1 at 98.11 (-30 pips from L2 initial 98.41)
+        result = s.on_tick(
+            tick=_tick(T0 + timedelta(seconds=540), "98.11", "98.11"),
+            state=state,
+        )
+        opens = _open_events(result)
+        counter_opens = [o for o in opens if "counter" in (o.strategy_event_type or "")]
+        assert len(counter_opens) == 1
+        assert counter_opens[0].units == 2000  # R1 = 2 lots
+
+        # Expected TP = weighted_avg(L2 initial 98.41*1000 + L2/R1 98.11*2000) / 3000
+        expected_tp = (Decimal("98.41") * 1000 + Decimal("98.11") * 2000) / 3000
+        actual_tp = counter_opens[0].planned_exit_price
+        assert abs(actual_tp - expected_tp) < Decimal("0.001"), (
+            f"L2/R1 TP: expected ~{expected_tp:.4f}, got {actual_tp}"
+        )
