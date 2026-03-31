@@ -982,8 +982,15 @@ class SnowballStrategy(Strategy):
         # --- Per-cycle processing ---
         for cycle in list(ss.active_cycles()):
             events.extend(self._process_cycle_tp(ss, tick, cycle))
-            events.extend(self._process_cycle_counter_closes(ss, tick, cycle))
-            events.extend(self._process_cycle_counter_adds(ss, tick, cycle))
+            counter_close_events = self._process_cycle_counter_closes(ss, tick, cycle)
+            events.extend(counter_close_events)
+            # After a counter TP close the retracement count is reset to 0 and
+            # the counter list is empty, so the "first counter add" path would
+            # immediately re-enter on the same tick — creating an open/close
+            # loop that fires every tick.  The spec says "re-enter on the *next*
+            # adverse move", so we skip counter adds on the tick that closed.
+            if not counter_close_events:
+                events.extend(self._process_cycle_counter_adds(ss, tick, cycle))
 
         state.strategy_state = ss.to_dict()
         return StrategyResult(state=state, events=events)
