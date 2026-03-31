@@ -31,6 +31,7 @@ from apps.trading.strategies.snowball.calculators import (
 from apps.trading.strategies.snowball.enums import ProtectionLevel
 from apps.trading.strategies.snowball.models import (
     Entry,
+    Layer,
     SnowballCycle,
     SnowballStrategyConfig,
     SnowballStrategyState,
@@ -195,8 +196,10 @@ class SnowballStrategy(Strategy):
             cycle_id=entry.entry_id,
             direction=direction,
             initial_entry=entry,
-            cycle_base_units=cfg.base_units,
         )
+        # Create the first layer (L1) with r_max empty slots
+        layer1 = Layer.create(1, cfg.r_max, cfg.base_units)
+        cycle.add_layer(layer1)
         ss.cycles.append(cycle)
         return [evt], cycle
 
@@ -284,28 +287,23 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        """Check counter entries for step-based close targets.
+        """Check slot entries for TP hits, closing from highest slot down.
 
-        Only the entry with the highest step number is eligible for close
-        on any given tick.  After closing it, we return immediately so that
-        the next tick re-evaluates the new max-step entry.  This prevents
-        cascading partial closes within a single tick.
+        Closes at most one entry per tick to avoid cascading.  When a slot
+        entry is closed, the slot is vacated and marked ``ever_closed``.
+        If the current layer becomes empty of slot entries, check whether
+        the layer-initial entry (L2+) should also be closed.
         """
         if cycle.completed:
             return []
 
-        non_hedge = cycle.counter_non_hedge()
-        if not non_hedge:
-            return []
-
-        max_step = max(e.step for e in non_hedge)
-
-        for entry in non_hedge:
-            if entry.is_hedge:
-                continue
-            if entry.step != max_step:
+        # Walk layers from newest to oldest
+        for layer in reversed(cycle.layers):
+            highest = layer.highest_occupied_slot()
+            if highest is None or highest.entry is None:
                 continue
 
+            entry = highest.entry
             close_price = entry.close_price
             if close_price <= 0:
                 continue
@@ -320,19 +318,17 @@ class SnowballStrategy(Strategy):
 
             exit_price = entry.exit_price(tick)
             pips_gained = abs(exit_price - entry.entry_price) / self.pip_size
-            layer = entry.layer_number
+            ln = entry.layer_number
             ret = entry.retracement_count
 
             logger.info(
-                "Counter TP step %d (%s): L%s/R%s, +%.1f pips",
-                entry.step,
+                "Counter TP (%s): L%s/R%s, +%.1f pips",
                 entry.direction.value.upper(),
-                layer,
+                ln,
                 ret,
                 pips_gained,
             )
-            cycle.remove_entry(entry.entry_id)
-            cycle.layer_retracement_count = 0
+            highest.vacate()
             cycle.counter_close_count += 1
 
             return [
@@ -340,11 +336,60 @@ class SnowballStrategy(Strategy):
                     tick,
                     entry,
                     description=(
-                        f"Counter TP step {entry.step} ({entry.direction.value.upper()}) | "
-                        f"L{layer}/R{ret}, entry={entry.entry_price:.3f}, "
+                        f"Counter TP ({entry.direction.value.upper()}) | "
+                        f"L{ln}/R{ret}, entry={entry.entry_price:.3f}, "
                         f"exit={exit_price:.3f}, +{pips_gained:.1f} pips"
                     ),
                     close_reason="counter_tp",
+                    actual_tp_pips=pips_gained,
+                    validation_status="pass",
+                )
+            ]
+
+        # Check layer-initial entries (L2+) — close if layer has no slot entries
+        for layer in reversed(cycle.layers):
+            if layer.layer_number == 1:
+                continue
+            if layer.initial_entry is None:
+                continue
+            if layer.occupied_slots():
+                break  # still has slot entries, don't close layer initial
+
+            entry = layer.initial_entry
+            close_price = entry.close_price
+            if close_price <= 0:
+                continue
+
+            hit = False
+            if entry.is_long and tick.bid >= close_price:
+                hit = True
+            elif entry.is_short and tick.ask <= close_price:
+                hit = True
+            if not hit:
+                continue
+
+            exit_price = entry.exit_price(tick)
+            pips_gained = abs(exit_price - entry.entry_price) / self.pip_size
+            ln = entry.layer_number
+
+            logger.info(
+                "Layer initial TP (%s): L%s, +%.1f pips",
+                entry.direction.value.upper(),
+                ln,
+                pips_gained,
+            )
+            layer.initial_entry = None
+
+            return [
+                self._close_entry(
+                    tick,
+                    entry,
+                    description=(
+                        f"Layer initial TP ({entry.direction.value.upper()}) | "
+                        f"L{ln}, entry={entry.entry_price:.3f}, "
+                        f"exit={exit_price:.3f}, +{pips_gained:.1f} pips"
+                    ),
+                    close_reason="layer_initial_tp",
                     actual_tp_pips=pips_gained,
                     validation_status="pass",
                 )
@@ -358,205 +403,89 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        """Check whether to add a new counter entry to this cycle."""
+        """Check whether to add a new counter entry to this cycle.
+
+        Uses the Layer/Slot model:
+        1. Find the current layer's next empty slot.
+        2. If the next slot has ``ever_closed`` (reversal happened), start a new layer.
+        3. Measure adverse distance from the appropriate reference entry.
+        4. If threshold met, fill the slot with a new entry.
+        """
         if cycle.completed:
             return []
         cfg = self.config
-        events: list[StrategyEvent] = []
+        layer = cycle.current_layer
+        if layer is None:
+            return []
 
-        if cycle.layer_index >= cfg.f_max:
-            return events
+        # Check if we need a new layer
+        if layer.should_start_new_layer():
+            if cycle.layer_index >= cfg.f_max - 1:
+                return []  # f_max reached
+            return self._start_new_layer(ss, tick, cycle)
 
-        if cycle.layer_retracement_count >= cfg.r_max:
-            new_layer = cycle.layer_index + 2
-            logger.info(
-                "Counter r_max reached (%d/%d) in cycle %d: layer_index %d -> %d",
-                cycle.layer_retracement_count,
-                cfg.r_max,
-                cycle.cycle_id,
-                cycle.layer_index,
-                cycle.layer_index + 1,
-            )
-            cycle.layer_retracement_count = 0
-            cycle.layer_index += 1
-            cycle.cycle_base_units = int(Decimal(str(cfg.base_units)) * cfg.post_r_max_base_factor)
+        # Find the next slot to fill
+        slot = layer.next_slot_to_fill()
+        if slot is None:
+            return []
 
-            initial = cycle.initial_entry
-            if initial is not None:
-                direction = cycle.direction
-                price = tick.ask if direction == Direction.LONG else tick.bid
-
-                layer_entry = Entry.open(
-                    state=ss,
-                    tick=tick,
-                    direction=direction,
-                    units=cfg.trend_lot_size * cycle.cycle_base_units,
-                    step=1,
-                    close_price=Decimal("0"),  # placeholder, computed below
-                    role="layer_initial",
-                    layer_number=new_layer,
-                    retracement_count=0,
-                    root_entry_id=initial.entry_id,
-                    parent_entry_id=initial.entry_id,
-                )
-
-                # Compute close_price as weighted average of previous layer's
-                # entries (initial/layer-initial + counters) plus this new entry.
-                prev_layer = new_layer - 1
-                prev_entries: list[tuple[Decimal, int]] = []
-                prev_initial = cycle.initial_for_layer(prev_layer)
-                if prev_initial is not None:
-                    prev_entries.append((prev_initial.entry_price, abs(prev_initial.units)))
-                for e in cycle.counter_entries:
-                    if e.layer_number == prev_layer and not e.is_hedge:
-                        prev_entries.append((e.entry_price, abs(e.units)))
-                prev_entries.append((layer_entry.entry_price, abs(layer_entry.units)))
-
-                total_cost = sum(p * Decimal(str(u)) for p, u in prev_entries)
-                total_units = sum(u for _, u in prev_entries)
-                if total_units > 0:
-                    close_price = total_cost / Decimal(str(total_units))
-                else:
-                    close_price = (
-                        price + cfg.m_pips * self.pip_size
-                        if direction == Direction.LONG
-                        else price - cfg.m_pips * self.pip_size
-                    )
-
-                layer_entry.close_price = close_price
-                tp_pips = abs(close_price - layer_entry.entry_price) / self.pip_size
-                layer_entry.expected_tp_pips = tp_pips
-                layer_entry.validation_status = "pass"
-                formula = f"weighted_avg(L{prev_layer} entries + L{new_layer} initial)"
-                evt = layer_entry.to_open_event(
-                    timestamp=tick.timestamp,
-                    planned_exit_price_formula=formula,
-                    description=(
-                        f"Layer initial entry ({direction.value.upper()}) | "
-                        f"L{new_layer}/R0, units={layer_entry.units}, TP={close_price:.3f}"
-                    ),
-                )
-                cycle.layer_initial_entries[new_layer] = layer_entry
-                events.append(evt)
-
-            return events
-
-        # Check if initial entry is losing
+        # Check if initial entry is losing (gate check)
         initial = cycle.initial_entry
         if not initial:
-            return events
+            return []
         loss = initial.unrealised_loss_pips(tick.mid, self.pip_size)
         if loss <= 0:
-            return events
+            return []
 
-        counter_non_hedge = cycle.counter_non_hedge()
+        # Determine reference entry and adverse distance
         direction = cycle.direction
-        current_layer = cycle.layer_index + 1
-        layer_initial = cycle.initial_for_layer(current_layer)
-
-        if not counter_non_hedge:
-            # First counter add — measure distance from the current layer's
-            # initial entry so that L2/R1 is spaced from L2/R0, not L1/R0.
-            reference = layer_initial if layer_initial is not None else initial
-            layer_loss = reference.unrealised_loss_pips(tick.mid, self.pip_size)
-            step_k = 1
-            interval = counter_interval_pips(step_k, cfg)
-            if layer_loss < interval:
-                return events
-
-            lot_k = cycle.layer_retracement_count + 2
-            units = lot_k * cycle.cycle_base_units
-            tp = counter_tp_pips(step_k, cfg)
-            new_price = tick.ask if direction == Direction.LONG else tick.bid
-            ret_number = cycle.layer_retracement_count + 1  # R1, R2, R3...
-
-            close_price, exit_formula = self._compute_counter_tp(
-                cfg,
-                direction,
-                new_price,
-                units,
-                tp,
-                counter_non_hedge,
-                layer_initial,
-                current_layer=current_layer,
-            )
-
-            logger.info(
-                "Counter first add #%d (%s) in cycle %d: L%d/R%d, units=%d, adverse=%.1f pips",
-                lot_k,
-                direction.value.upper(),
-                cycle.cycle_id,
-                cycle.layer_index + 1,
-                ret_number,
-                units,
-                layer_loss,
-            )
-            entry = Entry.open(
-                state=ss,
-                tick=tick,
-                direction=direction,
-                units=units,
-                step=step_k + 1,
-                close_price=close_price,
-                role="counter",
-                layer_number=cycle.layer_index + 1,
-                retracement_count=ret_number,
-                root_entry_id=initial.entry_id,
-                parent_entry_id=initial.entry_id,
-            )
-            entry.expected_interval_pips = interval
-            entry.actual_interval_pips = layer_loss
-            entry.expected_tp_pips = tp
-            entry.validation_status = "pass"
-            evt = entry.to_open_event(
-                timestamp=tick.timestamp,
-                planned_exit_price_formula=exit_formula,
-                description=(
-                    f"Counter add ({direction.value.upper()}) | "
-                    f"L{cycle.layer_index + 1}/R{ret_number}, units={units}, "
-                    f"adverse={layer_loss:.1f} pips, TP={close_price:.3f}"
-                ),
-            )
-            cycle.counter_entries.append(entry)
-            cycle.layer_retracement_count = 1
-            events.append(evt)
-            return events
-
-        # Subsequent counter adds — measure distance from latest
-        latest = max(counter_non_hedge, key=lambda e: e.step)
-        if direction == Direction.LONG:
-            adverse = (latest.entry_price - tick.mid) / self.pip_size
+        occupied = layer.occupied_slots()
+        if occupied:
+            # Measure from the last filled slot's entry
+            latest_entry = max(occupied, key=lambda s: s.index).entry
+            assert latest_entry is not None
+            if direction == Direction.LONG:
+                adverse = (latest_entry.entry_price - tick.mid) / self.pip_size
+            else:
+                adverse = (tick.mid - latest_entry.entry_price) / self.pip_size
         else:
-            adverse = (tick.mid - latest.entry_price) / self.pip_size
+            # First slot in this layer — measure from layer initial
+            reference = layer.initial_entry if layer.initial_entry is not None else initial
+            adverse = reference.unrealised_loss_pips(tick.mid, self.pip_size)
 
-        step_k = cycle.layer_retracement_count + 1
+        step_k = slot.index
         interval = counter_interval_pips(step_k, cfg)
         if adverse < interval:
-            return events
+            return []
 
-        lot_k = cycle.layer_retracement_count + 2
-        units = lot_k * cycle.cycle_base_units
+        # Compute units: (slot_index + 1) * base_units
+        lot_k = slot.index + 1
+        units = lot_k * layer.base_units
         tp = counter_tp_pips(step_k, cfg)
         new_price = tick.ask if direction == Direction.LONG else tick.bid
-        ret_number = cycle.layer_retracement_count + 1
+        layer_number = layer.layer_number
 
+        # Gather existing non-hedge entries in this layer for weighted avg
+        layer_non_hedge = [
+            s.entry for s in layer.slots if s.entry is not None and not s.entry.is_hedge
+        ]
         close_price, exit_formula = self._compute_counter_tp(
             cfg,
             direction,
             new_price,
             units,
             tp,
-            counter_non_hedge,
-            layer_initial,
-            current_layer=current_layer,
+            layer_non_hedge,
+            layer.initial_entry if layer.layer_number > 1 else initial,
+            current_layer=layer_number,
         )
 
         logger.info(
             "Counter add (%s) in cycle %d: L%d/R%d, units=%d, adverse=%.1f pips",
             direction.value.upper(),
             cycle.cycle_id,
-            cycle.layer_index + 1,
-            ret_number,
+            layer_number,
+            slot.index,
             units,
             adverse,
         )
@@ -565,15 +494,13 @@ class SnowballStrategy(Strategy):
             tick=tick,
             direction=direction,
             units=units,
-            step=latest.step + 1,
+            step=slot.index + 1,
             close_price=close_price,
             role="counter",
-            layer_number=cycle.layer_index + 1,
-            retracement_count=ret_number,
-            root_entry_id=latest.root_entry_id
-            if latest.root_entry_id is not None
-            else latest.entry_id,
-            parent_entry_id=latest.entry_id,
+            layer_number=layer_number,
+            retracement_count=slot.index,
+            root_entry_id=initial.entry_id,
+            parent_entry_id=initial.entry_id,
         )
         entry.expected_interval_pips = interval
         entry.actual_interval_pips = adverse
@@ -584,29 +511,106 @@ class SnowballStrategy(Strategy):
             planned_exit_price_formula=exit_formula,
             description=(
                 f"Counter add ({direction.value.upper()}) | "
-                f"L{cycle.layer_index + 1}/R{ret_number}, units={units}, "
+                f"L{layer_number}/R{slot.index}, units={units}, "
                 f"adverse={adverse:.1f} pips, TP={close_price:.3f}"
             ),
         )
-        cycle.counter_entries.append(entry)
-        cycle.layer_retracement_count += 1
+        slot.fill(entry)
 
-        # Update close prices for existing counter entries (non-weighted_avg only)
+        # Update close prices for existing entries in this layer (non-weighted_avg only)
         if cfg.counter_tp_mode != "weighted_avg":
-            for e in cycle.counter_entries:
-                if e.is_hedge:
+            for s in layer.slots:
+                if s.entry is None or s.entry.is_hedge:
                     continue
-                sk = e.step - 1
+                sk = s.index
                 if sk < 1:
                     sk = 1
                 step_tp = counter_tp_pips(sk, cfg)
                 if direction == Direction.LONG:
-                    e.close_price = e.entry_price + step_tp * self.pip_size
+                    s.entry.close_price = s.entry.entry_price + step_tp * self.pip_size
                 else:
-                    e.close_price = e.entry_price - step_tp * self.pip_size
+                    s.entry.close_price = s.entry.entry_price - step_tp * self.pip_size
 
-        events.append(evt)
-        return events
+        return [evt]
+
+    def _start_new_layer(
+        self,
+        ss: SnowballStrategyState,
+        tick: Tick,
+        cycle: SnowballCycle,
+    ) -> list[StrategyEvent]:
+        """Create a new layer with a layer-initial entry."""
+        cfg = self.config
+        initial = cycle.initial_entry
+        if initial is None:
+            return []
+
+        direction = cycle.direction
+        prev_layer = cycle.current_layer
+        assert prev_layer is not None
+        new_layer_number = prev_layer.layer_number + 1
+        new_base_units = int(Decimal(str(cfg.base_units)) * cfg.post_r_max_base_factor)
+
+        logger.info(
+            "Starting new layer L%d in cycle %d",
+            new_layer_number,
+            cycle.cycle_id,
+        )
+
+        new_layer = Layer.create(new_layer_number, cfg.r_max, new_base_units)
+        price = tick.ask if direction == Direction.LONG else tick.bid
+
+        layer_entry = Entry.open(
+            state=ss,
+            tick=tick,
+            direction=direction,
+            units=cfg.trend_lot_size * new_base_units,
+            step=1,
+            close_price=Decimal("0"),  # placeholder
+            role="layer_initial",
+            layer_number=new_layer_number,
+            retracement_count=0,
+            root_entry_id=initial.entry_id,
+            parent_entry_id=initial.entry_id,
+        )
+
+        # Compute close_price as weighted average of previous layer's entries + this new entry
+        prev_entries: list[tuple[Decimal, int]] = []
+        prev_initial = cycle.initial_for_layer(prev_layer.layer_number)
+        if prev_initial is not None:
+            prev_entries.append((prev_initial.entry_price, abs(prev_initial.units)))
+        for s in prev_layer.slots:
+            if s.entry is not None and not s.entry.is_hedge:
+                prev_entries.append((s.entry.entry_price, abs(s.entry.units)))
+        prev_entries.append((layer_entry.entry_price, abs(layer_entry.units)))
+
+        total_cost = sum(p * Decimal(str(u)) for p, u in prev_entries)
+        total_units = sum(u for _, u in prev_entries)
+        if total_units > 0:
+            close_price = total_cost / Decimal(str(total_units))
+        else:
+            close_price = (
+                price + cfg.m_pips * self.pip_size
+                if direction == Direction.LONG
+                else price - cfg.m_pips * self.pip_size
+            )
+
+        layer_entry.close_price = close_price
+        tp_pips = abs(close_price - layer_entry.entry_price) / self.pip_size
+        layer_entry.expected_tp_pips = tp_pips
+        layer_entry.validation_status = "pass"
+        formula = f"weighted_avg(L{prev_layer.layer_number} entries + L{new_layer_number} initial)"
+        evt = layer_entry.to_open_event(
+            timestamp=tick.timestamp,
+            planned_exit_price_formula=formula,
+            description=(
+                f"Layer initial entry ({direction.value.upper()}) | "
+                f"L{new_layer_number}/R0, units={layer_entry.units}, TP={close_price:.3f}"
+            ),
+        )
+        new_layer.initial_entry = layer_entry
+        cycle.add_layer(new_layer)
+        return [evt]
 
     def _compute_counter_tp(
         self,
@@ -1035,7 +1039,13 @@ class SnowballStrategy(Strategy):
         for cycle in ss.cycles:
             if cycle.initial_entry is not None and cycle.initial_entry.entry_id == eid:
                 cycle.initial_entry.position_id = str(position_id)
-            for entry in cycle.counter_entries + cycle.hedge_entries:
+            for layer in cycle.layers:
+                if layer.initial_entry is not None and layer.initial_entry.entry_id == eid:
+                    layer.initial_entry.position_id = str(position_id)
+                for slot in layer.slots:
+                    if slot.entry is not None and slot.entry.entry_id == eid:
+                        slot.entry.position_id = str(position_id)
+            for entry in cycle.hedge_entries:
                 if entry.entry_id == eid:
                     entry.position_id = str(position_id)
 

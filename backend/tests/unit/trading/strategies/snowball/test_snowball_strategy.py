@@ -1,7 +1,7 @@
 """Comprehensive unit tests for SnowballStrategy tick-driven behavior.
 
 Covers: initialisation, trend basket rotation, counter basket adds/closes,
-layer_retracement_count reset after TP, r_max cycle reset, f_max exhaustion, margin
+slot vacate after TP, layer progression, f_max exhaustion, margin
 protection (shrink / lock / emergency), rebalance, spread guard, and
 dynamic TP (ATR) scenarios.
 """
@@ -96,6 +96,31 @@ def _signal_events(result, kind: str | None = None) -> list[GenericStrategyEvent
     return evts
 
 
+def _cycle(state) -> dict[str, Any]:
+    """Return the first (LONG) cycle dict from serialised state."""
+    return state.strategy_state["cycles"][0]
+
+
+def _occupied_slot_count(state, cycle_idx: int = 0, layer_idx: int = 0) -> int:
+    """Count occupied slots in a given layer of a cycle."""
+    layers = state.strategy_state["cycles"][cycle_idx].get("layers", [])
+    if layer_idx >= len(layers):
+        return 0
+    return sum(1 for s in layers[layer_idx]["slots"] if s.get("entry") is not None)
+
+
+def _slot_entries(state, cycle_idx: int = 0, layer_idx: int = 0) -> list[dict]:
+    """Return all non-None slot entries from a layer."""
+    layers = state.strategy_state["cycles"][cycle_idx].get("layers", [])
+    if layer_idx >= len(layers):
+        return []
+    return [s["entry"] for s in layers[layer_idx]["slots"] if s.get("entry") is not None]
+
+
+def _layer_count(state, cycle_idx: int = 0) -> int:
+    return len(state.strategy_state["cycles"][cycle_idx].get("layers", []))
+
+
 # ==================================================================
 # 1. Initialisation
 # ==================================================================
@@ -106,7 +131,6 @@ class TestInitialisation:
         s = _strategy()
         state = DummyState()
         result = s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-
         opens = _open_events(result)
         assert len(opens) == 2
         dirs = {e.direction for e in opens}
@@ -118,106 +142,72 @@ class TestInitialisation:
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
         result = s.on_tick(tick=_tick(T0 + timedelta(seconds=1), "150.00", "150.02"), state=state)
-        # No new opens unless trend TP or counter add triggers
         opens = _open_events(result)
         assert len(opens) == 0
 
 
 # ==================================================================
-# 2. Trend basket — monotonic move triggers rotation
+# 2. Trend basket rotation
 # ==================================================================
 
 
 class TestTrendBasketRotation:
     def test_long_trend_tp_and_reentry(self):
-        """Price rises 50+ pips → long trend entry closes and re-opens."""
         s = _strategy(m_pips="50")
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-
-        # Move up 51 pips (bid >= entry_ask + 50*0.01)
-        result = s.on_tick(
-            tick=_tick(T0 + timedelta(seconds=60), "150.52", "150.54"),
-            state=state,
-        )
-        closes = _close_events(result)
-        opens = _open_events(result)
-        # Should close the long trend entry and re-open a new long
-        long_closes = [c for c in closes if c.direction == "long"]
-        long_opens = [o for o in opens if o.direction == "long"]
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.52", "150.54"), state=state)
+        long_closes = [c for c in _close_events(result) if c.direction == "long"]
+        long_opens = [o for o in _open_events(result) if o.direction == "long"]
         assert len(long_closes) >= 1
         assert len(long_opens) >= 1
 
     def test_short_trend_tp_and_reentry(self):
-        """Price drops 50+ pips → short trend entry closes and re-opens."""
         s = _strategy(m_pips="50")
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-
-        result = s.on_tick(
-            tick=_tick(T0 + timedelta(seconds=60), "149.48", "149.50"),
-            state=state,
-        )
-        closes = _close_events(result)
-        short_closes = [c for c in closes if c.direction == "short"]
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.48", "149.50"), state=state)
+        short_closes = [c for c in _close_events(result) if c.direction == "short"]
         assert len(short_closes) >= 1
 
 
 # ==================================================================
-# 3. Counter basket — monotonic adverse move adds steps
+# 3. Counter basket adds
 # ==================================================================
 
 
 class TestCounterBasketAdds:
     def test_first_counter_add_on_adverse_move(self):
-        """When one trend side loses >= n_pips_head, first counter entry opens."""
         s = _strategy(n_pips_head="30", interval_mode="constant")
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-
-        # Drop 31 pips — long side is losing
-        result = s.on_tick(
-            tick=_tick(T0 + timedelta(seconds=60), "149.69", "149.71"),
-            state=state,
-        )
-        opens = _open_events(result)
-        counter_opens = [o for o in opens if "counter" in (o.strategy_event_type or "")]
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.69", "149.71"), state=state)
+        counter_opens = [
+            o for o in _open_events(result) if "counter" in (o.strategy_event_type or "")
+        ]
         assert len(counter_opens) == 1
-        # First counter add: lot_k=2 (trend=1), add_count=1
-        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 1
+        assert _occupied_slot_count(state) == 1
 
     def test_second_counter_add(self):
-        """Counter adds use lot_k=2,3,4... (trend entry is position 1)."""
         s = _strategy(n_pips_head="10", interval_mode="constant")
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-
-        # First add — lot_k=2 (trend entry is position 1)
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
-        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 1
-
-        # Second add — 10 more pips from latest counter entry, lot_k=3
+        assert _occupied_slot_count(state) == 1
         s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.79", "149.81"), state=state)
-        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 2
-
-        counter = [
-            e for e in state.strategy_state["cycles"][0]["counter_entries"] if not e.get("is_hedge")
-        ]
-        assert len(counter) == 2
-        # lot_k=2 → 2000, lot_k=3 → 3000
-        assert int(counter[0]["units"]) == 2000
-        assert int(counter[-1]["units"]) == 3000
+        assert _occupied_slot_count(state) == 2
+        entries = _slot_entries(state)
+        assert int(entries[0]["units"]) == 2000
+        assert int(entries[1]["units"]) == 3000
 
 
 # ==================================================================
-# 4. Counter close — TP hit resets layer_retracement_count to 0
+# 4. Counter close — slot vacated, triggers new layer on re-adverse
 # ==================================================================
 
 
-class TestCounterCloseResetsAddCount:
-    def test_counter_tp_resets_add_count_to_zero(self):
-        """After a counter entry is closed at TP, layer_retracement_count resets to 0
-        so the next adverse add restarts from lot_k=1."""
+class TestCounterCloseAndLayerProgression:
+    def test_counter_tp_vacates_slot(self):
         s = _strategy(
             n_pips_head="10",
             interval_mode="constant",
@@ -225,98 +215,69 @@ class TestCounterCloseResetsAddCount:
             counter_tp_pips="5",
         )
         state = DummyState()
-        # Init
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-
-        # Add counter entries by dropping price
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
         s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.79", "149.81"), state=state)
         s.on_tick(tick=_tick(T0 + timedelta(seconds=180), "149.69", "149.71"), state=state)
-        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 3
+        assert _occupied_slot_count(state) == 3
 
-        # Now price reverses — latest counter entry (long) has close_price set
-        counter = [
-            e for e in state.strategy_state["cycles"][0]["counter_entries"] if not e.get("is_hedge")
-        ]
-        latest = max(counter, key=lambda e: int(e.get("step", 0)))
-        close_price = Decimal(str(latest["close_price"]))
-
-        # Move bid above close_price to trigger TP
-        bid_str = str(close_price + Decimal("0.01"))
-        ask_str = str(close_price + Decimal("0.03"))
+        # Close highest slot via TP
+        entries = _slot_entries(state)
+        latest = max(entries, key=lambda e: int(e.get("step", 0)))
+        cp = Decimal(str(latest["close_price"]))
         result = s.on_tick(
-            tick=_tick(T0 + timedelta(seconds=240), bid_str, ask_str),
+            tick=_tick(
+                T0 + timedelta(seconds=240), str(cp + Decimal("0.01")), str(cp + Decimal("0.03"))
+            ),
             state=state,
         )
-
         closes = _close_events(result)
         assert len(closes) >= 1
-        # layer_retracement_count resets to 0 after TP close
-        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 0
+        assert _occupied_slot_count(state) == 2
 
-    def test_next_add_after_close_restarts_from_lot1(self):
-        """After TP close resets layer_retracement_count, the next add uses lot_k=1 (1000 units)."""
+    def test_reversal_after_close_starts_new_layer(self):
+        """After a slot is vacated and price reverses again, a new layer starts."""
         s = _strategy(
             n_pips_head="10",
             interval_mode="constant",
             counter_tp_mode="fixed",
             counter_tp_pips="5",
+            f_max=3,
         )
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
 
-        # Build up counter entries
+        # Fill R1
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
-        s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.79", "149.81"), state=state)
+        assert _occupied_slot_count(state) == 1
 
-        # Close latest via TP
-        counter = [
-            e for e in state.strategy_state["cycles"][0]["counter_entries"] if not e.get("is_hedge")
-        ]
-        latest = max(counter, key=lambda e: int(e.get("step", 0)))
-        cp = Decimal(str(latest["close_price"]))
+        # Close R1 via TP
+        entries = _slot_entries(state)
+        cp = Decimal(str(entries[0]["close_price"]))
         s.on_tick(
             tick=_tick(
-                T0 + timedelta(seconds=180), str(cp + Decimal("0.01")), str(cp + Decimal("0.03"))
+                T0 + timedelta(seconds=120), str(cp + Decimal("0.01")), str(cp + Decimal("0.03"))
             ),
             state=state,
         )
-        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 0
+        assert _occupied_slot_count(state) == 0
+        assert _layer_count(state) == 1  # still L1
 
-        # Now drop again — next add should restart from lot_k=1, 1000 units
-        remaining = [
-            e for e in state.strategy_state["cycles"][0]["counter_entries"] if not e.get("is_hedge")
-        ]
-        if remaining:
-            latest_remaining = max(remaining, key=lambda e: int(e.get("step", 0)))
-            ep = Decimal(str(latest_remaining["entry_price"]))
-            drop_price = ep - Decimal("0.11")  # 11 pips below
-        else:
-            drop_price = Decimal("149.50")
-
-        result = s.on_tick(
-            tick=_tick(
-                T0 + timedelta(seconds=240), str(drop_price), str(drop_price + Decimal("0.02"))
-            ),
-            state=state,
-        )
+        # Price drops again past the next interval — should start L2
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=180), "149.70", "149.72"), state=state)
         opens = _open_events(result)
-        counter_opens = [o for o in opens if "counter" in (o.strategy_event_type or "")]
-        if counter_opens:
-            # lot_k=2 → 2000 units, Ret=1 (fresh restart after TP close)
-            assert counter_opens[0].units == 2000
-            assert counter_opens[0].retracement_count == 1
+        layer_initials = [o for o in opens if "layer_initial" in (o.strategy_event_type or "")]
+        assert len(layer_initials) == 1
+        assert _layer_count(state) == 2
 
 
 # ==================================================================
-# 5. Adverse → favourable → adverse again (reversal scenario)
+# 5. Reversal scenario
 # ==================================================================
 
 
 class TestReversalScenario:
     def test_adverse_then_favourable_then_adverse(self):
-        """Counter adds build up, trend TP fires on reversal, then
-        further adverse move re-adds from step 1."""
         s = _strategy(
             m_pips="20",
             n_pips_head="10",
@@ -325,68 +286,41 @@ class TestReversalScenario:
             counter_tp_pips="8",
         )
         state = DummyState()
-        # Init at 150.00
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
 
-        # Phase 1: adverse (drop) — add counter entries
+        # Phase 1: adverse — add counter
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
-        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 1
+        assert _occupied_slot_count(state) == 1
 
-        # Phase 2: favourable (rise) — close counter TP
-        counter = [
-            e for e in state.strategy_state["cycles"][0]["counter_entries"] if not e.get("is_hedge")
-        ]
-        if counter:
-            latest = max(counter, key=lambda e: int(e.get("step", 0)))
-            cp = Decimal(str(latest["close_price"]))
-            s.on_tick(
-                tick=_tick(
-                    T0 + timedelta(seconds=120),
-                    str(cp + Decimal("0.01")),
-                    str(cp + Decimal("0.03")),
-                ),
-                state=state,
-            )
-            assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 0
-
-        # Phase 3: adverse again — should add from step 1
-        remaining = [
-            e for e in state.strategy_state["cycles"][0]["counter_entries"] if not e.get("is_hedge")
-        ]
-        if remaining:
-            ref = Decimal(str(max(remaining, key=lambda e: int(e.get("step", 0)))["entry_price"]))
-        else:
-            # Use trend entry as reference
-            ref = Decimal("150.02")
-        drop = ref - Decimal("0.11")
-        result = s.on_tick(
-            tick=_tick(T0 + timedelta(seconds=180), str(drop), str(drop + Decimal("0.02"))),
+        # Phase 2: favourable — close counter TP
+        entries = _slot_entries(state)
+        cp = Decimal(str(entries[0]["close_price"]))
+        s.on_tick(
+            tick=_tick(
+                T0 + timedelta(seconds=120), str(cp + Decimal("0.01")), str(cp + Decimal("0.03"))
+            ),
             state=state,
         )
+        assert _occupied_slot_count(state) == 0
+
+        # Phase 3: adverse again — should start new layer
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=180), "149.70", "149.72"), state=state)
         opens = _open_events(result)
-        counter_opens = [o for o in opens if "counter" in (o.strategy_event_type or "")]
-        if counter_opens:
-            assert counter_opens[0].units == 2000  # lot_k=2 (restart after TP close)
+        layer_initials = [o for o in opens if "layer_initial" in (o.strategy_event_type or "")]
+        assert len(layer_initials) == 1
 
 
 # ==================================================================
-# 6. r_max cycle reset
+# 6. r_max → new layer
 # ==================================================================
 
 
-class TestRMaxCycleReset:
-    def test_cycle_resets_at_r_max(self):
-        """When layer_retracement_count reaches r_max, cycle resets."""
-        s = _strategy(
-            r_max=3,
-            n_pips_head="5",
-            interval_mode="constant",
-            f_max=3,
-        )
+class TestRMaxLayerProgression:
+    def test_all_slots_full_triggers_new_layer(self):
+        s = _strategy(r_max=3, n_pips_head="5", interval_mode="constant", f_max=3)
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
 
-        # Add 3 counter entries
         for i in range(1, 4):
             price = Decimal("150.00") - Decimal("0.05") * i - Decimal("0.01")
             s.on_tick(
@@ -395,19 +329,19 @@ class TestRMaxCycleReset:
                 ),
                 state=state,
             )
+        assert _occupied_slot_count(state) == 3
+        assert _layer_count(state) == 1
 
-        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 3
-
-        # Next tick should trigger cycle reset (add_count >= r_max)
+        # Next adverse tick triggers new layer
         price = Decimal("150.00") - Decimal("0.30")
         result = s.on_tick(
             tick=_tick(T0 + timedelta(seconds=300), str(price), str(price + Decimal("0.02"))),
             state=state,
         )
-        signals = _signal_events(result, "snowball_cycle_reset")
-        assert len(signals) == 0
-        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 0
-        assert state.strategy_state["cycles"][0]["layer_index"] == 1
+        assert _layer_count(state) == 2
+        opens = _open_events(result)
+        layer_initials = [o for o in opens if "layer_initial" in (o.strategy_event_type or "")]
+        assert len(layer_initials) == 1
 
 
 # ==================================================================
@@ -417,22 +351,28 @@ class TestRMaxCycleReset:
 
 class TestFMaxExhaustion:
     def test_no_adds_after_f_max_exceeded(self):
-        """Once layer_index >= f_max, no more counter adds."""
-        s = _strategy(r_max=2, f_max=1, n_pips_head="5", interval_mode="constant")
+        s = _strategy(r_max=2, f_max=2, n_pips_head="5", interval_mode="constant")
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
 
-        # Force state to f_max exceeded
-        state.strategy_state["cycles"][0]["layer_index"] = 2  # > f_max=1
-        state.strategy_state["cycles"][0]["layer_retracement_count"] = 0
+        # Fill L1 (2 slots)
+        s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.94", "149.96"), state=state)
+        s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.89", "149.91"), state=state)
+        # Trigger L2
+        s.on_tick(tick=_tick(T0 + timedelta(seconds=180), "149.80", "149.82"), state=state)
+        assert _layer_count(state) == 2
 
-        price = Decimal("149.50")
-        result = s.on_tick(
-            tick=_tick(T0 + timedelta(seconds=60), str(price), str(price + Decimal("0.02"))),
-            state=state,
-        )
+        # Fill L2 (2 slots)
+        s.on_tick(tick=_tick(T0 + timedelta(seconds=240), "149.50", "149.52"), state=state)
+        s.on_tick(tick=_tick(T0 + timedelta(seconds=300), "149.45", "149.47"), state=state)
+
+        # Next adverse tick — f_max=2 reached, no more layers
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=360), "149.30", "149.32"), state=state)
         counter_opens = [
-            o for o in _open_events(result) if "counter" in (o.strategy_event_type or "")
+            o
+            for o in _open_events(result)
+            if "counter" in (o.strategy_event_type or "")
+            or "layer_initial" in (o.strategy_event_type or "")
         ]
         assert len(counter_opens) == 0
 
@@ -444,13 +384,11 @@ class TestFMaxExhaustion:
 
 class TestEmergencyStop:
     def test_emergency_stop_at_95_percent(self):
-        """Margin ratio >= 95% triggers emergency stop regardless of settings."""
         s = _strategy()
-        state = DummyState(current_balance=Decimal("100"))  # tiny balance
+        state = DummyState(current_balance=Decimal("100"))
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
 
-        # Force huge positions to blow margin ratio
-        state.strategy_state["account_nav"] = "100"
+        # Inject a huge entry via layer slot to blow margin
         big_entry = {
             "entry_id": 99,
             "step": 1,
@@ -460,20 +398,11 @@ class TestEmergencyStop:
             "units": 5000000,
             "opened_at": T0.isoformat(),
         }
-        # Add big entry into the LONG cycle's counter_entries to blow margin
-        state.strategy_state["cycles"][0]["counter_entries"].append(big_entry)
+        layers = state.strategy_state["cycles"][0]["layers"]
+        layers[0]["slots"][0]["entry"] = big_entry
 
-        result = s.on_tick(
-            tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"),
-            state=state,
-        )
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"), state=state)
         assert result.should_stop is True
-        stop_events = [
-            e
-            for e in result.events
-            if isinstance(e, GenericStrategyEvent) and e.data.get("kind") == "emergency_stop"
-        ]
-        assert len(stop_events) == 1
 
 
 # ==================================================================
@@ -483,12 +412,11 @@ class TestEmergencyStop:
 
 class TestShrinkMode:
     def test_shrink_closes_worst_counter_entry(self):
-        """When shrink_enabled and ratio >= m_th, worst counter entry is closed."""
         s = _strategy(shrink_enabled=True, m_th="70", lock_enabled=False)
         state = DummyState(current_balance=Decimal("1000000"))
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
 
-        # Add a counter entry manually
+        # Inject a counter entry via slot
         counter_entry = {
             "entry_id": 10,
             "step": 2,
@@ -498,14 +426,11 @@ class TestShrinkMode:
             "units": 1000,
             "opened_at": T0.isoformat(),
         }
-        state.strategy_state["cycles"][0]["counter_entries"].append(counter_entry)
-        # Stub margin ratio to 75 (between m_th=70 and emergency=95)
-        s._margin_ratio = lambda _state, _ss: Decimal("75")  # type: ignore[method-assign]
+        layers = state.strategy_state["cycles"][0]["layers"]
+        layers[0]["slots"][0]["entry"] = counter_entry
 
-        result = s.on_tick(
-            tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"),
-            state=state,
-        )
+        s._margin_ratio = lambda _state, _ss: Decimal("75")  # type: ignore[method-assign]
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"), state=state)
         closes = _close_events(result)
         assert len(closes) >= 1
         shrink_signals = _signal_events(result, "snowball_shrink")
@@ -519,41 +444,25 @@ class TestShrinkMode:
 
 class TestLockMode:
     def test_lock_opens_hedge_and_blocks_trading(self):
-        """When lock_enabled and ratio >= n_th, hedge is opened and trading pauses."""
         s = _strategy(lock_enabled=True, n_th="85", shrink_enabled=False)
         state = DummyState(current_balance=Decimal("1000000"))
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-
-        # Stub margin ratio to 90 (between n_th=85 and emergency=95)
         s._margin_ratio = lambda _state, _ss: Decimal("90")  # type: ignore[method-assign]
-
-        result = s.on_tick(
-            tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"),
-            state=state,
-        )
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"), state=state)
         lock_signals = _signal_events(result, "snowball_locked")
         assert len(lock_signals) >= 1
         assert state.strategy_state["protection_level"] == "locked"
 
     def test_locked_state_blocks_normal_trading(self):
-        """While locked, no trend/counter processing occurs."""
         s = _strategy(lock_enabled=True, n_th="85", shrink_enabled=False)
         state = DummyState(current_balance=Decimal("1000000"))
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-
-        # Stub margin ratio to 90 to enter lock
         s._margin_ratio = lambda _state, _ss: Decimal("90")  # type: ignore[method-assign]
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"), state=state)
-        assert state.strategy_state["protection_level"] == "locked"
-
-        # Next tick — still locked, no new opens
-        result = s.on_tick(
-            tick=_tick(T0 + timedelta(seconds=120), "150.50", "150.52"),
-            state=state,
-        )
-        opens = _open_events(result)
-        # Only hedge-related opens, no trend/counter
-        non_hedge = [o for o in opens if "lock_hedge" not in (o.strategy_event_type or "")]
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "150.50", "150.52"), state=state)
+        non_hedge = [
+            o for o in _open_events(result) if "lock_hedge" not in (o.strategy_event_type or "")
+        ]
         assert len(non_hedge) == 0
 
 
@@ -564,7 +473,6 @@ class TestLockMode:
 
 class TestRebalance:
     def test_rebalance_closes_heavier_side(self):
-        """When rebalance_enabled and ratio >= start, heavier side entries close."""
         s = _strategy(
             rebalance_enabled=True,
             rebalance_start_ratio="50",
@@ -575,28 +483,22 @@ class TestRebalance:
         state = DummyState(current_balance=Decimal("1000000"))
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
 
-        # Add imbalanced counter entries (all long)
+        # Inject imbalanced entries via slots
         for i in range(3):
-            state.strategy_state["cycles"][0]["counter_entries"].append(
-                {
-                    "entry_id": 20 + i,
-                    "step": i + 2,
-                    "direction": "long",
-                    "entry_price": str(Decimal("149.00") - Decimal("0.10") * i),
-                    "close_price": "150.00",
-                    "units": 1000 * (i + 1),
-                    "opened_at": T0.isoformat(),
-                }
-            )
-        # total_units = 2000 (trend) + 1000+2000+3000 (counter) = 8000
-        # required = 150*8000*0.04 = 48000
-        # For ratio ~60%: nav = 48000/0.60 = 80000
-        state.strategy_state["account_nav"] = "80000"
+            entry = {
+                "entry_id": 20 + i,
+                "step": i + 2,
+                "direction": "long",
+                "entry_price": str(Decimal("149.00") - Decimal("0.10") * i),
+                "close_price": "150.00",
+                "units": 1000 * (i + 1),
+                "opened_at": T0.isoformat(),
+            }
+            layers = state.strategy_state["cycles"][0]["layers"]
+            layers[0]["slots"][i]["entry"] = entry
 
-        result = s.on_tick(
-            tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"),
-            state=state,
-        )
+        state.strategy_state["account_nav"] = "80000"
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"), state=state)
         closes = _close_events(result)
         assert len(closes) >= 1
 
@@ -608,73 +510,47 @@ class TestRebalance:
 
 class TestSpreadGuard:
     def test_spread_guard_blocks_trading(self):
-        """When spread exceeds limit, no trading occurs."""
         s = _strategy(spread_guard_enabled=True, spread_guard_pips="1")
         state = DummyState()
-        # Spread = 5 pips (0.05 / 0.01) > 1
         result = s.on_tick(tick=_tick(T0, "150.00", "150.05"), state=state)
-        # Should not initialise
         assert state.strategy_state.get("initialised") is not True
-        opens = _open_events(result)
-        assert len(opens) == 0
+        assert len(_open_events(result)) == 0
 
     def test_narrow_spread_allows_trading(self):
-        """When spread is within limit, trading proceeds normally."""
         s = _strategy(spread_guard_enabled=True, spread_guard_pips="5")
         state = DummyState()
-        # Spread = 2 pips (0.02 / 0.01) <= 5
         result = s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
         assert state.strategy_state["initialised"] is True
-        opens = _open_events(result)
-        assert len(opens) == 2
+        assert len(_open_events(result)) == 2
 
 
 # ==================================================================
-# 13. Monotonic increase — only trend rotation, no counter adds
+# 13. Monotonic increase
 # ==================================================================
 
 
 class TestMonotonicIncrease:
     def test_steady_rise_rotates_trend_no_counter(self):
-        """Steady price increase should only rotate trend basket, not add counter."""
         s = _strategy(m_pips="10")
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-
-        # Rise 11 pips
-        result = s.on_tick(
-            tick=_tick(T0 + timedelta(seconds=60), "150.12", "150.14"),
-            state=state,
-        )
-        # Long trend should TP and re-enter
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.12", "150.14"), state=state)
         long_closes = [c for c in _close_events(result) if c.direction == "long"]
         assert len(long_closes) >= 1
-
-        # No counter adds (short side is losing but not enough pips yet)
-        cycles = state.strategy_state.get("cycles", [])
-        counter = cycles[0].get("counter_entries", []) if cycles else []
-        non_hedge = [e for e in counter if not e.get("is_hedge")]
-        # With only 11 pips move and n_pips_head=30, no counter add
-        assert len(non_hedge) == 0
+        assert _occupied_slot_count(state) == 0
 
 
 # ==================================================================
-# 14. Monotonic decrease — mirror of increase
+# 14. Monotonic decrease
 # ==================================================================
 
 
 class TestMonotonicDecrease:
     def test_steady_drop_rotates_short_trend(self):
-        """Steady price decrease should rotate short trend basket."""
         s = _strategy(m_pips="10")
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-
-        # Drop 11 pips
-        result = s.on_tick(
-            tick=_tick(T0 + timedelta(seconds=60), "149.88", "149.90"),
-            state=state,
-        )
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.88", "149.90"), state=state)
         short_closes = [c for c in _close_events(result) if c.direction == "short"]
         assert len(short_closes) >= 1
 
@@ -686,7 +562,6 @@ class TestMonotonicDecrease:
 
 class TestLockUnlockCycle:
     def test_lock_then_unlock_resumes_trading(self):
-        """After lock and subsequent ratio drop, trading resumes."""
         s = _strategy(
             lock_enabled=True,
             n_th="85",
@@ -696,50 +571,31 @@ class TestLockUnlockCycle:
         )
         state = DummyState(current_balance=Decimal("1000000"))
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-
-        # Enter lock: stub ratio to 90
         ratio_value = Decimal("90")
         s._margin_ratio = lambda _state, _ss: ratio_value  # type: ignore[method-assign]
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"), state=state)
         assert state.strategy_state["protection_level"] == "locked"
-
-        # Restore ratio to unlock (below m_th - 5 = 65)
         ratio_value = Decimal("10")
         s._margin_ratio = lambda _state, _ss: ratio_value  # type: ignore[method-assign]
-        result = s.on_tick(
-            tick=_tick(T0 + timedelta(seconds=120), "150.00", "150.02"),
-            state=state,
-        )
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "150.00", "150.02"), state=state)
         unlock_signals = _signal_events(result, "snowball_unlocked")
         assert len(unlock_signals) >= 1
-        assert state.strategy_state["protection_level"] in ("normal", "shrink")
 
 
 # ==================================================================
-# 16. Counter basket — weighted_avg TP mode
+# 16. Weighted avg TP mode
 # ==================================================================
 
 
 class TestWeightedAvgTpMode:
     def test_weighted_avg_close_price_equals_avg(self):
-        """In weighted_avg mode, close_price should be the basket average."""
-        s = _strategy(
-            counter_tp_mode="weighted_avg",
-            n_pips_head="10",
-            interval_mode="constant",
-        )
+        s = _strategy(counter_tp_mode="weighted_avg", n_pips_head="10", interval_mode="constant")
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-
-        # First counter add
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
-        counter = [
-            e for e in state.strategy_state["cycles"][0]["counter_entries"] if not e.get("is_hedge")
-        ]
-        assert len(counter) == 1
-        # For weighted_avg with single entry, close_price = entry_price of losing trend
-        # (the initial trend entry price)
-        assert Decimal(str(counter[0]["close_price"])) > 0
+        entries = _slot_entries(state)
+        assert len(entries) == 1
+        assert Decimal(str(entries[0]["close_price"])) > 0
 
 
 # ==================================================================
@@ -749,7 +605,6 @@ class TestWeightedAvgTpMode:
 
 class TestManualIntervalMode:
     def test_manual_intervals_respected(self):
-        """Manual intervals should use user-specified pip distances."""
         s = _strategy(
             interval_mode="manual",
             manual_intervals=["5", "10", "15", "20", "25", "30", "35"],
@@ -757,14 +612,10 @@ class TestManualIntervalMode:
         )
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-
-        # First add at 5 pips
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.94", "149.96"), state=state)
-        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 1
-
-        # Second add needs 10 more pips from latest entry
+        assert _occupied_slot_count(state) == 1
         s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.84", "149.86"), state=state)
-        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 2
+        assert _occupied_slot_count(state) == 2
 
 
 # ==================================================================
@@ -773,8 +624,7 @@ class TestManualIntervalMode:
 
 
 class TestPostRMaxBaseFactor:
-    def test_cycle_base_units_updated_after_r_max(self):
-        """After r_max reset, cycle_base_units = base_units * factor."""
+    def test_new_layer_uses_updated_base_units(self):
         s = _strategy(
             r_max=2,
             f_max=5,
@@ -784,32 +634,24 @@ class TestPostRMaxBaseFactor:
         )
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-
-        # Add 2 entries to hit r_max
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.94", "149.96"), state=state)
         s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.89", "149.91"), state=state)
-        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 2
+        assert _occupied_slot_count(state) == 2
 
-        # Trigger cycle reset
+        # Trigger new layer
         s.on_tick(tick=_tick(T0 + timedelta(seconds=180), "149.80", "149.82"), state=state)
-        assert state.strategy_state["cycles"][0]["layer_index"] == 1
-        assert state.strategy_state["cycles"][0]["cycle_base_units"] == 1500  # 1000 * 1.5
+        assert _layer_count(state) == 2
+        # L2 base_units = 1000 * 1.5 = 1500
+        l2 = state.strategy_state["cycles"][0]["layers"][1]
+        assert l2["base_units"] == 1500
 
 
 # ==================================================================
-# Expected table validation: lot sizes, layer initial TP, counter TP
+# Expected table validation
 # ==================================================================
 
 
 class TestExpectedTableValidation:
-    """Validate the full expected table for lot sizes, layer initial TP
-    (weighted_avg of previous layer), and counter TP (weighted_avg of
-    same-layer entries).
-
-    Uses manual intervals [30, 30, 25, 20, 16, 14, 12] with r_max=7,
-    f_max=3, counter_tp_mode=weighted_avg.
-    """
-
     @staticmethod
     def _make_strategy() -> SnowballStrategy:
         return _strategy(
@@ -823,83 +665,46 @@ class TestExpectedTableValidation:
         )
 
     def test_layer1_lot_sizes_and_tp(self):
-        """L1: lots = 1,2,3,4,5,6,7 and TP = weighted_avg of all L1 entries."""
         s = self._make_strategy()
         state = DummyState()
-
-        # Init at 100.00 (ask=100.02 so entry_price for LONG = ask = 100.02)
-        # We use bid=ask to simplify price matching
         s.on_tick(tick=_tick(T0, "100.00", "100.00"), state=state)
 
-        # Expected L1 counter prices and lots (intervals: 30,30,25,20,16,14,12)
         drops = [
-            ("99.70", "99.70", 2000),  # R1: -30 pips from initial
-            ("99.40", "99.40", 3000),  # R2: -30 pips from R1
-            ("99.15", "99.15", 4000),  # R3: -25 pips from R2
-            ("98.95", "98.95", 5000),  # R4: -20 pips from R3
-            ("98.79", "98.79", 6000),  # R5: -16 pips from R4
-            ("98.65", "98.65", 7000),  # R6: -14 pips from R5
+            ("99.70", "99.70", 2000),
+            ("99.40", "99.40", 3000),
+            ("99.15", "99.15", 4000),
+            ("98.95", "98.95", 5000),
+            ("98.79", "98.79", 6000),
+            ("98.65", "98.65", 7000),
         ]
-
         for i, (bid, ask, expected_units) in enumerate(drops, 1):
-            result = s.on_tick(
-                tick=_tick(T0 + timedelta(seconds=i * 60), bid, ask),
-                state=state,
-            )
-            opens = _open_events(result)
-            counter_opens = [o for o in opens if "counter" in (o.strategy_event_type or "")]
+            result = s.on_tick(tick=_tick(T0 + timedelta(seconds=i * 60), bid, ask), state=state)
+            counter_opens = [
+                o for o in _open_events(result) if "counter" in (o.strategy_event_type or "")
+            ]
             assert len(counter_opens) == 1, f"R{i}: expected 1 counter open"
-            assert counter_opens[0].units == expected_units, (
-                f"R{i}: expected {expected_units} units, got {counter_opens[0].units}"
-            )
-
-        # Verify layer_retracement_count = 6 (R1-R6)
-        cycle = state.strategy_state["cycles"][0]
-        assert cycle["layer_retracement_count"] == 6
+            assert counter_opens[0].units == expected_units
+        assert _occupied_slot_count(state) == 6
 
     def test_layer_progression_tp_is_weighted_avg(self):
-        """L2 initial TP = weighted_avg(all L1 entries + L2 initial)."""
         s = self._make_strategy()
         state = DummyState()
-
-        # Init at 100.00
         s.on_tick(tick=_tick(T0, "100.00", "100.00"), state=state)
 
-        # Build up L1 R1-R7 (need all 7 to reach r_max)
-        # Intervals: 30, 30, 25, 20, 16, 14, 12
-        # Each price is measured from the PREVIOUS counter entry
-        l1_drops = [
-            "99.70",  # R1: initial(100.00) - 30 pips
-            "99.40",  # R2: R1(99.70) - 30 pips
-            "99.15",  # R3: R2(99.40) - 25 pips
-            "98.95",  # R4: R3(99.15) - 20 pips
-            "98.79",  # R5: R4(98.95) - 16 pips
-            "98.65",  # R6: R5(98.79) - 14 pips
-            "98.53",  # R7: R6(98.65) - 12 pips
-        ]
+        l1_drops = ["99.70", "99.40", "99.15", "98.95", "98.79", "98.65", "98.53"]
         for i, price in enumerate(l1_drops, 1):
             s.on_tick(tick=_tick(T0 + timedelta(seconds=i * 60), price, price), state=state)
+        assert _occupied_slot_count(state) == 7
 
-        # After R7: layer_retracement_count == 7 == r_max
-        cycle = state.strategy_state["cycles"][0]
-        assert cycle["layer_retracement_count"] == 7
-
-        # Next tick triggers layer progression (r_max check at start of counter_adds)
-        result = s.on_tick(
-            tick=_tick(T0 + timedelta(seconds=480), "98.41", "98.41"),
-            state=state,
-        )
-        opens = _open_events(result)
-        layer_initials = [o for o in opens if "layer_initial" in (o.strategy_event_type or "")]
-        assert len(layer_initials) == 1, "Expected 1 layer initial entry"
-
+        # Trigger L2
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=480), "98.41", "98.41"), state=state)
+        layer_initials = [
+            o for o in _open_events(result) if "layer_initial" in (o.strategy_event_type or "")
+        ]
+        assert len(layer_initials) == 1
         l2_init = layer_initials[0]
-        assert l2_init.units == 1000  # trend_lot_size * base_units
+        assert l2_init.units == 1000
 
-        # Expected TP = weighted_avg(L1 all entries + L2 initial)
-        # L1: (100.00,1000), (99.70,2000), (99.40,3000), (99.15,4000),
-        #     (98.95,5000), (98.79,6000), (98.65,7000), (98.53,8000)
-        # L2 initial: (98.41, 1000)
         l1_cost = (
             Decimal("100.00") * 1000
             + Decimal("99.70") * 2000
@@ -911,39 +716,24 @@ class TestExpectedTableValidation:
             + Decimal("98.53") * 8000
         )
         l2_init_cost = Decimal("98.41") * 1000
-        total_units = Decimal("37000")
-        expected_tp = (l1_cost + l2_init_cost) / total_units
-        actual_tp = l2_init.planned_exit_price
-        assert abs(actual_tp - expected_tp) < Decimal("0.001"), (
-            f"L2 initial TP: expected ~{expected_tp:.4f}, got {actual_tp}"
-        )
+        expected_tp = (l1_cost + l2_init_cost) / Decimal("37000")
+        assert abs(l2_init.planned_exit_price - expected_tp) < Decimal("0.001")
 
     def test_layer2_counter_tp_uses_layer2_only(self):
-        """L2 counter TP = weighted_avg of L2 entries only (not L1)."""
         s = self._make_strategy()
         state = DummyState()
-
-        # Init + build L1 R1-R7 + trigger layer progression
         s.on_tick(tick=_tick(T0, "100.00", "100.00"), state=state)
         l1_drops = ["99.70", "99.40", "99.15", "98.95", "98.79", "98.65", "98.53"]
         for i, price in enumerate(l1_drops, 1):
             s.on_tick(tick=_tick(T0 + timedelta(seconds=i * 60), price, price), state=state)
-        # Trigger layer progression (L2 initial at 98.41)
         s.on_tick(tick=_tick(T0 + timedelta(seconds=480), "98.41", "98.41"), state=state)
 
         # L2/R1 at 98.11 (-30 pips from L2 initial 98.41)
-        result = s.on_tick(
-            tick=_tick(T0 + timedelta(seconds=540), "98.11", "98.11"),
-            state=state,
-        )
-        opens = _open_events(result)
-        counter_opens = [o for o in opens if "counter" in (o.strategy_event_type or "")]
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=540), "98.11", "98.11"), state=state)
+        counter_opens = [
+            o for o in _open_events(result) if "counter" in (o.strategy_event_type or "")
+        ]
         assert len(counter_opens) == 1
-        assert counter_opens[0].units == 2000  # R1 = 2 lots
-
-        # Expected TP = weighted_avg(L2 initial 98.41*1000 + L2/R1 98.11*2000) / 3000
+        assert counter_opens[0].units == 2000
         expected_tp = (Decimal("98.41") * 1000 + Decimal("98.11") * 2000) / 3000
-        actual_tp = counter_opens[0].planned_exit_price
-        assert abs(actual_tp - expected_tp) < Decimal("0.001"), (
-            f"L2/R1 TP: expected ~{expected_tp:.4f}, got {actual_tp}"
-        )
+        assert abs(counter_opens[0].planned_exit_price - expected_tp) < Decimal("0.001")

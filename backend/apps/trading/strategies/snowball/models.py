@@ -1,4 +1,18 @@
-"""Data models for Snowball strategy."""
+"""Data models for Snowball strategy.
+
+The core abstraction is a hierarchy: Cycle → Layer → Slot → Entry.
+
+- A **Cycle** represents one directional trade from initial entry to close.
+- A **Layer** holds up to ``r_max`` retracement slots plus a layer-initial entry.
+  When all slots fill, a new layer is created (up to ``f_max``).
+- A **Slot** is a numbered seat (R1..R_max) that can hold an open Entry or be empty.
+- An **Entry** is a single position with entry price, close price, units, etc.
+
+When price moves adversely, slots fill sequentially.  When price reverses and
+a slot's entry hits its TP, the entry is closed and the slot becomes empty.
+If price reverses again past the *next* unfilled slot's threshold, a new layer
+begins instead of refilling the same slot.
+"""
 
 from __future__ import annotations
 
@@ -290,19 +304,11 @@ class Entry:
     # ------------------------------------------------------------------
 
     def exit_price(self, tick: Tick) -> Decimal:
-        """Return the exit price for this entry given a tick.
-
-        Long positions exit at bid, short positions exit at ask.
-        """
+        """Return the exit price for this entry given a tick."""
         return tick.bid if self.is_long else tick.ask
 
     def unrealised_loss_pips(self, mid_price: Decimal, pip_size: Decimal) -> Decimal:
-        """Return unrealised loss in pips (positive = losing).
-
-        Args:
-            mid_price: Current mid price.
-            pip_size: Pip size for the instrument.
-        """
+        """Return unrealised loss in pips (positive = losing)."""
         if self.is_long:
             return (self.entry_price - mid_price) / pip_size
         return (mid_price - self.entry_price) / pip_size
@@ -508,8 +514,179 @@ class Entry:
         )
 
 
-# Backward-compatible alias so existing imports keep working
+# Backward-compatible alias
 BasketEntry = Entry
+
+
+# ---------------------------------------------------------------------------
+# Slot — a numbered seat within a Layer that can hold an Entry
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Slot:
+    """A retracement seat within a layer.
+
+    ``index`` is 1-based (R1, R2, ...).  ``entry`` is the open position
+    occupying this slot, or ``None`` when the slot is empty.
+    ``ever_closed`` is ``True`` once an entry in this slot has been closed
+    at least once — this prevents the slot from being refilled and instead
+    triggers a new layer.
+    """
+
+    index: int  # 1-based (R1 = 1, R2 = 2, ...)
+    entry: Entry | None = None
+    ever_closed: bool = False
+
+    @property
+    def is_occupied(self) -> bool:
+        return self.entry is not None
+
+    @property
+    def is_empty(self) -> bool:
+        return self.entry is None
+
+    def fill(self, entry: Entry) -> None:
+        self.entry = entry
+
+    def vacate(self) -> Entry | None:
+        """Remove and return the entry, marking the slot as having been closed."""
+        e = self.entry
+        self.entry = None
+        self.ever_closed = True
+        return e
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "index": self.index,
+            "entry": self.entry.to_dict() if self.entry else None,
+            "ever_closed": self.ever_closed,
+        }
+
+    @staticmethod
+    def from_dict(d: dict[str, Any]) -> Slot:
+        raw_entry = d.get("entry")
+        return Slot(
+            index=_parse_int(d.get("index", 1), 1),
+            entry=Entry.from_dict(raw_entry) if raw_entry else None,
+            ever_closed=bool(d.get("ever_closed", False)),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Layer — a group of r_max slots plus an optional layer-initial entry
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Layer:
+    """A single layer of retracement slots.
+
+    ``layer_number`` is 1-based (L1, L2, ...).
+    ``initial_entry`` is the layer-initial position (L1 uses the cycle initial;
+    L2+ have their own layer-initial entry).
+    ``slots`` is a list of ``r_max`` Slot objects.
+    """
+
+    layer_number: int  # 1-based
+    slots: list[Slot] = field(default_factory=list)
+    initial_entry: Entry | None = None  # layer-initial entry (None for L1)
+    base_units: int = 1000
+
+    # ------------------------------------------------------------------
+    # Slot queries
+    # ------------------------------------------------------------------
+
+    def occupied_slots(self) -> list[Slot]:
+        """Return slots that currently hold an entry."""
+        return [s for s in self.slots if s.is_occupied]
+
+    def highest_occupied_slot(self) -> Slot | None:
+        """Return the occupied slot with the highest index, or None."""
+        occupied = self.occupied_slots()
+        return max(occupied, key=lambda s: s.index) if occupied else None
+
+    def next_slot_to_fill(self) -> Slot | None:
+        """Return the next empty slot that has never been closed.
+
+        If the next empty slot has ``ever_closed=True``, it means a reversal
+        happened and a new layer should be started instead.  Returns None in
+        that case.
+        """
+        for s in self.slots:
+            if s.is_empty and not s.ever_closed:
+                return s
+            if s.is_empty and s.ever_closed:
+                return None  # trigger new layer
+            # occupied — skip
+        return None  # all slots full
+
+    def should_start_new_layer(self) -> bool:
+        """True if the next empty slot has been previously closed (reversal)
+        or all slots are full."""
+        for s in self.slots:
+            if s.is_empty and not s.ever_closed:
+                return False
+            if s.is_empty and s.ever_closed:
+                return True
+        return True  # all slots full
+
+    def has_open_entries(self) -> bool:
+        """True if any slot has an open entry or the layer initial is present."""
+        if self.initial_entry is not None:
+            return True
+        return any(s.is_occupied for s in self.slots)
+
+    def all_entries(self) -> list[Entry]:
+        """Return all open entries in this layer (initial + slots)."""
+        entries: list[Entry] = []
+        if self.initial_entry is not None:
+            entries.append(self.initial_entry)
+        for s in self.slots:
+            if s.entry is not None:
+                entries.append(s.entry)
+        return entries
+
+    def remove_entry(self, entry_id: int) -> None:
+        """Remove an entry by ID from slots or initial."""
+        if self.initial_entry is not None and self.initial_entry.entry_id == entry_id:
+            self.initial_entry = None
+            return
+        for s in self.slots:
+            if s.entry is not None and s.entry.entry_id == entry_id:
+                s.vacate()
+                return
+
+    # ------------------------------------------------------------------
+    # Serialisation
+    # ------------------------------------------------------------------
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "layer_number": self.layer_number,
+            "slots": [s.to_dict() for s in self.slots],
+            "initial_entry": self.initial_entry.to_dict() if self.initial_entry else None,
+            "base_units": self.base_units,
+        }
+
+    @staticmethod
+    def from_dict(d: dict[str, Any]) -> Layer:
+        raw_initial = d.get("initial_entry")
+        return Layer(
+            layer_number=_parse_int(d.get("layer_number", 1), 1),
+            slots=[Slot.from_dict(s) for s in d.get("slots", [])],
+            initial_entry=Entry.from_dict(raw_initial) if raw_initial else None,
+            base_units=_parse_int(d.get("base_units", 1000), 1000),
+        )
+
+    @staticmethod
+    def create(layer_number: int, r_max: int, base_units: int) -> Layer:
+        """Create a new layer with ``r_max`` empty slots."""
+        return Layer(
+            layer_number=layer_number,
+            slots=[Slot(index=i + 1) for i in range(r_max)],
+            base_units=base_units,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -521,21 +698,33 @@ BasketEntry = Entry
 class SnowballCycle:
     """A single trading cycle: one initial entry through to its close.
 
-    Each cycle tracks its own counter entries, layer/retracement counters,
-    and hedge entries independently.
+    Each cycle tracks layers of retracement slots and hedge entries.
     """
 
     cycle_id: int  # = initial entry's entry_id
     direction: Direction
     initial_entry: Entry | None = None
-    counter_entries: list[Entry] = field(default_factory=list)
+    layers: list[Layer] = field(default_factory=list)
     hedge_entries: list[Entry] = field(default_factory=list)
-    layer_initial_entries: dict[int, Entry] = field(default_factory=dict)
-    layer_retracement_count: int = 0
-    layer_index: int = 0
-    cycle_base_units: int = 1000
     counter_close_count: int = 0
     completed: bool = False
+
+    # ------------------------------------------------------------------
+    # Layer accessors
+    # ------------------------------------------------------------------
+
+    @property
+    def current_layer(self) -> Layer | None:
+        """Return the most recent (highest-numbered) layer, or None."""
+        return self.layers[-1] if self.layers else None
+
+    @property
+    def layer_index(self) -> int:
+        """0-based index of the current layer (for compatibility)."""
+        return len(self.layers) - 1 if self.layers else 0
+
+    def add_layer(self, layer: Layer) -> None:
+        self.layers.append(layer)
 
     # ------------------------------------------------------------------
     # Computed properties
@@ -554,30 +743,69 @@ class SnowballCycle:
     # ------------------------------------------------------------------
 
     def all_entries(self) -> list[Entry]:
-        """Return all entries in this cycle (initial + layer initials + counter + hedge)."""
+        """Return all entries in this cycle (initial + layers + hedge)."""
         entries: list[Entry] = []
         if self.initial_entry is not None:
             entries.append(self.initial_entry)
-        for _layer, entry in sorted(self.layer_initial_entries.items()):
-            entries.append(entry)
-        entries.extend(self.counter_entries)
+        for layer in self.layers:
+            # layer initial (L2+)
+            if layer.initial_entry is not None:
+                entries.append(layer.initial_entry)
+            for s in layer.slots:
+                if s.entry is not None:
+                    entries.append(s.entry)
         entries.extend(self.hedge_entries)
         return entries
 
     def counter_non_hedge(self) -> list[Entry]:
-        """Return counter entries excluding hedges."""
-        return [e for e in self.counter_entries if not e.is_hedge]
+        """Return all counter entries (slot entries) excluding hedges."""
+        entries: list[Entry] = []
+        for layer in self.layers:
+            for s in layer.slots:
+                if s.entry is not None and not s.entry.is_hedge:
+                    entries.append(s.entry)
+        return entries
 
-    def initial_for_layer(self, layer: int) -> Entry | None:
+    def initial_for_layer(self, layer_number: int) -> Entry | None:
         """Return the initial entry for the given layer number."""
-        if layer == 1:
+        if layer_number == 1:
             return self.initial_entry
-        return self.layer_initial_entries.get(layer)
+        for layer in self.layers:
+            if layer.layer_number == layer_number and layer.initial_entry is not None:
+                return layer.initial_entry
+        return None
 
     def remove_entry(self, entry_id: int) -> None:
-        """Remove an entry by entry_id from counter or hedge lists."""
-        self.counter_entries = [e for e in self.counter_entries if e.entry_id != entry_id]
+        """Remove an entry by entry_id from layers or hedge lists."""
+        for layer in self.layers:
+            layer.remove_entry(entry_id)
         self.hedge_entries = [e for e in self.hedge_entries if e.entry_id != entry_id]
+
+    # ------------------------------------------------------------------
+    # Backward-compatible properties
+    # ------------------------------------------------------------------
+
+    @property
+    def counter_entries(self) -> list[Entry]:
+        """All slot entries across all layers (for backward compat)."""
+        return self.counter_non_hedge()
+
+    @property
+    def layer_initial_entries(self) -> dict[int, Entry]:
+        """Map of layer_number → layer initial entry (for backward compat)."""
+        result: dict[int, Entry] = {}
+        for layer in self.layers:
+            if layer.initial_entry is not None:
+                result[layer.layer_number] = layer.initial_entry
+        return result
+
+    @property
+    def layer_retracement_count(self) -> int:
+        """Number of occupied slots in the current layer."""
+        layer = self.current_layer
+        if layer is None:
+            return 0
+        return len(layer.occupied_slots())
 
     # ------------------------------------------------------------------
     # Serialisation
@@ -588,14 +816,8 @@ class SnowballCycle:
             "cycle_id": self.cycle_id,
             "direction": self.direction.value,
             "initial_entry": self.initial_entry.to_dict() if self.initial_entry is not None else {},
-            "counter_entries": [e.to_dict() for e in self.counter_entries],
+            "layers": [layer.to_dict() for layer in self.layers],
             "hedge_entries": [e.to_dict() for e in self.hedge_entries],
-            "layer_initial_entries": {
-                str(k): v.to_dict() for k, v in self.layer_initial_entries.items()
-            },
-            "layer_retracement_count": self.layer_retracement_count,
-            "layer_index": self.layer_index,
-            "cycle_base_units": self.cycle_base_units,
             "counter_close_count": self.counter_close_count,
             "completed": self.completed,
         }
@@ -614,27 +836,62 @@ class SnowballCycle:
         if raw_initial:
             initial_entry = Entry.from_dict(raw_initial)
 
-        raw_layer_initials = data.get("layer_initial_entries", {})
-        layer_initial_entries: dict[int, Entry] = {}
-        for k, v in raw_layer_initials.items():
-            if v:
-                layer_initial_entries[int(k)] = Entry.from_dict(v)
+        # New format: layers list
+        raw_layers = data.get("layers")
+        if raw_layers is not None:
+            layers = [Layer.from_dict(ld) for ld in raw_layers]
+        else:
+            # Legacy format migration: convert counter_entries + layer_initial_entries
+            layers = _migrate_legacy_cycle(data)
 
         return SnowballCycle(
             cycle_id=_parse_int(data.get("cycle_id", 0), 0),
             direction=direction,
             initial_entry=initial_entry,
-            counter_entries=[Entry.from_dict(e) for e in data.get("counter_entries", [])],
+            layers=layers,
             hedge_entries=[Entry.from_dict(e) for e in data.get("hedge_entries", [])],
-            layer_initial_entries=layer_initial_entries,
-            layer_retracement_count=_parse_int(
-                data.get("layer_retracement_count", data.get("add_count", 0)), 0
-            ),
-            layer_index=_parse_int(data.get("layer_index", data.get("freeze_count", 0)), 0),
-            cycle_base_units=_parse_int(data.get("cycle_base_units", 1000), 1000),
             counter_close_count=_parse_int(data.get("counter_close_count", 0), 0),
             completed=bool(data.get("completed", False)),
         )
+
+
+def _migrate_legacy_cycle(data: dict[str, Any]) -> list[Layer]:
+    """Convert old-format cycle data (counter_entries + layer_initial_entries) to layers."""
+    counter_entries = [Entry.from_dict(e) for e in data.get("counter_entries", [])]
+    raw_layer_initials = data.get("layer_initial_entries", {})
+    layer_initials: dict[int, Entry] = {}
+    for k, v in raw_layer_initials.items():
+        if v:
+            layer_initials[int(k)] = Entry.from_dict(v)
+
+    # Group counter entries by layer_number
+    by_layer: dict[int, list[Entry]] = {}
+    for e in counter_entries:
+        ln = e.layer_number
+        by_layer.setdefault(ln, []).append(e)
+
+    # Determine all layer numbers
+    all_layer_nums = set(by_layer.keys()) | set(layer_initials.keys())
+    if not all_layer_nums:
+        # At least L1 exists
+        r_max = _parse_int(data.get("layer_retracement_count", 0), 0) or 7
+        return [Layer.create(1, r_max, _parse_int(data.get("cycle_base_units", 1000), 1000))]
+
+    layers: list[Layer] = []
+    for ln in sorted(all_layer_nums):
+        entries_for_layer = by_layer.get(ln, [])
+        max_ret = max((e.retracement_count for e in entries_for_layer), default=0)
+        r_max = max(max_ret, 7)
+        layer = Layer.create(ln, r_max, _parse_int(data.get("cycle_base_units", 1000), 1000))
+        layer.initial_entry = layer_initials.get(ln)
+        # Fill slots
+        for e in entries_for_layer:
+            idx = e.retracement_count
+            if 1 <= idx <= len(layer.slots):
+                layer.slots[idx - 1].fill(e)
+        layers.append(layer)
+
+    return layers
 
 
 # ---------------------------------------------------------------------------
