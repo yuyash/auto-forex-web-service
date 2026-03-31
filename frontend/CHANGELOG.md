@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.24.1...frontend-v1.25.0) (2026-03-31)
+
+
+### Features
+
+* historical execution viewer ([#274](https://github.com/yuyash/auto-forex-web-service/issues/274)) ([71517de](https://github.com/yuyash/auto-forex-web-service/commit/71517deed4aacb1c70a05250a576f84c7cd50c3a))
+
 ## [1.24.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.24.0...frontend-v1.24.1) (2026-03-31)
 
 
