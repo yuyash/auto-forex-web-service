@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Box,
@@ -29,7 +29,7 @@ import {
 } from '../../../hooks/useColumnConfig';
 import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
 import { StatusBadge } from './StatusBadge';
-import { TaskStatus, TaskType } from '../../../types/common';
+import { TaskType } from '../../../types/common';
 import type { TaskExecution } from '../../../types/execution';
 
 interface ExecutionHistoryTableProps {
@@ -44,7 +44,7 @@ export function ExecutionHistoryTable({
   instrument,
 }: ExecutionHistoryTableProps) {
   const { t } = useTranslation('common');
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [colConfigOpen, setColConfigOpen] = useState(false);
@@ -246,15 +246,10 @@ export function ExecutionHistoryTable({
 
   const handleRowClick = useCallback(
     (exec: TaskExecution) => {
-      if (
-        exec.status === TaskStatus.RUNNING ||
-        exec.status === TaskStatus.PAUSED
-      ) {
-        const prefix = taskType === TaskType.BACKTEST ? 'backtest' : 'trading';
-        navigate(`/${prefix}-tasks/${taskId}/running`);
-      }
+      const tab = searchParams.get('tab') || 'overview';
+      setSearchParams({ tab, execution: exec.id });
     },
-    [navigate, taskId, taskType]
+    [searchParams, setSearchParams]
   );
 
   return (

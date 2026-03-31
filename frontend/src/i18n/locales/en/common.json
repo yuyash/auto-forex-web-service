@@ -78,7 +78,8 @@
     "deleting": "Deleting...",
     "newTask": "New Task",
     "createTask": "Create Task",
-    "updateTask": "Update Task"
+    "updateTask": "Update Task",
+    "backToCurrent": "Back to Current"
   },
   "status": {
     "active": "Active",

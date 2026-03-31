@@ -78,7 +78,8 @@
     "deleting": "削除中...",
     "newTask": "新規タスク",
     "createTask": "タスクを作成",
-    "updateTask": "タスクを更新"
+    "updateTask": "タスクを更新",
+    "backToCurrent": "現在の実行に戻る"
   },
   "status": {
     "active": "アクティブ",
