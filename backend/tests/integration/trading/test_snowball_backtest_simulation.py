@@ -200,8 +200,10 @@ class TestSnowballBacktestSimulation:
         ]
 
         assert state.ticks_processed == 5
-        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 1
-        assert state.strategy_state["cycles"][0]["layer_index"] == 0
+        cycle = state.strategy_state["cycles"][0]
+        occupied = sum(1 for s in cycle["layers"][0]["slots"] if s.get("entry") is not None)
+        assert occupied == 1
+        assert len(cycle["layers"]) == 2
         assert state.current_balance > task.initial_balance
         assert (
             Position.objects.filter(
@@ -225,7 +227,7 @@ class TestSnowballBacktestSimulation:
             ("open_position", "snowball_counter", 1),
             ("open_position", "snowball_counter", 2),
             ("close_position", None, 2),
-            ("open_position", "snowball_counter", 1),
+            ("open_position", "snowball_layer_initial", 0),
             ("close_position", None, 1),
             ("open_position", "snowball_initial", 1),
             ("strategy_stopped", None, None),
@@ -273,9 +275,10 @@ class TestSnowballBacktestSimulation:
         )
 
         assert state.ticks_processed == 4
-        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 0
-        assert state.strategy_state["cycles"][0]["layer_index"] == 1
-        assert state.strategy_state["cycles"][0]["cycle_base_units"] == 1500
+        cycle = state.strategy_state["cycles"][0]
+        # After r_max, a new layer is created with 0 occupied slots
+        assert len(cycle["layers"]) == 2
+        assert cycle["layers"][1]["base_units"] == 1500
         assert counter_add_retracements == [1, 2]
 
     def test_spread_guard_blocks_initialisation_through_executor(self) -> None:
@@ -379,18 +382,13 @@ class TestSnowballBacktestSimulation:
 
         assert resumed_state.ticks_processed == full_state.ticks_processed
         assert resumed_state.current_balance == full_state.current_balance
-        assert (
-            resumed_state.strategy_state["cycles"][0]["layer_retracement_count"]
-            == full_state.strategy_state["cycles"][0]["layer_retracement_count"]
-        )
-        assert (
-            resumed_state.strategy_state["cycles"][0]["layer_index"]
-            == full_state.strategy_state["cycles"][0]["layer_index"]
-        )
-        assert (
-            resumed_state.strategy_state["cycles"][0]["cycle_base_units"]
-            == full_state.strategy_state["cycles"][0]["cycle_base_units"]
-        )
+        # Compare layer structure
+        resumed_layers = resumed_state.strategy_state["cycles"][0]["layers"]
+        full_layers = full_state.strategy_state["cycles"][0]["layers"]
+        assert len(resumed_layers) == len(full_layers)
+        for rl, fl in zip(resumed_layers, full_layers):
+            assert rl["base_units"] == fl["base_units"]
+            assert len(rl["slots"]) == len(fl["slots"])
         # Compare strategy-level metrics only; runtime metrics (current_atr,
         # baseline_atr, margin_ratio, volatility_threshold) depend on candle
         # history that is not persisted across executor restarts.
@@ -415,13 +413,19 @@ class TestSnowballBacktestSimulation:
             for entry in [cycle["initial_entry"]]
             if entry
         ]
-        assert [
-            _normalize_entry(entry)
-            for entry in resumed_state.strategy_state["cycles"][0]["counter_entries"]
-        ] == [
-            _normalize_entry(entry)
-            for entry in full_state.strategy_state["cycles"][0]["counter_entries"]
-        ]
+
+        # Compare slot entries across all layers
+        def _all_slot_entries(cycle_dict):
+            entries = []
+            for layer in cycle_dict.get("layers", []):
+                for slot in layer.get("slots", []):
+                    if slot.get("entry"):
+                        entries.append(_normalize_entry(slot["entry"]))
+            return entries
+
+        assert _all_slot_entries(resumed_state.strategy_state["cycles"][0]) == _all_slot_entries(
+            full_state.strategy_state["cycles"][0]
+        )
         assert (
             Position.objects.filter(
                 task_id=resumed_task.pk,
@@ -505,7 +509,9 @@ class TestSnowballBacktestSimulation:
         )
 
         assert state.ticks_processed == 4
-        assert state.strategy_state["cycles"][0]["layer_retracement_count"] == 2
+        cycle = state.strategy_state["cycles"][0]
+        occupied = sum(1 for s in cycle["layers"][0]["slots"] if s.get("entry") is not None)
+        assert occupied == 2
         assert counter_adds == [
             (1, 7, 5.0),
             (2, 11, 10.0),
