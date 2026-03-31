@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.24.0...frontend-v1.24.1) (2026-03-31)
+
+
+### Bug Fixes
+
+* snowball strategy logic ([#272](https://github.com/yuyash/auto-forex-web-service/issues/272)) ([7c20257](https://github.com/yuyash/auto-forex-web-service/commit/7c202571f6bdd977d4f0286a18b74a95f1097831))
+
 ## [1.24.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.23.1...frontend-v1.24.0) (2026-03-30)
 
 
