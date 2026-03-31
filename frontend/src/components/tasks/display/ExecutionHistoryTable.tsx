@@ -155,13 +155,19 @@ export function ExecutionHistoryTable({
         minWidth: 80,
         align: 'right' as const,
         render: (row: TaskExecution) => {
-          if (!row.metrics?.total_return)
+          if (row.metrics?.total_return == null)
             return (
               <Typography variant="body2" color="text.secondary">
                 -
               </Typography>
             );
           const v = parseFloat(String(row.metrics.total_return));
+          if (isNaN(v))
+            return (
+              <Typography variant="body2" color="text.secondary">
+                -
+              </Typography>
+            );
           return (
             <Chip
               label={`${v >= 0 ? '+' : ''}${v.toFixed(2)}%`}
@@ -179,8 +185,9 @@ export function ExecutionHistoryTable({
         minWidth: 90,
         align: 'right' as const,
         render: (row: TaskExecution) => {
-          if (!row.metrics?.total_pnl) return '-';
+          if (row.metrics?.total_pnl == null) return '-';
           const v = parseFloat(String(row.metrics.total_pnl));
+          if (isNaN(v)) return '-';
           const suffix = pnlCurrency ? ` ${pnlCurrency}` : '';
           return (
             <Typography
