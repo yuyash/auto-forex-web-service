@@ -118,8 +118,8 @@ class TestSlot:
         )
         slot.fill(entry)
         assert slot.is_occupied
-        vacated = slot.vacate()
-        assert vacated is entry
+        closed = slot.close(refillable=False)
+        assert closed is entry
         assert slot.is_empty
         assert slot.ever_closed
 
@@ -141,7 +141,7 @@ class TestLayer:
 
     def test_next_slot_to_fill(self):
         layer = Layer.create(1, 3, 1000)
-        assert layer.next_slot_to_fill().index == 1
+        assert layer.next_available_slot().index == 1
         layer.slots[0].fill(
             Entry(
                 entry_id=1,
@@ -154,10 +154,10 @@ class TestLayer:
                 role="counter",
             )
         )
-        assert layer.next_slot_to_fill().index == 2
+        assert layer.next_available_slot().index == 2
 
     def test_should_start_new_layer_after_vacate(self):
-        layer = Layer.create(1, 3, 1000)
+        layer = Layer.create(1, 3, 1000, refill_up_to=0)
         entry = Entry(
             entry_id=1,
             step=1,
@@ -169,8 +169,8 @@ class TestLayer:
             role="counter",
         )
         layer.slots[0].fill(entry)
-        layer.slots[0].vacate()
-        assert layer.should_start_new_layer() is True
+        layer.slots[0].close(refillable=False)
+        assert layer.needs_new_layer is True
 
     def test_to_dict_roundtrip(self):
         layer = Layer.create(2, 3, 1500)

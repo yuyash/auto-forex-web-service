@@ -1,17 +1,18 @@
 """Data models for Snowball strategy.
 
-The core abstraction is a hierarchy: Cycle → Layer → Slot → Entry.
+Hierarchy: Cycle → Layer → Slot → Entry.
 
-- A **Cycle** represents one directional trade from initial entry to close.
+- A **Cycle** is one directional trade from initial entry to close.
 - A **Layer** holds up to ``r_max`` retracement slots plus a layer-initial entry.
-  When all slots fill, a new layer is created (up to ``f_max``).
-- A **Slot** is a numbered seat (R1..R_max) that can hold an open Entry or be empty.
+- A **Slot** is a numbered seat (R1..R_max) that holds an Entry or is empty.
 - An **Entry** is a single position with entry price, close price, units, etc.
 
-When price moves adversely, slots fill sequentially.  When price reverses and
-a slot's entry hits its TP, the entry is closed and the slot becomes empty.
-If price reverses again past the *next* unfilled slot's threshold, a new layer
-begins instead of refilling the same slot.
+Key rules encoded in the model:
+- L1/R0 close always ends the cycle.
+- L2+ R0 close resets the layer (refillable by default).
+- Slot close with index <= refill_up_to keeps the slot refillable.
+- Slot close with index > refill_up_to seals the slot, triggering a new layer.
+- Closes proceed from the newest layer's highest R down to L1/R0.
 """
 
 from __future__ import annotations
@@ -36,10 +37,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class SnowballStrategyConfig:
-    """Normalised Snowball strategy configuration.
-
-    All pip values are stored as Decimal for precision.
-    """
+    """Normalised Snowball strategy configuration."""
 
     # Core
     base_units: int
@@ -48,20 +46,18 @@ class SnowballStrategyConfig:
     r_max: int
     f_max: int
     post_r_max_base_factor: Decimal
-    refill_up_to: int  # slots R1..R(refill_up_to) are refillable after close (0 = none)
+    refill_up_to: int  # R1..R(refill_up_to) refillable after close; 0 = none
 
     # Counter-trend interval formula
     n_pips_head: Decimal
     n_pips_tail: Decimal
     n_pips_flat_steps: int
     n_pips_gamma: Decimal
-    interval_mode: str  # constant / additive / subtractive / multiplicative / divisive / manual
+    interval_mode: str
     manual_intervals: list[Decimal]
 
     # Counter-trend step TP
-    counter_tp_mode: (
-        str  # fixed / additive / subtractive / multiplicative / divisive / weighted_avg
-    )
+    counter_tp_mode: str
     counter_tp_pips: Decimal
     counter_tp_step_amount: Decimal
     counter_tp_multiplier: Decimal
@@ -93,7 +89,6 @@ class SnowballStrategyConfig:
 
     @staticmethod
     def from_dict(raw: dict[str, Any]) -> SnowballStrategyConfig:
-        """Create config from a parameters dictionary."""
         manual_raw = raw.get("manual_intervals", [])
         manual_intervals: list[Decimal] = []
         if isinstance(manual_raw, list):
@@ -139,7 +134,6 @@ class SnowballStrategyConfig:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialise to JSON-friendly dict."""
         return {
             "base_units": self.base_units,
             "m_pips": str(self.m_pips),
@@ -179,7 +173,6 @@ class SnowballStrategyConfig:
         }
 
     def validate(self) -> None:
-        """Raise ``ValueError`` on invalid parameter combinations."""
         if self.shrink_enabled and self.lock_enabled and not self.m_th < self.n_th < Decimal("100"):
             raise ValueError("Must satisfy m_th < n_th < 100")
         if self.shrink_enabled and not Decimal("0") < self.m_th < Decimal("100"):
@@ -217,10 +210,10 @@ class Entry:
     """A single position entry within a cycle."""
 
     entry_id: int
-    step: int  # 1-based step within the current cycle
+    step: int
     direction: Direction
     entry_price: Decimal
-    close_price: Decimal  # target close price
+    close_price: Decimal
     units: int
     opened_at: datetime
     role: Literal["initial", "counter", "hedge", "layer_initial"]
@@ -235,10 +228,6 @@ class Entry:
     actual_interval_pips: Decimal | None = None
     expected_tp_pips: Decimal | None = None
     validation_status: str = ""
-
-    # ------------------------------------------------------------------
-    # Factory
-    # ------------------------------------------------------------------
 
     @classmethod
     def open(
@@ -256,7 +245,6 @@ class Entry:
         root_entry_id: int | None = None,
         parent_entry_id: int | None = None,
     ) -> Entry:
-        """Factory: allocate an ID from state and build an Entry at the tick price."""
         eid = state.allocate_id()
         price = tick.ask if direction == Direction.LONG else tick.bid
         if root_entry_id is None and role == "initial":
@@ -275,10 +263,6 @@ class Entry:
             root_entry_id=root_entry_id,
             parent_entry_id=parent_entry_id,
         )
-
-    # ------------------------------------------------------------------
-    # Computed properties
-    # ------------------------------------------------------------------
 
     @property
     def is_long(self) -> bool:
@@ -304,16 +288,11 @@ class Entry:
     def is_hedge(self) -> bool:
         return self.role == "hedge"
 
-    # ------------------------------------------------------------------
-    # Price helpers
-    # ------------------------------------------------------------------
-
     def exit_price(self, tick: Tick) -> Decimal:
-        """Return the exit price for this entry given a tick."""
         return tick.bid if self.is_long else tick.ask
 
     def unrealised_loss_pips(self, mid_price: Decimal, pip_size: Decimal) -> Decimal:
-        """Return unrealised loss in pips (positive = losing)."""
+        """Positive = losing."""
         if self.is_long:
             return (self.entry_price - mid_price) / pip_size
         return (mid_price - self.entry_price) / pip_size
@@ -330,7 +309,6 @@ class Entry:
         actual_tp_pips: Decimal | None = None,
         actual_exit_price: Decimal | None = None,
     ) -> None:
-        """Write snowball-specific metadata from this entry onto a strategy event."""
         event.strategy_type = "snowball"
         event.basket = self.role
         event.root_entry_id = self.root_entry_id
@@ -353,7 +331,6 @@ class Entry:
         planned_exit_price_formula: str | None = None,
         description: str = "",
     ) -> "OpenPositionEvent":
-        """Create an OpenPositionEvent from this entry."""
         from apps.trading.enums import EventType
         from apps.trading.events import OpenPositionEvent
 
@@ -386,7 +363,6 @@ class Entry:
         actual_tp_pips: Decimal | None = None,
         validation_status: str = "",
     ) -> "ClosePositionEvent":
-        """Create a ClosePositionEvent from this entry."""
         from apps.trading.enums import EventType
         from apps.trading.events import ClosePositionEvent
         from apps.trading.utils import quote_to_account_rate
@@ -425,7 +401,7 @@ class Entry:
         return event
 
     # ------------------------------------------------------------------
-    # Entry serialisation
+    # Serialisation
     # ------------------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
@@ -465,7 +441,6 @@ class Entry:
             if isinstance(raw_direction, Direction)
             else Direction(str(raw_direction).strip().lower())
         )
-
         raw_opened = d.get("opened_at", "")
         if isinstance(raw_opened, datetime):
             opened_at = raw_opened
@@ -519,27 +494,25 @@ class Entry:
         )
 
 
-# Backward-compatible alias
 BasketEntry = Entry
 
 
 # ---------------------------------------------------------------------------
-# Slot — a numbered seat within a Layer that can hold an Entry
+# Slot
 # ---------------------------------------------------------------------------
 
 
 @dataclass
 class Slot:
-    """A retracement seat within a layer.
+    """A retracement seat (R1, R2, ...) within a Layer.
 
-    ``index`` is 1-based (R1, R2, ...).  ``entry`` is the open position
-    occupying this slot, or ``None`` when the slot is empty.
-    ``ever_closed`` is ``True`` once an entry in this slot has been closed
-    at least once — this prevents the slot from being refilled and instead
-    triggers a new layer.
+    States:
+    - empty + not ever_closed → available for a new entry
+    - occupied → holds an open entry
+    - empty + ever_closed → sealed; triggers new layer on next adverse move
     """
 
-    index: int  # 1-based (R1 = 1, R2 = 2, ...)
+    index: int  # 1-based (R1=1, R2=2, ...)
     entry: Entry | None = None
     ever_closed: bool = False
 
@@ -551,21 +524,30 @@ class Slot:
     def is_empty(self) -> bool:
         return self.entry is None
 
+    @property
+    def is_available(self) -> bool:
+        """True if this slot can accept a new entry."""
+        return self.entry is None and not self.ever_closed
+
     def fill(self, entry: Entry) -> None:
         self.entry = entry
 
-    def vacate(self, *, refillable: bool = False) -> Entry | None:
-        """Remove and return the entry.
+    def close(self, *, refillable: bool) -> Entry | None:
+        """Close the entry in this slot.
 
-        When *refillable* is ``True`` the slot stays available for a new
-        entry (``ever_closed`` remains ``False``).  Otherwise the slot is
-        permanently sealed.
+        If *refillable*, the slot remains available for re-entry.
+        Otherwise it is sealed (ever_closed=True).
         """
         e = self.entry
         self.entry = None
         if not refillable:
             self.ever_closed = True
         return e
+
+    def reset(self) -> None:
+        """Reset to fresh empty state."""
+        self.entry = None
+        self.ever_closed = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -585,77 +567,68 @@ class Slot:
 
 
 # ---------------------------------------------------------------------------
-# Layer — a group of r_max slots plus an optional layer-initial entry
+# Layer
 # ---------------------------------------------------------------------------
 
 
 @dataclass
 class Layer:
-    """A single layer of retracement slots.
+    """A layer of r_max retracement slots.
 
-    ``layer_number`` is 1-based (L1, L2, ...).
-    ``initial_entry`` is the layer-initial position (L1 uses the cycle initial;
-    L2+ have their own layer-initial entry).
-    ``slots`` is a list of ``r_max`` Slot objects.
+    L1 uses the cycle's initial_entry as its reference.
+    L2+ have their own initial_entry (layer_initial).
+
+    The layer knows its ``refill_up_to`` threshold so it can decide
+    whether a closed slot should be refillable or sealed.
     """
 
     layer_number: int  # 1-based
     slots: list[Slot] = field(default_factory=list)
-    initial_entry: Entry | None = None  # layer-initial entry (None for L1)
+    initial_entry: Entry | None = None
     base_units: int = 1000
-    completed: bool = False  # True once the layer-initial entry has been closed
+    refill_up_to: int = 2  # slots R1..R(refill_up_to) are refillable
 
     # ------------------------------------------------------------------
     # Slot queries
     # ------------------------------------------------------------------
 
     def occupied_slots(self) -> list[Slot]:
-        """Return slots that currently hold an entry."""
         return [s for s in self.slots if s.is_occupied]
 
     def highest_occupied_slot(self) -> Slot | None:
-        """Return the occupied slot with the highest index, or None."""
         occupied = self.occupied_slots()
         return max(occupied, key=lambda s: s.index) if occupied else None
 
-    def next_slot_to_fill(self) -> Slot | None:
-        """Return the next empty slot that has never been closed.
+    def next_available_slot(self) -> Slot | None:
+        """Return the next slot that can accept an entry.
 
-        Returns None when the layer is completed, the next empty slot has
-        ``ever_closed=True``, or all slots are full.
+        Walks slots in order.  Returns None if:
+        - A sealed (ever_closed) slot is encountered before an available one
+        - All slots are occupied
         """
-        if self.completed:
-            return None
         for s in self.slots:
-            if s.is_empty and not s.ever_closed:
+            if s.is_available:
                 return s
             if s.is_empty and s.ever_closed:
-                return None  # trigger new layer
-            # occupied — skip
-        return None  # all slots full
+                return None  # sealed slot blocks further filling → new layer
+        return None  # all occupied
 
-    def should_start_new_layer(self) -> bool:
-        """True if the next empty slot has been previously closed (reversal),
-        all slots are full, or the layer has been completed."""
-        if self.completed:
-            return True
-        for s in self.slots:
-            if s.is_empty and not s.ever_closed:
-                return False
-            if s.is_empty and s.ever_closed:
-                return True
-        return True  # all slots full
+    @property
+    def needs_new_layer(self) -> bool:
+        """True if this layer cannot accept more entries and a new layer is needed."""
+        return self.next_available_slot() is None
+
+    @property
+    def needs_initial_rebuild(self) -> bool:
+        """True if this is L2+ and the initial entry needs to be (re)built."""
+        return self.layer_number > 1 and self.initial_entry is None
 
     def has_open_entries(self) -> bool:
-        """True if any slot has an open entry or the layer initial is present."""
-        if self.completed:
-            return False
         if self.initial_entry is not None:
             return True
         return any(s.is_occupied for s in self.slots)
 
     def all_entries(self) -> list[Entry]:
-        """Return all open entries in this layer (initial + slots)."""
         entries: list[Entry] = []
         if self.initial_entry is not None:
             entries.append(self.initial_entry)
@@ -664,28 +637,112 @@ class Layer:
                 entries.append(s.entry)
         return entries
 
+    # ------------------------------------------------------------------
+    # Close operations
+    # ------------------------------------------------------------------
+
+    def close_slot(self, slot_index: int) -> Entry | None:
+        """Close the entry in the slot at *slot_index* (1-based).
+
+        Refillability is determined by comparing slot_index to refill_up_to.
+        For L2+, R0 (initial_entry) is always refillable — handled separately.
+        """
+        for s in self.slots:
+            if s.index == slot_index and s.is_occupied:
+                refillable = s.index <= self.refill_up_to
+                return s.close(refillable=refillable)
+        return None
+
+    def close_initial(self) -> Entry | None:
+        """Close the layer-initial entry and reset the layer for reuse.
+
+        Only applicable to L2+.  Resets all slots so the layer can be
+        re-entered on the next adverse move.
+        """
+        e = self.initial_entry
+        self.initial_entry = None
+        for s in self.slots:
+            s.reset()
+        return e
+
     def remove_entry(self, entry_id: int) -> None:
-        """Remove an entry by ID from slots or initial."""
+        """Remove an entry by ID (used by protection modes)."""
         if self.initial_entry is not None and self.initial_entry.entry_id == entry_id:
             self.initial_entry = None
             return
         for s in self.slots:
             if s.entry is not None and s.entry.entry_id == entry_id:
-                s.vacate()
+                s.close(refillable=False)
                 return
 
-    def reset(self) -> None:
-        """Reset the layer to a fresh state.
+    # ------------------------------------------------------------------
+    # Weighted average helpers
+    # ------------------------------------------------------------------
 
-        Clears the initial entry and resets all slots to empty/unused.
-        Called when the layer-initial entry is closed at TP, meaning the
-        layer's job is done and it can be reused on the next adverse move.
+    def weighted_avg_close_price(
+        self,
+        new_price: Decimal,
+        new_units: int,
+        include_initial: Entry | None = None,
+    ) -> tuple[Decimal, str]:
+        """Compute weighted-average close price for a new entry in this layer.
+
+        Includes: new entry + existing slot entries + layer initial (or cycle initial).
+        Returns (close_price, formula_string).
         """
-        self.initial_entry = None
-        self.completed = False
+        total_cost = new_price * Decimal(str(new_units))
+        total_units = new_units
+        parts = [f"{new_price} * {new_units}"]
+
         for s in self.slots:
-            s.entry = None
-            s.ever_closed = False
+            if s.entry is not None and not s.entry.is_hedge:
+                total_cost += s.entry.entry_price * Decimal(str(s.entry.units))
+                total_units += s.entry.units
+                parts.append(f"{s.entry.entry_price} * {s.entry.units}")
+
+        ref = include_initial or self.initial_entry
+        if ref is not None:
+            ref_units = abs(ref.units)
+            if ref_units > 0:
+                total_cost += ref.entry_price * Decimal(str(ref_units))
+                total_units += ref_units
+                parts.append(f"{ref.entry_price} * {ref_units}")
+
+        close_price = total_cost / Decimal(str(total_units)) if total_units > 0 else new_price
+        formula = f"({' + '.join(parts)}) / {total_units}"
+        return close_price, formula
+
+    def layer_initial_close_price(
+        self,
+        new_price: Decimal,
+        new_units: int,
+        prev_layer: Layer,
+        prev_layer_initial: Entry | None,
+    ) -> tuple[Decimal, str]:
+        """Compute close price for a layer-initial entry (L2+).
+
+        Weighted average of: previous layer's entries + this new entry.
+        """
+        total_cost = new_price * Decimal(str(new_units))
+        total_units = new_units
+        parts = [f"{new_price} * {new_units}"]
+
+        if prev_layer_initial is not None:
+            pu = abs(prev_layer_initial.units)
+            if pu > 0:
+                total_cost += prev_layer_initial.entry_price * Decimal(str(pu))
+                total_units += pu
+                parts.append(f"{prev_layer_initial.entry_price} * {pu}")
+
+        for s in prev_layer.slots:
+            if s.entry is not None and not s.entry.is_hedge:
+                total_cost += s.entry.entry_price * Decimal(str(s.entry.units))
+                total_units += s.entry.units
+                parts.append(f"{s.entry.entry_price} * {s.entry.units}")
+
+        close_price = total_cost / Decimal(str(total_units)) if total_units > 0 else new_price
+        formula = f"({' + '.join(parts)}) / {total_units}"
+        return close_price, formula
 
     # ------------------------------------------------------------------
     # Serialisation
@@ -697,7 +754,7 @@ class Layer:
             "slots": [s.to_dict() for s in self.slots],
             "initial_entry": self.initial_entry.to_dict() if self.initial_entry else None,
             "base_units": self.base_units,
-            "completed": self.completed,
+            "refill_up_to": self.refill_up_to,
         }
 
     @staticmethod
@@ -708,16 +765,16 @@ class Layer:
             slots=[Slot.from_dict(s) for s in d.get("slots", [])],
             initial_entry=Entry.from_dict(raw_initial) if raw_initial else None,
             base_units=_parse_int(d.get("base_units", 1000), 1000),
-            completed=bool(d.get("completed", False)),
+            refill_up_to=_parse_int(d.get("refill_up_to", 2), 2),
         )
 
     @staticmethod
-    def create(layer_number: int, r_max: int, base_units: int) -> Layer:
-        """Create a new layer with ``r_max`` empty slots."""
+    def create(layer_number: int, r_max: int, base_units: int, refill_up_to: int = 2) -> Layer:
         return Layer(
             layer_number=layer_number,
             slots=[Slot(index=i + 1) for i in range(r_max)],
             base_units=base_units,
+            refill_up_to=refill_up_to,
         )
 
 
@@ -728,12 +785,9 @@ class Layer:
 
 @dataclass
 class SnowballCycle:
-    """A single trading cycle: one initial entry through to its close.
+    """A single trading cycle: initial entry through to close."""
 
-    Each cycle tracks layers of retracement slots and hedge entries.
-    """
-
-    cycle_id: int  # = initial entry's entry_id
+    cycle_id: int
     direction: Direction
     initial_entry: Entry | None = None
     layers: list[Layer] = field(default_factory=list)
@@ -741,26 +795,13 @@ class SnowballCycle:
     counter_close_count: int = 0
     completed: bool = False
 
-    # ------------------------------------------------------------------
-    # Layer accessors
-    # ------------------------------------------------------------------
-
     @property
     def current_layer(self) -> Layer | None:
-        """Return the most recent (highest-numbered) layer, or None."""
         return self.layers[-1] if self.layers else None
 
     @property
-    def layer_index(self) -> int:
-        """0-based index of the current layer (for compatibility)."""
-        return len(self.layers) - 1 if self.layers else 0
-
-    def add_layer(self, layer: Layer) -> None:
-        self.layers.append(layer)
-
-    # ------------------------------------------------------------------
-    # Computed properties
-    # ------------------------------------------------------------------
+    def layer_count(self) -> int:
+        return len(self.layers)
 
     @property
     def is_long(self) -> bool:
@@ -770,27 +811,19 @@ class SnowballCycle:
     def is_short(self) -> bool:
         return self.direction == Direction.SHORT
 
-    # ------------------------------------------------------------------
-    # Entry accessors
-    # ------------------------------------------------------------------
+    def add_layer(self, layer: Layer) -> None:
+        self.layers.append(layer)
 
     def all_entries(self) -> list[Entry]:
-        """Return all entries in this cycle (initial + layers + hedge)."""
         entries: list[Entry] = []
         if self.initial_entry is not None:
             entries.append(self.initial_entry)
         for layer in self.layers:
-            # layer initial (L2+)
-            if layer.initial_entry is not None:
-                entries.append(layer.initial_entry)
-            for s in layer.slots:
-                if s.entry is not None:
-                    entries.append(s.entry)
+            entries.extend(layer.all_entries())
         entries.extend(self.hedge_entries)
         return entries
 
     def counter_non_hedge(self) -> list[Entry]:
-        """Return all counter entries (slot entries) excluding hedges."""
         entries: list[Entry] = []
         for layer in self.layers:
             for s in layer.slots:
@@ -798,46 +831,47 @@ class SnowballCycle:
                     entries.append(s.entry)
         return entries
 
+    # Backward compat
+    @property
+    def counter_entries(self) -> list[Entry]:
+        return self.counter_non_hedge()
+
     def initial_for_layer(self, layer_number: int) -> Entry | None:
-        """Return the initial entry for the given layer number."""
         if layer_number == 1:
             return self.initial_entry
         for layer in self.layers:
-            if layer.layer_number == layer_number and layer.initial_entry is not None:
+            if layer.layer_number == layer_number:
                 return layer.initial_entry
         return None
 
     def remove_entry(self, entry_id: int) -> None:
-        """Remove an entry by entry_id from layers or hedge lists."""
         for layer in self.layers:
             layer.remove_entry(entry_id)
         self.hedge_entries = [e for e in self.hedge_entries if e.entry_id != entry_id]
 
-    # ------------------------------------------------------------------
-    # Backward-compatible properties
-    # ------------------------------------------------------------------
+    def find_layer(self, layer_number: int) -> Layer | None:
+        for layer in self.layers:
+            if layer.layer_number == layer_number:
+                return layer
+        return None
+
+    # Compat properties
+    @property
+    def layer_index(self) -> int:
+        return len(self.layers) - 1 if self.layers else 0
 
     @property
-    def counter_entries(self) -> list[Entry]:
-        """All slot entries across all layers (for backward compat)."""
-        return self.counter_non_hedge()
+    def layer_retracement_count(self) -> int:
+        layer = self.current_layer
+        return len(layer.occupied_slots()) if layer else 0
 
     @property
     def layer_initial_entries(self) -> dict[int, Entry]:
-        """Map of layer_number → layer initial entry (for backward compat)."""
         result: dict[int, Entry] = {}
         for layer in self.layers:
             if layer.initial_entry is not None:
                 result[layer.layer_number] = layer.initial_entry
         return result
-
-    @property
-    def layer_retracement_count(self) -> int:
-        """Number of occupied slots in the current layer."""
-        layer = self.current_layer
-        if layer is None:
-            return 0
-        return len(layer.occupied_slots())
 
     # ------------------------------------------------------------------
     # Serialisation
@@ -862,19 +896,11 @@ class SnowballCycle:
             if isinstance(raw_direction, Direction)
             else Direction(str(raw_direction).strip().lower())
         )
-
         raw_initial = data.get("initial_entry", {})
-        initial_entry: Entry | None = None
-        if raw_initial:
-            initial_entry = Entry.from_dict(raw_initial)
+        initial_entry: Entry | None = Entry.from_dict(raw_initial) if raw_initial else None
 
-        # New format: layers list
         raw_layers = data.get("layers")
-        if raw_layers is not None:
-            layers = [Layer.from_dict(ld) for ld in raw_layers]
-        else:
-            # Legacy format migration: convert counter_entries + layer_initial_entries
-            layers = _migrate_legacy_cycle(data)
+        layers = [Layer.from_dict(ld) for ld in raw_layers] if raw_layers is not None else []
 
         return SnowballCycle(
             cycle_id=_parse_int(data.get("cycle_id", 0), 0),
@@ -885,45 +911,6 @@ class SnowballCycle:
             counter_close_count=_parse_int(data.get("counter_close_count", 0), 0),
             completed=bool(data.get("completed", False)),
         )
-
-
-def _migrate_legacy_cycle(data: dict[str, Any]) -> list[Layer]:
-    """Convert old-format cycle data (counter_entries + layer_initial_entries) to layers."""
-    counter_entries = [Entry.from_dict(e) for e in data.get("counter_entries", [])]
-    raw_layer_initials = data.get("layer_initial_entries", {})
-    layer_initials: dict[int, Entry] = {}
-    for k, v in raw_layer_initials.items():
-        if v:
-            layer_initials[int(k)] = Entry.from_dict(v)
-
-    # Group counter entries by layer_number
-    by_layer: dict[int, list[Entry]] = {}
-    for e in counter_entries:
-        ln = e.layer_number
-        by_layer.setdefault(ln, []).append(e)
-
-    # Determine all layer numbers
-    all_layer_nums = set(by_layer.keys()) | set(layer_initials.keys())
-    if not all_layer_nums:
-        # At least L1 exists
-        r_max = _parse_int(data.get("layer_retracement_count", 0), 0) or 7
-        return [Layer.create(1, r_max, _parse_int(data.get("cycle_base_units", 1000), 1000))]
-
-    layers: list[Layer] = []
-    for ln in sorted(all_layer_nums):
-        entries_for_layer = by_layer.get(ln, [])
-        max_ret = max((e.retracement_count for e in entries_for_layer), default=0)
-        r_max = max(max_ret, 7)
-        layer = Layer.create(ln, r_max, _parse_int(data.get("cycle_base_units", 1000), 1000))
-        layer.initial_entry = layer_initials.get(ln)
-        # Fill slots
-        for e in entries_for_layer:
-            idx = e.retracement_count
-            if 1 <= idx <= len(layer.slots):
-                layer.slots[idx - 1].fill(e)
-        layers.append(layer)
-
-    return layers
 
 
 # ---------------------------------------------------------------------------
@@ -937,11 +924,7 @@ class SnowballStrategyState:
 
     protection_level: ProtectionLevel = ProtectionLevel.NORMAL
     initialised: bool = False
-
-    # Cycle-based tracking
     cycles: list[SnowballCycle] = field(default_factory=list)
-
-    # Next entry id
     next_entry_id: int = 1
 
     # Lock state
@@ -956,40 +939,27 @@ class SnowballStrategyState:
     account_balance: Decimal = Decimal("0")
     account_nav: Decimal = Decimal("0")
 
-    # Metrics
     metrics: dict[str, str | int | float] = field(default_factory=dict)
 
-    # ------------------------------------------------------------------
-    # Convenience accessors
-    # ------------------------------------------------------------------
-
     def allocate_id(self) -> int:
-        """Allocate and return the next entry ID."""
         eid = self.next_entry_id
         self.next_entry_id += 1
         return eid
 
     def active_cycles(self) -> list[SnowballCycle]:
-        """Return cycles that are not yet completed."""
         return [c for c in self.cycles if not c.completed]
 
     def all_entries(self) -> list[Entry]:
-        """Return every entry across all active cycles."""
         entries: list[Entry] = []
         for c in self.active_cycles():
             entries.extend(c.all_entries())
         return entries
 
     def find_cycle(self, cycle_id: int) -> SnowballCycle | None:
-        """Find a cycle by its cycle_id."""
         for c in self.cycles:
             if c.cycle_id == cycle_id:
                 return c
         return None
-
-    # ------------------------------------------------------------------
-    # Serialisation
-    # ------------------------------------------------------------------
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -1042,7 +1012,7 @@ class SnowballStrategyState:
 
 
 # ---------------------------------------------------------------------------
-# Private parsing helpers (used only within this module)
+# Parsing helpers
 # ---------------------------------------------------------------------------
 
 
