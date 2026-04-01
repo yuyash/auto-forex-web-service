@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.25.0...frontend-v1.25.1) (2026-04-01)
+
+
+### Refactoring
+
+* snowball layer retracement model ([#278](https://github.com/yuyash/auto-forex-web-service/issues/278)) ([e0907a1](https://github.com/yuyash/auto-forex-web-service/commit/e0907a1dfa0d16a629524d7b495e0bb22afa41c2))
+
 ## [1.25.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.24.1...frontend-v1.25.0) (2026-03-31)
 
 
