@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.22.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.22.2...backend-v1.22.3) (2026-04-01)
+
+
+### Bug Fixes
+
+* **snowball:** reset layer instead of completing it when layer-initia… ([#280](https://github.com/yuyash/auto-forex-web-service/issues/280)) ([1e7e9db](https://github.com/yuyash/auto-forex-web-service/commit/1e7e9dbe21f255bc45a89dc0032666d29cfaec1e))
+* **snowball:** reset layer instead of completing it when layer-initial TP closes ([1e7e9db](https://github.com/yuyash/auto-forex-web-service/commit/1e7e9dbe21f255bc45a89dc0032666d29cfaec1e))
+
 ## [1.22.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.22.1...backend-v1.22.2) (2026-04-01)
 
 
