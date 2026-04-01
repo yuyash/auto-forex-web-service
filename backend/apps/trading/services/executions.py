@@ -17,6 +17,7 @@ from apps.trading.services.summary import compute_cached_task_summary
 
 
 EXECUTION_METRICS_CACHE_TTL_SECONDS = 60 * 60
+EXECUTION_METRICS_ACTIVE_CACHE_TTL_SECONDS = 15
 
 
 @dataclass(frozen=True)
@@ -337,7 +338,14 @@ def _get_cached_execution_metrics(
         run_id=run_id,
         fallback_mid_rate=fallback_mid_rate,
     )
-    cache.set(cache_key, metrics, EXECUTION_METRICS_CACHE_TTL_SECONDS)
+    status = str(meta.get("status") or "")
+    is_terminal = status in {TaskStatus.COMPLETED, TaskStatus.STOPPED, TaskStatus.FAILED}
+    ttl = (
+        EXECUTION_METRICS_CACHE_TTL_SECONDS
+        if is_terminal
+        else EXECUTION_METRICS_ACTIVE_CACHE_TTL_SECONDS
+    )
+    cache.set(cache_key, metrics, ttl)
     return metrics
 
 

@@ -243,6 +243,7 @@ class TestCounterCloseAndLayerProgression:
             counter_tp_mode="fixed",
             counter_tp_pips="5",
             f_max=3,
+            refill_up_to=0,
         )
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
@@ -284,6 +285,7 @@ class TestReversalScenario:
             interval_mode="constant",
             counter_tp_mode="fixed",
             counter_tp_pips="8",
+            refill_up_to=0,
         )
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
