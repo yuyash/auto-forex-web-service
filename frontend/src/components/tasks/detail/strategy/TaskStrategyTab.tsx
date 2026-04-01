@@ -496,14 +496,25 @@ export function TaskStrategyTab({
           {selectedCycle ? (
             <Box sx={{ p: 2 }}>
               {isMobile ? (
-                <IconButton
-                  onClick={() => setMobileShowDetail(false)}
-                  size="small"
-                  aria-label={t('common:strategyVisualization.cycleList.back')}
-                  sx={{ mb: 1 }}
+                <Box
+                  sx={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 10,
+                    bgcolor: 'background.paper',
+                    pb: 1,
+                  }}
                 >
-                  <ArrowBackIcon />
-                </IconButton>
+                  <IconButton
+                    onClick={() => setMobileShowDetail(false)}
+                    size="small"
+                    aria-label={t(
+                      'common:strategyVisualization.cycleList.back'
+                    )}
+                  >
+                    <ArrowBackIcon />
+                  </IconButton>
+                </Box>
               ) : null}
               <Stack
                 direction="row"
