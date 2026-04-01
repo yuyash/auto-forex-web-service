@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.22.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.22.4...backend-v1.22.5) (2026-04-01)
+
+
+### Bug Fixes
+
+* snowball layer reset on initial tp ([#285](https://github.com/yuyash/auto-forex-web-service/issues/285)) ([4cb0270](https://github.com/yuyash/auto-forex-web-service/commit/4cb0270928e0bec6856ef91ca0867ed9d459c071))
+* sort execution list by created_at and show execution ID in overview ([#286](https://github.com/yuyash/auto-forex-web-service/issues/286)) ([8bfbc6e](https://github.com/yuyash/auto-forex-web-service/commit/8bfbc6eced95b0149a61bfe5cfcb490292fd33ed))
+
 ## [1.22.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.22.3...backend-v1.22.4) (2026-04-01)
 
 
