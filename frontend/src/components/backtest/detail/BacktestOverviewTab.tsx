@@ -80,6 +80,19 @@ export function BacktestOverviewTab({
                 />
               </Box>
             </Box>
+            {task.execution_id && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  {t('backtest:detail.executionId')}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}
+                >
+                  {task.execution_id}
+                </Typography>
+              </Box>
+            )}
           </Box>
         </Grid>
 

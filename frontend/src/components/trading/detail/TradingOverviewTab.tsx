@@ -77,6 +77,19 @@ export function TradingOverviewTab({
                 />
               </Box>
             </Box>
+            {task.execution_id && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  {t('trading:detail.executionId')}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}
+                >
+                  {task.execution_id}
+                </Typography>
+              </Box>
+            )}
           </Box>
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
