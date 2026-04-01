@@ -674,6 +674,19 @@ class Layer:
                 s.vacate()
                 return
 
+    def reset(self) -> None:
+        """Reset the layer to a fresh state.
+
+        Clears the initial entry and resets all slots to empty/unused.
+        Called when the layer-initial entry is closed at TP, meaning the
+        layer's job is done and it can be reused on the next adverse move.
+        """
+        self.initial_entry = None
+        self.completed = False
+        for s in self.slots:
+            s.entry = None
+            s.ever_closed = False
+
     # ------------------------------------------------------------------
     # Serialisation
     # ------------------------------------------------------------------

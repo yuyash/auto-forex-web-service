@@ -380,7 +380,7 @@ class SnowballStrategy(Strategy):
                 pips_gained,
             )
             layer.initial_entry = None
-            layer.completed = True
+            layer.reset()
 
             return [
                 self._close_entry(
