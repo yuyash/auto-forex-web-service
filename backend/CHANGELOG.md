@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.6](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.22.5...backend-v1.22.6) (2026-04-01)
+
+
+### Refactoring
+
+* snowball rules overhaul ([#288](https://github.com/yuyash/auto-forex-web-service/issues/288)) ([3f7bffb](https://github.com/yuyash/auto-forex-web-service/commit/3f7bffba0c559af8211ac4fc8f3dcb8f8a398f92))
+
 ## [1.22.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.22.4...backend-v1.22.5) (2026-04-01)
 
 
