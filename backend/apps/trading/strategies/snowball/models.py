@@ -734,10 +734,7 @@ class Layer:
         highest = prev_layer.highest_occupied_slot()
         if highest is not None and highest.entry is not None:
             close_price = highest.entry.close_price
-            formula = (
-                f"prev_layer_highest_slot(L{prev_layer.layer_number}/R{highest.index}).close_price"
-                f" = {close_price}"
-            )
+            formula = f"{close_price:.5f}"
             return close_price, formula
 
         # Fallback: use m_pips from entry price (same as L1/R0)

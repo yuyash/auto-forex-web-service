@@ -997,7 +997,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
                 setLongRppFn(parseInt(e.target.value, 10));
                 setLongPageFn(0);
               }}
-              rowsPerPageOptions={[10, 50, 100, 200]}
+              rowsPerPageOptions={[10, 50, 100, 200, 500, 1000]}
             />
           </Box>
           {/* Short */}
@@ -1074,7 +1074,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
                 setShortRppFn(parseInt(e.target.value, 10));
                 setShortPageFn(0);
               }}
-              rowsPerPageOptions={[10, 50, 100, 200]}
+              rowsPerPageOptions={[10, 50, 100, 200, 500, 1000]}
             />
           </Box>
         </Box>
@@ -1184,7 +1184,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             setRppFn(parseInt(e.target.value, 10));
             setPageFn(0);
           }}
-          rowsPerPageOptions={[10, 25, 50, 100, 200]}
+          rowsPerPageOptions={[10, 25, 50, 100, 200, 500, 1000]}
         />
       </Box>
     );

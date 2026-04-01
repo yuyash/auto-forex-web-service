@@ -56,4 +56,4 @@ class TestTradePositionPagination:
         assert TradePositionPagination.page_size == 100
 
     def test_max_page_size(self):
-        assert TradePositionPagination.max_page_size == 200
+        assert TradePositionPagination.max_page_size == 1000
