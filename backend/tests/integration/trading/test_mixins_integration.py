@@ -185,7 +185,7 @@ class TestStrictQueryValidation:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data == {
             "code": "invalid_query_param",
-            "detail": "page_size exceeds maximum allowed value of 200",
+            "detail": "page_size exceeds maximum allowed value of 1000",
         }
 
     def test_rejects_inverted_range(self):
@@ -213,7 +213,7 @@ class TestStrictQueryValidation:
         [
             ("logs", {"execution_id": "invalid"}, "Invalid execution_id: invalid"),
             ("events", {"page_size": -1}, "page_size must be greater than 0"),
-            ("trades", {"page_size": 9999}, "page_size exceeds maximum allowed value of 200"),
+            ("trades", {"page_size": 9999}, "page_size exceeds maximum allowed value of 1000"),
             (
                 "orders",
                 {"execution_id": "invalid"},

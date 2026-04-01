@@ -713,7 +713,10 @@ class TestExpectedTableValidation:
         # and that it's a reasonable value between entry and initial
         assert l2_init.planned_exit_price > Decimal("98.41")  # above L2 entry
         assert l2_init.planned_exit_price < Decimal("100.00")  # below L1 initial
-        assert "prev_layer_highest_slot" in (l2_init.planned_exit_price_formula or "")
+        # Formula should be a simple numeric string
+        formula = l2_init.planned_exit_price_formula or ""
+        assert "weighted_avg" not in formula
+        assert formula.replace(".", "").replace("-", "").isdigit()
 
     def test_layer2_counter_tp_uses_layer2_only(self):
         s = self._make_strategy()
@@ -1012,7 +1015,8 @@ class TestFormulaStrings:
         assert len(layer_initials) == 1
         formula = layer_initials[0].planned_exit_price_formula
         assert formula is not None
-        assert "prev_layer_highest_slot" in formula
+        assert "weighted_avg" not in formula
+        assert formula.replace(".", "").replace("-", "").isdigit()
 
 
 # ==================================================================

@@ -1,4 +1,10 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Alert,
   Box,
@@ -65,13 +71,19 @@ export function TaskStrategyTab({
   });
 
   const cycles = useMemo<StrategyCycle[]>(() => data?.cycles ?? [], [data]);
-  const lastTickTimestamp = data?.last_tick_timestamp ?? null;
 
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [statusFilter, setStatusFilter] = useState<
     'all' | 'active' | 'completed'
   >('all');
   const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
+  // Snapshot of the selected cycle — only updated on select or manual refresh
+  const [detailSnapshot, setDetailSnapshot] = useState<StrategyCycle | null>(
+    null
+  );
+  const [snapshotTickTimestamp, setSnapshotTickTimestamp] = useState<
+    string | null
+  >(null);
   const [sidebarWidth, setSidebarWidth] = useState(360);
   const isDragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -147,9 +159,13 @@ export function TaskStrategyTab({
     (id: string) => {
       setSelectedCycleId(id);
       setSelectedTradeIds(new Set());
+      // Immediately snapshot from current data
+      const cycle = (data?.cycles ?? []).find((c) => c.cycle_id === id) ?? null;
+      setDetailSnapshot(cycle);
+      setSnapshotTickTimestamp(data?.last_tick_timestamp ?? null);
       if (isMobile) setMobileShowDetail(true);
     },
-    [isMobile]
+    [isMobile, data]
   );
 
   // Task 2: Handle marker click from chart → highlight trade in list
@@ -165,8 +181,27 @@ export function TaskStrategyTab({
     });
   }, []);
 
-  const selectedCycle =
-    displayedCycles.find((c) => c.cycle_id === selectedCycleId) ?? null;
+  const selectedCycle = detailSnapshot;
+
+  // Manual refresh: re-fetch data then update the snapshot
+  const [detailRefreshSeq, setDetailRefreshSeq] = useState(0);
+  const handleRefreshDetail = useCallback(async () => {
+    await refresh();
+    setDetailRefreshSeq((n) => n + 1);
+  }, [refresh]);
+
+  // Update snapshot when detailRefreshSeq changes (user triggered refresh)
+  useEffect(() => {
+    if (detailRefreshSeq > 0 && selectedCycleId && data) {
+      const freshCycle =
+        (data.cycles ?? []).find((c) => c.cycle_id === selectedCycleId) ?? null;
+      if (freshCycle) {
+        setDetailSnapshot(freshCycle);
+        setSnapshotTickTimestamp(data.last_tick_timestamp ?? null);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailRefreshSeq]);
 
   const handleSelectAllTrades = useCallback(() => {
     if (!selectedCycle) return;
@@ -461,19 +496,30 @@ export function TaskStrategyTab({
           {selectedCycle ? (
             <Box sx={{ p: 2 }}>
               {isMobile ? (
-                <IconButton
-                  onClick={() => setMobileShowDetail(false)}
-                  size="small"
-                  aria-label={t('common:strategyVisualization.cycleList.back')}
-                  sx={{ mb: 1 }}
+                <Box
+                  sx={{
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 10,
+                    bgcolor: 'background.paper',
+                    pb: 1,
+                  }}
                 >
-                  <ArrowBackIcon />
-                </IconButton>
+                  <IconButton
+                    onClick={() => setMobileShowDetail(false)}
+                    size="small"
+                    aria-label={t(
+                      'common:strategyVisualization.cycleList.back'
+                    )}
+                  >
+                    <ArrowBackIcon />
+                  </IconButton>
+                </Box>
               ) : null}
               <Stack
                 direction="row"
                 spacing={1}
-                sx={{ mb: 1, flexWrap: 'wrap' }}
+                sx={{ mb: 1, flexWrap: 'wrap', alignItems: 'center' }}
               >
                 <Typography variant="h6">
                   {selectedCycle.direction.toUpperCase()}{' '}
@@ -487,10 +533,21 @@ export function TaskStrategyTab({
                   size="small"
                   color={getStatusColor(selectedCycle.status)}
                 />
+                <Tooltip title={t('common:actions.refresh')}>
+                  <IconButton
+                    size="small"
+                    onClick={() => void handleRefreshDetail()}
+                    aria-label={t('common:actions.refresh')}
+                  >
+                    <RefreshIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
               </Stack>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 {formatDateTime(selectedCycle.started_at)} →{' '}
-                {formatDateTime(selectedCycle.ended_at ?? lastTickTimestamp)}
+                {formatDateTime(
+                  selectedCycle.ended_at ?? snapshotTickTimestamp
+                )}
               </Typography>
               <Typography
                 variant="caption"
@@ -525,7 +582,7 @@ export function TaskStrategyTab({
                     taskId={taskId}
                     taskType={taskType}
                     executionRunId={executionRunId}
-                    lastTickTimestamp={lastTickTimestamp}
+                    lastTickTimestamp={snapshotTickTimestamp}
                     selectedTradeIds={selectedTradeIds}
                     onMarkerClick={handleMarkerClick}
                   />
