@@ -96,7 +96,7 @@ export const useTaskPositions = ({
   includeTradeIds = false,
   since,
   enableRealTimeUpdates = false,
-  refreshInterval = 10_000,
+  refreshInterval = 5_000,
 }: UseTaskPositionsOptions): UseTaskPositionsResult => {
   const [positions, setPositions] = useState<TaskPosition[]>([]);
   const [totalCount, setTotalCount] = useState(0);

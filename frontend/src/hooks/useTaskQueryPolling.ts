@@ -35,7 +35,7 @@ export function useTaskQueryPolling<TData>(
       enabled:
         polling?.policy.isActive === true &&
         (polling.shouldPoll?.(query.data ?? null) ?? true),
-      intervalMs: polling?.policy.intervalMs ?? 10_000,
+      intervalMs: polling?.policy.intervalMs ?? 5_000,
     }
   );
 }

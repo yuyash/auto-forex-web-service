@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TaskStatus } from '../types/common';
 
-const DEFAULT_STATUS_POLL_MS = 10_000;
+const DEFAULT_STATUS_POLL_MS = 5_000;
 const FAST_STATUS_POLL_MS = 1_000;
 const FAST_STATUS_POLL_WINDOW_MS = 30_000;
 

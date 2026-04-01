@@ -101,7 +101,7 @@ export const useTaskTrades = ({
   pageSize = 100,
   since,
   enableRealTimeUpdates = false,
-  refreshInterval = 10_000,
+  refreshInterval = 5_000,
 }: UseTaskTradesOptions): UseTaskTradesResult => {
   const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${direction}-${page}-${pageSize}-${since ?? ''}`;
   const {
