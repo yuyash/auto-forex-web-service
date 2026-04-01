@@ -718,30 +718,35 @@ class Layer:
         new_units: int,
         prev_layer: Layer,
         prev_layer_initial: Entry | None,
+        direction: Direction,
+        pip_size: Decimal,
+        m_pips: Decimal,
     ) -> tuple[Decimal, str]:
         """Compute close price for a layer-initial entry (L2+).
 
-        Weighted average of: previous layer's entries + this new entry.
+        Uses the close_price of the highest-numbered occupied slot in the
+        previous layer.  This guarantees L2/R0 closes before any L1
+        retracement, preserving the correct close order.
+
+        Falls back to m_pips from entry price if no previous slot is occupied.
         """
-        total_cost = new_price * Decimal(str(new_units))
-        total_units = new_units
-        parts = [f"{new_price} * {new_units}"]
+        # Find the highest occupied slot in the previous layer
+        highest = prev_layer.highest_occupied_slot()
+        if highest is not None and highest.entry is not None:
+            close_price = highest.entry.close_price
+            formula = (
+                f"prev_layer_highest_slot(L{prev_layer.layer_number}/R{highest.index}).close_price"
+                f" = {close_price}"
+            )
+            return close_price, formula
 
-        if prev_layer_initial is not None:
-            pu = abs(prev_layer_initial.units)
-            if pu > 0:
-                total_cost += prev_layer_initial.entry_price * Decimal(str(pu))
-                total_units += pu
-                parts.append(f"{prev_layer_initial.entry_price} * {pu}")
-
-        for s in prev_layer.slots:
-            if s.entry is not None and not s.entry.is_hedge:
-                total_cost += s.entry.entry_price * Decimal(str(s.entry.units))
-                total_units += s.entry.units
-                parts.append(f"{s.entry.entry_price} * {s.entry.units}")
-
-        close_price = total_cost / Decimal(str(total_units)) if total_units > 0 else new_price
-        formula = f"({' + '.join(parts)}) / {total_units}"
+        # Fallback: use m_pips from entry price (same as L1/R0)
+        if direction == Direction.LONG:
+            close_price = new_price + m_pips * pip_size
+        else:
+            close_price = new_price - m_pips * pip_size
+        op = "+" if direction == Direction.LONG else "-"
+        formula = f"{new_price} {op} {m_pips} * {pip_size}"
         return close_price, formula
 
     # ------------------------------------------------------------------
