@@ -426,6 +426,10 @@ class SnowballStrategy(Strategy):
                 return []  # f_max reached
             return self._start_new_layer(ss, tick, cycle)
 
+        # L2+ layers that were reset need their initial entry rebuilt first
+        if layer.layer_number > 1 and layer.initial_entry is None:
+            return self._rebuild_layer_initial(ss, tick, cycle, layer)
+
         # Find the next slot to fill
         slot = layer.next_slot_to_fill()
         if slot is None:
@@ -612,6 +616,84 @@ class SnowballStrategy(Strategy):
         )
         new_layer.initial_entry = layer_entry
         cycle.add_layer(new_layer)
+        return [evt]
+
+    def _rebuild_layer_initial(
+        self,
+        ss: SnowballStrategyState,
+        tick: Tick,
+        cycle: SnowballCycle,
+        layer: Layer,
+    ) -> list[StrategyEvent]:
+        """Rebuild the initial entry for a reset L2+ layer."""
+        cfg = self.config
+        initial = cycle.initial_entry
+        if initial is None:
+            return []
+
+        direction = cycle.direction
+        layer_number = layer.layer_number
+        price = tick.ask if direction == Direction.LONG else tick.bid
+
+        layer_entry = Entry.open(
+            state=ss,
+            tick=tick,
+            direction=direction,
+            units=cfg.trend_lot_size * layer.base_units,
+            step=1,
+            close_price=Decimal("0"),
+            role="layer_initial",
+            layer_number=layer_number,
+            retracement_count=0,
+            root_entry_id=initial.entry_id,
+            parent_entry_id=initial.entry_id,
+        )
+
+        # Compute close_price from previous layer's entries + this new entry
+        prev_layer_num = layer_number - 1
+        prev_entries: list[tuple[Decimal, int]] = []
+        prev_initial = cycle.initial_for_layer(prev_layer_num)
+        if prev_initial is not None:
+            prev_entries.append((prev_initial.entry_price, abs(prev_initial.units)))
+        for ly in cycle.layers:
+            if ly.layer_number == prev_layer_num:
+                for s in ly.slots:
+                    if s.entry is not None and not s.entry.is_hedge:
+                        prev_entries.append((s.entry.entry_price, abs(s.entry.units)))
+        prev_entries.append((layer_entry.entry_price, abs(layer_entry.units)))
+
+        total_cost = sum(p * Decimal(str(u)) for p, u in prev_entries)
+        total_units = sum(u for _, u in prev_entries)
+        if total_units > 0:
+            close_price = total_cost / Decimal(str(total_units))
+        else:
+            close_price = (
+                price + cfg.m_pips * self.pip_size
+                if direction == Direction.LONG
+                else price - cfg.m_pips * self.pip_size
+            )
+
+        layer_entry.close_price = close_price
+        tp_pips = abs(close_price - layer_entry.entry_price) / self.pip_size
+        layer_entry.expected_tp_pips = tp_pips
+        layer_entry.validation_status = "pass"
+        formula = f"weighted_avg(L{prev_layer_num} entries + L{layer_number} initial rebuild)"
+
+        logger.info(
+            "Rebuilding layer initial L%d/R0 in cycle %d",
+            layer_number,
+            cycle.cycle_id,
+        )
+
+        evt = layer_entry.to_open_event(
+            timestamp=tick.timestamp,
+            planned_exit_price_formula=formula,
+            description=(
+                f"Layer initial entry ({direction.value.upper()}) | "
+                f"L{layer_number}/R0, units={layer_entry.units}, TP={close_price:.3f}"
+            ),
+        )
+        layer.initial_entry = layer_entry
         return [evt]
 
     def _compute_counter_tp(
