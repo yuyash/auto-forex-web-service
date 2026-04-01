@@ -173,6 +173,7 @@ class TestSnowballBacktestSimulation:
                 "shrink_enabled": False,
                 "lock_enabled": False,
                 "rebalance_enabled": False,
+                "refill_up_to": 0,
                 "m_pips_max": "55",
             },
             ticks=[

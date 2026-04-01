@@ -107,7 +107,7 @@ class SnowballStrategyConfig:
             r_max=_parse_int(raw.get("r_max", 7), 7),
             f_max=_parse_int(raw.get("f_max", 3), 3),
             post_r_max_base_factor=_parse_decimal(raw.get("post_r_max_base_factor", "1"), "1"),
-            refill_up_to=_parse_int(raw.get("refill_up_to", 0), 0),
+            refill_up_to=_parse_int(raw.get("refill_up_to", 2), 2),
             n_pips_head=_parse_decimal(raw.get("n_pips_head", "30"), "30"),
             n_pips_tail=_parse_decimal(raw.get("n_pips_tail", "14"), "14"),
             n_pips_flat_steps=_parse_int(raw.get("n_pips_flat_steps", 2), 2),
