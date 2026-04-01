@@ -161,7 +161,10 @@ export const BacktestTaskDetail: React.FC = () => {
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     const tabName = visibleTabIds[newValue] || 'overview';
-    setSearchParams({ tab: tabName });
+    const next: Record<string, string> = { tab: tabName };
+    const exec = searchParams.get('execution');
+    if (exec) next.execution = exec;
+    setSearchParams(next);
   };
 
   const handleBack = () => {

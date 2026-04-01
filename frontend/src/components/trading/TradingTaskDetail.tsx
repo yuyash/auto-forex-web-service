@@ -150,7 +150,12 @@ export const TradingTaskDetail: React.FC = () => {
 
   const activeTabIndex = Math.max(0, visibleTabIds.indexOf(tabParam));
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
-    setSearchParams({ tab: visibleTabIds[newValue] || 'overview' });
+    const next: Record<string, string> = {
+      tab: visibleTabIds[newValue] || 'overview',
+    };
+    const exec = searchParams.get('execution');
+    if (exec) next.execution = exec;
+    setSearchParams(next);
   };
   const handleBack = () => navigate('/trading-tasks');
 
