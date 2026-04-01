@@ -222,14 +222,14 @@ class TestSnowballBacktestSimulation:
         )
         assert event_summary == [
             ("strategy_started", None, None),
-            ("open_position", "snowball_initial", 1),
-            ("open_position", "snowball_initial", 1),
+            ("open_position", "snowball_initial", 0),
+            ("open_position", "snowball_initial", 0),
             ("open_position", "snowball_counter", 1),
             ("open_position", "snowball_counter", 2),
             ("close_position", None, 2),
             ("open_position", "snowball_layer_initial", 0),
-            ("close_position", None, 1),
-            ("open_position", "snowball_initial", 1),
+            ("close_position", None, 0),
+            ("open_position", "snowball_initial", 0),
             ("strategy_stopped", None, None),
         ]
 

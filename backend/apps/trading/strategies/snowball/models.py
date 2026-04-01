@@ -220,7 +220,7 @@ class Entry:
     opened_at: datetime
     role: Literal["initial", "counter", "hedge", "layer_initial"]
     layer_number: int = 1
-    retracement_count: int = 1
+    retracement_count: int = 0
     root_entry_id: int | None = None
     parent_entry_id: int | None = None
     position_id: str | None = None
@@ -247,7 +247,7 @@ class Entry:
         close_price: Decimal,
         role: Literal["initial", "counter", "hedge", "layer_initial"],
         layer_number: int = 1,
-        retracement_count: int = 1,
+        retracement_count: int = 0,
         root_entry_id: int | None = None,
         parent_entry_id: int | None = None,
     ) -> Entry:
@@ -485,7 +485,7 @@ class Entry:
             opened_at=opened_at,
             role=d.get("role", "counter"),
             layer_number=_parse_int(d.get("layer_number", 1), 1),
-            retracement_count=_parse_int(d.get("retracement_count", 1), 1),
+            retracement_count=_parse_int(d.get("retracement_count", 0), 0),
             root_entry_id=(
                 _parse_int(d["root_entry_id"], 0) if d.get("root_entry_id") is not None else None
             ),
