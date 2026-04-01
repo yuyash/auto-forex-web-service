@@ -527,6 +527,10 @@ class SnowballStrategy(Strategy):
         if initial is None:
             return []
 
+        # Gate: don't build layer initial if cycle initial is not losing
+        if initial.unrealised_loss_pips(tick.mid, self.pip_size) <= 0:
+            return []
+
         direction = cycle.direction
 
         if existing_layer is not None:
@@ -558,12 +562,18 @@ class SnowballStrategy(Strategy):
             parent_entry_id=initial.entry_id,
         )
 
-        # Compute close price from previous layer's entries + this new entry
+        # Compute close price from previous layer's highest slot close price
         prev_layer_obj = cycle.find_layer(prev_layer_num)
         prev_initial = cycle.initial_for_layer(prev_layer_num)
         if prev_layer_obj is not None:
             close_price, formula = layer.layer_initial_close_price(
-                price, abs(layer_entry.units), prev_layer_obj, prev_initial
+                price,
+                abs(layer_entry.units),
+                prev_layer_obj,
+                prev_initial,
+                direction=direction,
+                pip_size=self.pip_size,
+                m_pips=cfg.m_pips,
             )
         else:
             # Fallback: use m_pips

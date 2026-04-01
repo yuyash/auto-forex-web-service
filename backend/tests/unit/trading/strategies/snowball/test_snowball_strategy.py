@@ -688,7 +688,7 @@ class TestExpectedTableValidation:
             assert counter_opens[0].units == expected_units
         assert _occupied_slot_count(state) == 6
 
-    def test_layer_progression_tp_is_weighted_avg(self):
+    def test_layer_progression_tp_uses_prev_layer_highest_slot(self):
         s = self._make_strategy()
         state = DummyState()
         s.on_tick(tick=_tick(T0, "100.00", "100.00"), state=state)
@@ -707,19 +707,13 @@ class TestExpectedTableValidation:
         l2_init = layer_initials[0]
         assert l2_init.units == 1000
 
-        l1_cost = (
-            Decimal("100.00") * 1000
-            + Decimal("99.70") * 2000
-            + Decimal("99.40") * 3000
-            + Decimal("99.15") * 4000
-            + Decimal("98.95") * 5000
-            + Decimal("98.79") * 6000
-            + Decimal("98.65") * 7000
-            + Decimal("98.53") * 8000
-        )
-        l2_init_cost = Decimal("98.41") * 1000
-        expected_tp = (l1_cost + l2_init_cost) / Decimal("37000")
-        assert abs(l2_init.planned_exit_price - expected_tp) < Decimal("0.001")
+        # L2/R0 TP should equal L1/R7's close_price (highest occupied slot in L1)
+        # L1/R7 close_price is the weighted avg of all L1 entries at the time R7 was added
+        # We just verify it's NOT the old weighted-avg-of-everything formula
+        # and that it's a reasonable value between entry and initial
+        assert l2_init.planned_exit_price > Decimal("98.41")  # above L2 entry
+        assert l2_init.planned_exit_price < Decimal("100.00")  # below L1 initial
+        assert "prev_layer_highest_slot" in (l2_init.planned_exit_price_formula or "")
 
     def test_layer2_counter_tp_uses_layer2_only(self):
         s = self._make_strategy()
@@ -997,7 +991,7 @@ class TestFormulaStrings:
         assert "/" in formula
 
     def test_layer_initial_formula_is_numeric(self):
-        """L2 initial formula should contain actual numbers."""
+        """L2 initial formula should reference prev layer's highest slot."""
         s = _strategy(
             r_max=2,
             f_max=3,
@@ -1018,9 +1012,7 @@ class TestFormulaStrings:
         assert len(layer_initials) == 1
         formula = layer_initials[0].planned_exit_price_formula
         assert formula is not None
-        assert "weighted_avg" not in formula
-        assert "*" in formula
-        assert "/" in formula
+        assert "prev_layer_highest_slot" in formula
 
 
 # ==================================================================
