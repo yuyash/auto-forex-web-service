@@ -739,3 +739,315 @@ class TestExpectedTableValidation:
         assert counter_opens[0].units == 2000
         expected_tp = (Decimal("98.41") * 1000 + Decimal("98.11") * 2000) / 3000
         assert abs(counter_opens[0].planned_exit_price - expected_tp) < Decimal("0.001")
+
+
+# ==================================================================
+# Initial Entry has retracement_count = 0
+# ==================================================================
+
+
+class TestInitialEntryRetracementCount:
+    def test_initial_entries_have_retracement_count_zero(self):
+        """L1/R0 initial entries must have retracement_count=0."""
+        s = _strategy()
+        state = DummyState()
+        result = s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
+        opens = _open_events(result)
+        for o in opens:
+            assert o.retracement_count == 0, (
+                f"{o.direction} initial entry has retracement_count={o.retracement_count}"
+            )
+
+
+# ==================================================================
+# Refill: R1 close then re-enter same slot (refill_up_to=2)
+# ==================================================================
+
+
+class TestRefillWithinThreshold:
+    def test_r1_close_then_refill_same_slot(self):
+        """With refill_up_to=2, closing R1 should allow re-entry at R1."""
+        s = _strategy(
+            n_pips_head="10",
+            interval_mode="constant",
+            counter_tp_mode="fixed",
+            counter_tp_pips="5",
+            refill_up_to=2,
+        )
+        state = DummyState()
+        s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
+
+        # Fill R1
+        s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
+        assert _occupied_slot_count(state) == 1
+
+        # Close R1 via TP
+        entries = _slot_entries(state)
+        cp = Decimal(str(entries[0]["close_price"]))
+        s.on_tick(
+            tick=_tick(
+                T0 + timedelta(seconds=120), str(cp + Decimal("0.01")), str(cp + Decimal("0.03"))
+            ),
+            state=state,
+        )
+        assert _occupied_slot_count(state) == 0
+
+        # R1 slot should NOT be ever_closed (refillable)
+        layer = state.strategy_state["cycles"][0]["layers"][0]
+        assert layer["slots"][0]["ever_closed"] is False
+
+        # Drop again — should refill R1, NOT start new layer
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=180), "149.80", "149.82"), state=state)
+        opens = _open_events(result)
+        counter_opens = [o for o in opens if "counter" in (o.strategy_event_type or "")]
+        assert len(counter_opens) == 1
+        assert counter_opens[0].retracement_count == 1  # R1 again
+        assert _layer_count(state) == 1  # still L1
+
+    def test_r3_close_triggers_new_layer(self):
+        """With refill_up_to=2, closing R3 should trigger a new layer."""
+        s = _strategy(
+            n_pips_head="10",
+            interval_mode="constant",
+            counter_tp_mode="fixed",
+            counter_tp_pips="5",
+            refill_up_to=2,
+            f_max=3,
+        )
+        state = DummyState()
+        s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
+
+        # Fill R1, R2, R3
+        s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
+        s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.79", "149.81"), state=state)
+        s.on_tick(tick=_tick(T0 + timedelta(seconds=180), "149.69", "149.71"), state=state)
+        assert _occupied_slot_count(state) == 3
+
+        # Close R3 via TP
+        entries = _slot_entries(state)
+        latest = max(entries, key=lambda e: int(e.get("step", 0)))
+        cp = Decimal(str(latest["close_price"]))
+        s.on_tick(
+            tick=_tick(
+                T0 + timedelta(seconds=240), str(cp + Decimal("0.01")), str(cp + Decimal("0.03"))
+            ),
+            state=state,
+        )
+        assert _occupied_slot_count(state) == 2  # R1, R2 remain
+
+        # R3 slot should be ever_closed (index=3 > refill_up_to=2)
+        layer = state.strategy_state["cycles"][0]["layers"][0]
+        assert layer["slots"][2]["ever_closed"] is True
+
+        # Drop again — should start new layer
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=300), "149.50", "149.52"), state=state)
+        opens = _open_events(result)
+        layer_initials = [o for o in opens if "layer_initial" in (o.strategy_event_type or "")]
+        assert len(layer_initials) == 1
+        assert _layer_count(state) == 2
+
+
+# ==================================================================
+# L2+ R0 close resets layer for reuse
+# ==================================================================
+
+
+class TestL2InitialCloseResetsLayer:
+    def test_l2_initial_close_allows_reuse(self):
+        """When L2/R0 is closed, the layer resets and can be re-entered."""
+        s = _strategy(
+            n_pips_head="10",
+            interval_mode="constant",
+            counter_tp_mode="fixed",
+            counter_tp_pips="5",
+            refill_up_to=0,
+            f_max=3,
+        )
+        state = DummyState()
+        s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
+
+        # Fill R1 → close R1 → triggers L2
+        s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
+        entries = _slot_entries(state)
+        cp = Decimal(str(entries[0]["close_price"]))
+        s.on_tick(
+            tick=_tick(
+                T0 + timedelta(seconds=120), str(cp + Decimal("0.01")), str(cp + Decimal("0.03"))
+            ),
+            state=state,
+        )
+        # Drop to trigger L2 creation
+        s.on_tick(tick=_tick(T0 + timedelta(seconds=180), "149.70", "149.72"), state=state)
+        assert _layer_count(state) == 2
+
+        # Now close L2/R0 (layer initial) — need to close any L2 slots first
+        # L2 has no slots filled yet, so check if L2 initial can be closed
+        l2 = state.strategy_state["cycles"][0]["layers"][1]
+        assert l2["initial_entry"] is not None
+        l2_cp = Decimal(str(l2["initial_entry"]["close_price"]))
+
+        # Move price to close L2 initial
+        s.on_tick(
+            tick=_tick(
+                T0 + timedelta(seconds=240),
+                str(l2_cp + Decimal("0.01")),
+                str(l2_cp + Decimal("0.03")),
+            ),
+            state=state,
+        )
+
+        # L2 should be reset (initial_entry = None, slots all fresh)
+        l2_after = state.strategy_state["cycles"][0]["layers"][1]
+        assert l2_after["initial_entry"] is None
+        for slot in l2_after["slots"]:
+            assert slot["ever_closed"] is False
+
+
+# ==================================================================
+# Close order validation: newest layer highest R first
+# ==================================================================
+
+
+class TestCloseOrder:
+    def test_closes_highest_r_in_newest_layer_first(self):
+        """With L1/R1, L1/R2 filled, R2 must close before R1."""
+        s = _strategy(
+            n_pips_head="10",
+            interval_mode="constant",
+            counter_tp_mode="fixed",
+            counter_tp_pips="5",
+        )
+        state = DummyState()
+        s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
+
+        # Fill R1 and R2
+        s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
+        s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.79", "149.81"), state=state)
+        assert _occupied_slot_count(state) == 2
+
+        # Move price to close R2 (highest) — R2 close_price should be hit first
+        entries = _slot_entries(state)
+        r2 = max(entries, key=lambda e: int(e.get("retracement_count", 0)))
+        r2_cp = Decimal(str(r2["close_price"]))
+
+        result = s.on_tick(
+            tick=_tick(
+                T0 + timedelta(seconds=180),
+                str(r2_cp + Decimal("0.01")),
+                str(r2_cp + Decimal("0.03")),
+            ),
+            state=state,
+        )
+        closes = _close_events(result)
+        assert len(closes) == 1
+        assert closes[0].retracement_count == 2  # R2 closed, not R1
+        assert _occupied_slot_count(state) == 1  # R1 remains
+
+
+# ==================================================================
+# L1/R0 close ends cycle
+# ==================================================================
+
+
+class TestCycleEndOnL1R0Close:
+    def test_l1_initial_close_completes_cycle_and_creates_new(self):
+        """Closing L1/R0 (initial entry) ends the cycle and starts a new one."""
+        s = _strategy(m_pips="10")
+        state = DummyState()
+        s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
+
+        # Move price up 11 pips to close LONG initial entry
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.12", "150.14"), state=state)
+        long_closes = [c for c in _close_events(result) if c.direction == "long"]
+        long_opens = [o for o in _open_events(result) if o.direction == "long"]
+        assert len(long_closes) >= 1
+        assert len(long_opens) >= 1  # new cycle started
+
+        # The old cycle should be completed
+        cycles = state.strategy_state["cycles"]
+        completed_long = [c for c in cycles if c["direction"] == "long" and c["completed"]]
+        assert len(completed_long) >= 1
+
+
+# ==================================================================
+# Formula strings are numeric expressions
+# ==================================================================
+
+
+class TestFormulaStrings:
+    def test_counter_tp_formula_is_numeric(self):
+        """weighted_avg formula should contain actual numbers, not text."""
+        s = _strategy(
+            counter_tp_mode="weighted_avg",
+            n_pips_head="10",
+            interval_mode="constant",
+        )
+        state = DummyState()
+        s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.89", "149.91"), state=state)
+        counter_opens = [
+            o for o in _open_events(result) if "counter" in (o.strategy_event_type or "")
+        ]
+        assert len(counter_opens) == 1
+        formula = counter_opens[0].planned_exit_price_formula
+        assert formula is not None
+        # Should contain numbers and operators, not "weighted_avg(...)"
+        assert "weighted_avg" not in formula
+        assert "*" in formula
+        assert "/" in formula
+
+    def test_layer_initial_formula_is_numeric(self):
+        """L2 initial formula should contain actual numbers."""
+        s = _strategy(
+            r_max=2,
+            f_max=3,
+            n_pips_head="5",
+            interval_mode="constant",
+            counter_tp_mode="weighted_avg",
+        )
+        state = DummyState()
+        s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
+        s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "149.94", "149.96"), state=state)
+        s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "149.89", "149.91"), state=state)
+
+        # Trigger L2
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=180), "149.80", "149.82"), state=state)
+        layer_initials = [
+            o for o in _open_events(result) if "layer_initial" in (o.strategy_event_type or "")
+        ]
+        assert len(layer_initials) == 1
+        formula = layer_initials[0].planned_exit_price_formula
+        assert formula is not None
+        assert "weighted_avg" not in formula
+        assert "*" in formula
+        assert "/" in formula
+
+
+# ==================================================================
+# Lot sizes follow (slot_index + 1) * base_units
+# ==================================================================
+
+
+class TestLotSizes:
+    def test_counter_lot_sizes_increase_with_slot(self):
+        """R1=2000, R2=3000, R3=4000 with base_units=1000."""
+        s = _strategy(n_pips_head="10", interval_mode="constant")
+        state = DummyState()
+        s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
+
+        expected_units = [2000, 3000, 4000]
+        for i, expected in enumerate(expected_units, 1):
+            price = Decimal("150.00") - Decimal("0.10") * i - Decimal("0.01")
+            result = s.on_tick(
+                tick=_tick(
+                    T0 + timedelta(seconds=60 * i), str(price), str(price + Decimal("0.02"))
+                ),
+                state=state,
+            )
+            counter_opens = [
+                o for o in _open_events(result) if "counter" in (o.strategy_event_type or "")
+            ]
+            assert len(counter_opens) == 1, f"R{i}: expected 1 counter open"
+            assert counter_opens[0].units == expected, (
+                f"R{i}: expected {expected} units, got {counter_opens[0].units}"
+            )
