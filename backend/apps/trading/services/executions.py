@@ -182,7 +182,13 @@ def _load_execution_index(
     # Get the latest mid rate from the task's most recent ExecutionState
     # to use as fallback for past executions that no longer have state.
     latest_state = _load_latest_fallback_mid_rate(task_type=task_type, task_id=task_id)
-    return sorted(by_run_id.keys(), reverse=True), by_run_id, latest_state
+    return (
+        sorted(
+            by_run_id.keys(), key=lambda rid: by_run_id[rid].get("created_at") or "", reverse=True
+        ),
+        by_run_id,
+        latest_state,
+    )
 
 
 def _load_execution_meta(*, task, task_type: str, run_id: str) -> dict[str, Any] | None:
