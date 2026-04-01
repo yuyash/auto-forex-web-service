@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.25.2...frontend-v1.25.3) (2026-04-01)
+
+
+### Bug Fixes
+
+* sort execution list by created_at and show execution ID in overview ([#286](https://github.com/yuyash/auto-forex-web-service/issues/286)) ([8bfbc6e](https://github.com/yuyash/auto-forex-web-service/commit/8bfbc6eced95b0149a61bfe5cfcb490292fd33ed))
+
 ## [1.25.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.25.1...frontend-v1.25.2) (2026-04-01)
 
 
