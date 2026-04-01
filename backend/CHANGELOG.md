@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.7](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.22.6...backend-v1.22.7) (2026-04-01)
+
+
+### Bug Fixes
+
+* **snowball:** use prev layer highest slot close price for layer initial TP ([#290](https://github.com/yuyash/auto-forex-web-service/issues/290)) ([8428ebe](https://github.com/yuyash/auto-forex-web-service/commit/8428ebef294d968db2d1961d0d3aece667f96517))
+
 ## [1.22.6](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.22.5...backend-v1.22.6) (2026-04-01)
 
 
