@@ -12,7 +12,7 @@ export function usePollingActivity(
   const { requireVisible = true, requireOnline = true } = options;
   return usePollingPolicy({
     enabled,
-    baseIntervalMs: 10_000,
+    baseIntervalMs: 5_000,
     requireVisible,
     requireOnline,
   }).isActive;

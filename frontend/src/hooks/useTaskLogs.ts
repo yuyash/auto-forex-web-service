@@ -68,7 +68,7 @@ export const useTaskLogs = ({
   page = 1,
   pageSize = 100,
   enableRealTimeUpdates = false,
-  refreshInterval = 10_000,
+  refreshInterval = 5_000,
 }: UseTaskLogsOptions): UseTaskLogsResult => {
   const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${(level || []).join(',')}-${(component || []).join(',')}-${positionId ?? ''}-${timestampFrom ?? ''}-${timestampTo ?? ''}-${page}-${pageSize}`;
   const {

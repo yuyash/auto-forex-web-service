@@ -60,7 +60,8 @@ export function TaskStrategyTab({
     taskId,
     taskType,
     executionRunId,
-    enableRealTimeUpdates: false,
+    enableRealTimeUpdates: true,
+    refreshInterval: 5_000,
   });
 
   const cycles = useMemo<StrategyCycle[]>(() => data?.cycles ?? [], [data]);

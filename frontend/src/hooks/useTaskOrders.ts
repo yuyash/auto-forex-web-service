@@ -77,7 +77,7 @@ export const useTaskOrders = ({
   pageSize = 100,
   since,
   enableRealTimeUpdates = false,
-  refreshInterval = 10_000,
+  refreshInterval = 5_000,
 }: UseTaskOrdersOptions): UseTaskOrdersResult => {
   const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${status}-${orderType}-${direction}-${page}-${pageSize}-${since ?? ''}`;
   const {
