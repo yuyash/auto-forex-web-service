@@ -48,6 +48,7 @@ class SnowballStrategyConfig:
     r_max: int
     f_max: int
     post_r_max_base_factor: Decimal
+    refill_up_to: int  # slots R1..R(refill_up_to) are refillable after close (0 = none)
 
     # Counter-trend interval formula
     n_pips_head: Decimal
@@ -106,6 +107,7 @@ class SnowballStrategyConfig:
             r_max=_parse_int(raw.get("r_max", 7), 7),
             f_max=_parse_int(raw.get("f_max", 3), 3),
             post_r_max_base_factor=_parse_decimal(raw.get("post_r_max_base_factor", "1"), "1"),
+            refill_up_to=_parse_int(raw.get("refill_up_to", 0), 0),
             n_pips_head=_parse_decimal(raw.get("n_pips_head", "30"), "30"),
             n_pips_tail=_parse_decimal(raw.get("n_pips_tail", "14"), "14"),
             n_pips_flat_steps=_parse_int(raw.get("n_pips_flat_steps", 2), 2),
@@ -145,6 +147,7 @@ class SnowballStrategyConfig:
             "r_max": self.r_max,
             "f_max": self.f_max,
             "post_r_max_base_factor": str(self.post_r_max_base_factor),
+            "refill_up_to": self.refill_up_to,
             "n_pips_head": str(self.n_pips_head),
             "n_pips_tail": str(self.n_pips_tail),
             "n_pips_flat_steps": self.n_pips_flat_steps,
@@ -200,6 +203,8 @@ class SnowballStrategyConfig:
                 )
             if any(v < 1 for v in self.manual_intervals):
                 raise ValueError("All manual_intervals values must be >= 1")
+        if not 0 <= self.refill_up_to < self.r_max:
+            raise ValueError(f"refill_up_to must be >= 0 and < r_max ({self.r_max})")
 
 
 # ---------------------------------------------------------------------------
@@ -549,11 +554,17 @@ class Slot:
     def fill(self, entry: Entry) -> None:
         self.entry = entry
 
-    def vacate(self) -> Entry | None:
-        """Remove and return the entry, marking the slot as having been closed."""
+    def vacate(self, *, refillable: bool = False) -> Entry | None:
+        """Remove and return the entry.
+
+        When *refillable* is ``True`` the slot stays available for a new
+        entry (``ever_closed`` remains ``False``).  Otherwise the slot is
+        permanently sealed.
+        """
         e = self.entry
         self.entry = None
-        self.ever_closed = True
+        if not refillable:
+            self.ever_closed = True
         return e
 
     def to_dict(self) -> dict[str, Any]:
@@ -592,6 +603,7 @@ class Layer:
     slots: list[Slot] = field(default_factory=list)
     initial_entry: Entry | None = None  # layer-initial entry (None for L1)
     base_units: int = 1000
+    completed: bool = False  # True once the layer-initial entry has been closed
 
     # ------------------------------------------------------------------
     # Slot queries
@@ -609,10 +621,11 @@ class Layer:
     def next_slot_to_fill(self) -> Slot | None:
         """Return the next empty slot that has never been closed.
 
-        If the next empty slot has ``ever_closed=True``, it means a reversal
-        happened and a new layer should be started instead.  Returns None in
-        that case.
+        Returns None when the layer is completed, the next empty slot has
+        ``ever_closed=True``, or all slots are full.
         """
+        if self.completed:
+            return None
         for s in self.slots:
             if s.is_empty and not s.ever_closed:
                 return s
@@ -622,8 +635,10 @@ class Layer:
         return None  # all slots full
 
     def should_start_new_layer(self) -> bool:
-        """True if the next empty slot has been previously closed (reversal)
-        or all slots are full."""
+        """True if the next empty slot has been previously closed (reversal),
+        all slots are full, or the layer has been completed."""
+        if self.completed:
+            return True
         for s in self.slots:
             if s.is_empty and not s.ever_closed:
                 return False
@@ -633,6 +648,8 @@ class Layer:
 
     def has_open_entries(self) -> bool:
         """True if any slot has an open entry or the layer initial is present."""
+        if self.completed:
+            return False
         if self.initial_entry is not None:
             return True
         return any(s.is_occupied for s in self.slots)
@@ -667,6 +684,7 @@ class Layer:
             "slots": [s.to_dict() for s in self.slots],
             "initial_entry": self.initial_entry.to_dict() if self.initial_entry else None,
             "base_units": self.base_units,
+            "completed": self.completed,
         }
 
     @staticmethod
@@ -677,6 +695,7 @@ class Layer:
             slots=[Slot.from_dict(s) for s in d.get("slots", [])],
             initial_entry=Entry.from_dict(raw_initial) if raw_initial else None,
             base_units=_parse_int(d.get("base_units", 1000), 1000),
+            completed=bool(d.get("completed", False)),
         )
 
     @staticmethod

@@ -69,6 +69,17 @@
       "group": "Core Parameters",
       "group_ja": "コアパラメータ"
     },
+    "refill_up_to": {
+      "type": "integer",
+      "title": "Refill Up To Slot",
+      "title_ja": "再建玉可能スロット上限",
+      "description": "Slots R1 through R(refill_up_to) are refillable after close instead of triggering a new layer. 0 means no refill.",
+      "description_ja": "R1からR(refill_up_to)までのスロットは決済後に再建玉可能。0の場合は再建玉なし。",
+      "default": 0,
+      "minimum": 0,
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
+    },
     "interval_mode": {
       "type": "string",
       "title": "Interval Mode",

@@ -328,7 +328,8 @@ class SnowballStrategy(Strategy):
                 ret,
                 pips_gained,
             )
-            highest.vacate()
+            refillable = highest.index <= self.config.refill_up_to
+            highest.vacate(refillable=refillable)
             cycle.counter_close_count += 1
 
             return [
@@ -379,6 +380,7 @@ class SnowballStrategy(Strategy):
                 pips_gained,
             )
             layer.initial_entry = None
+            layer.completed = True
 
             return [
                 self._close_entry(
