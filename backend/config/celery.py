@@ -7,7 +7,13 @@ import logging
 import os
 
 from celery import Celery
-from celery.signals import worker_ready
+from celery.signals import (
+    worker_ready,
+    worker_shutting_down,
+    worker_process_shutdown,
+    task_failure,
+    task_revoked,
+)
 from django.apps import apps
 
 logger = logging.getLogger(__name__)
@@ -68,3 +74,64 @@ def _start_market_tick_supervisor(**_kwargs: object) -> None:
     except Exception:
         # Avoid blocking worker startup.
         return
+
+
+@worker_shutting_down.connect
+def _log_worker_shutdown(sig: str = "unknown", how: str = "unknown", **kwargs: object) -> None:
+    """Log when the Celery worker main process begins shutting down."""
+    logger.warning(
+        "Celery worker shutting down: sig=%s, how=%s, kwargs=%s",
+        sig,
+        how,
+        {k: str(v) for k, v in kwargs.items()},
+    )
+
+
+@worker_process_shutdown.connect
+def _log_worker_process_shutdown(pid: int = 0, exitcode: int = 0, **kwargs: object) -> None:
+    """Log when a Celery worker child process exits."""
+    logger.warning(
+        "Celery worker process shutdown: pid=%s, exitcode=%s, kwargs=%s",
+        pid,
+        exitcode,
+        {k: str(v) for k, v in kwargs.items()},
+    )
+
+
+@task_failure.connect
+def _log_task_failure(
+    task_id: str = "",
+    exception: BaseException | None = None,
+    traceback: object = None,
+    sender: object = None,
+    **kwargs: object,
+) -> None:
+    """Log task failures with exception details."""
+    task_name = getattr(sender, "name", "unknown") if sender else "unknown"
+    logger.error(
+        "Celery task failed: task_id=%s, task=%s, exception=%s",
+        task_id,
+        task_name,
+        exception,
+    )
+
+
+@task_revoked.connect
+def _log_task_revoked(
+    request: object = None,
+    terminated: bool = False,
+    signum: object = None,
+    expired: bool = False,
+    **kwargs: object,
+) -> None:
+    """Log when a task is revoked or terminated."""
+    task_id = getattr(request, "id", "unknown") if request else "unknown"
+    task_name = getattr(request, "task", "unknown") if request else "unknown"
+    logger.warning(
+        "Celery task revoked: task_id=%s, task=%s, terminated=%s, signum=%s, expired=%s",
+        task_id,
+        task_name,
+        terminated,
+        signum,
+        expired,
+    )
