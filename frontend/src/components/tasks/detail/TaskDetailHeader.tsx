@@ -306,7 +306,8 @@ export function TaskDetailHeader({
               </Box>
             )}
 
-            {progress > 0 && (
+            {(status === TaskStatus.RUNNING ||
+              status === TaskStatus.STARTING) && (
               <Typography
                 variant="body2"
                 color="text.secondary"
