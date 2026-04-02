@@ -195,11 +195,13 @@ class EventHandler:
 
     def _prune_closed_position(self, layer_number: int, position: Position) -> None:
         pos_id = str(position.id)
-        self._position_cache[pos_id] = position
         if position.is_open:
+            self._position_cache[pos_id] = position
             self.position_map[layer_number] = position
             return
 
+        # Remove closed position from cache to prevent unbounded memory growth
+        self._position_cache.pop(pos_id, None)
         ids = self.layer_position_ids.get(layer_number, [])
         if pos_id in ids:
             ids.remove(pos_id)
