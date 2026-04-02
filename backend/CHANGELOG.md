@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.8](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.22.7...backend-v1.22.8) (2026-04-01)
+
+
+### Bug Fixes
+
+* strategy tab detail manual refresh ([#292](https://github.com/yuyash/auto-forex-web-service/issues/292)) ([eb58ab5](https://github.com/yuyash/auto-forex-web-service/commit/eb58ab5e283cc58880b4d0daf617440d10286f1d))
+
 ## [1.22.7](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.22.6...backend-v1.22.7) (2026-04-01)
 
 
