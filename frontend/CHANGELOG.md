@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.25.5...frontend-v1.25.6) (2026-04-02)
+
+
+### Bug Fixes
+
+* **ui:** align positions tab layout with trades tab ([#296](https://github.com/yuyash/auto-forex-web-service/issues/296)) ([a8c3ce0](https://github.com/yuyash/auto-forex-web-service/commit/a8c3ce0787023826016a88f6a00ab63364167d50))
+
 ## [1.25.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.25.4...frontend-v1.25.5) (2026-04-02)
 
 
