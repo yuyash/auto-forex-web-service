@@ -462,7 +462,8 @@
   },
   "debug": {
     "title": "デバッグオプション",
-    "tracemalloc": "メモリプロファイリング (tracemalloc)"
+    "tracemalloc": "メモリプロファイリング (tracemalloc)",
+    "tracemallocDescription": "タスク実行中のメモリ使用量をプロファイリングします。CPU・メモリのオーバーヘッドが発生するため、デバッグ後は無効にしてください。"
   },
   "columnConfig": {
     "title": "列設定",

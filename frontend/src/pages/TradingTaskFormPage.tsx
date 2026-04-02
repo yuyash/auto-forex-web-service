@@ -53,6 +53,7 @@ export default function TradingTaskFormPage() {
               taskName={task.name}
               taskDescription={task.description}
               accountName={task.account_name}
+              debugOptions={task.debug_options}
               initialData={{
                 config_id: task.config_id,
               }}

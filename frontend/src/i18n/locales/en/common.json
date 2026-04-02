@@ -462,7 +462,8 @@
   },
   "debug": {
     "title": "Debug Options",
-    "tracemalloc": "Memory Profiling (tracemalloc)"
+    "tracemalloc": "Memory Profiling (tracemalloc)",
+    "tracemallocDescription": "Enable tracemalloc to profile memory usage during task execution. Adds CPU/memory overhead — disable after debugging."
   },
   "columnConfig": {
     "title": "Configure Columns",

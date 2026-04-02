@@ -1,7 +1,15 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Box, Button, Typography, Paper, Alert } from '@mui/material';
+import {
+  Box,
+  Button,
+  Typography,
+  Paper,
+  Alert,
+  FormControlLabel,
+  Checkbox,
+} from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
@@ -28,6 +36,7 @@ interface TradingTaskUpdateFormProps {
   taskDescription?: string;
   accountName: string;
   initialData: TradingTaskUpdateData;
+  debugOptions?: Record<string, unknown>;
 }
 
 export default function TradingTaskUpdateForm({
@@ -36,10 +45,14 @@ export default function TradingTaskUpdateForm({
   taskDescription,
   accountName,
   initialData,
+  debugOptions,
 }: TradingTaskUpdateFormProps) {
   const { t } = useTranslation(['trading', 'common']);
   const navigate = useNavigate();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [tracemalloc, setTracemalloc] = useState(
+    Boolean(debugOptions?.tracemalloc)
+  );
   const updateTask = useUpdateTradingTask();
 
   const {
@@ -67,6 +80,7 @@ export default function TradingTaskUpdateForm({
         id: taskId,
         data: {
           config: data.config_id,
+          debug_options: { tracemalloc },
         },
       });
 
@@ -187,6 +201,32 @@ export default function TradingTaskUpdateForm({
             </Grid>
           )}
         </Grid>
+
+        <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
+          {t('common:debug.title')}
+        </Typography>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={tracemalloc}
+              onChange={(e) => setTracemalloc(e.target.checked)}
+            />
+          }
+          label={
+            <Box>
+              <Typography variant="body1">
+                {t('common:debug.tracemalloc')}
+              </Typography>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mt: 0.5 }}
+              >
+                {t('common:debug.tracemallocDescription')}
+              </Typography>
+            </Box>
+          }
+        />
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
           <Button variant="outlined" onClick={() => navigate('/trading-tasks')}>
