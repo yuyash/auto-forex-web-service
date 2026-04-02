@@ -229,6 +229,7 @@
       "sortNewest": "新しい順",
       "filterActive": "進行中",
       "filterCompleted": "完了",
+      "positionIdFilter": "建玉IDでフィルタ",
       "noCyclesFound": "サイクルが見つかりません",
       "selectCycle": "リストからサイクルを選択して詳細を表示してください",
       "tradeCount": "{{count}} トレード",
@@ -350,7 +351,8 @@
       "layer": "段階",
       "retracement": "増し玉",
       "noTrades": "取引記録なし",
-      "description": "説明"
+      "description": "説明",
+      "cycleIdFilter": "サイクルIDでフィルタ"
     },
     "orders": {
       "title": "注文",
@@ -405,6 +407,7 @@
         "byStatus": "決済状態別"
       },
       "totalPnl": "合計損益",
+      "cycleIdFilter": "サイクルIDでフィルタ",
       "lifecycle": {
         "title": "ポジションライフサイクル",
         "viewLifecycle": "ライフサイクルを表示",
@@ -412,7 +415,17 @@
         "searchPlaceholder": "ポジションIDまたはプレフィックスを入力（例：先頭8文字）",
         "enterPositionId": "ポジションIDを入力してライフサイクルを表示します。",
         "noLogs": "このポジションのライフサイクルログが見つかりません。",
-        "close": "閉じる"
+        "close": "閉じる",
+        "events": {
+          "OPENED": "オープン",
+          "CLOSED": "クローズ",
+          "PARTIAL_CLOSE": "部分決済"
+        },
+        "details": {
+          "exitFormula": "決済価格計算式",
+          "closeReason": "決済理由",
+          "description": "説明"
+        }
       }
     },
     "logs": {

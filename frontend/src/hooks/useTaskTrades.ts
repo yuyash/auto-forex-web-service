@@ -40,6 +40,8 @@ interface UseTaskTradesOptions {
   direction?: 'long' | 'short';
   page?: number;
   pageSize?: number;
+  /** Filter trades by cycle ID. */
+  cycleId?: string;
   /** ISO 8601 timestamp — only return records updated after this time. */
   since?: string;
   enableRealTimeUpdates?: boolean;
@@ -99,11 +101,12 @@ export const useTaskTrades = ({
   direction,
   page = 1,
   pageSize = 100,
+  cycleId,
   since,
   enableRealTimeUpdates = false,
   refreshInterval = 5_000,
 }: UseTaskTradesOptions): UseTaskTradesResult => {
-  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${direction}-${page}-${pageSize}-${since ?? ''}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${direction}-${page}-${pageSize}-${cycleId ?? ''}-${since ?? ''}`;
   const {
     items: trades,
     totalCount,
@@ -131,6 +134,7 @@ export const useTaskTrades = ({
       }
       if (direction === 'long') params.direction = 'buy';
       if (direction === 'short') params.direction = 'sell';
+      if (cycleId) params.cycle_id = cycleId;
       return params;
     },
     getLatestCursor: getLatestUpdatedAt,

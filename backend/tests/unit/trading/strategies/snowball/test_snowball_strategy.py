@@ -849,9 +849,13 @@ class TestRefillWithinThreshold:
 # ==================================================================
 
 
-class TestL2InitialCloseResetsLayer:
-    def test_l2_initial_close_allows_reuse(self):
-        """When L2/R0 is closed, the layer resets and can be re-entered."""
+class TestL2InitialCloseRemovesLayer:
+    def test_l2_initial_close_removes_layer(self):
+        """When L2/R0 is closed, the layer is removed from cycle.layers.
+
+        This makes current_layer revert to L1, and L2 will only be
+        recreated when L1 slots get sealed again (needs_new_layer).
+        """
         s = _strategy(
             n_pips_head="10",
             interval_mode="constant",
@@ -877,8 +881,7 @@ class TestL2InitialCloseResetsLayer:
         s.on_tick(tick=_tick(T0 + timedelta(seconds=180), "149.70", "149.72"), state=state)
         assert _layer_count(state) == 2
 
-        # Now close L2/R0 (layer initial) — need to close any L2 slots first
-        # L2 has no slots filled yet, so check if L2 initial can be closed
+        # Now close L2/R0 (layer initial) — L2 has no slots filled
         l2 = state.strategy_state["cycles"][0]["layers"][1]
         assert l2["initial_entry"] is not None
         l2_cp = Decimal(str(l2["initial_entry"]["close_price"]))
@@ -893,11 +896,8 @@ class TestL2InitialCloseResetsLayer:
             state=state,
         )
 
-        # L2 should be reset (initial_entry = None, slots all fresh)
-        l2_after = state.strategy_state["cycles"][0]["layers"][1]
-        assert l2_after["initial_entry"] is None
-        for slot in l2_after["slots"]:
-            assert slot["ever_closed"] is False
+        # L2 should be removed entirely — only L1 remains
+        assert _layer_count(state) == 1
 
 
 # ==================================================================

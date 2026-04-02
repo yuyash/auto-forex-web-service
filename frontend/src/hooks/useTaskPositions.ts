@@ -56,6 +56,8 @@ interface UseTaskPositionsOptions {
   rangeFrom?: string;
   rangeTo?: string;
   includeTradeIds?: boolean;
+  /** Filter positions by cycle ID (via related trades). */
+  cycleId?: string;
   /** ISO 8601 timestamp — only return records updated after this time. */
   since?: string;
   enableRealTimeUpdates?: boolean;
@@ -94,6 +96,7 @@ export const useTaskPositions = ({
   rangeFrom,
   rangeTo,
   includeTradeIds = false,
+  cycleId,
   since,
   enableRealTimeUpdates = false,
   refreshInterval = 5_000,
@@ -122,7 +125,7 @@ export const useTaskPositions = ({
   const canUseIncrementalPolling = page === 1;
 
   // Reset incremental state when key params change.
-  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${status}-${direction}-${page}-${pageSize}-${rangeFrom ?? ''}-${rangeTo ?? ''}-${includeTradeIds}-${since ?? ''}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${status}-${direction}-${page}-${pageSize}-${rangeFrom ?? ''}-${rangeTo ?? ''}-${includeTradeIds}-${cycleId ?? ''}-${since ?? ''}`;
   const prevParamsKeyRef = useRef(paramsKey);
   if (paramsKey !== prevParamsKeyRef.current) {
     prevParamsKeyRef.current = paramsKey;
@@ -155,6 +158,7 @@ export const useTaskPositions = ({
         if (rangeFrom) params.range_from = rangeFrom;
         if (rangeTo) params.range_to = rangeTo;
         if (includeTradeIds) params.include_trade_ids = 'true';
+        if (cycleId) params.cycle_id = cycleId;
         // Use caller-provided `since` OR our tracked incremental timestamp.
         const effectiveSince =
           since ??

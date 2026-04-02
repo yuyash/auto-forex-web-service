@@ -62,9 +62,27 @@ const formatTimestamp = (ts: string): string =>
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
+    timeZoneName: 'short',
   });
 
 type LifecycleEvent = 'OPENED' | 'CLOSED' | 'PARTIAL_CLOSE';
+
+/** Extract the tick timestamp from lifecycle log context.
+ *  For OPENED events, use entry_time. For CLOSED/PARTIAL_CLOSE, use exit_time.
+ *  Falls back to the log's own timestamp (wall-clock time). */
+function getTickTimestamp(log: TaskLog): string {
+  const ctx = (log.details as Record<string, unknown>)?.context as
+    | Record<string, unknown>
+    | undefined;
+  if (!ctx) return log.timestamp;
+  const event = (ctx.lifecycle_event as string) ?? '';
+  if (event === 'OPENED' && ctx.entry_time) return String(ctx.entry_time);
+  if ((event === 'CLOSED' || event === 'PARTIAL_CLOSE') && ctx.exit_time)
+    return String(ctx.exit_time);
+  // Fallback: try entry_time, then log timestamp
+  if (ctx.entry_time) return String(ctx.entry_time);
+  return log.timestamp;
+}
 
 function getLifecycleColor(
   event: LifecycleEvent
@@ -171,9 +189,12 @@ export const PositionLifecycleDialog: React.FC<
     taskType,
   ]);
 
-  // Sort logs chronologically (oldest first for timeline)
+  // Sort logs chronologically by tick timestamp (oldest first for timeline)
   const sortedLogs = useMemo(
-    () => [...logs].sort((a, b) => a.timestamp.localeCompare(b.timestamp)),
+    () =>
+      [...logs].sort((a, b) =>
+        getTickTimestamp(a).localeCompare(getTickTimestamp(b))
+      ),
     [logs]
   );
 
@@ -288,7 +309,7 @@ export const PositionLifecycleDialog: React.FC<
                       variant="body2"
                       color="text.secondary"
                     >
-                      {formatTimestamp(log.timestamp)}
+                      {formatTimestamp(getTickTimestamp(log))}
                     </TimelineOppositeContent>
                     <TimelineSeparator>
                       <TimelineConnector sx={{ opacity: idx === 0 ? 0 : 1 }} />
@@ -304,7 +325,9 @@ export const PositionLifecycleDialog: React.FC<
                     </TimelineSeparator>
                     <TimelineContent sx={{ py: '12px', px: 2 }}>
                       <Chip
-                        label={lifecycleEvent}
+                        label={t(
+                          `tables.positions.lifecycle.events.${lifecycleEvent}`
+                        )}
                         color={color}
                         size="small"
                         sx={{ mb: 0.5 }}
@@ -412,7 +435,7 @@ const PositionSummary: React.FC<{
       </Box>
       <Box>
         <Typography variant="caption" color="text.secondary">
-          Direction
+          {t('tables.positions.direction')}
         </Typography>
         <Chip
           label={direction}
@@ -478,10 +501,12 @@ const PositionSummary: React.FC<{
       )}
       <Box>
         <Typography variant="caption" color="text.secondary">
-          Status
+          {t('tables.positions.status')}
         </Typography>
         <Chip
-          label={isClosed ? 'CLOSED' : 'OPEN'}
+          label={
+            isClosed ? t('tables.positions.closed') : t('tables.positions.open')
+          }
           size="small"
           color={isClosed ? 'default' : 'info'}
         />
@@ -495,6 +520,7 @@ const LifecycleDetails: React.FC<{
   ctx: Record<string, unknown> | undefined;
   positionData?: TaskPosition | null;
 }> = ({ ctx, positionData }) => {
+  const { t } = useTranslation('common');
   if (!ctx) return null;
 
   const formula =
@@ -504,21 +530,33 @@ const LifecycleDetails: React.FC<{
 
   const fields: [string, string | undefined][] = [
     [
-      'Units',
+      t('tables.positions.units'),
       ctx.units != null
         ? String(ctx.units)
         : ctx.units_closed != null
           ? String(ctx.units_closed)
           : undefined,
     ],
-    ['Layer', ctx.layer_index != null ? String(ctx.layer_index) : undefined],
     [
-      'Retracement',
+      t('tables.positions.layer'),
+      ctx.layer_index != null ? String(ctx.layer_index) : undefined,
+    ],
+    [
+      t('tables.positions.retracement'),
       ctx.retracement_count != null ? String(ctx.retracement_count) : undefined,
     ],
-    ['Exit Formula', formula != null ? String(formula) : undefined],
-    ['Close Reason', ctx.close_reason as string | undefined],
-    ['Description', ctx.description as string | undefined],
+    [
+      t('tables.positions.lifecycle.details.exitFormula'),
+      formula != null ? String(formula) : undefined,
+    ],
+    [
+      t('tables.positions.lifecycle.details.closeReason'),
+      ctx.close_reason as string | undefined,
+    ],
+    [
+      t('tables.positions.lifecycle.details.description'),
+      ctx.description as string | undefined,
+    ],
   ];
 
   const rendered = fields.filter(

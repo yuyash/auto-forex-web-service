@@ -12,8 +12,10 @@ import {
   CircularProgress,
   Divider,
   IconButton,
+  InputAdornment,
   Paper,
   Stack,
+  TextField,
   Tooltip,
   Typography,
   alpha,
@@ -23,6 +25,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
 import ClearIcon from '@mui/icons-material/Clear';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import SearchIcon from '@mui/icons-material/Search';
 import SelectAllIcon from '@mui/icons-material/SelectAll';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
@@ -76,6 +79,7 @@ export function TaskStrategyTab({
   const [statusFilter, setStatusFilter] = useState<
     'all' | 'active' | 'completed'
   >('all');
+  const [positionIdFilter, setPositionIdFilter] = useState('');
   const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
   // Snapshot of the selected cycle — only updated on select or manual refresh
   const [detailSnapshot, setDetailSnapshot] = useState<StrategyCycle | null>(
@@ -152,8 +156,16 @@ export function TaskStrategyTab({
     if (statusFilter !== 'all') {
       list = list.filter((c) => c.status === statusFilter);
     }
+    if (positionIdFilter.trim()) {
+      const needle = positionIdFilter.trim().toLowerCase();
+      list = list.filter((c) =>
+        c.trades.some(
+          (t) => t.position_id && t.position_id.toLowerCase().includes(needle)
+        )
+      );
+    }
     return list;
-  }, [cycles, sortOrder, statusFilter]);
+  }, [cycles, sortOrder, statusFilter, positionIdFilter]);
 
   const handleSelectCycle = useCallback(
     (id: string) => {
@@ -362,6 +374,38 @@ export function TaskStrategyTab({
                   p === 'completed' ? 'all' : 'completed'
                 )
               }
+            />
+          </Box>
+          <Divider />
+          <Box sx={{ px: 1.5, py: 0.75, flexShrink: 0 }}>
+            <TextField
+              size="small"
+              fullWidth
+              placeholder={t(
+                'common:strategyVisualization.cycleList.positionIdFilter'
+              )}
+              value={positionIdFilter}
+              onChange={(e) => setPositionIdFilter(e.target.value)}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: positionIdFilter ? (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        onClick={() => setPositionIdFilter('')}
+                        edge="end"
+                      >
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : null,
+                },
+              }}
             />
           </Box>
           <Divider />
@@ -747,6 +791,14 @@ function TradeRow({
           color={trade.direction === 'buy' ? 'success' : 'error'}
           variant="outlined"
         />
+        {trade.position_id ? (
+          <Typography
+            variant="caption"
+            sx={{ fontFamily: 'monospace', color: 'text.secondary' }}
+          >
+            {trade.position_id.slice(0, 8)}
+          </Typography>
+        ) : null}
         <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
           {trade.units} @ {Number(trade.price).toFixed(2)}
         </Typography>

@@ -15,9 +15,15 @@ import {
   Alert,
   TablePagination,
   IconButton,
+  InputAdornment,
+  TextField,
   Tooltip,
 } from '@mui/material';
-import { Settings as SettingsIcon } from '@mui/icons-material';
+import {
+  Settings as SettingsIcon,
+  Search as SearchIcon,
+  Clear as ClearIcon,
+} from '@mui/icons-material';
 import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
@@ -49,6 +55,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(50);
   const [isReloading, setIsReloading] = useState(false);
+  const [cycleIdFilter, setCycleIdFilter] = useState('');
 
   const { trades, totalCount, isLoading, error, refresh } = useTaskTrades({
     taskId,
@@ -56,6 +63,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     executionRunId,
     page: page + 1,
     pageSize: rowsPerPage,
+    cycleId: cycleIdFilter || undefined,
     enableRealTimeUpdates,
   });
 
@@ -232,11 +240,42 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          gap: 1,
+          flexWrap: 'wrap',
         }}
       >
-        <Typography variant="h6">
-          {t('tables.trades.title')} ({totalCount})
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="h6">
+            {t('tables.trades.title')} ({totalCount})
+          </Typography>
+          <TextField
+            size="small"
+            placeholder={t('tables.trades.cycleIdFilter')}
+            value={cycleIdFilter}
+            onChange={(e) => setCycleIdFilter(e.target.value)}
+            sx={{ width: 280 }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+                endAdornment: cycleIdFilter ? (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={() => setCycleIdFilter('')}
+                      edge="end"
+                    >
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ) : null,
+              },
+            }}
+          />
+        </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Tooltip title={t('common:columnConfig.configureColumns')}>
             <IconButton
