@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.26.0...frontend-v1.26.1) (2026-04-02)
+
+
+### Bug Fixes
+
+* **ui:** show 0% progress for running tasks ([#304](https://github.com/yuyash/auto-forex-web-service/issues/304)) ([7010775](https://github.com/yuyash/auto-forex-web-service/commit/7010775b6ff6554de3fe2ba114f9f3a47b5cf14a))
+
 ## [1.26.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.25.6...frontend-v1.26.0) (2026-04-02)
 
 
