@@ -145,6 +145,8 @@ services:
       - ./backups:/app/backups
       - ${HOME}/.aws:/root/.aws:ro
     command: celery -A config worker -l info --concurrency=8 -Q default,trading,market,backtest,system
+    mem_limit: 4g
+    memswap_limit: 4g
     restart: unless-stopped
     networks:
       - forex_network
