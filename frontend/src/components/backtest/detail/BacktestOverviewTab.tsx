@@ -1,4 +1,12 @@
-import { Box, Divider, Grid, Link, Typography } from '@mui/material';
+import {
+  Box,
+  Divider,
+  FormControlLabel,
+  Grid,
+  Link,
+  Switch,
+  Typography,
+} from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { StatusBadge } from '../../tasks/display/StatusBadge';
 import { ExecutionHistoryTable } from '../../tasks/display/ExecutionHistoryTable';
@@ -7,6 +15,7 @@ import { getStrategyDisplayName } from '../../../hooks/useStrategies';
 import type { Strategy } from '../../../services/api/strategies';
 import { TaskType, type TaskStatus } from '../../../types/common';
 import type { BacktestTask } from '../../../types';
+import { useUpdateBacktestTask } from '../../../hooks/useBacktestTaskMutations';
 
 interface BacktestOverviewTabProps {
   taskId: string;
@@ -28,6 +37,20 @@ export function BacktestOverviewTab({
   onOpenConfiguration,
 }: BacktestOverviewTabProps) {
   const { t } = useTranslation(['backtest', 'common']);
+  const updateTask = useUpdateBacktestTask({});
+
+  const tracemallocEnabled = Boolean(task.debug_options?.tracemalloc);
+  const handleToggleTracemalloc = () => {
+    updateTask.mutate({
+      id: taskId,
+      data: {
+        debug_options: {
+          ...task.debug_options,
+          tracemalloc: !tracemallocEnabled,
+        },
+      },
+    });
+  };
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
@@ -93,6 +116,25 @@ export function BacktestOverviewTab({
                 </Typography>
               </Box>
             )}
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                {t('common:debug.title')}
+              </Typography>
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={tracemallocEnabled}
+                    onChange={handleToggleTracemalloc}
+                  />
+                }
+                label={
+                  <Typography variant="body2">
+                    {t('common:debug.tracemalloc')}
+                  </Typography>
+                }
+              />
+            </Box>
           </Box>
         </Grid>
 

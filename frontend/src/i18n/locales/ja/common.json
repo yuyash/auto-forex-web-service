@@ -460,6 +460,10 @@
       "configureColumns": "列の設定"
     }
   },
+  "debug": {
+    "title": "デバッグオプション",
+    "tracemalloc": "メモリプロファイリング (tracemalloc)"
+  },
   "columnConfig": {
     "title": "列設定",
     "description": "列の表示/非表示を切り替え、ドラッグで順序を変更できます。",

@@ -460,6 +460,10 @@
       "configureColumns": "Configure columns"
     }
   },
+  "debug": {
+    "title": "Debug Options",
+    "tracemalloc": "Memory Profiling (tracemalloc)"
+  },
   "columnConfig": {
     "title": "Configure Columns",
     "description": "Toggle column visibility and drag to reorder.",

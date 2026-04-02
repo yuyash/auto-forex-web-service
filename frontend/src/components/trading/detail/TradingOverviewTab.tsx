@@ -1,4 +1,12 @@
-import { Box, Divider, Grid, Link, Typography } from '@mui/material';
+import {
+  Box,
+  Divider,
+  FormControlLabel,
+  Grid,
+  Link,
+  Switch,
+  Typography,
+} from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { StatusBadge } from '../../tasks/display/StatusBadge';
@@ -8,6 +16,7 @@ import { getStrategyDisplayName } from '../../../hooks/useStrategies';
 import type { Strategy } from '../../../services/api/strategies';
 import { TaskType, type TaskStatus } from '../../../types/common';
 import type { TradingTask } from '../../../types';
+import { useUpdateTradingTask } from '../../../hooks/useTradingTaskMutations';
 
 interface TradingOverviewTabProps {
   taskId: string;
@@ -29,6 +38,20 @@ export function TradingOverviewTab({
   onOpenConfiguration,
 }: TradingOverviewTabProps) {
   const { t } = useTranslation(['trading', 'common']);
+  const updateTask = useUpdateTradingTask({});
+
+  const tracemallocEnabled = Boolean(task.debug_options?.tracemalloc);
+  const handleToggleTracemalloc = () => {
+    updateTask.mutate({
+      id: taskId,
+      data: {
+        debug_options: {
+          ...task.debug_options,
+          tracemalloc: !tracemallocEnabled,
+        },
+      },
+    });
+  };
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
@@ -90,6 +113,25 @@ export function TradingOverviewTab({
                 </Typography>
               </Box>
             )}
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                {t('common:debug.title')}
+              </Typography>
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={tracemallocEnabled}
+                    onChange={handleToggleTracemalloc}
+                  />
+                }
+                label={
+                  <Typography variant="body2">
+                    {t('common:debug.tracemalloc')}
+                  </Typography>
+                }
+              />
+            </Box>
           </Box>
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
