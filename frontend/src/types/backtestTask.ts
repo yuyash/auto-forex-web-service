@@ -27,6 +27,7 @@ export interface BacktestTask {
   error_message?: string;
   created_at: string;
   updated_at: string;
+  debug_options?: Record<string, unknown>;
 }
 
 export interface BacktestTaskCreateData {
@@ -73,6 +74,7 @@ export interface BacktestTaskUpdateData {
   instrument?: string;
   sell_at_completion?: boolean;
   hedging_enabled?: boolean;
+  debug_options?: Record<string, unknown>;
 }
 
 export interface BacktestTaskListParams {

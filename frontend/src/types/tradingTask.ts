@@ -28,6 +28,7 @@ export interface TradingTask {
   pip_size?: string;
   created_at: string;
   updated_at: string;
+  debug_options?: Record<string, unknown>;
 }
 
 export interface TradingTaskCreateData {
@@ -49,6 +50,7 @@ export interface TradingTaskUpdateData {
   sell_on_stop?: boolean;
   dry_run?: boolean;
   hedging_enabled?: boolean;
+  debug_options?: Record<string, unknown>;
 }
 
 export interface TradingTaskListParams {

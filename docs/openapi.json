@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.22.10",
+        "version": "1.22.11",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -5170,6 +5170,9 @@
                         "format": "date-time",
                         "readOnly": true,
                         "description": "Timestamp when this record was last updated"
+                    },
+                    "debug_options": {
+                        "description": "Debug settings. Supported: {\"tracemalloc\": true}"
                     }
                 },
                 "required": [
@@ -5261,6 +5264,9 @@
                     "hedging_enabled": {
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging) during backtest."
+                    },
+                    "debug_options": {
+                        "description": "Debug settings. Supported: {\"tracemalloc\": true}"
                     }
                 },
                 "required": [
@@ -5390,6 +5396,10 @@
                         "format": "date-time",
                         "readOnly": true,
                         "description": "Timestamp when this record was last updated"
+                    },
+                    "debug_options": {
+                        "readOnly": true,
+                        "description": "Debug settings. Supported: {\"tracemalloc\": true}"
                     }
                 },
                 "required": [
@@ -5398,6 +5408,7 @@
                     "config_name",
                     "created_at",
                     "data_source",
+                    "debug_options",
                     "description",
                     "end_time",
                     "error_message",
@@ -5475,6 +5486,9 @@
                     "hedging_enabled": {
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging) during backtest."
+                    },
+                    "debug_options": {
+                        "description": "Debug settings. Supported: {\"tracemalloc\": true}"
                     }
                 },
                 "required": [
@@ -7205,6 +7219,9 @@
                     "hedging_enabled": {
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging) during backtest."
+                    },
+                    "debug_options": {
+                        "description": "Debug settings. Supported: {\"tracemalloc\": true}"
                     }
                 }
             },
@@ -7285,6 +7302,9 @@
                     "hedging_enabled": {
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account."
+                    },
+                    "debug_options": {
+                        "description": "Debug settings. Supported: {\"tracemalloc\": true}"
                     }
                 }
             },
@@ -8986,6 +9006,9 @@
                         "format": "date-time",
                         "readOnly": true,
                         "description": "Timestamp when this record was last updated"
+                    },
+                    "debug_options": {
+                        "description": "Debug settings. Supported: {\"tracemalloc\": true}"
                     }
                 },
                 "required": [
@@ -9050,6 +9073,9 @@
                     "hedging_enabled": {
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account."
+                    },
+                    "debug_options": {
+                        "description": "Debug settings. Supported: {\"tracemalloc\": true}"
                     }
                 }
             },
@@ -9229,6 +9255,9 @@
                     "hedging_enabled": {
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account."
+                    },
+                    "debug_options": {
+                        "description": "Debug settings. Supported: {\"tracemalloc\": true}"
                     }
                 },
                 "required": [

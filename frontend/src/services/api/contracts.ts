@@ -48,6 +48,7 @@ export interface BackendBacktestTask {
   error_message?: string | null;
   created_at: string;
   updated_at: string;
+  debug_options?: Record<string, unknown>;
 }
 
 export interface BackendTradingTask {
@@ -75,6 +76,7 @@ export interface BackendTradingTask {
   can_resume: boolean;
   created_at: string;
   updated_at: string;
+  debug_options?: Record<string, unknown>;
 }
 
 export interface BackendConfigurationTask {

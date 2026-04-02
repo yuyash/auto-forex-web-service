@@ -45,6 +45,7 @@ export default function BacktestTaskFormPage() {
               taskId={taskId}
               taskName={task.name}
               taskDescription={task.description}
+              debugOptions={task.debug_options}
               initialData={{
                 config_id: task.config_id,
                 data_source: task.data_source,

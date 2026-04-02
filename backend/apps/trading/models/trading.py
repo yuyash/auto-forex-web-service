@@ -116,6 +116,11 @@ class TradingTask(UUIDModel):
         blank=True,
         help_text="Full error traceback if task failed",
     )
+    debug_options = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Debug settings. Supported: {"tracemalloc": true}',
+    )
 
     sell_on_stop = models.BooleanField(
         default=False,

@@ -1,4 +1,4 @@
-import { Box, Divider, Grid, Link, Typography } from '@mui/material';
+import { Box, Chip, Divider, Grid, Link, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { StatusBadge } from '../../tasks/display/StatusBadge';
@@ -29,6 +29,8 @@ export function TradingOverviewTab({
   onOpenConfiguration,
 }: TradingOverviewTabProps) {
   const { t } = useTranslation(['trading', 'common']);
+
+  const tracemallocEnabled = Boolean(task.debug_options?.tracemalloc);
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
@@ -90,6 +92,19 @@ export function TradingOverviewTab({
                 </Typography>
               </Box>
             )}
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                {t('common:debug.title')}
+              </Typography>
+              <Box sx={{ mt: 0.5 }}>
+                <Chip
+                  size="small"
+                  label={t('common:debug.tracemalloc')}
+                  color={tracemallocEnabled ? 'warning' : 'default'}
+                  variant={tracemallocEnabled ? 'filled' : 'outlined'}
+                />
+              </Box>
+            </Box>
           </Box>
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>

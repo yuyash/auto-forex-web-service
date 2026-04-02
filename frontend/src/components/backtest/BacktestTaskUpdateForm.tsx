@@ -71,6 +71,7 @@ interface BacktestTaskUpdateFormProps {
   taskName: string;
   taskDescription?: string;
   initialData: BacktestTaskUpdateData;
+  debugOptions?: Record<string, unknown>;
 }
 
 export default function BacktestTaskUpdateForm({
@@ -78,10 +79,14 @@ export default function BacktestTaskUpdateForm({
   taskName,
   taskDescription,
   initialData,
+  debugOptions,
 }: BacktestTaskUpdateFormProps) {
   const { t } = useTranslation(['backtest', 'common']);
   const navigate = useNavigate();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [tracemalloc, setTracemalloc] = useState(
+    Boolean(debugOptions?.tracemalloc)
+  );
   const updateTask = useUpdateBacktestTask();
 
   const {
@@ -121,6 +126,7 @@ export default function BacktestTaskUpdateForm({
           pip_size: data.pip_size?.toString(),
           instrument: data.instrument,
           sell_at_completion: data.sell_at_completion,
+          debug_options: { tracemalloc },
         },
       });
 
@@ -375,6 +381,34 @@ export default function BacktestTaskUpdateForm({
                   }
                 />
               )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12 }}>
+            <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+              {t('common:debug.title')}
+            </Typography>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={tracemalloc}
+                  onChange={(e) => setTracemalloc(e.target.checked)}
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body1">
+                    {t('common:debug.tracemalloc')}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mt: 0.5 }}
+                  >
+                    {t('common:debug.tracemallocDescription')}
+                  </Typography>
+                </Box>
+              }
             />
           </Grid>
         </Grid>
