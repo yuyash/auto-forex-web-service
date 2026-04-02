@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.23.0...backend-v1.23.1) (2026-04-02)
+
+
+### Bug Fixes
+
+* **snowball:** guard L1/R0 close when counter entries are open ([#306](https://github.com/yuyash/auto-forex-web-service/issues/306)) ([2f92032](https://github.com/yuyash/auto-forex-web-service/commit/2f92032447ce1ad5cd84da2438f0bbd3bdfb022a))
+
 ## [1.23.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.22.11...backend-v1.23.0) (2026-04-02)
 
 
