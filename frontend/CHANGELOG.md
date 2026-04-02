@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.25.6...frontend-v1.26.0) (2026-04-02)
+
+
+### Features
+
+* task debug options ([#302](https://github.com/yuyash/auto-forex-web-service/issues/302)) ([be687eb](https://github.com/yuyash/auto-forex-web-service/commit/be687eb6d2a61a17e8150c6e5cd8bb5b6f3e37ce))
+
 ## [1.25.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.25.5...frontend-v1.25.6) (2026-04-02)
 
 
