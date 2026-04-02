@@ -92,19 +92,21 @@ export function TradingOverviewTab({
                 </Typography>
               </Box>
             )}
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('common:debug.title')}
-              </Typography>
-              <Box sx={{ mt: 0.5 }}>
-                <Chip
-                  size="small"
-                  label={t('common:debug.tracemalloc')}
-                  color={tracemallocEnabled ? 'warning' : 'default'}
-                  variant={tracemallocEnabled ? 'filled' : 'outlined'}
-                />
+            {tracemallocEnabled && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  {t('common:debug.title')}
+                </Typography>
+                <Box sx={{ mt: 0.5 }}>
+                  <Chip
+                    size="small"
+                    label={t('common:debug.tracemalloc')}
+                    color="warning"
+                    variant="filled"
+                  />
+                </Box>
               </Box>
-            </Box>
+            )}
           </Box>
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
@@ -273,6 +275,16 @@ export function TradingOverviewTab({
                 </Typography>
                 <Typography variant="body1">
                   {(summary.execution.marginRatio * 100).toFixed(1)}%
+                </Typography>
+              </Box>
+            )}
+            {summary.execution.currentAtr != null && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  {t('common:labels.currentAtr')}
+                </Typography>
+                <Typography variant="body1">
+                  {summary.execution.currentAtr.toFixed(2)}
                 </Typography>
               </Box>
             )}

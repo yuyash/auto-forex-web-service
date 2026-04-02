@@ -104,6 +104,7 @@
     "instrument": "Instrument",
     "pipSize": "Pip Size",
     "marginRatio": "Margin Ratio",
+    "currentAtr": "ATR",
     "status": "Status",
     "configuration": "Configuration",
     "strategyType": "Strategy Type",
