@@ -17,6 +17,8 @@ import {
   Alert,
   TablePagination,
   IconButton,
+  InputAdornment,
+  TextField,
   Tooltip,
   ToggleButtonGroup,
   ToggleButton,
@@ -25,6 +27,8 @@ import {
 import {
   History as HistoryIcon,
   Settings as SettingsIcon,
+  Search as SearchIcon,
+  Clear as ClearIcon,
 } from '@mui/icons-material';
 import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
@@ -118,6 +122,9 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   // --- Reload state ---
   const [reloading, setReloading] = useState<Record<string, boolean>>({});
 
+  // --- Cycle ID filter ---
+  const [cycleIdFilter, setCycleIdFilter] = useState('');
+
   // --- Selection ---
   const closedLongSel = useTableRowSelection();
   const closedShortSel = useTableRowSelection();
@@ -143,6 +150,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     direction: 'long',
     page: closedLongPage + 1,
     pageSize: closedLongRpp,
+    cycleId: cycleIdFilter || undefined,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
   });
   const {
@@ -159,6 +167,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     direction: 'short',
     page: closedShortPage + 1,
     pageSize: closedShortRpp,
+    cycleId: cycleIdFilter || undefined,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
   });
   const {
@@ -175,6 +184,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     direction: 'long',
     page: openLongPage + 1,
     pageSize: openLongRpp,
+    cycleId: cycleIdFilter || undefined,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
   });
   const {
@@ -191,6 +201,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     direction: 'short',
     page: openShortPage + 1,
     pageSize: openShortRpp,
+    cycleId: cycleIdFilter || undefined,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
   });
 
@@ -208,6 +219,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     direction: 'long',
     page: longPage + 1,
     pageSize: longRpp,
+    cycleId: cycleIdFilter || undefined,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byDirection',
   });
   const {
@@ -223,6 +235,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     direction: 'short',
     page: shortPage + 1,
     pageSize: shortRpp,
+    cycleId: cycleIdFilter || undefined,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byDirection',
   });
 
@@ -239,6 +252,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     executionRunId,
     page: allPage + 1,
     pageSize: allRpp,
+    cycleId: cycleIdFilter || undefined,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'all',
   });
 
@@ -1229,6 +1243,33 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             {t('tables.positions.viewMode.byStatus')}
           </ToggleButton>
         </ToggleButtonGroup>
+        <TextField
+          size="small"
+          placeholder={t('tables.positions.cycleIdFilter')}
+          value={cycleIdFilter}
+          onChange={(e) => setCycleIdFilter(e.target.value)}
+          sx={{ width: 280 }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+              endAdornment: cycleIdFilter ? (
+                <InputAdornment position="end">
+                  <IconButton
+                    size="small"
+                    onClick={() => setCycleIdFilter('')}
+                    edge="end"
+                  >
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null,
+            },
+          }}
+        />
         {viewMode !== 'byStatus' && (
           <Typography
             variant="subtitle1"

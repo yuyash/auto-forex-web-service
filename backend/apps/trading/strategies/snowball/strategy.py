@@ -367,12 +367,15 @@ class SnowballStrategy(Strategy):
             pips_gained = abs(exit_price - entry.entry_price) / self.pip_size
 
             logger.info(
-                "Layer initial TP (%s): L%s, +%.1f pips",
+                "Layer initial TP (%s): L%s, +%.1f pips — removing layer",
                 entry.direction.value.upper(),
                 layer.layer_number,
                 pips_gained,
             )
-            layer.close_initial()
+            # Remove the layer entirely so current_layer reverts to the
+            # previous one.  L2 will only be recreated when the previous
+            # layer's slots get sealed again (needs_new_layer).
+            cycle.layers.remove(layer)
 
             return [
                 self._close_entry(
@@ -410,10 +413,6 @@ class SnowballStrategy(Strategy):
             if cycle.layer_count >= cfg.f_max:
                 return []
             return self._open_layer_initial(ss, tick, cycle)
-
-        # L2+ layer needs its initial entry (re)built after reset?
-        if layer.needs_initial_rebuild:
-            return self._open_layer_initial(ss, tick, cycle, existing_layer=layer)
 
         # Find the next available slot
         slot = layer.next_available_slot()
@@ -519,9 +518,8 @@ class SnowballStrategy(Strategy):
         ss: SnowballStrategyState,
         tick: Tick,
         cycle: SnowballCycle,
-        existing_layer: Layer | None = None,
     ) -> list[StrategyEvent]:
-        """Open a layer-initial entry for a new or reset layer."""
+        """Open a layer-initial entry for a new layer."""
         cfg = self.config
         initial = cycle.initial_entry
         if initial is None:
@@ -533,19 +531,14 @@ class SnowballStrategy(Strategy):
 
         direction = cycle.direction
 
-        if existing_layer is not None:
-            # Rebuilding initial for a reset layer
-            layer = existing_layer
-            prev_layer_num = layer.layer_number - 1
-        else:
-            # Creating a brand new layer
-            prev_layer = cycle.current_layer
-            assert prev_layer is not None
-            prev_layer_num = prev_layer.layer_number
-            new_layer_number = prev_layer_num + 1
-            new_base_units = int(Decimal(str(cfg.base_units)) * cfg.post_r_max_base_factor)
-            layer = Layer.create(new_layer_number, cfg.r_max, new_base_units, cfg.refill_up_to)
-            cycle.add_layer(layer)
+        # Creating a brand new layer
+        prev_layer = cycle.current_layer
+        assert prev_layer is not None
+        prev_layer_num = prev_layer.layer_number
+        new_layer_number = prev_layer_num + 1
+        new_base_units = int(Decimal(str(cfg.base_units)) * cfg.post_r_max_base_factor)
+        layer = Layer.create(new_layer_number, cfg.r_max, new_base_units, cfg.refill_up_to)
+        cycle.add_layer(layer)
 
         price = tick.ask if direction == Direction.LONG else tick.bid
         layer_entry = Entry.open(

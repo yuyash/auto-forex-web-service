@@ -229,6 +229,7 @@
       "sortNewest": "Newest",
       "filterActive": "Active",
       "filterCompleted": "Completed",
+      "positionIdFilter": "Filter by Position ID",
       "noCyclesFound": "No cycles found",
       "selectCycle": "Select a cycle from the list to view its details",
       "tradeCount": "{{count}} trades",
@@ -350,7 +351,8 @@
       "layer": "Layer",
       "retracement": "Retracement",
       "noTrades": "No trades recorded",
-      "description": "Description"
+      "description": "Description",
+      "cycleIdFilter": "Filter by Cycle ID"
     },
     "orders": {
       "title": "Orders",
@@ -405,6 +407,7 @@
         "byStatus": "By Status"
       },
       "totalPnl": "Total PnL",
+      "cycleIdFilter": "Filter by Cycle ID",
       "lifecycle": {
         "title": "Position Lifecycle",
         "viewLifecycle": "View position lifecycle",

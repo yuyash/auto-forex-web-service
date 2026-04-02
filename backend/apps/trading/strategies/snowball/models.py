@@ -620,7 +620,11 @@ class Layer:
 
     @property
     def needs_initial_rebuild(self) -> bool:
-        """True if this is L2+ and the initial entry needs to be (re)built."""
+        """True if this is L2+ and the initial entry needs to be (re)built.
+
+        Note: With layer removal on L2+ initial close, this should not
+        normally be True.  Kept for defensive checks only.
+        """
         return self.layer_number > 1 and self.initial_entry is None
 
     def has_open_entries(self) -> bool:
