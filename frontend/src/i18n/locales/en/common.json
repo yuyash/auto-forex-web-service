@@ -415,7 +415,17 @@
         "searchPlaceholder": "Enter position ID or prefix (e.g. first 8 chars)",
         "enterPositionId": "Enter a position ID to view its lifecycle.",
         "noLogs": "No lifecycle logs found for this position.",
-        "close": "Close"
+        "close": "Close",
+        "events": {
+          "OPENED": "Opened",
+          "CLOSED": "Closed",
+          "PARTIAL_CLOSE": "Partial Close"
+        },
+        "details": {
+          "exitFormula": "Exit Formula",
+          "closeReason": "Close Reason",
+          "description": "Description"
+        }
       }
     },
     "logs": {

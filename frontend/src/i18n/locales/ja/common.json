@@ -415,7 +415,17 @@
         "searchPlaceholder": "ポジションIDまたはプレフィックスを入力（例：先頭8文字）",
         "enterPositionId": "ポジションIDを入力してライフサイクルを表示します。",
         "noLogs": "このポジションのライフサイクルログが見つかりません。",
-        "close": "閉じる"
+        "close": "閉じる",
+        "events": {
+          "OPENED": "オープン",
+          "CLOSED": "クローズ",
+          "PARTIAL_CLOSE": "部分決済"
+        },
+        "details": {
+          "exitFormula": "決済価格計算式",
+          "closeReason": "決済理由",
+          "description": "説明"
+        }
       }
     },
     "logs": {
