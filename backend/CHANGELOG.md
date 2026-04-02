@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.11](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.22.10...backend-v1.22.11) (2026-04-02)
+
+
+### Bug Fixes
+
+* **trading:** fix position cache memory leak and add celery mem_limit ([#300](https://github.com/yuyash/auto-forex-web-service/issues/300)) ([9fabcc1](https://github.com/yuyash/auto-forex-web-service/commit/9fabcc1f2342b6a42b39b650f9d13716939fb2ef))
+
 ## [1.22.10](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.22.9...backend-v1.22.10) (2026-04-02)
 
 
