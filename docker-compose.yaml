@@ -128,7 +128,7 @@ services:
       - ./backend:/app
       - ./logs:/app/logs
       - ${HOME}/.aws:/root/.aws:ro
-    command: celery -A config worker -l info --concurrency=8 --max-tasks-per-child=10 -Q default,trading,market,backtest,system
+    command: celery -A config worker -l info --concurrency=8 -Q default,trading,market,backtest,system
     restart: unless-stopped
     networks:
       - forex_network
