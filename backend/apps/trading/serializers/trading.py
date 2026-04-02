@@ -56,6 +56,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "can_resume",
             "created_at",
             "updated_at",
+            "debug_options",
         ]
         read_only_fields = [
             "id",
@@ -177,6 +178,7 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             "sell_on_stop",
             "dry_run",
             "hedging_enabled",
+            "debug_options",
         ]
         extra_kwargs = {
             "name": {"required": False},
@@ -185,6 +187,7 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             "sell_on_stop": {"required": False},
             "dry_run": {"required": False},
             "hedging_enabled": {"required": False},
+            "debug_options": {"required": False},
         }
 
     def validate_config_id(self, value: StrategyConfiguration) -> StrategyConfiguration:

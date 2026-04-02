@@ -149,6 +149,11 @@ class BacktestTask(UUIDModel):
         blank=True,
         help_text="Full error traceback if task failed",
     )
+    debug_options = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Debug settings. Supported: {"tracemalloc": true}',
+    )
 
     class Meta:
         db_table = "backtest_tasks"

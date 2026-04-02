@@ -118,6 +118,13 @@ class TaskExecutor:
         )
         self._runtime_metrics = self._create_runtime_metrics_tracker()
 
+        # --- Debug: memory profiling ---
+        debug_opts = getattr(task, "debug_options", None) or {}
+        self._tracemalloc_enabled = bool(debug_opts.get("tracemalloc"))
+        self._tracemalloc_started = False
+        self._mem_snapshot_count = 0
+        self._last_rss_mb = 0
+
         logger.info(
             "TaskExecutor initialized: instrument=%s, pip_size=%s, initial_balance=%s",
             self.instrument,
@@ -380,6 +387,8 @@ class TaskExecutor:
 
     def execute(self) -> None:
         """Execute the task."""
+        if self._tracemalloc_enabled:
+            self._start_tracemalloc()
         try:
             loop = ExecutionLoopState(state=self._start_execution())
             self._run_tick_loop(loop)
@@ -388,6 +397,8 @@ class TaskExecutor:
             self._handle_execution_failure(e)
             raise
         finally:
+            if self._tracemalloc_started:
+                self._stop_tracemalloc()
             self._cleanup_execution()
 
     def prepare_state_for_execution(
@@ -728,6 +739,8 @@ class TaskExecutor:
         self._flush_metrics(loop.state)
         self._update_unrealized_pnl(loop.state)
         self._emit_batch_telemetry(loop)
+        if self._tracemalloc_enabled:
+            self._check_memory(loop)
 
     def _update_unrealized_pnl(self, state: ExecutionState) -> None:
         """Recalculate unrealized pnl for open positions from latest tick."""
@@ -763,6 +776,81 @@ class TaskExecutor:
             self.state_manager.heartbeat(
                 status_message=f"Processed {loop.state.ticks_processed} ticks"
             )
+
+    # ------------------------------------------------------------------
+    # Debug: memory profiling (opt-in via task.debug_options.tracemalloc)
+    # ------------------------------------------------------------------
+
+    def _start_tracemalloc(self) -> None:
+        import tracemalloc
+
+        if tracemalloc.is_tracing():
+            logger.info("[TRACEMALLOC] Already tracing, reusing")
+        else:
+            tracemalloc.start(25)
+        self._tracemalloc_started = True
+        logger.warning(
+            "[TRACEMALLOC] Enabled for task %s — expect CPU/memory overhead",
+            self.task.pk,
+        )
+
+    def _stop_tracemalloc(self) -> None:
+        import tracemalloc
+
+        if tracemalloc.is_tracing():
+            self._log_tracemalloc_snapshot("final")
+            tracemalloc.stop()
+        self._tracemalloc_started = False
+        logger.info("[TRACEMALLOC] Stopped for task %s", self.task.pk)
+
+    def _check_memory(self, loop: ExecutionLoopState) -> None:
+        """Log RSS and take tracemalloc snapshot when memory grows."""
+        import resource
+
+        rss_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        # macOS returns bytes, Linux returns KB
+        import sys
+
+        rss_mb = rss_kb // 1024 if sys.platform == "linux" else rss_kb // (1024 * 1024)
+
+        # Log RSS every 100 batches (~10k ticks)
+        if loop.batch_count % 100 == 0:
+            logger.info(
+                "[MEMORY] task=%s batch=%d ticks=%d rss=%dMB",
+                self.task.pk,
+                loop.batch_count,
+                loop.state.ticks_processed,
+                rss_mb,
+            )
+
+        # Take snapshot when RSS jumps by 500MB+ since last snapshot
+        if rss_mb - self._last_rss_mb >= 500:
+            self._mem_snapshot_count += 1
+            self._log_tracemalloc_snapshot(
+                f"rss_jump_{self._mem_snapshot_count}",
+            )
+            self._last_rss_mb = rss_mb
+
+    def _log_tracemalloc_snapshot(self, label: str) -> None:
+        """Take a tracemalloc snapshot and log the top allocations."""
+        import tracemalloc
+
+        if not tracemalloc.is_tracing():
+            return
+
+        snapshot = tracemalloc.take_snapshot()
+        stats = snapshot.statistics("lineno")
+
+        current, peak = tracemalloc.get_traced_memory()
+        logger.warning(
+            "[TRACEMALLOC:%s] task=%s current=%.1fMB peak=%.1fMB",
+            label,
+            self.task.pk,
+            current / (1024 * 1024),
+            peak / (1024 * 1024),
+        )
+        for i, stat in enumerate(stats[:20]):
+            logger.warning("[TRACEMALLOC:%s] #%d %s", label, i + 1, stat)
 
     def _finalize_execution(self, loop: ExecutionLoopState) -> None:
         """Run stop hook and persist final stop state."""

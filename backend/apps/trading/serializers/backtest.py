@@ -43,6 +43,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "error_message",
             "created_at",
             "updated_at",
+            "debug_options",
         ]
         read_only_fields = [
             "id",
@@ -95,6 +96,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "pip_size",
             "instrument",
             "hedging_enabled",
+            "debug_options",
         ]
         # Make fields optional for partial updates (PATCH)
         extra_kwargs = {
@@ -108,6 +110,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "pip_size": {"required": False},
             "instrument": {"required": False},
             "hedging_enabled": {"required": False},
+            "debug_options": {"required": False},
         }
 
     def validate_config(self, value: StrategyConfiguration) -> StrategyConfiguration:
