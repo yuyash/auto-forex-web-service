@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.9](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.22.8...backend-v1.22.9) (2026-04-02)
+
+
+### Bug Fixes
+
+* remove layer on initial close ([#294](https://github.com/yuyash/auto-forex-web-service/issues/294)) ([6b7c4a5](https://github.com/yuyash/auto-forex-web-service/commit/6b7c4a563a0105a1dedd39115e35ee3f220c97ce))
+
 ## [1.22.8](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.22.7...backend-v1.22.8) (2026-04-01)
 
 

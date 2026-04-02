@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.25.4...frontend-v1.25.5) (2026-04-02)
+
+
+### Bug Fixes
+
+* remove layer on initial close ([#294](https://github.com/yuyash/auto-forex-web-service/issues/294)) ([6b7c4a5](https://github.com/yuyash/auto-forex-web-service/commit/6b7c4a563a0105a1dedd39115e35ee3f220c97ce))
+
 ## [1.25.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.25.3...frontend-v1.25.4) (2026-04-01)
 
 
