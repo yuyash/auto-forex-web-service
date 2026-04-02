@@ -328,7 +328,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
           setRowsPerPage(parseInt(e.target.value, 10));
           setPage(0);
         }}
-        rowsPerPageOptions={[10, 50, 100, 200, 500, 1000]}
+        rowsPerPageOptions={[10, 25, 50, 100, 200, 500, 1000]}
       />
 
       <ColumnConfigDialog
