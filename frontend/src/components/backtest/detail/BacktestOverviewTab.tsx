@@ -82,6 +82,17 @@ export function BacktestOverviewTab({
                 />
               </Box>
             </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                {t('common:labels.taskId')}
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}
+              >
+                {taskId}
+              </Typography>
+            </Box>
             {task.execution_id && (
               <Box>
                 <Typography variant="caption" color="text.secondary">
@@ -236,8 +247,8 @@ export function BacktestOverviewTab({
                 </Typography>
                 <Typography variant="body1">
                   {summary.execution.currentBalanceDisplay != null &&
-                  summary.execution.displayCurrency &&
-                  summary.execution.displayCurrency !==
+                    summary.execution.displayCurrency &&
+                    summary.execution.displayCurrency !==
                     summary.execution.accountCurrency ? (
                     <>
                       {summary.execution.currentBalanceDisplay.toFixed(0)}{' '}
