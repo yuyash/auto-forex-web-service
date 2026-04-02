@@ -63,6 +63,7 @@ class SnowballStrategy(Strategy):
     ) -> None:
         super().__init__(instrument, pip_size, config)
         self._hedging_enabled: bool = True
+        self._close_order_violation: str | None = None
         logger.info(
             "Initialised Snowball engine: instrument=%s, pip_size=%s",
             instrument,
@@ -252,6 +253,37 @@ class SnowballStrategy(Strategy):
         events.extend(new_events)
         return events
 
+    def _fail_close_order_violation(
+        self,
+        ss: SnowballStrategyState,
+        tick: Tick,
+        cycle: SnowballCycle,
+    ) -> list[StrategyEvent]:
+        """Build a stop event when a close-order violation is detected.
+
+        This sets ``should_stop`` on the next StrategyResult so the executor
+        marks the task as FAILED instead of silently continuing.
+        """
+        open_entries = []
+        for layer in cycle.layers:
+            for e in layer.all_entries():
+                open_entries.append(
+                    f"L{e.layer_number}/R{e.retracement_count} "
+                    f"entry={e.entry_price:.3f} tp={e.close_price:.3f}"
+                )
+        initial = cycle.initial_entry
+        detail = (
+            f"cycle_id={cycle.cycle_id}, direction={cycle.direction.value}, "
+            f"initial_entry={initial.entry_price:.3f if initial else 'None'}, "
+            f"initial_tp={initial.close_price:.3f if initial else 'None'}, "
+            f"open_counters=[{', '.join(open_entries)}], "
+            f"tick_bid={tick.bid}, tick_ask={tick.ask}"
+        )
+        logger.error("Close order violation detail: %s", detail)
+        # Store the violation so on_tick returns should_stop=True
+        self._close_order_violation = detail
+        return []
+
     # ------------------------------------------------------------------
     # Per-cycle tick processing
     # ------------------------------------------------------------------
@@ -262,7 +294,13 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        """Check if the initial entry hit its TP target."""
+        """Check if the initial entry hit its TP target.
+
+        The initial entry (L1/R0) must only close when no counter entries
+        remain open.  If counter entries are still present, their TPs should
+        be reached first (they are closer to the current price).  Closing
+        L1/R0 while counters are open is a close-order violation.
+        """
         if cycle.completed:
             return []
         entry = cycle.initial_entry
@@ -279,6 +317,20 @@ class SnowballStrategy(Strategy):
 
         if not hit:
             return []
+
+        # Guard: do not close L1/R0 while counter entries are still open.
+        # Counter TPs should be reached before the initial entry TP.
+        has_open_counters = any(layer.has_open_entries() for layer in cycle.layers)
+        if has_open_counters:
+            logger.error(
+                "CLOSE ORDER VIOLATION: L1/R0 TP reached while counter entries "
+                "are still open — cycle_id=%d, direction=%s. "
+                "Failing task to prevent data corruption.",
+                cycle.cycle_id,
+                direction.value,
+            )
+            return self._fail_close_order_violation(ss, tick, cycle)
+
         return self._close_and_reenter(ss, tick, cycle)
 
     def _process_cycle_counter_closes(
@@ -948,6 +1000,17 @@ class SnowballStrategy(Strategy):
         # --- Per-cycle processing ---
         for cycle in list(ss.active_cycles()):
             events.extend(self._process_cycle_tp(ss, tick, cycle))
+
+            # Check if a close-order violation was detected
+            if self._close_order_violation:
+                state.strategy_state = ss.to_dict()
+                return StrategyResult(
+                    state=state,
+                    events=events,
+                    should_stop=True,
+                    stop_reason=f"Close order violation: {self._close_order_violation}",
+                )
+
             counter_close_events = self._process_cycle_counter_closes(ss, tick, cycle)
             events.extend(counter_close_events)
             # After a counter TP close the retracement count is reset to 0 and
