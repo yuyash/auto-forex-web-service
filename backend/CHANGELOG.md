@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.10](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.22.9...backend-v1.22.10) (2026-04-02)
+
+
+### Bug Fixes
+
+* **celery:** remove max-tasks-per-child and add shutdown logging ([#298](https://github.com/yuyash/auto-forex-web-service/issues/298)) ([22318b7](https://github.com/yuyash/auto-forex-web-service/commit/22318b7698ac4034c2a2112e29ceb5ce52e9649e))
+
 ## [1.22.9](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.22.8...backend-v1.22.9) (2026-04-02)
 
 
