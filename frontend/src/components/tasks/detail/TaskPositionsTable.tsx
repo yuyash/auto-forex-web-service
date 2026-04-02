@@ -1123,50 +1123,70 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
+            gap: 1,
+            flexWrap: 'wrap',
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="h6">{label}</Typography>
-            <Typography variant="body2" color="text.secondary">
-              ({total})
+            <Typography variant="h6">
+              {label} ({total})
             </Typography>
-          </Box>
-          {pnlLabel != null && pnlValue != null && (
-            <Typography
-              variant="subtitle1"
-              fontWeight="bold"
-              color={pnlValue >= 0 ? 'success.main' : 'error.main'}
-            >
-              {pnlLabel}: {pnlValue >= 0 ? '+' : ''}¥{pnlValue.toFixed(2)}
-            </Typography>
-          )}
-        </Box>
-        <Box
-          sx={{
-            mb: 1,
-            display: 'flex',
-            justifyContent: 'flex-end',
-            alignItems: 'center',
-            gap: 0.5,
-          }}
-        >
-          <Tooltip title={t('common:columnConfig.configureColumns')}>
-            <IconButton
+            <TextField
               size="small"
-              onClick={onConfigClick}
-              aria-label={t('common:columnConfig.configureColumns')}
-            >
-              <SettingsIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <TableSelectionToolbar
-            selectedCount={selObj.selectedRowIds.size}
-            onCopy={makeCopy(data, selObj, columns, extractors, ids)}
-            onSelectAll={() => selObj.selectAllOnPage(ids)}
-            onReset={selObj.resetSelection}
-            onReload={makeReload(key, refresh)}
-            isReloading={!!reloading[key]}
-          />
+              placeholder={t('tables.positions.cycleIdFilter')}
+              value={cycleIdFilter}
+              onChange={(e) => setCycleIdFilter(e.target.value)}
+              sx={{ width: 280 }}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: cycleIdFilter ? (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        onClick={() => setCycleIdFilter('')}
+                        edge="end"
+                      >
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : null,
+                },
+              }}
+            />
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {pnlLabel != null && pnlValue != null && (
+              <Typography
+                variant="subtitle1"
+                fontWeight="bold"
+                color={pnlValue >= 0 ? 'success.main' : 'error.main'}
+              >
+                {pnlLabel}: {pnlValue >= 0 ? '+' : ''}¥{pnlValue.toFixed(2)}
+              </Typography>
+            )}
+            <Tooltip title={t('common:columnConfig.configureColumns')}>
+              <IconButton
+                size="small"
+                onClick={onConfigClick}
+                aria-label={t('common:columnConfig.configureColumns')}
+              >
+                <SettingsIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <TableSelectionToolbar
+              selectedCount={selObj.selectedRowIds.size}
+              onCopy={makeCopy(data, selObj, columns, extractors, ids)}
+              onSelectAll={() => selObj.selectAllOnPage(ids)}
+              onReset={selObj.resetSelection}
+              onReload={makeReload(key, refresh)}
+              isReloading={!!reloading[key]}
+            />
+          </Box>
         </Box>
         <DataTable
           columns={columns}
@@ -1243,33 +1263,6 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             {t('tables.positions.viewMode.byStatus')}
           </ToggleButton>
         </ToggleButtonGroup>
-        <TextField
-          size="small"
-          placeholder={t('tables.positions.cycleIdFilter')}
-          value={cycleIdFilter}
-          onChange={(e) => setCycleIdFilter(e.target.value)}
-          sx={{ width: 280 }}
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
-                </InputAdornment>
-              ),
-              endAdornment: cycleIdFilter ? (
-                <InputAdornment position="end">
-                  <IconButton
-                    size="small"
-                    onClick={() => setCycleIdFilter('')}
-                    edge="end"
-                  >
-                    <ClearIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ) : null,
-            },
-          }}
-        />
         {viewMode !== 'byStatus' && (
           <Typography
             variant="subtitle1"
