@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.26.2...frontend-v1.26.3) (2026-04-03)
+
+
+### Bug Fixes
+
+* execution metrics snapshot ([#311](https://github.com/yuyash/auto-forex-web-service/issues/311)) ([ae3bfd0](https://github.com/yuyash/auto-forex-web-service/commit/ae3bfd0424340f00d87f166837af5e6582e7d3f6))
+
 ## [1.26.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.26.1...frontend-v1.26.2) (2026-04-03)
 
 
