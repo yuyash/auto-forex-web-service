@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.24.2...backend-v1.24.3) (2026-04-03)
+
+
+### Bug Fixes
+
+* **events:** restore actual_interval_pips in OpenPositionEvent.from_dict ([#313](https://github.com/yuyash/auto-forex-web-service/issues/313)) ([1edf654](https://github.com/yuyash/auto-forex-web-service/commit/1edf654165e2932fb67ab06a75d6c05fe0f5d6df))
+
 ## [1.24.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.24.1...backend-v1.24.2) (2026-04-03)
 
 
