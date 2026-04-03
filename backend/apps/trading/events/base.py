@@ -580,7 +580,7 @@ class OpenPositionEvent(StrategyEvent):
 
     @classmethod
     def from_dict(cls, event_dict: dict[str, Any]) -> "OpenPositionEvent":
-        return cls(
+        instance = cls(
             event_type=EventType.OPEN_POSITION,
             timestamp=parse_datetime(event_dict.get("timestamp")),
             layer_number=int(event_dict.get("layer_number", 1)),
@@ -595,6 +595,10 @@ class OpenPositionEvent(StrategyEvent):
             planned_exit_price_formula=event_dict.get("planned_exit_price_formula"),
             description=str(event_dict.get("description", "")),
         )
+        instance.actual_interval_pips = parse_optional_decimal(
+            event_dict.get("actual_interval_pips")
+        )
+        return instance
 
 
 @register_event(EventType.CLOSE_POSITION)
