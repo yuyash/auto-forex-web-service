@@ -389,6 +389,7 @@
       "pips": "Pips",
       "plannedExitPrice": "予定決済価格",
       "plannedExitPriceFormula": "決済価格計算式",
+      "adversePips": "逆行Pips",
       "realizedPnl": "実現損益",
       "unrealizedPnl": "未実現損益",
       "totalRealizedPnl": "合計実現損益",

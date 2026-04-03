@@ -111,6 +111,13 @@ class Position(models.Model):
         blank=True,
         help_text="Human-readable formula used to calculate planned_exit_price (e.g. '1.12345 + 0.00500')",
     )
+    adverse_pips = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        help_text="Pips distance from the previous entry when this position was opened",
+    )
     oanda_trade_id = models.CharField(
         max_length=64,
         null=True,

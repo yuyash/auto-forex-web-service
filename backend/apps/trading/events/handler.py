@@ -481,6 +481,12 @@ class EventHandler:
 
         cycle_id = self._resolve_cycle_id_for_open(event)
 
+        # Persist adverse pips (distance from previous entry) on the position
+        adverse = getattr(event, "actual_interval_pips", None)
+        if adverse is not None:
+            position.adverse_pips = adverse
+            position.save(update_fields=["adverse_pips"])
+
         self._cache_position(event.layer_number, position)
         trade = self._record_trade(
             direction=direction,

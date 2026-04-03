@@ -7386,6 +7386,12 @@
                         "type": "string",
                         "nullable": true
                     },
+                    "adverse_pips": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,8}(?:\\.\\d{0,4})?$",
+                        "nullable": true
+                    },
                     "trade_ids": {
                         "type": "array",
                         "items": {
