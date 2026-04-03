@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.24.0...backend-v1.24.1) (2026-04-03)
+
+
+### Bug Fixes
+
+* table page sizes ([#309](https://github.com/yuyash/auto-forex-web-service/issues/309)) ([a3bc273](https://github.com/yuyash/auto-forex-web-service/commit/a3bc27389f71b0a86f0d9dae3220432abf221842))
+
 ## [1.24.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.23.1...backend-v1.24.0) (2026-04-02)
 
 
