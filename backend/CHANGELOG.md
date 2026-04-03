@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.24.3...backend-v1.24.4) (2026-04-03)
+
+
+### Bug Fixes
+
+* adverse pips from dict ([#315](https://github.com/yuyash/auto-forex-web-service/issues/315)) ([833eaf5](https://github.com/yuyash/auto-forex-web-service/commit/833eaf5d528ecdb791a7483b312a4cf3736c5829))
+
 ## [1.24.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.24.2...backend-v1.24.3) (2026-04-03)
 
 
