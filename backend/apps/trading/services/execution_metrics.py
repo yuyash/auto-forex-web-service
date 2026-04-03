@@ -86,11 +86,17 @@ def build_execution_metrics(
 
     metrics: dict[str, Any] = {
         "total_pnl": total_pnl,
+        "realized_pnl": summary.pnl.realized,
         "unrealized_pnl": summary.pnl.unrealized,
         "total_trades": total_trades,
         "winning_trades": winning_trades,
         "losing_trades": losing_trades,
         "win_rate": win_rate.quantize(Decimal("0.0001")),
+        "current_balance": summary.execution.current_balance,
+        "initial_balance": str(getattr(task, "initial_balance", None) or ""),
+        "open_positions": summary.counts.open_positions,
+        "closed_positions": summary.counts.closed_positions,
+        "ticks_processed": summary.execution.ticks_processed,
     }
     if total_return is not None:
         metrics["total_return"] = total_return
