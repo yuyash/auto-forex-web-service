@@ -100,10 +100,12 @@
   },
   "labels": {
     "name": "名前",
+    "taskId": "タスクID",
     "description": "説明",
     "instrument": "通貨ペア",
     "pipSize": "Pipサイズ",
-    "marginRatio": "マージン比率",
+    "marginRatio": "証拠金維持率",
+    "currentAtr": "ATR",
     "status": "ステータス",
     "configuration": "設定構成",
     "strategyType": "戦略タイプ",

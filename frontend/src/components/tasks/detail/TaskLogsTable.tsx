@@ -399,7 +399,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
           setRowsPerPage(parseInt(e.target.value, 10));
           setPage(0);
         }}
-        rowsPerPageOptions={[50, 100, 200, 500, 1000]}
+        rowsPerPageOptions={[25, 50, 100, 200, 500, 1000]}
       />
 
       <ColumnConfigDialog

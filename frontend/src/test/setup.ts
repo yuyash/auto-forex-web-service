@@ -1,6 +1,41 @@
 import '@testing-library/jest-dom/vitest';
 import '../i18n/config';
 
+// Node.js 22+ exposes a built-in localStorage that lacks standard Storage
+// methods (clear, key, length, etc.), which shadows jsdom's implementation.
+// Replace it with a spec-compliant in-memory Storage polyfill.
+if (
+  typeof localStorage !== 'undefined' &&
+  typeof localStorage.clear !== 'function'
+) {
+  const store = new Map<string, string>();
+  const storage: Storage = {
+    get length() {
+      return store.size;
+    },
+    clear() {
+      store.clear();
+    },
+    getItem(key: string) {
+      return store.get(key) ?? null;
+    },
+    key(index: number) {
+      return [...store.keys()][index] ?? null;
+    },
+    removeItem(key: string) {
+      store.delete(key);
+    },
+    setItem(key: string, value: string) {
+      store.set(key, String(value));
+    },
+  };
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: storage,
+    writable: true,
+    configurable: true,
+  });
+}
+
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,

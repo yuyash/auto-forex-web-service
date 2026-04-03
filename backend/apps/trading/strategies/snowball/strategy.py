@@ -464,6 +464,31 @@ class SnowballStrategy(Strategy):
         if layer.needs_new_layer:
             if cycle.layer_count >= cfg.f_max:
                 return []
+
+            # Gate: cycle initial entry must be losing
+            initial = cycle.initial_entry
+            if not initial:
+                return []
+            if initial.unrealised_loss_pips(tick.mid, self.pip_size) <= 0:
+                return []
+
+            # Gate: price must have moved adversely from the highest
+            # occupied slot in the current layer (same check as normal
+            # counter adds).  Without this, a new layer would be created
+            # immediately after a sealed slot is detected, regardless of
+            # price movement.
+            direction = cycle.direction
+            highest = layer.highest_occupied_slot()
+            if highest is not None and highest.entry is not None:
+                ref_price = highest.entry.entry_price
+                if direction == Direction.LONG:
+                    adverse = (ref_price - tick.mid) / self.pip_size
+                else:
+                    adverse = (tick.mid - ref_price) / self.pip_size
+                interval = counter_interval_pips(highest.index + 1, cfg)
+                if adverse < interval:
+                    return []
+
             return self._open_layer_initial(ss, tick, cycle)
 
         # Find the next available slot

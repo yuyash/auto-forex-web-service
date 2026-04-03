@@ -82,6 +82,17 @@ export function BacktestOverviewTab({
                 />
               </Box>
             </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                {t('common:labels.taskId')}
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}
+              >
+                {taskId}
+              </Typography>
+            </Box>
             {task.execution_id && (
               <Box>
                 <Typography variant="caption" color="text.secondary">
@@ -95,19 +106,21 @@ export function BacktestOverviewTab({
                 </Typography>
               </Box>
             )}
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('common:debug.title')}
-              </Typography>
-              <Box sx={{ mt: 0.5 }}>
-                <Chip
-                  size="small"
-                  label={t('common:debug.tracemalloc')}
-                  color={tracemallocEnabled ? 'warning' : 'default'}
-                  variant={tracemallocEnabled ? 'filled' : 'outlined'}
-                />
+            {tracemallocEnabled && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  {t('common:debug.title')}
+                </Typography>
+                <Box sx={{ mt: 0.5 }}>
+                  <Chip
+                    size="small"
+                    label={t('common:debug.tracemalloc')}
+                    color="warning"
+                    variant="filled"
+                  />
+                </Box>
               </Box>
-            </Box>
+            )}
           </Box>
         </Grid>
 
@@ -234,8 +247,8 @@ export function BacktestOverviewTab({
                 </Typography>
                 <Typography variant="body1">
                   {summary.execution.currentBalanceDisplay != null &&
-                  summary.execution.displayCurrency &&
-                  summary.execution.displayCurrency !==
+                    summary.execution.displayCurrency &&
+                    summary.execution.displayCurrency !==
                     summary.execution.accountCurrency ? (
                     <>
                       {summary.execution.currentBalanceDisplay.toFixed(0)}{' '}
@@ -300,6 +313,16 @@ export function BacktestOverviewTab({
                 </Typography>
                 <Typography variant="body1">
                   {(summary.execution.marginRatio * 100).toFixed(1)}%
+                </Typography>
+              </Box>
+            )}
+            {summary.execution.currentAtr != null && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  {t('common:labels.currentAtr')}
+                </Typography>
+                <Typography variant="body1">
+                  {summary.execution.currentAtr.toFixed(2)}
                 </Typography>
               </Box>
             )}
