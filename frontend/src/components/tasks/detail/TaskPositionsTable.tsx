@@ -467,6 +467,15 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     minWidth: 150,
     render: (r) => r.planned_exit_price_formula ?? '-',
   };
+  const adversePipsCol: Column<TaskPosition> = {
+    id: 'adverse_pips',
+    label: t('tables.positions.adversePips'),
+    width: 100,
+    minWidth: 70,
+    align: 'right',
+    render: (r) =>
+      r.adverse_pips != null ? parseFloat(r.adverse_pips).toFixed(1) : '-',
+  };
 
   /** Pips column — uses row direction for calculation when knownDir is not provided. */
   const pipsCol = (knownDir?: 'long' | 'short'): Column<TaskPosition> => ({
@@ -621,6 +630,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     exitPriceCol,
     plannedExitPriceCol,
     plannedExitFormulaCol,
+    adversePipsCol,
     pipsCol(dir),
     realizedPnlCol(dir),
   ];
@@ -635,6 +645,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     entryPriceCol,
     plannedExitPriceCol,
     plannedExitFormulaCol,
+    adversePipsCol,
     pipsCol(dir),
     unrealizedPnlCol(dir),
   ];
@@ -652,6 +663,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     exitPriceCol,
     plannedExitPriceCol,
     plannedExitFormulaCol,
+    adversePipsCol,
     pipsCol(dir),
     pnlCol(dir),
   ];
@@ -670,6 +682,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     exitPriceCol,
     plannedExitPriceCol,
     plannedExitFormulaCol,
+    adversePipsCol,
     pipsCol(),
     pnlCol(),
   ];

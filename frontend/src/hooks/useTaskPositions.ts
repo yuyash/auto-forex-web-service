@@ -36,6 +36,7 @@ export interface TaskPosition {
   exit_time?: string | null;
   planned_exit_price?: string | null;
   planned_exit_price_formula?: string | null;
+  adverse_pips?: string | null;
   unrealized_pnl?: string | null;
   is_open: boolean;
   layer_index?: number | null;
