@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.26.1...frontend-v1.26.2) (2026-04-03)
+
+
+### Bug Fixes
+
+* table page sizes ([#309](https://github.com/yuyash/auto-forex-web-service/issues/309)) ([a3bc273](https://github.com/yuyash/auto-forex-web-service/commit/a3bc27389f71b0a86f0d9dae3220432abf221842))
+
 ## [1.26.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.26.0...frontend-v1.26.1) (2026-04-02)
 
 
