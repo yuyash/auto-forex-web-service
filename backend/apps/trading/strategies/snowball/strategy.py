@@ -658,6 +658,14 @@ class SnowballStrategy(Strategy):
         layer_entry.expected_tp_pips = tp_pips
         layer_entry.validation_status = "pass"
 
+        # Compute adverse pips from the previous layer's highest occupied slot
+        if prev_layer_obj is not None:
+            highest = prev_layer_obj.highest_occupied_slot()
+            if highest is not None and highest.entry is not None:
+                layer_entry.actual_interval_pips = (
+                    abs(highest.entry.entry_price - price) / self.pip_size
+                )
+
         logger.info(
             "Layer initial L%d/R0 in cycle %d, TP=%.3f",
             layer.layer_number,
