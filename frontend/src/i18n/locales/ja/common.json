@@ -391,6 +391,7 @@
       "plannedExitPriceFormula": "決済価格計算式",
       "adversePips": "逆行Pips",
       "closeReason": "決済理由",
+      "closeReasonNormal": "通常",
       "realizedPnl": "実現損益",
       "unrealizedPnl": "未実現損益",
       "totalRealizedPnl": "合計実現損益",

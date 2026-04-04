@@ -157,7 +157,11 @@ class PositionSerializer(serializers.Serializer):
     )
 
     def get_close_reason(self, obj: object) -> str | None:
-        """Return close reason derived from the closing trade's execution_method."""
+        """Return close reason derived from the closing trade's execution_method.
+
+        Returns ``None`` for open positions, a protection method name for
+        protection closes, and ``"normal"`` for regular TP/manual closes.
+        """
         if isinstance(obj, dict):
             return cast(dict[str, Any], obj).get("close_reason")
         if not hasattr(obj, "is_open"):
@@ -175,8 +179,8 @@ class PositionSerializer(serializers.Serializer):
                 .values_list("execution_method", flat=True)
                 .first()
             )
-            return close_trade
-        return None
+            return close_trade if close_trade else "normal"
+        return "normal"
 
     def get_trade_ids(self, obj: object) -> list[str]:
         """Return the IDs of trades linked to this position."""

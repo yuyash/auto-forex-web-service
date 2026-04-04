@@ -480,10 +480,24 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   const closeReasonCol: Column<TaskPosition> = {
     id: 'close_reason',
     label: t('tables.positions.closeReason'),
-    width: 110,
-    minWidth: 80,
+    width: 120,
+    minWidth: 90,
     render: (r) => {
       if (!r.close_reason) return '-';
+      if (r.close_reason === 'normal') {
+        return (
+          <Chip
+            label={t('tables.positions.closeReasonNormal')}
+            size="small"
+            color="success"
+            variant="outlined"
+            sx={{
+              height: 22,
+              '& .MuiChip-label': { px: 0.75, fontSize: '0.75rem' },
+            }}
+          />
+        );
+      }
       return (
         <Chip
           label={`⚠ ${r.close_reason.replace(/_/g, ' ')}`}

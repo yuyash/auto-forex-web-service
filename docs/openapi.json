@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.25.0",
+        "version": "1.26.0",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -7395,7 +7395,7 @@
                     "close_reason": {
                         "type": "string",
                         "nullable": true,
-                        "description": "Return close reason derived from the closing trade's execution_method.",
+                        "description": "Return close reason derived from the closing trade's execution_method.\n\nReturns ``None`` for open positions, a protection method name for\nprotection closes, and ``\"normal\"`` for regular TP/manual closes.",
                         "readOnly": true
                     },
                     "trade_ids": {

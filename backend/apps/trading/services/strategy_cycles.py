@@ -249,6 +249,17 @@ def _serialize_trade(
         if metrics.get("margin_ratio") is not None:
             margin_ratio = f"{float(metrics['margin_ratio']):.3f}"
 
+    # For protection trades, prefer the ratio from the description (captured
+    # at the moment the protection fired) over the metrics bucket (which
+    # reflects the post-close state at the end of the tick).
+    desc = t.get("description") or ""
+    if desc.startswith("[PROTECTION]") and "ratio=" in desc:
+        import re
+
+        m = re.search(r"ratio=([\d.]+)%", desc)
+        if m:
+            margin_ratio = f"{float(m.group(1)) / 100:.3f}"
+
     return {
         "id": str(t["id"]),
         "direction": direction,
