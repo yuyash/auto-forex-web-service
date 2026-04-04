@@ -119,6 +119,16 @@ vi.mock('../../../src/hooks/useBacktestTaskMutations', () => ({
 }));
 
 // Mock child components to isolate page-level behavior
+vi.mock('../../../src/hooks/useTaskMetrics', () => ({
+  useTaskMetrics: vi.fn(() => ({
+    data: [],
+    latest: null,
+    isLoading: false,
+    error: null,
+    refresh: vi.fn(),
+  })),
+}));
+
 vi.mock('../../../src/contexts/AuthContext', () => ({
   useAuth: vi.fn(() => ({
     user: { timezone: 'UTC' },

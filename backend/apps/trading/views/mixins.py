@@ -538,13 +538,15 @@ class TaskSubResourceMixin:
             default_page_size=TradePositionPagination.page_size,
             max_page_size=TradePositionPagination.max_page_size,
         )
-        queryset = Position.objects.filter(
-            task_type=self.task_type_label,
-            task_id=task.pk,
-            execution_id=query.execution.execution_id,
-        ).order_by("-entry_time")
-        if query.include_trade_ids:
-            queryset = queryset.prefetch_related("trades")
+        queryset = (
+            Position.objects.filter(
+                task_type=self.task_type_label,
+                task_id=task.pk,
+                execution_id=query.execution.execution_id,
+            )
+            .prefetch_related("trades")
+            .order_by("-entry_time")
+        )
 
         if query.position_status == "open":
             queryset = queryset.filter(is_open=True)

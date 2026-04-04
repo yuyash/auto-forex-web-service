@@ -269,10 +269,12 @@ class SnowballStrategy(Strategy):
                     f"entry={e.entry_price:.3f} tp={e.close_price:.3f}"
                 )
         initial = cycle.initial_entry
+        initial_price = f"{initial.entry_price:.3f}" if initial else "None"
+        initial_tp = f"{initial.close_price:.3f}" if initial else "None"
         detail = (
             f"cycle_id={cycle.cycle_id}, direction={cycle.direction.value}, "
-            f"initial_entry={initial.entry_price:.3f if initial else 'None'}, "
-            f"initial_tp={initial.close_price:.3f if initial else 'None'}, "
+            f"initial_entry={initial_price}, "
+            f"initial_tp={initial_tp}, "
             f"open_counters=[{', '.join(open_entries)}], "
             f"tick_bid={tick.bid}, tick_ask={tick.ask}"
         )
@@ -902,6 +904,11 @@ class SnowballStrategy(Strategy):
             cycle.remove_entry(entry.entry_id)
             closed_count += 1
 
+            # Recalculate close prices for remaining counter entries
+            # after shrink changes the weighted average composition.
+            if cfg.counter_tp_mode == "weighted_avg":
+                self._recalculate_counter_tps(cycle)
+
             # Recalculate margin ratio after close
             # Approximate: each close reduces required margin
             from apps.trading.utils import quote_to_account_rate
@@ -1028,6 +1035,47 @@ class SnowballStrategy(Strategy):
             new_initial.retracement_count,
         )
         cycle.initial_entry = new_initial
+
+    def _recalculate_counter_tps(self, cycle: SnowballCycle) -> None:
+        """Recalculate close_price for all counter entries in a cycle.
+
+        After shrink removes entries, the weighted-average TP for remaining
+        entries changes.  Without recalculation, stale TPs can cause
+        close-order violations (L1/R0 TP reached before counter TPs).
+        """
+        for layer in cycle.layers:
+            ref = layer.initial_entry if layer.layer_number > 1 else cycle.initial_entry
+            occupied = layer.occupied_slots()
+            if not occupied:
+                continue
+            # Recalculate each occupied slot's close_price
+            for slot in occupied:
+                entry = slot.entry
+                if entry is None or entry.is_hedge:
+                    continue
+                # Compute weighted average of all entries in this layer
+                total_cost = Decimal("0")
+                total_units = 0
+                for s in layer.slots:
+                    if s.entry is not None and not s.entry.is_hedge:
+                        total_cost += s.entry.entry_price * Decimal(str(s.entry.units))
+                        total_units += s.entry.units
+                if ref is not None:
+                    ref_units = abs(ref.units)
+                    if ref_units > 0:
+                        total_cost += ref.entry_price * Decimal(str(ref_units))
+                        total_units += ref_units
+                if total_units > 0:
+                    new_tp = total_cost / Decimal(str(total_units))
+                    if new_tp != entry.close_price:
+                        logger.debug(
+                            "Shrink TP recalc: L%d/R%d %s → %s",
+                            entry.layer_number,
+                            entry.retracement_count,
+                            entry.close_price,
+                            new_tp,
+                        )
+                        entry.close_price = new_tp
 
     # ------------------------------------------------------------------
     # Core tick processing

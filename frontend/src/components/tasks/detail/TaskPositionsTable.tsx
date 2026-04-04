@@ -477,6 +477,28 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       r.adverse_pips != null ? parseFloat(r.adverse_pips).toFixed(1) : '-',
   };
 
+  const closeReasonCol: Column<TaskPosition> = {
+    id: 'close_reason',
+    label: t('tables.positions.closeReason'),
+    width: 110,
+    minWidth: 80,
+    render: (r) => {
+      if (!r.close_reason) return '-';
+      return (
+        <Chip
+          label={`⚠ ${r.close_reason.replace(/_/g, ' ')}`}
+          size="small"
+          color="warning"
+          variant="filled"
+          sx={{
+            height: 22,
+            '& .MuiChip-label': { px: 0.75, fontSize: '0.75rem' },
+          }}
+        />
+      );
+    },
+  };
+
   /** Pips column — uses row direction for calculation when knownDir is not provided. */
   const pipsCol = (knownDir?: 'long' | 'short'): Column<TaskPosition> => ({
     id: 'pips',
@@ -633,6 +655,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     plannedExitFormulaCol,
     pipsCol(dir),
     realizedPnlCol(dir),
+    closeReasonCol,
   ];
   /** byStatus: open positions (direction known) */
   const openCols = (dir: 'long' | 'short'): Column<TaskPosition>[] => [
@@ -666,6 +689,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     plannedExitFormulaCol,
     pipsCol(dir),
     pnlCol(dir),
+    closeReasonCol,
   ];
   /** all: every position */
   const allCols = (): Column<TaskPosition>[] => [
@@ -685,6 +709,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     plannedExitFormulaCol,
     pipsCol(),
     pnlCol(),
+    closeReasonCol,
   ];
 
   // --- Column config ---
@@ -809,6 +834,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       }
       return '-';
     },
+    close_reason: (r) => r.close_reason ?? '-',
   });
 
   const openExtractors = (
@@ -899,6 +925,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       }
       return '-';
     },
+    close_reason: (r) => r.close_reason ?? '-',
   };
 
   // --- Render a pair of Long/Short tables (used by byStatus mode) ---

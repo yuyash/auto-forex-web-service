@@ -144,8 +144,39 @@ class PositionSerializer(serializers.Serializer):
     adverse_pips = serializers.DecimalField(
         max_digits=12, decimal_places=4, required=False, allow_null=True
     )
+    close_reason = serializers.SerializerMethodField()
     trade_ids = serializers.SerializerMethodField()
     updated_at = serializers.DateTimeField(required=False, allow_null=True)
+
+    _PROTECTION_METHODS = frozenset(
+        {
+            "volatility_lock",
+            "margin_protection",
+            "shrink",
+        }
+    )
+
+    def get_close_reason(self, obj: object) -> str | None:
+        """Return close reason derived from the closing trade's execution_method."""
+        if isinstance(obj, dict):
+            return cast(dict[str, Any], obj).get("close_reason")
+        if not hasattr(obj, "is_open"):
+            return None
+        if getattr(obj, "is_open", True):
+            return None
+        # Use prefetched trades if available
+        if hasattr(obj, "prefetched_close_reason"):
+            return obj.prefetched_close_reason  # type: ignore[return-value]
+        if hasattr(obj, "trades"):
+            close_trade = (
+                obj.trades.filter(  # type: ignore[union-attr]
+                    execution_method__in=self._PROTECTION_METHODS
+                )
+                .values_list("execution_method", flat=True)
+                .first()
+            )
+            return close_trade
+        return None
 
     def get_trade_ids(self, obj: object) -> list[str]:
         """Return the IDs of trades linked to this position."""

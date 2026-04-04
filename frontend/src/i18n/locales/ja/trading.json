@@ -17,7 +17,8 @@
     "trades": "取引",
     "orders": "OANDA注文",
     "logs": "ログ",
-    "replay": "リプレイ"
+    "replay": "リプレイ",
+    "metrics": "メトリクス"
   },
   "filters": {
     "searchTasks": "タスクを検索...",

@@ -104,7 +104,7 @@
     "description": "Description",
     "instrument": "Instrument",
     "pipSize": "Pip Size",
-    "marginRatio": "Margin Ratio",
+    "marginRatio": "Margin Closeout Ratio",
     "currentAtr": "ATR",
     "status": "Status",
     "configuration": "Configuration",
@@ -390,6 +390,7 @@
       "plannedExitPrice": "Planned Exit Price",
       "plannedExitPriceFormula": "Exit Price Formula",
       "adversePips": "Adverse Pips",
+      "closeReason": "Close Reason",
       "realizedPnl": "Realized PnL",
       "unrealizedPnl": "Unrealized PnL",
       "totalRealizedPnl": "Total Realized PnL",
@@ -492,5 +493,22 @@
     "checkingConnection": "Checking connection...",
     "never": "Never",
     "lastChecked": "Last checked:"
+  },
+  "metrics": {
+    "title": "Metrics",
+    "noData": "No metrics data available for this execution.",
+    "current_balance": "Balance",
+    "total_pnl": "Total PnL",
+    "realized_pnl": "Realized PnL",
+    "unrealized_pnl": "Unrealized PnL",
+    "total_return": "Total Return",
+    "margin_ratio": "Margin Closeout Ratio",
+    "open_positions": "Open Positions",
+    "closed_positions": "Closed Positions",
+    "total_trades": "Total Trades",
+    "win_rate": "Win Rate",
+    "winning_trades": "Winning Trades",
+    "losing_trades": "Losing Trades",
+    "ticks_processed": "Ticks Processed"
   }
 }

@@ -127,7 +127,29 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       render: (row) => {
         const method =
           row.execution_method_display || row.execution_method || '-';
-        return <Typography variant="body2">{method}</Typography>;
+        const isProtection =
+          row.execution_method === 'shrink' ||
+          row.execution_method === 'margin_protection' ||
+          row.execution_method === 'volatility_lock' ||
+          (row.description?.startsWith('[PROTECTION]') ?? false);
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="body2">{method}</Typography>
+            {isProtection && (
+              <Chip
+                label="⚠"
+                size="small"
+                color="warning"
+                variant="filled"
+                sx={{
+                  minWidth: 0,
+                  height: 20,
+                  '& .MuiChip-label': { px: 0.5, fontSize: '0.7rem' },
+                }}
+              />
+            )}
+          </Box>
+        );
       },
     },
     {

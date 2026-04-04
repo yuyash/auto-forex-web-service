@@ -41,6 +41,7 @@ export interface TaskPosition {
   is_open: boolean;
   layer_index?: number | null;
   retracement_count?: number | null;
+  close_reason?: string | null;
   trade_ids?: string[];
   updated_at?: string | null;
 }

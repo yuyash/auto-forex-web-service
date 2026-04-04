@@ -58,7 +58,9 @@ import { useOptimisticTaskStatus } from '../../hooks/useOptimisticTaskStatus';
 import { TaskDetailHeader } from '../tasks/detail/TaskDetailHeader';
 import { TaskDetailTabs } from '../tasks/detail/TaskDetailTabs';
 import { TaskStrategyTab } from '../tasks/detail/strategy/TaskStrategyTab';
+import { TaskMetricsTab } from '../tasks/detail/TaskMetricsTab';
 import { BacktestOverviewTab } from './detail/BacktestOverviewTab';
+import { useTaskMetrics } from '../../hooks/useTaskMetrics';
 
 export const BacktestTaskDetail: React.FC = () => {
   const { t } = useTranslation(['backtest', 'common']);
@@ -90,6 +92,7 @@ export const BacktestTaskDetail: React.FC = () => {
     { id: 'trades', label: t('backtest:tabs.trades'), visible: true },
     { id: 'orders', label: t('backtest:tabs.orders'), visible: true },
     { id: 'logs', label: t('backtest:tabs.logs'), visible: true },
+    { id: 'metrics', label: t('backtest:tabs.metrics'), visible: true },
   ];
   const {
     tabs: allTabs,
@@ -149,6 +152,16 @@ export const BacktestTaskDetail: React.FC = () => {
   );
 
   const { summary: s } = overviewSummary;
+
+  const metricsResult = useTaskMetrics({
+    taskId,
+    taskType: TaskType.BACKTEST,
+    executionRunId: effectiveExecutionId,
+    enabled: !!taskId,
+    pollingInterval:
+      !isViewingHistorical && shouldPollTaskStatus(currentStatus) ? 30000 : 0,
+  });
+
   const polledTick = s.tick.timestamp
     ? {
         timestamp: s.tick.timestamp,
@@ -347,6 +360,7 @@ export const BacktestTaskDetail: React.FC = () => {
               currentStatus={currentStatus}
               strategies={strategies}
               pnlCurrency={pnlCurrency}
+              latestMetrics={metricsResult.latest}
               onOpenConfiguration={() =>
                 navigate(`/configurations/${detailTask.config_id}`)
               }
@@ -434,6 +448,20 @@ export const BacktestTaskDetail: React.FC = () => {
               taskType={TaskType.BACKTEST}
               executionRunId={activeExecutionId}
               enableRealTimeUpdates={enableRealtime}
+            />
+          </LazyTabPanel>
+        )}
+
+        {/* Metrics Tab */}
+        {visibleTabIds.includes('metrics') && (
+          <LazyTabPanel
+            value={activeTabIndex}
+            index={visibleTabIds.indexOf('metrics')}
+          >
+            <TaskMetricsTab
+              data={metricsResult.data}
+              isLoading={metricsResult.isLoading}
+              error={metricsResult.error}
             />
           </LazyTabPanel>
         )}
