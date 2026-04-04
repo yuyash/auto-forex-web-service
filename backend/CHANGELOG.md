@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.26.0...backend-v1.26.1) (2026-04-04)
+
+
+### Bug Fixes
+
+* protection labels and margin ([#321](https://github.com/yuyash/auto-forex-web-service/issues/321)) ([47cc7cb](https://github.com/yuyash/auto-forex-web-service/commit/47cc7cb395aef6f3a8cb772fc505d5004a588473))
+
 ## [1.26.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.25.0...backend-v1.26.0) (2026-04-04)
 
 
