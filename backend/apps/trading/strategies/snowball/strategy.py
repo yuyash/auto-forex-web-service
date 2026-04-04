@@ -849,8 +849,9 @@ class SnowballStrategy(Strategy):
         """Shrink v2: close positions from oldest/smallest until margin ratio drops below m1_th.
 
         Close order per cycle:
-        - L1 lowest R first, but skip the highest R in each layer
-        - If a layer has only 1 position, close it
+        - Slot entries first: lowest layer, lowest R first
+        - Then layer-initial entries (L2+/R0) from lowest layer upward
+        - Finally L1/R0 (cycle initial)
         - When L1/R0 is closed, move cycle initial_entry to the next closest open entry
         - Alternate between LONG and SHORT cycles, starting with the higher-impact one
         - If all positions are closed and ratio is still above m1_th, fail the task
@@ -964,44 +965,29 @@ class SnowballStrategy(Strategy):
     def _find_shrink_candidate_in_cycle(self, cycle: SnowballCycle) -> Entry | None:
         """Find the next entry to close in a cycle for shrink.
 
-        Priority: preserve the highest R in each layer as long as possible.
+        Close order: oldest/smallest first.
 
-        1. Scan layers bottom-up. If a layer has 2+ positions, return the
-           lowest R (the highest R is preserved).
-        2. If a layer has exactly 1 position, check whether any layer above
-           it still has 2+ positions. If yes, skip this layer (the upper
-           layer will yield a candidate first). If no (all layers above
-           also have ≤1), this single position must be closed — return it.
-        3. If no slot entries remain, return cycle.initial_entry.
+        1. Scan layers from L1 upward.  Within each layer, return the
+           lowest occupied R slot first.
+        2. After all slot entries are exhausted, close layer-initial
+           entries (L2+/R0) from the lowest layer upward.
+        3. Finally, return cycle.initial_entry (L1/R0).
         """
         layers = cycle.layers
 
-        for i, layer in enumerate(layers):
+        # Phase 1: slot entries — lowest layer, lowest R first
+        for layer in layers:
             occupied = layer.occupied_slots()
-            if not occupied:
-                continue
-
-            if len(occupied) >= 2:
-                # Close the lowest R; preserve the highest R
+            if occupied:
                 lowest = min(occupied, key=lambda s: s.index)
                 return lowest.entry
 
-            # Exactly 1 position in this layer.
-            # Check if any layer above has 2+ occupied slots.
-            has_multi_above = False
-            for upper_layer in layers[i + 1 :]:
-                if len(upper_layer.occupied_slots()) >= 2:
-                    has_multi_above = True
-                    break
+        # Phase 2: layer-initial entries (L2+) — lowest layer first
+        for layer in layers:
+            if layer.layer_number > 1 and layer.initial_entry is not None:
+                return layer.initial_entry
 
-            if has_multi_above:
-                # Skip — upper layers still have positions to trim first
-                continue
-
-            # All layers above also have ≤1 position. Close this one.
-            return occupied[0].entry
-
-        # No slot entries left — check cycle initial_entry
+        # Phase 3: cycle initial entry (L1/R0)
         if cycle.initial_entry is not None:
             return cycle.initial_entry
 
@@ -1039,6 +1025,22 @@ class SnowballStrategy(Strategy):
             new_initial.layer_number,
             new_initial.retracement_count,
         )
+
+        # Remove the new initial from its layer position so it is only
+        # tracked as cycle.initial_entry and not double-counted as a
+        # counter entry.
+        for layer in cycle.layers:
+            if (
+                layer.initial_entry is not None
+                and layer.initial_entry.entry_id == new_initial.entry_id
+            ):
+                layer.initial_entry = None
+                break
+            for slot in layer.slots:
+                if slot.entry is not None and slot.entry.entry_id == new_initial.entry_id:
+                    slot.entry = None
+                    break
+
         cycle.initial_entry = new_initial
 
     def _recalculate_counter_tps(self, cycle: SnowballCycle) -> None:
