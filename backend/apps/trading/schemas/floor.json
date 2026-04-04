@@ -218,7 +218,7 @@
     "margin_cut_start_ratio": {
       "type": "number",
       "title": "Margin Cut Start Ratio",
-      "description": "Start forced position reduction when margin ratio reaches this level (e.g. 0.6 = 60%).",
+      "description": "Start forced position reduction when margin closeout ratio reaches this level (e.g. 0.6 = 60%).",
       "default": 0.6,
       "dependsOn": {
         "field": "margin_protection_enabled",
@@ -229,7 +229,7 @@
     "margin_cut_target_ratio": {
       "type": "number",
       "title": "Margin Cut Target Ratio",
-      "description": "Reduce positions until margin ratio drops to this level (e.g. 0.5 = 50%).",
+      "description": "Reduce positions until margin closeout ratio drops to this level (e.g. 0.5 = 50%).",
       "default": 0.5,
       "dependsOn": {
         "field": "margin_protection_enabled",
