@@ -172,6 +172,7 @@ class PositionSerializer(serializers.Serializer):
         if hasattr(obj, "prefetched_close_reason"):
             return obj.prefetched_close_reason  # type: ignore[return-value]
         if hasattr(obj, "trades"):
+            # Check execution_method first (new trades written after the fix)
             close_trade = (
                 obj.trades.filter(  # type: ignore[union-attr]
                     execution_method__in=self._PROTECTION_METHODS
@@ -179,7 +180,14 @@ class PositionSerializer(serializers.Serializer):
                 .values_list("execution_method", flat=True)
                 .first()
             )
-            return close_trade if close_trade else "normal"
+            if close_trade:
+                return close_trade
+            # Fallback: detect protection closes from description for older
+            # trades that still have execution_method='close_position'.
+            has_protection_desc = obj.trades.filter(  # type: ignore[union-attr]
+                description__startswith="[PROTECTION]"
+            ).exists()
+            return "shrink" if has_protection_desc else "normal"
         return "normal"
 
     def get_trade_ids(self, obj: object) -> list[str]:
