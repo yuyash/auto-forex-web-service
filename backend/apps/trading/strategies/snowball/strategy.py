@@ -5,6 +5,18 @@ Implements a cycle-based hedging strategy:
 - Hedging mode: LONG and SHORT cycles run independently in parallel
 - Non-hedging mode: a single LONG cycle
 - Multi-level margin protection (shrink → lock → emergency)
+
+Position grid
+-------------
+All positions (including the cycle's first entry) live in a unified
+``PositionGrid``.  The grid is addressed as L(layer)/R(index) where both
+are 0-based.  R0 of each layer is the layer-initial position.
+
+Close ordering:
+- Normal TP: newest → oldest (back of grid first)
+- Shrink protection: oldest → newest (front of grid first)
+- Cycle head (whose TP ends the cycle): dynamically the oldest surviving
+  position — ``grid.head_entry()``.
 """
 
 from __future__ import annotations
@@ -125,10 +137,6 @@ class SnowballStrategy(Strategy):
         required = mid * Decimal(str(total_units)) * margin_rate * conv
         return (required / nav) * Decimal("100")
 
-    # ------------------------------------------------------------------
-    # Entry helpers
-    # ------------------------------------------------------------------
-
     def _close_entry(
         self,
         tick: Tick,
@@ -165,7 +173,7 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         direction: Direction,
     ) -> tuple[list[StrategyEvent], SnowballCycle]:
-        """Create a new cycle with an initial entry. Returns (events, cycle)."""
+        """Create a new cycle with an initial entry at L0/R0."""
         cfg = self.config
         units = cfg.trend_lot_size * cfg.base_units
         price = tick.ask if direction == Direction.LONG else tick.bid
@@ -184,6 +192,8 @@ class SnowballStrategy(Strategy):
             step=1,
             close_price=close_price,
             role="initial",
+            layer_number=0,
+            retracement_count=0,
         )
         entry.expected_tp_pips = cfg.m_pips
         entry.validation_status = "pass"
@@ -194,14 +204,12 @@ class SnowballStrategy(Strategy):
                 f"Initial entry ({direction.value.upper()}) | units={units}, TP={close_price:.3f}"
             ),
         )
-        cycle = SnowballCycle(
-            cycle_id=entry.entry_id,
-            direction=direction,
-            initial_entry=entry,
-        )
-        # Create the first layer (L1) with r_max empty slots
-        layer1 = Layer.create(1, cfg.r_max, cfg.base_units, cfg.refill_up_to)
-        cycle.add_layer(layer1)
+
+        cycle = SnowballCycle(cycle_id=entry.entry_id, direction=direction)
+        # L0 with R0 (initial) + R1…R(r_max) counter slots
+        layer0 = Layer.create(0, cfg.r_max, cfg.base_units, cfg.refill_up_to)
+        layer0.slot_at(0).fill(entry)
+        cycle.add_layer(layer0)
         ss.cycles.append(cycle)
         return [evt], cycle
 
@@ -211,7 +219,7 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        """Close the initial entry (TP hit), mark cycle completed, create new cycle."""
+        """Close the cycle head (TP hit), mark cycle completed, create new cycle."""
         entry = cycle.initial_entry
         if entry is None:
             return []
@@ -220,7 +228,6 @@ class SnowballStrategy(Strategy):
         pips_gained = abs(exit_price - entry.entry_price) / self.pip_size
 
         events: list[StrategyEvent] = []
-
         logger.info(
             "TP hit (%s): entry=%s, exit=%s, +%.1f pips, units=%s",
             direction.value.upper(),
@@ -244,7 +251,6 @@ class SnowballStrategy(Strategy):
         )
         cycle.completed = True
 
-        # Re-entry: new cycle in the same direction
         new_events, _new_cycle = self._create_cycle(ss, tick, direction)
         logger.info(
             "Re-entry (%s) after TP: new cycle_id=%d",
@@ -260,30 +266,23 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        """Build a stop event when a close-order violation is detected.
-
-        This sets ``should_stop`` on the next StrategyResult so the executor
-        marks the task as FAILED instead of silently continuing.
-        """
+        """Build a stop event when a close-order violation is detected."""
         open_entries = []
-        for layer in cycle.layers:
-            for e in layer.all_entries():
-                open_entries.append(
-                    f"L{e.layer_number}/R{e.retracement_count} "
-                    f"entry={e.entry_price:.3f} tp={e.close_price:.3f}"
-                )
-        initial = cycle.initial_entry
-        initial_price = f"{initial.entry_price:.3f}" if initial else "None"
-        initial_tp = f"{initial.close_price:.3f}" if initial else "None"
+        for e in cycle.grid.all_entries():
+            open_entries.append(
+                f"L{e.layer_number}/R{e.retracement_count} "
+                f"entry={e.entry_price:.3f} tp={e.close_price:.3f}"
+            )
+        head = cycle.initial_entry
+        head_price = f"{head.entry_price:.3f}" if head else "None"
+        head_tp = f"{head.close_price:.3f}" if head else "None"
         detail = (
             f"cycle_id={cycle.cycle_id}, direction={cycle.direction.value}, "
-            f"initial_entry={initial_price}, "
-            f"initial_tp={initial_tp}, "
-            f"open_counters=[{', '.join(open_entries)}], "
+            f"head_entry={head_price}, head_tp={head_tp}, "
+            f"open_entries=[{', '.join(open_entries)}], "
             f"tick_bid={tick.bid}, tick_ask={tick.ask}"
         )
         logger.error("Close order violation detail: %s", detail)
-        # Store the violation so on_tick returns should_stop=True
         self._close_order_violation = detail
         return []
 
@@ -297,16 +296,15 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        """Check if the initial entry hit its TP target.
+        """Check if the cycle head hit its TP target.
 
-        The initial entry (L1/R0) must only close when no counter entries
-        remain open.  If counter entries are still present, their TPs should
-        be reached first (they are closer to the current price).  Closing
-        L1/R0 while counters are open is a close-order violation.
+        The head must only close when no other entries remain open.
+        If other entries are still present, their TPs should be reached
+        first (they are closer to the current price).
         """
         if cycle.completed:
             return []
-        entry = cycle.initial_entry
+        entry = cycle.initial_entry  # dynamic head
         if not entry:
             return []
         direction = cycle.direction
@@ -321,14 +319,10 @@ class SnowballStrategy(Strategy):
         if not hit:
             return []
 
-        # Guard: do not close L1/R0 while counter entries are still open.
-        # Counter TPs should be reached before the initial entry TP.
-        has_open_counters = any(layer.has_open_entries() for layer in cycle.layers)
-        if has_open_counters:
+        if cycle.grid.has_counter_entries():
             logger.error(
-                "CLOSE ORDER VIOLATION: L1/R0 TP reached while counter entries "
-                "are still open — cycle_id=%d, direction=%s. "
-                "Failing task to prevent data corruption.",
+                "CLOSE ORDER VIOLATION: head TP reached while counter entries "
+                "are still open — cycle_id=%d, direction=%s.",
                 cycle.cycle_id,
                 direction.value,
             )
@@ -342,21 +336,26 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        """Close slot entries from highest R in newest layer, one per tick.
+        """Close counter entries from the back (newest first), one per tick.
 
-        Close order: newest layer highest R → ... → R1 → layer initial →
-        previous layer highest R → ... → L1/R0 (cycle end).
+        After all counter slots in a layer are empty, close the layer's R0
+        (layer-initial) if its TP is hit, then remove the layer.
         """
         if cycle.completed:
             return []
 
-        # Walk layers from newest to oldest — close highest occupied slot
-        for layer in reversed(cycle.layers):
+        # Walk layers from newest to oldest — close highest occupied counter slot
+        for layer in reversed(cycle.grid.layers):
             highest = layer.highest_occupied_slot()
             if highest is None or highest.entry is None:
                 continue
 
             entry = highest.entry
+            # Skip the cycle head — it closes via _process_cycle_tp
+            head = cycle.initial_entry
+            if head is not None and entry.entry_id == head.entry_id:
+                continue
+
             if entry.close_price <= 0:
                 continue
 
@@ -381,7 +380,7 @@ class SnowballStrategy(Strategy):
             layer.close_slot(highest.index)
             cycle.counter_close_count += 1
 
-            return [
+            events: list[StrategyEvent] = [
                 self._close_entry(
                     tick,
                     entry,
@@ -397,55 +396,46 @@ class SnowballStrategy(Strategy):
                 )
             ]
 
-        # Close layer-initial entries (L2+) when all slots are empty
-        for layer in reversed(cycle.layers):
-            if layer.layer_number == 1:
-                continue
-            if layer.initial_entry is None:
-                continue
-            if layer.occupied_slots():
-                break  # still has slot entries
+            # If this was the last counter slot in a non-L0 layer and R0 is
+            # the only remaining entry, check if R0's TP is also hit.
+            # If so, close R0 and remove the layer.
+            if layer.layer_number > 0:
+                remaining = layer.occupied_slots()
+                if len(remaining) == 1 and remaining[0].index == 0:
+                    r0_entry = remaining[0].entry
+                    if r0_entry is not None and r0_entry.close_price > 0:
+                        r0_hit = False
+                        if r0_entry.is_long and tick.bid >= r0_entry.close_price:
+                            r0_hit = True
+                        elif r0_entry.is_short and tick.ask <= r0_entry.close_price:
+                            r0_hit = True
+                        if r0_hit:
+                            r0_exit = r0_entry.exit_price(tick)
+                            r0_pips = abs(r0_exit - r0_entry.entry_price) / self.pip_size
+                            logger.info(
+                                "Layer initial TP (%s): L%s, +%.1f pips — removing layer",
+                                r0_entry.direction.value.upper(),
+                                layer.layer_number,
+                                r0_pips,
+                            )
+                            layer.close_slot(0, refillable=False)
+                            cycle.grid.layers.remove(layer)
+                            events.append(
+                                self._close_entry(
+                                    tick,
+                                    r0_entry,
+                                    description=(
+                                        f"Layer initial TP ({r0_entry.direction.value.upper()}) | "
+                                        f"L{layer.layer_number}, entry={r0_entry.entry_price:.3f}, "
+                                        f"exit={r0_exit:.3f}, +{r0_pips:.1f} pips"
+                                    ),
+                                    close_reason="layer_initial_tp",
+                                    actual_tp_pips=r0_pips,
+                                    validation_status="pass",
+                                )
+                            )
 
-            entry = layer.initial_entry
-            if entry.close_price <= 0:
-                continue
-
-            hit = False
-            if entry.is_long and tick.bid >= entry.close_price:
-                hit = True
-            elif entry.is_short and tick.ask <= entry.close_price:
-                hit = True
-            if not hit:
-                continue
-
-            exit_price = entry.exit_price(tick)
-            pips_gained = abs(exit_price - entry.entry_price) / self.pip_size
-
-            logger.info(
-                "Layer initial TP (%s): L%s, +%.1f pips — removing layer",
-                entry.direction.value.upper(),
-                layer.layer_number,
-                pips_gained,
-            )
-            # Remove the layer entirely so current_layer reverts to the
-            # previous one.  L2 will only be recreated when the previous
-            # layer's slots get sealed again (needs_new_layer).
-            cycle.layers.remove(layer)
-
-            return [
-                self._close_entry(
-                    tick,
-                    entry,
-                    description=(
-                        f"Layer initial TP ({entry.direction.value.upper()}) | "
-                        f"L{layer.layer_number}, entry={entry.entry_price:.3f}, "
-                        f"exit={exit_price:.3f}, +{pips_gained:.1f} pips"
-                    ),
-                    close_reason="layer_initial_tp",
-                    actual_tp_pips=pips_gained,
-                    validation_status="pass",
-                )
-            ]
+            return events
 
         return []
 
@@ -463,23 +453,21 @@ class SnowballStrategy(Strategy):
         if layer is None:
             return []
 
+        head = cycle.initial_entry
+        if not head:
+            return []
+
         # Need a new layer?
         if layer.needs_new_layer:
-            if cycle.layer_count >= cfg.f_max:
+            if cycle.layer_count >= cfg.f_max + 1:  # L0…Lf = f_max+1 layers
                 return []
 
-            # Gate: cycle initial entry must be losing
-            initial = cycle.initial_entry
-            if not initial:
-                return []
-            if initial.unrealised_loss_pips(tick.mid, self.pip_size) <= 0:
+            # Gate: head must be losing
+            if head.unrealised_loss_pips(tick.mid, self.pip_size) <= 0:
                 return []
 
             # Gate: price must have moved adversely from the highest
-            # occupied slot in the current layer (same check as normal
-            # counter adds).  Without this, a new layer would be created
-            # immediately after a sealed slot is detected, regardless of
-            # price movement.
+            # occupied slot in the current layer.
             direction = cycle.direction
             highest = layer.highest_occupied_slot()
             if highest is not None and highest.entry is not None:
@@ -494,21 +482,18 @@ class SnowballStrategy(Strategy):
 
             return self._open_layer_initial(ss, tick, cycle)
 
-        # Find the next available slot
-        slot = layer.next_available_slot()
+        # Find the next available counter slot (R1+)
+        slot = layer.next_available_counter_slot()
         if slot is None:
             return []
 
-        # Gate: cycle initial entry must be losing
-        initial = cycle.initial_entry
-        if not initial:
-            return []
-        if initial.unrealised_loss_pips(tick.mid, self.pip_size) <= 0:
+        # Gate: head must be losing
+        if head.unrealised_loss_pips(tick.mid, self.pip_size) <= 0:
             return []
 
-        # Measure adverse distance from the appropriate reference
+        # Measure adverse distance
         direction = cycle.direction
-        occupied = layer.occupied_slots()
+        occupied = [s for s in layer.occupied_slots() if s.index >= 1]
         if occupied:
             latest_entry = max(occupied, key=lambda s: s.index).entry
             assert latest_entry is not None
@@ -517,7 +502,9 @@ class SnowballStrategy(Strategy):
             else:
                 adverse = (tick.mid - latest_entry.entry_price) / self.pip_size
         else:
-            reference = layer.initial_entry if layer.initial_entry is not None else initial
+            # First counter in this layer — measure from R0
+            r0 = layer.slot_at(0)
+            reference = r0.entry if r0 is not None and r0.entry is not None else head
             adverse = reference.unrealised_loss_pips(tick.mid, self.pip_size)
 
         interval = counter_interval_pips(slot.index, cfg)
@@ -527,11 +514,14 @@ class SnowballStrategy(Strategy):
         # Build the entry
         units = (slot.index + 1) * layer.base_units
         new_price = tick.ask if direction == Direction.LONG else tick.bid
-        layer_ref = layer.initial_entry if layer.layer_number > 1 else initial
+
+        # Reference for weighted avg: R0 of this layer
+        r0 = layer.slot_at(0)
+        layer_ref = r0.entry if r0 is not None and r0.entry is not None else head
 
         if cfg.counter_tp_mode == "weighted_avg":
             close_price, formula = layer.weighted_avg_close_price(
-                new_price, units, include_initial=layer_ref
+                new_price, units, include_ref=layer_ref
             )
         else:
             tp = counter_tp_pips(slot.index, cfg)
@@ -552,8 +542,8 @@ class SnowballStrategy(Strategy):
             role="counter",
             layer_number=layer.layer_number,
             retracement_count=slot.index,
-            root_entry_id=initial.entry_id,
-            parent_entry_id=initial.entry_id,
+            root_entry_id=head.entry_id,
+            parent_entry_id=head.entry_id,
         )
         entry.expected_interval_pips = interval
         entry.actual_interval_pips = adverse
@@ -583,7 +573,7 @@ class SnowballStrategy(Strategy):
         # Update close prices for non-weighted_avg modes
         if cfg.counter_tp_mode != "weighted_avg":
             for s in layer.slots:
-                if s.entry is None or s.entry.is_hedge:
+                if s.index == 0 or s.entry is None or s.entry.is_hedge:
                     continue
                 step_tp = counter_tp_pips(s.index, cfg)
                 if direction == Direction.LONG:
@@ -599,23 +589,19 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        """Open a layer-initial entry for a new layer."""
+        """Open a layer-initial entry (R0) for a new layer."""
         cfg = self.config
-        initial = cycle.initial_entry
-        if initial is None:
+        head = cycle.initial_entry
+        if head is None:
             return []
 
-        # Gate: don't build layer initial if cycle initial is not losing
-        if initial.unrealised_loss_pips(tick.mid, self.pip_size) <= 0:
+        if head.unrealised_loss_pips(tick.mid, self.pip_size) <= 0:
             return []
 
         direction = cycle.direction
-
-        # Creating a brand new layer
         prev_layer = cycle.current_layer
         assert prev_layer is not None
-        prev_layer_num = prev_layer.layer_number
-        new_layer_number = prev_layer_num + 1
+        new_layer_number = prev_layer.layer_number + 1
         new_base_units = int(Decimal(str(cfg.base_units)) * cfg.post_r_max_base_factor)
         layer = Layer.create(new_layer_number, cfg.r_max, new_base_units, cfg.refill_up_to)
         cycle.add_layer(layer)
@@ -631,43 +617,29 @@ class SnowballStrategy(Strategy):
             role="layer_initial",
             layer_number=layer.layer_number,
             retracement_count=0,
-            root_entry_id=initial.entry_id,
-            parent_entry_id=initial.entry_id,
+            root_entry_id=head.entry_id,
+            parent_entry_id=head.entry_id,
         )
 
-        # Compute close price from previous layer's highest slot close price
-        prev_layer_obj = cycle.find_layer(prev_layer_num)
-        prev_initial = cycle.initial_for_layer(prev_layer_num)
-        if prev_layer_obj is not None:
-            close_price, formula = layer.layer_initial_close_price(
-                price,
-                abs(layer_entry.units),
-                prev_layer_obj,
-                prev_initial,
-                direction=direction,
-                pip_size=self.pip_size,
-                m_pips=cfg.m_pips,
-            )
-        else:
-            # Fallback: use m_pips
-            if direction == Direction.LONG:
-                close_price = price + cfg.m_pips * self.pip_size
-            else:
-                close_price = price - cfg.m_pips * self.pip_size
-            formula = f"{price} {'+' if direction == Direction.LONG else '-'} {cfg.m_pips} * {self.pip_size}"
+        close_price, formula = layer.layer_initial_close_price(
+            price,
+            abs(layer_entry.units),
+            prev_layer,
+            direction=direction,
+            pip_size=self.pip_size,
+            m_pips=cfg.m_pips,
+        )
 
         layer_entry.close_price = close_price
         tp_pips = abs(close_price - layer_entry.entry_price) / self.pip_size
         layer_entry.expected_tp_pips = tp_pips
         layer_entry.validation_status = "pass"
 
-        # Compute adverse pips from the previous layer's highest occupied slot
-        if prev_layer_obj is not None:
-            highest = prev_layer_obj.highest_occupied_slot()
-            if highest is not None and highest.entry is not None:
-                layer_entry.actual_interval_pips = (
-                    abs(highest.entry.entry_price - price) / self.pip_size
-                )
+        highest = prev_layer.highest_occupied_slot()
+        if highest is not None and highest.entry is not None:
+            layer_entry.actual_interval_pips = (
+                abs(highest.entry.entry_price - price) / self.pip_size
+            )
 
         logger.info(
             "Layer initial L%d/R0 in cycle %d, TP=%.3f",
@@ -684,7 +656,8 @@ class SnowballStrategy(Strategy):
                 f"L{layer.layer_number}/R0, units={layer_entry.units}, TP={close_price:.3f}"
             ),
         )
-        layer.initial_entry = layer_entry
+        # Place in R0 of the new layer
+        layer.slot_at(0).fill(layer_entry)
         return [evt]
 
     # ------------------------------------------------------------------
@@ -698,7 +671,6 @@ class SnowballStrategy(Strategy):
         ratio: Decimal,
         unrealized: Decimal,
     ) -> tuple[list[StrategyEvent], str] | None:
-        """Check for emergency stop. Returns (events, stop_reason) or None."""
         if ratio < Decimal("95"):
             return None
         ss.protection_level = ProtectionLevel.EMERGENCY
@@ -724,7 +696,6 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         ratio: Decimal,
     ) -> list[StrategyEvent] | None:
-        """Enter lock mode if ratio >= n_th. Returns events or None."""
         cfg = self.config
         if not cfg.lock_enabled or ratio < cfg.n_th:
             return None
@@ -760,7 +731,6 @@ class SnowballStrategy(Strategy):
                 layer_number=0,
                 retracement_count=0,
             )
-            # Add hedge to the first active cycle (arbitrary; it's a global hedge)
             active = ss.active_cycles()
             if active:
                 active[0].hedge_entries.append(hedge_entry)
@@ -795,7 +765,6 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         ratio: Decimal,
     ) -> list[StrategyEvent]:
-        """Check if lock can be released. Returns events."""
         if ss.protection_level != ProtectionLevel.LOCKED:
             return []
         cfg = self.config
@@ -846,16 +815,7 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         ratio: Decimal,
     ) -> list[StrategyEvent] | None:
-        """Shrink v2: close positions from oldest/smallest until margin ratio drops below m1_th.
-
-        Close order per cycle:
-        - Slot entries first: lowest layer, lowest R first
-        - Then layer-initial entries (L2+/R0) from lowest layer upward
-        - Finally L1/R0 (cycle initial)
-        - When L1/R0 is closed, move cycle initial_entry to the next closest open entry
-        - Alternate between LONG and SHORT cycles, starting with the higher-impact one
-        - If all positions are closed and ratio is still above m1_th, fail the task
-        """
+        """Shrink: close positions from the front (oldest first) until ratio < m1_th."""
         cfg = self.config
         if not cfg.shrink_enabled or ratio < cfg.m_th:
             return None
@@ -874,10 +834,8 @@ class SnowballStrategy(Strategy):
 
         closed_count = 0
         while ratio >= cfg.m1_th:
-            # Pick the next entry to close, alternating between cycles
             entry, cycle = self._pick_shrink_target(ss, tick)
             if entry is None or cycle is None:
-                # No more positions to close — fail the task
                 logger.error(
                     "SHRINK EXHAUSTED: all positions closed but margin ratio "
                     "%.1f%% still above m1_th=%.1f%%. Failing task.",
@@ -889,10 +847,6 @@ class SnowballStrategy(Strategy):
                     f"no more positions to close"
                 )
                 break
-
-            # If closing L1/R0 (cycle initial), migrate initial_entry first
-            if entry.entry_id == cycle.initial_entry.entry_id if cycle.initial_entry else False:
-                self._migrate_cycle_initial(cycle, entry)
 
             events.append(
                 self._close_entry(
@@ -910,15 +864,15 @@ class SnowballStrategy(Strategy):
             cycle.remove_entry(entry.entry_id)
             closed_count += 1
 
-            # Recalculate close prices for remaining counter entries
-            # after shrink changes the weighted average composition.
+            # Check if cycle is now empty
+            if cycle.grid.is_empty():
+                cycle.completed = True
+
+            # Recalculate counter TPs after shrink
             if cfg.counter_tp_mode == "weighted_avg":
                 self._recalculate_counter_tps(cycle)
 
-            # Recalculate margin ratio after close
-            # Approximate: each close reduces required margin
-            from apps.trading.utils import quote_to_account_rate
-
+            # Approximate margin ratio after close
             conv = quote_to_account_rate(self.instrument, tick.mid, self.account_currency)
             margin_rate = Decimal("0.04")
             released_margin = tick.mid * Decimal(str(abs(entry.units))) * margin_rate * conv
@@ -945,12 +899,12 @@ class SnowballStrategy(Strategy):
         """Pick the next position to close during shrink.
 
         Alternates between active cycles, starting with the one whose
-        candidate has the largest unrealised loss (higher impact).
-        Within a cycle: oldest layer, lowest R, skipping the highest R per layer.
+        candidate has the largest unrealised loss.
+        Within a cycle: oldest position first (front of grid).
         """
         candidates: list[tuple[Entry, SnowballCycle, Decimal]] = []
         for cycle in ss.active_cycles():
-            entry = self._find_shrink_candidate_in_cycle(cycle)
+            entry = cycle.grid.front_entry()
             if entry is not None:
                 loss = entry.unrealised_loss_pips(tick.mid, self.pip_size)
                 candidates.append((entry, cycle, loss))
@@ -958,116 +912,30 @@ class SnowballStrategy(Strategy):
         if not candidates:
             return None, None
 
-        # Pick the candidate with the largest loss (highest impact)
         candidates.sort(key=lambda c: c[2], reverse=True)
         return candidates[0][0], candidates[0][1]
 
-    def _find_shrink_candidate_in_cycle(self, cycle: SnowballCycle) -> Entry | None:
-        """Find the next entry to close in a cycle for shrink.
-
-        Close order: oldest/smallest first.
-
-        1. Scan layers from L1 upward.  Within each layer, return the
-           lowest occupied R slot first.
-        2. After all slot entries are exhausted, close layer-initial
-           entries (L2+/R0) from the lowest layer upward.
-        3. Finally, return cycle.initial_entry (L1/R0).
-        """
-        layers = cycle.layers
-
-        # Phase 1: slot entries — lowest layer, lowest R first
-        for layer in layers:
-            occupied = layer.occupied_slots()
-            if occupied:
-                lowest = min(occupied, key=lambda s: s.index)
-                return lowest.entry
-
-        # Phase 2: layer-initial entries (L2+) — lowest layer first
-        for layer in layers:
-            if layer.layer_number > 1 and layer.initial_entry is not None:
-                return layer.initial_entry
-
-        # Phase 3: cycle initial entry (L1/R0)
-        if cycle.initial_entry is not None:
-            return cycle.initial_entry
-
-        return None
-
-    @staticmethod
-    def _migrate_cycle_initial(cycle: SnowballCycle, old_initial: Entry) -> None:
-        """Move cycle initial_entry to the next closest open entry.
-
-        Called when shrink needs to close L1/R0. The next entry with the
-        closest R number becomes the new initial_entry.
-        """
-        # Collect all open entries except the one being closed
-        candidates: list[Entry] = []
-        for layer in cycle.layers:
-            for e in layer.all_entries():
-                if e.entry_id != old_initial.entry_id:
-                    candidates.append(e)
-
-        if not candidates:
-            # No other entries — cycle will end after this close
-            cycle.initial_entry = None
-            cycle.completed = True
-            return
-
-        # Pick the entry with the lowest layer number and lowest retracement count
-        candidates.sort(key=lambda e: (e.layer_number, e.retracement_count))
-        new_initial = candidates[0]
-        logger.warning(
-            "SHRINK: migrating cycle initial from entry_id=%s (L%s/R%s) to entry_id=%s (L%s/R%s)",
-            old_initial.entry_id,
-            old_initial.layer_number,
-            old_initial.retracement_count,
-            new_initial.entry_id,
-            new_initial.layer_number,
-            new_initial.retracement_count,
-        )
-
-        # Remove the new initial from its layer position so it is only
-        # tracked as cycle.initial_entry and not double-counted as a
-        # counter entry.
-        for layer in cycle.layers:
-            if (
-                layer.initial_entry is not None
-                and layer.initial_entry.entry_id == new_initial.entry_id
-            ):
-                layer.initial_entry = None
-                break
-            for slot in layer.slots:
-                if slot.entry is not None and slot.entry.entry_id == new_initial.entry_id:
-                    slot.entry = None
-                    break
-
-        cycle.initial_entry = new_initial
-
     def _recalculate_counter_tps(self, cycle: SnowballCycle) -> None:
-        """Recalculate close_price for all counter entries in a cycle.
-
-        After shrink removes entries, the weighted-average TP for remaining
-        entries changes.  Without recalculation, stale TPs can cause
-        close-order violations (L1/R0 TP reached before counter TPs).
-        """
-        for layer in cycle.layers:
-            ref = layer.initial_entry if layer.layer_number > 1 else cycle.initial_entry
-            occupied = layer.occupied_slots()
-            if not occupied:
+        """Recalculate close_price for all counter entries in a cycle."""
+        for layer in cycle.grid.layers:
+            r0 = layer.slot_at(0)
+            ref = r0.entry if r0 is not None and r0.entry is not None else cycle.initial_entry
+            counter_slots = [s for s in layer.occupied_slots() if s.index >= 1]
+            if not counter_slots:
                 continue
-            # Recalculate each occupied slot's close_price
-            for slot in occupied:
+            for slot in counter_slots:
                 entry = slot.entry
                 if entry is None or entry.is_hedge:
                     continue
-                # Compute weighted average of all entries in this layer
                 total_cost = Decimal("0")
                 total_units = 0
                 for s in layer.slots:
                     if s.entry is not None and not s.entry.is_hedge:
                         total_cost += s.entry.entry_price * Decimal(str(s.entry.units))
                         total_units += s.entry.units
-                if ref is not None:
+                if ref is not None and ref.entry_id not in {
+                    s.entry.entry_id for s in layer.slots if s.entry
+                }:
                     ref_units = abs(ref.units)
                     if ref_units > 0:
                         total_cost += ref.entry_price * Decimal(str(ref_units))
@@ -1162,7 +1030,6 @@ class SnowballStrategy(Strategy):
         for cycle in list(ss.active_cycles()):
             events.extend(self._process_cycle_tp(ss, tick, cycle))
 
-            # Check if a close-order violation was detected
             if self._close_order_violation:
                 state.strategy_state = ss.to_dict()
                 return StrategyResult(
@@ -1174,11 +1041,6 @@ class SnowballStrategy(Strategy):
 
             counter_close_events = self._process_cycle_counter_closes(ss, tick, cycle)
             events.extend(counter_close_events)
-            # After a counter TP close the retracement count is reset to 0 and
-            # the counter list is empty, so the "first counter add" path would
-            # immediately re-enter on the same tick — creating an open/close
-            # loop that fires every tick.  The spec says "re-enter on the *next*
-            # adverse move", so we skip counter adds on the tick that closed.
             if not counter_close_events:
                 events.extend(self._process_cycle_counter_adds(ss, tick, cycle))
 
@@ -1209,11 +1071,7 @@ class SnowballStrategy(Strategy):
             return
 
         for cycle in ss.cycles:
-            if cycle.initial_entry is not None and cycle.initial_entry.entry_id == eid:
-                cycle.initial_entry.position_id = str(position_id)
-            for layer in cycle.layers:
-                if layer.initial_entry is not None and layer.initial_entry.entry_id == eid:
-                    layer.initial_entry.position_id = str(position_id)
+            for layer in cycle.grid.layers:
                 for slot in layer.slots:
                     if slot.entry is not None and slot.entry.entry_id == eid:
                         slot.entry.position_id = str(position_id)
