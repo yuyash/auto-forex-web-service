@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.26.4...frontend-v1.27.0) (2026-04-04)
+
+
+### Features
+
+* add shrink v2 ([#317](https://github.com/yuyash/auto-forex-web-service/issues/317)) ([a35f3bb](https://github.com/yuyash/auto-forex-web-service/commit/a35f3bbce8e6cc4e949ad3ec05cd62a352f58337))
+
 ## [1.26.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.26.3...frontend-v1.26.4) (2026-04-03)
 
 
