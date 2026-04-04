@@ -676,7 +676,7 @@ class ClosePositionEvent(StrategyEvent):
 
     @classmethod
     def from_dict(cls, event_dict: dict[str, Any]) -> "ClosePositionEvent":
-        return cls(
+        inst = cls(
             event_type=EventType.CLOSE_POSITION,
             timestamp=parse_datetime(event_dict.get("timestamp")),
             layer_number=int(event_dict.get("layer_number", 1)),
@@ -694,6 +694,16 @@ class ClosePositionEvent(StrategyEvent):
             strategy_event_type=str(event_dict.get("strategy_event_type", "")),
             description=str(event_dict.get("description", "")),
         )
+        # Restore base-class fields that are not part of the constructor
+        # but are serialised into the event dict.
+        if event_dict.get("close_reason"):
+            inst.close_reason = str(event_dict["close_reason"])
+        if event_dict.get("validation_status"):
+            inst.validation_status = str(event_dict["validation_status"])
+        raw_margin = event_dict.get("margin_ratio")
+        if raw_margin is not None:
+            inst.margin_ratio = parse_decimal(raw_margin)
+        return inst
 
 
 @register_event(EventType.ADD_LAYER)
