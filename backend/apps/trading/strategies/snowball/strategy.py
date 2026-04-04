@@ -4,7 +4,7 @@ Implements a cycle-based hedging strategy:
 - Each cycle starts with an initial entry and tracks its own counter entries
 - Hedging mode: LONG and SHORT cycles run independently in parallel
 - Non-hedging mode: a single LONG cycle
-- Multi-level margin protection (rebalance → shrink → lock → emergency)
+- Multi-level margin protection (shrink → lock → emergency)
 """
 
 from __future__ import annotations
@@ -1015,55 +1015,6 @@ class SnowballStrategy(Strategy):
         )
         cycle.initial_entry = new_initial
 
-    def _handle_rebalance(
-        self,
-        ss: SnowballStrategyState,
-        tick: Tick,
-        ratio: Decimal,
-    ) -> list[StrategyEvent] | None:
-        """Rebalance: reduce BUY/SELL imbalance. Returns events or None."""
-        cfg = self.config
-        if not cfg.rebalance_enabled or ratio < cfg.rebalance_start_ratio:
-            return None
-
-        events: list[StrategyEvent] = []
-        all_entries = ss.all_entries()
-        long_units = sum(e.units for e in all_entries if e.is_long)
-        short_units = sum(e.units for e in all_entries if e.is_short)
-        if long_units == short_units:
-            return events
-
-        heavier = Direction.LONG if long_units > short_units else Direction.SHORT
-        # Collect all counter entries on the heavier side, sorted by step
-        candidates: list[tuple[SnowballCycle, Entry]] = []
-        for cycle in ss.active_cycles():
-            for e in cycle.counter_entries:
-                if e.direction == heavier and not e.is_hedge:
-                    candidates.append((cycle, e))
-        candidates.sort(key=lambda x: x[1].step)
-
-        for cycle, entry in candidates:
-            events.append(
-                self._close_entry(
-                    tick,
-                    entry,
-                    description=(
-                        f"[PROTECTION] Rebalance: reduce {heavier.value.upper()} imbalance | "
-                        f"LONG={long_units} vs SHORT={short_units}"
-                    ),
-                    close_reason="rebalance",
-                    validation_status="warn",
-                )
-            )
-            cycle.remove_entry(entry.entry_id)
-            # Recheck
-            all_entries = ss.all_entries()
-            long_units = sum(e.units for e in all_entries if e.is_long)
-            short_units = sum(e.units for e in all_entries if e.is_short)
-            if long_units == short_units:
-                break
-        return events
-
     # ------------------------------------------------------------------
     # Core tick processing
     # ------------------------------------------------------------------
@@ -1122,12 +1073,6 @@ class SnowballStrategy(Strategy):
         if shrink_events is not None:
             state.strategy_state = ss.to_dict()
             return StrategyResult(state=state, events=shrink_events)
-
-        # --- Rebalance ---
-        rebalance_events = self._handle_rebalance(ss, tick, ratio)
-        if rebalance_events is not None:
-            state.strategy_state = ss.to_dict()
-            return StrategyResult(state=state, events=rebalance_events)
 
         # Back to normal
         if ss.protection_level != ProtectionLevel.NORMAL:

@@ -2,7 +2,7 @@
 
 Covers: initialisation, trend basket rotation, counter basket adds/closes,
 slot vacate after TP, layer progression, f_max exhaustion, margin
-protection (shrink / lock / emergency), rebalance, spread guard, and
+protection (shrink / lock / emergency), spread guard, and
 dynamic TP (ATR) scenarios.
 """
 
@@ -67,7 +67,6 @@ def _strategy(**overrides) -> SnowballStrategy:
         "counter_tp_multiplier": "1.2",
         "round_step_pips": "0.1",
         "dynamic_tp_enabled": False,
-        "rebalance_enabled": False,
         "shrink_enabled": False,
         "lock_enabled": False,
         "spread_guard_enabled": False,
@@ -466,43 +465,6 @@ class TestLockMode:
             o for o in _open_events(result) if "lock_hedge" not in (o.strategy_event_type or "")
         ]
         assert len(non_hedge) == 0
-
-
-# ==================================================================
-# 11. Rebalance
-# ==================================================================
-
-
-class TestRebalance:
-    def test_rebalance_closes_heavier_side(self):
-        s = _strategy(
-            rebalance_enabled=True,
-            rebalance_start_ratio="50",
-            rebalance_end_ratio="40",
-            shrink_enabled=False,
-            lock_enabled=False,
-        )
-        state = DummyState(current_balance=Decimal("1000000"))
-        s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-
-        # Inject imbalanced entries via slots
-        for i in range(3):
-            entry = {
-                "entry_id": 20 + i,
-                "step": i + 2,
-                "direction": "long",
-                "entry_price": str(Decimal("149.00") - Decimal("0.10") * i),
-                "close_price": "150.00",
-                "units": 1000 * (i + 1),
-                "opened_at": T0.isoformat(),
-            }
-            layers = state.strategy_state["cycles"][0]["layers"]
-            layers[0]["slots"][i]["entry"] = entry
-
-        state.strategy_state["account_nav"] = "80000"
-        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"), state=state)
-        closes = _close_events(result)
-        assert len(closes) >= 1
 
 
 # ==================================================================

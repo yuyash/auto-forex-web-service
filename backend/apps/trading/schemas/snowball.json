@@ -332,40 +332,6 @@
       "group_ja": "動的利確（ATR）"
     },
 
-    "rebalance_enabled": {
-      "type": "boolean",
-      "title": "Enable Rebalance",
-      "title_ja": "リバランス有効",
-      "description": "When enabled, BUY/SELL imbalance is reduced by closing oldest counter entries when margin ratio reaches the start threshold.",
-      "description_ja": "有効時、証拠金比率が開始閾値に達すると、古い逆行エントリーを決済してBUY/SELLの偏りを解消します。",
-      "default": false,
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
-    },
-    "rebalance_start_ratio": {
-      "type": "number",
-      "title": "Rebalance Start (%)",
-      "title_ja": "リバランス開始（%）",
-      "description": "Margin ratio at which BUY/SELL rebalancing begins.",
-      "description_ja": "BUY/SELLリバランスを開始する証拠金比率。",
-      "default": 60,
-      "minimum": 1,
-      "dependsOn": { "field": "rebalance_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
-    },
-    "rebalance_end_ratio": {
-      "type": "number",
-      "title": "Rebalance End (%)",
-      "title_ja": "リバランス終了（%）",
-      "description": "Margin ratio target at which rebalancing stops.",
-      "description_ja": "リバランスを終了する証拠金比率の目標値。",
-      "default": 50,
-      "minimum": 1,
-      "dependsOn": { "field": "rebalance_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
-    },
     "shrink_enabled": {
       "type": "boolean",
       "title": "Enable Shrink",

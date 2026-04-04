@@ -72,9 +72,6 @@ class SnowballStrategyConfig:
     m_pips_max: Decimal
 
     # Margin protection
-    rebalance_enabled: bool
-    rebalance_start_ratio: Decimal
-    rebalance_end_ratio: Decimal
     shrink_enabled: bool
     m_th: Decimal
     m1_th: Decimal  # shrink target: close positions until ratio drops below this
@@ -121,9 +118,6 @@ class SnowballStrategyConfig:
             atr_baseline_lookback=_parse_int(raw.get("atr_baseline_lookback", 96), 96),
             m_pips_min=_parse_decimal(raw.get("m_pips_min", "12"), "12"),
             m_pips_max=_parse_decimal(raw.get("m_pips_max", "80"), "80"),
-            rebalance_enabled=bool(raw.get("rebalance_enabled", False)),
-            rebalance_start_ratio=_parse_decimal(raw.get("rebalance_start_ratio", "60"), "60"),
-            rebalance_end_ratio=_parse_decimal(raw.get("rebalance_end_ratio", "50"), "50"),
             shrink_enabled=bool(raw.get("shrink_enabled", True)),
             m_th=_parse_decimal(raw.get("m_th", "70"), "70"),
             m1_th=_parse_decimal(raw.get("m1_th", "50"), "50"),
@@ -161,9 +155,6 @@ class SnowballStrategyConfig:
             "atr_baseline_lookback": self.atr_baseline_lookback,
             "m_pips_min": str(self.m_pips_min),
             "m_pips_max": str(self.m_pips_max),
-            "rebalance_enabled": self.rebalance_enabled,
-            "rebalance_start_ratio": str(self.rebalance_start_ratio),
-            "rebalance_end_ratio": str(self.rebalance_end_ratio),
             "shrink_enabled": self.shrink_enabled,
             "m_th": str(self.m_th),
             "m1_th": str(self.m1_th),
@@ -192,8 +183,6 @@ class SnowballStrategyConfig:
             raise ValueError("n_pips_flat_steps must be < r_max")
         if self.counter_tp_mode != "weighted_avg" and self.counter_tp_pips <= 0:
             raise ValueError("counter_tp_pips must be > 0")
-        if self.rebalance_enabled and not self.rebalance_start_ratio > self.rebalance_end_ratio > 0:
-            raise ValueError("rebalance_start_ratio > rebalance_end_ratio > 0")
         if self.interval_mode == "manual":
             if len(self.manual_intervals) != self.r_max:
                 raise ValueError(
