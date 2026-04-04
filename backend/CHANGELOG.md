@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.26.1...backend-v1.26.2) (2026-04-04)
+
+
+### Bug Fixes
+
+* shrink close order and reason ([#323](https://github.com/yuyash/auto-forex-web-service/issues/323)) ([9a5a59f](https://github.com/yuyash/auto-forex-web-service/commit/9a5a59f170e619c2da870bc8ab1c8e283e3b0b63))
+
 ## [1.26.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.26.0...backend-v1.26.1) (2026-04-04)
 
 
