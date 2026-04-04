@@ -94,17 +94,11 @@ class TestSnowballStrategyClassMethods:
         assert isinstance(result, dict)
         assert result["base_units"] == 2000
 
-    def test_normalize_parameters_uppercases_atr_timeframe(self):
-        """Regression: lowercase atr_timeframe must be normalised."""
-        result = SnowballStrategy.normalize_parameters({"atr_timeframe": "h4"})
-        assert result["atr_timeframe"] == "H4"
-
     def test_default_parameters(self):
         defaults = SnowballStrategy.default_parameters()
         assert isinstance(defaults, dict)
         assert "base_units" in defaults
         assert "m_pips" in defaults
-        assert defaults["atr_timeframe"] == "M1"
 
     def test_validate_parameters_valid(self):
         """validate_parameters should not raise for valid params + schema."""
@@ -137,44 +131,6 @@ class TestSnowballStrategyClassMethods:
         params["base_units"] = 0
         with pytest.raises(ValueError):
             SnowballStrategy.validate_parameters(parameters=params, config_schema=schema)
-
-    def test_validate_parameters_rejects_invalid_atr_timeframe(self):
-        """JSON schema rejects timeframes not in the enum."""
-        import json
-        from pathlib import Path
-
-        from django.conf import settings
-
-        schema_path = Path(settings.BASE_DIR) / "apps" / "trading" / "schemas" / "snowball.json"
-        with open(schema_path) as f:
-            schema = json.load(f)
-
-        params = SnowballStrategy.default_parameters()
-        params["atr_timeframe"] = "INVALID"
-        with pytest.raises(ValueError):
-            SnowballStrategy.validate_parameters(parameters=params, config_schema=schema)
-
-    def test_normalize_then_validate_round_trip(self):
-        """Regression: normalize → validate must not fail for lowercase timeframe."""
-        import json
-        from pathlib import Path
-
-        from django.conf import settings
-
-        schema_path = Path(settings.BASE_DIR) / "apps" / "trading" / "schemas" / "snowball.json"
-        with open(schema_path) as f:
-            schema = json.load(f)
-
-        raw = {
-            "atr_timeframe": "m1",
-            "base_units": 1000,
-            "m_pips": 50,
-            "r_max": 7,
-            "m_pips_max": 55,
-        }
-        normalised = SnowballStrategy.normalize_parameters(raw)
-        # This was the exact bug: normalize produced "m1" which schema rejected
-        SnowballStrategy.validate_parameters(parameters=normalised, config_schema=schema)
 
 
 # ===================================================================
@@ -241,25 +197,6 @@ class TestSnowballTrendTakeProfit:
 # ===================================================================
 # on_tick — spread guard
 # ===================================================================
-
-
-class TestSnowballSpreadGuard:
-    def test_wide_spread_blocks_entries(self):
-        s = _strategy(
-            {
-                "spread_guard_enabled": True,
-                "spread_guard_pips": "1",
-            }
-        )
-        state = DummyState()
-        ts = datetime(2026, 1, 1, tzinfo=UTC)
-
-        # Spread = 5 pips (0.05 / 0.01) — exceeds guard of 1 pip
-        s.on_tick(tick=_make_tick(ts, "150.00", "150.05"), state=state)
-
-        ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
-        # With wide spread, strategy should not initialise baskets
-        assert ss.initialised is False
 
 
 # ===================================================================

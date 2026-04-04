@@ -105,9 +105,6 @@ class SnowballStrategy(Strategy):
     # Helpers
     # ------------------------------------------------------------------
 
-    def _spread_pips(self, tick: Tick) -> Decimal:
-        return (tick.ask - tick.bid) / self.pip_size
-
     def _margin_ratio(self, state: ExecutionState, ss: SnowballStrategyState) -> Decimal:
         nav = ss.account_nav
         if nav <= 0:
@@ -796,9 +793,7 @@ class SnowballStrategy(Strategy):
         if ss.protection_level != ProtectionLevel.LOCKED:
             return []
         cfg = self.config
-        unlock_ok = ratio < cfg.m_th - Decimal("5") and (
-            not cfg.spread_guard_enabled or self._spread_pips(tick) <= cfg.spread_guard_pips
-        )
+        unlock_ok = ratio < cfg.m_th - Decimal("5")
         if ss.cooldown_until:
             from datetime import datetime
 
@@ -1096,12 +1091,6 @@ class SnowballStrategy(Strategy):
         # Back to normal
         if ss.protection_level != ProtectionLevel.NORMAL:
             ss.protection_level = ProtectionLevel.NORMAL
-
-        # --- Spread guard ---
-        cfg = self.config
-        if cfg.spread_guard_enabled and self._spread_pips(tick) > cfg.spread_guard_pips:
-            state.strategy_state = ss.to_dict()
-            return StrategyResult(state=state, events=events)
 
         # --- Initialisation ---
         if not ss.initialised:

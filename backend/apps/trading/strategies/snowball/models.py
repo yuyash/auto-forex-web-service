@@ -63,14 +63,6 @@ class SnowballStrategyConfig:
     counter_tp_multiplier: Decimal
     round_step_pips: Decimal
 
-    # Dynamic TP (ATR)
-    dynamic_tp_enabled: bool
-    atr_period: int
-    atr_timeframe: str
-    atr_baseline_lookback: int
-    m_pips_min: Decimal
-    m_pips_max: Decimal
-
     # Margin protection
     shrink_enabled: bool
     m_th: Decimal
@@ -78,10 +70,6 @@ class SnowballStrategyConfig:
     lock_enabled: bool
     n_th: Decimal
     cooldown_sec: int
-
-    # Spread guard
-    spread_guard_enabled: bool
-    spread_guard_pips: Decimal
 
     pip_size: Decimal
 
@@ -112,20 +100,12 @@ class SnowballStrategyConfig:
             counter_tp_step_amount=_parse_decimal(raw.get("counter_tp_step_amount", "2.5"), "2.5"),
             counter_tp_multiplier=_parse_decimal(raw.get("counter_tp_multiplier", "1.2"), "1.2"),
             round_step_pips=_parse_decimal(raw.get("round_step_pips", "0.1"), "0.1"),
-            dynamic_tp_enabled=bool(raw.get("dynamic_tp_enabled", False)),
-            atr_period=_parse_int(raw.get("atr_period", 14), 14),
-            atr_timeframe=_parse_str(raw.get("atr_timeframe"), "M1").upper(),
-            atr_baseline_lookback=_parse_int(raw.get("atr_baseline_lookback", 96), 96),
-            m_pips_min=_parse_decimal(raw.get("m_pips_min", "12"), "12"),
-            m_pips_max=_parse_decimal(raw.get("m_pips_max", "80"), "80"),
             shrink_enabled=bool(raw.get("shrink_enabled", True)),
             m_th=_parse_decimal(raw.get("m_th", "70"), "70"),
             m1_th=_parse_decimal(raw.get("m1_th", "50"), "50"),
             lock_enabled=bool(raw.get("lock_enabled", True)),
             n_th=_parse_decimal(raw.get("n_th", "85"), "85"),
             cooldown_sec=_parse_int(raw.get("cooldown_sec", 300), 300),
-            spread_guard_enabled=bool(raw.get("spread_guard_enabled", False)),
-            spread_guard_pips=_parse_decimal(raw.get("spread_guard_pips", "2.5"), "2.5"),
             pip_size=_parse_decimal(raw.get("pip_size", "0.01"), "0.01"),
         )
 
@@ -149,20 +129,12 @@ class SnowballStrategyConfig:
             "counter_tp_step_amount": str(self.counter_tp_step_amount),
             "counter_tp_multiplier": str(self.counter_tp_multiplier),
             "round_step_pips": str(self.round_step_pips),
-            "dynamic_tp_enabled": self.dynamic_tp_enabled,
-            "atr_period": self.atr_period,
-            "atr_timeframe": self.atr_timeframe,
-            "atr_baseline_lookback": self.atr_baseline_lookback,
-            "m_pips_min": str(self.m_pips_min),
-            "m_pips_max": str(self.m_pips_max),
             "shrink_enabled": self.shrink_enabled,
             "m_th": str(self.m_th),
             "m1_th": str(self.m1_th),
             "lock_enabled": self.lock_enabled,
             "n_th": str(self.n_th),
             "cooldown_sec": self.cooldown_sec,
-            "spread_guard_enabled": self.spread_guard_enabled,
-            "spread_guard_pips": str(self.spread_guard_pips),
             "pip_size": str(self.pip_size),
         }
 
@@ -175,8 +147,6 @@ class SnowballStrategyConfig:
             raise ValueError("m1_th must be between 0 and m_th")
         if self.lock_enabled and not Decimal("0") < self.n_th < Decimal("100"):
             raise ValueError("n_th must be between 0 and 100")
-        if self.dynamic_tp_enabled and not self.m_pips_min <= self.m_pips <= self.m_pips_max:
-            raise ValueError("Must satisfy m_pips_min <= m_pips <= m_pips_max")
         if not self.n_pips_head >= self.n_pips_tail > 0:
             raise ValueError("Must satisfy n_pips_head >= n_pips_tail > 0")
         if not self.n_pips_flat_steps < self.r_max:

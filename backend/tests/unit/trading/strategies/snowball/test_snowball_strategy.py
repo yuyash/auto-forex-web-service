@@ -66,11 +66,8 @@ def _strategy(**overrides) -> SnowballStrategy:
         "counter_tp_step_amount": "2.5",
         "counter_tp_multiplier": "1.2",
         "round_step_pips": "0.1",
-        "dynamic_tp_enabled": False,
         "shrink_enabled": False,
         "lock_enabled": False,
-        "spread_guard_enabled": False,
-        "spread_guard_pips": "2.5",
         "m_th": "70",
         "n_th": "85",
         "pip_size": "0.01",
@@ -472,22 +469,6 @@ class TestLockMode:
 # ==================================================================
 
 
-class TestSpreadGuard:
-    def test_spread_guard_blocks_trading(self):
-        s = _strategy(spread_guard_enabled=True, spread_guard_pips="1")
-        state = DummyState()
-        result = s.on_tick(tick=_tick(T0, "150.00", "150.05"), state=state)
-        assert state.strategy_state.get("initialised") is not True
-        assert len(_open_events(result)) == 0
-
-    def test_narrow_spread_allows_trading(self):
-        s = _strategy(spread_guard_enabled=True, spread_guard_pips="5")
-        state = DummyState()
-        result = s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-        assert state.strategy_state["initialised"] is True
-        assert len(_open_events(result)) == 2
-
-
 # ==================================================================
 # 13. Monotonic increase
 # ==================================================================
@@ -531,7 +512,6 @@ class TestLockUnlockCycle:
             n_th="85",
             m_th="70",
             shrink_enabled=False,
-            spread_guard_enabled=False,
         )
         state = DummyState(current_balance=Decimal("1000000"))
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
