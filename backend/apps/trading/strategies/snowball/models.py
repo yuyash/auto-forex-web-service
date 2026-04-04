@@ -77,6 +77,7 @@ class SnowballStrategyConfig:
     rebalance_end_ratio: Decimal
     shrink_enabled: bool
     m_th: Decimal
+    m1_th: Decimal  # shrink target: close positions until ratio drops below this
     lock_enabled: bool
     n_th: Decimal
     cooldown_sec: int
@@ -125,6 +126,7 @@ class SnowballStrategyConfig:
             rebalance_end_ratio=_parse_decimal(raw.get("rebalance_end_ratio", "50"), "50"),
             shrink_enabled=bool(raw.get("shrink_enabled", True)),
             m_th=_parse_decimal(raw.get("m_th", "70"), "70"),
+            m1_th=_parse_decimal(raw.get("m1_th", "50"), "50"),
             lock_enabled=bool(raw.get("lock_enabled", True)),
             n_th=_parse_decimal(raw.get("n_th", "85"), "85"),
             cooldown_sec=_parse_int(raw.get("cooldown_sec", 300), 300),
@@ -164,6 +166,7 @@ class SnowballStrategyConfig:
             "rebalance_end_ratio": str(self.rebalance_end_ratio),
             "shrink_enabled": self.shrink_enabled,
             "m_th": str(self.m_th),
+            "m1_th": str(self.m1_th),
             "lock_enabled": self.lock_enabled,
             "n_th": str(self.n_th),
             "cooldown_sec": self.cooldown_sec,
@@ -177,6 +180,8 @@ class SnowballStrategyConfig:
             raise ValueError("Must satisfy m_th < n_th < 100")
         if self.shrink_enabled and not Decimal("0") < self.m_th < Decimal("100"):
             raise ValueError("m_th must be between 0 and 100")
+        if self.shrink_enabled and not Decimal("0") < self.m1_th < self.m_th:
+            raise ValueError("m1_th must be between 0 and m_th")
         if self.lock_enabled and not Decimal("0") < self.n_th < Decimal("100"):
             raise ValueError("n_th must be between 0 and 100")
         if self.dynamic_tp_enabled and not self.m_pips_min <= self.m_pips <= self.m_pips_max:

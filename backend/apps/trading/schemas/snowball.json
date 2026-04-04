@@ -389,6 +389,19 @@
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
     },
+    "m1_th": {
+      "type": "number",
+      "title": "Shrink Target (%)",
+      "title_ja": "縮小目標（%）",
+      "description": "Target margin ratio to stop closing positions during shrink. Must be less than m_th.",
+      "description_ja": "縮小中にポジションのクローズを停止する目標証拠金比率。m_thより小さい値を設定してください。",
+      "default": 50,
+      "minimum": 1,
+      "maximum": 98,
+      "dependsOn": { "field": "shrink_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
     "lock_enabled": {
       "type": "boolean",
       "title": "Enable Lock",

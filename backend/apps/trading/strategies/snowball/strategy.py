@@ -845,7 +845,15 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         ratio: Decimal,
     ) -> list[StrategyEvent] | None:
-        """Shrink mode: close worst-loss counter entry. Returns events or None."""
+        """Shrink v2: close positions from oldest/smallest until margin ratio drops below m1_th.
+
+        Close order per cycle:
+        - L1 lowest R first, but skip the highest R in each layer
+        - If a layer has only 1 position, close it
+        - When L1/R0 is closed, move cycle initial_entry to the next closest open entry
+        - Alternate between LONG and SHORT cycles, starting with the higher-impact one
+        - If all positions are closed and ratio is still above m1_th, fail the task
+        """
         cfg = self.config
         if not cfg.shrink_enabled or ratio < cfg.m_th:
             return None
@@ -862,38 +870,150 @@ class SnowballStrategy(Strategy):
             shrink_evt.close_reason = "shrink_entered"
             events.append(shrink_evt)
 
-        # Find worst-loss counter entry across all cycles
-        worst_entry: Entry | None = None
-        worst_cycle: SnowballCycle | None = None
-        worst_loss = Decimal("-1")
-        for cycle in ss.active_cycles():
-            for e in cycle.counter_entries:
-                if e.is_hedge:
-                    continue
-                loss = e.unrealised_loss_pips(tick.mid, self.pip_size)
-                if loss > worst_loss:
-                    worst_loss = loss
-                    worst_entry = e
-                    worst_cycle = cycle
+        closed_count = 0
+        while ratio >= cfg.m1_th:
+            # Pick the next entry to close, alternating between cycles
+            entry, cycle = self._pick_shrink_target(ss, tick)
+            if entry is None or cycle is None:
+                # No more positions to close — fail the task
+                logger.error(
+                    "SHRINK EXHAUSTED: all positions closed but margin ratio "
+                    "%.1f%% still above m1_th=%.1f%%. Failing task.",
+                    ratio,
+                    cfg.m1_th,
+                )
+                self._close_order_violation = (
+                    f"Shrink exhausted: ratio={ratio:.1f}%, m1_th={cfg.m1_th}%, "
+                    f"no more positions to close"
+                )
+                break
 
-        if worst_entry and worst_cycle:
+            # If closing L1/R0 (cycle initial), migrate initial_entry first
+            if entry.entry_id == cycle.initial_entry.entry_id if cycle.initial_entry else False:
+                self._migrate_cycle_initial(cycle, entry)
+
             events.append(
                 self._close_entry(
                     tick,
-                    worst_entry,
+                    entry,
                     description=(
-                        f"[PROTECTION] Shrink: close largest-loss counter | "
-                        f"loss={worst_loss:.1f} pips, ratio={ratio:.1f}%"
+                        f"[PROTECTION] Shrink: L{entry.layer_number}/R{entry.retracement_count} | "
+                        f"ratio={ratio:.1f}%, target={cfg.m1_th}%"
                     ),
                     close_reason="shrink",
                     validation_status="warn",
                 )
             )
-            worst_cycle.remove_entry(worst_entry.entry_id)
+            cycle.remove_entry(entry.entry_id)
+            closed_count += 1
 
-        if ratio < cfg.m_th - Decimal("5"):
+            # Recalculate margin ratio after close
+            # Approximate: each close reduces required margin
+            from apps.trading.utils import quote_to_account_rate
+
+            conv = quote_to_account_rate(self.instrument, tick.mid, self.account_currency)
+            margin_rate = Decimal("0.04")
+            released_margin = tick.mid * Decimal(str(abs(entry.units))) * margin_rate * conv
+            nav = ss.account_nav
+            if nav > 0:
+                ratio = ratio - (released_margin / nav) * Decimal("100")
+
+        if closed_count > 0:
+            logger.warning(
+                "SHRINK completed: closed %d position(s), ratio now ~%.1f%%",
+                closed_count,
+                ratio,
+            )
+
+        if ratio < cfg.m1_th:
             ss.protection_level = ProtectionLevel.NORMAL
         return events
+
+    def _pick_shrink_target(
+        self,
+        ss: SnowballStrategyState,
+        tick: Tick,
+    ) -> tuple[Entry | None, SnowballCycle | None]:
+        """Pick the next position to close during shrink.
+
+        Alternates between active cycles, starting with the one whose
+        candidate has the largest unrealised loss (higher impact).
+        Within a cycle: oldest layer, lowest R, skipping the highest R per layer.
+        """
+        candidates: list[tuple[Entry, SnowballCycle, Decimal]] = []
+        for cycle in ss.active_cycles():
+            entry = self._find_shrink_candidate_in_cycle(cycle)
+            if entry is not None:
+                loss = entry.unrealised_loss_pips(tick.mid, self.pip_size)
+                candidates.append((entry, cycle, loss))
+
+        if not candidates:
+            return None, None
+
+        # Pick the candidate with the largest loss (highest impact)
+        candidates.sort(key=lambda c: c[2], reverse=True)
+        return candidates[0][0], candidates[0][1]
+
+    def _find_shrink_candidate_in_cycle(self, cycle: SnowballCycle) -> Entry | None:
+        """Find the next entry to close in a cycle for shrink.
+
+        Order: L1 lowest R → ... → L1 highest-1 R → L2 lowest R → ...
+        Skip the highest occupied R in each layer (preserve last position).
+        If a layer has only 1 position, close it.
+        Special: cycle initial_entry (L1/R0) is eligible.
+        """
+        for layer in cycle.layers:
+            occupied = layer.occupied_slots()
+            if not occupied:
+                continue
+
+            if len(occupied) == 1:
+                # Only one position in this layer — close it
+                return occupied[0].entry
+
+            # Multiple positions: close lowest R, skip highest R
+            lowest = min(occupied, key=lambda s: s.index)
+            return lowest.entry
+
+        # No slot entries left — check cycle initial_entry
+        if cycle.initial_entry is not None:
+            return cycle.initial_entry
+
+        return None
+
+    @staticmethod
+    def _migrate_cycle_initial(cycle: SnowballCycle, old_initial: Entry) -> None:
+        """Move cycle initial_entry to the next closest open entry.
+
+        Called when shrink needs to close L1/R0. The next entry with the
+        closest R number becomes the new initial_entry.
+        """
+        # Collect all open entries except the one being closed
+        candidates: list[Entry] = []
+        for layer in cycle.layers:
+            for e in layer.all_entries():
+                if e.entry_id != old_initial.entry_id:
+                    candidates.append(e)
+
+        if not candidates:
+            # No other entries — cycle will end after this close
+            cycle.initial_entry = None
+            cycle.completed = True
+            return
+
+        # Pick the entry with the lowest layer number and lowest retracement count
+        candidates.sort(key=lambda e: (e.layer_number, e.retracement_count))
+        new_initial = candidates[0]
+        logger.warning(
+            "SHRINK: migrating cycle initial from entry_id=%s (L%s/R%s) to entry_id=%s (L%s/R%s)",
+            old_initial.entry_id,
+            old_initial.layer_number,
+            old_initial.retracement_count,
+            new_initial.entry_id,
+            new_initial.layer_number,
+            new_initial.retracement_count,
+        )
+        cycle.initial_entry = new_initial
 
     def _handle_rebalance(
         self,
