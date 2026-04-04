@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.27.0...frontend-v1.28.0) (2026-04-04)
+
+
+### Features
+
+* add metrics tab ([#319](https://github.com/yuyash/auto-forex-web-service/issues/319)) ([056bfe4](https://github.com/yuyash/auto-forex-web-service/commit/056bfe424c01465cede211b5a2954bc0ae9ce39c))
+
 ## [1.27.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.26.4...frontend-v1.27.0) (2026-04-04)
 
 

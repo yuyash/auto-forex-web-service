@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.25.0...backend-v1.26.0) (2026-04-04)
+
+
+### Features
+
+* add metrics tab ([#319](https://github.com/yuyash/auto-forex-web-service/issues/319)) ([056bfe4](https://github.com/yuyash/auto-forex-web-service/commit/056bfe424c01465cede211b5a2954bc0ae9ce39c))
+
 ## [1.25.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.24.4...backend-v1.25.0) (2026-04-04)
 
 
