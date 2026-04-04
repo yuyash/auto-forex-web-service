@@ -24,7 +24,6 @@ SNOWBALL_DEFAULTS: dict[str, Any] = {
     "base_units": 1000,
     "m_pips": 50,
     "r_max": 7,
-    "m_pips_max": 55,
 }
 
 SNOWBALL_FULL_PARAMS: dict[str, Any] = {
@@ -44,14 +43,10 @@ SNOWBALL_FULL_PARAMS: dict[str, Any] = {
     "counter_tp_step_amount": "3",
     "counter_tp_multiplier": "1.5",
     "round_step_pips": "0.5",
-    "dynamic_tp_enabled": False,
-    "atr_timeframe": "M5",
     "shrink_enabled": True,
     "m_th": "70",
     "lock_enabled": True,
     "n_th": "85",
-    "m_pips_min": "12",
-    "m_pips_max": "55",
 }
 
 
@@ -87,30 +82,17 @@ class TestSnowballRegistry:
     def test_normalize_parameters(self):
         normalised = registry.normalize_parameters(
             identifier="snowball",
-            parameters={"base_units": 2000, "atr_timeframe": "h1"},
+            parameters={"base_units": 2000},
         )
         assert normalised["base_units"] == 2000
-        assert normalised["atr_timeframe"] == "H1"
 
     def test_normalize_then_validate_defaults(self):
         """Full round-trip: normalize defaults → validate against schema."""
         normalised = registry.normalize_parameters(
             identifier="snowball",
-            parameters={"m_pips_max": "55"},
+            parameters={},
         )
         # Should not raise
-        registry.validate_parameters(
-            identifier="snowball",
-            parameters=normalised,
-        )
-
-    def test_normalize_then_validate_lowercase_timeframe(self):
-        """Regression: lowercase atr_timeframe must survive normalize → validate."""
-        normalised = registry.normalize_parameters(
-            identifier="snowball",
-            parameters={"atr_timeframe": "m1", "m_pips_max": "55"},
-        )
-        assert normalised["atr_timeframe"] == "M1"
         registry.validate_parameters(
             identifier="snowball",
             parameters=normalised,
@@ -178,13 +160,11 @@ class TestSnowballModelIntegration:
         assert is_valid is True, error
 
     def test_validate_parameters_empty_dict(self):
-        """Config with empty params should validate (needs m_pips_max >= m_pips default)."""
         user = UserFactory()
         config = StrategyConfiguration.objects.create_for_user(
             user,
             name="Snowball Empty",
             strategy_type="snowball",
-            parameters={"m_pips_max": 55},
         )
         is_valid, error = config.validate_parameters()
         assert is_valid is True, error
@@ -261,12 +241,10 @@ class TestSnowballSerializerIntegration:
         assert "interval_mode" in config.parameters
 
     def test_create_with_empty_params(self):
-        """Empty params should be normalised to full defaults (with m_pips_max fix)."""
         user = UserFactory()
         data = {
             "name": "Snowball Empty Params",
             "strategy_type": "snowball",
-            "parameters": {"m_pips_max": 55},
         }
         serializer = StrategyConfigCreateSerializer(
             data=data,
@@ -275,23 +253,6 @@ class TestSnowballSerializerIntegration:
         assert serializer.is_valid(), serializer.errors
         config = serializer.save()
         assert config.parameters["base_units"] == 1000
-        assert config.parameters["atr_timeframe"] == "M1"
-
-    def test_create_normalises_lowercase_timeframe(self):
-        """Regression: lowercase atr_timeframe must be accepted and normalised."""
-        user = UserFactory()
-        data = {
-            "name": "Snowball Lowercase TF",
-            "strategy_type": "snowball",
-            "parameters": {"atr_timeframe": "m5", "m_pips_max": 55},
-        }
-        serializer = StrategyConfigCreateSerializer(
-            data=data,
-            context={"request": _make_request(user)},
-        )
-        assert serializer.is_valid(), serializer.errors
-        config = serializer.save()
-        assert config.parameters["atr_timeframe"] == "M5"
 
     def test_create_rejects_invalid_base_units(self):
         user = UserFactory()
