@@ -70,6 +70,7 @@ class StrategyEvent(ABC):
     expected_exit_price: Decimal | None = None
     actual_exit_price: Decimal | None = None
     validation_tolerance_pips: Decimal | None = None
+    margin_ratio: Decimal | None = None
 
     @property
     def category(self) -> str:

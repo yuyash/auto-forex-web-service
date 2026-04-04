@@ -116,6 +116,16 @@ class Trade(models.Model):
             "Preserves the logical ordering of events that share the same timestamp."
         ),
     )
+    margin_ratio = models.DecimalField(
+        max_digits=10,
+        decimal_places=6,
+        null=True,
+        blank=True,
+        help_text=(
+            "Margin closeout ratio at the time this trade was executed. "
+            "Stored as a fraction (e.g. 0.791 = 79.1%)."
+        ),
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         help_text="Timestamp when this record was created",

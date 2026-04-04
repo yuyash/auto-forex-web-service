@@ -245,6 +245,7 @@ class EventHandler:
         order: Order | None = None,
         description: str = "",
         cycle_id: str | None = None,
+        margin_ratio: Decimal | None = None,
     ) -> Trade:
         trade = Trade.objects.create(
             task_type=self.order_service.task_type.value,
@@ -264,6 +265,7 @@ class EventHandler:
             description=description,
             cycle_id=cycle_id,
             sequence_number=self._current_sequence_number,
+            margin_ratio=margin_ratio,
         )
         return trade
 
@@ -502,6 +504,7 @@ class EventHandler:
             order=order,
             description=getattr(event, "description", ""),
             cycle_id=cycle_id,
+            margin_ratio=event.margin_ratio,
         )
 
         # New cycle: back-fill cycle_id = trade's own id.
@@ -669,6 +672,7 @@ class EventHandler:
                 order=close_order,
                 description=getattr(event, "description", ""),
                 cycle_id=self._resolve_cycle_id_for_close(event),
+                margin_ratio=event.margin_ratio,
             )
 
             self._prune_closed_position(event.layer_number, closed_position)
@@ -798,6 +802,7 @@ class EventHandler:
                     order=close_order,
                     description=f"[PROTECTION] Volatility lock: close all positions ({event.reason})",
                     cycle_id=self._resolve_cycle_id_for_position(position),
+                    margin_ratio=event.margin_ratio,
                 )
                 logger.info(
                     "Closed position due to volatility: layer=%s, position_id=%s, pnl=%s",
@@ -991,6 +996,7 @@ class EventHandler:
                     order=close_order,
                     description=f"[PROTECTION] Margin protection: forced close ({event.reason})",
                     cycle_id=self._resolve_cycle_id_for_position(position),
+                    margin_ratio=event.margin_ratio,
                 )
                 touched_positions += 1
                 if remaining_units is not None:

@@ -249,6 +249,13 @@ def _serialize_trade(
         if metrics.get("margin_ratio") is not None:
             margin_ratio = f"{float(metrics['margin_ratio']):.3f}"
 
+    # Prefer the margin_ratio stored directly on the trade (captured at
+    # the moment the event fired) over the metrics bucket (which reflects
+    # the post-tick state).
+    trade_mr = t.get("margin_ratio")
+    if trade_mr is not None:
+        margin_ratio = f"{float(trade_mr):.3f}"
+
     return {
         "id": str(t["id"]),
         "direction": direction,
