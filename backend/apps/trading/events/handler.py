@@ -39,6 +39,8 @@ class EventHandler:
         position_map: Maps layer numbers to Position instances
     """
 
+    _PROTECTION_CLOSE_REASONS = frozenset({"shrink", "volatility_lock", "margin_protection"})
+
     def __init__(self, order_service: OrderService, instrument: str):
         """Initialize event handler.
 
@@ -663,7 +665,11 @@ class EventHandler:
                 units=closed_units,
                 instrument=position.instrument,
                 price=Decimal(str(closed_position.exit_price or position.entry_price)),
-                execution_method=str(event.event_type.value),
+                execution_method=(
+                    event.close_reason
+                    if event.close_reason in self._PROTECTION_CLOSE_REASONS
+                    else str(event.event_type.value)
+                ),
                 timestamp=event.timestamp,
                 layer_index=event.layer_number,
                 retracement_count=event.retracement_count,
