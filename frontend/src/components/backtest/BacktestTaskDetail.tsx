@@ -505,39 +505,49 @@ export const BacktestTaskDetail: React.FC = () => {
           action={pendingAction.type}
           taskName={task.name}
           onCancel={cancelAction}
+          isLoading={
+            startTask.isLoading ||
+            pauseTask.isLoading ||
+            resumeTask.isLoading ||
+            restartTask.isLoading
+          }
           onConfirm={async () => {
             const { type, taskId: actionTaskId } = pendingAction;
-            cancelAction();
-            if (type === 'start') {
-              const updatedTask = await startTask.mutate(actionTaskId);
-              applyOptimisticStatus(updatedTask.status, [
-                TaskStatus.STARTING,
-                TaskStatus.RUNNING,
-                TaskStatus.FAILED,
-              ]);
-            } else if (type === 'pause') {
-              const updatedTask = await pauseTask.mutate(actionTaskId);
-              applyOptimisticStatus(updatedTask.status, [
-                TaskStatus.PAUSED,
-                TaskStatus.RUNNING,
-                TaskStatus.FAILED,
-              ]);
-            } else if (type === 'resume') {
-              const updatedTask = await resumeTask.mutate(actionTaskId);
-              applyOptimisticStatus(updatedTask.status, [
-                TaskStatus.RUNNING,
-                TaskStatus.PAUSED,
-                TaskStatus.FAILED,
-              ]);
-            } else if (type === 'restart') {
-              const updatedTask = await restartTask.mutate(actionTaskId);
-              applyOptimisticStatus(updatedTask.status, [
-                TaskStatus.STARTING,
-                TaskStatus.RUNNING,
-                TaskStatus.FAILED,
-              ]);
+            try {
+              if (type === 'start') {
+                const updatedTask = await startTask.mutate(actionTaskId);
+                applyOptimisticStatus(updatedTask.status, [
+                  TaskStatus.STARTING,
+                  TaskStatus.RUNNING,
+                  TaskStatus.FAILED,
+                ]);
+              } else if (type === 'pause') {
+                const updatedTask = await pauseTask.mutate(actionTaskId);
+                applyOptimisticStatus(updatedTask.status, [
+                  TaskStatus.PAUSED,
+                  TaskStatus.RUNNING,
+                  TaskStatus.FAILED,
+                ]);
+              } else if (type === 'resume') {
+                const updatedTask = await resumeTask.mutate(actionTaskId);
+                applyOptimisticStatus(updatedTask.status, [
+                  TaskStatus.RUNNING,
+                  TaskStatus.PAUSED,
+                  TaskStatus.FAILED,
+                ]);
+              } else if (type === 'restart') {
+                const updatedTask = await restartTask.mutate(actionTaskId);
+                applyOptimisticStatus(updatedTask.status, [
+                  TaskStatus.STARTING,
+                  TaskStatus.RUNNING,
+                  TaskStatus.FAILED,
+                ]);
+              }
+              cancelAction();
+              await refreshTask();
+            } catch {
+              cancelAction();
             }
-            await refreshTask();
           }}
         />
       )}
