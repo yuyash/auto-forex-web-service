@@ -269,10 +269,12 @@ class SnowballStrategy(Strategy):
                     f"entry={e.entry_price:.3f} tp={e.close_price:.3f}"
                 )
         initial = cycle.initial_entry
+        initial_price = f"{initial.entry_price:.3f}" if initial else "None"
+        initial_tp = f"{initial.close_price:.3f}" if initial else "None"
         detail = (
             f"cycle_id={cycle.cycle_id}, direction={cycle.direction.value}, "
-            f"initial_entry={initial.entry_price:.3f if initial else 'None'}, "
-            f"initial_tp={initial.close_price:.3f if initial else 'None'}, "
+            f"initial_entry={initial_price}, "
+            f"initial_tp={initial_tp}, "
             f"open_counters=[{', '.join(open_entries)}], "
             f"tick_bid={tick.bid}, tick_ask={tick.ask}"
         )
