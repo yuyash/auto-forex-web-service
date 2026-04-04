@@ -2,7 +2,7 @@
 
 Covers: initialisation, trend basket rotation, counter basket adds/closes,
 slot vacate after TP, layer progression, f_max exhaustion, margin
-protection (shrink / lock / emergency), rebalance, spread guard, and
+protection (shrink / lock / emergency), spread guard, and
 dynamic TP (ATR) scenarios.
 """
 
@@ -66,12 +66,8 @@ def _strategy(**overrides) -> SnowballStrategy:
         "counter_tp_step_amount": "2.5",
         "counter_tp_multiplier": "1.2",
         "round_step_pips": "0.1",
-        "dynamic_tp_enabled": False,
-        "rebalance_enabled": False,
         "shrink_enabled": False,
         "lock_enabled": False,
-        "spread_guard_enabled": False,
-        "spread_guard_pips": "2.5",
         "m_th": "70",
         "n_th": "85",
         "pip_size": "0.01",
@@ -469,61 +465,8 @@ class TestLockMode:
 
 
 # ==================================================================
-# 11. Rebalance
-# ==================================================================
-
-
-class TestRebalance:
-    def test_rebalance_closes_heavier_side(self):
-        s = _strategy(
-            rebalance_enabled=True,
-            rebalance_start_ratio="50",
-            rebalance_end_ratio="40",
-            shrink_enabled=False,
-            lock_enabled=False,
-        )
-        state = DummyState(current_balance=Decimal("1000000"))
-        s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-
-        # Inject imbalanced entries via slots
-        for i in range(3):
-            entry = {
-                "entry_id": 20 + i,
-                "step": i + 2,
-                "direction": "long",
-                "entry_price": str(Decimal("149.00") - Decimal("0.10") * i),
-                "close_price": "150.00",
-                "units": 1000 * (i + 1),
-                "opened_at": T0.isoformat(),
-            }
-            layers = state.strategy_state["cycles"][0]["layers"]
-            layers[0]["slots"][i]["entry"] = entry
-
-        state.strategy_state["account_nav"] = "80000"
-        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"), state=state)
-        closes = _close_events(result)
-        assert len(closes) >= 1
-
-
-# ==================================================================
 # 12. Spread guard
 # ==================================================================
-
-
-class TestSpreadGuard:
-    def test_spread_guard_blocks_trading(self):
-        s = _strategy(spread_guard_enabled=True, spread_guard_pips="1")
-        state = DummyState()
-        result = s.on_tick(tick=_tick(T0, "150.00", "150.05"), state=state)
-        assert state.strategy_state.get("initialised") is not True
-        assert len(_open_events(result)) == 0
-
-    def test_narrow_spread_allows_trading(self):
-        s = _strategy(spread_guard_enabled=True, spread_guard_pips="5")
-        state = DummyState()
-        result = s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
-        assert state.strategy_state["initialised"] is True
-        assert len(_open_events(result)) == 2
 
 
 # ==================================================================
@@ -569,7 +512,6 @@ class TestLockUnlockCycle:
             n_th="85",
             m_th="70",
             shrink_enabled=False,
-            spread_guard_enabled=False,
         )
         state = DummyState(current_balance=Decimal("1000000"))
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)

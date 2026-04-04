@@ -169,12 +169,9 @@ class TestSnowballBacktestSimulation:
                 "interval_mode": "constant",
                 "counter_tp_mode": "fixed",
                 "counter_tp_pips": "8",
-                "spread_guard_enabled": False,
                 "shrink_enabled": False,
                 "lock_enabled": False,
-                "rebalance_enabled": False,
                 "refill_up_to": 0,
-                "m_pips_max": "55",
             },
             ticks=[
                 _tick(base, "150.00", "150.02"),
@@ -249,11 +246,8 @@ class TestSnowballBacktestSimulation:
                 "interval_mode": "constant",
                 "counter_tp_mode": "fixed",
                 "counter_tp_pips": "20",
-                "spread_guard_enabled": False,
                 "shrink_enabled": False,
                 "lock_enabled": False,
-                "rebalance_enabled": False,
-                "m_pips_max": "55",
             },
             ticks=[
                 _tick(base, "150.00", "150.02"),
@@ -282,48 +276,6 @@ class TestSnowballBacktestSimulation:
         assert cycle["layers"][1]["base_units"] == 1500
         assert counter_add_retracements == [1, 2]
 
-    def test_spread_guard_blocks_initialisation_through_executor(self) -> None:
-        base = datetime(2026, 1, 1, tzinfo=UTC)
-        task, state = _run_snowball_backtest(
-            parameters={
-                "base_units": 1000,
-                "m_pips": "50",
-                "r_max": 7,
-                "f_max": 3,
-                "n_pips_head": "30",
-                "n_pips_tail": "14",
-                "n_pips_flat_steps": 2,
-                "interval_mode": "constant",
-                "counter_tp_mode": "weighted_avg",
-                "spread_guard_enabled": True,
-                "spread_guard_pips": "1",
-                "shrink_enabled": False,
-                "lock_enabled": False,
-                "rebalance_enabled": False,
-                "m_pips_max": "55",
-            },
-            ticks=[
-                _tick(base, "150.00", "150.05"),
-                _tick(base + timedelta(seconds=60), "150.01", "150.06"),
-            ],
-        )
-
-        events = list(
-            TradingEvent.objects.filter(
-                task_id=task.pk,
-                execution_id=task.execution_id,
-            )
-            .order_by("created_at", "id")
-            .values_list("event_type", flat=True)
-        )
-
-        assert state.ticks_processed == 2
-        assert state.strategy_state["initialised"] is False
-        assert state.strategy_state["cycles"] == []
-        assert Position.objects.filter(task_id=task.pk, execution_id=task.execution_id).count() == 0
-        assert Trade.objects.filter(task_id=task.pk, execution_id=task.execution_id).count() == 0
-        assert events == ["strategy_started", "strategy_stopped"]
-
     def test_resume_run_matches_continuous_run_for_same_tick_sequence(self) -> None:
         base = datetime(2026, 1, 1, tzinfo=UTC)
         parameters = {
@@ -337,11 +289,8 @@ class TestSnowballBacktestSimulation:
             "interval_mode": "constant",
             "counter_tp_mode": "fixed",
             "counter_tp_pips": "8",
-            "spread_guard_enabled": False,
             "shrink_enabled": False,
             "lock_enabled": False,
-            "rebalance_enabled": False,
-            "m_pips_max": "55",
         }
         all_ticks = [
             _tick(base, "150.00", "150.02"),
@@ -480,11 +429,8 @@ class TestSnowballBacktestSimulation:
                 "manual_intervals": ["5", "10", "15", "20"],
                 "counter_tp_mode": "fixed",
                 "counter_tp_pips": "25",
-                "spread_guard_enabled": False,
                 "shrink_enabled": False,
                 "lock_enabled": False,
-                "rebalance_enabled": False,
-                "m_pips_max": "55",
             },
             ticks=[
                 _tick(base, "150.00", "150.02"),

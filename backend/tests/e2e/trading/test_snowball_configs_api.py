@@ -24,14 +24,11 @@ SNOWBALL_FULL_PARAMS = {
     "counter_tp_step_amount": 3,
     "counter_tp_multiplier": 1.5,
     "round_step_pips": 0.5,
-    "dynamic_tp_enabled": False,
-    "atr_timeframe": "M5",
     "shrink_enabled": True,
     "m_th": 70,
+    "m1_th": 50,
     "lock_enabled": True,
     "n_th": 85,
-    "m_pips_min": 12,
-    "m_pips_max": 55,
 }
 
 
@@ -58,16 +55,16 @@ class TestSnowballStrategyEndpoints:
         assert resp.status_code == 200
         defaults = resp.data["defaults"]
         assert defaults["base_units"] == 1000
-        assert defaults["atr_timeframe"] == "M1"
 
-    def test_snowball_schema_has_atr_timeframe_enum(self, authenticated_client):
+    def test_snowball_schema_has_interval_mode_enum(self, authenticated_client):
         resp = authenticated_client.get("/api/trading/strategies/")
         assert resp.status_code == 200
         strategies = resp.data["strategies"]
         snowball = next(s for s in strategies if s["id"] == "snowball")
         schema = snowball["config_schema"]
-        atr_tf = schema["properties"]["atr_timeframe"]
-        assert atr_tf["enum"] == ["M1", "M5", "M15", "M30", "H1", "H4"]
+        im = schema["properties"]["interval_mode"]
+        assert "constant" in im["enum"]
+        assert "manual" in im["enum"]
 
 
 # ===================================================================
@@ -100,58 +97,27 @@ class TestSnowballConfigCRUD:
             {
                 "name": "E2E Snowball Minimal",
                 "strategy_type": "snowball",
-                "parameters": {"base_units": 1000, "m_pips": 50, "r_max": 7, "m_pips_max": 55},
+                "parameters": {"base_units": 1000, "m_pips": 50, "r_max": 7},
             },
             format="json",
         )
         assert resp.status_code in (200, 201), resp.data
         params = resp.data["parameters"]
         assert params["interval_mode"] == "constant"
-        assert params["atr_timeframe"] == "M1"
 
     def test_create_with_empty_params(self, authenticated_client):
-        """Empty params should be accepted (needs m_pips_max >= default m_pips)."""
+        """Empty params should be accepted with defaults."""
         resp = authenticated_client.post(
             "/api/trading/strategy-configs/",
             {
                 "name": "E2E Snowball Empty",
                 "strategy_type": "snowball",
-                "parameters": {"m_pips_max": 55},
             },
             format="json",
         )
         assert resp.status_code in (200, 201), resp.data
         params = resp.data["parameters"]
         assert params["base_units"] == 1000
-        assert params["atr_timeframe"] == "M1"
-
-    def test_create_with_lowercase_timeframe(self, authenticated_client):
-        """Regression: lowercase atr_timeframe must be accepted and normalised."""
-        resp = authenticated_client.post(
-            "/api/trading/strategy-configs/",
-            {
-                "name": "E2E Snowball Lowercase TF",
-                "strategy_type": "snowball",
-                "parameters": {"atr_timeframe": "m1", "m_pips_max": 55},
-            },
-            format="json",
-        )
-        assert resp.status_code in (200, 201), resp.data
-        assert resp.data["parameters"]["atr_timeframe"] == "M1"
-
-    @pytest.mark.parametrize("timeframe", ["m5", "M15", "h1", "H4", "m30"])
-    def test_create_with_various_timeframes(self, authenticated_client, timeframe):
-        resp = authenticated_client.post(
-            "/api/trading/strategy-configs/",
-            {
-                "name": f"E2E Snowball TF {timeframe}",
-                "strategy_type": "snowball",
-                "parameters": {"atr_timeframe": timeframe, "m_pips_max": 55},
-            },
-            format="json",
-        )
-        assert resp.status_code in (200, 201), resp.data
-        assert resp.data["parameters"]["atr_timeframe"] == timeframe.upper()
 
     def test_create_rejects_invalid_base_units(self, authenticated_client):
         resp = authenticated_client.post(
@@ -172,18 +138,6 @@ class TestSnowballConfigCRUD:
                 "name": "E2E Snowball Bad Mode",
                 "strategy_type": "snowball",
                 "parameters": {"interval_mode": "nonexistent"},
-            },
-            format="json",
-        )
-        assert resp.status_code == 400
-
-    def test_create_rejects_invalid_atr_timeframe(self, authenticated_client):
-        resp = authenticated_client.post(
-            "/api/trading/strategy-configs/",
-            {
-                "name": "E2E Snowball Bad TF",
-                "strategy_type": "snowball",
-                "parameters": {"atr_timeframe": "INVALID"},
             },
             format="json",
         )
@@ -317,7 +271,6 @@ class TestSnowballValidationEdgeCases:
                     "manual_intervals": [10, 20, 30],
                     "r_max": 3,
                     "n_pips_flat_steps": 1,
-                    "m_pips_max": 55,
                 },
             },
             format="json",
@@ -335,22 +288,6 @@ class TestSnowballValidationEdgeCases:
                     "lock_enabled": True,
                     "m_th": 90,
                     "n_th": 85,
-                },
-            },
-            format="json",
-        )
-        assert resp.status_code == 400
-
-    def test_rebalance_ratio_ordering_rejected(self, authenticated_client):
-        resp = authenticated_client.post(
-            "/api/trading/strategy-configs/",
-            {
-                "name": "E2E Snowball Rebalance Bad",
-                "strategy_type": "snowball",
-                "parameters": {
-                    "rebalance_enabled": True,
-                    "rebalance_start_ratio": 40,
-                    "rebalance_end_ratio": 50,
                 },
             },
             format="json",

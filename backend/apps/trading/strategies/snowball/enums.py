@@ -11,7 +11,6 @@ class ProtectionLevel(str, Enum):
     """Margin protection level."""
 
     NORMAL = "normal"
-    REBALANCE = "rebalance"
     SHRINK = "shrink"
     LOCKED = "locked"
     EMERGENCY = "emergency"

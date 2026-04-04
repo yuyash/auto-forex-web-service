@@ -261,111 +261,6 @@
       "group_ja": "コアパラメータ"
     },
 
-    "dynamic_tp_enabled": {
-      "type": "boolean",
-      "title": "Dynamic Take-Profit (ATR)",
-      "title_ja": "動的利確（ATR）",
-      "description": "Automatically adjust trend take-profit based on ATR volatility.",
-      "description_ja": "ATRボラティリティに基づいて順行側利確を自動調整。",
-      "default": false,
-      "group": "Dynamic Take-Profit (ATR)",
-      "group_ja": "動的利確（ATR）"
-    },
-    "atr_period": {
-      "type": "integer",
-      "title": "ATR Period",
-      "title_ja": "ATR期間",
-      "description": "Number of candles for ATR calculation.",
-      "description_ja": "ATR計算に使用するローソク足の本数。",
-      "default": 14,
-      "minimum": 1,
-      "dependsOn": { "field": "dynamic_tp_enabled", "values": [true] },
-      "group": "Dynamic Take-Profit (ATR)",
-      "group_ja": "動的利確（ATR）"
-    },
-    "atr_timeframe": {
-      "type": "string",
-      "title": "ATR Timeframe",
-      "title_ja": "ATR時間枠",
-      "description": "Candle granularity for ATR calculation.",
-      "description_ja": "ATR計算のローソク足の時間枠。",
-      "enum": ["M1", "M5", "M15", "M30", "H1", "H4"],
-      "default": "M1",
-      "dependsOn": { "field": "dynamic_tp_enabled", "values": [true] },
-      "group": "Dynamic Take-Profit (ATR)",
-      "group_ja": "動的利確（ATR）"
-    },
-    "atr_baseline_lookback": {
-      "type": "integer",
-      "title": "ATR Baseline Lookback",
-      "title_ja": "ATR基準値算出本数",
-      "description": "Number of candles for baseline ATR calculation.",
-      "description_ja": "基準ATR計算に使用するローソク足の本数。",
-      "default": 96,
-      "minimum": 1,
-      "dependsOn": { "field": "dynamic_tp_enabled", "values": [true] },
-      "group": "Dynamic Take-Profit (ATR)",
-      "group_ja": "動的利確（ATR）"
-    },
-    "m_pips_min": {
-      "type": "number",
-      "title": "Dynamic m_pips Min",
-      "title_ja": "動的m_pips下限",
-      "description": "Lower bound for ATR-adjusted trend take-profit.",
-      "description_ja": "ATR調整後の順行側利確の下限値。",
-      "default": 12,
-      "minimum": 1,
-      "dependsOn": { "field": "dynamic_tp_enabled", "values": [true] },
-      "group": "Dynamic Take-Profit (ATR)",
-      "group_ja": "動的利確（ATR）"
-    },
-    "m_pips_max": {
-      "type": "number",
-      "title": "Dynamic m_pips Max",
-      "title_ja": "動的m_pips上限",
-      "description": "Upper bound for ATR-adjusted trend take-profit.",
-      "description_ja": "ATR調整後の順行側利確の上限値。",
-      "default": 80,
-      "minimum": 1,
-      "dependsOn": { "field": "dynamic_tp_enabled", "values": [true] },
-      "group": "Dynamic Take-Profit (ATR)",
-      "group_ja": "動的利確（ATR）"
-    },
-
-    "rebalance_enabled": {
-      "type": "boolean",
-      "title": "Enable Rebalance",
-      "title_ja": "リバランス有効",
-      "description": "When enabled, BUY/SELL imbalance is reduced by closing oldest counter entries when margin ratio reaches the start threshold.",
-      "description_ja": "有効時、証拠金比率が開始閾値に達すると、古い逆行エントリーを決済してBUY/SELLの偏りを解消します。",
-      "default": false,
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
-    },
-    "rebalance_start_ratio": {
-      "type": "number",
-      "title": "Rebalance Start (%)",
-      "title_ja": "リバランス開始（%）",
-      "description": "Margin ratio at which BUY/SELL rebalancing begins.",
-      "description_ja": "BUY/SELLリバランスを開始する証拠金比率。",
-      "default": 60,
-      "minimum": 1,
-      "dependsOn": { "field": "rebalance_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
-    },
-    "rebalance_end_ratio": {
-      "type": "number",
-      "title": "Rebalance End (%)",
-      "title_ja": "リバランス終了（%）",
-      "description": "Margin ratio target at which rebalancing stops.",
-      "description_ja": "リバランスを終了する証拠金比率の目標値。",
-      "default": 50,
-      "minimum": 1,
-      "dependsOn": { "field": "rebalance_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
-    },
     "shrink_enabled": {
       "type": "boolean",
       "title": "Enable Shrink",
@@ -385,6 +280,19 @@
       "default": 70,
       "minimum": 1,
       "maximum": 99,
+      "dependsOn": { "field": "shrink_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+    "m1_th": {
+      "type": "number",
+      "title": "Shrink Target (%)",
+      "title_ja": "縮小目標（%）",
+      "description": "Target margin ratio to stop closing positions during shrink. Must be less than m_th.",
+      "description_ja": "縮小中にポジションのクローズを停止する目標証拠金比率。m_thより小さい値を設定してください。",
+      "default": 50,
+      "minimum": 1,
+      "maximum": 98,
       "dependsOn": { "field": "shrink_enabled", "values": [true] },
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
@@ -423,29 +331,6 @@
       "dependsOn": { "field": "lock_enabled", "values": [true] },
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
-    },
-
-    "spread_guard_enabled": {
-      "type": "boolean",
-      "title": "Enable Spread Guard",
-      "title_ja": "スプレッドガード有効",
-      "description": "When enabled, new entries are blocked while the spread exceeds the threshold.",
-      "description_ja": "有効時、スプレッドが閾値を超えている間は新規エントリーをブロックします。",
-      "default": false,
-      "group": "Spread Guard",
-      "group_ja": "スプレッドガード"
-    },
-    "spread_guard_pips": {
-      "type": "number",
-      "title": "Spread Guard (pips)",
-      "title_ja": "スプレッドガード（pips）",
-      "description": "Maximum spread allowed for new entries and lock release.",
-      "description_ja": "新規エントリーおよびロック解除時に許容される最大スプレッド。",
-      "default": 2.5,
-      "minimum": 0,
-      "dependsOn": { "field": "spread_guard_enabled", "values": [true] },
-      "group": "Spread Guard",
-      "group_ja": "スプレッドガード"
     }
   },
   "required": ["base_units", "m_pips", "r_max"]

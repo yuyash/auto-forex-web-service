@@ -146,8 +146,7 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
                 )
                 raise serializers.ValidationError({"parameters": message}) from exc
 
-        if has_parameters:
-            attrs["parameters"] = normalized_parameters
+        attrs["parameters"] = normalized_parameters
         return attrs
 
     def create(self, validated_data: dict) -> StrategyConfiguration:

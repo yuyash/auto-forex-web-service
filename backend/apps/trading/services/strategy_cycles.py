@@ -198,7 +198,7 @@ def _build_cycle(
     else:
         status = "completed"
 
-    _PROTECTION_METHODS = {"volatility_lock", "margin_protection", "shrink", "rebalance"}
+    _PROTECTION_METHODS = {"volatility_lock", "margin_protection", "shrink"}
     protection_trades = [
         t
         for t in trades
