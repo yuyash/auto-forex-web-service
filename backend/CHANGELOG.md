@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.26.2...backend-v1.26.3) (2026-04-04)
+
+
+### Bug Fixes
+
+* task lifecycle actions ([#325](https://github.com/yuyash/auto-forex-web-service/issues/325)) ([01fb643](https://github.com/yuyash/auto-forex-web-service/commit/01fb643907e33ca4a4af5fd10e9e58aab274afdf))
+
 ## [1.26.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.26.1...backend-v1.26.2) (2026-04-04)
 
 
