@@ -957,23 +957,42 @@ class SnowballStrategy(Strategy):
     def _find_shrink_candidate_in_cycle(self, cycle: SnowballCycle) -> Entry | None:
         """Find the next entry to close in a cycle for shrink.
 
-        Order: L1 lowest R → ... → L1 highest-1 R → L2 lowest R → ...
-        Skip the highest occupied R in each layer (preserve last position).
-        If a layer has only 1 position, close it.
-        Special: cycle initial_entry (L1/R0) is eligible.
+        Priority: preserve the highest R in each layer as long as possible.
+
+        1. Scan layers bottom-up. If a layer has 2+ positions, return the
+           lowest R (the highest R is preserved).
+        2. If a layer has exactly 1 position, check whether any layer above
+           it still has 2+ positions. If yes, skip this layer (the upper
+           layer will yield a candidate first). If no (all layers above
+           also have ≤1), this single position must be closed — return it.
+        3. If no slot entries remain, return cycle.initial_entry.
         """
-        for layer in cycle.layers:
+        layers = cycle.layers
+
+        for i, layer in enumerate(layers):
             occupied = layer.occupied_slots()
             if not occupied:
                 continue
 
-            if len(occupied) == 1:
-                # Only one position in this layer — close it
-                return occupied[0].entry
+            if len(occupied) >= 2:
+                # Close the lowest R; preserve the highest R
+                lowest = min(occupied, key=lambda s: s.index)
+                return lowest.entry
 
-            # Multiple positions: close lowest R, skip highest R
-            lowest = min(occupied, key=lambda s: s.index)
-            return lowest.entry
+            # Exactly 1 position in this layer.
+            # Check if any layer above has 2+ occupied slots.
+            has_multi_above = False
+            for upper_layer in layers[i + 1 :]:
+                if len(upper_layer.occupied_slots()) >= 2:
+                    has_multi_above = True
+                    break
+
+            if has_multi_above:
+                # Skip — upper layers still have positions to trim first
+                continue
+
+            # All layers above also have ≤1 position. Close this one.
+            return occupied[0].entry
 
         # No slot entries left — check cycle initial_entry
         if cycle.initial_entry is not None:
