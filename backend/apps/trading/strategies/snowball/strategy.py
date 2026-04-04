@@ -138,9 +138,10 @@ class SnowballStrategy(Strategy):
         close_reason: str = "",
         actual_tp_pips: Decimal | None = None,
         validation_status: str = "",
+        margin_ratio: Decimal | None = None,
     ) -> ClosePositionEvent:
         """Create a ClosePositionEvent from an Entry."""
-        return entry.to_close_event(
+        event = entry.to_close_event(
             tick,
             instrument=self.instrument,
             pip_size=self.pip_size,
@@ -150,6 +151,9 @@ class SnowballStrategy(Strategy):
             actual_tp_pips=actual_tp_pips,
             validation_status=validation_status,
         )
+        if margin_ratio is not None:
+            event.margin_ratio = margin_ratio
+        return event
 
     # ------------------------------------------------------------------
     # Cycle lifecycle
@@ -899,6 +903,7 @@ class SnowballStrategy(Strategy):
                     ),
                     close_reason="shrink",
                     validation_status="warn",
+                    margin_ratio=ratio / Decimal("100"),
                 )
             )
             cycle.remove_entry(entry.entry_id)
