@@ -390,6 +390,7 @@
       "plannedExitPrice": "Planned Exit Price",
       "plannedExitPriceFormula": "Exit Price Formula",
       "adversePips": "Adverse Pips",
+      "closeReason": "Close Reason",
       "realizedPnl": "Realized PnL",
       "unrealizedPnl": "Unrealized PnL",
       "totalRealizedPnl": "Total Realized PnL",
