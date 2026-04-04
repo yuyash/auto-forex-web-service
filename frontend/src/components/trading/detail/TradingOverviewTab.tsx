@@ -3,11 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { StatusBadge } from '../../tasks/display/StatusBadge';
 import { ExecutionHistoryTable } from '../../tasks/display/ExecutionHistoryTable';
+import { LatestMetricsSummary } from '../../tasks/detail/LatestMetricsSummary';
 import type { TaskSummary } from '../../../hooks/useTaskSummary';
 import { getStrategyDisplayName } from '../../../hooks/useStrategies';
 import type { Strategy } from '../../../services/api/strategies';
 import { TaskType, type TaskStatus } from '../../../types/common';
 import type { TradingTask } from '../../../types';
+import type { MetricPoint } from '../../../utils/fetchMetrics';
 
 interface TradingOverviewTabProps {
   taskId: string;
@@ -16,6 +18,7 @@ interface TradingOverviewTabProps {
   currentStatus?: TaskStatus;
   strategies: Strategy[];
   pnlCurrency: string;
+  latestMetrics?: MetricPoint | null;
   onOpenConfiguration: () => void;
 }
 
@@ -26,6 +29,7 @@ export function TradingOverviewTab({
   currentStatus,
   strategies,
   pnlCurrency,
+  latestMetrics,
   onOpenConfiguration,
 }: TradingOverviewTabProps) {
   const { t } = useTranslation(['trading', 'common']);
@@ -220,8 +224,8 @@ export function TradingOverviewTab({
                 </Typography>
                 <Typography variant="body1">
                   {summary.execution.currentBalanceDisplay != null &&
-                    summary.execution.displayCurrency &&
-                    summary.execution.displayCurrency !==
+                  summary.execution.displayCurrency &&
+                  summary.execution.displayCurrency !==
                     summary.execution.accountCurrency ? (
                     <>
                       {summary.execution.currentBalanceDisplay.toFixed(0)}{' '}
@@ -299,6 +303,10 @@ export function TradingOverviewTab({
                 </Typography>
               </Box>
             )}
+            <LatestMetricsSummary
+              latest={latestMetrics ?? null}
+              pnlCurrency={pnlCurrency}
+            />
           </Box>
         </Grid>
         <Grid size={{ xs: 12 }}>

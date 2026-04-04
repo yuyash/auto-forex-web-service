@@ -492,5 +492,22 @@
     "checkingConnection": "接続を確認中...",
     "never": "未確認",
     "lastChecked": "最終確認："
+  },
+  "metrics": {
+    "title": "メトリクス",
+    "noData": "この実行のメトリクスデータはありません。",
+    "current_balance": "残高",
+    "total_pnl": "合計損益",
+    "realized_pnl": "実現損益",
+    "unrealized_pnl": "未実現損益",
+    "total_return": "トータルリターン",
+    "margin_ratio": "証拠金維持率",
+    "open_positions": "オープンポジション数",
+    "closed_positions": "クローズポジション数",
+    "total_trades": "総取引数",
+    "win_rate": "勝率",
+    "winning_trades": "勝ちトレード数",
+    "losing_trades": "負けトレード数",
+    "ticks_processed": "処理Tick数"
   }
 }

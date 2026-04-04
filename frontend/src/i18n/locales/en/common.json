@@ -492,5 +492,22 @@
     "checkingConnection": "Checking connection...",
     "never": "Never",
     "lastChecked": "Last checked:"
+  },
+  "metrics": {
+    "title": "Metrics",
+    "noData": "No metrics data available for this execution.",
+    "current_balance": "Balance",
+    "total_pnl": "Total PnL",
+    "realized_pnl": "Realized PnL",
+    "unrealized_pnl": "Unrealized PnL",
+    "total_return": "Total Return",
+    "margin_ratio": "Margin Ratio",
+    "open_positions": "Open Positions",
+    "closed_positions": "Closed Positions",
+    "total_trades": "Total Trades",
+    "win_rate": "Win Rate",
+    "winning_trades": "Winning Trades",
+    "losing_trades": "Losing Trades",
+    "ticks_processed": "Ticks Processed"
   }
 }

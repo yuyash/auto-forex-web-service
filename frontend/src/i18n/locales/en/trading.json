@@ -17,7 +17,8 @@
     "trades": "Trades",
     "orders": "Orders",
     "logs": "Logs",
-    "replay": "Replay"
+    "replay": "Replay",
+    "metrics": "Metrics"
   },
   "filters": {
     "searchTasks": "Search tasks...",

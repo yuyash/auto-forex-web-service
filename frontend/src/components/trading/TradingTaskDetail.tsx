@@ -56,7 +56,9 @@ import { useOptimisticTaskStatus } from '../../hooks/useOptimisticTaskStatus';
 import { TaskDetailHeader } from '../tasks/detail/TaskDetailHeader';
 import { TaskDetailTabs } from '../tasks/detail/TaskDetailTabs';
 import { TaskStrategyTab } from '../tasks/detail/strategy/TaskStrategyTab';
+import { TaskMetricsTab } from '../tasks/detail/TaskMetricsTab';
 import { TradingOverviewTab } from './detail/TradingOverviewTab';
+import { useTaskMetrics } from '../../hooks/useTaskMetrics';
 
 export const TradingTaskDetail: React.FC = () => {
   const { t } = useTranslation(['trading', 'common']);
@@ -85,6 +87,7 @@ export const TradingTaskDetail: React.FC = () => {
     { id: 'trades', label: t('trading:tabs.trades'), visible: true },
     { id: 'orders', label: t('trading:tabs.orders'), visible: true },
     { id: 'logs', label: t('trading:tabs.logs'), visible: true },
+    { id: 'metrics', label: t('trading:tabs.metrics'), visible: true },
   ];
   const {
     tabs: allTabs,
@@ -141,6 +144,16 @@ export const TradingTaskDetail: React.FC = () => {
     }
   );
   const { summary: s } = overviewSummary;
+
+  const metricsResult = useTaskMetrics({
+    taskId,
+    taskType: TaskType.TRADING,
+    executionRunId: effectiveExecutionId,
+    enabled: !!taskId,
+    pollingInterval:
+      !isViewingHistorical && shouldPollTaskStatus(currentStatus) ? 30000 : 0,
+  });
+
   const polledTick = s.tick.timestamp
     ? {
         timestamp: s.tick.timestamp,
@@ -320,6 +333,7 @@ export const TradingTaskDetail: React.FC = () => {
               currentStatus={currentStatus}
               strategies={strategies}
               pnlCurrency={pnlCurrency}
+              latestMetrics={metricsResult.latest}
               onOpenConfiguration={() =>
                 navigate(`/configurations/${detailTask.config_id}`)
               }
@@ -400,6 +414,20 @@ export const TradingTaskDetail: React.FC = () => {
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
               enableRealTimeUpdates={enableRealtime}
+            />
+          </LazyTabPanel>
+        )}
+
+        {/* Metrics Tab */}
+        {visibleTabIds.includes('metrics') && (
+          <LazyTabPanel
+            value={activeTabIndex}
+            index={visibleTabIds.indexOf('metrics')}
+          >
+            <TaskMetricsTab
+              data={metricsResult.data}
+              isLoading={metricsResult.isLoading}
+              error={metricsResult.error}
             />
           </LazyTabPanel>
         )}
