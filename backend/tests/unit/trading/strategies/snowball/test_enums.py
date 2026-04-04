@@ -10,7 +10,6 @@ from apps.trading.strategies.snowball.enums import (
 class TestProtectionLevel:
     def test_values(self):
         assert ProtectionLevel.NORMAL == "normal"
-        assert ProtectionLevel.REBALANCE == "rebalance"
         assert ProtectionLevel.SHRINK == "shrink"
         assert ProtectionLevel.LOCKED == "locked"
         assert ProtectionLevel.EMERGENCY == "emergency"

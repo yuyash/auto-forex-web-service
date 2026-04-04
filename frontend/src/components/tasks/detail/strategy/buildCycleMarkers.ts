@@ -45,7 +45,6 @@ const PROTECTION_METHODS = new Set([
   'volatility_lock',
   'margin_protection',
   'shrink',
-  'rebalance',
 ]);
 
 function isProtectionTrade(trade: CycleTrade): boolean {

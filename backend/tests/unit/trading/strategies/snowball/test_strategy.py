@@ -54,10 +54,6 @@ def _strategy(overrides: dict[str, Any] | None = None) -> SnowballStrategy:
         "counter_tp_mode": "weighted_avg",
         "shrink_enabled": False,
         "lock_enabled": False,
-        "rebalance_enabled": False,
-        "spread_guard_enabled": False,
-        "m_pips_min": "12",
-        "m_pips_max": "55",
         "m_th": "70",
         "n_th": "85",
     }
@@ -112,8 +108,6 @@ class TestSnowballStrategyClassMethods:
             schema = json.load(f)
 
         params = SnowballStrategy.default_parameters()
-        # Ensure m_pips is within m_pips_min..m_pips_max range
-        params["m_pips_max"] = "55"
         SnowballStrategy.validate_parameters(parameters=params, config_schema=schema)
 
     def test_validate_parameters_rejects_invalid_schema_value(self):
