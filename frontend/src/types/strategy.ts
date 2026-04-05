@@ -50,6 +50,9 @@ export interface ConfigProperty {
   [localizedKey2: `description_${string}`]: string | undefined;
   /** Localized group names: group_ja, group_en, etc. */
   [localizedKey3: `group_${string}`]: string | undefined;
+  /** Localized enum labels: enum_labels, enum_labels_ja, etc. */
+  enum_labels?: Record<string, string>;
+  [localizedKey4: `enum_labels_${string}`]: Record<string, string> | undefined;
   // Conditional visibility: show this field only when another field has specific values
   dependsOn?: DependsOnCondition;
   /**

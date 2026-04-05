@@ -84,6 +84,17 @@ const StrategyConfigForm = ({
     [i18n.language]
   );
 
+  /** Resolve a localized enum label for a given option value. */
+  const localizedEnumLabel = useCallback(
+    (prop: ConfigProperty, value: string): string | undefined => {
+      const langKey = `enum_labels_${i18n.language}` as keyof ConfigProperty;
+      const langLabels = prop[langKey] as Record<string, string> | undefined;
+      if (langLabels?.[value]) return langLabels[value];
+      return prop.enum_labels?.[value];
+    },
+    [i18n.language]
+  );
+
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>(
     {}
   );
@@ -437,7 +448,8 @@ const StrategyConfigForm = ({
                   <Typography variant="body2">
                     {typeof option === 'number'
                       ? formatNumericEnumValue(option)
-                      : formatEnumValue(String(option))}
+                      : (localizedEnumLabel(fieldSchema, String(option)) ??
+                        formatEnumValue(String(option)))}
                   </Typography>
                   {showOptionDescriptions && (
                     <Typography
