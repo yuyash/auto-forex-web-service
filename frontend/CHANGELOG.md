@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.28.2...frontend-v1.29.0) (2026-04-05)
+
+
+### Features
+
+* **trading:** add comprehensive metrics tracking and task data throt… ([#331](https://github.com/yuyash/auto-forex-web-service/issues/331)) ([40d2d8c](https://github.com/yuyash/auto-forex-web-service/commit/40d2d8c17b7dd28766f1ce6025484c7c2ed016cf))
+
 ## [1.28.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.28.1...frontend-v1.28.2) (2026-04-04)
 
 
