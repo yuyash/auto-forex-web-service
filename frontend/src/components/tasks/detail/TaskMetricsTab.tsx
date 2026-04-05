@@ -162,10 +162,18 @@ function formatTooltipDate(date: Date, intervalMin: number): string {
 }
 
 /**
- * Estimate the pixel width needed for the longest Y-axis label.
- * Uses a conservative 7px per character at fontSize 10.
- * Currency suffix is intentionally excluded — the unit is shown in the
- * chart header, so tick labels only contain the numeric value.
+ * Estimate the pixel width needed for the Y-axis including tick marks
+ * and internal gaps.
+ *
+ * MUI X-Charts defaults the Y-axis width to only 45 px
+ * (DEFAULT_AXIS_SIZE_WIDTH).  The label rendering budget is even
+ * smaller: axisWidth − tickSize(6) − TICK_LABEL_GAP(2) = 37 px.
+ * Any label wider than that gets truncated with "…".
+ *
+ * This function computes a width large enough for the longest label
+ * and is used as both the yAxis `width` prop (controls the label
+ * clipping rectangle) and the chart `margin.left` (reserves space
+ * in the SVG).
  */
 function estimateYAxisWidth(
   yValues: number[],
@@ -182,7 +190,6 @@ function estimateYAxisWidth(
     if (format === 'pct') {
       label = `${v.toFixed(1)}%`;
     } else if (format === 'currency') {
-      // Numbers only — no currency suffix on tick labels
       label = v.toFixed(1);
     } else if (format === 'int') {
       label = Math.round(v).toLocaleString();
@@ -191,8 +198,8 @@ function estimateYAxisWidth(
     }
     if (label.length > maxLen) maxLen = label.length;
   }
-  // ~7px per char + 16px padding (extra room to prevent truncation)
-  return Math.max(60, maxLen * 7 + 16);
+  // ~7px per char at fontSize 10, plus tickSize(6) + TICK_LABEL_GAP(2) + safety
+  return Math.max(60, maxLen * 7 + 20);
 }
 
 /** Compute a suitable Y-axis tick count based on the value range. */
@@ -387,6 +394,7 @@ export function TaskMetricsTab({
                   ]}
                   yAxis={[
                     {
+                      width: sharedLeftMargin,
                       tickNumber: yTickCount,
                       valueFormatter:
                         m.format === 'pct'
