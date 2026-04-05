@@ -179,7 +179,7 @@ function estimateYAxisWidth(
   yValues: number[],
   format?: 'pct' | 'int' | 'currency'
 ): number {
-  if (yValues.length === 0) return 60;
+  if (yValues.length === 0) return 40;
   const min = Math.min(...yValues);
   const max = Math.max(...yValues);
   const samples = [min, max];
@@ -198,8 +198,8 @@ function estimateYAxisWidth(
     }
     if (label.length > maxLen) maxLen = label.length;
   }
-  // ~7px per char at fontSize 10, plus tickSize(6) + TICK_LABEL_GAP(2) + safety
-  return Math.max(60, maxLen * 7 + 20);
+  // ~7px per char at fontSize 10, plus tickSize(6) + TICK_LABEL_GAP(2) + small buffer
+  return Math.max(40, maxLen * 7 + 12);
 }
 
 /** Compute a suitable Y-axis tick count based on the value range. */
@@ -289,16 +289,16 @@ export function TaskMetricsTab({
     return map;
   }, [data, availableMetrics]);
 
-  // Compute the maximum Y-axis label width across all charts so they align
-  const sharedLeftMargin = useMemo(() => {
-    let maxWidth = 60;
+  // Compute per-chart Y-axis label width so each chart fits its own labels
+  // without wasting space on charts with shorter labels.
+  const perChartLeftMargin = useMemo(() => {
+    const map: Record<string, number> = {};
     for (const m of availableMetrics) {
       const cd = chartDataMap[m.key];
       if (!cd || cd.y.length < 2) continue;
-      const w = estimateYAxisWidth(cd.y, m.format);
-      if (w > maxWidth) maxWidth = w;
+      map[m.key] = estimateYAxisWidth(cd.y, m.format);
     }
-    return maxWidth;
+    return map;
   }, [availableMetrics, chartDataMap]);
 
   if (isLoading && data.length === 0) {
@@ -354,6 +354,7 @@ export function TaskMetricsTab({
           const rangeMs = cd.x[cd.x.length - 1].getTime() - cd.x[0].getTime();
           const yTickCount = computeYTickCount(cd.y);
           const xTickCount = computeXTickCount(cd.x.length);
+          const leftMargin = perChartLeftMargin[m.key] ?? 60;
           return (
             <Grid key={m.key} size={{ xs: 12, md: 6 }}>
               <Paper variant="outlined" sx={{ p: 1.5 }}>
@@ -394,7 +395,7 @@ export function TaskMetricsTab({
                   ]}
                   yAxis={[
                     {
-                      width: sharedLeftMargin,
+                      width: leftMargin,
                       tickNumber: yTickCount,
                       valueFormatter:
                         m.format === 'pct'
@@ -419,7 +420,7 @@ export function TaskMetricsTab({
                   grid={{ vertical: true, horizontal: true }}
                   height={200}
                   margin={{
-                    left: sharedLeftMargin,
+                    left: leftMargin,
                     right: 16,
                     top: 8,
                     bottom: 36,
