@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.5...frontend-v1.29.6) (2026-04-05)
+
+
+### Bug Fixes
+
+* **frontend:** reduce excessive left padding on metrics chart Y-axis ([#344](https://github.com/yuyash/auto-forex-web-service/issues/344)) ([356b643](https://github.com/yuyash/auto-forex-web-service/commit/356b6434448b9054b7d71f9fe0c8b4a3573c2ed0))
+
 ## [1.29.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.4...frontend-v1.29.5) (2026-04-05)
 
 
