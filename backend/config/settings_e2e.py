@@ -103,6 +103,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "user": "6000/minute",
         "anon": "6000/minute",
+        "task_data": "6000/minute",
     },
 }
 
