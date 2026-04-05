@@ -2,386 +2,332 @@
 
 ## [1.29.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.28.2...frontend-v1.29.0) (2026-04-05)
 
-
 ### Features
 
-* **trading:** add comprehensive metrics tracking and task data throt… ([#331](https://github.com/yuyash/auto-forex-web-service/issues/331)) ([40d2d8c](https://github.com/yuyash/auto-forex-web-service/commit/40d2d8c17b7dd28766f1ce6025484c7c2ed016cf))
+- **trading:** add comprehensive metrics tracking and task data throt… ([#331](https://github.com/yuyash/auto-forex-web-service/issues/331)) ([40d2d8c](https://github.com/yuyash/auto-forex-web-service/commit/40d2d8c17b7dd28766f1ce6025484c7c2ed016cf))
 
 ## [1.28.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.28.1...frontend-v1.28.2) (2026-04-04)
 
-
 ### Bug Fixes
 
-* task lifecycle actions ([#325](https://github.com/yuyash/auto-forex-web-service/issues/325)) ([01fb643](https://github.com/yuyash/auto-forex-web-service/commit/01fb643907e33ca4a4af5fd10e9e58aab274afdf))
+- task lifecycle actions ([#325](https://github.com/yuyash/auto-forex-web-service/issues/325)) ([01fb643](https://github.com/yuyash/auto-forex-web-service/commit/01fb643907e33ca4a4af5fd10e9e58aab274afdf))
 
 ## [1.28.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.28.0...frontend-v1.28.1) (2026-04-04)
 
-
 ### Bug Fixes
 
-* protection labels and margin ([#321](https://github.com/yuyash/auto-forex-web-service/issues/321)) ([47cc7cb](https://github.com/yuyash/auto-forex-web-service/commit/47cc7cb395aef6f3a8cb772fc505d5004a588473))
+- protection labels and margin ([#321](https://github.com/yuyash/auto-forex-web-service/issues/321)) ([47cc7cb](https://github.com/yuyash/auto-forex-web-service/commit/47cc7cb395aef6f3a8cb772fc505d5004a588473))
 
 ## [1.28.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.27.0...frontend-v1.28.0) (2026-04-04)
 
-
 ### Features
 
-* add metrics tab ([#319](https://github.com/yuyash/auto-forex-web-service/issues/319)) ([056bfe4](https://github.com/yuyash/auto-forex-web-service/commit/056bfe424c01465cede211b5a2954bc0ae9ce39c))
+- add metrics tab ([#319](https://github.com/yuyash/auto-forex-web-service/issues/319)) ([056bfe4](https://github.com/yuyash/auto-forex-web-service/commit/056bfe424c01465cede211b5a2954bc0ae9ce39c))
 
 ## [1.27.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.26.4...frontend-v1.27.0) (2026-04-04)
 
-
 ### Features
 
-* add shrink v2 ([#317](https://github.com/yuyash/auto-forex-web-service/issues/317)) ([a35f3bb](https://github.com/yuyash/auto-forex-web-service/commit/a35f3bbce8e6cc4e949ad3ec05cd62a352f58337))
+- add shrink v2 ([#317](https://github.com/yuyash/auto-forex-web-service/issues/317)) ([a35f3bb](https://github.com/yuyash/auto-forex-web-service/commit/a35f3bbce8e6cc4e949ad3ec05cd62a352f58337))
 
 ## [1.26.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.26.3...frontend-v1.26.4) (2026-04-03)
 
-
 ### Bug Fixes
 
-* adverse pips from dict ([#315](https://github.com/yuyash/auto-forex-web-service/issues/315)) ([833eaf5](https://github.com/yuyash/auto-forex-web-service/commit/833eaf5d528ecdb791a7483b312a4cf3736c5829))
+- adverse pips from dict ([#315](https://github.com/yuyash/auto-forex-web-service/issues/315)) ([833eaf5](https://github.com/yuyash/auto-forex-web-service/commit/833eaf5d528ecdb791a7483b312a4cf3736c5829))
 
 ## [1.26.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.26.2...frontend-v1.26.3) (2026-04-03)
 
-
 ### Bug Fixes
 
-* execution metrics snapshot ([#311](https://github.com/yuyash/auto-forex-web-service/issues/311)) ([ae3bfd0](https://github.com/yuyash/auto-forex-web-service/commit/ae3bfd0424340f00d87f166837af5e6582e7d3f6))
+- execution metrics snapshot ([#311](https://github.com/yuyash/auto-forex-web-service/issues/311)) ([ae3bfd0](https://github.com/yuyash/auto-forex-web-service/commit/ae3bfd0424340f00d87f166837af5e6582e7d3f6))
 
 ## [1.26.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.26.1...frontend-v1.26.2) (2026-04-03)
 
-
 ### Bug Fixes
 
-* table page sizes ([#309](https://github.com/yuyash/auto-forex-web-service/issues/309)) ([a3bc273](https://github.com/yuyash/auto-forex-web-service/commit/a3bc27389f71b0a86f0d9dae3220432abf221842))
+- table page sizes ([#309](https://github.com/yuyash/auto-forex-web-service/issues/309)) ([a3bc273](https://github.com/yuyash/auto-forex-web-service/commit/a3bc27389f71b0a86f0d9dae3220432abf221842))
 
 ## [1.26.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.26.0...frontend-v1.26.1) (2026-04-02)
 
-
 ### Bug Fixes
 
-* **ui:** show 0% progress for running tasks ([#304](https://github.com/yuyash/auto-forex-web-service/issues/304)) ([7010775](https://github.com/yuyash/auto-forex-web-service/commit/7010775b6ff6554de3fe2ba114f9f3a47b5cf14a))
+- **ui:** show 0% progress for running tasks ([#304](https://github.com/yuyash/auto-forex-web-service/issues/304)) ([7010775](https://github.com/yuyash/auto-forex-web-service/commit/7010775b6ff6554de3fe2ba114f9f3a47b5cf14a))
 
 ## [1.26.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.25.6...frontend-v1.26.0) (2026-04-02)
 
-
 ### Features
 
-* task debug options ([#302](https://github.com/yuyash/auto-forex-web-service/issues/302)) ([be687eb](https://github.com/yuyash/auto-forex-web-service/commit/be687eb6d2a61a17e8150c6e5cd8bb5b6f3e37ce))
+- task debug options ([#302](https://github.com/yuyash/auto-forex-web-service/issues/302)) ([be687eb](https://github.com/yuyash/auto-forex-web-service/commit/be687eb6d2a61a17e8150c6e5cd8bb5b6f3e37ce))
 
 ## [1.25.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.25.5...frontend-v1.25.6) (2026-04-02)
 
-
 ### Bug Fixes
 
-* **ui:** align positions tab layout with trades tab ([#296](https://github.com/yuyash/auto-forex-web-service/issues/296)) ([a8c3ce0](https://github.com/yuyash/auto-forex-web-service/commit/a8c3ce0787023826016a88f6a00ab63364167d50))
+- **ui:** align positions tab layout with trades tab ([#296](https://github.com/yuyash/auto-forex-web-service/issues/296)) ([a8c3ce0](https://github.com/yuyash/auto-forex-web-service/commit/a8c3ce0787023826016a88f6a00ab63364167d50))
 
 ## [1.25.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.25.4...frontend-v1.25.5) (2026-04-02)
 
-
 ### Bug Fixes
 
-* remove layer on initial close ([#294](https://github.com/yuyash/auto-forex-web-service/issues/294)) ([6b7c4a5](https://github.com/yuyash/auto-forex-web-service/commit/6b7c4a563a0105a1dedd39115e35ee3f220c97ce))
+- remove layer on initial close ([#294](https://github.com/yuyash/auto-forex-web-service/issues/294)) ([6b7c4a5](https://github.com/yuyash/auto-forex-web-service/commit/6b7c4a563a0105a1dedd39115e35ee3f220c97ce))
 
 ## [1.25.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.25.3...frontend-v1.25.4) (2026-04-01)
 
-
 ### Bug Fixes
 
-* strategy tab detail manual refresh ([#292](https://github.com/yuyash/auto-forex-web-service/issues/292)) ([eb58ab5](https://github.com/yuyash/auto-forex-web-service/commit/eb58ab5e283cc58880b4d0daf617440d10286f1d))
+- strategy tab detail manual refresh ([#292](https://github.com/yuyash/auto-forex-web-service/issues/292)) ([eb58ab5](https://github.com/yuyash/auto-forex-web-service/commit/eb58ab5e283cc58880b4d0daf617440d10286f1d))
 
 ## [1.25.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.25.2...frontend-v1.25.3) (2026-04-01)
 
-
 ### Bug Fixes
 
-* sort execution list by created_at and show execution ID in overview ([#286](https://github.com/yuyash/auto-forex-web-service/issues/286)) ([8bfbc6e](https://github.com/yuyash/auto-forex-web-service/commit/8bfbc6eced95b0149a61bfe5cfcb490292fd33ed))
+- sort execution list by created_at and show execution ID in overview ([#286](https://github.com/yuyash/auto-forex-web-service/issues/286)) ([8bfbc6e](https://github.com/yuyash/auto-forex-web-service/commit/8bfbc6eced95b0149a61bfe5cfcb490292fd33ed))
 
 ## [1.25.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.25.1...frontend-v1.25.2) (2026-04-01)
 
-
 ### Refactoring
 
-* snowball layer retracement model ([#283](https://github.com/yuyash/auto-forex-web-service/issues/283)) ([0696ff8](https://github.com/yuyash/auto-forex-web-service/commit/0696ff8e8aa48fce7175737433fd66adb2616f68))
+- snowball layer retracement model ([#283](https://github.com/yuyash/auto-forex-web-service/issues/283)) ([0696ff8](https://github.com/yuyash/auto-forex-web-service/commit/0696ff8e8aa48fce7175737433fd66adb2616f68))
 
 ## [1.25.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.25.0...frontend-v1.25.1) (2026-04-01)
 
-
 ### Refactoring
 
-* snowball layer retracement model ([#278](https://github.com/yuyash/auto-forex-web-service/issues/278)) ([e0907a1](https://github.com/yuyash/auto-forex-web-service/commit/e0907a1dfa0d16a629524d7b495e0bb22afa41c2))
+- snowball layer retracement model ([#278](https://github.com/yuyash/auto-forex-web-service/issues/278)) ([e0907a1](https://github.com/yuyash/auto-forex-web-service/commit/e0907a1dfa0d16a629524d7b495e0bb22afa41c2))
 
 ## [1.25.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.24.1...frontend-v1.25.0) (2026-03-31)
 
-
 ### Features
 
-* historical execution viewer ([#274](https://github.com/yuyash/auto-forex-web-service/issues/274)) ([71517de](https://github.com/yuyash/auto-forex-web-service/commit/71517deed4aacb1c70a05250a576f84c7cd50c3a))
+- historical execution viewer ([#274](https://github.com/yuyash/auto-forex-web-service/issues/274)) ([71517de](https://github.com/yuyash/auto-forex-web-service/commit/71517deed4aacb1c70a05250a576f84c7cd50c3a))
 
 ## [1.24.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.24.0...frontend-v1.24.1) (2026-03-31)
 
-
 ### Bug Fixes
 
-* snowball strategy logic ([#272](https://github.com/yuyash/auto-forex-web-service/issues/272)) ([7c20257](https://github.com/yuyash/auto-forex-web-service/commit/7c202571f6bdd977d4f0286a18b74a95f1097831))
+- snowball strategy logic ([#272](https://github.com/yuyash/auto-forex-web-service/issues/272)) ([7c20257](https://github.com/yuyash/auto-forex-web-service/commit/7c202571f6bdd977d4f0286a18b74a95f1097831))
 
 ## [1.24.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.23.1...frontend-v1.24.0) (2026-03-30)
 
-
 ### Features
 
-* **ui:** add confirmation dialogs for all task actions ([#268](https://github.com/yuyash/auto-forex-web-service/issues/268)) ([9df32b3](https://github.com/yuyash/auto-forex-web-service/commit/9df32b33f9ad27464a2134942edc1c8e1f83656c))
+- **ui:** add confirmation dialogs for all task actions ([#268](https://github.com/yuyash/auto-forex-web-service/issues/268)) ([9df32b3](https://github.com/yuyash/auto-forex-web-service/commit/9df32b33f9ad27464a2134942edc1c8e1f83656c))
 
 ## [1.23.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.23.0...frontend-v1.23.1) (2026-03-30)
 
-
 ### Bug Fixes
 
-* **ui:** show lifecycle button on closed trades in strategy tab ([#264](https://github.com/yuyash/auto-forex-web-service/issues/264)) ([60275fd](https://github.com/yuyash/auto-forex-web-service/commit/60275fdf2f8d27ee18f3abb78a70227cdef90eb2))
+- **ui:** show lifecycle button on closed trades in strategy tab ([#264](https://github.com/yuyash/auto-forex-web-service/issues/264)) ([60275fd](https://github.com/yuyash/auto-forex-web-service/commit/60275fdf2f8d27ee18f3abb78a70227cdef90eb2))
 
 ## [1.23.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.22.3...frontend-v1.23.0) (2026-03-29)
 
-
 ### Features
 
-* margin atr display progress padding ([#262](https://github.com/yuyash/auto-forex-web-service/issues/262)) ([282af2d](https://github.com/yuyash/auto-forex-web-service/commit/282af2d95a5d44a656a4d2075914801f857c12c8))
+- margin atr display progress padding ([#262](https://github.com/yuyash/auto-forex-web-service/issues/262)) ([282af2d](https://github.com/yuyash/auto-forex-web-service/commit/282af2d95a5d44a656a4d2075914801f857c12c8))
 
 ## [1.22.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.22.2...frontend-v1.22.3) (2026-03-28)
 
-
 ### Refactoring
 
-* remove trend tab and all related components ([#260](https://github.com/yuyash/auto-forex-web-service/issues/260)) ([f26f56b](https://github.com/yuyash/auto-forex-web-service/commit/f26f56bd4d613e7ac05f3547b3268e5c0b20fccd))
+- remove trend tab and all related components ([#260](https://github.com/yuyash/auto-forex-web-service/issues/260)) ([f26f56b](https://github.com/yuyash/auto-forex-web-service/commit/f26f56bd4d613e7ac05f3547b3268e5c0b20fccd))
 
 ## [1.22.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.22.1...frontend-v1.22.2) (2026-03-28)
 
-
 ### Bug Fixes
 
-* **trend:** default chart to M1 with 1-day view centered on current tick ([#258](https://github.com/yuyash/auto-forex-web-service/issues/258)) ([96d860c](https://github.com/yuyash/auto-forex-web-service/commit/96d860cb416cdc8a2beac3aafacba747cd8ba42d))
+- **trend:** default chart to M1 with 1-day view centered on current tick ([#258](https://github.com/yuyash/auto-forex-web-service/issues/258)) ([96d860c](https://github.com/yuyash/auto-forex-web-service/commit/96d860cb416cdc8a2beac3aafacba747cd8ba42d))
 
 ## [1.22.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.22.0...frontend-v1.22.1) (2026-03-28)
 
-
 ### Bug Fixes
 
-* mobile nav trend tab chart loading ([#256](https://github.com/yuyash/auto-forex-web-service/issues/256)) ([ec338c8](https://github.com/yuyash/auto-forex-web-service/commit/ec338c8c1a3f5251b6f4025513afa676721bf74b))
+- mobile nav trend tab chart loading ([#256](https://github.com/yuyash/auto-forex-web-service/issues/256)) ([ec338c8](https://github.com/yuyash/auto-forex-web-service/commit/ec338c8c1a3f5251b6f4025513afa676721bf74b))
 
 ## [1.22.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.21.0...frontend-v1.22.0) (2026-03-28)
 
-
 ### Features
 
-* mobile page improvements ([#254](https://github.com/yuyash/auto-forex-web-service/issues/254)) ([ba2c436](https://github.com/yuyash/auto-forex-web-service/commit/ba2c43687c650222e8f760d0a6a2193b4aeece8a))
+- mobile page improvements ([#254](https://github.com/yuyash/auto-forex-web-service/issues/254)) ([ba2c436](https://github.com/yuyash/auto-forex-web-service/commit/ba2c43687c650222e8f760d0a6a2193b4aeece8a))
 
 ## [1.21.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.20.0...frontend-v1.21.0) (2026-03-28)
 
-
 ### Features
 
-* **strategy:** add select all / deselect all controls for trade sele… ([#252](https://github.com/yuyash/auto-forex-web-service/issues/252)) ([2dace27](https://github.com/yuyash/auto-forex-web-service/commit/2dace27e5ff8087c0f5317ef550b5166cc7d91c1))
-* **strategy:** add select all / deselect all controls for trade selection ([2dace27](https://github.com/yuyash/auto-forex-web-service/commit/2dace27e5ff8087c0f5317ef550b5166cc7d91c1))
+- **strategy:** add select all / deselect all controls for trade sele… ([#252](https://github.com/yuyash/auto-forex-web-service/issues/252)) ([2dace27](https://github.com/yuyash/auto-forex-web-service/commit/2dace27e5ff8087c0f5317ef550b5166cc7d91c1))
+- **strategy:** add select all / deselect all controls for trade selection ([2dace27](https://github.com/yuyash/auto-forex-web-service/commit/2dace27e5ff8087c0f5317ef550b5166cc7d91c1))
 
 ## [1.20.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.19.5...frontend-v1.20.0) (2026-03-28)
 
-
 ### Features
 
-* strategy tab improvements ([#250](https://github.com/yuyash/auto-forex-web-service/issues/250)) ([5f60742](https://github.com/yuyash/auto-forex-web-service/commit/5f60742fe3d7e7ba0139c8df1634f95ba9e77952))
+- strategy tab improvements ([#250](https://github.com/yuyash/auto-forex-web-service/issues/250)) ([5f60742](https://github.com/yuyash/auto-forex-web-service/commit/5f60742fe3d7e7ba0139c8df1634f95ba9e77952))
 
 ## [1.19.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.19.4...frontend-v1.19.5) (2026-03-27)
 
-
 ### Bug Fixes
 
-* **frontend:** OANDA accounts UX improvements ([#244](https://github.com/yuyash/auto-forex-web-service/issues/244)) ([f14db1b](https://github.com/yuyash/auto-forex-web-service/commit/f14db1b22aab2f296203f66294e5833f24f28080))
+- **frontend:** OANDA accounts UX improvements ([#244](https://github.com/yuyash/auto-forex-web-service/issues/244)) ([f14db1b](https://github.com/yuyash/auto-forex-web-service/commit/f14db1b22aab2f296203f66294e5833f24f28080))
 
 ## [1.19.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.19.3...frontend-v1.19.4) (2026-03-27)
 
-
 ### Bug Fixes
 
-* trading task initial balance and default instrument ([#242](https://github.com/yuyash/auto-forex-web-service/issues/242)) ([3cc01e8](https://github.com/yuyash/auto-forex-web-service/commit/3cc01e899f3ea467382f9462ff1536162996d0f9))
+- trading task initial balance and default instrument ([#242](https://github.com/yuyash/auto-forex-web-service/issues/242)) ([3cc01e8](https://github.com/yuyash/auto-forex-web-service/commit/3cc01e899f3ea467382f9462ff1536162996d0f9))
 
 ## [1.19.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.19.2...frontend-v1.19.3) (2026-03-27)
 
-
 ### Bug Fixes
 
-* **trading:** add instrument selector to trading task creation form ([#240](https://github.com/yuyash/auto-forex-web-service/issues/240)) ([5f1220e](https://github.com/yuyash/auto-forex-web-service/commit/5f1220ecbd6c6da2516d33ac5065d96d5993a6bf))
+- **trading:** add instrument selector to trading task creation form ([#240](https://github.com/yuyash/auto-forex-web-service/issues/240)) ([5f1220e](https://github.com/yuyash/auto-forex-web-service/commit/5f1220ecbd6c6da2516d33ac5065d96d5993a6bf))
 
 ## [1.19.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.19.1...frontend-v1.19.2) (2026-03-27)
 
-
 ### Bug Fixes
 
-* **frontend:** i18n breadcrumbs, section titles, and close selected p… ([#237](https://github.com/yuyash/auto-forex-web-service/issues/237)) ([d522ef7](https://github.com/yuyash/auto-forex-web-service/commit/d522ef7d07bdd2abf34cdd3bd22f3fcdb89facd6))
-* **frontend:** i18n breadcrumbs, section titles, and close selected positions ([d522ef7](https://github.com/yuyash/auto-forex-web-service/commit/d522ef7d07bdd2abf34cdd3bd22f3fcdb89facd6))
+- **frontend:** i18n breadcrumbs, section titles, and close selected p… ([#237](https://github.com/yuyash/auto-forex-web-service/issues/237)) ([d522ef7](https://github.com/yuyash/auto-forex-web-service/commit/d522ef7d07bdd2abf34cdd3bd22f3fcdb89facd6))
+- **frontend:** i18n breadcrumbs, section titles, and close selected positions ([d522ef7](https://github.com/yuyash/auto-forex-web-service/commit/d522ef7d07bdd2abf34cdd3bd22f3fcdb89facd6))
 
 ## [1.19.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.19.0...frontend-v1.19.1) (2026-03-27)
 
-
 ### Bug Fixes
 
-* **frontend:** move OANDA accounts to user menu and add breadcrumbs ([#235](https://github.com/yuyash/auto-forex-web-service/issues/235)) ([9af21b9](https://github.com/yuyash/auto-forex-web-service/commit/9af21b9450c21e7c195cb4751f1bdcb8f7209b03))
+- **frontend:** move OANDA accounts to user menu and add breadcrumbs ([#235](https://github.com/yuyash/auto-forex-web-service/issues/235)) ([9af21b9](https://github.com/yuyash/auto-forex-web-service/commit/9af21b9450c21e7c195cb4751f1bdcb8f7209b03))
 
 ## [1.19.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.21...frontend-v1.19.0) (2026-03-27)
 
-
 ### Features
 
-* **frontend:** add independent OANDA accounts page with positions/tr… ([#233](https://github.com/yuyash/auto-forex-web-service/issues/233)) ([179b2bc](https://github.com/yuyash/auto-forex-web-service/commit/179b2bcba9bc8e4bd1800f4006416af6735a0caf))
-* **frontend:** add independent OANDA accounts page with positions/trades tables ([179b2bc](https://github.com/yuyash/auto-forex-web-service/commit/179b2bcba9bc8e4bd1800f4006416af6735a0caf))
+- **frontend:** add independent OANDA accounts page with positions/tr… ([#233](https://github.com/yuyash/auto-forex-web-service/issues/233)) ([179b2bc](https://github.com/yuyash/auto-forex-web-service/commit/179b2bcba9bc8e4bd1800f4006416af6735a0caf))
+- **frontend:** add independent OANDA accounts page with positions/trades tables ([179b2bc](https://github.com/yuyash/auto-forex-web-service/commit/179b2bcba9bc8e4bd1800f4006416af6735a0caf))
 
 ## [1.18.21](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.20...frontend-v1.18.21) (2026-03-27)
 
-
 ### Styles
 
-* **frontend:** wrap backtest form in Paper and add i18n to strategy… ([#230](https://github.com/yuyash/auto-forex-web-service/issues/230)) ([95d8ca2](https://github.com/yuyash/auto-forex-web-service/commit/95d8ca2beae55430a8f826ebe23d0f55f6886acf))
+- **frontend:** wrap backtest form in Paper and add i18n to strategy… ([#230](https://github.com/yuyash/auto-forex-web-service/issues/230)) ([95d8ca2](https://github.com/yuyash/auto-forex-web-service/commit/95d8ca2beae55430a8f826ebe23d0f55f6886acf))
 
 ## [1.18.20](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.19...frontend-v1.18.20) (2026-03-27)
 
-
 ### Bug Fixes
 
-* **frontend:** use current time as end for active cycle charts ([#228](https://github.com/yuyash/auto-forex-web-service/issues/228)) ([a48e35c](https://github.com/yuyash/auto-forex-web-service/commit/a48e35c955c221cdba5d7666a8d86c7a52bc3d59))
+- **frontend:** use current time as end for active cycle charts ([#228](https://github.com/yuyash/auto-forex-web-service/issues/228)) ([a48e35c](https://github.com/yuyash/auto-forex-web-service/commit/a48e35c955c221cdba5d7666a8d86c7a52bc3d59))
 
 ## [1.18.19](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.18...frontend-v1.18.19) (2026-03-27)
 
-
 ### Bug Fixes
 
-* disable backup and Athena jobs ([#224](https://github.com/yuyash/auto-forex-web-service/issues/224)) ([044d78f](https://github.com/yuyash/auto-forex-web-service/commit/044d78f9e5177380a10daed64f03e59a2c7d1d76))
+- disable backup and Athena jobs ([#224](https://github.com/yuyash/auto-forex-web-service/issues/224)) ([044d78f](https://github.com/yuyash/auto-forex-web-service/commit/044d78f9e5177380a10daed64f03e59a2c7d1d76))
 
 ## [1.18.18](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.17...frontend-v1.18.18) (2026-03-27)
 
-
 ### Bug Fixes
 
-* strategy tab scroll ([#221](https://github.com/yuyash/auto-forex-web-service/issues/221)) ([b5da99c](https://github.com/yuyash/auto-forex-web-service/commit/b5da99c7dfa4c2993505d3064fbfc44ad83c2b06))
+- strategy tab scroll ([#221](https://github.com/yuyash/auto-forex-web-service/issues/221)) ([b5da99c](https://github.com/yuyash/auto-forex-web-service/commit/b5da99c7dfa4c2993505d3064fbfc44ad83c2b06))
 
 ## [1.18.17](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.16...frontend-v1.18.17) (2026-03-27)
 
-
 ### Bug Fixes
 
-* minor issues ([#219](https://github.com/yuyash/auto-forex-web-service/issues/219)) ([e217380](https://github.com/yuyash/auto-forex-web-service/commit/e2173802d95d68d7223d1b1abe2dde3ec6e42a5a))
+- minor issues ([#219](https://github.com/yuyash/auto-forex-web-service/issues/219)) ([e217380](https://github.com/yuyash/auto-forex-web-service/commit/e2173802d95d68d7223d1b1abe2dde3ec6e42a5a))
 
 ## [1.18.16](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.15...frontend-v1.18.16) (2026-03-26)
 
-
 ### Bug Fixes
 
-* **frontend:** centre chart on task end and always fetch metrics overlay ([#217](https://github.com/yuyash/auto-forex-web-service/issues/217)) ([5f54a79](https://github.com/yuyash/auto-forex-web-service/commit/5f54a792c9e7bd935c05324d88ff5bf9b7d980a0))
+- **frontend:** centre chart on task end and always fetch metrics overlay ([#217](https://github.com/yuyash/auto-forex-web-service/issues/217)) ([5f54a79](https://github.com/yuyash/auto-forex-web-service/commit/5f54a792c9e7bd935c05324d88ff5bf9b7d980a0))
 
 ## [1.18.15](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.14...frontend-v1.18.15) (2026-03-26)
 
-
 ### Bug Fixes
 
-* **frontend:** use pixel-based spacing for time axis labels ([#215](https://github.com/yuyash/auto-forex-web-service/issues/215)) ([6f5e978](https://github.com/yuyash/auto-forex-web-service/commit/6f5e978840a582b7a5efc8b2aeb99796cd655b68))
+- **frontend:** use pixel-based spacing for time axis labels ([#215](https://github.com/yuyash/auto-forex-web-service/issues/215)) ([6f5e978](https://github.com/yuyash/auto-forex-web-service/commit/6f5e978840a582b7a5efc8b2aeb99796cd655b68))
 
 ## [1.18.14](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.13...frontend-v1.18.14) (2026-03-26)
 
-
 ### Bug Fixes
 
-* **frontend:** show time axis labels for H4 and Daily candles ([#213](https://github.com/yuyash/auto-forex-web-service/issues/213)) ([7d4e6fc](https://github.com/yuyash/auto-forex-web-service/commit/7d4e6fc262f615e7a702811b890af0989d7e2eec))
+- **frontend:** show time axis labels for H4 and Daily candles ([#213](https://github.com/yuyash/auto-forex-web-service/issues/213)) ([7d4e6fc](https://github.com/yuyash/auto-forex-web-service/commit/7d4e6fc262f615e7a702811b890af0989d7e2eec))
 
 ## [1.18.13](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.12...frontend-v1.18.13) (2026-03-26)
 
-
 ### Bug Fixes
 
-* **frontend:** fix strategy tab OHLC chart not rendering on cycle switch ([#211](https://github.com/yuyash/auto-forex-web-service/issues/211)) ([5a5c127](https://github.com/yuyash/auto-forex-web-service/commit/5a5c127e775e3a432387047f70da514fbdaed36e))
+- **frontend:** fix strategy tab OHLC chart not rendering on cycle switch ([#211](https://github.com/yuyash/auto-forex-web-service/issues/211)) ([5a5c127](https://github.com/yuyash/auto-forex-web-service/commit/5a5c127e775e3a432387047f70da514fbdaed36e))
 
 ## [1.18.12](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.11...frontend-v1.18.12) (2026-03-26)
 
-
 ### Bug Fixes
 
-* **frontend:** fix OHLC chart not rendering after recreation and add … ([#209](https://github.com/yuyash/auto-forex-web-service/issues/209)) ([fb1d4c3](https://github.com/yuyash/auto-forex-web-service/commit/fb1d4c35c3bd3cb4c7f9818f5ea247abb5960763))
-* **frontend:** fix OHLC chart not rendering after recreation and add reload button ([fb1d4c3](https://github.com/yuyash/auto-forex-web-service/commit/fb1d4c35c3bd3cb4c7f9818f5ea247abb5960763))
+- **frontend:** fix OHLC chart not rendering after recreation and add … ([#209](https://github.com/yuyash/auto-forex-web-service/issues/209)) ([fb1d4c3](https://github.com/yuyash/auto-forex-web-service/commit/fb1d4c35c3bd3cb4c7f9818f5ea247abb5960763))
+- **frontend:** fix OHLC chart not rendering after recreation and add reload button ([fb1d4c3](https://github.com/yuyash/auto-forex-web-service/commit/fb1d4c35c3bd3cb4c7f9818f5ea247abb5960763))
 
 ## [1.18.11](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.10...frontend-v1.18.11) (2026-03-26)
 
-
 ### Bug Fixes
 
-* **strategy:** DB fallback for cycle_id, granularity selector, chart … ([#204](https://github.com/yuyash/auto-forex-web-service/issues/204)) ([794a7cc](https://github.com/yuyash/auto-forex-web-service/commit/794a7cc1911528b910fc953b0c126d7023db6567))
-* **strategy:** DB fallback for cycle_id, granularity selector, chart fixes ([794a7cc](https://github.com/yuyash/auto-forex-web-service/commit/794a7cc1911528b910fc953b0c126d7023db6567))
+- **strategy:** DB fallback for cycle_id, granularity selector, chart … ([#204](https://github.com/yuyash/auto-forex-web-service/issues/204)) ([794a7cc](https://github.com/yuyash/auto-forex-web-service/commit/794a7cc1911528b910fc953b0c126d7023db6567))
+- **strategy:** DB fallback for cycle_id, granularity selector, chart fixes ([794a7cc](https://github.com/yuyash/auto-forex-web-service/commit/794a7cc1911528b910fc953b0c126d7023db6567))
 
 ## [1.18.10](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.9...frontend-v1.18.10) (2026-03-26)
 
-
 ### Bug Fixes
 
-* **frontend:** independent scroll for strategy sidebar and detail panel ([#202](https://github.com/yuyash/auto-forex-web-service/issues/202)) ([ab99336](https://github.com/yuyash/auto-forex-web-service/commit/ab993363c1a74122f420206f4f328e451a58a139))
+- **frontend:** independent scroll for strategy sidebar and detail panel ([#202](https://github.com/yuyash/auto-forex-web-service/issues/202)) ([ab99336](https://github.com/yuyash/auto-forex-web-service/commit/ab993363c1a74122f420206f4f328e451a58a139))
 
 ## [1.18.9](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.8...frontend-v1.18.9) (2026-03-26)
 
-
 ### Bug Fixes
 
-* **frontend:** responsive chart width, proper time labels, padded range ([#200](https://github.com/yuyash/auto-forex-web-service/issues/200)) ([d036a2d](https://github.com/yuyash/auto-forex-web-service/commit/d036a2d190c6d98baa8af906e751fbda527216fb))
+- **frontend:** responsive chart width, proper time labels, padded range ([#200](https://github.com/yuyash/auto-forex-web-service/issues/200)) ([d036a2d](https://github.com/yuyash/auto-forex-web-service/commit/d036a2d190c6d98baa8af906e751fbda527216fb))
 
 ## [1.18.8](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.7...frontend-v1.18.8) (2026-03-26)
 
-
 ### Bug Fixes
 
-* chart marker positions ([#197](https://github.com/yuyash/auto-forex-web-service/issues/197)) ([a9794a3](https://github.com/yuyash/auto-forex-web-service/commit/a9794a331f766c403e76d6e294c262943f8f4d66))
+- chart marker positions ([#197](https://github.com/yuyash/auto-forex-web-service/issues/197)) ([a9794a3](https://github.com/yuyash/auto-forex-web-service/commit/a9794a331f766c403e76d6e294c262943f8f4d66))
 
 ## [1.18.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.6...frontend-v1.18.7) (2026-03-25)
 
-
 ### Bug Fixes
 
-* **frontend:** fix chart marker positions and auto-select granularity ([#195](https://github.com/yuyash/auto-forex-web-service/issues/195)) ([5801f0c](https://github.com/yuyash/auto-forex-web-service/commit/5801f0c041a52286eedc95bf2598da39be631f82))
+- **frontend:** fix chart marker positions and auto-select granularity ([#195](https://github.com/yuyash/auto-forex-web-service/issues/195)) ([5801f0c](https://github.com/yuyash/auto-forex-web-service/commit/5801f0c041a52286eedc95bf2598da39be631f82))
 
 ## [1.18.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.5...frontend-v1.18.6) (2026-03-25)
 
-
 ### Bug Fixes
 
-* **frontend:** always poll execution history when polling is enabled ([#193](https://github.com/yuyash/auto-forex-web-service/issues/193)) ([f4b4c8a](https://github.com/yuyash/auto-forex-web-service/commit/f4b4c8ae8e8a424178862788c71b3fab1d67b716))
+- **frontend:** always poll execution history when polling is enabled ([#193](https://github.com/yuyash/auto-forex-web-service/issues/193)) ([f4b4c8a](https://github.com/yuyash/auto-forex-web-service/commit/f4b4c8ae8e8a424178862788c71b3fab1d67b716))
 
 ## [1.18.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.4...frontend-v1.18.5) (2026-03-25)
 
-
 ### Bug Fixes
 
-* cycle id assignment and chart ([#190](https://github.com/yuyash/auto-forex-web-service/issues/190)) ([d3f7700](https://github.com/yuyash/auto-forex-web-service/commit/d3f77005565781c4b3629d3f12bfc3d9b542b9d4))
+- cycle id assignment and chart ([#190](https://github.com/yuyash/auto-forex-web-service/issues/190)) ([d3f7700](https://github.com/yuyash/auto-forex-web-service/commit/d3f77005565781c4b3629d3f12bfc3d9b542b9d4))
 
 ## [1.18.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.3...frontend-v1.18.4) (2026-03-25)
 
-
 ### Bug Fixes
 
-* cycle based snowball strategy ([#188](https://github.com/yuyash/auto-forex-web-service/issues/188)) ([4cbd2be](https://github.com/yuyash/auto-forex-web-service/commit/4cbd2be327178526c0828d871bc77c43e31a05de))
+- cycle based snowball strategy ([#188](https://github.com/yuyash/auto-forex-web-service/issues/188)) ([4cbd2be](https://github.com/yuyash/auto-forex-web-service/commit/4cbd2be327178526c0828d871bc77c43e31a05de))
 
 ## [1.18.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.2...frontend-v1.18.3) (2026-03-25)
 
-
 ### Bug Fixes
 
-* **frontend:** comprehensive realtime task status updates ([#186](https://github.com/yuyash/auto-forex-web-service/issues/186)) ([7290e46](https://github.com/yuyash/auto-forex-web-service/commit/7290e46184ffc3ab523b07e7dc88c79651a895dc))
+- **frontend:** comprehensive realtime task status updates ([#186](https://github.com/yuyash/auto-forex-web-service/issues/186)) ([7290e46](https://github.com/yuyash/auto-forex-web-service/commit/7290e46184ffc3ab523b07e7dc88c79651a895dc))
 
 ## [1.18.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.1...frontend-v1.18.2) (2026-03-25)
 
-
 ### Bug Fixes
 
-* strategy tab refresh and chart viewport ([#184](https://github.com/yuyash/auto-forex-web-service/issues/184)) ([db5b2c3](https://github.com/yuyash/auto-forex-web-service/commit/db5b2c3f78692f39d8f39dc15953d4f75d030c77))
+- strategy tab refresh and chart viewport ([#184](https://github.com/yuyash/auto-forex-web-service/issues/184)) ([db5b2c3](https://github.com/yuyash/auto-forex-web-service/commit/db5b2c3f78692f39d8f39dc15953d4f75d030c77))
 
 ## [1.18.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.18.0...frontend-v1.18.1) (2026-03-25)
 
-
 ### Bug Fixes
 
-* **strategy:** trigger deployment for cycle-based snowball refactor ([#182](https://github.com/yuyash/auto-forex-web-service/issues/182)) ([13f6bc4](https://github.com/yuyash/auto-forex-web-service/commit/13f6bc43549cb8b1d359516a8c9590df142c9306))
+- **strategy:** trigger deployment for cycle-based snowball refactor ([#182](https://github.com/yuyash/auto-forex-web-service/issues/182)) ([13f6bc4](https://github.com/yuyash/auto-forex-web-service/commit/13f6bc43549cb8b1d359516a8c9590df142c9306))
 
 ## [1.18.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.17.0...frontend-v1.18.0) (2026-03-24)
 

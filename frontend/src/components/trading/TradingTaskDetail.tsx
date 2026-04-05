@@ -145,10 +145,17 @@ export const TradingTaskDetail: React.FC = () => {
   );
   const { summary: s } = overviewSummary;
 
+  const [metricsInterval, setMetricsInterval] = useState(1);
+  const [metricsSince, setMetricsSince] = useState('');
+  const [metricsUntil, setMetricsUntil] = useState('');
+
   const metricsResult = useTaskMetrics({
     taskId,
     taskType: TaskType.TRADING,
     executionRunId: effectiveExecutionId,
+    interval: metricsInterval,
+    since: metricsSince ? new Date(metricsSince).toISOString() : undefined,
+    until: metricsUntil ? new Date(metricsUntil).toISOString() : undefined,
     enabled: !!taskId,
     pollingInterval:
       !isViewingHistorical && shouldPollTaskStatus(currentStatus) ? 30000 : 0,
@@ -428,6 +435,14 @@ export const TradingTaskDetail: React.FC = () => {
               data={metricsResult.data}
               isLoading={metricsResult.isLoading}
               error={metricsResult.error}
+              currency={pnlCurrency}
+              interval={metricsInterval}
+              since={metricsSince}
+              until={metricsUntil}
+              onIntervalChange={setMetricsInterval}
+              onSinceChange={setMetricsSince}
+              onUntilChange={setMetricsUntil}
+              onRefresh={metricsResult.refresh}
             />
           </LazyTabPanel>
         )}

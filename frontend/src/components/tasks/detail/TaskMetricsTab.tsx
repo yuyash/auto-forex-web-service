@@ -16,11 +16,20 @@ import {
 import { LineChart } from '@mui/x-charts/LineChart';
 import { useTranslation } from 'react-i18next';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
+import { MetricsToolbar } from './MetricsToolbar';
 
 interface TaskMetricsTabProps {
   data: MetricPoint[];
   isLoading: boolean;
   error: Error | null;
+  currency?: string;
+  interval: number;
+  since: string;
+  until: string;
+  onIntervalChange: (interval: number) => void;
+  onSinceChange: (since: string) => void;
+  onUntilChange: (until: string) => void;
+  onRefresh: () => void;
 }
 
 /** Metrics to chart and their display order */
@@ -30,9 +39,9 @@ const CHART_METRICS: {
   format?: 'pct' | 'int' | 'currency';
 }[] = [
   { key: 'current_balance', color: '#1976d2', format: 'currency' },
-  { key: 'total_pnl', color: '#2e7d32' },
-  { key: 'realized_pnl', color: '#388e3c' },
-  { key: 'unrealized_pnl', color: '#f57c00' },
+  { key: 'total_pnl', color: '#2e7d32', format: 'currency' },
+  { key: 'realized_pnl', color: '#388e3c', format: 'currency' },
+  { key: 'unrealized_pnl', color: '#f57c00', format: 'currency' },
   { key: 'total_return', color: '#7b1fa2', format: 'pct' },
   { key: 'margin_ratio', color: '#d32f2f', format: 'pct' },
   { key: 'open_positions', color: '#0288d1', format: 'int' },
@@ -47,10 +56,46 @@ const CHART_METRICS: {
 /** Keys whose raw value is a ratio (0–1) that must be multiplied by 100 for display */
 const RATIO_KEYS = new Set(['margin_ratio']);
 
+/**
+ * Compute a short date/time label appropriate for the data's time span.
+ */
+function formatTickLabel(date: Date, rangeMs: number): string {
+  const DAY = 86_400_000;
+  if (rangeMs <= DAY) {
+    // Intraday: show HH:mm
+    return date.toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  }
+  if (rangeMs <= 30 * DAY) {
+    // Up to ~1 month: show MM/DD HH:mm
+    return date.toLocaleDateString(undefined, {
+      month: '2-digit',
+      day: '2-digit',
+    });
+  }
+  // Longer: show YYYY/MM/DD
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+}
+
 export function TaskMetricsTab({
   data,
   isLoading,
   error,
+  currency,
+  interval,
+  since,
+  until,
+  onIntervalChange,
+  onSinceChange,
+  onUntilChange,
+  onRefresh,
 }: TaskMetricsTabProps) {
   const { t } = useTranslation('common');
 
@@ -116,15 +161,27 @@ export function TaskMetricsTab({
     );
   }
 
+  const currencySuffix = currency ? ` ${currency}` : '';
+
   const formatValue = (val: number, format?: string) => {
     if (format === 'pct') return `${val.toFixed(2)}%`;
     if (format === 'int') return Math.round(val).toLocaleString();
-    if (format === 'currency') return val.toFixed(2);
+    if (format === 'currency') return `${val.toFixed(2)}${currencySuffix}`;
     return val.toFixed(2);
   };
 
   return (
     <Box sx={{ p: { xs: 1, sm: 2 } }}>
+      <MetricsToolbar
+        interval={interval}
+        since={since}
+        until={until}
+        onIntervalChange={onIntervalChange}
+        onSinceChange={onSinceChange}
+        onUntilChange={onUntilChange}
+        onRefresh={onRefresh}
+        isLoading={isLoading}
+      />
       <Grid container spacing={2}>
         {availableMetrics.map((m) => {
           const cd = chartDataMap[m.key];
@@ -154,28 +211,41 @@ export function TaskMetricsTab({
                   xAxis={[
                     {
                       data: cd.x,
-                      scaleType: 'time',
+                      scaleType: 'time' as const,
+                      tickNumber: 5,
                       tickLabelStyle: { fontSize: 10 },
+                      valueFormatter: (v: Date) => {
+                        const rangeMs =
+                          cd.x[cd.x.length - 1].getTime() - cd.x[0].getTime();
+                        return formatTickLabel(v, rangeMs);
+                      },
                     },
                   ]}
                   yAxis={[
-                    m.format === 'pct'
-                      ? {
-                          valueFormatter: (v: number | null) =>
-                            v != null ? `${v.toFixed(1)}%` : '',
-                        }
-                      : {},
+                    {
+                      tickNumber: 6,
+                      valueFormatter:
+                        m.format === 'pct'
+                          ? (v: number | null) =>
+                              v != null ? `${v.toFixed(1)}%` : ''
+                          : m.format === 'currency'
+                            ? (v: number | null) =>
+                                v != null
+                                  ? `${v.toFixed(1)}${currencySuffix}`
+                                  : ''
+                            : undefined,
+                    },
                   ]}
                   series={[
                     {
                       data: cd.y,
                       color: m.color,
                       showMark: false,
-                      area: m.key === 'current_balance',
                     },
                   ]}
+                  grid={{ vertical: true, horizontal: true }}
                   height={200}
-                  margin={{ left: 60, right: 16, top: 8, bottom: 28 }}
+                  margin={{ left: 60, right: 16, top: 8, bottom: 36 }}
                   hideLegend
                 />
               </Paper>
