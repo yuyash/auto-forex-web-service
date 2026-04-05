@@ -199,9 +199,9 @@ class TestSnowballBacktestSimulation:
 
         assert state.ticks_processed == 5
         cycle = state.strategy_state["cycles"][0]
-        occupied = sum(1 for s in cycle["layers"][0]["slots"] if s.get("entry") is not None)
-        assert occupied == 1
-        assert len(cycle["layers"]) == 2
+        occupied = sum(1 for s in cycle["grid"]["layers"][0]["slots"] if s.get("entry") is not None)
+        assert occupied == 2  # R0 (initial) + 1 counter entry
+        assert len(cycle["grid"]["layers"]) == 2
         assert state.current_balance > task.initial_balance
         assert (
             Position.objects.filter(
@@ -272,8 +272,8 @@ class TestSnowballBacktestSimulation:
         assert state.ticks_processed == 4
         cycle = state.strategy_state["cycles"][0]
         # After r_max, a new layer is created with 0 occupied slots
-        assert len(cycle["layers"]) == 2
-        assert cycle["layers"][1]["base_units"] == 1500
+        assert len(cycle["grid"]["layers"]) == 2
+        assert cycle["grid"]["layers"][1]["base_units"] == 1500
         assert counter_add_retracements == [1, 2]
 
     def test_resume_run_matches_continuous_run_for_same_tick_sequence(self) -> None:
@@ -333,8 +333,8 @@ class TestSnowballBacktestSimulation:
         assert resumed_state.ticks_processed == full_state.ticks_processed
         assert resumed_state.current_balance == full_state.current_balance
         # Compare layer structure
-        resumed_layers = resumed_state.strategy_state["cycles"][0]["layers"]
-        full_layers = full_state.strategy_state["cycles"][0]["layers"]
+        resumed_layers = resumed_state.strategy_state["cycles"][0]["grid"]["layers"]
+        full_layers = full_state.strategy_state["cycles"][0]["grid"]["layers"]
         assert len(resumed_layers) == len(full_layers)
         for rl, fl in zip(resumed_layers, full_layers):
             assert rl["base_units"] == fl["base_units"]
@@ -352,22 +352,31 @@ class TestSnowballBacktestSimulation:
             k: v for k, v in full_state.strategy_state["metrics"].items() if k not in _runtime_keys
         }
         assert resumed_metrics == full_metrics
+
+        def _head_entry(cycle_dict):
+            """Extract the head entry (first occupied slot) from a cycle dict."""
+            for layer in cycle_dict.get("grid", {}).get("layers", []):
+                for slot in layer.get("slots", []):
+                    if slot.get("entry"):
+                        return slot["entry"]
+            return None
+
         assert [
             _normalize_entry(entry)
             for cycle in resumed_state.strategy_state["cycles"]
-            for entry in [cycle["initial_entry"]]
+            for entry in [_head_entry(cycle)]
             if entry
         ] == [
             _normalize_entry(entry)
             for cycle in full_state.strategy_state["cycles"]
-            for entry in [cycle["initial_entry"]]
+            for entry in [_head_entry(cycle)]
             if entry
         ]
 
         # Compare slot entries across all layers
         def _all_slot_entries(cycle_dict):
             entries = []
-            for layer in cycle_dict.get("layers", []):
+            for layer in cycle_dict.get("grid", {}).get("layers", []):
                 for slot in layer.get("slots", []):
                     if slot.get("entry"):
                         entries.append(_normalize_entry(slot["entry"]))
@@ -457,8 +466,8 @@ class TestSnowballBacktestSimulation:
 
         assert state.ticks_processed == 4
         cycle = state.strategy_state["cycles"][0]
-        occupied = sum(1 for s in cycle["layers"][0]["slots"] if s.get("entry") is not None)
-        assert occupied == 2
+        occupied = sum(1 for s in cycle["grid"]["layers"][0]["slots"] if s.get("entry") is not None)
+        assert occupied == 3  # R0 (initial) + 2 counter entries
         assert counter_adds == [
             (1, 7, 5.0),
             (2, 11, 10.0),

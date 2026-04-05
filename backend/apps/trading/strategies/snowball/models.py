@@ -1,18 +1,26 @@
 """Data models for Snowball strategy.
 
-Hierarchy: Cycle → Layer → Slot → Entry.
+Hierarchy: StrategyState → Cycle → PositionGrid → Entry.
 
-- A **Cycle** is one directional trade from initial entry to close.
-- A **Layer** holds up to ``r_max`` retracement slots plus a layer-initial entry.
-- A **Slot** is a numbered seat (R1..R_max) that holds an Entry or is empty.
-- An **Entry** is a single position with entry price, close price, units, etc.
+Design principles
+-----------------
+- **Unified grid**: Every position (including the cycle's first entry at L0/R0)
+  lives in the same ``PositionGrid``.  There is no special ``initial_entry``
+  field — the grid is the single source of truth.
+- **Dynamic cycle head**: The cycle head (whose TP closes the cycle) is always
+  the *oldest surviving position* in the grid, determined at query time.
+- **Bidirectional close**: Normal TP closes from the back (newest → oldest).
+  Shrink protection closes from the front (oldest → newest).
+- **0-indexed addressing**: Layers are ``L0 … Lf`` (f_max layers total).
+  Retracements within a layer are ``R0 … Rr`` (r_max + 1 slots per layer,
+  where R0 is the layer-initial position).
 
-Key rules encoded in the model:
-- L1/R0 close always ends the cycle.
-- L2+ R0 close resets the layer (refillable by default).
-- Slot close with index <= refill_up_to keeps the slot refillable.
-- Slot close with index > refill_up_to seals the slot, triggering a new layer.
-- Closes proceed from the newest layer's highest R down to L1/R0.
+Slot lifecycle
+--------------
+A slot transitions through: ``empty → occupied → closed``.
+- ``closed`` with ``refillable=True`` → returns to ``empty`` (can be reused).
+- ``closed`` with ``refillable=False`` → becomes ``sealed`` (blocks further
+  filling in this layer, triggering a new layer).
 """
 
 from __future__ import annotations
@@ -66,7 +74,7 @@ class SnowballStrategyConfig:
     # Margin protection
     shrink_enabled: bool
     m_th: Decimal
-    m1_th: Decimal  # shrink target: close positions until ratio drops below this
+    m1_th: Decimal
     lock_enabled: bool
     n_th: Decimal
     cooldown_sec: int
@@ -139,6 +147,7 @@ class SnowballStrategyConfig:
         }
 
     def validate(self) -> None:
+        """Raise ``ValueError`` on invalid combinations."""
         if self.shrink_enabled and self.lock_enabled and not self.m_th < self.n_th < Decimal("100"):
             raise ValueError("Must satisfy m_th < n_th < 100")
         if self.shrink_enabled and not Decimal("0") < self.m_th < Decimal("100"):
@@ -171,7 +180,12 @@ class SnowballStrategyConfig:
 
 @dataclass
 class Entry:
-    """A single position entry within a cycle."""
+    """A single position entry within a cycle.
+
+    Every entry lives in a ``Slot`` inside the ``PositionGrid``.  The entry
+    knows its own grid coordinates (``layer``, ``index``) and its ``role``
+    which is purely descriptive — it does *not* affect close ordering.
+    """
 
     entry_id: int
     step: int
@@ -181,7 +195,7 @@ class Entry:
     units: int
     opened_at: datetime
     role: Literal["initial", "counter", "hedge", "layer_initial"]
-    layer_number: int = 1
+    layer_number: int = 0
     retracement_count: int = 0
     root_entry_id: int | None = None
     parent_entry_id: int | None = None
@@ -197,18 +211,18 @@ class Entry:
     def open(
         cls,
         *,
-        state: SnowballStrategyState,
-        tick: Tick,
+        state: "SnowballStrategyState",
+        tick: "Tick",
         direction: Direction,
         units: int,
         step: int,
         close_price: Decimal,
         role: Literal["initial", "counter", "hedge", "layer_initial"],
-        layer_number: int = 1,
+        layer_number: int = 0,
         retracement_count: int = 0,
         root_entry_id: int | None = None,
         parent_entry_id: int | None = None,
-    ) -> Entry:
+    ) -> "Entry":
         eid = state.allocate_id()
         price = tick.ask if direction == Direction.LONG else tick.bid
         if root_entry_id is None and role == "initial":
@@ -227,6 +241,8 @@ class Entry:
             root_entry_id=root_entry_id,
             parent_entry_id=parent_entry_id,
         )
+
+    # -- Convenience properties --
 
     @property
     def is_long(self) -> bool:
@@ -252,7 +268,7 @@ class Entry:
     def is_hedge(self) -> bool:
         return self.role == "hedge"
 
-    def exit_price(self, tick: Tick) -> Decimal:
+    def exit_price(self, tick: "Tick") -> Decimal:
         return tick.bid if self.is_long else tick.ask
 
     def unrealised_loss_pips(self, mid_price: Decimal, pip_size: Decimal) -> Decimal:
@@ -261,9 +277,14 @@ class Entry:
             return (self.entry_price - mid_price) / pip_size
         return (mid_price - self.entry_price) / pip_size
 
-    # ------------------------------------------------------------------
-    # Event generation
-    # ------------------------------------------------------------------
+    # -- Grid coordinate --
+
+    @property
+    def grid_key(self) -> tuple[int, int]:
+        """(layer_number, retracement_count) — used for ordering."""
+        return (self.layer_number, self.retracement_count)
+
+    # -- Event generation --
 
     def apply_metadata_to(
         self,
@@ -317,7 +338,7 @@ class Entry:
 
     def to_close_event(
         self,
-        tick: Tick,
+        tick: "Tick",
         *,
         instrument: str,
         pip_size: Decimal,
@@ -364,9 +385,7 @@ class Entry:
         self.validation_status = orig_vs
         return event
 
-    # ------------------------------------------------------------------
-    # Serialisation
-    # ------------------------------------------------------------------
+    # -- Serialisation --
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -398,7 +417,7 @@ class Entry:
         }
 
     @staticmethod
-    def from_dict(d: dict[str, Any]) -> Entry:
+    def from_dict(d: dict[str, Any]) -> "Entry":
         raw_direction = d.get("direction", "long")
         direction = (
             raw_direction
@@ -428,7 +447,7 @@ class Entry:
             units=_parse_int(d.get("units", 0), 0),
             opened_at=opened_at,
             role=d.get("role", "counter"),
-            layer_number=_parse_int(d.get("layer_number", 1), 1),
+            layer_number=_parse_int(d.get("layer_number", 0), 0),
             retracement_count=_parse_int(d.get("retracement_count", 0), 0),
             root_entry_id=(
                 _parse_int(d["root_entry_id"], 0) if d.get("root_entry_id") is not None else None
@@ -458,6 +477,7 @@ class Entry:
         )
 
 
+# Backward-compat alias
 BasketEntry = Entry
 
 
@@ -468,7 +488,11 @@ BasketEntry = Entry
 
 @dataclass
 class Slot:
-    """A retracement seat (R1, R2, ...) within a Layer.
+    """A numbered seat inside a layer.
+
+    Addressing: ``(layer_number, index)`` where ``index`` is 0-based.
+    R0 is the layer-initial position (or the cycle-initial for L0).
+    R1…R(r_max) are counter-trend retracement positions.
 
     States:
     - empty + not ever_closed → available for a new entry
@@ -476,7 +500,7 @@ class Slot:
     - empty + ever_closed → sealed; triggers new layer on next adverse move
     """
 
-    index: int  # 1-based (R1=1, R2=2, ...)
+    index: int  # 0-based (R0=0, R1=1, …)
     entry: Entry | None = None
     ever_closed: bool = False
 
@@ -497,11 +521,6 @@ class Slot:
         self.entry = entry
 
     def close(self, *, refillable: bool) -> Entry | None:
-        """Close the entry in this slot.
-
-        If *refillable*, the slot remains available for re-entry.
-        Otherwise it is sealed (ever_closed=True).
-        """
         e = self.entry
         self.entry = None
         if not refillable:
@@ -509,7 +528,6 @@ class Slot:
         return e
 
     def reset(self) -> None:
-        """Reset to fresh empty state."""
         self.entry = None
         self.ever_closed = False
 
@@ -521,10 +539,10 @@ class Slot:
         }
 
     @staticmethod
-    def from_dict(d: dict[str, Any]) -> Slot:
+    def from_dict(d: dict[str, Any]) -> "Slot":
         raw_entry = d.get("entry")
         return Slot(
-            index=_parse_int(d.get("index", 1), 1),
+            index=_parse_int(d.get("index", 0), 0),
             entry=Entry.from_dict(raw_entry) if raw_entry else None,
             ever_closed=bool(d.get("ever_closed", False)),
         )
@@ -537,24 +555,18 @@ class Slot:
 
 @dataclass
 class Layer:
-    """A layer of r_max retracement slots.
+    """A layer of ``r_max + 1`` slots (R0 … R(r_max)).
 
-    L1 uses the cycle's initial_entry as its reference.
-    L2+ have their own initial_entry (layer_initial).
-
-    The layer knows its ``refill_up_to`` threshold so it can decide
-    whether a closed slot should be refillable or sealed.
+    R0 is the layer-initial (or cycle-initial for L0).
+    R1…R(r_max) are counter-trend retracement slots.
     """
 
-    layer_number: int  # 1-based
+    layer_number: int  # 0-based
     slots: list[Slot] = field(default_factory=list)
-    initial_entry: Entry | None = None
     base_units: int = 1000
-    refill_up_to: int = 2  # slots R1..R(refill_up_to) are refillable
+    refill_up_to: int = 2
 
-    # ------------------------------------------------------------------
-    # Slot queries
-    # ------------------------------------------------------------------
+    # -- Slot queries --
 
     def occupied_slots(self) -> list[Slot]:
         return [s for s in self.slots if s.is_occupied]
@@ -563,100 +575,77 @@ class Layer:
         occupied = self.occupied_slots()
         return max(occupied, key=lambda s: s.index) if occupied else None
 
-    def next_available_slot(self) -> Slot | None:
-        """Return the next slot that can accept an entry.
+    def lowest_occupied_slot(self) -> Slot | None:
+        occupied = self.occupied_slots()
+        return min(occupied, key=lambda s: s.index) if occupied else None
 
-        Walks slots in order.  Returns None if:
-        - A sealed (ever_closed) slot is encountered before an available one
-        - All slots are occupied
+    def slot_at(self, index: int) -> Slot | None:
+        """Return the slot at *index* (0-based), or None."""
+        for s in self.slots:
+            if s.index == index:
+                return s
+        return None
+
+    def next_available_counter_slot(self) -> Slot | None:
+        """Return the next available slot with index >= 1 (counter slots).
+
+        Walks counter slots in order.  Returns None if a sealed slot is
+        encountered before an available one, or all are occupied.
         """
         for s in self.slots:
+            if s.index == 0:
+                continue  # skip R0 (layer-initial)
             if s.is_available:
                 return s
             if s.is_empty and s.ever_closed:
-                return None  # sealed slot blocks further filling → new layer
-        return None  # all occupied
+                return None  # sealed → new layer needed
+        return None
 
     @property
     def needs_new_layer(self) -> bool:
-        """True if this layer cannot accept more entries and a new layer is needed."""
-        return self.next_available_slot() is None
-
-    @property
-    def needs_initial_rebuild(self) -> bool:
-        """True if this is L2+ and the initial entry needs to be (re)built.
-
-        Note: With layer removal on L2+ initial close, this should not
-        normally be True.  Kept for defensive checks only.
-        """
-        return self.layer_number > 1 and self.initial_entry is None
+        """True if counter slots cannot accept more entries."""
+        return self.next_available_counter_slot() is None
 
     def has_open_entries(self) -> bool:
-        if self.initial_entry is not None:
-            return True
         return any(s.is_occupied for s in self.slots)
 
     def all_entries(self) -> list[Entry]:
-        entries: list[Entry] = []
-        if self.initial_entry is not None:
-            entries.append(self.initial_entry)
-        for s in self.slots:
-            if s.entry is not None:
-                entries.append(s.entry)
-        return entries
+        return [s.entry for s in self.slots if s.entry is not None]
 
-    # ------------------------------------------------------------------
-    # Close operations
-    # ------------------------------------------------------------------
+    # -- Close operations --
 
-    def close_slot(self, slot_index: int) -> Entry | None:
-        """Close the entry in the slot at *slot_index* (1-based).
+    def close_slot(self, slot_index: int, *, refillable: bool | None = None) -> Entry | None:
+        """Close the entry in the slot at *slot_index*.
 
-        Refillability is determined by comparing slot_index to refill_up_to.
-        For L2+, R0 (initial_entry) is always refillable — handled separately.
+        If *refillable* is None, auto-determine from ``refill_up_to``:
+        counter slots (index >= 1) with index <= refill_up_to are refillable.
+        R0 is never auto-refillable (it's the layer-initial).
         """
         for s in self.slots:
             if s.index == slot_index and s.is_occupied:
-                refillable = s.index <= self.refill_up_to
+                if refillable is None:
+                    refillable = s.index >= 1 and s.index <= self.refill_up_to
                 return s.close(refillable=refillable)
         return None
 
-    def close_initial(self) -> Entry | None:
-        """Close the layer-initial entry and reset the layer for reuse.
-
-        Only applicable to L2+.  Resets all slots so the layer can be
-        re-entered on the next adverse move.
-        """
-        e = self.initial_entry
-        self.initial_entry = None
-        for s in self.slots:
-            s.reset()
-        return e
-
     def remove_entry(self, entry_id: int) -> None:
-        """Remove an entry by ID (used by protection modes)."""
-        if self.initial_entry is not None and self.initial_entry.entry_id == entry_id:
-            self.initial_entry = None
-            return
+        """Remove an entry by ID (used by protection modes).  Seals the slot."""
         for s in self.slots:
             if s.entry is not None and s.entry.entry_id == entry_id:
                 s.close(refillable=False)
                 return
 
-    # ------------------------------------------------------------------
-    # Weighted average helpers
-    # ------------------------------------------------------------------
+    # -- Weighted average helpers --
 
     def weighted_avg_close_price(
         self,
         new_price: Decimal,
         new_units: int,
-        include_initial: Entry | None = None,
+        include_ref: Entry | None = None,
     ) -> tuple[Decimal, str]:
         """Compute weighted-average close price for a new entry in this layer.
 
-        Includes: new entry + existing slot entries + layer initial (or cycle initial).
-        Returns (close_price, formula_string).
+        Includes: new entry + existing occupied slots + optional reference entry.
         """
         total_cost = new_price * Decimal(str(new_units))
         total_units = new_units
@@ -668,13 +657,12 @@ class Layer:
                 total_units += s.entry.units
                 parts.append(f"{s.entry.entry_price} * {s.entry.units}")
 
-        ref = include_initial or self.initial_entry
-        if ref is not None:
-            ref_units = abs(ref.units)
+        if include_ref is not None:
+            ref_units = abs(include_ref.units)
             if ref_units > 0:
-                total_cost += ref.entry_price * Decimal(str(ref_units))
+                total_cost += include_ref.entry_price * Decimal(str(ref_units))
                 total_units += ref_units
-                parts.append(f"{ref.entry_price} * {ref_units}")
+                parts.append(f"{include_ref.entry_price} * {ref_units}")
 
         close_price = total_cost / Decimal(str(total_units)) if total_units > 0 else new_price
         formula = f"({' + '.join(parts)}) / {total_units}"
@@ -684,86 +672,87 @@ class Layer:
         self,
         new_price: Decimal,
         new_units: int,
-        prev_layer: Layer,
-        prev_layer_initial: Entry | None,
+        prev_layer: "Layer",
         direction: Direction,
         pip_size: Decimal,
         m_pips: Decimal,
     ) -> tuple[Decimal, str]:
-        """Compute close price for a layer-initial entry (L2+).
+        """Compute close price for a layer-initial entry.
 
         Uses the close_price of the highest-numbered occupied slot in the
-        previous layer.  This guarantees L2/R0 closes before any L1
-        retracement, preserving the correct close order.
-
-        Falls back to m_pips from entry price if no previous slot is occupied.
+        previous layer.  Falls back to m_pips from entry price.
         """
-        # Find the highest occupied slot in the previous layer
         highest = prev_layer.highest_occupied_slot()
         if highest is not None and highest.entry is not None:
             close_price = highest.entry.close_price
-            formula = f"{close_price:.5f}"
-            return close_price, formula
+            return close_price, f"{close_price:.5f}"
 
-        # Fallback: use m_pips from entry price (same as L1/R0)
         if direction == Direction.LONG:
             close_price = new_price + m_pips * pip_size
         else:
             close_price = new_price - m_pips * pip_size
         op = "+" if direction == Direction.LONG else "-"
-        formula = f"{new_price} {op} {m_pips} * {pip_size}"
-        return close_price, formula
+        return close_price, f"{new_price} {op} {m_pips} * {pip_size}"
 
-    # ------------------------------------------------------------------
-    # Serialisation
-    # ------------------------------------------------------------------
+    # -- Serialisation --
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "layer_number": self.layer_number,
             "slots": [s.to_dict() for s in self.slots],
-            "initial_entry": self.initial_entry.to_dict() if self.initial_entry else None,
             "base_units": self.base_units,
             "refill_up_to": self.refill_up_to,
         }
 
     @staticmethod
-    def from_dict(d: dict[str, Any]) -> Layer:
-        raw_initial = d.get("initial_entry")
+    def from_dict(d: dict[str, Any]) -> "Layer":
         return Layer(
-            layer_number=_parse_int(d.get("layer_number", 1), 1),
+            layer_number=_parse_int(d.get("layer_number", 0), 0),
             slots=[Slot.from_dict(s) for s in d.get("slots", [])],
-            initial_entry=Entry.from_dict(raw_initial) if raw_initial else None,
             base_units=_parse_int(d.get("base_units", 1000), 1000),
             refill_up_to=_parse_int(d.get("refill_up_to", 2), 2),
         )
 
     @staticmethod
-    def create(layer_number: int, r_max: int, base_units: int, refill_up_to: int = 2) -> Layer:
+    def create(
+        layer_number: int,
+        r_max: int,
+        base_units: int,
+        refill_up_to: int = 2,
+    ) -> "Layer":
+        """Create a layer with R0 … R(r_max) slots (r_max + 1 total)."""
         return Layer(
             layer_number=layer_number,
-            slots=[Slot(index=i + 1) for i in range(r_max)],
+            slots=[Slot(index=i) for i in range(r_max + 1)],
             base_units=base_units,
             refill_up_to=refill_up_to,
         )
 
 
 # ---------------------------------------------------------------------------
-# Cycle
+# PositionGrid
 # ---------------------------------------------------------------------------
 
 
 @dataclass
-class SnowballCycle:
-    """A single trading cycle: initial entry through to close."""
+class PositionGrid:
+    """Flat, ordered collection of all positions in a cycle.
 
-    cycle_id: int
-    direction: Direction
-    initial_entry: Entry | None = None
+    The grid is a list of ``Layer`` objects.  Every position — including the
+    cycle's first entry at L0/R0 — lives in a slot.  This eliminates the
+    need for a separate ``initial_entry`` field and makes close ordering
+    uniform.
+
+    Ordering convention (grid_key = (layer, index)):
+    - Front (oldest): L0/R0
+    - Back  (newest): highest layer, highest index
+
+    Normal TP closes from the back.  Shrink closes from the front.
+    """
+
     layers: list[Layer] = field(default_factory=list)
-    hedge_entries: list[Entry] = field(default_factory=list)
-    counter_close_count: int = 0
-    completed: bool = False
+
+    # -- Layer management --
 
     @property
     def current_layer(self) -> Layer | None:
@@ -773,6 +762,132 @@ class SnowballCycle:
     def layer_count(self) -> int:
         return len(self.layers)
 
+    def add_layer(self, layer: Layer) -> None:
+        self.layers.append(layer)
+
+    def find_layer(self, layer_number: int) -> Layer | None:
+        for layer in self.layers:
+            if layer.layer_number == layer_number:
+                return layer
+        return None
+
+    # -- Entry queries --
+
+    def all_entries(self) -> list[Entry]:
+        entries: list[Entry] = []
+        for layer in self.layers:
+            entries.extend(layer.all_entries())
+        return entries
+
+    def head_entry(self) -> Entry | None:
+        """Return the oldest surviving position (cycle head).
+
+        This is the entry whose TP closes the cycle.  It is always the
+        entry with the smallest grid_key among all occupied slots.
+        """
+        for layer in self.layers:
+            lowest = layer.lowest_occupied_slot()
+            if lowest is not None and lowest.entry is not None:
+                return lowest.entry
+        return None
+
+    def tail_entry(self) -> Entry | None:
+        """Return the newest position (highest grid_key)."""
+        for layer in reversed(self.layers):
+            highest = layer.highest_occupied_slot()
+            if highest is not None and highest.entry is not None:
+                return highest.entry
+        return None
+
+    def has_counter_entries(self) -> bool:
+        """True if any position other than the head is open."""
+        head = self.head_entry()
+        if head is None:
+            return False
+        for layer in self.layers:
+            for s in layer.slots:
+                if s.entry is not None and s.entry.entry_id != head.entry_id:
+                    return True
+        return False
+
+    def is_empty(self) -> bool:
+        return all(not layer.has_open_entries() for layer in self.layers)
+
+    # -- Shrink: close from front --
+
+    def front_entry(self) -> Entry | None:
+        """Return the oldest position — same as head_entry.
+
+        Shrink closes this first.
+        """
+        return self.head_entry()
+
+    # -- Normal TP: close from back --
+
+    def back_entry_for_tp(self) -> tuple[Entry | None, Layer | None]:
+        """Return the newest counter entry eligible for TP close.
+
+        Walks layers from newest to oldest, returning the highest occupied
+        slot.  Skips the head entry (it closes via cycle TP, not counter TP).
+        """
+        head = self.head_entry()
+        for layer in reversed(self.layers):
+            highest = layer.highest_occupied_slot()
+            if highest is None or highest.entry is None:
+                continue
+            if head is not None and highest.entry.entry_id == head.entry_id:
+                continue  # don't close head via counter TP
+            return highest.entry, layer
+        return None, None
+
+    # -- Remove entry (protection) --
+
+    def remove_entry(self, entry_id: int) -> None:
+        for layer in self.layers:
+            layer.remove_entry(entry_id)
+
+    # -- Serialisation --
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"layers": [layer.to_dict() for layer in self.layers]}
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> "PositionGrid":
+        raw_layers = data.get("layers")
+        layers = [Layer.from_dict(ld) for ld in raw_layers] if raw_layers else []
+        return PositionGrid(layers=layers)
+
+
+# ---------------------------------------------------------------------------
+# Cycle
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class SnowballCycle:
+    """A single trading cycle: from first entry through to close.
+
+    All positions live in ``grid``.  The cycle head is determined
+    dynamically via ``grid.head_entry()``.
+    """
+
+    cycle_id: int
+    direction: Direction
+    grid: PositionGrid = field(default_factory=PositionGrid)
+    hedge_entries: list[Entry] = field(default_factory=list)
+    counter_close_count: int = 0
+    completed: bool = False
+
+    # -- Convenience --
+
+    @property
+    def current_layer(self) -> Layer | None:
+        return self.grid.current_layer
+
+    @property
+    def layer_count(self) -> int:
+        return self.grid.layer_count
+
     @property
     def is_long(self) -> bool:
         return self.direction == Direction.LONG
@@ -781,106 +896,160 @@ class SnowballCycle:
     def is_short(self) -> bool:
         return self.direction == Direction.SHORT
 
+    @property
+    def initial_entry(self) -> Entry | None:
+        """Dynamic cycle head — the oldest surviving position."""
+        return self.grid.head_entry()
+
     def add_layer(self, layer: Layer) -> None:
-        self.layers.append(layer)
+        self.grid.add_layer(layer)
+
+    def find_layer(self, layer_number: int) -> Layer | None:
+        return self.grid.find_layer(layer_number)
 
     def all_entries(self) -> list[Entry]:
-        entries: list[Entry] = []
-        if self.initial_entry is not None:
-            entries.append(self.initial_entry)
-        for layer in self.layers:
-            entries.extend(layer.all_entries())
+        entries = self.grid.all_entries()
         entries.extend(self.hedge_entries)
         return entries
 
     def counter_non_hedge(self) -> list[Entry]:
+        head = self.grid.head_entry()
         entries: list[Entry] = []
-        for layer in self.layers:
-            for s in layer.slots:
-                if s.entry is not None and not s.entry.is_hedge:
-                    entries.append(s.entry)
+        for e in self.grid.all_entries():
+            if head is not None and e.entry_id == head.entry_id:
+                continue
+            if not e.is_hedge:
+                entries.append(e)
         return entries
 
-    # Backward compat
     @property
     def counter_entries(self) -> list[Entry]:
         return self.counter_non_hedge()
 
+    @property
+    def layers(self) -> list[Layer]:
+        return self.grid.layers
+
     def initial_for_layer(self, layer_number: int) -> Entry | None:
-        if layer_number == 1:
-            return self.initial_entry
-        for layer in self.layers:
-            if layer.layer_number == layer_number:
-                return layer.initial_entry
-        return None
+        layer = self.grid.find_layer(layer_number)
+        if layer is None:
+            return None
+        r0 = layer.slot_at(0)
+        return r0.entry if r0 is not None else None
 
     def remove_entry(self, entry_id: int) -> None:
-        for layer in self.layers:
-            layer.remove_entry(entry_id)
+        self.grid.remove_entry(entry_id)
         self.hedge_entries = [e for e in self.hedge_entries if e.entry_id != entry_id]
 
-    def find_layer(self, layer_number: int) -> Layer | None:
-        for layer in self.layers:
-            if layer.layer_number == layer_number:
-                return layer
-        return None
+    # -- Compat properties --
 
-    # Compat properties
     @property
     def layer_index(self) -> int:
-        return len(self.layers) - 1 if self.layers else 0
+        return self.grid.layer_count - 1 if self.grid.layer_count > 0 else 0
 
     @property
     def layer_retracement_count(self) -> int:
-        layer = self.current_layer
+        layer = self.grid.current_layer
         return len(layer.occupied_slots()) if layer else 0
 
     @property
     def layer_initial_entries(self) -> dict[int, Entry]:
         result: dict[int, Entry] = {}
-        for layer in self.layers:
-            if layer.initial_entry is not None:
-                result[layer.layer_number] = layer.initial_entry
+        for layer in self.grid.layers:
+            r0 = layer.slot_at(0)
+            if r0 is not None and r0.entry is not None:
+                result[layer.layer_number] = r0.entry
         return result
 
-    # ------------------------------------------------------------------
-    # Serialisation
-    # ------------------------------------------------------------------
+    # -- Serialisation --
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "cycle_id": self.cycle_id,
             "direction": self.direction.value,
-            "initial_entry": self.initial_entry.to_dict() if self.initial_entry is not None else {},
-            "layers": [layer.to_dict() for layer in self.layers],
+            "grid": self.grid.to_dict(),
             "hedge_entries": [e.to_dict() for e in self.hedge_entries],
             "counter_close_count": self.counter_close_count,
             "completed": self.completed,
         }
 
     @staticmethod
-    def from_dict(data: dict[str, Any]) -> SnowballCycle:
+    def from_dict(data: dict[str, Any]) -> "SnowballCycle":
         raw_direction = data.get("direction", "long")
         direction = (
             raw_direction
             if isinstance(raw_direction, Direction)
             else Direction(str(raw_direction).strip().lower())
         )
-        raw_initial = data.get("initial_entry", {})
-        initial_entry: Entry | None = Entry.from_dict(raw_initial) if raw_initial else None
 
-        raw_layers = data.get("layers")
-        layers = [Layer.from_dict(ld) for ld in raw_layers] if raw_layers is not None else []
+        # Support both new "grid" format and legacy "initial_entry" + "layers" format
+        if "grid" in data:
+            grid = PositionGrid.from_dict(data["grid"])
+        else:
+            grid = _migrate_legacy_cycle(data)
 
         return SnowballCycle(
             cycle_id=_parse_int(data.get("cycle_id", 0), 0),
             direction=direction,
-            initial_entry=initial_entry,
-            layers=layers,
+            grid=grid,
             hedge_entries=[Entry.from_dict(e) for e in data.get("hedge_entries", [])],
             counter_close_count=_parse_int(data.get("counter_close_count", 0), 0),
             completed=bool(data.get("completed", False)),
         )
+
+
+def _migrate_legacy_cycle(data: dict[str, Any]) -> PositionGrid:
+    """Convert old initial_entry + layers format to unified grid.
+
+    Legacy format:
+    - ``initial_entry``: dict (the L1/R0 entry, stored separately)
+    - ``layers``: list of layers where L1 has slots R1…R(r_max) and
+      L2+ have ``initial_entry`` + slots R1…R(r_max)
+
+    New format:
+    - All entries live in slots.  L0 has R0 (cycle initial) + R1…R(r_max).
+      L1+ have R0 (layer initial) + R1…R(r_max).
+    """
+    raw_initial = data.get("initial_entry", {})
+    raw_layers = data.get("layers", [])
+
+    layers: list[Layer] = []
+    for ld in raw_layers:
+        old_layer_num = _parse_int(ld.get("layer_number", 1), 1)
+        new_layer_num = old_layer_num - 1  # 1-based → 0-based
+
+        old_slots = [Slot.from_dict(s) for s in ld.get("slots", [])]
+        # Re-index old 1-based slots to new 1-based (they stay the same)
+        new_slots: list[Slot] = []
+
+        # R0 slot: layer initial (or cycle initial for L0)
+        r0_entry: Entry | None = None
+        if new_layer_num == 0 and raw_initial:
+            r0_entry = Entry.from_dict(raw_initial)
+            r0_entry.layer_number = 0
+            r0_entry.retracement_count = 0
+        elif ld.get("initial_entry"):
+            r0_entry = Entry.from_dict(ld["initial_entry"])
+            r0_entry.layer_number = new_layer_num
+            r0_entry.retracement_count = 0
+
+        new_slots.append(Slot(index=0, entry=r0_entry))
+
+        for old_slot in old_slots:
+            if old_slot.entry is not None:
+                old_slot.entry.layer_number = new_layer_num
+            new_slots.append(old_slot)
+
+        layers.append(
+            Layer(
+                layer_number=new_layer_num,
+                slots=new_slots,
+                base_units=_parse_int(ld.get("base_units", 1000), 1000),
+                refill_up_to=_parse_int(ld.get("refill_up_to", 2), 2),
+            )
+        )
+
+    return PositionGrid(layers=layers)
 
 
 # ---------------------------------------------------------------------------
@@ -949,7 +1118,7 @@ class SnowballStrategyState:
         }
 
     @staticmethod
-    def from_dict(data: dict[str, Any]) -> SnowballStrategyState:
+    def from_dict(data: dict[str, Any]) -> "SnowballStrategyState":
         def _dec_or_none(v: object) -> Decimal | None:
             return _parse_decimal(v, "0") if v is not None else None
 
@@ -975,7 +1144,7 @@ class SnowballStrategyState:
         )
 
     @classmethod
-    def from_strategy_state(cls, raw: dict[str, Any] | None) -> SnowballStrategyState:
+    def from_strategy_state(cls, raw: dict[str, Any] | None) -> "SnowballStrategyState":
         if not isinstance(raw, dict):
             return cls()
         return cls.from_dict(raw)
