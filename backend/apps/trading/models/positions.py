@@ -86,12 +86,12 @@ class Position(models.Model):
     layer_index = models.IntegerField(
         null=True,
         blank=True,
-        help_text="Layer index for Floor strategy (null for other strategies)",
+        help_text="Layer index for Floor strategy (1-based: L1, L2, ...; null for other strategies)",
     )
     retracement_count = models.IntegerField(
         null=True,
         blank=True,
-        help_text="Number of retracements for this position",
+        help_text="Retracement index for this position (0-based: R0=initial entry, R1=first retracement, ...)",
     )
     unrealized_pnl = models.DecimalField(
         max_digits=20,

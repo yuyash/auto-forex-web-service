@@ -76,12 +76,12 @@ class Trade(models.Model):
         null=True,
         blank=True,
         db_index=True,
-        help_text="Layer index for Floor strategy-related trades",
+        help_text="Layer index for Floor strategy-related trades (1-based: L1, L2, ...)",
     )
     retracement_count = models.IntegerField(
         null=True,
         blank=True,
-        help_text="Number of retracements in the layer at the time of this trade",
+        help_text="Retracement index at the time of this trade (0-based: R0=initial, R1=first retracement, ...)",
     )
     position = models.ForeignKey(
         "trading.Position",

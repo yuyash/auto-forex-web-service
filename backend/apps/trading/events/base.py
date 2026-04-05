@@ -168,12 +168,12 @@ class InitialEntryEvent(StrategyEvent):
     """Event for opening an initial position layer.
 
     Attributes:
-        layer_number: Layer number being opened
+        layer_number: Layer number being opened (1-based: L1, L2, ...)
         direction: Trade direction (Direction enum)
         price: Entry price
         units: Position size
         entry_time: Entry timestamp
-        retracement_count: Number of retracements (default: 0)
+        retracement_count: Retracement index (always 0 for initial entry = R0)
 
     Example:
         >>> from apps.trading.strategies.floor.enums import Direction
@@ -192,7 +192,7 @@ class InitialEntryEvent(StrategyEvent):
     price: Decimal = Decimal("0")
     units: int = 0
     entry_time: datetime | None = None
-    retracement_count: int = 1
+    retracement_count: int = 0
     entry_id: int | None = None  # Strategy-internal entry ID for position tracking
     planned_exit_price: Decimal | None = None
     planned_exit_price_formula: str | None = None
@@ -264,7 +264,7 @@ class InitialEntryEvent(StrategyEvent):
             price=parse_decimal(event_dict.get("price", "0")),
             units=int(event_dict.get("units", 0)),
             entry_time=parse_datetime(event_dict.get("entry_time")),
-            retracement_count=int(event_dict.get("retracement_count", 1)),
+            retracement_count=int(event_dict.get("retracement_count", 0)),
             entry_id=event_dict.get("entry_id"),
             planned_exit_price=parse_optional_decimal(event_dict.get("planned_exit_price")),
             planned_exit_price_formula=event_dict.get("planned_exit_price_formula"),
@@ -277,12 +277,12 @@ class RetracementEvent(StrategyEvent):
     """Event for opening a retracement position.
 
     Attributes:
-        layer_number: Layer number being retracted
+        layer_number: Layer number being retracted (1-based: L1, L2, ...)
         direction: Trade direction (Direction enum)
         price: Entry price
         units: Position size
         entry_time: Entry timestamp
-        retracement_count: Number of retracements for this layer
+        retracement_count: Retracement index (0-based: R0=initial, R1=first retracement, ...)
 
     Example:
         >>> from apps.trading.strategies.floor.enums import Direction
@@ -293,7 +293,7 @@ class RetracementEvent(StrategyEvent):
         ...     price=Decimal("150.15"),
         ...     units=500,
         ...     entry_time=datetime.now(),
-        ...     retracement_count=2,
+        ...     retracement_count=1,
         ... )
     """
 
@@ -302,7 +302,7 @@ class RetracementEvent(StrategyEvent):
     price: Decimal = Decimal("0")
     units: int = 0
     entry_time: datetime | None = None
-    retracement_count: int = 1
+    retracement_count: int = 0
     entry_id: int | None = None  # Strategy-internal entry ID for position tracking
     planned_exit_price: Decimal | None = None
     planned_exit_price_formula: str | None = None
@@ -375,7 +375,7 @@ class RetracementEvent(StrategyEvent):
             price=parse_decimal(event_dict.get("price", "0")),
             units=int(event_dict.get("units", 0)),
             entry_time=parse_datetime(event_dict.get("entry_time")),
-            retracement_count=int(event_dict.get("retracement_count", 1)),
+            retracement_count=int(event_dict.get("retracement_count", 0)),
             entry_id=event_dict.get("entry_id"),
             planned_exit_price=parse_optional_decimal(event_dict.get("planned_exit_price")),
             planned_exit_price_formula=event_dict.get("planned_exit_price_formula"),
@@ -424,7 +424,7 @@ class TakeProfitEvent(StrategyEvent):
     pips: Decimal = Decimal("0")
     entry_time: datetime | None = None
     exit_time: datetime | None = None
-    retracement_count: int = 1
+    retracement_count: int = 0
     entry_id: int | None = None  # Strategy-internal entry ID
     position_id: str | None = None  # Position UUID for direct targeting
 
@@ -506,7 +506,7 @@ class TakeProfitEvent(StrategyEvent):
             pips=parse_decimal(event_dict.get("pips", "0")),
             entry_time=parse_datetime(event_dict.get("entry_time")),
             exit_time=parse_datetime(event_dict.get("exit_time")),
-            retracement_count=int(event_dict.get("retracement_count", 1)),
+            retracement_count=int(event_dict.get("retracement_count", 0)),
             entry_id=event_dict.get("entry_id"),
             position_id=event_dict.get("position_id"),
         )
@@ -522,7 +522,7 @@ class OpenPositionEvent(StrategyEvent):
     price: Decimal = Decimal("0")
     units: int = 0
     entry_time: datetime | None = None
-    retracement_count: int = 1
+    retracement_count: int = 0
     entry_id: int | None = None
     strategy_event_type: str = ""
     planned_exit_price: Decimal | None = None
@@ -589,7 +589,7 @@ class OpenPositionEvent(StrategyEvent):
             price=parse_decimal(event_dict.get("price", "0")),
             units=int(event_dict.get("units", 0)),
             entry_time=parse_datetime(event_dict.get("entry_time")),
-            retracement_count=int(event_dict.get("retracement_count", 1)),
+            retracement_count=int(event_dict.get("retracement_count", 0)),
             entry_id=event_dict.get("entry_id"),
             strategy_event_type=str(event_dict.get("strategy_event_type", "")),
             planned_exit_price=parse_optional_decimal(event_dict.get("planned_exit_price")),
@@ -616,7 +616,7 @@ class ClosePositionEvent(StrategyEvent):
     pips: Decimal = Decimal("0")
     entry_time: datetime | None = None
     exit_time: datetime | None = None
-    retracement_count: int = 1
+    retracement_count: int = 0
     entry_id: int | None = None
     position_id: str | None = None
     strategy_event_type: str = ""
@@ -688,7 +688,7 @@ class ClosePositionEvent(StrategyEvent):
             pips=parse_decimal(event_dict.get("pips", "0")),
             entry_time=parse_datetime(event_dict.get("entry_time")),
             exit_time=parse_datetime(event_dict.get("exit_time")),
-            retracement_count=int(event_dict.get("retracement_count", 1)),
+            retracement_count=int(event_dict.get("retracement_count", 0)),
             entry_id=event_dict.get("entry_id"),
             position_id=event_dict.get("position_id"),
             strategy_event_type=str(event_dict.get("strategy_event_type", "")),

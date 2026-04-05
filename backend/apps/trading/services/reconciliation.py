@@ -275,10 +275,10 @@ class TradingResumeReconciler:
                 continue
 
             floor_index = int(position.layer_index or floor_state.active_floor_index or 1)
-            retracement_count = int(position.retracement_count or 1)
+            retracement_count = int(position.retracement_count or 0)
             take_profit_pips = floor_config.intra_layer_take_profit_pips(
                 floor_index,
-                max(retracement_count - 1, 0),
+                retracement_count,
             )
             normalized_entries.append(
                 {
@@ -289,7 +289,7 @@ class TradingResumeReconciler:
                     "units": abs(int(position.units)),
                     "take_profit_pips": str(take_profit_pips),
                     "opened_at": position.entry_time.isoformat(),
-                    "is_initial": retracement_count <= 1,
+                    "is_initial": retracement_count == 0,
                     "retracement_count": retracement_count,
                     "position_id": position_id,
                 }
@@ -302,15 +302,12 @@ class TradingResumeReconciler:
         max_floor = 1
         for entry in normalized_entries:
             floor_index = max(1, _safe_int(entry.get("floor_index"), 1))
-            retracement_count = max(1, _safe_int(entry.get("retracement_count"), 1))
             direction = str(entry.get("direction", Direction.LONG)).lower()
             if direction not in {Direction.LONG, Direction.SHORT}:
                 direction = Direction.LONG
 
-            floor_retracement_counts[floor_index] = max(
-                floor_retracement_counts.get(floor_index, 0),
-                retracement_count,
-            )
+            # floor_retracement_counts tracks total entries per layer
+            floor_retracement_counts[floor_index] = floor_retracement_counts.get(floor_index, 0) + 1
             floor_directions.setdefault(floor_index, direction)
             max_floor = max(max_floor, floor_index)
 

@@ -192,7 +192,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       minWidth: 80,
       align: 'right',
       render: (row: TaskTrade) =>
-        row.layer_index != null ? String(row.layer_index) : '-',
+        row.layer_index != null ? `L${row.layer_index}` : '-',
     },
     {
       id: 'retracement_count',
@@ -201,7 +201,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       minWidth: 80,
       align: 'right',
       render: (row: TaskTrade) =>
-        row.retracement_count != null ? String(row.retracement_count) : '-',
+        row.retracement_count != null ? `R${row.retracement_count}` : '-',
     },
     {
       id: 'description',
