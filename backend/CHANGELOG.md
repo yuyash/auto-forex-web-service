@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.26.3...backend-v1.26.4) (2026-04-05)
+
+
+### Bug Fixes
+
+* snowball unified position grid ([#327](https://github.com/yuyash/auto-forex-web-service/issues/327)) ([e135a58](https://github.com/yuyash/auto-forex-web-service/commit/e135a587dcfc2a1c29b8f4dd8f7a85d3c7ed0813))
+
 ## [1.26.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.26.2...backend-v1.26.3) (2026-04-04)
 
 
