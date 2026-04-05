@@ -428,6 +428,7 @@ export const TradingTaskDetail: React.FC = () => {
               data={metricsResult.data}
               isLoading={metricsResult.isLoading}
               error={metricsResult.error}
+              currency={pnlCurrency}
             />
           </LazyTabPanel>
         )}

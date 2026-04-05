@@ -21,6 +21,7 @@ interface TaskMetricsTabProps {
   data: MetricPoint[];
   isLoading: boolean;
   error: Error | null;
+  currency?: string;
 }
 
 /** Metrics to chart and their display order */
@@ -30,9 +31,9 @@ const CHART_METRICS: {
   format?: 'pct' | 'int' | 'currency';
 }[] = [
   { key: 'current_balance', color: '#1976d2', format: 'currency' },
-  { key: 'total_pnl', color: '#2e7d32' },
-  { key: 'realized_pnl', color: '#388e3c' },
-  { key: 'unrealized_pnl', color: '#f57c00' },
+  { key: 'total_pnl', color: '#2e7d32', format: 'currency' },
+  { key: 'realized_pnl', color: '#388e3c', format: 'currency' },
+  { key: 'unrealized_pnl', color: '#f57c00', format: 'currency' },
   { key: 'total_return', color: '#7b1fa2', format: 'pct' },
   { key: 'margin_ratio', color: '#d32f2f', format: 'pct' },
   { key: 'open_positions', color: '#0288d1', format: 'int' },
@@ -79,6 +80,7 @@ export function TaskMetricsTab({
   data,
   isLoading,
   error,
+  currency,
 }: TaskMetricsTabProps) {
   const { t } = useTranslation('common');
 
@@ -144,10 +146,12 @@ export function TaskMetricsTab({
     );
   }
 
+  const currencySuffix = currency ? ` ${currency}` : '';
+
   const formatValue = (val: number, format?: string) => {
     if (format === 'pct') return `${val.toFixed(2)}%`;
     if (format === 'int') return Math.round(val).toLocaleString();
-    if (format === 'currency') return val.toFixed(2);
+    if (format === 'currency') return `${val.toFixed(2)}${currencySuffix}`;
     return val.toFixed(2);
   };
 
@@ -199,7 +203,12 @@ export function TaskMetricsTab({
                         m.format === 'pct'
                           ? (v: number | null) =>
                               v != null ? `${v.toFixed(1)}%` : ''
-                          : undefined,
+                          : m.format === 'currency'
+                            ? (v: number | null) =>
+                                v != null
+                                  ? `${v.toFixed(1)}${currencySuffix}`
+                                  : ''
+                            : undefined,
                     },
                   ]}
                   series={[
