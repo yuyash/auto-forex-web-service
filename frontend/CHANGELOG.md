@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.0...frontend-v1.29.1) (2026-04-05)
+
+
+### Bug Fixes
+
+* align config detail view with edit form layout and add i18n ([#334](https://github.com/yuyash/auto-forex-web-service/issues/334)) ([fd76d7c](https://github.com/yuyash/auto-forex-web-service/commit/fd76d7c1001f824fd80958bd9adddbf138740daf))
+
 ## [1.29.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.28.2...frontend-v1.29.0) (2026-04-05)
 
 ### Features
