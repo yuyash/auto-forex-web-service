@@ -198,6 +198,7 @@ class TaskExecutor:
                 )
             ),
             volatility_lock_multiplier=config_decimal(config_dict, "volatility_lock_multiplier"),
+            initial_balance=self.initial_balance,
         )
 
     def handle_events(self, state: ExecutionState, events: List[TradingEvent]) -> None:
@@ -225,6 +226,11 @@ class TaskExecutor:
                     state.current_balance = (
                         Decimal(str(state.current_balance)) + execution_result.realized_pnl_delta
                     )
+                    self._runtime_metrics.record_position_closed(
+                        execution_result.realized_pnl_delta
+                    )
+                if execution_result.entry_binding is not None:
+                    self._runtime_metrics.record_trade()
                 self.engine.apply_event_execution_result(
                     state=state,
                     execution_result=execution_result,
@@ -447,6 +453,11 @@ class TaskExecutor:
         self.save_events(result.events)
         self.save_state(state)
         self._refresh_open_positions_cache()
+
+        # Restore cumulative metric counters from DB when resuming
+        if resumed:
+            self._restore_metric_counters()
+
         logger.info("Engine started, events_count=%d", len(result.events))
         return state
 
@@ -581,6 +592,81 @@ class TaskExecutor:
         positions = self.order_service.get_open_positions(instrument=self.instrument)
         self._runtime_metrics.sync_open_positions(positions)
 
+    def _restore_metric_counters(self) -> None:
+        """Restore cumulative metric counters from DB for resumed executions."""
+        from django.db.models import Case, F, Sum, Value, When
+
+        from apps.trading.models.positions import Position
+        from apps.trading.models.trades import Trade
+
+        base_filter: dict = {
+            "task_type": self.task_type.value,
+            "task_id": str(self.task.pk),
+        }
+        if self.task.execution_id:
+            base_filter["execution_id"] = self.task.execution_id
+
+        abs_units = Case(When(units__lt=0, then=-F("units")), default=F("units"))
+
+        closed_qs = Position.objects.filter(**base_filter, is_open=False).exclude(
+            exit_price__isnull=True
+        )
+        agg = closed_qs.aggregate(
+            realized_pnl=Sum(
+                Case(
+                    When(direction="long", then=(F("exit_price") - F("entry_price")) * abs_units),
+                    When(direction="short", then=(F("entry_price") - F("exit_price")) * abs_units),
+                    default=Value(Decimal("0")),
+                )
+            ),
+            winning=Sum(
+                Case(
+                    When(
+                        direction="long",
+                        then=Case(
+                            When(exit_price__gt=F("entry_price"), then=Value(1)),
+                            default=Value(0),
+                        ),
+                    ),
+                    When(
+                        direction="short",
+                        then=Case(
+                            When(exit_price__lt=F("entry_price"), then=Value(1)),
+                            default=Value(0),
+                        ),
+                    ),
+                    default=Value(0),
+                )
+            ),
+            losing=Sum(
+                Case(
+                    When(
+                        direction="long",
+                        then=Case(
+                            When(exit_price__lt=F("entry_price"), then=Value(1)),
+                            default=Value(0),
+                        ),
+                    ),
+                    When(
+                        direction="short",
+                        then=Case(
+                            When(exit_price__gt=F("entry_price"), then=Value(1)),
+                            default=Value(0),
+                        ),
+                    ),
+                    default=Value(0),
+                )
+            ),
+        )
+
+        self._runtime_metrics.restore_counters(
+            realized_pnl=agg["realized_pnl"] or Decimal("0"),
+            total_trades=Trade.objects.filter(**base_filter).count(),
+            closed_positions=closed_qs.count(),
+            winning_trades=agg["winning"] or 0,
+            losing_trades=agg["losing"] or 0,
+        )
+
     def _update_common_metrics(self, state: ExecutionState, tick) -> None:
         """Merge strategy-agnostic runtime metrics into state.strategy_state.metrics."""
         strategy_state = state.strategy_state if isinstance(state.strategy_state, dict) else {}
@@ -599,6 +685,7 @@ class TaskExecutor:
             ask=Decimal(str(tick.ask)),
             mid=Decimal(str(tick.mid)),
             current_balance=current_balance,
+            ticks_processed=state.ticks_processed,
         )
         existing_metrics.update(common_metrics)
         strategy_state["metrics"] = existing_metrics

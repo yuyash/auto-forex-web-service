@@ -499,6 +499,7 @@ class TestResumeLifecycle:
                 return_value=(state, True),
             ),
             patch.object(executor, "_replay_unprocessed_events") as mock_replay,
+            patch.object(executor, "_restore_metric_counters"),
             patch.object(executor, "save_events"),
             patch.object(executor, "save_state"),
         ):
@@ -559,6 +560,7 @@ class TestResumeLifecycle:
                 "_replay_unprocessed_events",
                 side_effect=replay_side_effect,
             ) as mock_replay,
+            patch.object(executor, "_restore_metric_counters"),
             patch.object(executor, "save_events"),
             patch.object(executor, "save_state"),
         ):

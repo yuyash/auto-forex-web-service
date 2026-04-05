@@ -29,6 +29,7 @@ def build_rest_settings(
         "DEFAULT_THROTTLE_RATES": {
             "user": "120/minute",
             "anon": "30/minute",
+            "task_data": "600/minute",
         },
         "DEFAULT_FILTER_BACKENDS": [
             "rest_framework.filters.SearchFilter",

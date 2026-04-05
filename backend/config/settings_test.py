@@ -148,5 +148,7 @@ OANDA_REST_MAX_RETRIES = 0
 REST_FRAMEWORK = {
     **globals().get("REST_FRAMEWORK", {}),  # type: ignore[arg-type]
     "DEFAULT_THROTTLE_CLASSES": [],
-    "DEFAULT_THROTTLE_RATES": {},
+    "DEFAULT_THROTTLE_RATES": {
+        "task_data": "6000/minute",
+    },
 }

@@ -15,6 +15,8 @@ from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from apps.trading.views.throttles import TaskDataRateThrottle
+
 from apps.trading.enums import EventType, LogLevel
 from apps.trading.models.logs import TaskLog
 from apps.trading.serializers.events import (
@@ -133,7 +135,9 @@ class TaskSubResourceMixin:
         },
         description="Retrieve paginated time-series metrics for the task.",
     )
-    @action(detail=True, methods=["get"], url_path="metrics")
+    @action(
+        detail=True, methods=["get"], url_path="metrics", throttle_classes=[TaskDataRateThrottle]
+    )
     def metrics(self, request: Request, pk: int | None = None) -> Response:
         from apps.trading.models.metrics import Metrics
 
@@ -268,7 +272,7 @@ class TaskSubResourceMixin:
         },
         description="Retrieve paginated task logs.",
     )
-    @action(detail=True, methods=["get"])
+    @action(detail=True, methods=["get"], throttle_classes=[TaskDataRateThrottle])
     def logs(self, request: Request, pk: int | None = None) -> Response:
         task = self.get_object()  # type: ignore[attr-defined]
         query = LogsQueryParams.from_request(
@@ -321,7 +325,12 @@ class TaskSubResourceMixin:
         },
         description="Return distinct logger/component names for a task's logs.",
     )
-    @action(detail=True, methods=["get"], url_path="log-components")
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="log-components",
+        throttle_classes=[TaskDataRateThrottle],
+    )
     def log_components(self, request: Request, pk: int | None = None) -> Response:
         """Return distinct component names for the task's logs."""
         task = self.get_object()  # type: ignore[attr-defined]
@@ -357,7 +366,7 @@ class TaskSubResourceMixin:
         },
         description="Retrieve paginated task events.",
     )
-    @action(detail=True, methods=["get"])
+    @action(detail=True, methods=["get"], throttle_classes=[TaskDataRateThrottle])
     def events(self, request: Request, pk: int | None = None) -> Response:
         from apps.trading.models import TradingEvent
 
@@ -413,7 +422,12 @@ class TaskSubResourceMixin:
         },
         description="Retrieve strategy cycles built from Trade.cycle_id.",
     )
-    @action(detail=True, methods=["get"], url_path="strategy-events")
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="strategy-events",
+        throttle_classes=[TaskDataRateThrottle],
+    )
     def strategy_events(self, request: Request, pk: int | None = None) -> Response:
         from apps.trading.services.strategy_cycles import StrategyCyclesService
 
@@ -447,7 +461,7 @@ class TaskSubResourceMixin:
         },
         description="Retrieve paginated task trades.",
     )
-    @action(detail=True, methods=["get"])
+    @action(detail=True, methods=["get"], throttle_classes=[TaskDataRateThrottle])
     def trades(self, request: Request, pk: str | None = None) -> Response:
         from apps.trading.models.trades import Trade
 
@@ -527,7 +541,7 @@ class TaskSubResourceMixin:
         },
         description="Retrieve paginated task positions.",
     )
-    @action(detail=True, methods=["get"])
+    @action(detail=True, methods=["get"], throttle_classes=[TaskDataRateThrottle])
     def positions(self, request: Request, pk: str | None = None) -> Response:
         from apps.trading.models.positions import Position
 
@@ -586,7 +600,12 @@ class TaskSubResourceMixin:
         responses={200: TaskTrendReplaySerializer},
         description="Retrieve chart-oriented trades and positions for task trend replay.",
     )
-    @action(detail=True, methods=["get"], url_path="trend-replay")
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="trend-replay",
+        throttle_classes=[TaskDataRateThrottle],
+    )
     def trend_replay(self, request: Request, pk: str | None = None) -> Response:
         from apps.trading.services.trend_replay import (
             DEFAULT_TREND_REPLAY_PAGE_SIZE,
@@ -641,7 +660,7 @@ class TaskSubResourceMixin:
         },
         description="Retrieve paginated task orders.",
     )
-    @action(detail=True, methods=["get"])
+    @action(detail=True, methods=["get"], throttle_classes=[TaskDataRateThrottle])
     def orders(self, request: Request, pk: str | None = None) -> Response:
         from apps.trading.models.orders import Order
 
@@ -684,7 +703,9 @@ class TaskSubResourceMixin:
             "trade/position counts, execution state, tick info, and task status."
         ),
     )
-    @action(detail=True, methods=["get"], url_path="summary")
+    @action(
+        detail=True, methods=["get"], url_path="summary", throttle_classes=[TaskDataRateThrottle]
+    )
     def summary(self, request: Request, pk: str | None = None) -> Response:
         """Retrieve comprehensive task summary."""
         from dataclasses import asdict
@@ -722,7 +743,7 @@ class TaskSubResourceMixin:
         },
         description="Retrieve execution history for a task.",
     )
-    @action(detail=True, methods=["get"])
+    @action(detail=True, methods=["get"], throttle_classes=[TaskDataRateThrottle])
     def executions(self, request: Request, pk: str | None = None) -> Response:
         from apps.trading.services.executions import list_task_executions
 
@@ -760,6 +781,7 @@ class TaskSubResourceMixin:
         detail=True,
         methods=["get"],
         url_path=r"executions/(?P<execution_id>[^/.]+)",
+        throttle_classes=[TaskDataRateThrottle],
     )
     def execution_detail(
         self, request: Request, pk: str | None = None, execution_id: str | None = None

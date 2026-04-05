@@ -33,6 +33,7 @@ class RuntimeMetricsTracker:
         atr_period: int,
         atr_baseline_period: int | None = None,
         volatility_lock_multiplier: Decimal | None = None,
+        initial_balance: Decimal = Decimal("0"),
     ) -> None:
         self.instrument = instrument
         self.pip_size = pip_size
@@ -47,11 +48,48 @@ class RuntimeMetricsTracker:
         self._completed_candles: list[_Candle] = []
         self._current_candle: _Candle | None = None
 
+        # Cumulative counters for dashboard metrics
+        self._initial_balance = initial_balance
+        self._realized_pnl = Decimal("0")
+        self._total_trades = 0
+        self._closed_positions = 0
+        self._winning_trades = 0
+        self._losing_trades = 0
+
     def sync_open_positions(self, positions: Iterable[Position]) -> None:
         """Replace the in-memory open position cache with current open positions."""
         self._open_positions = {
             str(position.id): position for position in positions if position.is_open
         }
+
+    def record_trade(self) -> None:
+        """Increment the total trade counter (call once per trade created)."""
+        self._total_trades += 1
+
+    def record_position_closed(self, realized_pnl: Decimal) -> None:
+        """Record a position closure with its realized PnL."""
+        self._closed_positions += 1
+        self._realized_pnl += realized_pnl
+        if realized_pnl > 0:
+            self._winning_trades += 1
+        elif realized_pnl < 0:
+            self._losing_trades += 1
+
+    def restore_counters(
+        self,
+        *,
+        realized_pnl: Decimal,
+        total_trades: int,
+        closed_positions: int,
+        winning_trades: int,
+        losing_trades: int,
+    ) -> None:
+        """Restore cumulative counters when resuming an execution."""
+        self._realized_pnl = realized_pnl
+        self._total_trades = total_trades
+        self._closed_positions = closed_positions
+        self._winning_trades = winning_trades
+        self._losing_trades = losing_trades
 
     def build_metrics(
         self,
@@ -61,19 +99,55 @@ class RuntimeMetricsTracker:
         ask: Decimal,
         mid: Decimal,
         current_balance: Decimal,
+        ticks_processed: int = 0,
     ) -> dict[str, str]:
         """Update rolling state for a tick and return common metrics."""
         self._record_tick(timestamp=timestamp, mid=mid)
 
+        conv = quote_to_account_rate(self.instrument, mid, self.account_currency)
+
+        # Unrealized PnL from cached open positions
+        unrealized_pnl = Decimal("0")
+        for position in self._open_positions.values():
+            units = Decimal(str(abs(position.units)))
+            entry_price = Decimal(str(position.entry_price))
+            if position.direction == "long":
+                unrealized_pnl += (bid - entry_price) * units * conv
+            else:
+                unrealized_pnl += (entry_price - ask) * units * conv
+
+        total_pnl = self._realized_pnl + unrealized_pnl
+        total_return = (
+            (total_pnl / self._initial_balance * 100) if self._initial_balance > 0 else Decimal("0")
+        )
+        total_closed = self._winning_trades + self._losing_trades
+        win_rate = (
+            (Decimal(self._winning_trades) / Decimal(total_closed) * 100)
+            if total_closed > 0
+            else Decimal("0")
+        )
+
         metrics: dict[str, str] = {
             "margin_ratio": str(
                 self._calculate_margin_ratio(
-                    bid=bid,
-                    ask=ask,
                     mid=mid,
                     current_balance=current_balance,
+                    unrealized_pnl=unrealized_pnl,
+                    conv=conv,
                 )
-            )
+            ),
+            "current_balance": str(current_balance),
+            "realized_pnl": str(self._realized_pnl),
+            "unrealized_pnl": str(unrealized_pnl),
+            "total_pnl": str(total_pnl),
+            "total_return": str(total_return),
+            "open_positions": str(len(self._open_positions)),
+            "closed_positions": str(self._closed_positions),
+            "total_trades": str(self._total_trades),
+            "winning_trades": str(self._winning_trades),
+            "losing_trades": str(self._losing_trades),
+            "win_rate": str(win_rate),
+            "ticks_processed": str(ticks_processed),
         }
 
         current_atr = self._calculate_atr(self.atr_period)
@@ -132,10 +206,10 @@ class RuntimeMetricsTracker:
     def _calculate_margin_ratio(
         self,
         *,
-        bid: Decimal,
-        ask: Decimal,
         mid: Decimal,
         current_balance: Decimal,
+        unrealized_pnl: Decimal,
+        conv: Decimal,
     ) -> Decimal:
         positions = list(self._open_positions.values())
         if not positions:
@@ -151,17 +225,7 @@ class RuntimeMetricsTracker:
         if total_units <= 0 or mid <= 0:
             return Decimal("0")
 
-        conv = quote_to_account_rate(self.instrument, mid, self.account_currency)
-        unrealized = Decimal("0")
-        for position in positions:
-            units = Decimal(str(abs(position.units)))
-            entry_price = Decimal(str(position.entry_price))
-            if position.direction == "long":
-                unrealized += (bid - entry_price) * units * conv
-            else:
-                unrealized += (entry_price - ask) * units * conv
-
-        nav = current_balance + unrealized
+        nav = current_balance + unrealized_pnl
         if nav <= 0:
             return Decimal("0")
 
