@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.2...frontend-v1.29.3) (2026-04-05)
+
+
+### Bug Fixes
+
+* metrics yaxis label truncation ([#338](https://github.com/yuyash/auto-forex-web-service/issues/338)) ([f4e0e2c](https://github.com/yuyash/auto-forex-web-service/commit/f4e0e2cb1c033d7955fb6ada452cae7f967380d1))
+
 ## [1.29.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.1...frontend-v1.29.2) (2026-04-05)
 
 
