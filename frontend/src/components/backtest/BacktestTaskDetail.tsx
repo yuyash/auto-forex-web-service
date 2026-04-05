@@ -6,7 +6,7 @@
  *
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -61,6 +61,7 @@ import { TaskStrategyTab } from '../tasks/detail/strategy/TaskStrategyTab';
 import { TaskMetricsTab } from '../tasks/detail/TaskMetricsTab';
 import { BacktestOverviewTab } from './detail/BacktestOverviewTab';
 import { useTaskMetrics } from '../../hooks/useTaskMetrics';
+import { computeAutoInterval } from '../../utils/autoGranularity';
 
 export const BacktestTaskDetail: React.FC = () => {
   const { t } = useTranslation(['backtest', 'common']);
@@ -153,15 +154,34 @@ export const BacktestTaskDetail: React.FC = () => {
 
   const { summary: s } = overviewSummary;
 
-  const [metricsInterval, setMetricsInterval] = useState(1);
+  const [metricsInterval, setMetricsInterval] = useState(0);
   const [metricsSince, setMetricsSince] = useState('');
   const [metricsUntil, setMetricsUntil] = useState('');
+
+  const effectiveMetricsInterval = useMemo(() => {
+    if (metricsInterval !== 0) return metricsInterval;
+    // Auto: compute from task time range or since/until
+    const start = metricsSince
+      ? new Date(metricsSince).getTime() / 1000
+      : task?.start_time
+        ? new Date(task.start_time).getTime() / 1000
+        : 0;
+    const end = metricsUntil
+      ? new Date(metricsUntil).getTime() / 1000
+      : task?.end_time
+        ? new Date(task.end_time).getTime() / 1000
+        : 0;
+    if (start && end && end > start) {
+      return computeAutoInterval(end - start);
+    }
+    return 1;
+  }, [metricsInterval, metricsSince, metricsUntil, task]);
 
   const metricsResult = useTaskMetrics({
     taskId,
     taskType: TaskType.BACKTEST,
     executionRunId: effectiveExecutionId,
-    interval: metricsInterval,
+    interval: effectiveMetricsInterval,
     since: metricsSince ? new Date(metricsSince).toISOString() : undefined,
     until: metricsUntil ? new Date(metricsUntil).toISOString() : undefined,
     enabled: !!taskId,

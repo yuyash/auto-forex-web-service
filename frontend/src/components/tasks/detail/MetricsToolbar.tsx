@@ -17,6 +17,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import FilterListIcon from '@mui/icons-material/FilterList';
 
 const INTERVAL_OPTIONS = [
+  { value: 0, label: 'Auto' },
   { value: 1, label: '1m' },
   { value: 5, label: '5m' },
   { value: 15, label: '15m' },

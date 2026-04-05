@@ -57,20 +57,53 @@ const CHART_METRICS: {
 const RATIO_KEYS = new Set(['margin_ratio']);
 
 /**
- * Compute a short date/time label appropriate for the data's time span.
+ * Compute a short date/time label appropriate for the data's time span
+ * and the current granularity.
  */
-function formatTickLabel(date: Date, rangeMs: number): string {
+function formatTickLabel(
+  date: Date,
+  rangeMs: number,
+  intervalMin: number
+): string {
   const DAY = 86_400_000;
   if (rangeMs <= DAY) {
-    // Intraday: show HH:mm
     return date.toLocaleTimeString(undefined, {
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
     });
   }
-  if (rangeMs <= 30 * DAY) {
-    // Up to ~1 month: show MM/DD HH:mm
+  if (rangeMs <= 7 * DAY) {
+    // Up to ~1 week: show MM/DD HH:mm
+    return (
+      date.toLocaleDateString(undefined, {
+        month: '2-digit',
+        day: '2-digit',
+      }) +
+      ' ' +
+      date.toLocaleTimeString(undefined, {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      })
+    );
+  }
+  if (rangeMs <= 90 * DAY) {
+    // Up to ~3 months: show MM/DD
+    if (intervalMin < 60) {
+      return (
+        date.toLocaleDateString(undefined, {
+          month: '2-digit',
+          day: '2-digit',
+        }) +
+        ' ' +
+        date.toLocaleTimeString(undefined, {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        })
+      );
+    }
     return date.toLocaleDateString(undefined, {
       month: '2-digit',
       day: '2-digit',
@@ -82,6 +115,100 @@ function formatTickLabel(date: Date, rangeMs: number): string {
     month: '2-digit',
     day: '2-digit',
   });
+}
+
+/**
+ * Format tooltip date/time based on granularity.
+ */
+function formatTooltipDate(date: Date, intervalMin: number): string {
+  if (intervalMin >= 1440) {
+    // Daily: date only
+    return date.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+  }
+  if (intervalMin >= 240) {
+    // 4h: date + hour
+    return (
+      date.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }) +
+      ' ' +
+      date.toLocaleTimeString(undefined, {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      })
+    );
+  }
+  // Sub-hourly: full date + time
+  return (
+    date.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }) +
+    ' ' +
+    date.toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+  );
+}
+
+/**
+ * Estimate the pixel width needed for the longest Y-axis label.
+ * Uses a conservative 7px per character at fontSize 10.
+ */
+function estimateYAxisWidth(
+  yValues: number[],
+  format?: 'pct' | 'int' | 'currency',
+  currencySuffix?: string
+): number {
+  if (yValues.length === 0) return 60;
+  const min = Math.min(...yValues);
+  const max = Math.max(...yValues);
+  const samples = [min, max];
+
+  let maxLen = 0;
+  for (const v of samples) {
+    let label: string;
+    if (format === 'pct') {
+      label = `${v.toFixed(1)}%`;
+    } else if (format === 'currency') {
+      label = `${v.toFixed(1)}${currencySuffix || ''}`;
+    } else if (format === 'int') {
+      label = Math.round(v).toLocaleString();
+    } else {
+      label = v.toFixed(1);
+    }
+    if (label.length > maxLen) maxLen = label.length;
+  }
+  // ~7px per char + 12px padding
+  return Math.max(60, maxLen * 7 + 12);
+}
+
+/** Compute a suitable Y-axis tick count based on the value range. */
+function computeYTickCount(yValues: number[]): number {
+  if (yValues.length < 2) return 4;
+  const min = Math.min(...yValues);
+  const max = Math.max(...yValues);
+  const range = max - min;
+  if (range === 0) return 2;
+  // Aim for 4-5 ticks for most charts
+  return 5;
+}
+
+/** Compute a suitable X-axis tick count based on data point count and range. */
+function computeXTickCount(dataLen: number): number {
+  if (dataLen <= 10) return dataLen;
+  if (dataLen <= 50) return 8;
+  return 10;
 }
 
 export function TaskMetricsTab({
@@ -113,6 +240,22 @@ export function TaskMetricsTab({
     return CHART_METRICS.filter((m) => keysWithData.has(m.key));
   }, [data]);
 
+  // Compute effective interval from data range (for formatting)
+  const effectiveInterval = useMemo(() => {
+    if (interval > 0) return interval;
+    if (data.length >= 2) {
+      const rangeS = data[data.length - 1].t - data[0].t;
+      const DAY = 86_400;
+      if (rangeS <= 14 * DAY) return 1;
+      if (rangeS <= 31 * DAY) return 5;
+      if (rangeS <= 93 * DAY) return 15;
+      if (rangeS <= 183 * DAY) return 60;
+      if (rangeS <= 366 * DAY) return 240;
+      return 1440;
+    }
+    return 1;
+  }, [interval, data]);
+
   // Build chart data per metric
   const chartDataMap = useMemo(() => {
     const map: Record<string, { x: Date[]; y: number[] }> = {};
@@ -136,6 +279,19 @@ export function TaskMetricsTab({
     }
     return map;
   }, [data, availableMetrics]);
+
+  // Compute the maximum Y-axis label width across all charts so they align
+  const sharedLeftMargin = useMemo(() => {
+    const currencySuffix = currency ? ` ${currency}` : '';
+    let maxWidth = 60;
+    for (const m of availableMetrics) {
+      const cd = chartDataMap[m.key];
+      if (!cd || cd.y.length < 2) continue;
+      const w = estimateYAxisWidth(cd.y, m.format, currencySuffix);
+      if (w > maxWidth) maxWidth = w;
+    }
+    return maxWidth;
+  }, [availableMetrics, chartDataMap, currency]);
 
   if (isLoading && data.length === 0) {
     return (
@@ -187,6 +343,9 @@ export function TaskMetricsTab({
           const cd = chartDataMap[m.key];
           if (!cd || cd.x.length < 2) return null;
           const lastVal = cd.y[cd.y.length - 1];
+          const rangeMs = cd.x[cd.x.length - 1].getTime() - cd.x[0].getTime();
+          const yTickCount = computeYTickCount(cd.y);
+          const xTickCount = computeXTickCount(cd.x.length);
           return (
             <Grid key={m.key} size={{ xs: 12, md: 6 }}>
               <Paper variant="outlined" sx={{ p: 1.5 }}>
@@ -212,18 +371,22 @@ export function TaskMetricsTab({
                     {
                       data: cd.x,
                       scaleType: 'time' as const,
-                      tickNumber: 5,
+                      tickNumber: xTickCount,
                       tickLabelStyle: { fontSize: 10 },
-                      valueFormatter: (v: Date) => {
-                        const rangeMs =
-                          cd.x[cd.x.length - 1].getTime() - cd.x[0].getTime();
-                        return formatTickLabel(v, rangeMs);
+                      valueFormatter: (
+                        v: Date,
+                        context: { location: string }
+                      ) => {
+                        if (context.location === 'tooltip') {
+                          return formatTooltipDate(v, effectiveInterval);
+                        }
+                        return formatTickLabel(v, rangeMs, effectiveInterval);
                       },
                     },
                   ]}
                   yAxis={[
                     {
-                      tickNumber: 6,
+                      tickNumber: yTickCount,
                       valueFormatter:
                         m.format === 'pct'
                           ? (v: number | null) =>
@@ -241,12 +404,25 @@ export function TaskMetricsTab({
                       data: cd.y,
                       color: m.color,
                       showMark: false,
+                      valueFormatter: (v: number | null) =>
+                        v != null ? formatValue(v, m.format) : '',
                     },
                   ]}
+                  axisHighlight={{ x: 'line', y: 'none' }}
                   grid={{ vertical: true, horizontal: true }}
                   height={200}
-                  margin={{ left: 60, right: 16, top: 8, bottom: 36 }}
+                  margin={{
+                    left: sharedLeftMargin,
+                    right: 16,
+                    top: 8,
+                    bottom: 36,
+                  }}
                   hideLegend
+                  slotProps={{
+                    axisTickLabel: {
+                      style: { fontSize: 10 },
+                    },
+                  }}
                 />
               </Paper>
             </Grid>
