@@ -47,6 +47,34 @@ const CHART_METRICS: {
 /** Keys whose raw value is a ratio (0–1) that must be multiplied by 100 for display */
 const RATIO_KEYS = new Set(['margin_ratio']);
 
+/**
+ * Compute a short date/time label appropriate for the data's time span.
+ */
+function formatTickLabel(date: Date, rangeMs: number): string {
+  const DAY = 86_400_000;
+  if (rangeMs <= DAY) {
+    // Intraday: show HH:mm
+    return date.toLocaleTimeString(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  }
+  if (rangeMs <= 30 * DAY) {
+    // Up to ~1 month: show MM/DD HH:mm
+    return date.toLocaleDateString(undefined, {
+      month: '2-digit',
+      day: '2-digit',
+    });
+  }
+  // Longer: show YYYY/MM/DD
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+}
+
 export function TaskMetricsTab({
   data,
   isLoading,
@@ -154,8 +182,14 @@ export function TaskMetricsTab({
                   xAxis={[
                     {
                       data: cd.x,
-                      scaleType: 'time',
+                      scaleType: 'time' as const,
+                      tickNumber: 5,
                       tickLabelStyle: { fontSize: 10 },
+                      valueFormatter: (v: Date) => {
+                        const rangeMs =
+                          cd.x[cd.x.length - 1].getTime() - cd.x[0].getTime();
+                        return formatTickLabel(v, rangeMs);
+                      },
                     },
                   ]}
                   yAxis={[
@@ -175,7 +209,7 @@ export function TaskMetricsTab({
                     },
                   ]}
                   height={200}
-                  margin={{ left: 60, right: 16, top: 8, bottom: 28 }}
+                  margin={{ left: 60, right: 16, top: 8, bottom: 36 }}
                   hideLegend
                 />
               </Paper>
