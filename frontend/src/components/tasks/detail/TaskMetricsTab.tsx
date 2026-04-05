@@ -164,11 +164,12 @@ function formatTooltipDate(date: Date, intervalMin: number): string {
 /**
  * Estimate the pixel width needed for the longest Y-axis label.
  * Uses a conservative 7px per character at fontSize 10.
+ * Currency suffix is intentionally excluded — the unit is shown in the
+ * chart header, so tick labels only contain the numeric value.
  */
 function estimateYAxisWidth(
   yValues: number[],
-  format?: 'pct' | 'int' | 'currency',
-  currencySuffix?: string
+  format?: 'pct' | 'int' | 'currency'
 ): number {
   if (yValues.length === 0) return 60;
   const min = Math.min(...yValues);
@@ -181,7 +182,8 @@ function estimateYAxisWidth(
     if (format === 'pct') {
       label = `${v.toFixed(1)}%`;
     } else if (format === 'currency') {
-      label = `${v.toFixed(1)}${currencySuffix || ''}`;
+      // Numbers only — no currency suffix on tick labels
+      label = v.toFixed(1);
     } else if (format === 'int') {
       label = Math.round(v).toLocaleString();
     } else {
@@ -189,8 +191,8 @@ function estimateYAxisWidth(
     }
     if (label.length > maxLen) maxLen = label.length;
   }
-  // ~7px per char + 12px padding
-  return Math.max(60, maxLen * 7 + 12);
+  // ~7px per char + 16px padding (extra room to prevent truncation)
+  return Math.max(60, maxLen * 7 + 16);
 }
 
 /** Compute a suitable Y-axis tick count based on the value range. */
@@ -282,16 +284,15 @@ export function TaskMetricsTab({
 
   // Compute the maximum Y-axis label width across all charts so they align
   const sharedLeftMargin = useMemo(() => {
-    const currencySuffix = currency ? ` ${currency}` : '';
     let maxWidth = 60;
     for (const m of availableMetrics) {
       const cd = chartDataMap[m.key];
       if (!cd || cd.y.length < 2) continue;
-      const w = estimateYAxisWidth(cd.y, m.format, currencySuffix);
+      const w = estimateYAxisWidth(cd.y, m.format);
       if (w > maxWidth) maxWidth = w;
     }
     return maxWidth;
-  }, [availableMetrics, chartDataMap, currency]);
+  }, [availableMetrics, chartDataMap]);
 
   if (isLoading && data.length === 0) {
     return (
@@ -393,9 +394,7 @@ export function TaskMetricsTab({
                               v != null ? `${v.toFixed(1)}%` : ''
                           : m.format === 'currency'
                             ? (v: number | null) =>
-                                v != null
-                                  ? `${v.toFixed(1)}${currencySuffix}`
-                                  : ''
+                                v != null ? v.toFixed(1) : ''
                             : undefined,
                     },
                   ]}
