@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.1...frontend-v1.29.2) (2026-04-05)
+
+
+### Bug Fixes
+
+* strategy trade margin label ([#336](https://github.com/yuyash/auto-forex-web-service/issues/336)) ([417588e](https://github.com/yuyash/auto-forex-web-service/commit/417588e94d157c015a8e82e9352e175842a81dd8))
+
 ## [1.29.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.0...frontend-v1.29.1) (2026-04-05)
 
 
