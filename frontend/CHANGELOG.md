@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.3...frontend-v1.29.4) (2026-04-05)
+
+
+### Bug Fixes
+
+* **metrics:** set yAxis width to prevent tick label truncation ([#340](https://github.com/yuyash/auto-forex-web-service/issues/340)) ([134680b](https://github.com/yuyash/auto-forex-web-service/commit/134680b256f1c8dcb42965ac5315be1e185824d2))
+
 ## [1.29.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.2...frontend-v1.29.3) (2026-04-05)
 
 
