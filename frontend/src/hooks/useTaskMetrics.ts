@@ -15,6 +15,10 @@ export interface UseTaskMetricsOptions {
   executionRunId?: string;
   /** Aggregation interval in minutes (default: 1) */
   interval?: number;
+  /** RFC3339 lower-bound timestamp */
+  since?: string;
+  /** RFC3339 upper-bound timestamp */
+  until?: string;
   enabled?: boolean;
   /** Polling interval in ms (0 = no polling) */
   pollingInterval?: number;
@@ -35,6 +39,8 @@ export function useTaskMetrics({
   taskType,
   executionRunId,
   interval = 1,
+  since,
+  until,
   enabled = true,
   pollingInterval = 0,
 }: UseTaskMetricsOptions): UseTaskMetricsResult {
@@ -53,6 +59,8 @@ export function useTaskMetrics({
         taskType,
         executionRunId,
         interval: interval > 1 ? interval : undefined,
+        since,
+        until,
         pageSize: 500,
       });
       if (mountedRef.current) {
@@ -67,7 +75,16 @@ export function useTaskMetrics({
         setIsLoading(false);
       }
     }
-  }, [taskId, taskType, executionRunId, interval, enabled, data.length]);
+  }, [
+    taskId,
+    taskType,
+    executionRunId,
+    interval,
+    since,
+    until,
+    enabled,
+    data.length,
+  ]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -78,7 +95,7 @@ export function useTaskMetrics({
 
   useEffect(() => {
     fetchData();
-  }, [taskId, taskType, executionRunId, interval, enabled]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [taskId, taskType, executionRunId, interval, since, until, enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!pollingInterval || pollingInterval <= 0 || !enabled) return;

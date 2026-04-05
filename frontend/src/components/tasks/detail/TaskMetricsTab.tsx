@@ -16,12 +16,20 @@ import {
 import { LineChart } from '@mui/x-charts/LineChart';
 import { useTranslation } from 'react-i18next';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
+import { MetricsToolbar } from './MetricsToolbar';
 
 interface TaskMetricsTabProps {
   data: MetricPoint[];
   isLoading: boolean;
   error: Error | null;
   currency?: string;
+  interval: number;
+  since: string;
+  until: string;
+  onIntervalChange: (interval: number) => void;
+  onSinceChange: (since: string) => void;
+  onUntilChange: (until: string) => void;
+  onRefresh: () => void;
 }
 
 /** Metrics to chart and their display order */
@@ -81,6 +89,13 @@ export function TaskMetricsTab({
   isLoading,
   error,
   currency,
+  interval,
+  since,
+  until,
+  onIntervalChange,
+  onSinceChange,
+  onUntilChange,
+  onRefresh,
 }: TaskMetricsTabProps) {
   const { t } = useTranslation('common');
 
@@ -157,6 +172,16 @@ export function TaskMetricsTab({
 
   return (
     <Box sx={{ p: { xs: 1, sm: 2 } }}>
+      <MetricsToolbar
+        interval={interval}
+        since={since}
+        until={until}
+        onIntervalChange={onIntervalChange}
+        onSinceChange={onSinceChange}
+        onUntilChange={onUntilChange}
+        onRefresh={onRefresh}
+        isLoading={isLoading}
+      />
       <Grid container spacing={2}>
         {availableMetrics.map((m) => {
           const cd = chartDataMap[m.key];
