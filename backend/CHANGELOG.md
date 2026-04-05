@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.26.4...backend-v1.26.5) (2026-04-05)
+
+
+### Bug Fixes
+
+* **shrink:** preserve last position in layer when upper layers have multiple ([#329](https://github.com/yuyash/auto-forex-web-service/issues/329)) ([be6516a](https://github.com/yuyash/auto-forex-web-service/commit/be6516a231b8afa030d55042635dcf9c060a4fcb))
+
 ## [1.26.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.26.3...backend-v1.26.4) (2026-04-05)
 
 
