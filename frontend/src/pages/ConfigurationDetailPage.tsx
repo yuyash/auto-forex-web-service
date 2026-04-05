@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -22,6 +23,9 @@ import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
 import { STRATEGY_CONFIG_SCHEMAS } from '../components/configurations/strategyConfigSchemas';
 import type { ConfigProperty, ConfigSchema } from '../types/strategy';
 
+/** Keys excluded from the detail view (not user-facing). */
+const HIDDEN_KEYS = new Set(['pip_size']);
+
 function formatDate(dateString?: string) {
   if (!dateString) return '';
   return new Date(dateString).toLocaleDateString('en-US', {
@@ -34,9 +38,8 @@ function formatDate(dateString?: string) {
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') {
+  if (typeof value === 'number' || typeof value === 'boolean')
     return String(value);
-  }
   try {
     return JSON.stringify(value);
   } catch {
@@ -45,7 +48,7 @@ function formatValue(value: unknown): string {
 }
 
 export default function ConfigurationDetailPage() {
-  const { t } = useTranslation(['configuration', 'common']);
+  const { t, i18n } = useTranslation(['configuration', 'common']);
   const { id } = useParams<{ id: string }>();
   const configId = id || '';
   const navigate = useNavigate();
@@ -58,10 +61,6 @@ export default function ConfigurationDetailPage() {
     },
   });
 
-  // Resolve the schema for the current strategy type.
-  // The backend JSON schema is the single source of truth (includes group,
-  // title, description, default, dependsOn). The frontend override map
-  // (STRATEGY_CONFIG_SCHEMAS) is checked first but is normally empty.
   const configSchema: ConfigSchema | undefined = (() => {
     if (!configuration) return undefined;
     const frontendSchema = STRATEGY_CONFIG_SCHEMAS[configuration.strategy_type];
@@ -72,52 +71,66 @@ export default function ConfigurationDetailPage() {
     return matched?.config_schema as ConfigSchema | undefined;
   })();
 
-  /** Look up a property definition from the schema. */
-  const propMeta = (key: string): ConfigProperty | undefined =>
-    configSchema?.properties?.[key];
+  /** Resolve a localized schema field (same pattern as StrategyConfigForm). */
+  const localized = useCallback(
+    (
+      prop: ConfigProperty,
+      field: 'title' | 'description' | 'group'
+    ): string | undefined => {
+      const langKey = `${field}_${i18n.language}` as keyof ConfigProperty;
+      return (prop[langKey] as string | undefined) ?? prop[field];
+    },
+    [i18n.language]
+  );
 
-  /**
-   * Friendly titles for parameters that may exist in saved configs
-   * but are not part of the current schema (backend-only or legacy keys).
-   */
-  const EXTRA_PARAM_TITLES: Record<string, string> = {
-    leverage: 'Leverage',
-    floor_profiles: 'Floor Profiles',
-    candle_lookback_count: 'Candle Lookback Count',
-    candle_granularity_seconds: 'Candle Granularity (seconds)',
-    margin_closeout_threshold: 'Margin Closeout Threshold',
-  };
+  /** Resolve a localized enum label. */
+  const localizedEnumLabel = useCallback(
+    (prop: ConfigProperty, value: string): string | undefined => {
+      const langKey = `enum_labels_${i18n.language}` as keyof ConfigProperty;
+      const langLabels = prop[langKey] as Record<string, string> | undefined;
+      if (langLabels?.[value]) return langLabels[value];
+      return prop.enum_labels?.[value];
+    },
+    [i18n.language]
+  );
 
-  /** Friendly display label for a parameter key. */
+  /** Display label for a parameter key. */
   const displayLabel = (key: string): string => {
-    const meta = propMeta(key);
-    if (meta?.title) return meta.title;
-    if (EXTRA_PARAM_TITLES[key]) return EXTRA_PARAM_TITLES[key];
+    const meta = configSchema?.properties?.[key];
+    if (meta) {
+      const l = localized(meta, 'title');
+      if (l) return l;
+    }
     return key
       .split('_')
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
       .join(' ');
   };
 
+  /** Format a parameter value, resolving enum labels when available. */
+  const displayValue = (key: string, value: unknown): string => {
+    const meta = configSchema?.properties?.[key];
+    if (meta && typeof value === 'string') {
+      const label = localizedEnumLabel(meta, value);
+      if (label) return label;
+    }
+    return formatValue(value);
+  };
+
   /** Build grouped parameter entries preserving schema order. */
   const groupedParams = (() => {
     if (!configuration?.parameters) return [];
     const params = configuration.parameters;
-    const groups: Array<{
-      name: string;
-      entries: Array<{ key: string; value: unknown; description?: string }>;
-    }> = [];
-    const groupMap = new Map<
-      string,
-      Array<{ key: string; value: unknown; description?: string }>
-    >();
+    type Entry = { key: string; value: unknown; description?: string };
+    const groups: Array<{ name: string; entries: Entry[] }> = [];
+    const groupMap = new Map<string, Entry[]>();
     const seenGroups: string[] = [];
 
-    // If we have a schema, iterate in schema order
     if (configSchema?.properties) {
       Object.entries(configSchema.properties).forEach(([key, prop]) => {
-        if (!(key in params)) return;
-        const groupName = prop.group || t('configuration:form.otherParameters');
+        if (!(key in params) || HIDDEN_KEYS.has(key)) return;
+        const groupName =
+          localized(prop, 'group') || t('configuration:form.otherParameters');
         if (!groupMap.has(groupName)) {
           groupMap.set(groupName, []);
           seenGroups.push(groupName);
@@ -125,13 +138,12 @@ export default function ConfigurationDetailPage() {
         groupMap.get(groupName)!.push({
           key,
           value: params[key],
-          description: prop.description,
+          description: localized(prop, 'description'),
         });
       });
-      // Add any params not in schema into "Other Parameters"
       const otherGroup = t('configuration:form.otherParameters');
       Object.keys(params).forEach((key) => {
-        if (configSchema.properties[key]) return;
+        if (configSchema.properties[key] || HIDDEN_KEYS.has(key)) return;
         if (!groupMap.has(otherGroup)) {
           groupMap.set(otherGroup, []);
           seenGroups.push(otherGroup);
@@ -139,20 +151,16 @@ export default function ConfigurationDetailPage() {
         groupMap.get(otherGroup)!.push({ key, value: params[key] });
       });
     } else {
-      // No schema — flat list
-      const entries = Object.entries(params).map(([key, value]) => ({
-        key,
-        value,
-      }));
+      const entries = Object.entries(params)
+        .filter(([key]) => !HIDDEN_KEYS.has(key))
+        .map(([key, value]) => ({ key, value }));
       groupMap.set('', entries);
       seenGroups.push('');
     }
 
     seenGroups.forEach((name) => {
       const entries = groupMap.get(name);
-      if (entries && entries.length > 0) {
-        groups.push({ name, entries });
-      }
+      if (entries && entries.length > 0) groups.push({ name, entries });
     });
     return groups;
   })();
@@ -323,7 +331,7 @@ export default function ConfigurationDetailPage() {
                               flexShrink: 0,
                             }}
                           >
-                            {formatValue(value)}
+                            {displayValue(key, value)}
                           </Typography>
                         </Box>
                       ))}
