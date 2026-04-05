@@ -52,6 +52,7 @@ class StrategyCyclesService:
                 "timestamp",
                 "position_id",
                 "updated_at",
+                "margin_ratio",
             )
         )
 
