@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.27.2...backend-v1.27.3) (2026-04-05)
+
+
+### Bug Fixes
+
+* **trading:** correct layer and retracement numbering ([#342](https://github.com/yuyash/auto-forex-web-service/issues/342)) ([02e7d27](https://github.com/yuyash/auto-forex-web-service/commit/02e7d27ed950d733213e0896247b12aab6181afd))
+
 ## [1.27.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.27.1...backend-v1.27.2) (2026-04-05)
 
 
