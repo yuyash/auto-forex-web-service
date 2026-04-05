@@ -262,9 +262,82 @@ class TestPositionGrid:
         grid.add_layer(l0)
         assert grid.has_counter_entries() is False
 
-    def test_front_entry_equals_head(self):
+    def test_front_entry_with_multi_positions_returns_lowest_r(self):
+        """L0 has 3 entries → front_entry returns L0/R0 (lowest R)."""
         grid = self._grid_with_entries()
-        assert grid.front_entry() is grid.head_entry()
+        front = grid.front_entry()
+        assert front is not None
+        assert front.entry_id == 1  # L0/R0
+
+    def test_front_entry_skips_single_layer_when_upper_has_multi(self):
+        """L0 has 1 entry, L1 has 2 entries → skip L0, return L1/R0."""
+        grid = PositionGrid()
+        l0 = Layer.create(0, 3, 1000)
+        l0.slot_at(0).fill(_entry(entry_id=1, layer_number=0, retracement_count=0, role="initial"))
+        grid.add_layer(l0)
+
+        l1 = Layer.create(1, 3, 1000)
+        l1.slot_at(0).fill(
+            _entry(entry_id=4, layer_number=1, retracement_count=0, role="layer_initial")
+        )
+        l1.slot_at(1).fill(_entry(entry_id=5, layer_number=1, retracement_count=1))
+        grid.add_layer(l1)
+
+        front = grid.front_entry()
+        assert front is not None
+        assert front.entry_id == 4  # L1/R0, not L0/R0
+
+    def test_front_entry_closes_single_when_no_upper_multi(self):
+        """L0 has 1 entry, L1 has 1 entry → close L0/R0 (no upper multi)."""
+        grid = PositionGrid()
+        l0 = Layer.create(0, 3, 1000)
+        l0.slot_at(0).fill(_entry(entry_id=1, layer_number=0, retracement_count=0, role="initial"))
+        grid.add_layer(l0)
+
+        l1 = Layer.create(1, 3, 1000)
+        l1.slot_at(0).fill(
+            _entry(entry_id=4, layer_number=1, retracement_count=0, role="layer_initial")
+        )
+        grid.add_layer(l1)
+
+        front = grid.front_entry()
+        assert front is not None
+        assert front.entry_id == 1  # L0/R0
+
+    def test_front_entry_progressive_shrink_sequence(self):
+        """Simulate a full shrink sequence with the preservation rule.
+
+        Grid: L0:[R0, R1], L1:[R0, R1, R2, R3]
+        Expected order:
+        1. L0/R0 (L0 has 2 → close lowest R)
+        2. L1/R0 (L0 has 1, L1 has 4 → skip L0, close L1 lowest R)
+        3. L1/R1 (L0 has 1, L1 has 3 → skip L0, close L1 lowest R)
+        4. L1/R2 (L0 has 1, L1 has 2 → skip L0, close L1 lowest R)
+        5. L0/R1 (L0 has 1, L1 has 1 → no upper multi, close L0)
+        6. L1/R3 (L0 empty, L1 has 1 → close it)
+        """
+        grid = PositionGrid()
+        l0 = Layer.create(0, 3, 1000)
+        l0.slot_at(0).fill(_entry(entry_id=1, layer_number=0, retracement_count=0))
+        l0.slot_at(1).fill(_entry(entry_id=2, layer_number=0, retracement_count=1))
+        grid.add_layer(l0)
+
+        l1 = Layer.create(1, 3, 1000)
+        l1.slot_at(0).fill(_entry(entry_id=10, layer_number=1, retracement_count=0))
+        l1.slot_at(1).fill(_entry(entry_id=11, layer_number=1, retracement_count=1))
+        l1.slot_at(2).fill(_entry(entry_id=12, layer_number=1, retracement_count=2))
+        l1.slot_at(3).fill(_entry(entry_id=13, layer_number=1, retracement_count=3))
+        grid.add_layer(l1)
+
+        close_order = []
+        for _ in range(6):
+            e = grid.front_entry()
+            assert e is not None, f"Expected entry but got None after closing {close_order}"
+            close_order.append(e.entry_id)
+            grid.remove_entry(e.entry_id)
+
+        assert close_order == [1, 10, 11, 12, 2, 13]
+        assert grid.front_entry() is None
 
     def test_is_empty(self):
         grid = PositionGrid()
