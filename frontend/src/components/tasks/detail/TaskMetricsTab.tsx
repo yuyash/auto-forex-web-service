@@ -44,6 +44,9 @@ const CHART_METRICS: {
   { key: 'ticks_processed', color: '#546e7a', format: 'int' },
 ];
 
+/** Keys whose raw value is a ratio (0–1) that must be multiplied by 100 for display */
+const RATIO_KEYS = new Set(['margin_ratio']);
+
 export function TaskMetricsTab({
   data,
   isLoading,
@@ -71,13 +74,14 @@ export function TaskMetricsTab({
     for (const m of availableMetrics) {
       const x: Date[] = [];
       const y: number[] = [];
+      const scale = RATIO_KEYS.has(m.key) ? 100 : 1;
       for (const point of data) {
         const val = point.metrics[m.key];
         if (val != null && val !== '') {
           const num = Number(val);
           if (!isNaN(num)) {
             x.push(new Date(point.t * 1000));
-            y.push(num);
+            y.push(num * scale);
           }
         }
       }
@@ -153,6 +157,14 @@ export function TaskMetricsTab({
                       scaleType: 'time',
                       tickLabelStyle: { fontSize: 10 },
                     },
+                  ]}
+                  yAxis={[
+                    m.format === 'pct'
+                      ? {
+                          valueFormatter: (v: number | null) =>
+                            v != null ? `${v.toFixed(1)}%` : '',
+                        }
+                      : {},
                   ]}
                   series={[
                     {
