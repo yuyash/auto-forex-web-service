@@ -193,21 +193,23 @@ export function TaskMetricsTab({
                     },
                   ]}
                   yAxis={[
-                    m.format === 'pct'
-                      ? {
-                          valueFormatter: (v: number | null) =>
-                            v != null ? `${v.toFixed(1)}%` : '',
-                        }
-                      : {},
+                    {
+                      tickNumber: 6,
+                      valueFormatter:
+                        m.format === 'pct'
+                          ? (v: number | null) =>
+                              v != null ? `${v.toFixed(1)}%` : ''
+                          : undefined,
+                    },
                   ]}
                   series={[
                     {
                       data: cd.y,
                       color: m.color,
                       showMark: false,
-                      area: m.key === 'current_balance',
                     },
                   ]}
+                  grid={{ vertical: true, horizontal: true }}
                   height={200}
                   margin={{ left: 60, right: 16, top: 8, bottom: 36 }}
                   hideLegend
