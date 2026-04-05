@@ -36,6 +36,7 @@ def _make_position(units=1000, layer_index=1, is_open=True, direction="long"):
         is_open=is_open,
         units=units,
         layer_index=layer_index,
+        retracement_count=0,
         direction=direction,
         instrument="EUR_USD",
         entry_price=Decimal("1.10000"),

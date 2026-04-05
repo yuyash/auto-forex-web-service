@@ -671,8 +671,8 @@ class EventHandler:
                     else str(event.event_type.value)
                 ),
                 timestamp=event.timestamp,
-                layer_index=event.layer_number,
-                retracement_count=event.retracement_count,
+                layer_index=position.layer_index,
+                retracement_count=position.retracement_count,
                 oanda_trade_id=position.oanda_trade_id,
                 position=position,
                 order=close_order,

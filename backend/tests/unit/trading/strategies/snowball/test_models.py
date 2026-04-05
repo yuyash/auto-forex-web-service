@@ -28,7 +28,7 @@ def _entry(
     close_price: str = "150.50",
     units: int = 1000,
     role: str = "counter",
-    layer_number: int = 0,
+    layer_number: int = 1,
     retracement_count: int = 0,
 ) -> Entry:
     return Entry(
@@ -162,41 +162,41 @@ class TestSlot:
 
 class TestLayer:
     def test_create_has_r0_through_rmax(self):
-        layer = Layer.create(0, 7, 1000)
-        assert layer.layer_number == 0
+        layer = Layer.create(1, 7, 1000)
+        assert layer.layer_number == 1
         assert len(layer.slots) == 8  # R0 + R1…R7
         assert layer.slots[0].index == 0
         assert layer.slots[7].index == 7
         assert all(s.is_empty for s in layer.slots)
 
     def test_next_available_counter_slot_skips_r0(self):
-        layer = Layer.create(0, 3, 1000)
+        layer = Layer.create(1, 3, 1000)
         slot = layer.next_available_counter_slot()
         assert slot is not None
         assert slot.index == 1  # R1, not R0
 
     def test_next_available_counter_slot_after_fill(self):
-        layer = Layer.create(0, 3, 1000)
+        layer = Layer.create(1, 3, 1000)
         layer.slots[1].fill(_entry(entry_id=1, retracement_count=1))
         slot = layer.next_available_counter_slot()
         assert slot is not None
         assert slot.index == 2
 
     def test_needs_new_layer_after_seal(self):
-        layer = Layer.create(0, 3, 1000, refill_up_to=0)
+        layer = Layer.create(1, 3, 1000, refill_up_to=0)
         layer.slots[1].fill(_entry(entry_id=1))
         layer.slots[1].close(refillable=False)
         assert layer.needs_new_layer is True
 
     def test_slot_at(self):
-        layer = Layer.create(0, 3, 1000)
+        layer = Layer.create(1, 3, 1000)
         assert layer.slot_at(0) is not None
         assert layer.slot_at(0).index == 0
         assert layer.slot_at(3) is not None
         assert layer.slot_at(4) is None
 
     def test_close_slot_auto_refillable(self):
-        layer = Layer.create(0, 3, 1000, refill_up_to=2)
+        layer = Layer.create(1, 3, 1000, refill_up_to=2)
         layer.slots[1].fill(_entry(entry_id=1))
         layer.close_slot(1)  # R1 <= refill_up_to=2 → refillable
         assert layer.slots[1].is_available
@@ -216,19 +216,19 @@ class TestLayer:
 
 class TestPositionGrid:
     def _grid_with_entries(self) -> PositionGrid:
-        """L0: R0(id=1), R1(id=2), R2(id=3).  L1: R0(id=4), R1(id=5)."""
+        """L1: R0(id=1), R1(id=2), R2(id=3).  L2: R0(id=4), R1(id=5)."""
         grid = PositionGrid()
-        l0 = Layer.create(0, 3, 1000)
-        l0.slot_at(0).fill(_entry(entry_id=1, layer_number=0, retracement_count=0, role="initial"))
-        l0.slot_at(1).fill(_entry(entry_id=2, layer_number=0, retracement_count=1))
-        l0.slot_at(2).fill(_entry(entry_id=3, layer_number=0, retracement_count=2))
+        l0 = Layer.create(1, 3, 1000)
+        l0.slot_at(0).fill(_entry(entry_id=1, layer_number=1, retracement_count=0, role="initial"))
+        l0.slot_at(1).fill(_entry(entry_id=2, layer_number=1, retracement_count=1))
+        l0.slot_at(2).fill(_entry(entry_id=3, layer_number=1, retracement_count=2))
         grid.add_layer(l0)
 
-        l1 = Layer.create(1, 3, 1000)
+        l1 = Layer.create(2, 3, 1000)
         l1.slot_at(0).fill(
-            _entry(entry_id=4, layer_number=1, retracement_count=0, role="layer_initial")
+            _entry(entry_id=4, layer_number=2, retracement_count=0, role="layer_initial")
         )
-        l1.slot_at(1).fill(_entry(entry_id=5, layer_number=1, retracement_count=1))
+        l1.slot_at(1).fill(_entry(entry_id=5, layer_number=2, retracement_count=1))
         grid.add_layer(l1)
         return grid
 
@@ -257,76 +257,76 @@ class TestPositionGrid:
 
     def test_no_counter_entries_when_only_head(self):
         grid = PositionGrid()
-        l0 = Layer.create(0, 3, 1000)
+        l0 = Layer.create(1, 3, 1000)
         l0.slot_at(0).fill(_entry(entry_id=1, role="initial"))
         grid.add_layer(l0)
         assert grid.has_counter_entries() is False
 
     def test_front_entry_with_multi_positions_returns_lowest_r(self):
-        """L0 has 3 entries → front_entry returns L0/R0 (lowest R)."""
+        """L1 has 3 entries → front_entry returns L1/R0 (lowest R)."""
         grid = self._grid_with_entries()
         front = grid.front_entry()
         assert front is not None
-        assert front.entry_id == 1  # L0/R0
+        assert front.entry_id == 1  # L1/R0
 
     def test_front_entry_skips_single_layer_when_upper_has_multi(self):
-        """L0 has 1 entry, L1 has 2 entries → skip L0, return L1/R0."""
+        """L1 has 1 entry, L2 has 2 entries → skip L1, return L2/R0."""
         grid = PositionGrid()
-        l0 = Layer.create(0, 3, 1000)
-        l0.slot_at(0).fill(_entry(entry_id=1, layer_number=0, retracement_count=0, role="initial"))
+        l0 = Layer.create(1, 3, 1000)
+        l0.slot_at(0).fill(_entry(entry_id=1, layer_number=1, retracement_count=0, role="initial"))
         grid.add_layer(l0)
 
-        l1 = Layer.create(1, 3, 1000)
+        l1 = Layer.create(2, 3, 1000)
         l1.slot_at(0).fill(
-            _entry(entry_id=4, layer_number=1, retracement_count=0, role="layer_initial")
+            _entry(entry_id=4, layer_number=2, retracement_count=0, role="layer_initial")
         )
-        l1.slot_at(1).fill(_entry(entry_id=5, layer_number=1, retracement_count=1))
+        l1.slot_at(1).fill(_entry(entry_id=5, layer_number=2, retracement_count=1))
         grid.add_layer(l1)
 
         front = grid.front_entry()
         assert front is not None
-        assert front.entry_id == 4  # L1/R0, not L0/R0
+        assert front.entry_id == 4  # L2/R0, not L1/R0
 
     def test_front_entry_closes_single_when_no_upper_multi(self):
-        """L0 has 1 entry, L1 has 1 entry → close L0/R0 (no upper multi)."""
+        """L1 has 1 entry, L2 has 1 entry → close L1/R0 (no upper multi)."""
         grid = PositionGrid()
-        l0 = Layer.create(0, 3, 1000)
-        l0.slot_at(0).fill(_entry(entry_id=1, layer_number=0, retracement_count=0, role="initial"))
+        l0 = Layer.create(1, 3, 1000)
+        l0.slot_at(0).fill(_entry(entry_id=1, layer_number=1, retracement_count=0, role="initial"))
         grid.add_layer(l0)
 
-        l1 = Layer.create(1, 3, 1000)
+        l1 = Layer.create(2, 3, 1000)
         l1.slot_at(0).fill(
-            _entry(entry_id=4, layer_number=1, retracement_count=0, role="layer_initial")
+            _entry(entry_id=4, layer_number=2, retracement_count=0, role="layer_initial")
         )
         grid.add_layer(l1)
 
         front = grid.front_entry()
         assert front is not None
-        assert front.entry_id == 1  # L0/R0
+        assert front.entry_id == 1  # L1/R0
 
     def test_front_entry_progressive_shrink_sequence(self):
         """Simulate a full shrink sequence with the preservation rule.
 
-        Grid: L0:[R0, R1], L1:[R0, R1, R2, R3]
+        Grid: L1:[R0, R1], L2:[R0, R1, R2, R3]
         Expected order:
-        1. L0/R0 (L0 has 2 → close lowest R)
-        2. L1/R0 (L0 has 1, L1 has 4 → skip L0, close L1 lowest R)
-        3. L1/R1 (L0 has 1, L1 has 3 → skip L0, close L1 lowest R)
-        4. L1/R2 (L0 has 1, L1 has 2 → skip L0, close L1 lowest R)
-        5. L0/R1 (L0 has 1, L1 has 1 → no upper multi, close L0)
-        6. L1/R3 (L0 empty, L1 has 1 → close it)
+        1. L1/R0 (L1 has 2 → close lowest R)
+        2. L2/R0 (L1 has 1, L2 has 4 → skip L1, close L2 lowest R)
+        3. L2/R1 (L1 has 1, L2 has 3 → skip L1, close L2 lowest R)
+        4. L2/R2 (L1 has 1, L2 has 2 → skip L1, close L2 lowest R)
+        5. L1/R1 (L1 has 1, L2 has 1 → no upper multi, close L1)
+        6. L2/R3 (L1 empty, L2 has 1 → close it)
         """
         grid = PositionGrid()
-        l0 = Layer.create(0, 3, 1000)
-        l0.slot_at(0).fill(_entry(entry_id=1, layer_number=0, retracement_count=0))
-        l0.slot_at(1).fill(_entry(entry_id=2, layer_number=0, retracement_count=1))
+        l0 = Layer.create(1, 3, 1000)
+        l0.slot_at(0).fill(_entry(entry_id=1, layer_number=1, retracement_count=0))
+        l0.slot_at(1).fill(_entry(entry_id=2, layer_number=1, retracement_count=1))
         grid.add_layer(l0)
 
-        l1 = Layer.create(1, 3, 1000)
-        l1.slot_at(0).fill(_entry(entry_id=10, layer_number=1, retracement_count=0))
-        l1.slot_at(1).fill(_entry(entry_id=11, layer_number=1, retracement_count=1))
-        l1.slot_at(2).fill(_entry(entry_id=12, layer_number=1, retracement_count=2))
-        l1.slot_at(3).fill(_entry(entry_id=13, layer_number=1, retracement_count=3))
+        l1 = Layer.create(2, 3, 1000)
+        l1.slot_at(0).fill(_entry(entry_id=10, layer_number=2, retracement_count=0))
+        l1.slot_at(1).fill(_entry(entry_id=11, layer_number=2, retracement_count=1))
+        l1.slot_at(2).fill(_entry(entry_id=12, layer_number=2, retracement_count=2))
+        l1.slot_at(3).fill(_entry(entry_id=13, layer_number=2, retracement_count=3))
         grid.add_layer(l1)
 
         close_order = []
@@ -341,7 +341,7 @@ class TestPositionGrid:
 
     def test_is_empty(self):
         grid = PositionGrid()
-        grid.add_layer(Layer.create(0, 3, 1000))
+        grid.add_layer(Layer.create(1, 3, 1000))
         assert grid.is_empty() is True
 
     def test_all_entries(self):

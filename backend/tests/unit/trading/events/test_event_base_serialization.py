@@ -41,7 +41,7 @@ class TestInitialEntryEventSerialization:
         assert d["direction"] == "long"
         assert d["price"] == "1.1000"
         assert d["units"] == 1000
-        assert d["retracement_count"] == 1
+        assert d["retracement_count"] == 0
         assert "entry_time" not in d
         assert "entry_id" not in d
 

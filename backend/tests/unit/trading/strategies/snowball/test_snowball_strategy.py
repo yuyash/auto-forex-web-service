@@ -109,7 +109,7 @@ class TestInitialisation:
         opens = _open_events(result)
         assert len(opens) == 2  # LONG + SHORT initial entries
 
-    def test_initial_entries_are_at_l0_r0(self):
+    def test_initial_entries_are_at_l1_r0(self):
         s = _strategy()
         state = DummyState()
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
@@ -119,7 +119,7 @@ class TestInitialisation:
         for cycle in ss.active_cycles():
             head = cycle.initial_entry
             assert head is not None
-            assert head.layer_number == 0
+            assert head.layer_number == 1
             assert head.retracement_count == 0
 
     def test_second_tick_does_not_reinitialise(self):
@@ -239,7 +239,7 @@ class TestShrinkMode:
         # Directly construct state with known entries — no on_tick needed
         ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
         cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
-        l0 = Layer.create(0, 3, 1000)
+        l0 = Layer.create(1, 3, 1000)
         l0.slot_at(0).fill(
             Entry(
                 entry_id=1,
@@ -250,7 +250,7 @@ class TestShrinkMode:
                 units=1000,
                 opened_at=T0,
                 role="initial",
-                layer_number=0,
+                layer_number=1,
                 retracement_count=0,
             )
         )
@@ -264,20 +264,20 @@ class TestShrinkMode:
                 units=2000,
                 opened_at=T0,
                 role="counter",
-                layer_number=0,
+                layer_number=1,
                 retracement_count=1,
             )
         )
         cycle.add_layer(l0)
         ss.cycles.append(cycle)
 
-        # Verify head is L0/R0
+        # Verify head is L1/R0
         assert cycle.initial_entry.entry_id == 1
 
-        # Simulate shrink closing L0/R0
+        # Simulate shrink closing L1/R0
         cycle.remove_entry(1)
 
-        # Head should now be L0/R1
+        # Head should now be L1/R1
         assert cycle.initial_entry is not None
         assert cycle.initial_entry.entry_id == 2
         assert cycle.initial_entry.retracement_count == 1

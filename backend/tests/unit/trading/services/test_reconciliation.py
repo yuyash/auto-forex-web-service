@@ -70,7 +70,7 @@ def _make_position(**overrides: Any) -> MagicMock:
     pos.exit_time = overrides.get("exit_time", None)
     pos.exit_price = overrides.get("exit_price", None)
     pos.layer_index = overrides.get("layer_index", 1)
-    pos.retracement_count = overrides.get("retracement_count", 1)
+    pos.retracement_count = overrides.get("retracement_count", 0)
     return pos
 
 

@@ -195,7 +195,7 @@ class Entry:
     units: int
     opened_at: datetime
     role: Literal["initial", "counter", "hedge", "layer_initial"]
-    layer_number: int = 0
+    layer_number: int = 1
     retracement_count: int = 0
     root_entry_id: int | None = None
     parent_entry_id: int | None = None
@@ -218,7 +218,7 @@ class Entry:
         step: int,
         close_price: Decimal,
         role: Literal["initial", "counter", "hedge", "layer_initial"],
-        layer_number: int = 0,
+        layer_number: int = 1,
         retracement_count: int = 0,
         root_entry_id: int | None = None,
         parent_entry_id: int | None = None,
@@ -447,7 +447,7 @@ class Entry:
             units=_parse_int(d.get("units", 0), 0),
             opened_at=opened_at,
             role=d.get("role", "counter"),
-            layer_number=_parse_int(d.get("layer_number", 0), 0),
+            layer_number=_parse_int(d.get("layer_number", 1), 1),
             retracement_count=_parse_int(d.get("retracement_count", 0), 0),
             root_entry_id=(
                 _parse_int(d["root_entry_id"], 0) if d.get("root_entry_id") is not None else None
@@ -557,11 +557,11 @@ class Slot:
 class Layer:
     """A layer of ``r_max + 1`` slots (R0 … R(r_max)).
 
-    R0 is the layer-initial (or cycle-initial for L0).
+    R0 is the layer-initial (or cycle-initial for L1).
     R1…R(r_max) are counter-trend retracement slots.
     """
 
-    layer_number: int  # 0-based
+    layer_number: int  # 1-based
     slots: list[Slot] = field(default_factory=list)
     base_units: int = 1000
     refill_up_to: int = 2
@@ -707,7 +707,7 @@ class Layer:
     @staticmethod
     def from_dict(d: dict[str, Any]) -> "Layer":
         return Layer(
-            layer_number=_parse_int(d.get("layer_number", 0), 0),
+            layer_number=_parse_int(d.get("layer_number", 1), 1),
             slots=[Slot.from_dict(s) for s in d.get("slots", [])],
             base_units=_parse_int(d.get("base_units", 1000), 1000),
             refill_up_to=_parse_int(d.get("refill_up_to", 2), 2),

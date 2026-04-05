@@ -255,13 +255,15 @@ class FloorStrategy(Strategy):
                 price=entry_price,
                 units=units,
                 entry_time=tick.timestamp,
-                retracement_count=1,
+                retracement_count=0,
                 entry_id=entry_id,
                 planned_exit_price=planned_exit_price,
                 planned_exit_price_formula=planned_exit_price_formula,
             )
 
-        retracement_count = floor_state.floor_retracement_counts.get(floor_index, 0)
+        # R index = total entries in layer - 1 (R0 is initial, R1 is first retracement, etc.)
+        total_entries = floor_state.floor_retracement_counts.get(floor_index, 0)
+        retracement_index = max(total_entries - 1, 0)
         return RetracementEvent(
             event_type=EventType.RETRACEMENT,
             timestamp=tick.timestamp,
@@ -270,7 +272,7 @@ class FloorStrategy(Strategy):
             price=entry_price,
             units=units,
             entry_time=tick.timestamp,
-            retracement_count=retracement_count,
+            retracement_count=retracement_index,
             entry_id=entry_id,
             planned_exit_price=planned_exit_price,
             planned_exit_price_formula=planned_exit_price_formula,
@@ -800,7 +802,9 @@ class FloorStrategy(Strategy):
                     pips=pnl_pips,
                     entry_time=None,
                     exit_time=tick.timestamp,
-                    retracement_count=floor_state.floor_retracement_counts.get(entry_floor, 0),
+                    retracement_count=max(
+                        floor_state.floor_retracement_counts.get(entry_floor, 0) - 1, 0
+                    ),
                     entry_id=int(entry.get("entry_id", 0)),
                     position_id=entry.get("position_id"),
                 )

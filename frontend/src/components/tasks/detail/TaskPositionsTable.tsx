@@ -420,7 +420,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     width: 70,
     minWidth: 50,
     align: 'right',
-    render: (r) => (r.layer_index != null ? String(r.layer_index) : '-'),
+    render: (r) => (r.layer_index != null ? `L${r.layer_index}` : '-'),
   };
   const retracementCol: Column<TaskPosition> = {
     id: 'retracement_count',
@@ -429,7 +429,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     minWidth: 50,
     align: 'right',
     render: (r) =>
-      r.retracement_count != null ? String(r.retracement_count) : '-',
+      r.retracement_count != null ? `R${r.retracement_count}` : '-',
   };
   const entryPriceCol: Column<TaskPosition> = {
     id: 'entry_price',

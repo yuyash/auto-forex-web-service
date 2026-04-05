@@ -192,7 +192,7 @@ class SnowballStrategy(Strategy):
             step=1,
             close_price=close_price,
             role="initial",
-            layer_number=0,
+            layer_number=1,
             retracement_count=0,
         )
         entry.expected_tp_pips = cfg.m_pips
@@ -206,8 +206,8 @@ class SnowballStrategy(Strategy):
         )
 
         cycle = SnowballCycle(cycle_id=entry.entry_id, direction=direction)
-        # L0 with R0 (initial) + R1…R(r_max) counter slots
-        layer0 = Layer.create(0, cfg.r_max, cfg.base_units, cfg.refill_up_to)
+        # L1 with R0 (initial) + R1…R(r_max) counter slots
+        layer0 = Layer.create(1, cfg.r_max, cfg.base_units, cfg.refill_up_to)
         layer0.slot_at(0).fill(entry)
         cycle.add_layer(layer0)
         ss.cycles.append(cycle)
@@ -396,10 +396,10 @@ class SnowballStrategy(Strategy):
                 )
             ]
 
-            # If this was the last counter slot in a non-L0 layer and R0 is
+            # If this was the last counter slot in a non-L1 layer and R0 is
             # the only remaining entry, check if R0's TP is also hit.
             # If so, close R0 and remove the layer.
-            if layer.layer_number > 0:
+            if layer.layer_number > 1:
                 remaining = layer.occupied_slots()
                 if len(remaining) == 1 and remaining[0].index == 0:
                     r0_entry = remaining[0].entry
