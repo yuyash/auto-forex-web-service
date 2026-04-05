@@ -816,11 +816,43 @@ class PositionGrid:
     # -- Shrink: close from front --
 
     def front_entry(self) -> Entry | None:
-        """Return the oldest position — same as head_entry.
+        """Return the next shrink candidate respecting layer-preservation rules.
 
-        Shrink closes this first.
+        Priority (within a single cycle):
+        1. Lowest layer number first.
+        2. Within a layer, lowest R index first.
+        3. **Exception**: if a layer has exactly 1 occupied slot, check whether
+           any *higher* layer has 2+ occupied slots.  If yes, skip this layer
+           and let the higher layer yield a candidate (its lowest R).  If no
+           higher layer has 2+ slots either, close this single position.
+
+        This preserves the "last survivor" in a layer as long as there are
+        still trimmable positions in upper layers.
         """
-        return self.head_entry()
+        layers = self.layers
+
+        for i, layer in enumerate(layers):
+            occupied = layer.occupied_slots()
+            if not occupied:
+                continue
+
+            if len(occupied) >= 2:
+                # Multiple positions → close the lowest R
+                lowest = min(occupied, key=lambda s: s.index)
+                return lowest.entry
+
+            # Exactly 1 position in this layer.
+            # Check if any higher layer has 2+ occupied slots.
+            has_multi_above = any(len(upper.occupied_slots()) >= 2 for upper in layers[i + 1 :])
+
+            if has_multi_above:
+                # Skip — upper layers still have trimmable positions
+                continue
+
+            # All layers above also have ≤1 position. Close this one.
+            return occupied[0].entry
+
+        return None
 
     # -- Normal TP: close from back --
 
