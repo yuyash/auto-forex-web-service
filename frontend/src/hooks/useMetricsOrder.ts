@@ -2,7 +2,7 @@
  * useMetricsOrder Hook
  *
  * Persists the display order of metrics charts in localStorage.
- * Returns the ordered list of metric keys and functions to move items.
+ * Returns the ordered list of metric keys and a function to move items.
  */
 
 import { useState, useCallback, useMemo } from 'react';
@@ -45,23 +45,15 @@ export function useMetricsOrder(availableKeys: string[]) {
     writeStoredValue(STORAGE_KEY, keys);
   }, []);
 
-  const moveUp = useCallback(
-    (key: string) => {
-      const idx = orderedKeys.indexOf(key);
-      if (idx <= 0) return;
+  /** Move sourceKey to the position currently occupied by targetKey. */
+  const moveItem = useCallback(
+    (sourceKey: string, targetKey: string) => {
+      const fromIdx = orderedKeys.indexOf(sourceKey);
+      const toIdx = orderedKeys.indexOf(targetKey);
+      if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
       const next = [...orderedKeys];
-      [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
-      persist(next);
-    },
-    [orderedKeys, persist]
-  );
-
-  const moveDown = useCallback(
-    (key: string) => {
-      const idx = orderedKeys.indexOf(key);
-      if (idx < 0 || idx >= orderedKeys.length - 1) return;
-      const next = [...orderedKeys];
-      [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+      next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, sourceKey);
       persist(next);
     },
     [orderedKeys, persist]
@@ -72,5 +64,5 @@ export function useMetricsOrder(availableKeys: string[]) {
     removeStoredValue(STORAGE_KEY);
   }, []);
 
-  return { orderedKeys, moveUp, moveDown, resetOrder };
+  return { orderedKeys, moveItem, resetOrder };
 }
