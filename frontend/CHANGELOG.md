@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.6...frontend-v1.29.7) (2026-04-06)
+
+
+### Bug Fixes
+
+* **frontend:** halve Y-axis left margin on metrics charts ([#346](https://github.com/yuyash/auto-forex-web-service/issues/346)) ([ac3f867](https://github.com/yuyash/auto-forex-web-service/commit/ac3f867f0a244723461520b034c50acc38967e49))
+
 ## [1.29.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.5...frontend-v1.29.6) (2026-04-05)
 
 
