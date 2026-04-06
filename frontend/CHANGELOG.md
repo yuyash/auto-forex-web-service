@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.31.0...frontend-v1.32.0) (2026-04-06)
+
+
+### Features
+
+* **metrics:** OHLC first by default, drag-to-reorder, fix chart height ([#359](https://github.com/yuyash/auto-forex-web-service/issues/359)) ([42606bf](https://github.com/yuyash/auto-forex-web-service/commit/42606bf27e5d2923ad2d92353414b8467f7a19a1))
+
 ## [1.31.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.30.0...frontend-v1.31.0) (2026-04-06)
 
 
