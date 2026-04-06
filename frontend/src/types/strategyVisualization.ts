@@ -11,6 +11,7 @@ export interface CycleTrade {
   position_id?: string | null;
   volatility?: string | null;
   margin_ratio?: string | null;
+  is_rebuild?: boolean;
 }
 
 export interface StrategyCycle {

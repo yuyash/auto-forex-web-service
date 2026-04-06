@@ -39,7 +39,9 @@ class EventHandler:
         position_map: Maps layer numbers to Position instances
     """
 
-    _PROTECTION_CLOSE_REASONS = frozenset({"shrink", "volatility_lock", "margin_protection"})
+    _PROTECTION_CLOSE_REASONS = frozenset(
+        {"shrink", "volatility_lock", "margin_protection", "stop_loss"}
+    )
 
     def __init__(self, order_service: OrderService, instrument: str):
         """Initialize event handler.
@@ -248,6 +250,7 @@ class EventHandler:
         description: str = "",
         cycle_id: str | None = None,
         margin_ratio: Decimal | None = None,
+        is_rebuild: bool = False,
     ) -> Trade:
         trade = Trade.objects.create(
             task_type=self.order_service.task_type.value,
@@ -268,6 +271,7 @@ class EventHandler:
             cycle_id=cycle_id,
             sequence_number=self._current_sequence_number,
             margin_ratio=margin_ratio,
+            is_rebuild=is_rebuild,
         )
         return trade
 
@@ -491,6 +495,18 @@ class EventHandler:
             position.adverse_pips = adverse
             position.save(update_fields=["adverse_pips"])
 
+        # Persist stop-loss price on the position
+        sl_price = getattr(event, "stop_loss_price", None)
+        if sl_price is not None:
+            position.stop_loss_price = sl_price
+            position.save(update_fields=["stop_loss_price"])
+
+        # Persist is_rebuild flag on the position
+        is_rebuild = getattr(event, "is_rebuild", False)
+        if is_rebuild:
+            position.is_rebuild = True
+            position.save(update_fields=["is_rebuild"])
+
         self._cache_position(event.layer_number, position)
         trade = self._record_trade(
             direction=direction,
@@ -507,6 +523,7 @@ class EventHandler:
             description=getattr(event, "description", ""),
             cycle_id=cycle_id,
             margin_ratio=event.margin_ratio,
+            is_rebuild=getattr(event, "is_rebuild", False),
         )
 
         # New cycle: back-fill cycle_id = trade's own id.

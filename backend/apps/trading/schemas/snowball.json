@@ -293,6 +293,18 @@
       "group_ja": "コアパラメータ"
     },
 
+    "stop_loss_enabled": {
+      "type": "boolean",
+      "title": "Enable Stop Loss",
+      "title_ja": "ロスカット有効",
+      "description": "When enabled, each position gets a stop-loss price calculated at entry time. If the market reaches that price, the position is closed. Closed positions are rebuilt when price returns to the original entry price. Cannot be used together with Shrink.",
+      "description_ja": "有効時、各ポジションに建玉時のロスカット価格が設定されます。市場価格がロスカット価格に達するとポジションが決済されます。価格が元の建玉価格に戻った場合、ポジションが再建されます。縮小機能とは同時に使用できません。",
+      "default": false,
+      "exclusiveWith": "shrink_enabled",
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
     "shrink_enabled": {
       "type": "boolean",
       "title": "Enable Shrink",
@@ -300,6 +312,7 @@
       "description": "When enabled, the largest-loss counter entry is closed when margin closeout ratio reaches the shrink threshold.",
       "description_ja": "有効時、証拠金清算割合が縮小閾値に達すると、最大損失の逆行エントリーを決済します。",
       "default": true,
+      "exclusiveWith": "stop_loss_enabled",
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
     },

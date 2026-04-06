@@ -18,6 +18,7 @@ import { z } from 'zod';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
 import { useUpdateTradingTask } from '../../hooks/useTradingTaskMutations';
 import { useConfiguration } from '../../hooks/useConfigurations';
+import { useAccount } from '../../hooks/useAccounts';
 import {
   useStrategies,
   getStrategyDisplayName,
@@ -26,6 +27,7 @@ import {
 // Update schema - only editable fields
 const tradingTaskUpdateSchema = z.object({
   config_id: z.string().min(1, 'Configuration is required'),
+  hedging_enabled: z.boolean().optional(),
 });
 
 type TradingTaskUpdateData = z.infer<typeof tradingTaskUpdateSchema>;
@@ -34,6 +36,7 @@ interface TradingTaskUpdateFormProps {
   taskId: string;
   taskName: string;
   taskDescription?: string;
+  accountId: number;
   accountName: string;
   initialData: TradingTaskUpdateData;
   debugOptions?: Record<string, unknown>;
@@ -43,6 +46,7 @@ export default function TradingTaskUpdateForm({
   taskId,
   taskName,
   taskDescription,
+  accountId,
   accountName,
   initialData,
   debugOptions,
@@ -67,6 +71,14 @@ export default function TradingTaskUpdateForm({
 
   const { strategies } = useStrategies();
 
+  // Fetch account details to check hedging support
+  const { data: accountDetail } = useAccount(accountId, {
+    enabled: accountId > 0,
+  });
+  const accountHedgingEnabled = accountDetail
+    ? (accountDetail as { hedging_enabled?: boolean }).hedging_enabled
+    : undefined;
+
   // Watch selected config
   // eslint-disable-next-line react-hooks/incompatible-library
   const selectedConfigId = watch('config_id');
@@ -80,6 +92,8 @@ export default function TradingTaskUpdateForm({
         id: taskId,
         data: {
           config: data.config_id,
+          hedging_enabled:
+            accountHedgingEnabled === false ? false : data.hedging_enabled,
           debug_options: { tracemalloc },
         },
       });
@@ -98,6 +112,7 @@ export default function TradingTaskUpdateForm({
 
         const fieldMapping: Record<string, string> = {
           config: 'Configuration',
+          hedging_enabled: 'Hedging',
         };
 
         Object.entries(backendErrors).forEach(([field, messages]) => {
@@ -200,6 +215,51 @@ export default function TradingTaskUpdateForm({
               </Alert>
             </Grid>
           )}
+        </Grid>
+
+        <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
+          {t('trading:form.hedgingEnabled', 'Hedging')}
+        </Typography>
+        <Grid container spacing={3}>
+          <Grid size={{ xs: 12 }}>
+            <Controller
+              name="hedging_enabled"
+              control={control}
+              render={({ field }) => (
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={field.value ?? true}
+                      onChange={field.onChange}
+                      disabled={accountHedgingEnabled === false}
+                    />
+                  }
+                  label={t(
+                    'trading:form.hedgingEnabled',
+                    'Enable Hedging (simultaneous long/short positions)'
+                  )}
+                />
+              )}
+            />
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: 'block', ml: 4 }}
+            >
+              {t(
+                'trading:form.hedgingDescription',
+                'When enabled, the strategy can hold both long and short positions simultaneously. Requires a hedging-enabled OANDA account.'
+              )}
+            </Typography>
+            {accountHedgingEnabled === false && (
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                {t(
+                  'trading:form.hedgingUnsupported',
+                  'This OANDA account uses netting mode and does not support hedging. Hedging has been disabled for this task.'
+                )}
+              </Alert>
+            )}
+          </Grid>
         </Grid>
 
         <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>

@@ -7392,6 +7392,16 @@
                         "pattern": "^-?\\d{0,8}(?:\\.\\d{0,4})?$",
                         "nullable": true
                     },
+                    "stop_loss_price": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "nullable": true
+                    },
+                    "is_rebuild": {
+                        "type": "boolean",
+                        "default": false
+                    },
                     "close_reason": {
                         "type": "string",
                         "nullable": true,
@@ -8801,6 +8811,16 @@
                         "format": "uuid",
                         "nullable": true
                     },
+                    "is_rebuild": {
+                        "type": "boolean",
+                        "default": false
+                    },
+                    "stop_loss_price": {
+                        "type": "string",
+                        "nullable": true,
+                        "description": "Return stop_loss_price from the related position, if any.",
+                        "readOnly": true
+                    },
                     "updated_at": {
                         "type": "string",
                         "format": "date-time",
@@ -8813,6 +8833,7 @@
                     "execution_method_display",
                     "instrument",
                     "price",
+                    "stop_loss_price",
                     "timestamp",
                     "units"
                 ]

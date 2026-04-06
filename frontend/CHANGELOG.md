@@ -2,52 +2,45 @@
 
 ## [1.29.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.6...frontend-v1.29.7) (2026-04-06)
 
-
 ### Bug Fixes
 
-* **frontend:** halve Y-axis left margin on metrics charts ([#346](https://github.com/yuyash/auto-forex-web-service/issues/346)) ([ac3f867](https://github.com/yuyash/auto-forex-web-service/commit/ac3f867f0a244723461520b034c50acc38967e49))
+- **frontend:** halve Y-axis left margin on metrics charts ([#346](https://github.com/yuyash/auto-forex-web-service/issues/346)) ([ac3f867](https://github.com/yuyash/auto-forex-web-service/commit/ac3f867f0a244723461520b034c50acc38967e49))
 
 ## [1.29.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.5...frontend-v1.29.6) (2026-04-05)
 
-
 ### Bug Fixes
 
-* **frontend:** reduce excessive left padding on metrics chart Y-axis ([#344](https://github.com/yuyash/auto-forex-web-service/issues/344)) ([356b643](https://github.com/yuyash/auto-forex-web-service/commit/356b6434448b9054b7d71f9fe0c8b4a3573c2ed0))
+- **frontend:** reduce excessive left padding on metrics chart Y-axis ([#344](https://github.com/yuyash/auto-forex-web-service/issues/344)) ([356b643](https://github.com/yuyash/auto-forex-web-service/commit/356b6434448b9054b7d71f9fe0c8b4a3573c2ed0))
 
 ## [1.29.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.4...frontend-v1.29.5) (2026-04-05)
 
-
 ### Bug Fixes
 
-* **trading:** correct layer and retracement numbering ([#342](https://github.com/yuyash/auto-forex-web-service/issues/342)) ([02e7d27](https://github.com/yuyash/auto-forex-web-service/commit/02e7d27ed950d733213e0896247b12aab6181afd))
+- **trading:** correct layer and retracement numbering ([#342](https://github.com/yuyash/auto-forex-web-service/issues/342)) ([02e7d27](https://github.com/yuyash/auto-forex-web-service/commit/02e7d27ed950d733213e0896247b12aab6181afd))
 
 ## [1.29.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.3...frontend-v1.29.4) (2026-04-05)
 
-
 ### Bug Fixes
 
-* **metrics:** set yAxis width to prevent tick label truncation ([#340](https://github.com/yuyash/auto-forex-web-service/issues/340)) ([134680b](https://github.com/yuyash/auto-forex-web-service/commit/134680b256f1c8dcb42965ac5315be1e185824d2))
+- **metrics:** set yAxis width to prevent tick label truncation ([#340](https://github.com/yuyash/auto-forex-web-service/issues/340)) ([134680b](https://github.com/yuyash/auto-forex-web-service/commit/134680b256f1c8dcb42965ac5315be1e185824d2))
 
 ## [1.29.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.2...frontend-v1.29.3) (2026-04-05)
 
-
 ### Bug Fixes
 
-* metrics yaxis label truncation ([#338](https://github.com/yuyash/auto-forex-web-service/issues/338)) ([f4e0e2c](https://github.com/yuyash/auto-forex-web-service/commit/f4e0e2cb1c033d7955fb6ada452cae7f967380d1))
+- metrics yaxis label truncation ([#338](https://github.com/yuyash/auto-forex-web-service/issues/338)) ([f4e0e2c](https://github.com/yuyash/auto-forex-web-service/commit/f4e0e2cb1c033d7955fb6ada452cae7f967380d1))
 
 ## [1.29.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.1...frontend-v1.29.2) (2026-04-05)
 
-
 ### Bug Fixes
 
-* strategy trade margin label ([#336](https://github.com/yuyash/auto-forex-web-service/issues/336)) ([417588e](https://github.com/yuyash/auto-forex-web-service/commit/417588e94d157c015a8e82e9352e175842a81dd8))
+- strategy trade margin label ([#336](https://github.com/yuyash/auto-forex-web-service/issues/336)) ([417588e](https://github.com/yuyash/auto-forex-web-service/commit/417588e94d157c015a8e82e9352e175842a81dd8))
 
 ## [1.29.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.0...frontend-v1.29.1) (2026-04-05)
 
-
 ### Bug Fixes
 
-* align config detail view with edit form layout and add i18n ([#334](https://github.com/yuyash/auto-forex-web-service/issues/334)) ([fd76d7c](https://github.com/yuyash/auto-forex-web-service/commit/fd76d7c1001f824fd80958bd9adddbf138740daf))
+- align config detail view with edit form layout and add i18n ([#334](https://github.com/yuyash/auto-forex-web-service/issues/334)) ([fd76d7c](https://github.com/yuyash/auto-forex-web-service/commit/fd76d7c1001f824fd80958bd9adddbf138740daf))
 
 ## [1.29.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.28.2...frontend-v1.29.0) (2026-04-05)
 

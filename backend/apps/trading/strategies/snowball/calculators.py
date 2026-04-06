@@ -104,3 +104,41 @@ def counter_tp_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
 
     # Fallback
     return round_to_step(base, step)
+
+
+def stop_loss_price(
+    current_tp_pips: Decimal,
+    next_entry_price: Decimal,
+    next_interval_pips: Decimal,
+    pip_size: Decimal,
+) -> Decimal:
+    """Calculate stop-loss price for a position when the next position opens.
+
+    The formula mirrors the Excel formula:
+    ``=IF(G2 < -(C3), B3, B3 - (-C3 / 100))``
+
+    Where:
+    - G2 = current position's take-profit distance in pips
+      (close_price - entry_price) / pip_size for LONG
+    - C3 = next position's interval (negative in Excel, positive here)
+    - B3 = next position's entry price
+
+    When the current position's TP pips are less than the next interval,
+    the stop-loss is set to the next position's entry price.
+    Otherwise, it is set to next_entry_price - next_interval_pips * pip_size.
+
+    For LONG positions, the stop-loss is always below the entry price.
+    For SHORT positions, the caller should negate/mirror appropriately.
+
+    Args:
+        current_tp_pips: Current position's TP distance in pips (always positive).
+        next_entry_price: The next (newly opened) position's entry price.
+        next_interval_pips: The interval (in pips) used to open the next position.
+        pip_size: Instrument pip size.
+
+    Returns:
+        The stop-loss price for the current position.
+    """
+    if current_tp_pips < next_interval_pips:
+        return next_entry_price
+    return next_entry_price - next_interval_pips * pip_size

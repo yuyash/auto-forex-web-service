@@ -56,6 +56,11 @@ export interface ConfigProperty {
   // Conditional visibility: show this field only when another field has specific values
   dependsOn?: DependsOnCondition;
   /**
+   * Mutual exclusion for boolean fields.
+   * When this field is set to true, the named field is automatically set to false.
+   */
+  exclusiveWith?: string;
+  /**
    * For array fields: derive the required element count from another field.
    * `field` is the config key to read, `offset` is added to that value.
    * Example: { field: "r_max", offset: -1 } → array length = r_max − 1.

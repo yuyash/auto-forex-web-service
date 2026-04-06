@@ -527,6 +527,8 @@ class OpenPositionEvent(StrategyEvent):
     strategy_event_type: str = ""
     planned_exit_price: Decimal | None = None
     planned_exit_price_formula: str | None = None
+    stop_loss_price: Decimal | None = None
+    is_rebuild: bool = False
     description: str = ""
 
     def __post_init__(self):
@@ -575,6 +577,10 @@ class OpenPositionEvent(StrategyEvent):
             result["planned_exit_price"] = str(self.planned_exit_price)
         if self.planned_exit_price_formula:
             result["planned_exit_price_formula"] = self.planned_exit_price_formula
+        if self.stop_loss_price is not None:
+            result["stop_loss_price"] = str(self.stop_loss_price)
+        if self.is_rebuild:
+            result["is_rebuild"] = True
         if self.description:
             result["description"] = self.description
         return result
@@ -594,6 +600,8 @@ class OpenPositionEvent(StrategyEvent):
             strategy_event_type=str(event_dict.get("strategy_event_type", "")),
             planned_exit_price=parse_optional_decimal(event_dict.get("planned_exit_price")),
             planned_exit_price_formula=event_dict.get("planned_exit_price_formula"),
+            stop_loss_price=parse_optional_decimal(event_dict.get("stop_loss_price")),
+            is_rebuild=bool(event_dict.get("is_rebuild", False)),
             description=str(event_dict.get("description", "")),
         )
         instance.actual_interval_pips = parse_optional_decimal(

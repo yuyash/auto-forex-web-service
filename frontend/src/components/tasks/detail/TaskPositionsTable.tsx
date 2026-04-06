@@ -476,6 +476,36 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     render: (r) =>
       r.adverse_pips != null ? parseFloat(r.adverse_pips).toFixed(1) : '-',
   };
+  const stopLossPriceCol: Column<TaskPosition> = {
+    id: 'stop_loss_price',
+    label: t('tables.positions.stopLossPrice'),
+    width: 130,
+    minWidth: 90,
+    align: 'right',
+    render: (r) =>
+      r.stop_loss_price ? `¥${parseFloat(r.stop_loss_price).toFixed(3)}` : '-',
+  };
+  const isRebuildCol: Column<TaskPosition> = {
+    id: 'is_rebuild',
+    label: t('tables.positions.isRebuild'),
+    width: 80,
+    minWidth: 60,
+    render: (r) =>
+      r.is_rebuild ? (
+        <Chip
+          label={t('tables.positions.rebuild')}
+          size="small"
+          color="info"
+          variant="outlined"
+          sx={{
+            height: 22,
+            '& .MuiChip-label': { px: 0.75, fontSize: '0.75rem' },
+          }}
+        />
+      ) : (
+        '-'
+      ),
+  };
 
   const closeReasonCol: Column<TaskPosition> = {
     id: 'close_reason',
@@ -667,9 +697,11 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     exitPriceCol,
     plannedExitPriceCol,
     plannedExitFormulaCol,
+    stopLossPriceCol,
     pipsCol(dir),
     realizedPnlCol(dir),
     closeReasonCol,
+    isRebuildCol,
   ];
   /** byStatus: open positions (direction known) */
   const openCols = (dir: 'long' | 'short'): Column<TaskPosition>[] => [
@@ -683,8 +715,10 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     entryPriceCol,
     plannedExitPriceCol,
     plannedExitFormulaCol,
+    stopLossPriceCol,
     pipsCol(dir),
     unrealizedPnlCol(dir),
+    isRebuildCol,
   ];
   /** byDirection: all statuses for a known direction */
   const dirCols = (dir: 'long' | 'short'): Column<TaskPosition>[] => [
@@ -701,9 +735,11 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     exitPriceCol,
     plannedExitPriceCol,
     plannedExitFormulaCol,
+    stopLossPriceCol,
     pipsCol(dir),
     pnlCol(dir),
     closeReasonCol,
+    isRebuildCol,
   ];
   /** all: every position */
   const allCols = (): Column<TaskPosition>[] => [
@@ -721,9 +757,11 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     exitPriceCol,
     plannedExitPriceCol,
     plannedExitFormulaCol,
+    stopLossPriceCol,
     pipsCol(),
     pnlCol(),
     closeReasonCol,
+    isRebuildCol,
   ];
 
   // --- Column config ---
@@ -733,16 +771,32 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   const [allColConfigOpen, setAllColConfigOpen] = useState(false);
 
   const closedColDefaults = columnsToDefaults(closedCols('long')).map((c) =>
-    c.id === 'planned_exit_price_formula' ? { ...c, visible: false } : c
+    ['planned_exit_price_formula', 'stop_loss_price', 'is_rebuild'].includes(
+      c.id
+    )
+      ? { ...c, visible: false }
+      : c
   );
   const openColDefaults = columnsToDefaults(openCols('long')).map((c) =>
-    c.id === 'planned_exit_price_formula' ? { ...c, visible: false } : c
+    ['planned_exit_price_formula', 'stop_loss_price', 'is_rebuild'].includes(
+      c.id
+    )
+      ? { ...c, visible: false }
+      : c
   );
   const dirColDefaults = columnsToDefaults(dirCols('long')).map((c) =>
-    c.id === 'planned_exit_price_formula' ? { ...c, visible: false } : c
+    ['planned_exit_price_formula', 'stop_loss_price', 'is_rebuild'].includes(
+      c.id
+    )
+      ? { ...c, visible: false }
+      : c
   );
   const allColDefaults = columnsToDefaults(allCols()).map((c) =>
-    c.id === 'planned_exit_price_formula' ? { ...c, visible: false } : c
+    ['planned_exit_price_formula', 'stop_loss_price', 'is_rebuild'].includes(
+      c.id
+    )
+      ? { ...c, visible: false }
+      : c
   );
 
   const {
@@ -849,6 +903,9 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       return '-';
     },
     close_reason: (r) => r.close_reason ?? '-',
+    stop_loss_price: (r) =>
+      r.stop_loss_price ? `¥${parseFloat(r.stop_loss_price).toFixed(3)}` : '-',
+    is_rebuild: (r) => (r.is_rebuild ? 'Yes' : '-'),
   });
 
   const openExtractors = (
@@ -887,6 +944,9 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       }
       return '-';
     },
+    stop_loss_price: (r) =>
+      r.stop_loss_price ? `¥${parseFloat(r.stop_loss_price).toFixed(3)}` : '-',
+    is_rebuild: (r) => (r.is_rebuild ? 'Yes' : '-'),
   });
 
   const genericExtractors: CopyValueExtractors<TaskPosition> = {
@@ -940,6 +1000,9 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       return '-';
     },
     close_reason: (r) => r.close_reason ?? '-',
+    stop_loss_price: (r) =>
+      r.stop_loss_price ? `¥${parseFloat(r.stop_loss_price).toFixed(3)}` : '-',
+    is_rebuild: (r) => (r.is_rebuild ? 'Yes' : '-'),
   };
 
   // --- Render a pair of Long/Short tables (used by byStatus mode) ---

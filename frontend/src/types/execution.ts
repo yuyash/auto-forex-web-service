@@ -74,7 +74,8 @@ export interface StrategyEvent {
     | 'close'
     | 'take_profit'
     | 'volatility_lock'
-    | 'margin_protection';
+    | 'margin_protection'
+    | 'stop_loss';
   timestamp: string;
   layer_number: number;
   retracement_count: number;

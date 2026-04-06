@@ -118,6 +118,17 @@ class Position(models.Model):
         blank=True,
         help_text="Pips distance from the previous entry when this position was opened",
     )
+    stop_loss_price = models.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        null=True,
+        blank=True,
+        help_text="Stop-loss price calculated at entry time. Position is closed if market reaches this price.",
+    )
+    is_rebuild = models.BooleanField(
+        default=False,
+        help_text="Whether this position was rebuilt after a stop-loss close.",
+    )
     oanda_trade_id = models.CharField(
         max_length=64,
         null=True,
