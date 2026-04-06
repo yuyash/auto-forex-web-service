@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.9](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.8...frontend-v1.29.9) (2026-04-06)
+
+
+### Bug Fixes
+
+* **ui:** config detail dependsOn, backtest hedging toggle, compact layout ([59d934a](https://github.com/yuyash/auto-forex-web-service/commit/59d934a0b3442b28f84df32185f40e3cef7568b9))
+
 ## [1.29.8](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.7...frontend-v1.29.8) (2026-04-06)
 
 ### Bug Fixes
