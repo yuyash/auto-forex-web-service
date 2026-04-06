@@ -354,7 +354,10 @@
       "retracement": "増し玉",
       "noTrades": "取引記録なし",
       "description": "説明",
-      "cycleIdFilter": "サイクルIDでフィルタ"
+      "cycleIdFilter": "サイクルIDでフィルタ",
+      "stopLossPrice": "ロスカット価格",
+      "isRebuild": "再建玉",
+      "rebuild": "再建玉"
     },
     "orders": {
       "title": "注文",
@@ -392,6 +395,9 @@
       "adversePips": "逆行Pips",
       "closeReason": "決済理由",
       "closeReasonNormal": "通常",
+      "stopLossPrice": "ロスカット価格",
+      "isRebuild": "再建玉",
+      "rebuild": "再建玉",
       "realizedPnl": "実現損益",
       "unrealizedPnl": "未実現損益",
       "totalRealizedPnl": "合計実現損益",

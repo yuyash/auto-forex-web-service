@@ -162,44 +162,100 @@ function formatTooltipDate(date: Date, intervalMin: number): string {
 }
 
 /**
- * Estimate the pixel width needed for the Y-axis including tick marks
- * and internal gaps.
- *
- * MUI X-Charts defaults the Y-axis width to only 45 px
- * (DEFAULT_AXIS_SIZE_WIDTH).  The label rendering budget is even
- * smaller: axisWidth − tickSize(6) − TICK_LABEL_GAP(2) = 37 px.
- * Any label wider than that gets truncated with "…".
- *
- * This function computes a width large enough for the longest label
- * and is used as both the yAxis `width` prop (controls the label
- * clipping rectangle) and the chart `margin.left` (reserves space
- * in the SVG).
+ * MUI X-Charts internal constants that eat into the yAxis `width` budget.
+ * The actual label clipping rect = width − TICK_SIZE − TICK_LABEL_GAP.
+ * Source: @mui/x-charts/internals (DEFAULT_TICK_SIZE=6, TICK_LABEL_GAP=2).
  */
-function estimateYAxisWidth(
+const Y_AXIS_OVERHEAD = 6 + 2; // tickSize + tickLabelGap
+
+/** Shared off-screen canvas for measuring text width. */
+let _measureCtx: CanvasRenderingContext2D | null = null;
+function getTextMeasureCtx(): CanvasRenderingContext2D {
+  if (!_measureCtx) {
+    const canvas = document.createElement('canvas');
+    _measureCtx = canvas.getContext('2d')!;
+  }
+  return _measureCtx;
+}
+
+/** Font string matching the tick label style applied to the chart. */
+const TICK_FONT = '10px "Roboto", "Helvetica", "Arial", sans-serif';
+
+/**
+ * Format a Y-axis tick value exactly as the chart's valueFormatter does.
+ * This must stay in sync with the valueFormatter passed to yAxis below.
+ */
+function formatYLabel(v: number, format?: 'pct' | 'int' | 'currency'): string {
+  if (format === 'pct') return `${v.toFixed(1)}%`;
+  if (format === 'currency') return v.toFixed(1);
+  if (format === 'int') return Math.round(v).toLocaleString();
+  return v.toFixed(1);
+}
+
+/**
+ * Generate representative Y-axis tick values that d3's linear scale would
+ * produce, so we can measure the widest label.  We use a simple nice-number
+ * approach: compute a human-friendly step from the data range and the
+ * desired tick count, then enumerate ticks from the rounded min to max.
+ */
+function generateRepresentativeTicks(
   yValues: number[],
+  tickCount: number
+): number[] {
+  if (yValues.length === 0) return [0];
+  const rawMin = Math.min(...yValues);
+  const rawMax = Math.max(...yValues);
+  if (rawMin === rawMax) return [rawMin];
+
+  const range = rawMax - rawMin;
+  // d3-scale niceNum: round the step to a "nice" number
+  const roughStep = range / Math.max(tickCount - 1, 1);
+  const mag = Math.pow(10, Math.floor(Math.log10(roughStep)));
+  const residual = roughStep / mag;
+  let niceStep: number;
+  if (residual <= 1.5) niceStep = 1 * mag;
+  else if (residual <= 3) niceStep = 2 * mag;
+  else if (residual <= 7) niceStep = 5 * mag;
+  else niceStep = 10 * mag;
+
+  const niceMin = Math.floor(rawMin / niceStep) * niceStep;
+  const niceMax = Math.ceil(rawMax / niceStep) * niceStep;
+
+  const ticks: number[] = [];
+  for (let v = niceMin; v <= niceMax + niceStep * 0.01; v += niceStep) {
+    ticks.push(v);
+  }
+  return ticks;
+}
+
+/**
+ * Measure the exact pixel width needed for the Y-axis so that no label
+ * is ever truncated, while adding no unnecessary padding.
+ *
+ * Uses Canvas.measureText() for pixel-accurate measurement, and
+ * generates representative tick values to cover all labels the chart
+ * will actually render (not just min/max).
+ *
+ * Returns a value suitable for both yAxis `width` and margin `left`.
+ */
+function measureYAxisWidth(
+  yValues: number[],
+  tickCount: number,
   format?: 'pct' | 'int' | 'currency'
 ): number {
-  if (yValues.length === 0) return 20;
-  const min = Math.min(...yValues);
-  const max = Math.max(...yValues);
-  const samples = [min, max];
+  const ticks = generateRepresentativeTicks(yValues, tickCount);
+  const ctx = getTextMeasureCtx();
+  ctx.font = TICK_FONT;
 
-  let maxLen = 0;
-  for (const v of samples) {
-    let label: string;
-    if (format === 'pct') {
-      label = `${v.toFixed(1)}%`;
-    } else if (format === 'currency') {
-      label = v.toFixed(1);
-    } else if (format === 'int') {
-      label = Math.round(v).toLocaleString();
-    } else {
-      label = v.toFixed(1);
-    }
-    if (label.length > maxLen) maxLen = label.length;
+  let maxPx = 0;
+  for (const v of ticks) {
+    const label = formatYLabel(v, format);
+    const w = ctx.measureText(label).width;
+    if (w > maxPx) maxPx = w;
   }
-  // ~3.5px per char at fontSize 10, plus tick/gap overhead
-  return Math.max(20, maxLen * 3.5 + 6);
+
+  // Total = measured label width + MUI internal overhead + 2px safety
+  return Math.ceil(maxPx) + Y_AXIS_OVERHEAD + 2;
 }
 
 /** Compute a suitable Y-axis tick count based on the value range. */
@@ -289,14 +345,15 @@ export function TaskMetricsTab({
     return map;
   }, [data, availableMetrics]);
 
-  // Compute per-chart Y-axis label width so each chart fits its own labels
-  // without wasting space on charts with shorter labels.
+  // Compute per-chart Y-axis width using pixel-accurate text measurement.
+  // Each chart gets exactly the width it needs — no more, no less.
   const perChartLeftMargin = useMemo(() => {
     const map: Record<string, number> = {};
     for (const m of availableMetrics) {
       const cd = chartDataMap[m.key];
       if (!cd || cd.y.length < 2) continue;
-      map[m.key] = estimateYAxisWidth(cd.y, m.format);
+      const tickCount = computeYTickCount(cd.y);
+      map[m.key] = measureYAxisWidth(cd.y, tickCount, m.format);
     }
     return map;
   }, [availableMetrics, chartDataMap]);
@@ -354,7 +411,7 @@ export function TaskMetricsTab({
           const rangeMs = cd.x[cd.x.length - 1].getTime() - cd.x[0].getTime();
           const yTickCount = computeYTickCount(cd.y);
           const xTickCount = computeXTickCount(cd.x.length);
-          const leftMargin = perChartLeftMargin[m.key] ?? 20;
+          const leftMargin = perChartLeftMargin[m.key] ?? 45;
           return (
             <Grid key={m.key} size={{ xs: 12, md: 6 }}>
               <Paper variant="outlined" sx={{ p: 1.5 }}>
@@ -397,14 +454,8 @@ export function TaskMetricsTab({
                     {
                       width: leftMargin,
                       tickNumber: yTickCount,
-                      valueFormatter:
-                        m.format === 'pct'
-                          ? (v: number | null) =>
-                              v != null ? `${v.toFixed(1)}%` : ''
-                          : m.format === 'currency'
-                            ? (v: number | null) =>
-                                v != null ? v.toFixed(1) : ''
-                            : undefined,
+                      valueFormatter: (v: number | null) =>
+                        v != null ? formatYLabel(v, m.format) : '',
                     },
                   ]}
                   series={[

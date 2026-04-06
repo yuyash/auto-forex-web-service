@@ -354,7 +354,10 @@
       "retracement": "Retracement",
       "noTrades": "No trades recorded",
       "description": "Description",
-      "cycleIdFilter": "Filter by Cycle ID"
+      "cycleIdFilter": "Filter by Cycle ID",
+      "stopLossPrice": "Stop Loss",
+      "isRebuild": "Rebuild",
+      "rebuild": "Rebuild"
     },
     "orders": {
       "title": "Orders",
@@ -392,6 +395,9 @@
       "adversePips": "Adverse Pips",
       "closeReason": "Close Reason",
       "closeReasonNormal": "Normal",
+      "stopLossPrice": "Stop Loss",
+      "isRebuild": "Rebuild",
+      "rebuild": "Rebuild",
       "realizedPnl": "Realized PnL",
       "unrealizedPnl": "Unrealized PnL",
       "totalRealizedPnl": "Total Realized PnL",

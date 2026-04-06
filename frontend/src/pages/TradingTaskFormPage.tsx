@@ -52,10 +52,12 @@ export default function TradingTaskFormPage() {
               taskId={taskId}
               taskName={task.name}
               taskDescription={task.description}
+              accountId={Number(task.account_id)}
               accountName={task.account_name}
               debugOptions={task.debug_options}
               initialData={{
                 config_id: task.config_id,
+                hedging_enabled: task.hedging_enabled,
               }}
             />
           ) : (

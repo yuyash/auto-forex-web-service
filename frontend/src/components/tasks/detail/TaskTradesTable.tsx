@@ -130,6 +130,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
         const isProtection =
           row.execution_method === 'shrink' ||
           row.execution_method === 'margin_protection' ||
+          row.execution_method === 'stop_loss' ||
           row.execution_method === 'volatility_lock' ||
           (row.description?.startsWith('[PROTECTION]') ?? false);
         return (
@@ -209,11 +210,47 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       minWidth: 200,
       render: (row: TaskTrade) => row.description || '-',
     },
+    {
+      id: 'stop_loss_price',
+      label: t('tables.trades.stopLossPrice'),
+      width: 130,
+      minWidth: 90,
+      align: 'right',
+      render: (row: TaskTrade) =>
+        row.stop_loss_price
+          ? `¥${parseFloat(row.stop_loss_price).toFixed(3)}`
+          : '-',
+    },
+    {
+      id: 'is_rebuild',
+      label: t('tables.trades.isRebuild'),
+      width: 80,
+      minWidth: 60,
+      render: (row: TaskTrade) =>
+        row.is_rebuild ? (
+          <Chip
+            label={t('tables.trades.rebuild')}
+            size="small"
+            color="info"
+            variant="outlined"
+            sx={{
+              height: 22,
+              '& .MuiChip-label': { px: 0.75, fontSize: '0.75rem' },
+            }}
+          />
+        ) : (
+          '-'
+        ),
+    },
   ];
 
   // Column config
   const [colConfigOpen, setColConfigOpen] = useState(false);
-  const defaultColItems = columnsToDefaults(columns);
+  const defaultColItems = columnsToDefaults(columns).map((c) =>
+    ['stop_loss_price', 'is_rebuild'].includes(c.id)
+      ? { ...c, visible: false }
+      : c
+  );
   const {
     columns: colConfig,
     updateColumns,
@@ -237,6 +274,11 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       retracement_count: (r) =>
         r.retracement_count != null ? String(r.retracement_count) : '-',
       description: (r) => r.description || '-',
+      stop_loss_price: (r) =>
+        r.stop_loss_price
+          ? `¥${parseFloat(r.stop_loss_price).toFixed(3)}`
+          : '-',
+      is_rebuild: (r) => (r.is_rebuild ? 'Yes' : '-'),
     };
     const { headers, formatRow } = buildCopyHandler(
       visibleColumns,

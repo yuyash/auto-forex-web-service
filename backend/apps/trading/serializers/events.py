@@ -106,7 +106,20 @@ class TradeSerializer(serializers.Serializer):
     timestamp = serializers.DateTimeField()
     position_id = serializers.UUIDField(required=False, allow_null=True)
     cycle_id = serializers.UUIDField(required=False, allow_null=True)
+    is_rebuild = serializers.BooleanField(required=False, default=False)
+    stop_loss_price = serializers.SerializerMethodField()
     updated_at = serializers.DateTimeField(required=False, allow_null=True)
+
+    def get_stop_loss_price(self, obj: object) -> str | None:
+        """Return stop_loss_price from the related position, if any."""
+        position = getattr(obj, "position", None)
+        if position is not None:
+            sl = getattr(position, "stop_loss_price", None)
+            if sl is not None:
+                return str(sl)
+        if isinstance(obj, dict):
+            return cast(dict[str, Any], obj).get("stop_loss_price")
+        return None
 
     def get_execution_method_display(self, obj: object) -> str:
         """Return the human-readable label for the execution method."""
@@ -144,6 +157,10 @@ class PositionSerializer(serializers.Serializer):
     adverse_pips = serializers.DecimalField(
         max_digits=12, decimal_places=4, required=False, allow_null=True
     )
+    stop_loss_price = serializers.DecimalField(
+        max_digits=20, decimal_places=10, required=False, allow_null=True
+    )
+    is_rebuild = serializers.BooleanField(required=False, default=False)
     close_reason = serializers.SerializerMethodField()
     trade_ids = serializers.SerializerMethodField()
     updated_at = serializers.DateTimeField(required=False, allow_null=True)
@@ -153,6 +170,7 @@ class PositionSerializer(serializers.Serializer):
             "volatility_lock",
             "margin_protection",
             "shrink",
+            "stop_loss",
         }
     )
 

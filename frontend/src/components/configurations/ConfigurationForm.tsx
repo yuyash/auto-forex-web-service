@@ -321,6 +321,17 @@ const ConfigurationForm = ({
   const handleParameterChange = (key: string, value: unknown) => {
     hasUserEditedParamsRef.current = true;
     const newParameters: StrategyConfig = { ...parameters, [key]: value };
+
+    // Mutual exclusion for boolean fields with exclusiveWith
+    const fieldSchema = strategySchema?.properties?.[key];
+    if (
+      fieldSchema?.exclusiveWith &&
+      fieldSchema.type === 'boolean' &&
+      value === true
+    ) {
+      newParameters[fieldSchema.exclusiveWith] = false;
+    }
+
     setParameters(newParameters);
     setValue('parameters', newParameters);
   };

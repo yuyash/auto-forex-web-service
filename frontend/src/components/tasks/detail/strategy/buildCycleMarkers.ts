@@ -45,6 +45,7 @@ const PROTECTION_METHODS = new Set([
   'volatility_lock',
   'margin_protection',
   'shrink',
+  'stop_loss',
 ]);
 
 function isProtectionTrade(trade: CycleTrade): boolean {
@@ -81,6 +82,7 @@ export function buildCycleMarkers(
     const isOpen = trade.execution_method === 'open_position';
     const isBuy = trade.direction === 'buy';
     const isProtection = isProtectionTrade(trade);
+    const isRebuild = trade.is_rebuild ?? false;
 
     const baseColor = isProtection
       ? '#e91e63'
@@ -102,12 +104,13 @@ export function buildCycleMarkers(
         tradeId: trade.id,
       });
     } else {
+      const rebuildPrefix = isRebuild ? '🔄 ' : '';
       markers.push({
         time: snapped as Time,
         position: isOpen ? 'belowBar' : 'aboveBar',
         color,
         shape: isOpen ? (isBuy ? 'arrowUp' : 'arrowDown') : 'circle',
-        text: `${isOpen ? 'Open' : 'Close'} ${isBuy ? 'B' : 'S'} ${trade.units}`,
+        text: `${rebuildPrefix}${isOpen ? 'Open' : 'Close'} ${isBuy ? 'B' : 'S'} ${trade.units}`,
         tradeId: trade.id,
       });
     }

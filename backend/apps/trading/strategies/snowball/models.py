@@ -78,6 +78,7 @@ class SnowballStrategyConfig:
     lock_enabled: bool
     n_th: Decimal
     cooldown_sec: int
+    stop_loss_enabled: bool
 
     pip_size: Decimal
 
@@ -114,6 +115,7 @@ class SnowballStrategyConfig:
             lock_enabled=bool(raw.get("lock_enabled", True)),
             n_th=_parse_decimal(raw.get("n_th", "85"), "85"),
             cooldown_sec=_parse_int(raw.get("cooldown_sec", 300), 300),
+            stop_loss_enabled=bool(raw.get("stop_loss_enabled", False)),
             pip_size=_parse_decimal(raw.get("pip_size", "0.01"), "0.01"),
         )
 
@@ -143,11 +145,14 @@ class SnowballStrategyConfig:
             "lock_enabled": self.lock_enabled,
             "n_th": str(self.n_th),
             "cooldown_sec": self.cooldown_sec,
+            "stop_loss_enabled": self.stop_loss_enabled,
             "pip_size": str(self.pip_size),
         }
 
     def validate(self) -> None:
         """Raise ``ValueError`` on invalid combinations."""
+        if self.stop_loss_enabled and self.shrink_enabled:
+            raise ValueError("stop_loss_enabled and shrink_enabled cannot both be true")
         if self.shrink_enabled and self.lock_enabled and not self.m_th < self.n_th < Decimal("100"):
             raise ValueError("Must satisfy m_th < n_th < 100")
         if self.shrink_enabled and not Decimal("0") < self.m_th < Decimal("100"):
@@ -200,6 +205,8 @@ class Entry:
     root_entry_id: int | None = None
     parent_entry_id: int | None = None
     position_id: str | None = None
+    stop_loss_price: Decimal | None = None
+    is_rebuild: bool = False
 
     # Validation fields
     expected_interval_pips: Decimal | None = None
@@ -331,6 +338,8 @@ class Entry:
             strategy_event_type=f"snowball_{self.role}",
             planned_exit_price=self.close_price,
             planned_exit_price_formula=planned_exit_price_formula,
+            stop_loss_price=self.stop_loss_price,
+            is_rebuild=self.is_rebuild,
             description=description,
         )
         self.apply_metadata_to(event)
@@ -414,6 +423,10 @@ class Entry:
                 str(self.expected_tp_pips) if self.expected_tp_pips is not None else None
             ),
             "validation_status": self.validation_status,
+            "stop_loss_price": (
+                str(self.stop_loss_price) if self.stop_loss_price is not None else None
+            ),
+            "is_rebuild": self.is_rebuild,
         }
 
     @staticmethod
@@ -474,11 +487,84 @@ class Entry:
                 else None
             ),
             validation_status=str(d.get("validation_status", "")),
+            stop_loss_price=(
+                _parse_decimal(d["stop_loss_price"], "0")
+                if d.get("stop_loss_price") not in (None, "")
+                else None
+            ),
+            is_rebuild=bool(d.get("is_rebuild", False)),
         )
 
 
 # Backward-compat alias
 BasketEntry = Entry
+
+
+# ---------------------------------------------------------------------------
+# StopLossClosedEntry — tracks positions closed by stop-loss for rebuild
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class StopLossClosedEntry:
+    """Snapshot of a position closed by stop-loss, awaiting rebuild.
+
+    When the market price returns to ``entry_price``, the position is
+    re-opened with the same parameters.
+    """
+
+    entry_price: Decimal
+    close_price: Decimal
+    units: int
+    direction: Direction
+    role: Literal["initial", "counter", "hedge", "layer_initial"]
+    layer_number: int
+    retracement_count: int
+    step: int
+    root_entry_id: int | None = None
+    parent_entry_id: int | None = None
+    cycle_id: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "entry_price": str(self.entry_price),
+            "close_price": str(self.close_price),
+            "units": self.units,
+            "direction": self.direction.value,
+            "role": self.role,
+            "layer_number": self.layer_number,
+            "retracement_count": self.retracement_count,
+            "step": self.step,
+            "root_entry_id": self.root_entry_id,
+            "parent_entry_id": self.parent_entry_id,
+            "cycle_id": self.cycle_id,
+        }
+
+    @staticmethod
+    def from_dict(d: dict[str, Any]) -> "StopLossClosedEntry":
+        raw_dir = d.get("direction", "long")
+        direction = (
+            raw_dir if isinstance(raw_dir, Direction) else Direction(str(raw_dir).strip().lower())
+        )
+        return StopLossClosedEntry(
+            entry_price=_parse_decimal(d.get("entry_price", "0"), "0"),
+            close_price=_parse_decimal(d.get("close_price", "0"), "0"),
+            units=_parse_int(d.get("units", 0), 0),
+            direction=direction,
+            role=d.get("role", "counter"),
+            layer_number=_parse_int(d.get("layer_number", 1), 1),
+            retracement_count=_parse_int(d.get("retracement_count", 0), 0),
+            step=_parse_int(d.get("step", 1), 1),
+            root_entry_id=(
+                _parse_int(d["root_entry_id"], 0) if d.get("root_entry_id") is not None else None
+            ),
+            parent_entry_id=(
+                _parse_int(d["parent_entry_id"], 0)
+                if d.get("parent_entry_id") is not None
+                else None
+            ),
+            cycle_id=_parse_int(d.get("cycle_id", 0), 0),
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1112,6 +1198,9 @@ class SnowballStrategyState:
 
     metrics: dict[str, str | int | float] = field(default_factory=dict)
 
+    # Stop-loss: positions closed by SL awaiting rebuild when price returns
+    stop_loss_pending_rebuilds: list[StopLossClosedEntry] = field(default_factory=list)
+
     def allocate_id(self) -> int:
         eid = self.next_entry_id
         self.next_entry_id += 1
@@ -1147,6 +1236,7 @@ class SnowballStrategyState:
             "account_balance": str(self.account_balance),
             "account_nav": str(self.account_nav),
             "metrics": dict(self.metrics),
+            "stop_loss_pending_rebuilds": [r.to_dict() for r in self.stop_loss_pending_rebuilds],
         }
 
     @staticmethod
@@ -1173,6 +1263,10 @@ class SnowballStrategyState:
             account_balance=_parse_decimal(data.get("account_balance", "0"), "0"),
             account_nav=_parse_decimal(data.get("account_nav", "0"), "0"),
             metrics=dict(data.get("metrics", {})) if isinstance(data.get("metrics"), dict) else {},
+            stop_loss_pending_rebuilds=[
+                StopLossClosedEntry.from_dict(r)
+                for r in (data.get("stop_loss_pending_rebuilds") or [])
+            ],
         )
 
     @classmethod

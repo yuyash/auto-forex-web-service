@@ -39,6 +39,7 @@ from apps.trading.strategies.registry import register_strategy
 from apps.trading.strategies.snowball.calculators import (
     counter_interval_pips,
     counter_tp_pips,
+    stop_loss_price,
 )
 from apps.trading.strategies.snowball.enums import ProtectionLevel
 from apps.trading.strategies.snowball.models import (
@@ -47,6 +48,7 @@ from apps.trading.strategies.snowball.models import (
     SnowballCycle,
     SnowballStrategyConfig,
     SnowballStrategyState,
+    StopLossClosedEntry,
 )
 from apps.trading.utils import quote_to_account_rate
 
@@ -570,6 +572,13 @@ class SnowballStrategy(Strategy):
         )
         slot.fill(entry)
 
+        # Assign stop-loss to the previous entry in this layer
+        if cfg.stop_loss_enabled:
+            prev_slot_index = slot.index - 1
+            prev_slot = layer.slot_at(prev_slot_index)
+            if prev_slot is not None and prev_slot.entry is not None:
+                self._assign_stop_loss(prev_slot.entry, entry, interval)
+
         # Update close prices for non-weighted_avg modes
         if cfg.counter_tp_mode != "weighted_avg":
             for s in layer.slots:
@@ -658,6 +667,13 @@ class SnowballStrategy(Strategy):
         )
         # Place in R0 of the new layer
         layer.slot_at(0).fill(layer_entry)
+
+        # Assign stop-loss to the highest entry in the previous layer
+        if cfg.stop_loss_enabled and highest is not None and highest.entry is not None:
+            interval = layer_entry.actual_interval_pips or Decimal("0")
+            if interval > 0:
+                self._assign_stop_loss(highest.entry, layer_entry, interval)
+
         return [evt]
 
     # ------------------------------------------------------------------
@@ -915,6 +931,228 @@ class SnowballStrategy(Strategy):
         candidates.sort(key=lambda c: c[2], reverse=True)
         return candidates[0][0], candidates[0][1]
 
+    # ------------------------------------------------------------------
+    # Stop-loss protection
+    # ------------------------------------------------------------------
+
+    def _assign_stop_loss(
+        self,
+        prev_entry: Entry,
+        new_entry: Entry,
+        interval_pips: Decimal,
+    ) -> None:
+        """Assign a stop-loss price to *prev_entry* when *new_entry* opens.
+
+        Uses the formula:
+        - tp_pips = |prev_entry.close_price - prev_entry.entry_price| / pip_size
+        - if tp_pips < interval_pips: SL = new_entry.entry_price
+        - else: SL = new_entry.entry_price - interval_pips * pip_size  (LONG)
+                 SL = new_entry.entry_price + interval_pips * pip_size  (SHORT)
+        """
+        tp_pips = abs(prev_entry.close_price - prev_entry.entry_price) / self.pip_size
+        if prev_entry.is_long:
+            sl = stop_loss_price(tp_pips, new_entry.entry_price, interval_pips, self.pip_size)
+        else:
+            # For SHORT, mirror: SL is above entry price
+            if tp_pips < interval_pips:
+                sl = new_entry.entry_price
+            else:
+                sl = new_entry.entry_price + interval_pips * self.pip_size
+        prev_entry.stop_loss_price = sl
+        logger.debug(
+            "SL assigned: entry_id=%d L%d/R%d, SL=%.5f (tp_pips=%.1f, interval=%.1f)",
+            prev_entry.entry_id,
+            prev_entry.layer_number,
+            prev_entry.retracement_count,
+            sl,
+            tp_pips,
+            interval_pips,
+        )
+
+    def _process_stop_loss_closes(
+        self,
+        ss: SnowballStrategyState,
+        tick: Tick,
+        cycle: SnowballCycle,
+    ) -> list[StrategyEvent]:
+        """Close entries whose stop-loss price has been hit."""
+        if not self.config.stop_loss_enabled:
+            return []
+
+        events: list[StrategyEvent] = []
+        entries_to_close: list[tuple[Entry, Layer]] = []
+
+        for layer in cycle.grid.layers:
+            for slot in layer.slots:
+                entry = slot.entry
+                if entry is None or entry.stop_loss_price is None:
+                    continue
+                if entry.is_hedge:
+                    continue
+
+                hit = False
+                if entry.is_long and tick.bid <= entry.stop_loss_price:
+                    hit = True
+                elif entry.is_short and tick.ask >= entry.stop_loss_price:
+                    hit = True
+
+                if hit:
+                    entries_to_close.append((entry, layer))
+
+        for entry, layer in entries_to_close:
+            exit_price = entry.exit_price(tick)
+            pips_lost = abs(exit_price - entry.entry_price) / self.pip_size
+
+            logger.info(
+                "Stop-loss hit (%s): L%d/R%d, entry=%.5f, SL=%.5f, exit=%.5f, -%.1f pips",
+                entry.direction.value.upper(),
+                entry.layer_number,
+                entry.retracement_count,
+                entry.entry_price,
+                entry.stop_loss_price,
+                exit_price,
+                pips_lost,
+            )
+
+            # Record for rebuild
+            ss.stop_loss_pending_rebuilds.append(
+                StopLossClosedEntry(
+                    entry_price=entry.entry_price,
+                    close_price=entry.close_price,
+                    units=entry.units,
+                    direction=entry.direction,
+                    role=entry.role,
+                    layer_number=entry.layer_number,
+                    retracement_count=entry.retracement_count,
+                    step=entry.step,
+                    root_entry_id=entry.root_entry_id,
+                    parent_entry_id=entry.parent_entry_id,
+                    cycle_id=cycle.cycle_id,
+                )
+            )
+
+            # Close the slot (not refillable — rebuild is handled separately)
+            layer.close_slot(
+                entry.retracement_count,
+                refillable=False,
+            )
+
+            events.append(
+                self._close_entry(
+                    tick,
+                    entry,
+                    description=(
+                        f"[PROTECTION] Stop-loss ({entry.direction.value.upper()}) | "
+                        f"L{entry.layer_number}/R{entry.retracement_count}, "
+                        f"entry={entry.entry_price:.5f}, SL={entry.stop_loss_price:.5f}, "
+                        f"exit={exit_price:.5f}, -{pips_lost:.1f} pips"
+                    ),
+                    close_reason="stop_loss",
+                    validation_status="warn",
+                )
+            )
+
+            # If cycle is now empty, mark completed
+            if cycle.grid.is_empty():
+                cycle.completed = True
+
+        return events
+
+    def _process_stop_loss_rebuilds(
+        self,
+        ss: SnowballStrategyState,
+        tick: Tick,
+        cycle: SnowballCycle,
+    ) -> list[StrategyEvent]:
+        """Rebuild positions that were closed by stop-loss when price returns."""
+        if not self.config.stop_loss_enabled:
+            return []
+
+        events: list[StrategyEvent] = []
+        rebuilt: list[StopLossClosedEntry] = []
+
+        for pending in ss.stop_loss_pending_rebuilds:
+            if pending.cycle_id != cycle.cycle_id:
+                continue
+
+            # Check if price has returned to the original entry price
+            hit = False
+            if pending.direction == Direction.LONG and tick.ask <= pending.entry_price:
+                hit = True
+            elif pending.direction == Direction.SHORT and tick.bid >= pending.entry_price:
+                hit = True
+
+            if not hit:
+                continue
+
+            # Find the layer and slot for this position
+            layer = cycle.grid.find_layer(pending.layer_number)
+            if layer is None:
+                # Layer was removed (e.g., all positions closed) — skip rebuild
+                rebuilt.append(pending)
+                continue
+
+            slot = layer.slot_at(pending.retracement_count)
+            if slot is None:
+                rebuilt.append(pending)
+                continue
+
+            # Only rebuild if the slot is empty (not occupied by another entry)
+            if slot.is_occupied:
+                # Slot already has a position (e.g., refilled by normal logic)
+                rebuilt.append(pending)
+                continue
+
+            # Rebuild the position with the same parameters
+            entry = Entry.open(
+                state=ss,
+                tick=tick,
+                direction=pending.direction,
+                units=pending.units,
+                step=pending.step,
+                close_price=pending.close_price,
+                role=pending.role,
+                layer_number=pending.layer_number,
+                retracement_count=pending.retracement_count,
+                root_entry_id=pending.root_entry_id,
+                parent_entry_id=pending.parent_entry_id,
+            )
+            # Override entry_price to the original price (rebuild at same level)
+            entry.entry_price = pending.entry_price
+            entry.validation_status = "pass"
+            entry.is_rebuild = True
+
+            slot.fill(entry)
+            # Reset ever_closed so the slot is properly occupied
+            slot.ever_closed = False
+
+            logger.info(
+                "Stop-loss rebuild (%s): L%d/R%d, entry=%.5f, TP=%.5f, units=%d",
+                pending.direction.value.upper(),
+                pending.layer_number,
+                pending.retracement_count,
+                pending.entry_price,
+                pending.close_price,
+                pending.units,
+            )
+
+            evt = entry.to_open_event(
+                timestamp=tick.timestamp,
+                description=(
+                    f"Stop-loss rebuild ({pending.direction.value.upper()}) | "
+                    f"L{pending.layer_number}/R{pending.retracement_count}, "
+                    f"units={pending.units}, TP={pending.close_price:.5f}"
+                ),
+            )
+            events.append(evt)
+            rebuilt.append(pending)
+
+        # Remove rebuilt entries from pending list
+        for r in rebuilt:
+            ss.stop_loss_pending_rebuilds.remove(r)
+
+        return events
+
     def _recalculate_counter_tps(self, cycle: SnowballCycle) -> None:
         """Recalculate close_price for all counter entries in a cycle."""
         for layer in cycle.grid.layers:
@@ -1041,6 +1279,15 @@ class SnowballStrategy(Strategy):
 
             counter_close_events = self._process_cycle_counter_closes(ss, tick, cycle)
             events.extend(counter_close_events)
+
+            # --- Stop-loss closes ---
+            sl_close_events = self._process_stop_loss_closes(ss, tick, cycle)
+            events.extend(sl_close_events)
+
+            # --- Stop-loss rebuilds ---
+            sl_rebuild_events = self._process_stop_loss_rebuilds(ss, tick, cycle)
+            events.extend(sl_rebuild_events)
+
             if not counter_close_events:
                 events.extend(self._process_cycle_counter_adds(ss, tick, cycle))
 

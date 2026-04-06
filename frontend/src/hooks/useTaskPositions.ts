@@ -37,6 +37,8 @@ export interface TaskPosition {
   planned_exit_price?: string | null;
   planned_exit_price_formula?: string | null;
   adverse_pips?: string | null;
+  stop_loss_price?: string | null;
+  is_rebuild?: boolean;
   unrealized_pnl?: string | null;
   is_open: boolean;
   layer_index?: number | null;

@@ -337,6 +337,18 @@ const StrategyConfigForm = ({
       ...config,
       [fieldName]: value,
     };
+
+    // Mutual exclusion: when a boolean field with exclusiveWith is set to true,
+    // automatically set the other field to false.
+    const fieldSchema = configSchema.properties?.[fieldName];
+    if (
+      fieldSchema?.exclusiveWith &&
+      fieldSchema.type === 'boolean' &&
+      value === true
+    ) {
+      updatedConfig[fieldSchema.exclusiveWith] = false;
+    }
+
     onChange(updatedConfig);
   };
 

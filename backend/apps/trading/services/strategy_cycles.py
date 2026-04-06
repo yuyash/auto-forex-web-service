@@ -53,6 +53,7 @@ class StrategyCyclesService:
                 "position_id",
                 "updated_at",
                 "margin_ratio",
+                "is_rebuild",
             )
         )
 
@@ -199,7 +200,7 @@ def _build_cycle(
     else:
         status = "completed"
 
-    _PROTECTION_METHODS = {"volatility_lock", "margin_protection", "shrink"}
+    _PROTECTION_METHODS = {"volatility_lock", "margin_protection", "shrink", "stop_loss"}
     protection_trades = [
         t
         for t in trades
@@ -270,6 +271,7 @@ def _serialize_trade(
         "position_id": str(t["position_id"]) if t.get("position_id") else None,
         "volatility": volatility,
         "margin_ratio": margin_ratio,
+        "is_rebuild": bool(t.get("is_rebuild", False)),
     }
 
 

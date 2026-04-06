@@ -126,6 +126,10 @@ class Trade(models.Model):
             "Stored as a fraction (e.g. 0.791 = 79.1%)."
         ),
     )
+    is_rebuild = models.BooleanField(
+        default=False,
+        help_text="Whether this trade is for a position rebuilt after a stop-loss close.",
+    )
     created_at = models.DateTimeField(
         auto_now_add=True,
         help_text="Timestamp when this record was created",

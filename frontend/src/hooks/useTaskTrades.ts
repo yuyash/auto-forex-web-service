@@ -29,6 +29,8 @@ export interface TaskTrade {
   description?: string;
   commission?: string;
   cycle_id?: string | null;
+  is_rebuild?: boolean;
+  stop_loss_price?: string | null;
   updated_at?: string | null;
 }
 
