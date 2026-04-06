@@ -4,7 +4,7 @@
  * Renders a grid of line charts, one per metric key, using @mui/x-charts.
  */
 
-import { useMemo } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Grid,
@@ -12,11 +12,8 @@ import {
   Typography,
   CircularProgress,
   Alert,
-  IconButton,
-  Tooltip,
 } from '@mui/material';
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { LineChart } from '@mui/x-charts/LineChart';
 import { useTranslation } from 'react-i18next';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
@@ -218,7 +215,8 @@ function computeXTickCount(dataLen: number): number {
   return 10;
 }
 
-/** Special key for the OHLC candlestick chart in the ordering system */
+/** Fixed height for all chart cards to ensure consistent grid layout */
+const CHART_CARD_HEIGHT = 260;
 const OHLC_KEY = '__ohlc__';
 
 export function TaskMetricsTab({
@@ -255,14 +253,15 @@ export function TaskMetricsTab({
     return CHART_METRICS.filter((m) => keysWithData.has(m.key));
   }, [data]);
 
-  // Build the list of all chart keys (metrics + OHLC) for ordering
+  // Build the list of all chart keys (OHLC first, then metrics) for ordering
   const allChartKeys = useMemo(() => {
-    const keys = availableMetrics.map((m) => m.key);
+    const keys: string[] = [];
     if (hasOhlc) keys.push(OHLC_KEY);
+    for (const m of availableMetrics) keys.push(m.key);
     return keys;
   }, [availableMetrics, hasOhlc]);
 
-  const { orderedKeys, moveUp, moveDown } = useMetricsOrder(allChartKeys);
+  const { orderedKeys, moveItem } = useMetricsOrder(allChartKeys);
 
   // Map metric key → metric config for quick lookup
   const metricsMap = useMemo(() => {
@@ -315,6 +314,39 @@ export function TaskMetricsTab({
   // and labels are never clipped regardless of data values.
   const leftMargin = Y_AXIS_WIDTH;
 
+  // --- Drag-and-drop reorder state ---
+  const dragKeyRef = useRef<string | null>(null);
+  const [dragKey, setDragKey] = useState<string | null>(null);
+
+  const handleDragStart = useCallback((e: React.DragEvent, key: string) => {
+    dragKeyRef.current = key;
+    setDragKey(key);
+    e.dataTransfer.effectAllowed = 'move';
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent, targetKey: string) => {
+      e.preventDefault();
+      const sourceKey = dragKeyRef.current;
+      if (sourceKey && sourceKey !== targetKey) {
+        moveItem(sourceKey, targetKey);
+      }
+      dragKeyRef.current = null;
+      setDragKey(null);
+    },
+    [moveItem]
+  );
+
+  const handleDragEnd = useCallback(() => {
+    dragKeyRef.current = null;
+    setDragKey(null);
+  }, []);
+
   if (isLoading && data.length === 0) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
@@ -361,53 +393,29 @@ export function TaskMetricsTab({
         isLoading={isLoading}
       />
       <Grid container spacing={2}>
-        {orderedKeys.map((key, idx) => {
+        {orderedKeys.map((key) => {
           // OHLC chart
           if (key === OHLC_KEY) {
             return (
-              <Grid key={OHLC_KEY} size={{ xs: 12, md: 6 }}>
-                <Box sx={{ position: 'relative' }}>
-                  <MetricsOhlcChart
-                    instrument={instrument!}
-                    startTime={startTime!}
-                    endTime={endTime ?? undefined}
-                    height={200}
-                  />
-                  <Box
-                    sx={{
-                      position: 'absolute',
-                      top: 4,
-                      right: 4,
-                      display: 'flex',
-                      gap: 0,
-                    }}
-                  >
-                    <Tooltip title={t('tabs.moveUp')}>
-                      <span>
-                        <IconButton
-                          size="small"
-                          onClick={() => moveUp(OHLC_KEY)}
-                          disabled={idx === 0}
-                          sx={{ p: 0.25 }}
-                        >
-                          <ArrowUpwardIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                    <Tooltip title={t('tabs.moveDown')}>
-                      <span>
-                        <IconButton
-                          size="small"
-                          onClick={() => moveDown(OHLC_KEY)}
-                          disabled={idx === orderedKeys.length - 1}
-                          sx={{ p: 0.25 }}
-                        >
-                          <ArrowDownwardIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                  </Box>
-                </Box>
+              <Grid
+                key={OHLC_KEY}
+                size={{ xs: 12, md: 6 }}
+                draggable
+                onDragStart={(e) => handleDragStart(e, OHLC_KEY)}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, OHLC_KEY)}
+                onDragEnd={handleDragEnd}
+                sx={{
+                  opacity: dragKey === OHLC_KEY ? 0.4 : 1,
+                  cursor: 'grab',
+                }}
+              >
+                <MetricsOhlcChart
+                  instrument={instrument!}
+                  startTime={startTime!}
+                  endTime={endTime ?? undefined}
+                  cardHeight={CHART_CARD_HEIGHT}
+                />
               </Grid>
             );
           }
@@ -422,8 +430,23 @@ export function TaskMetricsTab({
           const yTickCount = computeYTickCount(cd.y);
           const xTickCount = computeXTickCount(cd.x.length);
           return (
-            <Grid key={m.key} size={{ xs: 12, md: 6 }}>
-              <Paper variant="outlined" sx={{ p: 1.5, position: 'relative' }}>
+            <Grid
+              key={m.key}
+              size={{ xs: 12, md: 6 }}
+              draggable
+              onDragStart={(e) => handleDragStart(e, m.key)}
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, m.key)}
+              onDragEnd={handleDragEnd}
+              sx={{
+                opacity: dragKey === m.key ? 0.4 : 1,
+                cursor: 'grab',
+              }}
+            >
+              <Paper
+                variant="outlined"
+                sx={{ p: 1.5, height: CHART_CARD_HEIGHT, overflow: 'hidden' }}
+              >
                 <Box
                   sx={{
                     display: 'flex',
@@ -432,40 +455,29 @@ export function TaskMetricsTab({
                     mb: 0.5,
                   }}
                 >
-                  <Typography variant="subtitle2">
-                    {t(`metrics.${m.key}`, {
-                      defaultValue: m.key.replace(/_/g, ' '),
-                    })}
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Tooltip title={t('tabs.moveUp')}>
-                      <span>
-                        <IconButton
-                          size="small"
-                          onClick={() => moveUp(m.key)}
-                          disabled={idx === 0}
-                          sx={{ p: 0.25 }}
-                        >
-                          <ArrowUpwardIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                    <Tooltip title={t('tabs.moveDown')}>
-                      <span>
-                        <IconButton
-                          size="small"
-                          onClick={() => moveDown(m.key)}
-                          disabled={idx === orderedKeys.length - 1}
-                          sx={{ p: 0.25 }}
-                        >
-                          <ArrowDownwardIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                    <Typography variant="body2" color="text.secondary">
-                      {formatValue(lastVal, m.format)}
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 0.5,
+                    }}
+                  >
+                    <DragIndicatorIcon
+                      sx={{
+                        fontSize: 16,
+                        color: 'text.disabled',
+                        cursor: 'grab',
+                      }}
+                    />
+                    <Typography variant="subtitle2">
+                      {t(`metrics.${m.key}`, {
+                        defaultValue: m.key.replace(/_/g, ' '),
+                      })}
                     </Typography>
                   </Box>
+                  <Typography variant="body2" color="text.secondary">
+                    {formatValue(lastVal, m.format)}
+                  </Typography>
                 </Box>
                 <LineChart
                   xAxis={[

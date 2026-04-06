@@ -17,6 +17,7 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import ZoomOutMapIcon from '@mui/icons-material/ZoomOutMap';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import {
@@ -41,7 +42,8 @@ interface MetricsOhlcChartProps {
   instrument: string;
   startTime: string;
   endTime?: string;
-  height?: number;
+  /** Fixed height for the outer Paper card (should match metric chart cards) */
+  cardHeight?: number;
 }
 
 const GRANULARITY_OPTIONS = ['M1', 'M5', 'M15', 'H1', 'H4', 'D'] as const;
@@ -62,15 +64,26 @@ export function MetricsOhlcChart({
   instrument,
   startTime,
   endTime,
-  height = 300,
+  cardHeight,
 }: MetricsOhlcChartProps) {
   const theme = useTheme();
   const { t } = useTranslation('common');
   const isDark = theme.palette.mode === 'dark';
   const containerRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
+  const [chartHeight, setChartHeight] = useState(200);
+
+  // Compute chart canvas height to fill the card minus header and padding
+  useEffect(() => {
+    if (!cardHeight || !headerRef.current) return;
+    const headerH = headerRef.current.offsetHeight;
+    // Paper padding: p=1.5 = 12px top + 12px bottom = 24px, mb:0.5 = 4px
+    const available = cardHeight - 24 - headerH - 4;
+    setChartHeight(Math.max(100, available));
+  }, [cardHeight]);
 
   const fallbackEnd = endTime ?? new Date().toISOString();
 
@@ -144,7 +157,7 @@ export function MetricsOhlcChart({
       const container = containerRef.current;
       const { upColor, downColor } = getCandleColors();
       const chart = createChart(container, {
-        height,
+        height: chartHeight,
         width: container.clientWidth,
         layout: {
           background: { color: isDark ? '#131722' : '#ffffff' },
@@ -210,7 +223,7 @@ export function MetricsOhlcChart({
     } else {
       chartRef.current?.timeScale().fitContent();
     }
-  }, [candles, height, isDark, paddedRange, timezone]);
+  }, [candles, chartHeight, isDark, paddedRange, timezone]);
 
   const handleResetZoom = useCallback(() => {
     if (paddedRange && chartRef.current) {
@@ -229,7 +242,13 @@ export function MetricsOhlcChart({
 
   if (isInitialLoading) {
     return (
-      <Paper variant="outlined" sx={{ p: 1.5 }}>
+      <Paper
+        variant="outlined"
+        sx={{
+          p: 1.5,
+          ...(cardHeight ? { height: cardHeight, overflow: 'hidden' } : {}),
+        }}
+      >
         <Typography variant="subtitle2" sx={{ mb: 1 }}>
           {displayInstrument}
         </Typography>
@@ -242,7 +261,13 @@ export function MetricsOhlcChart({
 
   if (error) {
     return (
-      <Paper variant="outlined" sx={{ p: 1.5 }}>
+      <Paper
+        variant="outlined"
+        sx={{
+          p: 1.5,
+          ...(cardHeight ? { height: cardHeight, overflow: 'hidden' } : {}),
+        }}
+      >
         <Typography variant="subtitle2" sx={{ mb: 1 }}>
           {displayInstrument}
         </Typography>
@@ -253,7 +278,13 @@ export function MetricsOhlcChart({
 
   if (candles.length === 0) {
     return (
-      <Paper variant="outlined" sx={{ p: 1.5 }}>
+      <Paper
+        variant="outlined"
+        sx={{
+          p: 1.5,
+          ...(cardHeight ? { height: cardHeight, overflow: 'hidden' } : {}),
+        }}
+      >
         <Typography variant="subtitle2" sx={{ mb: 1 }}>
           {displayInstrument}
         </Typography>
@@ -263,8 +294,15 @@ export function MetricsOhlcChart({
   }
 
   return (
-    <Paper variant="outlined" sx={{ p: 1.5 }}>
+    <Paper
+      variant="outlined"
+      sx={{
+        p: 1.5,
+        ...(cardHeight ? { height: cardHeight, overflow: 'hidden' } : {}),
+      }}
+    >
       <Box
+        ref={headerRef}
         sx={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -272,7 +310,12 @@ export function MetricsOhlcChart({
           mb: 0.5,
         }}
       >
-        <Typography variant="subtitle2">{displayInstrument}</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <DragIndicatorIcon
+            sx={{ fontSize: 16, color: 'text.disabled', cursor: 'grab' }}
+          />
+          <Typography variant="subtitle2">{displayInstrument}</Typography>
+        </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           <ToggleButtonGroup
             value={granularity}
