@@ -58,6 +58,7 @@ const backtestTaskUpdateSchema = z
       .optional(),
     instrument: z.string().min(1, 'Instrument is required'),
     sell_at_completion: z.boolean().optional().default(false),
+    hedging_enabled: z.boolean().optional().default(true),
   })
   .refine((data) => data.start_time < data.end_time, {
     message: 'Start date must be before end date',
@@ -126,6 +127,7 @@ export default function BacktestTaskUpdateForm({
           pip_size: data.pip_size?.toString(),
           instrument: data.instrument,
           sell_at_completion: data.sell_at_completion,
+          hedging_enabled: data.hedging_enabled,
           debug_options: { tracemalloc },
         },
       });
@@ -347,6 +349,37 @@ export default function BacktestTaskUpdateForm({
                   helperText={
                     errors.pip_size?.message ||
                     t('backtest:form.pipSizeHelperText')
+                  }
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12 }}>
+            <Controller
+              name="hedging_enabled"
+              control={control}
+              render={({ field }) => (
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={field.value ?? true}
+                      onChange={(e) => field.onChange(e.target.checked)}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body1">
+                        {t('backtest:form.hedgingEnabled')}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mt: 0.5 }}
+                      >
+                        {t('backtest:form.hedgingDescription')}
+                      </Typography>
+                    </Box>
                   }
                 />
               )}
