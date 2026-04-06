@@ -179,7 +179,7 @@ function estimateYAxisWidth(
   yValues: number[],
   format?: 'pct' | 'int' | 'currency'
 ): number {
-  if (yValues.length === 0) return 40;
+  if (yValues.length === 0) return 20;
   const min = Math.min(...yValues);
   const max = Math.max(...yValues);
   const samples = [min, max];
@@ -198,8 +198,8 @@ function estimateYAxisWidth(
     }
     if (label.length > maxLen) maxLen = label.length;
   }
-  // ~7px per char at fontSize 10, plus tickSize(6) + TICK_LABEL_GAP(2) + small buffer
-  return Math.max(40, maxLen * 7 + 12);
+  // ~3.5px per char at fontSize 10, plus tick/gap overhead
+  return Math.max(20, maxLen * 3.5 + 6);
 }
 
 /** Compute a suitable Y-axis tick count based on the value range. */
@@ -354,7 +354,7 @@ export function TaskMetricsTab({
           const rangeMs = cd.x[cd.x.length - 1].getTime() - cd.x[0].getTime();
           const yTickCount = computeYTickCount(cd.y);
           const xTickCount = computeXTickCount(cd.x.length);
-          const leftMargin = perChartLeftMargin[m.key] ?? 60;
+          const leftMargin = perChartLeftMargin[m.key] ?? 20;
           return (
             <Grid key={m.key} size={{ xs: 12, md: 6 }}>
               <Paper variant="outlined" sx={{ p: 1.5 }}>
