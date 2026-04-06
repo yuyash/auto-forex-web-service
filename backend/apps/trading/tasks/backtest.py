@@ -28,6 +28,40 @@ from apps.trading.utils import pip_size_for_instrument
 logger = logging.getLogger(__name__)
 
 
+def _stop_previous_publisher(request_id: str) -> None:
+    """Request any running publisher for *request_id* to stop and wait briefly.
+
+    The publisher polls CeleryTaskStatus for a STOPPING flag.  Setting it
+    causes the publisher to exit on its next stop-check iteration.
+    We then wait up to 5 s for it to actually terminate.
+    """
+    import time
+
+    from apps.market.models.celery import CeleryTaskStatus
+
+    task_name = "market.tasks.publish_ticks_for_backtest"
+    rows = CeleryTaskStatus.objects.filter(
+        task_name=task_name,
+        instance_key=request_id,
+        status=CeleryTaskStatus.Status.RUNNING,
+    ).update(status=CeleryTaskStatus.Status.STOPPING)
+
+    if not rows:
+        return
+
+    logger.info("Requested previous publisher to stop - request_id=%s", request_id)
+
+    for _ in range(10):
+        still_running = CeleryTaskStatus.objects.filter(
+            task_name=task_name,
+            instance_key=request_id,
+            status__in=(CeleryTaskStatus.Status.RUNNING, CeleryTaskStatus.Status.STOPPING),
+        ).exists()
+        if not still_running:
+            break
+        time.sleep(0.5)
+
+
 @shared_task(
     bind=True,
     name="trading.tasks.run_backtest_task",
@@ -171,6 +205,13 @@ def execute_backtest(task: BacktestTask) -> None:
 
     request_id = str(task.pk)
     channel = f"market:backtest:ticks:{request_id}"
+
+    # Stop any previous publisher that may still be running on this channel.
+    # The channel name is task-ID based (not execution-ID based), so a
+    # restarted task reuses the same channel.  If the old publisher hasn't
+    # finished yet its leftover ticks would corrupt the new execution.
+    _stop_previous_publisher(request_id)
+
     data_source = RedisTickDataSource(
         channel=channel,
         batch_size=100,

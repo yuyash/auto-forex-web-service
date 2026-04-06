@@ -7,7 +7,7 @@ from logging import Logger
 from django.utils import timezone
 
 from apps.trading.enums import TaskStatus
-from apps.trading.models import BacktestTask, StrategyEventRecord, TradingEvent, TradingTask
+from apps.trading.models import BacktestTask, TradingTask
 
 
 class TaskLifecycleWriter:
@@ -45,40 +45,10 @@ class TaskLifecycleWriter:
         task: BacktestTask | TradingTask,
         task_type: str,
     ) -> None:
-        from apps.trading.models.equities import Equity
-        from apps.trading.models.logs import TaskLog
-        from apps.trading.models.metrics import Metrics
-        from apps.trading.models.orders import Order
-        from apps.trading.models.positions import Position
-        from apps.trading.models.snapshots import TaskExecutionSnapshot
-        from apps.trading.models.state import ExecutionState
-        from apps.trading.models.trades import Trade
+        """No-op: execution data is scoped by execution_id.
 
-        for model, label in (
-            (Trade, "trades"),
-            (Order, "orders"),
-            (Position, "positions"),
-            (TradingEvent, "trading events"),
-            (StrategyEventRecord, "strategy events"),
-            (ExecutionState, "execution state"),
-            (Equity, "equities"),
-            (Metrics, "metrics"),
-            (TaskExecutionSnapshot, "execution snapshots"),
-            (TaskLog, "task logs"),
-        ):
-            try:
-                deleted, _ = model.objects.filter(task_type=task_type, task_id=task.pk).delete()
-                if deleted:
-                    self.logger.info(
-                        "[SERVICE:RESTART] Cleared %d %s - task_id=%s",
-                        deleted,
-                        label,
-                        task.pk,
-                    )
-            except Exception as exc:  # pragma: no cover - defensive logging path
-                self.logger.warning(
-                    "[SERVICE:RESTART] Failed to clear %s - task_id=%s, error=%s",
-                    label,
-                    task.pk,
-                    exc,
-                )
+        A new execution_id is assigned on each restart, so previous
+        runs' ExecutionState, TradingEvent, and StrategyEventRecord
+        rows do not interfere and must be preserved for historical
+        viewing.
+        """
