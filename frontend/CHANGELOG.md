@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.31.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.30.0...frontend-v1.31.0) (2026-04-06)
+
+
+### Features
+
+* metrics ohlc width and reorder ([#357](https://github.com/yuyash/auto-forex-web-service/issues/357)) ([25e79ca](https://github.com/yuyash/auto-forex-web-service/commit/25e79cac65754504793d804a354a1ac211bf2f20))
+* **metrics:** move OHLC chart into grid and add chart reorder buttons ([25e79ca](https://github.com/yuyash/auto-forex-web-service/commit/25e79cac65754504793d804a354a1ac211bf2f20))
+
 ## [1.30.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.9...frontend-v1.30.0) (2026-04-06)
 
 
