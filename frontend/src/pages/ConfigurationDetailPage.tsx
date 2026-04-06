@@ -117,18 +117,55 @@ export default function ConfigurationDetailPage() {
     return formatValue(value);
   };
 
+  /** Check whether a dependsOn condition is satisfied by the current params. */
+  const matchesDependsOn = useCallback(
+    (
+      params: Record<string, unknown>,
+      schema: ConfigSchema,
+      dependsOn: ConfigProperty['dependsOn']
+    ): boolean => {
+      if (!dependsOn) return true;
+      const raw =
+        params[dependsOn.field] ??
+        schema.properties?.[dependsOn.field]?.default;
+      const normalize = (v: unknown) => {
+        if (v === undefined || v === null) return v;
+        if (typeof v === 'string') {
+          const lower = v.trim().toLowerCase();
+          if (lower === 'true') return true;
+          if (lower === 'false') return false;
+        }
+        return v;
+      };
+      return dependsOn.values.some((expected) => normalize(raw) === expected);
+    },
+    []
+  );
+
   /** Build grouped parameter entries preserving schema order. */
   const groupedParams = (() => {
     if (!configuration?.parameters) return [];
     const params = configuration.parameters;
+    const schema = configSchema;
     type Entry = { key: string; value: unknown; description?: string };
     const groups: Array<{ name: string; entries: Entry[] }> = [];
     const groupMap = new Map<string, Entry[]>();
     const seenGroups: string[] = [];
 
-    if (configSchema?.properties) {
-      Object.entries(configSchema.properties).forEach(([key, prop]) => {
-        if (!(key in params) || HIDDEN_KEYS.has(key)) return;
+    if (schema?.properties) {
+      Object.entries(schema.properties).forEach(([key, prop]) => {
+        if (HIDDEN_KEYS.has(key)) return;
+        // Skip fields whose dependsOn condition is not met
+        if (prop.dependsOn && !matchesDependsOn(params, schema, prop.dependsOn))
+          return;
+        // Use saved value, or fall back to schema default for boolean toggles
+        const value =
+          key in params
+            ? params[key]
+            : prop.type === 'boolean'
+              ? (prop.default ?? false)
+              : undefined;
+        if (value === undefined) return;
         const groupName =
           localized(prop, 'group') || t('configuration:form.otherParameters');
         if (!groupMap.has(groupName)) {
@@ -137,13 +174,13 @@ export default function ConfigurationDetailPage() {
         }
         groupMap.get(groupName)!.push({
           key,
-          value: params[key],
+          value,
           description: localized(prop, 'description'),
         });
       });
       const otherGroup = t('configuration:form.otherParameters');
       Object.keys(params).forEach((key) => {
-        if (configSchema.properties[key] || HIDDEN_KEYS.has(key)) return;
+        if (configSchema?.properties?.[key] || HIDDEN_KEYS.has(key)) return;
         if (!groupMap.has(otherGroup)) {
           groupMap.set(otherGroup, []);
           seenGroups.push(otherGroup);
@@ -295,7 +332,7 @@ export default function ConfigurationDetailPage() {
                         gap: 0.75,
                       }}
                     >
-                      {entries.map(({ key, value, description }) => (
+                      {entries.map(({ key, value }) => (
                         <Box
                           key={key}
                           sx={{
@@ -307,23 +344,18 @@ export default function ConfigurationDetailPage() {
                         >
                           <Box sx={{ minWidth: 0 }}>
                             <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 600 }}
+                              variant="caption"
+                              sx={{
+                                fontWeight: 600,
+                                display: 'block',
+                                lineHeight: 1.4,
+                              }}
                             >
                               {displayLabel(key)}
                             </Typography>
-                            {description && (
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                sx={{ display: 'block', lineHeight: 1.3 }}
-                              >
-                                {description}
-                              </Typography>
-                            )}
                           </Box>
                           <Typography
-                            variant="body2"
+                            variant="caption"
                             color="text.secondary"
                             sx={{
                               textAlign: 'right',
