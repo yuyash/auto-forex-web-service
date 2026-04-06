@@ -87,12 +87,15 @@ class TestRunBacktestTask:
 
 
 class TestExecuteBacktest:
+    @patch("apps.trading.tasks.backtest._stop_previous_publisher")
     @patch("apps.trading.tasks.backtest.trigger_backtest_publisher")
     @patch("apps.trading.tasks.backtest.BacktestExecutor")
     @patch("apps.trading.tasks.backtest.RedisTickDataSource")
     @patch("apps.trading.tasks.backtest.TradingEngine")
     @patch("apps.trading.tasks.backtest.pip_size_for_instrument")
-    def test_normal_flow(self, mock_pip, mock_engine, mock_source, mock_executor, mock_trigger):
+    def test_normal_flow(
+        self, mock_pip, mock_engine, mock_source, mock_executor, mock_trigger, mock_stop_pub
+    ):
         from apps.trading.tasks.backtest import execute_backtest
 
         task = MagicMock(
@@ -100,15 +103,17 @@ class TestExecuteBacktest:
         )
         mock_pip.return_value = 0.0001
         execute_backtest(task)
+        mock_stop_pub.assert_called_once_with(str(task.pk))
         mock_executor.return_value.execute.assert_called_once()
 
+    @patch("apps.trading.tasks.backtest._stop_previous_publisher")
     @patch("apps.trading.tasks.backtest.trigger_backtest_publisher")
     @patch("apps.trading.tasks.backtest.BacktestExecutor")
     @patch("apps.trading.tasks.backtest.RedisTickDataSource")
     @patch("apps.trading.tasks.backtest.TradingEngine")
     @patch("apps.trading.tasks.backtest.pip_size_for_instrument")
     def test_executor_exception(
-        self, mock_pip, mock_engine, mock_source, mock_executor, mock_trigger
+        self, mock_pip, mock_engine, mock_source, mock_executor, mock_trigger, mock_stop_pub
     ):
         from apps.trading.tasks.backtest import execute_backtest
 

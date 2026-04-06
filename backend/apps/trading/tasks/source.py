@@ -89,6 +89,23 @@ class RedisTickDataSource(TickDataSource):
 
         time.sleep(0.1)
 
+        # Drain any stale messages left on the channel by a previous publisher
+        # (e.g. after a task restart while the old publisher was still running).
+        # Without this, the new execution would process leftover ticks from a
+        # different point in the historical timeline, causing timestamp inversions.
+        drained = 0
+        while True:
+            stale = self.pubsub.get_message(timeout=0.05)
+            if stale is None:
+                break
+            drained += 1
+        if drained:
+            logger.info(
+                "RedisTickDataSource: drained %d stale messages from channel %s",
+                drained,
+                self.channel,
+            )
+
         # Trigger the publisher AFTER subscription is established
         if self.trigger_publisher:
             logger.info(f"Triggering publisher for channel: {self.channel}")
