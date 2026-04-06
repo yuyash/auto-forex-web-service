@@ -467,6 +467,9 @@ export const TradingTaskDetail: React.FC = () => {
               onSinceChange={setMetricsSince}
               onUntilChange={setMetricsUntil}
               onRefresh={metricsResult.refresh}
+              instrument={detailTask.instrument}
+              startTime={detailTask.started_at}
+              endTime={detailTask.completed_at}
             />
           </LazyTabPanel>
         )}

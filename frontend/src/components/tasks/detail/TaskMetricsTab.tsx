@@ -17,6 +17,7 @@ import { LineChart } from '@mui/x-charts/LineChart';
 import { useTranslation } from 'react-i18next';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
 import { MetricsToolbar } from './MetricsToolbar';
+import { MetricsOhlcChart } from './MetricsOhlcChart';
 
 interface TaskMetricsTabProps {
   data: MetricPoint[];
@@ -30,6 +31,12 @@ interface TaskMetricsTabProps {
   onSinceChange: (since: string) => void;
   onUntilChange: (until: string) => void;
   onRefresh: () => void;
+  /** Instrument identifier for the OHLC chart (e.g. "USD_JPY") */
+  instrument?: string;
+  /** ISO start time for the OHLC chart range */
+  startTime?: string;
+  /** ISO end time for the OHLC chart range */
+  endTime?: string | null;
 }
 
 /** Metrics to chart and their display order */
@@ -184,12 +191,22 @@ const TICK_FONT = '10px "Roboto", "Helvetica", "Arial", sans-serif';
 /**
  * Format a Y-axis tick value exactly as the chart's valueFormatter does.
  * This must stay in sync with the valueFormatter passed to yAxis below.
+ *
+ * Uses adaptive decimal places: shows enough precision so that labels
+ * are never truncated while keeping them compact for large values.
  */
 function formatYLabel(v: number, format?: 'pct' | 'int' | 'currency'): string {
-  if (format === 'pct') return `${v.toFixed(1)}%`;
-  if (format === 'currency') return v.toFixed(1);
+  if (format === 'pct') {
+    // Use enough decimals to distinguish ticks: 2 for small ranges, 1 for large
+    const decimals = Math.abs(v) < 1 ? 2 : 1;
+    return `${v.toFixed(decimals)}%`;
+  }
+  if (format === 'currency') {
+    const decimals = Math.abs(v) < 1 ? 2 : 1;
+    return v.toFixed(decimals);
+  }
   if (format === 'int') return Math.round(v).toLocaleString();
-  return v.toFixed(1);
+  return v.toFixed(2);
 }
 
 /**
@@ -288,6 +305,9 @@ export function TaskMetricsTab({
   onSinceChange,
   onUntilChange,
   onRefresh,
+  instrument,
+  startTime,
+  endTime,
 }: TaskMetricsTabProps) {
   const { t } = useTranslation('common');
 
@@ -345,17 +365,18 @@ export function TaskMetricsTab({
     return map;
   }, [data, availableMetrics]);
 
-  // Compute per-chart Y-axis width using pixel-accurate text measurement.
-  // Each chart gets exactly the width it needs — no more, no less.
-  const perChartLeftMargin = useMemo(() => {
-    const map: Record<string, number> = {};
+  // Compute a uniform Y-axis width across all charts so they align perfectly.
+  // Uses the maximum measured width from all charts.
+  const uniformLeftMargin = useMemo(() => {
+    let maxWidth = 45; // minimum fallback
     for (const m of availableMetrics) {
       const cd = chartDataMap[m.key];
       if (!cd || cd.y.length < 2) continue;
       const tickCount = computeYTickCount(cd.y);
-      map[m.key] = measureYAxisWidth(cd.y, tickCount, m.format);
+      const w = measureYAxisWidth(cd.y, tickCount, m.format);
+      if (w > maxWidth) maxWidth = w;
     }
-    return map;
+    return maxWidth;
   }, [availableMetrics, chartDataMap]);
 
   if (isLoading && data.length === 0) {
@@ -411,7 +432,6 @@ export function TaskMetricsTab({
           const rangeMs = cd.x[cd.x.length - 1].getTime() - cd.x[0].getTime();
           const yTickCount = computeYTickCount(cd.y);
           const xTickCount = computeXTickCount(cd.x.length);
-          const leftMargin = perChartLeftMargin[m.key] ?? 45;
           return (
             <Grid key={m.key} size={{ xs: 12, md: 6 }}>
               <Paper variant="outlined" sx={{ p: 1.5 }}>
@@ -452,7 +472,7 @@ export function TaskMetricsTab({
                   ]}
                   yAxis={[
                     {
-                      width: leftMargin,
+                      width: uniformLeftMargin,
                       tickNumber: yTickCount,
                       valueFormatter: (v: number | null) =>
                         v != null ? formatYLabel(v, m.format) : '',
@@ -471,7 +491,7 @@ export function TaskMetricsTab({
                   grid={{ vertical: true, horizontal: true }}
                   height={200}
                   margin={{
-                    left: leftMargin,
+                    left: uniformLeftMargin,
                     right: 16,
                     top: 8,
                     bottom: 36,
@@ -488,6 +508,17 @@ export function TaskMetricsTab({
           );
         })}
       </Grid>
+
+      {/* OHLC Candlestick Chart */}
+      {instrument && startTime && (
+        <Box sx={{ mt: 2 }}>
+          <MetricsOhlcChart
+            instrument={instrument}
+            startTime={startTime}
+            endTime={endTime ?? undefined}
+          />
+        </Box>
+      )}
     </Box>
   );
 }

@@ -497,6 +497,9 @@ export const BacktestTaskDetail: React.FC = () => {
               onSinceChange={setMetricsSince}
               onUntilChange={setMetricsUntil}
               onRefresh={metricsResult.refresh}
+              instrument={detailTask.instrument}
+              startTime={task?.start_time}
+              endTime={task?.end_time}
             />
           </LazyTabPanel>
         )}
