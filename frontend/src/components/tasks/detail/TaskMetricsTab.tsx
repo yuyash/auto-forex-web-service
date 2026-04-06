@@ -12,12 +12,17 @@ import {
   Typography,
   CircularProgress,
   Alert,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { LineChart } from '@mui/x-charts/LineChart';
 import { useTranslation } from 'react-i18next';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
 import { MetricsToolbar } from './MetricsToolbar';
 import { MetricsOhlcChart } from './MetricsOhlcChart';
+import { useMetricsOrder } from '../../../hooks/useMetricsOrder';
 
 interface TaskMetricsTabProps {
   data: MetricPoint[];
@@ -213,6 +218,9 @@ function computeXTickCount(dataLen: number): number {
   return 10;
 }
 
+/** Special key for the OHLC candlestick chart in the ordering system */
+const OHLC_KEY = '__ohlc__';
+
 export function TaskMetricsTab({
   data,
   isLoading,
@@ -231,6 +239,8 @@ export function TaskMetricsTab({
 }: TaskMetricsTabProps) {
   const { t } = useTranslation('common');
 
+  const hasOhlc = !!(instrument && startTime);
+
   // Determine which metrics actually have data
   const availableMetrics = useMemo(() => {
     if (data.length === 0) return [];
@@ -244,6 +254,22 @@ export function TaskMetricsTab({
     }
     return CHART_METRICS.filter((m) => keysWithData.has(m.key));
   }, [data]);
+
+  // Build the list of all chart keys (metrics + OHLC) for ordering
+  const allChartKeys = useMemo(() => {
+    const keys = availableMetrics.map((m) => m.key);
+    if (hasOhlc) keys.push(OHLC_KEY);
+    return keys;
+  }, [availableMetrics, hasOhlc]);
+
+  const { orderedKeys, moveUp, moveDown } = useMetricsOrder(allChartKeys);
+
+  // Map metric key → metric config for quick lookup
+  const metricsMap = useMemo(() => {
+    const map = new Map<string, (typeof CHART_METRICS)[number]>();
+    for (const m of CHART_METRICS) map.set(m.key, m);
+    return map;
+  }, []);
 
   // Compute effective interval from data range (for formatting)
   const effectiveInterval = useMemo(() => {
@@ -335,7 +361,60 @@ export function TaskMetricsTab({
         isLoading={isLoading}
       />
       <Grid container spacing={2}>
-        {availableMetrics.map((m) => {
+        {orderedKeys.map((key, idx) => {
+          // OHLC chart
+          if (key === OHLC_KEY) {
+            return (
+              <Grid key={OHLC_KEY} size={{ xs: 12, md: 6 }}>
+                <Box sx={{ position: 'relative' }}>
+                  <MetricsOhlcChart
+                    instrument={instrument!}
+                    startTime={startTime!}
+                    endTime={endTime ?? undefined}
+                    height={200}
+                  />
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      top: 4,
+                      right: 4,
+                      display: 'flex',
+                      gap: 0,
+                    }}
+                  >
+                    <Tooltip title={t('tabs.moveUp')}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={() => moveUp(OHLC_KEY)}
+                          disabled={idx === 0}
+                          sx={{ p: 0.25 }}
+                        >
+                          <ArrowUpwardIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title={t('tabs.moveDown')}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={() => moveDown(OHLC_KEY)}
+                          disabled={idx === orderedKeys.length - 1}
+                          sx={{ p: 0.25 }}
+                        >
+                          <ArrowDownwardIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </Box>
+                </Box>
+              </Grid>
+            );
+          }
+
+          // Metric line chart
+          const m = metricsMap.get(key);
+          if (!m) return null;
           const cd = chartDataMap[m.key];
           if (!cd || cd.x.length < 2) return null;
           const lastVal = cd.y[cd.y.length - 1];
@@ -344,7 +423,7 @@ export function TaskMetricsTab({
           const xTickCount = computeXTickCount(cd.x.length);
           return (
             <Grid key={m.key} size={{ xs: 12, md: 6 }}>
-              <Paper variant="outlined" sx={{ p: 1.5 }}>
+              <Paper variant="outlined" sx={{ p: 1.5, position: 'relative' }}>
                 <Box
                   sx={{
                     display: 'flex',
@@ -358,9 +437,35 @@ export function TaskMetricsTab({
                       defaultValue: m.key.replace(/_/g, ' '),
                     })}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {formatValue(lastVal, m.format)}
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Tooltip title={t('tabs.moveUp')}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={() => moveUp(m.key)}
+                          disabled={idx === 0}
+                          sx={{ p: 0.25 }}
+                        >
+                          <ArrowUpwardIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title={t('tabs.moveDown')}>
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={() => moveDown(m.key)}
+                          disabled={idx === orderedKeys.length - 1}
+                          sx={{ p: 0.25 }}
+                        >
+                          <ArrowDownwardIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    <Typography variant="body2" color="text.secondary">
+                      {formatValue(lastVal, m.format)}
+                    </Typography>
+                  </Box>
                 </Box>
                 <LineChart
                   xAxis={[
@@ -418,17 +523,6 @@ export function TaskMetricsTab({
           );
         })}
       </Grid>
-
-      {/* OHLC Candlestick Chart */}
-      {instrument && startTime && (
-        <Box sx={{ mt: 2 }}>
-          <MetricsOhlcChart
-            instrument={instrument}
-            startTime={startTime}
-            endTime={endTime ?? undefined}
-          />
-        </Box>
-      )}
     </Box>
   );
 }
