@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.27.4...backend-v1.27.5) (2026-04-06)
+
+
+### Bug Fixes
+
+* **backtest:** drain stale ticks from Redis channel on restart ([#352](https://github.com/yuyash/auto-forex-web-service/issues/352)) ([50f977d](https://github.com/yuyash/auto-forex-web-service/commit/50f977d4085508df183ea347207267b94ab57b4c))
+
 ## [1.27.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.27.3...backend-v1.27.4) (2026-04-06)
 
 
