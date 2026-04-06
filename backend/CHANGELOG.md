@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.27.3...backend-v1.27.4) (2026-04-06)
+
+
+### Bug Fixes
+
+* restart clear all execution data ([#348](https://github.com/yuyash/auto-forex-web-service/issues/348)) ([36f02f8](https://github.com/yuyash/auto-forex-web-service/commit/36f02f8375278bb201fc4386ce38243974eb8858))
+
 ## [1.27.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.27.2...backend-v1.27.3) (2026-04-05)
 
 

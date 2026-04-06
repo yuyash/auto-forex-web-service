@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.8](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.7...frontend-v1.29.8) (2026-04-06)
+
+
+### Bug Fixes
+
+* restart clear all execution data ([#348](https://github.com/yuyash/auto-forex-web-service/issues/348)) ([36f02f8](https://github.com/yuyash/auto-forex-web-service/commit/36f02f8375278bb201fc4386ce38243974eb8858))
+
 ## [1.29.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.29.6...frontend-v1.29.7) (2026-04-06)
 
 ### Bug Fixes
