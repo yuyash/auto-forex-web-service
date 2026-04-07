@@ -353,6 +353,7 @@
         "retracement": "Retracement",
         "take_profit": "Take Profit",
         "open_position": "Open Position",
+        "rebuild_position": "Rebuild Position",
         "close_position": "Close Position",
         "shrink": "Shrink",
         "stop_loss": "Stop Loss",

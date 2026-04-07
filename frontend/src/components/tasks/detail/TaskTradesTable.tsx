@@ -125,8 +125,13 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       width: 150,
       minWidth: 150,
       render: (row) => {
-        // Use i18n key if available, fall back to backend display name
-        const methodKey = row.execution_method || '';
+        // Use i18n key if available, fall back to backend display name.
+        // When the trade is a stop-loss rebuild, show the rebuild label
+        // instead of the generic open_position label.
+        const methodKey =
+          row.is_rebuild && row.execution_method === 'open_position'
+            ? 'rebuild_position'
+            : row.execution_method || '';
         const i18nLabel = t(`tables.trades.executionMethod.${methodKey}`, {
           defaultValue: '',
         });
@@ -274,7 +279,10 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
         r.timestamp ? new Date(r.timestamp).toLocaleString() : '-',
       instrument: (r) => r.instrument ?? '-',
       execution_method: (r) => {
-        const methodKey = r.execution_method || '';
+        const methodKey =
+          r.is_rebuild && r.execution_method === 'open_position'
+            ? 'rebuild_position'
+            : r.execution_method || '';
         const i18nLabel = t(`tables.trades.executionMethod.${methodKey}`, {
           defaultValue: '',
         });

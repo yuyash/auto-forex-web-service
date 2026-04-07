@@ -353,6 +353,7 @@
         "retracement": "増し玉",
         "take_profit": "利確",
         "open_position": "ポジション作成",
+        "rebuild_position": "ポジション再建",
         "close_position": "ポジション決済",
         "shrink": "縮退",
         "stop_loss": "ロスカット",

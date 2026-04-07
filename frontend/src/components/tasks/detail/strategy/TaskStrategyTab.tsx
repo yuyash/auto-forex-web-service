@@ -768,14 +768,18 @@ function TradeRow({
           size="small"
           label={
             trade.execution_method === 'open_position'
-              ? 'OPEN'
+              ? trade.is_rebuild
+                ? 'REBUILD'
+                : 'OPEN'
               : trade.execution_method === 'close_position'
                 ? 'CLOSE'
                 : trade.execution_method.replace(/_/g, ' ').toUpperCase()
           }
           color={
             trade.execution_method === 'open_position'
-              ? 'info'
+              ? trade.is_rebuild
+                ? 'secondary'
+                : 'info'
               : trade.execution_method === 'close_position'
                 ? 'default'
                 : 'error'
