@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.33.0...frontend-v1.33.1) (2026-04-07)
+
+
+### Bug Fixes
+
+* **frontend:** let MUI auto-size Y-axis labels to prevent clipping ([#363](https://github.com/yuyash/auto-forex-web-service/issues/363)) ([441be7b](https://github.com/yuyash/auto-forex-web-service/commit/441be7b640e6abdfe5d0d2110795a931f4dc4768))
+
 ## [1.33.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.32.0...frontend-v1.33.0) (2026-04-07)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.0...backend-v1.28.1) (2026-04-07)
+
+
+### Bug Fixes
+
+* **strategy:** swap LONG/SHORT rebuild conditions that were inverted ([#364](https://github.com/yuyash/auto-forex-web-service/issues/364)) ([20e6b30](https://github.com/yuyash/auto-forex-web-service/commit/20e6b3070fbeea140dd1f999e9cbba3a9e1da392))
+
 ## [1.28.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.27.5...backend-v1.28.0) (2026-04-07)
 
 
