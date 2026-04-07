@@ -118,7 +118,8 @@ class TradeSerializer(serializers.Serializer):
             if sl is not None:
                 return str(sl)
         if isinstance(obj, dict):
-            return cast(dict[str, Any], obj).get("stop_loss_price")
+            val = cast(dict[str, Any], obj).get("stop_loss_price")
+            return str(val) if val is not None else None
         return None
 
     def get_execution_method_display(self, obj: object) -> str:

@@ -320,25 +320,29 @@ export function TaskMetricsTab({
     return map;
   }, [data, availableMetrics]);
 
-  // Compute the widest Y-axis label across ALL metrics so every chart
-  // uses the same axis width and their plot areas align perfectly.
-  // We check min/max of each metric and format them, then pick the longest.
+  // Compute per-metric Y-axis width so each chart uses only the space
+  // its own labels need, avoiding wasted horizontal space.
   // A 20% padding is added to account for MUI's "nice" tick rounding that
   // may produce values slightly outside the data range.
-  const yAxisWidth = useMemo(() => {
-    let maxChars = 0;
+  const yAxisWidthMap = useMemo(() => {
+    const map: Record<string, number> = {};
     for (const m of availableMetrics) {
       const cd = chartDataMap[m.key];
       if (!cd || cd.y.length === 0) continue;
+      let maxChars = 0;
       const yMin = Math.min(...cd.y);
       const yMax = Math.max(...cd.y);
       for (const v of [yMin, yMax, yMin * 1.2, yMax * 1.2]) {
         const label = formatYLabel(v, m.format);
         if (label.length > maxChars) maxChars = label.length;
       }
+      const labelPx = maxChars * CHAR_WIDTH_PX;
+      map[m.key] = Math.max(
+        MIN_Y_AXIS_WIDTH,
+        Math.ceil(labelPx) + Y_AXIS_OVERHEAD
+      );
     }
-    const labelPx = maxChars * CHAR_WIDTH_PX;
-    return Math.max(MIN_Y_AXIS_WIDTH, Math.ceil(labelPx) + Y_AXIS_OVERHEAD);
+    return map;
   }, [availableMetrics, chartDataMap]);
 
   // --- Drag-and-drop reorder state ---
@@ -458,6 +462,7 @@ export function TaskMetricsTab({
           const rangeMs = cd.x[cd.x.length - 1].getTime() - cd.x[0].getTime();
           const yTickCount = computeYTickCount(cd.y);
           const xTickCount = computeXTickCount(cd.x.length);
+          const metricYAxisWidth = yAxisWidthMap[m.key] ?? MIN_Y_AXIS_WIDTH;
           return (
             <Grid
               key={m.key}
@@ -529,7 +534,7 @@ export function TaskMetricsTab({
                   yAxis={[
                     {
                       position: 'right',
-                      width: yAxisWidth,
+                      width: metricYAxisWidth,
                       tickNumber: yTickCount,
                       valueFormatter: (v: number | null) =>
                         v != null ? formatYLabel(v, m.format) : '',
@@ -549,7 +554,7 @@ export function TaskMetricsTab({
                   height={200}
                   margin={{
                     left: 8,
-                    right: yAxisWidth,
+                    right: metricYAxisWidth,
                     top: 8,
                     bottom: 36,
                   }}
