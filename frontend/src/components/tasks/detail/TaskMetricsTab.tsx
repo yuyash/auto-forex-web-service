@@ -175,17 +175,21 @@ function formatTooltipDate(date: Date, intervalMin: number): string {
 }
 
 /**
- * Fixed right margin shared by all metric line charts.
+ * Compute the pixel width needed for the widest Y-axis tick label across
+ * all metric charts.  This guarantees labels are never truncated and all
+ * charts share the same right margin so their plot areas align.
  *
- * MUI X Charts auto-sizes the Y-axis label width within the margin
- * region, so we do NOT set an explicit yAxis.width — that would cap
- * the label area and clip long values.  Instead we only fix the right
- * margin so every chart's plot area ends at the same horizontal
- * position, keeping the grid visually aligned.
+ * MUI X Charts internally reserves `yAxis.width` for the axis region and
+ * uses `axisWidth - tickSize(6) - TICK_LABEL_GAP(2)` as the maximum label
+ * width.  Labels exceeding that limit are ellipsized.  We therefore need
+ * `yAxis.width = maxLabelPx + 8` and `margin.right = yAxis.width`.
  *
- * 80px comfortably fits labels like "-10000.00", "-0.02%", "100,000".
+ * We estimate text width at fontSize 10 using ~6.2 px per character, which
+ * is a safe upper bound for proportional sans-serif digits.
  */
-const RIGHT_MARGIN = 80;
+const CHAR_WIDTH_PX = 6.5; // conservative estimate at fontSize 10
+const Y_AXIS_OVERHEAD = 8; // tickSize(6) + TICK_LABEL_GAP(2)
+const MIN_Y_AXIS_WIDTH = 40; // minimum to avoid overly narrow axes
 
 /**
  * Format a Y-axis tick value exactly as the chart's valueFormatter does.
@@ -315,6 +319,27 @@ export function TaskMetricsTab({
     }
     return map;
   }, [data, availableMetrics]);
+
+  // Compute the widest Y-axis label across ALL metrics so every chart
+  // uses the same axis width and their plot areas align perfectly.
+  // We check min/max of each metric and format them, then pick the longest.
+  // A 20% padding is added to account for MUI's "nice" tick rounding that
+  // may produce values slightly outside the data range.
+  const yAxisWidth = useMemo(() => {
+    let maxChars = 0;
+    for (const m of availableMetrics) {
+      const cd = chartDataMap[m.key];
+      if (!cd || cd.y.length === 0) continue;
+      const yMin = Math.min(...cd.y);
+      const yMax = Math.max(...cd.y);
+      for (const v of [yMin, yMax, yMin * 1.2, yMax * 1.2]) {
+        const label = formatYLabel(v, m.format);
+        if (label.length > maxChars) maxChars = label.length;
+      }
+    }
+    const labelPx = maxChars * CHAR_WIDTH_PX;
+    return Math.max(MIN_Y_AXIS_WIDTH, Math.ceil(labelPx) + Y_AXIS_OVERHEAD);
+  }, [availableMetrics, chartDataMap]);
 
   // --- Drag-and-drop reorder state ---
   const dragKeyRef = useRef<string | null>(null);
@@ -504,6 +529,7 @@ export function TaskMetricsTab({
                   yAxis={[
                     {
                       position: 'right',
+                      width: yAxisWidth,
                       tickNumber: yTickCount,
                       valueFormatter: (v: number | null) =>
                         v != null ? formatYLabel(v, m.format) : '',
@@ -523,7 +549,7 @@ export function TaskMetricsTab({
                   height={200}
                   margin={{
                     left: 8,
-                    right: RIGHT_MARGIN,
+                    right: yAxisWidth,
                     top: 8,
                     bottom: 36,
                   }}
