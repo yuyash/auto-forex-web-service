@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.33.2...frontend-v1.33.3) (2026-04-07)
+
+
+### Bug Fixes
+
+* snowball sl cycle completion and rebuild cleanup ([#372](https://github.com/yuyash/auto-forex-web-service/issues/372)) ([5485ebf](https://github.com/yuyash/auto-forex-web-service/commit/5485ebfac41b591c2fb040bdb2c4586a95153624))
+
 ## [1.33.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.33.1...frontend-v1.33.2) (2026-04-07)
 
 
