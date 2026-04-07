@@ -86,6 +86,7 @@ describe('taskMutationCache', () => {
       summary: {
         cycle_count: 0,
         active_count: 0,
+        pending_count: 0,
         completed_count: 0,
         total_trades: 0,
       },
@@ -182,6 +183,7 @@ describe('taskMutationCache', () => {
       summary: {
         cycle_count: 0,
         active_count: 0,
+        pending_count: 0,
         completed_count: 0,
         total_trades: 0,
       },
