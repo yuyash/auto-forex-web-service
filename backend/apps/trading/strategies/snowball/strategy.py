@@ -228,7 +228,11 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        """Close the cycle head (TP hit), mark cycle completed, create new cycle."""
+        """Close the cycle head (TP hit), create new cycle.
+
+        The cycle transitions to COMPLETED via the unified grid.is_empty()
+        check in on_tick after this method returns.
+        """
         entry = cycle.initial_entry
         if entry is None:
             return []
@@ -258,7 +262,13 @@ class SnowballStrategy(Strategy):
                 validation_status="pass",
             )
         )
-        cycle.completed = True
+
+        # Remove the head from the grid so grid.is_empty() becomes true.
+        for layer in cycle.grid.layers:
+            for slot in layer.slots:
+                if slot.entry is not None and slot.entry.entry_id == entry.entry_id:
+                    layer.close_slot(slot.index, refillable=False)
+                    break
 
         # Discard any pending stop-loss rebuilds for this cycle — the
         # cycle achieved its TP so rebuilding old positions is pointless.
@@ -959,15 +969,6 @@ class SnowballStrategy(Strategy):
             cycle.remove_entry(entry.entry_id)
             closed_count += 1
 
-            # Check if cycle is now empty
-            if cycle.grid.is_empty():
-                cycle.completed = True
-                # Discard pending rebuilds — shrink is a protective
-                # measure and we should not reopen positions.
-                ss.stop_loss_pending_rebuilds = [
-                    p for p in ss.stop_loss_pending_rebuilds if p.cycle_id != cycle.cycle_id
-                ]
-
             # Recalculate counter TPs after shrink
             if cfg.counter_tp_mode == "weighted_avg":
                 self._recalculate_counter_tps(cycle)
@@ -986,6 +987,14 @@ class SnowballStrategy(Strategy):
                 closed_count,
                 ratio,
             )
+
+            # Mark any cycles emptied by shrink as completed.
+            for cycle in ss.active_cycles():
+                if cycle.grid.is_empty():
+                    cycle.status = CycleStatus.COMPLETED
+                    ss.stop_loss_pending_rebuilds = [
+                        p for p in ss.stop_loss_pending_rebuilds if p.cycle_id != cycle.cycle_id
+                    ]
 
         if ratio < cfg.m1_th:
             ss.protection_level = ProtectionLevel.NORMAL
@@ -1140,19 +1149,6 @@ class SnowballStrategy(Strategy):
                     validation_status="warn",
                 )
             )
-
-            # If cycle is now empty, mark completed only if there are
-            # no pending stop-loss rebuilds for this cycle.  When rebuilds
-            # are pending the cycle transitions to PENDING so that
-            # _process_stop_loss_rebuilds can restore positions.
-            if cycle.grid.is_empty():
-                has_pending = any(
-                    p.cycle_id == cycle.cycle_id for p in ss.stop_loss_pending_rebuilds
-                )
-                if has_pending:
-                    cycle.status = CycleStatus.PENDING
-                else:
-                    cycle.status = CycleStatus.COMPLETED
 
         return events
 
@@ -1405,6 +1401,22 @@ class SnowballStrategy(Strategy):
 
             if not counter_close_events:
                 events.extend(self._process_cycle_counter_adds(ss, tick, cycle))
+
+            # --- Unified cycle completion check ---
+            # A cycle is completed when its grid has no open positions.
+            # If stop-loss rebuilds are pending, the cycle transitions to
+            # PENDING instead so rebuilds can restore positions later.
+            if cycle.is_active and cycle.grid.is_empty():
+                has_pending = any(
+                    p.cycle_id == cycle.cycle_id for p in ss.stop_loss_pending_rebuilds
+                )
+                if has_pending:
+                    cycle.status = CycleStatus.PENDING
+                else:
+                    cycle.status = CycleStatus.COMPLETED
+                    ss.stop_loss_pending_rebuilds = [
+                        p for p in ss.stop_loss_pending_rebuilds if p.cycle_id != cycle.cycle_id
+                    ]
 
         # --- Re-seed directions that have no active cycle ---
         # When every cycle for a direction has completed (e.g. all
