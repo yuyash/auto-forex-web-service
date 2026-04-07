@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.33.1...frontend-v1.33.2) (2026-04-07)
+
+
+### Bug Fixes
+
+* **frontend:** dynamically size Y-axis width from actual label lengths ([#366](https://github.com/yuyash/auto-forex-web-service/issues/366)) ([fae30d9](https://github.com/yuyash/auto-forex-web-service/commit/fae30d98774c5c68f9e7661971fb674d03f32811))
+
 ## [1.33.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.33.0...frontend-v1.33.1) (2026-04-07)
 
 
