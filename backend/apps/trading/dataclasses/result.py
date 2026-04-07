@@ -24,12 +24,15 @@ class StrategyResult:
             this result. Used by strategies to signal unrecoverable conditions
             (e.g. margin blow-out with no open positions).
         stop_reason: Human-readable reason when should_stop is True.
+        is_error: If True the stop is due to an error condition and the task
+            should transition to FAILED instead of COMPLETED.
     """
 
     state: ExecutionState
     events: list[StrategyEvent] = field(default_factory=list)
     should_stop: bool = False
     stop_reason: str = ""
+    is_error: bool = False
 
     @classmethod
     def from_state(cls, state: ExecutionState) -> "StrategyResult":

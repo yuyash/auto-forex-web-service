@@ -764,6 +764,8 @@ class SnowballStrategy(Strategy):
         ratio: Decimal,
         unrealized: Decimal,
     ) -> tuple[list[StrategyEvent], str] | None:
+        if not self.config.emergency_enabled:
+            return None
         if ratio < Decimal("95"):
             return None
         ss.protection_level = ProtectionLevel.EMERGENCY
@@ -1340,6 +1342,7 @@ class SnowballStrategy(Strategy):
                 events=emergency_events,
                 should_stop=True,
                 stop_reason=stop_reason,
+                is_error=True,
             )
 
         # --- Lock enter ---
@@ -1389,6 +1392,7 @@ class SnowballStrategy(Strategy):
                     events=events,
                     should_stop=True,
                     stop_reason=f"Close order violation: {self._close_order_violation}",
+                    is_error=True,
                 )
 
             # --- Stop-loss closes ---
@@ -1447,7 +1451,7 @@ class SnowballStrategy(Strategy):
         state: ExecutionState,
         execution_result: EventExecutionResult,
     ) -> None:
-        """Apply order execution feedback (position IDs) to state."""
+        """Apply order execution feedback (position IDs, cycle IDs) to state."""
         ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
         if not execution_result:
             return
@@ -1465,6 +1469,14 @@ class SnowballStrategy(Strategy):
                 for slot in layer.slots:
                     if slot.entry is not None and slot.entry.entry_id == eid:
                         slot.entry.position_id = str(position_id)
+                        # Back-fill trade_cycle_id on the cycle when the
+                        # initial entry (cycle_id == entry_id) is executed.
+                        if (
+                            binding.cycle_id
+                            and cycle.cycle_id == eid
+                            and cycle.trade_cycle_id is None
+                        ):
+                            cycle.trade_cycle_id = binding.cycle_id
             for entry in cycle.hedge_entries:
                 if entry.entry_id == eid:
                     entry.position_id = str(position_id)

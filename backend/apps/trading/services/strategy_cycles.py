@@ -86,7 +86,7 @@ class StrategyCyclesService:
         )
 
         cycles = [
-            _build_cycle(cid, trades, metrics_by_minute, cycle_status_map.get(int(cid)))
+            _build_cycle(cid, trades, metrics_by_minute, cycle_status_map.get(cid))
             for cid, trades in by_cycle.items()
         ]
         cycles.sort(key=lambda c: c["started_at"] or "")
@@ -140,11 +140,12 @@ def _load_cycle_statuses(
     task_type: str,
     task_id: str,
     execution_id: str,
-) -> dict[int, str]:
+) -> dict[str, str]:
     """Load cycle statuses from the persisted strategy_state.
 
-    Returns a mapping of cycle_id → status string ("active", "pending",
-    "completed").  Falls back to an empty dict if the state is unavailable.
+    Returns a mapping of trade_cycle_id (UUID str) → status string
+    ("active", "pending", "completed").  Falls back to an empty dict
+    if the state is unavailable or cycles lack trade_cycle_id.
     """
     from apps.trading.models.state import ExecutionState as ExecutionStateModel
 
@@ -160,16 +161,15 @@ def _load_cycle_statuses(
     if not isinstance(row, dict):
         return {}
 
-    result: dict[int, str] = {}
+    result: dict[str, str] = {}
     for cycle_data in row.get("cycles", []):
-        cid = cycle_data.get("cycle_id")
-        if cid is None:
+        tcid = cycle_data.get("trade_cycle_id")
+        if not tcid:
             continue
-        # Prefer explicit "status" key; fall back to legacy "completed" bool.
         status = cycle_data.get("status")
         if status is None:
             status = "completed" if cycle_data.get("completed", False) else "active"
-        result[int(cid)] = str(status)
+        result[str(tcid)] = str(status)
     return result
 
 

@@ -38,6 +38,15 @@ logger: Logger = getLogger(name=__name__)
 EventHandler = _EventHandlerCompat
 
 
+class StrategyError(Exception):
+    """Raised when a strategy signals an error stop.
+
+    This exception is raised by the executor when a strategy returns
+    ``should_stop=True`` with ``is_error=True``.  Task runners should
+    catch this to transition the task to FAILED with the error message.
+    """
+
+
 def is_forex_market_closed() -> bool:
     """Check if the forex market is currently closed (weekend).
 
@@ -62,6 +71,8 @@ class ExecutionLoopState:
     no_tick_batches: int = 0
     max_no_tick_batches: int = 60
     stopped_early: bool = False
+    stop_reason: str = ""
+    is_error: bool = False
 
 
 class TaskExecutor:
@@ -561,6 +572,8 @@ class TaskExecutor:
                 loop.state.ticks_processed,
             )
             loop.stopped_early = True
+            loop.stop_reason = result.stop_reason
+            loop.is_error = result.is_error
             return True
 
         tick_timestamp = self._coerce_tick_timestamp(tick.timestamp)
@@ -949,6 +962,18 @@ class TaskExecutor:
         # Flush any remaining metrics (including the last partial minute)
         self._metrics_aggregator.flush(final=True)
         logger.info("Engine stopped, events_count=%d", len(result.events))
+
+        if loop.stopped_early and loop.is_error:
+            logger.error(
+                "Execution failed: %s — ticks_processed=%d, final_balance=%s",
+                loop.stop_reason,
+                loop.state.ticks_processed,
+                loop.state.current_balance,
+            )
+            self.state_manager.stop(
+                status_message=f"Execution failed: {loop.stop_reason}",
+            )
+            raise StrategyError(loop.stop_reason)
 
         if loop.stopped_early:
             logger.info(
