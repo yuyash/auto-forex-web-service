@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.33.3...frontend-v1.34.0) (2026-04-07)
+
+
+### Features
+
+* **frontend:** show Rebuild label for stop-loss rebuilt trades ([#374](https://github.com/yuyash/auto-forex-web-service/issues/374)) ([fc85661](https://github.com/yuyash/auto-forex-web-service/commit/fc8566191ec34028b908ec7cb846d01c1a45f461))
+
 ## [1.33.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.33.2...frontend-v1.33.3) (2026-04-07)
 
 
