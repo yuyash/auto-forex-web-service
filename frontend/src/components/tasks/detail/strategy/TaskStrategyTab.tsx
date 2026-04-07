@@ -51,9 +51,12 @@ function formatDateTime(value?: string | null): string {
   return new Date(value).toLocaleString();
 }
 
-function getStatusColor(status: string): 'success' | 'warning' | 'default' {
+function getStatusColor(
+  status: string
+): 'success' | 'warning' | 'info' | 'default' {
   if (status === 'completed') return 'success';
   if (status === 'active') return 'warning';
+  if (status === 'pending') return 'info';
   return 'default';
 }
 
@@ -274,6 +277,14 @@ export function TaskStrategyTab({
               count: summary.active_count,
             })}
           />
+          {summary.pending_count > 0 ? (
+            <Chip
+              label={t('common:strategyVisualization.chips.pending', {
+                count: summary.pending_count,
+              })}
+              color="info"
+            />
+          ) : null}
           <Chip
             label={t('common:strategyVisualization.chips.completed', {
               count: summary.completed_count,

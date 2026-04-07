@@ -4,7 +4,7 @@ from enum import Enum
 
 from apps.trading.enums import Direction  # noqa: F401
 
-__all__ = ["Direction", "ProtectionLevel", "IntervalMode"]
+__all__ = ["Direction", "ProtectionLevel", "IntervalMode", "CycleStatus"]
 
 
 class ProtectionLevel(str, Enum):
@@ -14,6 +14,14 @@ class ProtectionLevel(str, Enum):
     SHRINK = "shrink"
     LOCKED = "locked"
     EMERGENCY = "emergency"
+
+
+class CycleStatus(str, Enum):
+    """Lifecycle status of a snowball cycle."""
+
+    ACTIVE = "active"
+    PENDING = "pending"
+    COMPLETED = "completed"
 
 
 class IntervalMode(str, Enum):

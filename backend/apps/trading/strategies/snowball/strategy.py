@@ -41,7 +41,7 @@ from apps.trading.strategies.snowball.calculators import (
     counter_tp_pips,
     stop_loss_price,
 )
-from apps.trading.strategies.snowball.enums import ProtectionLevel
+from apps.trading.strategies.snowball.enums import CycleStatus, ProtectionLevel
 from apps.trading.strategies.snowball.models import (
     Entry,
     Layer,
@@ -1141,14 +1141,16 @@ class SnowballStrategy(Strategy):
 
             # If cycle is now empty, mark completed only if there are
             # no pending stop-loss rebuilds for this cycle.  When rebuilds
-            # are pending the cycle should stay active so that
+            # are pending the cycle transitions to PENDING so that
             # _process_stop_loss_rebuilds can restore positions.
             if cycle.grid.is_empty():
                 has_pending = any(
                     p.cycle_id == cycle.cycle_id for p in ss.stop_loss_pending_rebuilds
                 )
-                if not has_pending:
-                    cycle.completed = True
+                if has_pending:
+                    cycle.status = CycleStatus.PENDING
+                else:
+                    cycle.status = CycleStatus.COMPLETED
 
         return events
 
@@ -1250,6 +1252,15 @@ class SnowballStrategy(Strategy):
         # Remove rebuilt entries from pending list
         for r in rebuilt:
             ss.stop_loss_pending_rebuilds.remove(r)
+
+        # If any entries were rebuilt and the cycle was pending, reactivate it.
+        if rebuilt and cycle.is_pending:
+            cycle.status = CycleStatus.ACTIVE
+            logger.info(
+                "Cycle %d (%s) reactivated after stop-loss rebuild",
+                cycle.cycle_id,
+                cycle.direction.value.upper(),
+            )
 
         return events
 
@@ -1395,14 +1406,29 @@ class SnowballStrategy(Strategy):
         # When every cycle for a direction has completed (e.g. all
         # positions were stopped-out with no pending rebuilds), start a
         # fresh cycle so the strategy keeps trading.
+        # When reseed_on_all_pending is enabled, also re-seed when all
+        # remaining cycles for a direction are in PENDING state (all
+        # positions awaiting stop-loss rebuild with none currently open).
         active = ss.active_cycles()
         for direction in (Direction.LONG, Direction.SHORT):
             if not self._hedging_enabled and direction == Direction.SHORT:
                 continue
-            has_active = any(c.direction == direction for c in active)
-            if not has_active:
+            dir_cycles = [c for c in active if c.direction == direction]
+            if not dir_cycles:
+                # No active or pending cycles — all completed.
                 logger.info(
                     "No active %s cycle — creating new cycle",
+                    direction.value.upper(),
+                )
+                new_events, _ = self._create_cycle(ss, tick, direction)
+                events.extend(new_events)
+            elif self.config.reseed_on_all_pending and all(c.is_pending for c in dir_cycles):
+                # All cycles for this direction are pending rebuild with
+                # no open positions.  Start a fresh cycle at the current
+                # price so the strategy keeps trading while waiting for
+                # rebuilds.
+                logger.info(
+                    "All %s cycles pending — creating new cycle (reseed_on_all_pending)",
                     direction.value.upper(),
                 )
                 new_events, _ = self._create_cycle(ss, tick, direction)

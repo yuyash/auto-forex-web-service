@@ -31,7 +31,7 @@ from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Any, Literal
 
 from apps.trading.enums import Direction
-from apps.trading.strategies.snowball.enums import ProtectionLevel
+from apps.trading.strategies.snowball.enums import CycleStatus, ProtectionLevel
 
 if TYPE_CHECKING:
     from apps.trading.dataclasses.tick import Tick
@@ -82,6 +82,10 @@ class SnowballStrategyConfig:
 
     pip_size: Decimal
 
+    # Cycle re-seed: create a new cycle when all positions in a direction
+    # are pending stop-loss rebuild (no open positions).
+    reseed_on_all_pending: bool
+
     @staticmethod
     def from_dict(raw: dict[str, Any]) -> SnowballStrategyConfig:
         manual_raw = raw.get("manual_intervals", [])
@@ -117,6 +121,7 @@ class SnowballStrategyConfig:
             cooldown_sec=_parse_int(raw.get("cooldown_sec", 300), 300),
             stop_loss_enabled=bool(raw.get("stop_loss_enabled", False)),
             pip_size=_parse_decimal(raw.get("pip_size", "0.01"), "0.01"),
+            reseed_on_all_pending=bool(raw.get("reseed_on_all_pending", False)),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -147,6 +152,7 @@ class SnowballStrategyConfig:
             "cooldown_sec": self.cooldown_sec,
             "stop_loss_enabled": self.stop_loss_enabled,
             "pip_size": str(self.pip_size),
+            "reseed_on_all_pending": self.reseed_on_all_pending,
         }
 
     def validate(self) -> None:
@@ -994,7 +1000,25 @@ class SnowballCycle:
     grid: PositionGrid = field(default_factory=PositionGrid)
     hedge_entries: list[Entry] = field(default_factory=list)
     counter_close_count: int = 0
-    completed: bool = False
+    status: CycleStatus = CycleStatus.ACTIVE
+
+    # -- Backward-compatible property --
+
+    @property
+    def completed(self) -> bool:
+        return self.status == CycleStatus.COMPLETED
+
+    @completed.setter
+    def completed(self, value: bool) -> None:
+        self.status = CycleStatus.COMPLETED if value else CycleStatus.ACTIVE
+
+    @property
+    def is_active(self) -> bool:
+        return self.status == CycleStatus.ACTIVE
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status == CycleStatus.PENDING
 
     # -- Convenience --
 
@@ -1089,6 +1113,7 @@ class SnowballCycle:
             "hedge_entries": [e.to_dict() for e in self.hedge_entries],
             "counter_close_count": self.counter_close_count,
             "completed": self.completed,
+            "status": self.status.value,
         }
 
     @staticmethod
@@ -1106,13 +1131,30 @@ class SnowballCycle:
         else:
             grid = _migrate_legacy_cycle(data)
 
+        # Resolve status: prefer explicit "status" key, fall back to legacy
+        # "completed" boolean for backward compatibility.
+        raw_status = data.get("status")
+        if raw_status is not None:
+            try:
+                status = CycleStatus(str(raw_status).strip().lower())
+            except ValueError:
+                status = (
+                    CycleStatus.COMPLETED
+                    if bool(data.get("completed", False))
+                    else CycleStatus.ACTIVE
+                )
+        else:
+            status = (
+                CycleStatus.COMPLETED if bool(data.get("completed", False)) else CycleStatus.ACTIVE
+            )
+
         return SnowballCycle(
             cycle_id=_parse_int(data.get("cycle_id", 0), 0),
             direction=direction,
             grid=grid,
             hedge_entries=[Entry.from_dict(e) for e in data.get("hedge_entries", [])],
             counter_close_count=_parse_int(data.get("counter_close_count", 0), 0),
-            completed=bool(data.get("completed", False)),
+            status=status,
         )
 
 
@@ -1208,6 +1250,10 @@ class SnowballStrategyState:
 
     def active_cycles(self) -> list[SnowballCycle]:
         return [c for c in self.cycles if not c.completed]
+
+    def tradable_cycles(self) -> list[SnowballCycle]:
+        """Return only cycles that are actively trading (not pending or completed)."""
+        return [c for c in self.cycles if c.is_active]
 
     def all_entries(self) -> list[Entry]:
         entries: list[Entry] = []

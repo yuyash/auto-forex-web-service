@@ -305,6 +305,18 @@
       "group_ja": "証拠金保護"
     },
 
+    "reseed_on_all_pending": {
+      "type": "boolean",
+      "title": "Re-seed When All Pending",
+      "title_ja": "全保留時に新規サイクル作成",
+      "description": "When enabled, a new cycle is created for a direction if all existing cycles are in pending state (all positions closed by stop-loss and awaiting rebuild). This keeps the strategy trading at the current price while waiting for rebuilds. Requires stop-loss to be enabled.",
+      "description_ja": "有効時、ある方向のすべてのサイクルが保留状態（全ポジションがロスカットされリビルド待ち）の場合、現在の価格で新しいサイクルを作成します。リビルドを待つ間も取引を継続できます。ロスカットが有効である必要があります。",
+      "default": false,
+      "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
     "shrink_enabled": {
       "type": "boolean",
       "title": "Enable Shrink",

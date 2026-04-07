@@ -17,7 +17,7 @@ export interface CycleTrade {
 export interface StrategyCycle {
   cycle_id: string;
   direction: string;
-  status: 'active' | 'completed';
+  status: 'active' | 'pending' | 'completed';
   started_at: string | null;
   ended_at: string | null;
   trade_count: number;
@@ -31,6 +31,7 @@ export interface StrategyCycle {
 export interface StrategyCyclesSummary {
   cycle_count: number;
   active_count: number;
+  pending_count: number;
   completed_count: number;
   total_trades: number;
 }
