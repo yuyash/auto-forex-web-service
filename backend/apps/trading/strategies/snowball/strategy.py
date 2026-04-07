@@ -1088,9 +1088,9 @@ class SnowballStrategy(Strategy):
 
             # Check if price has returned to the original entry price
             hit = False
-            if pending.direction == Direction.LONG and tick.ask <= pending.entry_price:
+            if pending.direction == Direction.LONG and tick.bid >= pending.entry_price:
                 hit = True
-            elif pending.direction == Direction.SHORT and tick.bid >= pending.entry_price:
+            elif pending.direction == Direction.SHORT and tick.ask <= pending.entry_price:
                 hit = True
 
             if not hit:
