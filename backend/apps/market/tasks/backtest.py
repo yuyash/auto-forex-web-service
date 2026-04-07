@@ -498,7 +498,8 @@ def _gap_spans_only_market_close(last_tick: datetime, end_dt: datetime) -> bool:
     explained by a forex weekend market closure (Fri 21:00 → Sun 21:00 UTC).
 
     The check is intentionally generous: if *last_tick* falls on Friday after
-    20:00 UTC and *end_dt* falls on Sunday after 21:00 or on Monday, the gap
+    20:00 UTC and *end_dt* falls anywhere during the weekend (Saturday,
+    Sunday before reopen) or after the Sunday reopen / on a weekday, the gap
     is considered a normal weekend closure.
     """
     from datetime import timedelta
@@ -508,8 +509,8 @@ def _gap_spans_only_market_close(last_tick: datetime, end_dt: datetime) -> bool:
 
     # last_tick on Friday (4) evening
     if lt_weekday == 4 and last_tick.hour >= 20:
-        # end_dt on Sunday evening after reopen, or Monday+
-        if (et_weekday == 6 and end_dt.hour >= 21) or et_weekday in (0, 1, 2, 3, 4):
+        # end_dt on Saturday (5), Sunday before/after reopen (6), or weekday
+        if et_weekday == 5 or (et_weekday == 6) or et_weekday in (0, 1, 2, 3, 4):
             # Sanity: gap should be less than ~3 days
             if (end_dt - last_tick) < timedelta(days=3, hours=6):
                 return True
