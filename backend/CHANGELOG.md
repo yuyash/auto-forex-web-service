@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.28.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.27.5...backend-v1.28.0) (2026-04-07)
+
+
+### Features
+
+* **frontend:** i18n for close reasons and trade types, metrics chart improvements, stop-loss price fix ([aa20b7a](https://github.com/yuyash/auto-forex-web-service/commit/aa20b7a45b5b07e44073046c7520c9a085eab3da))
+* **frontend:** i18n for close reasons and trade types, metrics chart… ([#361](https://github.com/yuyash/auto-forex-web-service/issues/361)) ([aa20b7a](https://github.com/yuyash/auto-forex-web-service/commit/aa20b7a45b5b07e44073046c7520c9a085eab3da))
+
 ## [1.27.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.27.4...backend-v1.27.5) (2026-04-06)
 
 
