@@ -514,10 +514,32 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     minWidth: 90,
     render: (r) => {
       if (!r.close_reason) return '-';
+
+      // Map close_reason values to i18n keys
+      const closeReasonKeyMap: Record<string, string> = {
+        normal: 'closeReasonNormal',
+        stop_loss: 'closeReasonStopLoss',
+        shrink: 'closeReasonShrink',
+        volatility_lock: 'closeReasonVolatilityLock',
+        margin_protection: 'closeReasonMarginProtection',
+        tp: 'closeReasonTp',
+        counter_tp: 'closeReasonCounterTp',
+        layer_initial_tp: 'closeReasonLayerInitialTp',
+        lock_hedge_neutralize: 'closeReasonLockHedgeNeutralize',
+        shrink_entered: 'closeReasonShrinkEntered',
+        lock_entered: 'closeReasonLockEntered',
+        lock_released: 'closeReasonLockReleased',
+      };
+
+      const i18nKey = closeReasonKeyMap[r.close_reason];
+      const label = i18nKey
+        ? t(`tables.positions.${i18nKey}`)
+        : r.close_reason.replace(/_/g, ' ');
+
       if (r.close_reason === 'normal') {
         return (
           <Chip
-            label={t('tables.positions.closeReasonNormal')}
+            label={label}
             size="small"
             color="success"
             variant="outlined"
@@ -530,7 +552,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       }
       return (
         <Chip
-          label={`⚠ ${r.close_reason.replace(/_/g, ' ')}`}
+          label={`⚠ ${label}`}
           size="small"
           color="warning"
           variant="filled"

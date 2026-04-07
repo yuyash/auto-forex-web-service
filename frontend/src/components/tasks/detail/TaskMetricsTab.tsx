@@ -39,6 +39,10 @@ interface TaskMetricsTabProps {
   startTime?: string;
   /** ISO end time for the OHLC chart range */
   endTime?: string | null;
+  /** Current tick timestamp for the sequence position line */
+  currentTickTimestamp?: string | null;
+  /** Current tick price for the sequence position line */
+  currentTickPrice?: number | null;
 }
 
 /** Metrics to chart and their display order */
@@ -171,17 +175,12 @@ function formatTooltipDate(date: Date, intervalMin: number): string {
 }
 
 /**
- * Generous fixed Y-axis width that guarantees labels are never clipped.
+ * Y-axis width for the right-side axis labels.
  *
- * Previous approaches tried pixel-accurate Canvas.measureText() but
- * sub-pixel rounding, font-loading timing, and browser differences
- * caused persistent truncation.  A generous fixed width eliminates
- * the problem entirely — the small extra left margin is an acceptable
- * trade-off for labels that are always fully visible.
- *
- * 80px comfortably fits labels like "-10000.00", "-0.02%", "100,000".
+ * 40px is sufficient for most labels and matches the OHLC chart's compact
+ * margin.  The Y-axis is rendered on the right side of the chart.
  */
-const Y_AXIS_WIDTH = 80;
+const Y_AXIS_WIDTH = 40;
 
 /**
  * Format a Y-axis tick value exactly as the chart's valueFormatter does.
@@ -234,6 +233,8 @@ export function TaskMetricsTab({
   instrument,
   startTime,
   endTime,
+  currentTickTimestamp,
+  currentTickPrice,
 }: TaskMetricsTabProps) {
   const { t } = useTranslation('common');
 
@@ -310,8 +311,7 @@ export function TaskMetricsTab({
     return map;
   }, [data, availableMetrics]);
 
-  // All charts share the same fixed Y-axis width so axes are perfectly aligned
-  // and labels are never clipped regardless of data values.
+  // Y-axis width for right-side labels
   const leftMargin = Y_AXIS_WIDTH;
 
   // --- Drag-and-drop reorder state ---
@@ -415,6 +415,8 @@ export function TaskMetricsTab({
                   startTime={startTime!}
                   endTime={endTime ?? undefined}
                   cardHeight={CHART_CARD_HEIGHT}
+                  currentTickTimestamp={currentTickTimestamp}
+                  currentTickPrice={currentTickPrice}
                 />
               </Grid>
             );
@@ -499,6 +501,7 @@ export function TaskMetricsTab({
                   ]}
                   yAxis={[
                     {
+                      position: 'right',
                       width: leftMargin,
                       tickNumber: yTickCount,
                       valueFormatter: (v: number | null) =>
@@ -518,8 +521,8 @@ export function TaskMetricsTab({
                   grid={{ vertical: true, horizontal: true }}
                   height={200}
                   margin={{
-                    left: leftMargin,
-                    right: 16,
+                    left: 8,
+                    right: leftMargin + 8,
                     top: 8,
                     bottom: 36,
                   }}

@@ -37,6 +37,7 @@ import {
   createSuppressedTickMarkFormatter,
   createTooltipTimeFormatter,
 } from '../../../utils/adaptiveTimeScalePlugin';
+import { SequencePositionLine } from '../../../utils/SequencePositionLine';
 
 interface MetricsOhlcChartProps {
   instrument: string;
@@ -44,9 +45,21 @@ interface MetricsOhlcChartProps {
   endTime?: string;
   /** Fixed height for the outer Paper card (should match metric chart cards) */
   cardHeight?: number;
+  /** Current tick timestamp for the sequence position line */
+  currentTickTimestamp?: string | null;
+  /** Current tick price for the sequence position line */
+  currentTickPrice?: number | null;
 }
 
-const GRANULARITY_OPTIONS = ['M1', 'M5', 'M15', 'H1', 'H4', 'D'] as const;
+const GRANULARITY_OPTIONS = [
+  'Auto',
+  'M1',
+  'M5',
+  'M15',
+  'H1',
+  'H4',
+  'D',
+] as const;
 
 function autoGranularity(startTime: string, endTime: string): string {
   const startSec = Math.floor(new Date(startTime).getTime() / 1000);
@@ -65,6 +78,8 @@ export function MetricsOhlcChart({
   startTime,
   endTime,
   cardHeight,
+  currentTickTimestamp,
+  currentTickPrice,
 }: MetricsOhlcChartProps) {
   const theme = useTheme();
   const { t } = useTranslation('common');
@@ -74,6 +89,7 @@ export function MetricsOhlcChart({
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
+  const seqLineRef = useRef<SequencePositionLine | null>(null);
   const [chartHeight, setChartHeight] = useState(200);
 
   // Compute chart canvas height to fill the card minus header and padding
@@ -87,15 +103,15 @@ export function MetricsOhlcChart({
 
   const fallbackEnd = endTime ?? new Date().toISOString();
 
-  const defaultGranularity = useMemo(
+  const resolvedAutoGranularity = useMemo(
     () => autoGranularity(startTime, fallbackEnd),
     [startTime, fallbackEnd]
   );
-  const [granularity, setGranularity] = useState(defaultGranularity);
+  const [granularity, setGranularity] = useState<string>('Auto');
 
-  useEffect(() => {
-    setGranularity(defaultGranularity);
-  }, [defaultGranularity]);
+  // The actual granularity used for data fetching
+  const effectiveGranularity =
+    granularity === 'Auto' ? resolvedAutoGranularity : granularity;
 
   const fullRangeEdgeCount = useMemo(() => {
     const GRANULARITY_SECONDS: Record<string, number> = {
@@ -106,17 +122,17 @@ export function MetricsOhlcChart({
       H4: 14400,
       D: 86400,
     };
-    const granSec = GRANULARITY_SECONDS[granularity] ?? 60;
+    const granSec = GRANULARITY_SECONDS[effectiveGranularity] ?? 60;
     const startSec = Math.floor(new Date(startTime).getTime() / 1000);
     const endSec = Math.floor(new Date(fallbackEnd).getTime() / 1000);
     const span = Math.max(60, endSec - startSec);
     return Math.ceil((span / granSec) * 1.2) + 10;
-  }, [startTime, fallbackEnd, granularity]);
+  }, [startTime, fallbackEnd, effectiveGranularity]);
 
   const { candles, isInitialLoading, error, replaceWithCountWindow } =
     useWindowedCandles({
       instrument,
-      granularity,
+      granularity: effectiveGranularity,
       startTime,
       endTime: fallbackEnd,
       initialCount: fullRangeEdgeCount,
@@ -137,6 +153,8 @@ export function MetricsOhlcChart({
   const destroyChart = useCallback(() => {
     observerRef.current?.disconnect();
     observerRef.current = null;
+    seqLineRef.current?.clear();
+    seqLineRef.current = null;
     chartRef.current?.remove();
     chartRef.current = null;
     seriesRef.current = null;
@@ -144,7 +162,7 @@ export function MetricsOhlcChart({
 
   useEffect(() => {
     destroyChart();
-  }, [granularity, isDark, destroyChart]);
+  }, [effectiveGranularity, isDark, destroyChart]);
 
   useEffect(() => {
     return destroyChart;
@@ -197,6 +215,13 @@ export function MetricsOhlcChart({
       chartRef.current = chart;
       seriesRef.current = series;
 
+      // Attach sequence position line for current tick indicator
+      const seqLine = new SequencePositionLine({
+        maxExtrapolation: Infinity,
+      });
+      series.attachPrimitive(seqLine);
+      seqLineRef.current = seqLine;
+
       const observer = new ResizeObserver(() => {
         const w = container.clientWidth;
         if (w > 0) chart.applyOptions({ width: w });
@@ -232,6 +257,19 @@ export function MetricsOhlcChart({
       chartRef.current?.timeScale().fitContent();
     }
   }, [paddedRange]);
+
+  // Update sequence position line when current tick changes
+  useEffect(() => {
+    if (!seqLineRef.current) return;
+    if (currentTickTimestamp) {
+      seqLineRef.current.setPosition(
+        currentTickTimestamp,
+        currentTickPrice ?? null
+      );
+    } else {
+      seqLineRef.current.clear();
+    }
+  }, [currentTickTimestamp, currentTickPrice]);
 
   const handleReload = useCallback(() => {
     destroyChart();
@@ -329,7 +367,12 @@ export function MetricsOhlcChart({
               <ToggleButton
                 key={g}
                 value={g}
-                sx={{ px: 1, py: 0.15, fontSize: '0.7rem' }}
+                sx={{
+                  px: { xs: 0.5, sm: 1 },
+                  py: 0.15,
+                  fontSize: { xs: '0.6rem', sm: '0.7rem' },
+                  minWidth: { xs: 28, sm: 'auto' },
+                }}
               >
                 {g}
               </ToggleButton>
