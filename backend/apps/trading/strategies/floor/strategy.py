@@ -311,9 +311,23 @@ class FloorStrategy(Strategy):
         return floor_state.account_nav
 
     def _margin_ratio(self, state, floor_state: FloorStrategyState, tick) -> Decimal:
-        total_units = Decimal(
-            str(sum(abs(int(item.get("units", 0))) for item in floor_state.open_entries))
-        )
+        if self.config.hedging_enabled:
+            # OANDA MAX方式: 売りと買いのうち必要証拠金が多い方のみで計算
+            long_units = sum(
+                abs(int(item.get("units", 0)))
+                for item in floor_state.open_entries
+                if str(item.get("direction", "long")).lower() == "long"
+            )
+            short_units = sum(
+                abs(int(item.get("units", 0)))
+                for item in floor_state.open_entries
+                if str(item.get("direction", "long")).lower() == "short"
+            )
+            total_units = Decimal(str(max(long_units, short_units)))
+        else:
+            total_units = Decimal(
+                str(sum(abs(int(item.get("units", 0))) for item in floor_state.open_entries))
+            )
         if total_units <= 0:
             return Decimal("0")
         nav = self._estimate_nav(state, floor_state, tick)
@@ -438,7 +452,23 @@ class FloorStrategy(Strategy):
         if margin_ratio < self.config.margin_cut_start_ratio:
             return []
 
-        total_units = sum(int(item.get("units", 0)) for item in floor_state.open_entries)
+        if self.config.hedging_enabled:
+            # MAX方式: margin is driven by the larger side only
+            long_units = sum(
+                abs(int(item.get("units", 0)))
+                for item in floor_state.open_entries
+                if str(item.get("direction", "long")).lower() == "long"
+            )
+            short_units = sum(
+                abs(int(item.get("units", 0)))
+                for item in floor_state.open_entries
+                if str(item.get("direction", "long")).lower() == "short"
+            )
+            total_units = max(long_units, short_units)
+            dominant_direction = "long" if long_units >= short_units else "short"
+        else:
+            total_units = sum(int(item.get("units", 0)) for item in floor_state.open_entries)
+            dominant_direction = None
         if total_units <= 0:
             return []
 
@@ -465,6 +495,13 @@ class FloorStrategy(Strategy):
             units = int(item.get("units", 0))
             if units <= 0:
                 continue
+
+            # In hedging mode, only close positions on the dominant side
+            if dominant_direction is not None:
+                entry_dir = str(item.get("direction", "long")).lower()
+                if entry_dir != dominant_direction:
+                    updated_entries.append(item)
+                    continue
 
             remaining_to_close = units_to_close - closed_units
             if remaining_to_close <= 0:
