@@ -175,12 +175,17 @@ function formatTooltipDate(date: Date, intervalMin: number): string {
 }
 
 /**
- * Y-axis width for the right-side axis labels.
+ * Fixed right margin shared by all metric line charts.
  *
- * 40px is sufficient for most labels and matches the OHLC chart's compact
- * margin.  The Y-axis is rendered on the right side of the chart.
+ * MUI X Charts auto-sizes the Y-axis label width within the margin
+ * region, so we do NOT set an explicit yAxis.width — that would cap
+ * the label area and clip long values.  Instead we only fix the right
+ * margin so every chart's plot area ends at the same horizontal
+ * position, keeping the grid visually aligned.
+ *
+ * 80px comfortably fits labels like "-10000.00", "-0.02%", "100,000".
  */
-const Y_AXIS_WIDTH = 40;
+const RIGHT_MARGIN = 80;
 
 /**
  * Format a Y-axis tick value exactly as the chart's valueFormatter does.
@@ -310,9 +315,6 @@ export function TaskMetricsTab({
     }
     return map;
   }, [data, availableMetrics]);
-
-  // Y-axis width for right-side labels
-  const leftMargin = Y_AXIS_WIDTH;
 
   // --- Drag-and-drop reorder state ---
   const dragKeyRef = useRef<string | null>(null);
@@ -502,7 +504,6 @@ export function TaskMetricsTab({
                   yAxis={[
                     {
                       position: 'right',
-                      width: leftMargin,
                       tickNumber: yTickCount,
                       valueFormatter: (v: number | null) =>
                         v != null ? formatYLabel(v, m.format) : '',
@@ -522,7 +523,7 @@ export function TaskMetricsTab({
                   height={200}
                   margin={{
                     left: 8,
-                    right: leftMargin + 8,
+                    right: RIGHT_MARGIN,
                     top: 8,
                     bottom: 36,
                   }}
