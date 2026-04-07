@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.2...backend-v1.28.3) (2026-04-07)
+
+
+### Bug Fixes
+
+* snowball close order violation with sl rebuild ([#370](https://github.com/yuyash/auto-forex-web-service/issues/370)) ([fbc6fa4](https://github.com/yuyash/auto-forex-web-service/commit/fbc6fa4b29cb83a33e1d506f7a102982c62a6181))
+
 ## [1.28.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.1...backend-v1.28.2) (2026-04-07)
 
 
