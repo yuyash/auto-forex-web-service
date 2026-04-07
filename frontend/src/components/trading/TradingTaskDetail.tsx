@@ -470,6 +470,10 @@ export const TradingTaskDetail: React.FC = () => {
               instrument={detailTask.instrument}
               startTime={detailTask.started_at}
               endTime={detailTask.completed_at}
+              currentTickTimestamp={polledTick?.timestamp}
+              currentTickPrice={
+                polledTick?.price != null ? parseFloat(polledTick.price) : null
+              }
             />
           </LazyTabPanel>
         )}

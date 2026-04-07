@@ -500,6 +500,10 @@ export const BacktestTaskDetail: React.FC = () => {
               instrument={detailTask.instrument}
               startTime={task?.start_time}
               endTime={task?.end_time}
+              currentTickTimestamp={polledTick?.timestamp}
+              currentTickPrice={
+                polledTick?.price != null ? parseFloat(polledTick.price) : null
+              }
             />
           </LazyTabPanel>
         )}

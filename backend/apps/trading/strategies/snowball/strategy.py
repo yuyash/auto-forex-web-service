@@ -199,6 +199,13 @@ class SnowballStrategy(Strategy):
         )
         entry.expected_tp_pips = cfg.m_pips
         entry.validation_status = "pass"
+
+        # Compute stop-loss for this entry at creation time
+        if cfg.stop_loss_enabled:
+            next_interval = counter_interval_pips(1, cfg)
+            if next_interval > 0:
+                self._assign_stop_loss(entry, next_interval)
+
         evt = entry.to_open_event(
             timestamp=tick.timestamp,
             planned_exit_price_formula=formula,
@@ -551,6 +558,12 @@ class SnowballStrategy(Strategy):
         entry.actual_interval_pips = adverse
         entry.validation_status = "pass"
 
+        # Compute stop-loss for this entry at creation time
+        if cfg.stop_loss_enabled:
+            next_interval = counter_interval_pips(slot.index + 1, cfg)
+            if next_interval > 0:
+                self._assign_stop_loss(entry, next_interval)
+
         logger.info(
             "Counter add (%s) in cycle %d: L%d/R%d, units=%d, adverse=%.1f pips",
             direction.value.upper(),
@@ -571,13 +584,6 @@ class SnowballStrategy(Strategy):
             ),
         )
         slot.fill(entry)
-
-        # Assign stop-loss to the previous entry in this layer
-        if cfg.stop_loss_enabled:
-            prev_slot_index = slot.index - 1
-            prev_slot = layer.slot_at(prev_slot_index)
-            if prev_slot is not None and prev_slot.entry is not None:
-                self._assign_stop_loss(prev_slot.entry, entry, interval)
 
         # Update close prices for non-weighted_avg modes
         if cfg.counter_tp_mode != "weighted_avg":
@@ -650,6 +656,12 @@ class SnowballStrategy(Strategy):
                 abs(highest.entry.entry_price - price) / self.pip_size
             )
 
+        # Compute stop-loss for this entry at creation time
+        if cfg.stop_loss_enabled:
+            next_interval = counter_interval_pips(1, cfg)
+            if next_interval > 0:
+                self._assign_stop_loss(layer_entry, next_interval)
+
         logger.info(
             "Layer initial L%d/R0 in cycle %d, TP=%.3f",
             layer.layer_number,
@@ -667,12 +679,6 @@ class SnowballStrategy(Strategy):
         )
         # Place in R0 of the new layer
         layer.slot_at(0).fill(layer_entry)
-
-        # Assign stop-loss to the highest entry in the previous layer
-        if cfg.stop_loss_enabled and highest is not None and highest.entry is not None:
-            interval = layer_entry.actual_interval_pips or Decimal("0")
-            if interval > 0:
-                self._assign_stop_loss(highest.entry, layer_entry, interval)
 
         return [evt]
 
@@ -937,36 +943,41 @@ class SnowballStrategy(Strategy):
 
     def _assign_stop_loss(
         self,
-        prev_entry: Entry,
-        new_entry: Entry,
-        interval_pips: Decimal,
+        entry: Entry,
+        next_interval_pips: Decimal,
     ) -> None:
-        """Assign a stop-loss price to *prev_entry* when *new_entry* opens.
+        """Compute and assign a stop-loss price to *entry* at creation time.
 
-        Uses the formula:
-        - tp_pips = |prev_entry.close_price - prev_entry.entry_price| / pip_size
-        - if tp_pips < interval_pips: SL = new_entry.entry_price
-        - else: SL = new_entry.entry_price - interval_pips * pip_size  (LONG)
-                 SL = new_entry.entry_price + interval_pips * pip_size  (SHORT)
+        The SL is derived from the hypothetical next entry's price, which is
+        deterministic: ``entry_price ∓ next_interval_pips * pip_size``.
+
+        Formula:
+        - tp_pips = |close_price - entry_price| / pip_size
+        - next_entry_price = entry_price - next_interval_pips * pip_size  (LONG)
+                             entry_price + next_interval_pips * pip_size  (SHORT)
+        - if tp_pips < next_interval_pips: SL = next_entry_price
+        - else: SL = next_entry_price - next_interval_pips * pip_size  (LONG)
+                     SL = next_entry_price + next_interval_pips * pip_size  (SHORT)
         """
-        tp_pips = abs(prev_entry.close_price - prev_entry.entry_price) / self.pip_size
-        if prev_entry.is_long:
-            sl = stop_loss_price(tp_pips, new_entry.entry_price, interval_pips, self.pip_size)
+        tp_pips = abs(entry.close_price - entry.entry_price) / self.pip_size
+        if entry.is_long:
+            next_entry_price = entry.entry_price - next_interval_pips * self.pip_size
+            sl = stop_loss_price(tp_pips, next_entry_price, next_interval_pips, self.pip_size)
         else:
-            # For SHORT, mirror: SL is above entry price
-            if tp_pips < interval_pips:
-                sl = new_entry.entry_price
+            next_entry_price = entry.entry_price + next_interval_pips * self.pip_size
+            if tp_pips < next_interval_pips:
+                sl = next_entry_price
             else:
-                sl = new_entry.entry_price + interval_pips * self.pip_size
-        prev_entry.stop_loss_price = sl
+                sl = next_entry_price + next_interval_pips * self.pip_size
+        entry.stop_loss_price = sl
         logger.debug(
-            "SL assigned: entry_id=%d L%d/R%d, SL=%.5f (tp_pips=%.1f, interval=%.1f)",
-            prev_entry.entry_id,
-            prev_entry.layer_number,
-            prev_entry.retracement_count,
+            "SL assigned: entry_id=%d L%d/R%d, SL=%.5f (tp_pips=%.1f, next_interval=%.1f)",
+            entry.entry_id,
+            entry.layer_number,
+            entry.retracement_count,
             sl,
             tp_pips,
-            interval_pips,
+            next_interval_pips,
         )
 
     def _process_stop_loss_closes(
@@ -1121,6 +1132,12 @@ class SnowballStrategy(Strategy):
             entry.entry_price = pending.entry_price
             entry.validation_status = "pass"
             entry.is_rebuild = True
+
+            # Compute stop-loss for the rebuilt entry
+            if self.config.stop_loss_enabled:
+                next_interval = counter_interval_pips(pending.retracement_count + 1, self.config)
+                if next_interval > 0:
+                    self._assign_stop_loss(entry, next_interval)
 
             slot.fill(entry)
             # Reset ever_closed so the slot is properly occupied

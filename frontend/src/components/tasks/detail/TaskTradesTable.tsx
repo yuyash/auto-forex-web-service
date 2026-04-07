@@ -125,8 +125,16 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       width: 150,
       minWidth: 150,
       render: (row) => {
+        // Use i18n key if available, fall back to backend display name
+        const methodKey = row.execution_method || '';
+        const i18nLabel = t(`tables.trades.executionMethod.${methodKey}`, {
+          defaultValue: '',
+        });
         const method =
-          row.execution_method_display || row.execution_method || '-';
+          i18nLabel ||
+          row.execution_method_display ||
+          row.execution_method ||
+          '-';
         const isProtection =
           row.execution_method === 'shrink' ||
           row.execution_method === 'margin_protection' ||
@@ -259,14 +267,21 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
   const visibleColumns = applyColumnConfig(columns, colConfig);
 
   const handleCopy = useCallback(() => {
-    const tradesMap = new Map(trades.map((t) => [String(t.id), t]));
+    const tradesMap = new Map(trades.map((tr) => [String(tr.id), tr]));
     const extractors: Record<string, (r: TaskTrade) => string> = {
       id: (r) => (r.id ? String(r.id).slice(0, 8) : '-'),
       timestamp: (r) =>
         r.timestamp ? new Date(r.timestamp).toLocaleString() : '-',
       instrument: (r) => r.instrument ?? '-',
-      execution_method: (r) =>
-        r.execution_method_display || r.execution_method || '-',
+      execution_method: (r) => {
+        const methodKey = r.execution_method || '';
+        const i18nLabel = t(`tables.trades.executionMethod.${methodKey}`, {
+          defaultValue: '',
+        });
+        return (
+          i18nLabel || r.execution_method_display || r.execution_method || '-'
+        );
+      },
       direction: (r) => String(r.direction ?? '').toUpperCase(),
       units: (r) => String(r.units ?? '-'),
       price: (r) => (r.price ? parseFloat(r.price).toFixed(5) : '-'),
@@ -286,7 +301,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       tradesMap
     );
     selection.copySelectedRows(headers, formatRow, pageRowIds);
-  }, [trades, selection, visibleColumns, pageRowIds]);
+  }, [t, trades, selection, visibleColumns, pageRowIds]);
 
   if (error) {
     return (
