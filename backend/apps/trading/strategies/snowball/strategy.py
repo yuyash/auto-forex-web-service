@@ -260,6 +260,12 @@ class SnowballStrategy(Strategy):
         )
         cycle.completed = True
 
+        # Discard any pending stop-loss rebuilds for this cycle — the
+        # cycle achieved its TP so rebuilding old positions is pointless.
+        ss.stop_loss_pending_rebuilds = [
+            p for p in ss.stop_loss_pending_rebuilds if p.cycle_id != cycle.cycle_id
+        ]
+
         new_events, _new_cycle = self._create_cycle(ss, tick, direction)
         logger.info(
             "Re-entry (%s) after TP: new cycle_id=%d",
@@ -954,6 +960,11 @@ class SnowballStrategy(Strategy):
             # Check if cycle is now empty
             if cycle.grid.is_empty():
                 cycle.completed = True
+                # Discard pending rebuilds — shrink is a protective
+                # measure and we should not reopen positions.
+                ss.stop_loss_pending_rebuilds = [
+                    p for p in ss.stop_loss_pending_rebuilds if p.cycle_id != cycle.cycle_id
+                ]
 
             # Recalculate counter TPs after shrink
             if cfg.counter_tp_mode == "weighted_avg":
