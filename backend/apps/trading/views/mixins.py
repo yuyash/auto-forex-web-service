@@ -507,7 +507,9 @@ class TaskSubResourceMixin:
             "description",
             "timestamp",
             "position_id",
+            "cycle_id",
             "updated_at",
+            "is_rebuild",
         )
         normalized: list[dict] = []
         for trade in trades_qs:
