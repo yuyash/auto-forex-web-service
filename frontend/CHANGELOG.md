@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.0...frontend-v1.34.1) (2026-04-07)
+
+
+### Bug Fixes
+
+* per metric yaxis width and hedging margin ([#376](https://github.com/yuyash/auto-forex-web-service/issues/376)) ([2e1dc96](https://github.com/yuyash/auto-forex-web-service/commit/2e1dc965239e31cb95455008aff6749c2eb4b5c1))
+
 ## [1.34.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.33.3...frontend-v1.34.0) (2026-04-07)
 
 
