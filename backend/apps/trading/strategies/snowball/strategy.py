@@ -1128,9 +1128,16 @@ class SnowballStrategy(Strategy):
                 )
             )
 
-            # If cycle is now empty, mark completed
+            # If cycle is now empty, mark completed only if there are
+            # no pending stop-loss rebuilds for this cycle.  When rebuilds
+            # are pending the cycle should stay active so that
+            # _process_stop_loss_rebuilds can restore positions.
             if cycle.grid.is_empty():
-                cycle.completed = True
+                has_pending = any(
+                    p.cycle_id == cycle.cycle_id for p in ss.stop_loss_pending_rebuilds
+                )
+                if not has_pending:
+                    cycle.completed = True
 
         return events
 
@@ -1372,6 +1379,23 @@ class SnowballStrategy(Strategy):
 
             if not counter_close_events:
                 events.extend(self._process_cycle_counter_adds(ss, tick, cycle))
+
+        # --- Re-seed directions that have no active cycle ---
+        # When every cycle for a direction has completed (e.g. all
+        # positions were stopped-out with no pending rebuilds), start a
+        # fresh cycle so the strategy keeps trading.
+        active = ss.active_cycles()
+        for direction in (Direction.LONG, Direction.SHORT):
+            if not self._hedging_enabled and direction == Direction.SHORT:
+                continue
+            has_active = any(c.direction == direction for c in active)
+            if not has_active:
+                logger.info(
+                    "No active %s cycle — creating new cycle",
+                    direction.value.upper(),
+                )
+                new_events, _ = self._create_cycle(ss, tick, direction)
+                events.extend(new_events)
 
         state.strategy_state = ss.to_dict()
         return StrategyResult(state=state, events=events)
