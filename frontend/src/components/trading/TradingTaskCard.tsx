@@ -530,23 +530,16 @@ export default function TradingTaskCard({
 
         {/* Error message for failed tasks */}
         {displayStatus === TaskStatus.FAILED && (
-          <Box
-            sx={{
-              mt: 2,
-              p: 2,
-              bgcolor: 'error.light',
-              borderRadius: 1,
-            }}
-          >
-            <Typography variant="body2" color="error.dark" fontWeight="bold">
+          <Alert severity="error" sx={{ mt: 2 }}>
+            <Typography variant="body2" fontWeight="bold">
               Task execution failed
             </Typography>
             {currentTask.latest_execution?.error_message && (
-              <Typography variant="body2" color="error.dark" sx={{ mt: 1 }}>
+              <Typography variant="body2" sx={{ mt: 0.5 }}>
                 {currentTask.latest_execution.error_message}
               </Typography>
             )}
-          </Box>
+          </Alert>
         )}
 
         {/* Footer with metadata */}
