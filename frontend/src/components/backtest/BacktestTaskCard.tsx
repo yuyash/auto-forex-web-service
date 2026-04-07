@@ -9,6 +9,7 @@ import {
   Chip,
   IconButton,
   Tooltip,
+  Alert,
   useMediaQuery,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -459,23 +460,16 @@ export default function BacktestTaskCard({
 
         {/* Error message for failed tasks */}
         {displayStatus === TaskStatus.FAILED && (
-          <Box
-            sx={{
-              mt: 2,
-              p: 2,
-              bgcolor: 'error.light',
-              borderRadius: 1,
-            }}
-          >
-            <Typography variant="body2" color="error.dark" fontWeight="bold">
+          <Alert severity="error" sx={{ mt: 2 }}>
+            <Typography variant="body2" fontWeight="bold">
               {t('backtest:card.taskExecutionFailed')}
             </Typography>
             {currentTask.latest_execution?.error_message && (
-              <Typography variant="body2" color="error.dark" sx={{ mt: 1 }}>
+              <Typography variant="body2" sx={{ mt: 0.5 }}>
                 {currentTask.latest_execution.error_message}
               </Typography>
             )}
-          </Box>
+          </Alert>
         )}
 
         {/* Footer with metadata */}
