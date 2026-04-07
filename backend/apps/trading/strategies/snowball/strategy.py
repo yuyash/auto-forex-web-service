@@ -310,6 +310,11 @@ class SnowballStrategy(Strategy):
         The head must only close when no other entries remain open.
         If other entries are still present, their TPs should be reached
         first (they are closer to the current price).
+
+        When stop-loss closes and rebuilds are active, counter entries
+        may end up with TPs that are hit on the same tick as the head.
+        In that case we flush all TP-ready counters first, then close
+        the head — this is not a violation.
         """
         if cycle.completed:
             return []
@@ -328,7 +333,27 @@ class SnowballStrategy(Strategy):
         if not hit:
             return []
 
-        if cycle.grid.has_counter_entries():
+        if not cycle.grid.has_counter_entries():
+            return self._close_and_reenter(ss, tick, cycle)
+
+        # Counter entries are still open while the head TP is hit.
+        # Check whether every remaining counter's TP is also reached
+        # on this tick.  If so, flush them all and proceed normally.
+        all_counters_tp_hit = True
+        for e in cycle.grid.all_entries():
+            if e.entry_id == entry.entry_id:
+                continue
+            if e.close_price <= 0:
+                all_counters_tp_hit = False
+                break
+            if e.is_long and tick.bid < e.close_price:
+                all_counters_tp_hit = False
+                break
+            if e.is_short and tick.ask > e.close_price:
+                all_counters_tp_hit = False
+                break
+
+        if not all_counters_tp_hit:
             logger.error(
                 "CLOSE ORDER VIOLATION: head TP reached while counter entries "
                 "are still open — cycle_id=%d, direction=%s.",
@@ -337,7 +362,47 @@ class SnowballStrategy(Strategy):
             )
             return self._fail_close_order_violation(ss, tick, cycle)
 
-        return self._close_and_reenter(ss, tick, cycle)
+        # All counter TPs are hit on this tick — flush them before
+        # closing the head.  This can happen when stop-loss rebuilds
+        # produce entries whose TPs coincide with the head TP.
+        events: list[StrategyEvent] = []
+        for layer in reversed(list(cycle.grid.layers)):
+            for slot in reversed(layer.occupied_slots()):
+                counter = slot.entry
+                if counter is None or counter.entry_id == entry.entry_id:
+                    continue
+                exit_price = counter.exit_price(tick)
+                pips_gained = abs(exit_price - counter.entry_price) / self.pip_size
+                logger.info(
+                    "Counter TP (flush) (%s): L%s/R%s, +%.1f pips",
+                    counter.direction.value.upper(),
+                    counter.layer_number,
+                    counter.retracement_count,
+                    pips_gained,
+                )
+                layer.close_slot(slot.index)
+                cycle.counter_close_count += 1
+                events.append(
+                    self._close_entry(
+                        tick,
+                        counter,
+                        description=(
+                            f"Counter TP flush ({counter.direction.value.upper()}) | "
+                            f"L{counter.layer_number}/R{counter.retracement_count}, "
+                            f"entry={counter.entry_price:.3f}, "
+                            f"exit={exit_price:.3f}, +{pips_gained:.1f} pips"
+                        ),
+                        close_reason="counter_tp",
+                        actual_tp_pips=pips_gained,
+                        validation_status="pass",
+                    )
+                )
+            # Remove empty non-L1 layers
+            if layer.layer_number > 1 and not layer.has_open_entries():
+                cycle.grid.layers.remove(layer)
+
+        events.extend(self._close_and_reenter(ss, tick, cycle))
+        return events
 
     def _process_cycle_counter_closes(
         self,
@@ -1283,6 +1348,9 @@ class SnowballStrategy(Strategy):
 
         # --- Per-cycle processing ---
         for cycle in list(ss.active_cycles()):
+            counter_close_events = self._process_cycle_counter_closes(ss, tick, cycle)
+            events.extend(counter_close_events)
+
             events.extend(self._process_cycle_tp(ss, tick, cycle))
 
             if self._close_order_violation:
@@ -1293,9 +1361,6 @@ class SnowballStrategy(Strategy):
                     should_stop=True,
                     stop_reason=f"Close order violation: {self._close_order_violation}",
                 )
-
-            counter_close_events = self._process_cycle_counter_closes(ss, tick, cycle)
-            events.extend(counter_close_events)
 
             # --- Stop-loss closes ---
             sl_close_events = self._process_stop_loss_closes(ss, tick, cycle)
