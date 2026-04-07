@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.28.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.1...backend-v1.28.2) (2026-04-07)
+
+
+### Bug Fixes
+
+* **strategy:** resolve false close-order violation when SL rebuilds p… ([#368](https://github.com/yuyash/auto-forex-web-service/issues/368)) ([283fcd9](https://github.com/yuyash/auto-forex-web-service/commit/283fcd925d7168176daf6556d08cfd850ee8e58d))
+* **strategy:** resolve false close-order violation when SL rebuilds produce coincident TPs ([283fcd9](https://github.com/yuyash/auto-forex-web-service/commit/283fcd925d7168176daf6556d08cfd850ee8e58d))
+
 ## [1.28.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.0...backend-v1.28.1) (2026-04-07)
 
 
