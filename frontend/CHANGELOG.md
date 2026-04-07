@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.1...frontend-v1.34.2) (2026-04-07)
+
+
+### Bug Fixes
+
+* **frontend:** improve failed task error message readability ([#377](https://github.com/yuyash/auto-forex-web-service/issues/377)) ([9a0bbea](https://github.com/yuyash/auto-forex-web-service/commit/9a0bbead3ccf934d3f6bcb115d9e9b141e26f528))
+
 ## [1.34.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.0...frontend-v1.34.1) (2026-04-07)
 
 
