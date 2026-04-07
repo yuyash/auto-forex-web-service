@@ -41,7 +41,7 @@ from apps.trading.strategies.snowball.calculators import (
     counter_tp_pips,
     stop_loss_price,
 )
-from apps.trading.strategies.snowball.enums import ProtectionLevel
+from apps.trading.strategies.snowball.enums import CycleStatus, ProtectionLevel
 from apps.trading.strategies.snowball.models import (
     Entry,
     Layer,
@@ -228,7 +228,11 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        """Close the cycle head (TP hit), mark cycle completed, create new cycle."""
+        """Close the cycle head (TP hit), create new cycle.
+
+        The cycle transitions to COMPLETED via the unified grid.is_empty()
+        check in on_tick after this method returns.
+        """
         entry = cycle.initial_entry
         if entry is None:
             return []
@@ -258,7 +262,19 @@ class SnowballStrategy(Strategy):
                 validation_status="pass",
             )
         )
-        cycle.completed = True
+
+        # Remove the head from the grid so grid.is_empty() becomes true.
+        for layer in cycle.grid.layers:
+            for slot in layer.slots:
+                if slot.entry is not None and slot.entry.entry_id == entry.entry_id:
+                    layer.close_slot(slot.index, refillable=False)
+                    break
+
+        # Discard any pending stop-loss rebuilds for this cycle — the
+        # cycle achieved its TP so rebuilding old positions is pointless.
+        ss.stop_loss_pending_rebuilds = [
+            p for p in ss.stop_loss_pending_rebuilds if p.cycle_id != cycle.cycle_id
+        ]
 
         new_events, _new_cycle = self._create_cycle(ss, tick, direction)
         logger.info(
@@ -758,6 +774,8 @@ class SnowballStrategy(Strategy):
         ratio: Decimal,
         unrealized: Decimal,
     ) -> tuple[list[StrategyEvent], str] | None:
+        if not self.config.emergency_enabled:
+            return None
         if ratio < Decimal("95"):
             return None
         ss.protection_level = ProtectionLevel.EMERGENCY
@@ -951,10 +969,6 @@ class SnowballStrategy(Strategy):
             cycle.remove_entry(entry.entry_id)
             closed_count += 1
 
-            # Check if cycle is now empty
-            if cycle.grid.is_empty():
-                cycle.completed = True
-
             # Recalculate counter TPs after shrink
             if cfg.counter_tp_mode == "weighted_avg":
                 self._recalculate_counter_tps(cycle)
@@ -973,6 +987,14 @@ class SnowballStrategy(Strategy):
                 closed_count,
                 ratio,
             )
+
+            # Mark any cycles emptied by shrink as completed.
+            for cycle in ss.active_cycles():
+                if cycle.grid.is_empty():
+                    cycle.status = CycleStatus.COMPLETED
+                    ss.stop_loss_pending_rebuilds = [
+                        p for p in ss.stop_loss_pending_rebuilds if p.cycle_id != cycle.cycle_id
+                    ]
 
         if ratio < cfg.m1_th:
             ss.protection_level = ProtectionLevel.NORMAL
@@ -1128,17 +1150,6 @@ class SnowballStrategy(Strategy):
                 )
             )
 
-            # If cycle is now empty, mark completed only if there are
-            # no pending stop-loss rebuilds for this cycle.  When rebuilds
-            # are pending the cycle should stay active so that
-            # _process_stop_loss_rebuilds can restore positions.
-            if cycle.grid.is_empty():
-                has_pending = any(
-                    p.cycle_id == cycle.cycle_id for p in ss.stop_loss_pending_rebuilds
-                )
-                if not has_pending:
-                    cycle.completed = True
-
         return events
 
     def _process_stop_loss_rebuilds(
@@ -1240,6 +1251,15 @@ class SnowballStrategy(Strategy):
         for r in rebuilt:
             ss.stop_loss_pending_rebuilds.remove(r)
 
+        # If any entries were rebuilt and the cycle was pending, reactivate it.
+        if rebuilt and cycle.is_pending:
+            cycle.status = CycleStatus.ACTIVE
+            logger.info(
+                "Cycle %d (%s) reactivated after stop-loss rebuild",
+                cycle.cycle_id,
+                cycle.direction.value.upper(),
+            )
+
         return events
 
     def _recalculate_counter_tps(self, cycle: SnowballCycle) -> None:
@@ -1318,6 +1338,7 @@ class SnowballStrategy(Strategy):
                 events=emergency_events,
                 should_stop=True,
                 stop_reason=stop_reason,
+                is_error=True,
             )
 
         # --- Lock enter ---
@@ -1367,6 +1388,7 @@ class SnowballStrategy(Strategy):
                     events=events,
                     should_stop=True,
                     stop_reason=f"Close order violation: {self._close_order_violation}",
+                    is_error=True,
                 )
 
             # --- Stop-loss closes ---
@@ -1380,18 +1402,49 @@ class SnowballStrategy(Strategy):
             if not counter_close_events:
                 events.extend(self._process_cycle_counter_adds(ss, tick, cycle))
 
+            # --- Unified cycle completion check ---
+            # A cycle is completed when its grid has no open positions.
+            # If stop-loss rebuilds are pending, the cycle transitions to
+            # PENDING instead so rebuilds can restore positions later.
+            if cycle.is_active and cycle.grid.is_empty():
+                has_pending = any(
+                    p.cycle_id == cycle.cycle_id for p in ss.stop_loss_pending_rebuilds
+                )
+                if has_pending:
+                    cycle.status = CycleStatus.PENDING
+                else:
+                    cycle.status = CycleStatus.COMPLETED
+                    ss.stop_loss_pending_rebuilds = [
+                        p for p in ss.stop_loss_pending_rebuilds if p.cycle_id != cycle.cycle_id
+                    ]
+
         # --- Re-seed directions that have no active cycle ---
         # When every cycle for a direction has completed (e.g. all
         # positions were stopped-out with no pending rebuilds), start a
         # fresh cycle so the strategy keeps trading.
+        # When reseed_on_all_pending is enabled, also re-seed when all
+        # remaining cycles for a direction are in PENDING state (all
+        # positions awaiting stop-loss rebuild with none currently open).
         active = ss.active_cycles()
         for direction in (Direction.LONG, Direction.SHORT):
             if not self._hedging_enabled and direction == Direction.SHORT:
                 continue
-            has_active = any(c.direction == direction for c in active)
-            if not has_active:
+            dir_cycles = [c for c in active if c.direction == direction]
+            if not dir_cycles:
+                # No active or pending cycles — all completed.
                 logger.info(
                     "No active %s cycle — creating new cycle",
+                    direction.value.upper(),
+                )
+                new_events, _ = self._create_cycle(ss, tick, direction)
+                events.extend(new_events)
+            elif self.config.reseed_on_all_pending and all(c.is_pending for c in dir_cycles):
+                # All cycles for this direction are pending rebuild with
+                # no open positions.  Start a fresh cycle at the current
+                # price so the strategy keeps trading while waiting for
+                # rebuilds.
+                logger.info(
+                    "All %s cycles pending — creating new cycle (reseed_on_all_pending)",
                     direction.value.upper(),
                 )
                 new_events, _ = self._create_cycle(ss, tick, direction)
@@ -1410,7 +1463,7 @@ class SnowballStrategy(Strategy):
         state: ExecutionState,
         execution_result: EventExecutionResult,
     ) -> None:
-        """Apply order execution feedback (position IDs) to state."""
+        """Apply order execution feedback (position IDs, cycle IDs) to state."""
         ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
         if not execution_result:
             return
@@ -1428,6 +1481,14 @@ class SnowballStrategy(Strategy):
                 for slot in layer.slots:
                     if slot.entry is not None and slot.entry.entry_id == eid:
                         slot.entry.position_id = str(position_id)
+                        # Back-fill trade_cycle_id on the cycle when the
+                        # initial entry (cycle_id == entry_id) is executed.
+                        if (
+                            binding.cycle_id
+                            and cycle.cycle_id == eid
+                            and cycle.trade_cycle_id is None
+                        ):
+                            cycle.trade_cycle_id = binding.cycle_id
             for entry in cycle.hedge_entries:
                 if entry.entry_id == eid:
                     entry.position_id = str(position_id)

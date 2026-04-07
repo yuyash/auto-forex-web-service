@@ -726,6 +726,7 @@ class FloorStrategy(Strategy):
                         f"{hypothetical_margin:.4f} >= target "
                         f"{self.config.margin_cut_target_ratio:.4f} with no open positions"
                     ),
+                    is_error=True,
                 )
 
         active_entries = self._active_floor_entries(floor_state, active_floor)

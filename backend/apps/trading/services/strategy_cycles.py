@@ -77,7 +77,18 @@ class StrategyCyclesService:
         for row in rows:
             by_cycle[str(row["cycle_id"])].append(row)
 
-        cycles = [_build_cycle(cid, trades, metrics_by_minute) for cid, trades in by_cycle.items()]
+        # Load authoritative cycle statuses from strategy_state so we can
+        # distinguish active / pending / completed accurately.
+        cycle_status_map = _load_cycle_statuses(
+            task_type=task_type,
+            task_id=str(task.pk),
+            execution_id=str(execution_id),
+        )
+
+        cycles = [
+            _build_cycle(cid, trades, metrics_by_minute, cycle_status_map.get(cid))
+            for cid, trades in by_cycle.items()
+        ]
         cycles.sort(key=lambda c: c["started_at"] or "")
 
         # Resolve the last tick timestamp from the execution state so the
@@ -122,6 +133,44 @@ def _resolve_last_tick_timestamp(
     if row is not None:
         return row.isoformat()
     return None
+
+
+def _load_cycle_statuses(
+    *,
+    task_type: str,
+    task_id: str,
+    execution_id: str,
+) -> dict[str, str]:
+    """Load cycle statuses from the persisted strategy_state.
+
+    Returns a mapping of trade_cycle_id (UUID str) → status string
+    ("active", "pending", "completed").  Falls back to an empty dict
+    if the state is unavailable or cycles lack trade_cycle_id.
+    """
+    from apps.trading.models.state import ExecutionState as ExecutionStateModel
+
+    row = (
+        ExecutionStateModel.objects.filter(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=execution_id,
+        )
+        .values_list("strategy_state", flat=True)
+        .first()
+    )
+    if not isinstance(row, dict):
+        return {}
+
+    result: dict[str, str] = {}
+    for cycle_data in row.get("cycles", []):
+        tcid = cycle_data.get("trade_cycle_id")
+        if not tcid:
+            continue
+        status = cycle_data.get("status")
+        if status is None:
+            status = "completed" if cycle_data.get("completed", False) else "active"
+        result[str(tcid)] = str(status)
+    return result
 
 
 def _load_metrics_for_trades(
@@ -174,7 +223,10 @@ def _load_metrics_for_trades(
 
 
 def _build_cycle(
-    cycle_id: str, trades: list[dict[str, Any]], metrics_by_minute: dict[str, dict[str, Any]]
+    cycle_id: str,
+    trades: list[dict[str, Any]],
+    metrics_by_minute: dict[str, dict[str, Any]],
+    authoritative_status: str | None = None,
 ) -> dict[str, Any]:
     first = trades[0]
     last = trades[-1]
@@ -186,19 +238,23 @@ def _build_cycle(
     close_ids = {str(t["position_id"]) for t in closes if t.get("position_id")}
     has_open_remaining = bool(open_ids - close_ids)
 
-    # The initial entry is the first open trade in the cycle (cycle_id == trade.id)
-    initial = next(
-        (t for t in opens if str(t["id"]) == cycle_id),
-        opens[0] if opens else first,
-    )
-    initial_closed = str(initial.get("position_id", "")) in close_ids
-
-    if initial_closed:
-        status = "completed"
-    elif has_open_remaining:
-        status = "active"
+    # Use authoritative status from strategy_state when available;
+    # otherwise fall back to event-based inference.
+    if authoritative_status is not None:
+        status = authoritative_status
     else:
-        status = "completed"
+        initial = next(
+            (t for t in opens if str(t["id"]) == cycle_id),
+            opens[0] if opens else first,
+        )
+        initial_closed = str(initial.get("position_id", "")) in close_ids
+
+        if initial_closed:
+            status = "completed"
+        elif has_open_remaining:
+            status = "active"
+        else:
+            status = "completed"
 
     _PROTECTION_METHODS = {"volatility_lock", "margin_protection", "shrink", "stop_loss"}
     protection_trades = [
@@ -279,6 +335,7 @@ def _empty_summary() -> dict[str, int]:
     return {
         "cycle_count": 0,
         "active_count": 0,
+        "pending_count": 0,
         "completed_count": 0,
         "total_trades": 0,
     }
@@ -288,6 +345,7 @@ def _build_summary(cycles: list[dict[str, Any]]) -> dict[str, int]:
     return {
         "cycle_count": len(cycles),
         "active_count": sum(1 for c in cycles if c["status"] == "active"),
+        "pending_count": sum(1 for c in cycles if c["status"] == "pending"),
         "completed_count": sum(1 for c in cycles if c["status"] == "completed"),
         "total_trades": sum(c["trade_count"] for c in cycles),
     }

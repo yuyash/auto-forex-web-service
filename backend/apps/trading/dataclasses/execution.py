@@ -12,6 +12,7 @@ class EntryExecutionBinding:
 
     entry_id: int | None
     position_id: str
+    cycle_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

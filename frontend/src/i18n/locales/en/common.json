@@ -247,6 +247,7 @@
     "chips": {
       "cycles": "Cycles: {{count}}",
       "active": "Active: {{count}}",
+      "pending": "Pending: {{count}}",
       "completed": "Completed: {{count}}",
       "trades": "Trades: {{count}}"
     }

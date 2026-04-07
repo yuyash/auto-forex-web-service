@@ -247,6 +247,7 @@
     "chips": {
       "cycles": "サイクル: {{count}}",
       "active": "進行中: {{count}}",
+      "pending": "保留: {{count}}",
       "completed": "完了: {{count}}",
       "trades": "トレード: {{count}}"
     }

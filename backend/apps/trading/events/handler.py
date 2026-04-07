@@ -311,6 +311,7 @@ class EventHandler:
         binding = EntryExecutionBinding(
             entry_id=strategy_event.entry_id,
             position_id=str(position.id),
+            cycle_id=getattr(self, "_last_open_cycle_id", None),
         )
         return EventExecutionResult(
             realized_pnl_delta=Decimal("0"),
@@ -531,6 +532,9 @@ class EventHandler:
             trade.cycle_id = str(trade.id)
             trade.save(update_fields=["cycle_id"])
             cycle_id = str(trade.id)
+
+        # Store for _dispatch_open_position to include in the binding.
+        self._last_open_cycle_id = cycle_id
 
         # Register mapping so child entries and close events can look up
         # the cycle_id by their root_entry_id or entry_id.
