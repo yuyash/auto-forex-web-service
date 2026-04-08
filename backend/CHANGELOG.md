@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.9](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.8...backend-v1.28.9) (2026-04-08)
+
+
+### Bug Fixes
+
+* **frontend:** enable horizontal scroll on logs table for mobile ([#386](https://github.com/yuyash/auto-forex-web-service/issues/386)) ([ffc121f](https://github.com/yuyash/auto-forex-web-service/commit/ffc121fb5ee84eff25d237818fb9787fee5a84e2))
+
 ## [1.28.8](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.7...backend-v1.28.8) (2026-04-08)
 
 
