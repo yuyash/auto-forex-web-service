@@ -21,18 +21,19 @@
 - $P_{\text{avg}}=\dfrac{\sum_i p_i u_i}{\sum_i u_i}$
 - $\mathrm{ratio}=\dfrac{\mathrm{required\_margin}}{\mathrm{NAV}}\times 100$（証拠金比率 %）
 - NAV = 口座残高 + 未実現損益
-- 証拠金計算: OANDA のネットポジション方式（LONG/SHORT の大きい方のみ）
+- 証拠金計算: OANDA のMAX方式（LONG/SHORT の必要証拠金が多い方のみ）
 
 ### 2.3 用語
 
 | 用語 | 説明 |
 | --- | --- |
 | サイクル | 1つの初期エントリーから完了までの一連のトレード群。LONG/SHORT それぞれ独立に管理される |
-| レイヤー | 1サイクル内のリトレースメントスロット群。各レイヤーは `r_max` 個のスロットを持つ |
-| スロット | レイヤー内の番号付き座席（R1, R2, ..., R_max）。エントリーを保持するか空の状態を取る |
-| リトレースメント | スロットにエントリーが配置されること。逆行距離が閾値に達するとスロットが埋まる |
-| カウンターエントリー | 逆行時にスロットに配置されるナンピンポジション |
-| レイヤー初期エントリー | 新レイヤー開始時に建てるエントリー（L2以降） |
+| グリッド | サイクル内の全ポジションを管理する統一構造。レイヤーのリストで構成される |
+| レイヤー | グリッド内のリトレースメントスロット群。各レイヤーは R0（レイヤー初期）+ R1〜R(r_max) のスロットを持つ |
+| スロット | レイヤー内の番号付き座席。エントリーを保持するか空の状態を取る |
+| ヘッド | サイクル内の最も古いポジション（動的に決定）。ヘッドのTPがサイクル完了のトリガーとなる |
+| カウンターエントリー | 逆行時にスロットに配置されるナンピンポジション（R1以降） |
+| レイヤー初期エントリー | 新レイヤー開始時にR0に建てるエントリー（L2以降） |
 
 ### 2.4 パラメータ記号対応
 
@@ -42,12 +43,12 @@
 | $f_{\max}$ | `f_max` |
 | $m_{\mathrm{pips}}$ | `m_pips` |
 | $m_{\mathrm{th}}$ | `m_th` |
+| $m1_{\mathrm{th}}$ | `m1_th` |
 | $n_{\mathrm{th}}$ | `n_th` |
 | $n_{\mathrm{head}}$ | `n_pips_head` |
 | $n_{\mathrm{tail}}$ | `n_pips_tail` |
 | $n_{\mathrm{flat}}$ | `n_pips_flat_steps` |
 | $\gamma_n$ | `n_pips_gamma` |
-| $s_{\mathrm{spread}}$ | `spread_guard_pips` |
 | $\Delta t_{\mathrm{cool}}$ | `cooldown_sec` |
 
 ## 3. パラメータ
@@ -59,7 +60,7 @@
 | `base_units` | 基本ロット (通貨単位) | `1000` |
 | `m_pips` | 順行側の利確幅 (pips) | `50` |
 | `trend_lot_size` | 順行側エントリーのロット数（`base_units` に乗算） | `1` |
-| `r_max` | 1レイヤーあたりのスロット数（最大カウンターエントリー数） | `7` |
+| `r_max` | 1レイヤーあたりのカウンタースロット数 | `7` |
 | `f_max` | レイヤーの最大数 | `3` |
 | `post_r_max_base_factor` | 新レイヤー作成時の `base_units` 倍率 | `1` |
 | `refill_up_to` | 決済後に再建玉可能なスロット上限（R1〜R_n）。0=再建玉なし | `2` |
@@ -67,12 +68,10 @@
 
 ### 3.2 逆行側間隔（Interval Mode）
 
-間隔モード（`interval_mode`）により、カウンターエントリーの追加間隔の計算方法を選択する。
-
 | `interval_mode` | 動作 |
 | --- | --- |
 | `constant` | 全段 `n_pips_head` 固定 |
-| カーブ系（`additive` / `subtractive` / `multiplicative` / `divisive`） | `n_pips_head` → `n_pips_tail` へガンマカーブで遷移 |
+| カーブ系 | `n_pips_head` → `n_pips_tail` へガンマカーブで遷移 |
 | `manual` | `manual_intervals` 配列でユーザーが段ごとに指定 |
 
 | Key | 意味 | Default | 表示条件 |
@@ -84,20 +83,11 @@
 | `n_pips_gamma` | 減衰カーブ係数 | `1.4` | カーブ系のみ |
 | `manual_intervals` | 段ごとのpip間隔配列（`r_max` 個） | `[]` | `manual` のみ |
 
-間隔一般式（カーブ系モード）:
-
-1. $k \le n_{\mathrm{flat}}$ のとき: $n_{\mathrm{head}}$
-2. $k > n_{\mathrm{flat}}$ のとき: $t = k - n_{\mathrm{flat}}$, $r_{\mathrm{decay}} = r_{\max} - n_{\mathrm{flat}}$, $\mathrm{progress} = t / r_{\mathrm{decay}}$
-   - $\mathrm{interval} = n_{\mathrm{head}} - (n_{\mathrm{head}} - n_{\mathrm{tail}}) \cdot \mathrm{progress}^{\gamma_n}$
-   - $\gamma > 1$: 緩やかな開始、$\gamma < 1$: 急速な開始
-
 ### 3.3 逆行側決済（Counter TP Mode）
-
-決済価格モード（`counter_tp_mode`）により、各段の決済価格の計算方法を選択する。
 
 | `counter_tp_mode` | 動作 |
 | --- | --- |
-| `weighted_avg` | 同レイヤー内の全ポジション（レイヤー初期エントリー含む）の加重平均価格を決済価格とする（デフォルト） |
+| `weighted_avg` | 同レイヤー内の全ポジションの加重平均価格を決済価格とする（デフォルト） |
 | `fixed` | 全段 `counter_tp_pips` 固定 |
 | `additive` | `counter_tp_pips + counter_tp_step_amount × (k-1)` |
 | `subtractive` | `counter_tp_pips - counter_tp_step_amount × (k-1)`（下限 0.1） |
@@ -111,431 +101,334 @@
 | `counter_tp_step_amount` | 段階増減量（pip） | `2.5` | `additive` / `subtractive` |
 | `counter_tp_multiplier` | 段階乗数 | `1.2` | `multiplicative` / `divisive` |
 
-### 3.4 動的利確（ATR）
+### 3.4 ストップロス
 
-| Key | 意味 | Default | 表示条件 |
-| --- | --- | --- | --- |
-| `dynamic_tp_enabled` | ATR動的利確の有効/無効 | `false` | 常時 |
-| `atr_period` | ATR期間 | `14` | 有効時 |
-| `atr_timeframe` | ATR計算足（`M1`/`M5`/`M15`/`M30`/`H1`/`H4`） | `M1` | 有効時 |
-| `atr_baseline_lookback` | ATR基準値算出本数 | `96` | 有効時 |
-| `m_pips_min` | 動的 `m_pips` の下限 | `12` | 有効時 |
-| `m_pips_max` | 動的 `m_pips` の上限 | `80` | 有効時 |
+| Key | 意味 | Default |
+| --- | --- | --- |
+| `stop_loss_enabled` | ストップロスの有効/無効 | `false` |
+| `reseed_on_all_pending` | 全サイクルが再建待ちの場合に新サイクルを作成 | `false` |
 
 ### 3.5 証拠金保護
 
-各保護レベルは個別に有効/無効を切り替え可能。
-
 | Key | 意味 | Default | 表示条件 |
 | --- | --- | --- | --- |
-| `rebalance_enabled` | リバランス機能の有効/無効 | `false` | 常時 |
-| `rebalance_start_ratio` | リバランス開始の証拠金比率（%） | `60` | リバランス有効時 |
-| `rebalance_end_ratio` | リバランス終了の証拠金比率（%） | `50` | リバランス有効時 |
 | `shrink_enabled` | 縮小モードの有効/無効 | `true` | 常時 |
-| `m_th` | 証拠金防御レベル1 - 縮小（%） | `70` | 縮小有効時 |
+| `m_th` | 縮小開始の証拠金比率（%） | `70` | 縮小有効時 |
+| `m1_th` | 縮小の目標証拠金比率（%） | `50` | 縮小有効時 |
 | `lock_enabled` | ロックモードの有効/無効 | `true` | 常時 |
-| `n_th` | 証拠金防御レベル2 - ロック（%） | `85` | ロック有効時 |
+| `n_th` | ロック開始の証拠金比率（%） | `85` | ロック有効時 |
 | `cooldown_sec` | ロック解除後の再開待機（秒） | `300` | ロック有効時 |
+| `emergency_enabled` | 緊急停止の有効/無効 | `true` | 常時 |
 
-### 3.6 スプレッドガード
-
-| Key | 意味 | Default | 表示条件 |
-| --- | --- | --- | --- |
-| `spread_guard_enabled` | スプレッドガードの有効/無効 | `false` | 常時 |
-| `spread_guard_pips` | 新規/増し玉停止スプレッド閾値 | `2.5` | 有効時 |
-
-### 3.7 バリデーション
+### 3.6 バリデーション
 
 - `shrink_enabled` かつ `lock_enabled` のとき: $m_{\mathrm{th}} < n_{\mathrm{th}} < 100$
-- `shrink_enabled` のとき: $0 < m_{\mathrm{th}} < 100$
+- `shrink_enabled` のとき: $0 < m1_{\mathrm{th}} < m_{\mathrm{th}} < 100$
 - `lock_enabled` のとき: $0 < n_{\mathrm{th}} < 100$
-- `dynamic_tp_enabled` のとき: $m_{\mathrm{pips,min}} \le m_{\mathrm{pips}} \le m_{\mathrm{pips,max}}$
 - $n_{\mathrm{head}} \ge n_{\mathrm{tail}} > 0$
 - $n_{\mathrm{flat}} < r_{\max}$
 - `counter_tp_mode` が `weighted_avg` 以外のとき: $\mathrm{counter\_tp\_pips} > 0$
-- `rebalance_enabled` のとき: $rebalance\_start\_ratio > rebalance\_end\_ratio > 0$
 - `interval_mode` が `manual` のとき: `manual_intervals` の要素数 = `r_max`、全値 ≥ 1
 - $0 \le \mathrm{refill\_up\_to} < r_{\max}$
+- `stop_loss_enabled` と `shrink_enabled` は同時に有効にできない
 
+## 4. サイクルとグリッドの構造
 
-## 4. 全体フロー
+### 4.1 統一グリッド
 
-```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#ffffff', 'primaryBorderColor': '#000000', 'primaryTextColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#ffffff', 'tertiaryColor': '#ffffff', 'fontSize': '11px'}, 'flowchart': {'nodeSpacing': 16, 'rankSpacing': 16, 'padding': 4, 'useMaxWidth': true}}}%%
-flowchart TB
-    A[開始] --> B{ヘッジ有効?}
-    B -->|Yes| B1[初期両建て<br/>LONG cycle + SHORT cycle]
-    B -->|No| B2[LONG cycle のみ]
-    B1 --> C{ratio 判定}
-    B2 --> C
-    C -->|ratio >= 95| Z[緊急停止]
-    C -->|lock有効 かつ ratio >= n_th| L[ロック]
-    C -->|shrink有効 かつ ratio >= m_th| S[縮小]
-    C -->|rebalance有効 かつ ratio >= rebalance_start| R[リバランス]
-    C -->|ratio < 各閾値| N[通常]
-
-    N --> G{spread_guard有効<br/>かつ spread > 閾値?}
-    G -->|Yes| C
-    G -->|No| N1[順行側: 初期エントリーが m_pips 到達で利確→即再エントリー]
-    N1 --> N2[逆行側: スロット決済チェック]
-    N2 --> N2a{同tick内で<br/>決済が発生した?}
-    N2a -->|Yes| C
-    N2a -->|No| N3[逆行側: スロット追加チェック]
-    N3 --> N4{次のスロットは<br/>クローズ済み or 全スロット使用済み?}
-    N4 -->|No| N5[スロットにエントリーを配置]
-    N4 -->|Yes| N6{レイヤー数 < f_max?}
-    N6 -->|Yes| N7[新レイヤー作成<br/>レイヤー初期エントリー建玉]
-    N6 -->|No| N8[カウンター追加停止<br/>順行側利確は継続]
-    N5 --> C
-    N7 --> C
-    N8 --> C
-
-    S --> S1[新規/増し玉停止]
-    S1 --> S2[含み損最大のカウンターエントリーをクローズ]
-    S2 --> S3{ratio < m_th - 5?}
-    S3 -->|Yes| C
-    S3 -->|No| S
-
-    L --> L1[ネット0ヘッジ追加]
-    L1 --> L2[新規/増し玉禁止]
-    L2 --> L3{解除条件を満たす?}
-    L3 -->|Yes| L4[ヘッジ解消]
-    L4 --> C
-    L3 -->|No| L
-
-    R --> R1[重い側の古いカウンターエントリーを順次クローズ]
-    R1 --> R2{BUY/SELL同数?}
-    R2 -->|Yes| C
-    R2 -->|No| R1
-```
-
-## 5. サイクルの構造
-
-各サイクルは以下の階層構造で構成される:
+各サイクルは `PositionGrid` を持ち、全ポジション（初期エントリー含む）がグリッド内のスロットに配置される。
 
 ```
 Cycle
-├── initial_entry (Entry)     … 順行側の初期エントリー（回転利確対象）
-├── layers[] (Layer)          … レイヤーのリスト（L1, L2, ...）
-│   ├── layer_number (int)    … レイヤー番号（1始まり）
-│   ├── initial_entry (Entry) … レイヤー初期エントリー（L2以降、L1はNone）
-│   ├── base_units (int)      … このレイヤーのロット基準値
-│   └── slots[] (Slot)        … r_max 個のスロット
-│       ├── index (int)       … スロット番号（1始まり、R1=1, R2=2, ...）
-│       ├── entry (Entry?)    … 保持中のエントリー（空ならNone）
-│       └── ever_closed (bool)… 一度でもクローズされたか
-├── hedge_entries[] (Entry)   … ロックモード時のヘッジエントリー群
-├── counter_close_count (int) … カウンターTPクローズの累計回数
-└── completed (bool)          … サイクル完了フラグ
+├── direction: LONG | SHORT
+├── status: ACTIVE | PENDING | COMPLETED
+├── grid: PositionGrid
+│   └── layers[]
+│       ├── Layer 1 (L1)
+│       │   ├── R0: 初期エントリー（サイクルヘッド候補）
+│       │   ├── R1: カウンター 1
+│       │   ├── R2: カウンター 2
+│       │   └── ... R(r_max)
+│       ├── Layer 2 (L2)
+│       │   ├── R0: レイヤー初期エントリー
+│       │   ├── R1: カウンター 1
+│       │   └── ...
+│       └── Layer 3 (L3) ...
+├── counter_close_count: int
+└── stop_loss_pending_rebuilds[]  ← StrategyState レベルで管理
 ```
 
-### 5.1 スロットの状態遷移
+### 4.2 サイクルヘッド（動的）
 
-各スロットは以下の3状態を取る:
+サイクルヘッドは「グリッド内の最も古いポジション」として動的に決定される。具体的には、レイヤーを L1 から順に走査し、最初に見つかった occupied スロットのエントリーがヘッドとなる。
 
-1. **空・未使用** (`entry=None, ever_closed=False`): エントリーを配置可能
-2. **使用中** (`entry=Entry`): エントリーが保持されている
-3. **空・クローズ済み** (`entry=None, ever_closed=True`): 一度クローズされ再利用不可。次の逆行で新レイヤーが開始される
+ヘッドのTPがサイクル完了のトリガーとなる。ヘッドのTP = entry_price ± m_pips × pip_size。
 
-スロットのクローズ時、`refill_up_to` 設定に基づいて挙動が分かれる:
+### 4.3 スロットの状態遷移
 
-- スロット番号 ≤ `refill_up_to` の場合: クローズ後も `ever_closed=False` のまま（再建玉可能）
-- スロット番号 > `refill_up_to` の場合: クローズ後に `ever_closed=True`（再利用不可、新レイヤーへ）
+各スロットは以下の状態を取る:
 
-L2以降のレイヤー初期エントリー（R0）がクローズされた場合、レイヤー全体がリセットされ（全スロットが空・未使用に戻る）、次の逆行時に同じレイヤー番号で R0 から再開する。
+| 状態 | entry | ever_closed | 説明 |
+| --- | --- | --- | --- |
+| 空・未使用 | None | false | エントリーを配置可能 |
+| 使用中 | Entry | - | エントリーが保持されている |
+| 空・再建玉可能 | None | false | クローズされたが再利用可能（refill_up_to 以下、またはSL再建待ち） |
+| 空・sealed | None | true | 再利用不可。次の逆行で新レイヤーが必要 |
 
-L1 の初期エントリー（R0）がクローズされた場合、サイクルが終了する。
+クローズ時の `ever_closed` 設定:
 
-### 5.2 サイクルのライフサイクル
+- 通常のTPクローズ: スロット番号 ≤ `refill_up_to` → `false`（再建玉可能）、それ以外 → `true`（sealed）
+- ストップロスクローズ: 常に `false`（再建待ちとして扱う）
+- レイヤー初期エントリー（R0）のクローズ: `true`（レイヤー除去）
 
-1. 初期エントリーを建玉してサイクル開始。L1 レイヤー（`r_max` 個の空スロット）を作成
-2. 逆行時にスロットを順番に埋める（R1 → R2 → ... → R_max）
-3. トレンド反転時、最も番号の大きい使用中スロットのエントリーがTPに到達したらクローズ（スロットは `ever_closed=True` に）
-4. 再度逆行した場合:
-   - 次の空スロットが `ever_closed=False` → そのスロットにエントリーを配置
-   - 次の空スロットが `ever_closed=True` → 新レイヤーを開始（`f_max` 未満の場合）
-   - 全スロットが使用中 → 新レイヤーを開始（`f_max` 未満の場合）
-5. 初期エントリーが `m_pips` に到達したら利確 → サイクル完了 → 同方向で新サイクル開始
+### 4.4 サイクルのステータス
 
-## 6. 順行側ロジック（回転利確）
+| ステータス | 説明 |
+| --- | --- |
+| ACTIVE | 通常稼働中 |
+| PENDING | グリッドが空だがSL再建待ちのエントリーがある。再建されたら ACTIVE に復帰 |
+| COMPLETED | サイクル完了。新サイクルが作成される |
 
-### 6.1 初期化
+## 5. 順行側ロジック（回転利確）
 
-戦略開始時に以下を建玉する:
+### 5.1 初期化
 
-- ヘッジ有効時: LONG サイクルと SHORT サイクルを同時に作成。各サイクルの初期エントリーは `trend_lot_size × base_units` 通貨単位。
-- ヘッジ無効時: LONG サイクルのみ作成。
+戦略開始時:
 
-各サイクル作成時に L1 レイヤー（`r_max` 個の空スロット）が自動的に作成される。
+- ヘッジ有効時: LONG サイクルと SHORT サイクルを同時に作成
+- ヘッジ無効時: LONG サイクルのみ作成
 
-### 6.2 利確と再エントリー
+各サイクルは L1/R0 に初期エントリーを建玉。TP = entry ± m_pips × pip_size。
 
-初期エントリーの価格が順行方向に `m_pips` 到達で利確し、即座に同方向で新サイクルを開始する。
+### 5.2 利確と再エントリー
 
-利確条件:
+ヘッドのTPがヒットしたらサイクル完了:
 
 - LONG: $bid \ge entry\_price + m_{\mathrm{pips}} \times pip\_size$
 - SHORT: $ask \le entry\_price - m_{\mathrm{pips}} \times pip\_size$
 
-利確後の処理:
+ヘッドTP到達時の処理:
 
-1. 初期エントリーをクローズ
-2. サイクルを `completed = true` に設定
-3. 同方向で新サイクルを作成
+1. グリッド内に他のエントリーが残っていないか確認
+2. 残っている場合、全エントリーのTPが同一ティックで到達しているか確認
+   - 全到達: 全エントリーをフラッシュクローズしてからヘッドをクローズ
+   - 未到達あり: close order violation（戦略停止）
+3. ヘッドをクローズ
+4. 同方向で新サイクルを作成
 
-注: サイクル完了時、そのサイクルに残存するレイヤー・スロット内のエントリーやレイヤー初期エントリーは新サイクルには引き継がれない。
+### 5.3 サイクル再シード
 
-## 7. 逆行側ロジック（カウンターエントリー）
+全サイクルが COMPLETED になった方向は、自動的に新サイクルを作成。
 
-### 7.1 カウンター追加の前提条件
+`reseed_on_all_pending=true` の場合、全サイクルが PENDING（SL再建待ち）の方向でも新サイクルを作成し、再建を待ちながら取引を継続する。
 
-以下の全てを満たす場合にのみカウンター追加を評価する:
+## 6. 逆行側ロジック（カウンターエントリー）
 
-1. サイクルが未完了（`completed == false`）
-2. 現在のレイヤーに空きスロットがある、または新レイヤーを作成可能（レイヤー数 < `f_max`）
-3. 初期エントリーが含み損状態（`unrealised_loss_pips > 0`）
-4. 同一tick内でカウンターTPクローズが発生していない
+### 6.1 カウンター追加の前提条件
 
-条件4は、スロットがクローズされた直後に同一tick内で新レイヤーの作成条件を満たしてしまう問題を防ぐためのガードである。
+1. サイクルが ACTIVE
+2. ヘッドが含み損状態
+3. 同一ティック内でカウンターTPクローズが発生していない
 
-### 7.2 スロット配置の判定
+### 6.2 スロット配置の判定
 
-現在のレイヤーの状態を確認する:
+現在のレイヤーの `next_available_counter_slot()` を確認:
 
-- **空・未使用スロットが見つかった場合**: 逆行距離が閾値に達していればそのスロットにエントリーを配置
-- **次の空スロットが `ever_closed=True` の場合**: 新レイヤーを開始（セクション9参照）
-- **全スロットが使用中の場合**: 新レイヤーを開始（セクション9参照）
-- **L2以降でレイヤー初期エントリーが未建玉の場合**: まずレイヤー初期エントリーを建玉
+- 空きスロットあり → 逆行距離が閾値に達していればエントリーを配置
+- 空きスロットなし（`needs_new_layer=true`）→ 新レイヤーを作成（セクション8参照）
 
-### 7.3 逆行距離の計測
+`next_available_counter_slot()` は R1 から順に走査し:
+- `is_available`（空・未使用）なスロットを返す
+- `is_empty and ever_closed`（sealed）なスロットに到達したら `None` を返す（新レイヤーが必要）
 
-- レイヤー内に使用中スロットがない場合: レイヤー初期エントリー（L1の場合はサイクル初期エントリー）からの距離
-- レイヤー内に使用中スロットがある場合: 最も番号の大きい使用中スロットのエントリーからの距離
+SLクローズされたスロットは `ever_closed=false` のため sealed とは見なされず、再建待ちとして「存在する」扱いになる。
 
-距離は `mid` 価格で計測する。
+### 6.3 逆行距離の計測
 
-### 7.4 追加間隔の判定
+- レイヤー内にカウンターエントリーがない場合: R0（レイヤー初期エントリー）からの距離
+- レイヤー内にカウンターエントリーがある場合: 最も高いR番号のエントリーからの距離
 
-逆行距離が `counter_interval_pips(k, cfg)` 以上の場合にスロットにエントリーを配置する。`k` はスロット番号（1始まり）。
+距離は `mid` 価格で計測。
 
-### 7.5 ロットサイズの計算
-
-ロットサイズは以下の式で計算される:
+### 6.4 ロットサイズ
 
 $lot = (slot\_index + 1) \times layer\_base\_units$
 
-- R1: `(1 + 1) × 1000 = 2000`（2ロット）
-- R2: `(2 + 1) × 1000 = 3000`（3ロット）
-- R_k: `(k + 1) × 1000`
+### 6.5 決済価格の計算
 
-## 8. 決済ロジック
+`weighted_avg` モード: 同レイヤー内の全ポジション（R0含む）と新エントリーの加重平均価格。
 
-### 8.1 スロットエントリーの決済
+その他のモード: エントリー価格 ± `counter_tp_pips(k)` × pip_size。新エントリー追加時に既存エントリーのTPも再計算。
 
-決済対象は、最新レイヤーから順に走査し、最も番号の大きい使用中スロットのエントリー1つのみ。1tickにつき最大1件の決済を行い、次のtickで残りを再評価する。
+## 7. 決済ロジック
 
-決済時の処理:
+### 7.1 カウンターTPクローズ
 
-1. スロットの `close()` を呼び出し、エントリーを取り出す
-2. スロット番号 ≤ `refill_up_to` の場合: スロットは再建玉可能な状態を維持
-3. スロット番号 > `refill_up_to` の場合: スロットが `ever_closed=True` にマークされる
-4. `counter_close_count` をインクリメント
+最新レイヤーから逆順に走査し、最も高いR番号の occupied スロットのTPがヒットしていればクローズ。1ティックにつき最大1件。
 
-### 8.2 レイヤー初期エントリーの決済
+クローズ後:
+- スロット番号 ≤ `refill_up_to`: `ever_closed=false`（再建玉可能）
+- スロット番号 > `refill_up_to`: `ever_closed=true`（sealed）
 
-レイヤー内の全スロットが空になった場合、そのレイヤーのレイヤー初期エントリー（L2以降）のTP判定を行う。TPに到達していればクローズし、レイヤー全体をリセットする（全スロットが空・未使用に戻る）。次の逆行時に同じレイヤー番号で再び R0 から開始される。
+### 7.2 レイヤー初期エントリー（R0）の決済
 
-### 8.3 決済価格の計算
+L2以降のレイヤーで全カウンタースロットが空になり、R0だけが残った場合、R0のTPがヒットしていればクローズしてレイヤーを除去。
 
-各エントリーには建玉時に `close_price`（決済価格）が設定される。
-
-`weighted_avg` モード:
-
-- 決済価格 = 同レイヤー内の全ポジション（新規エントリー + 既存スロットエントリー + レイヤー初期エントリー）の加重平均価格
-- 各エントリーの決済価格は建玉時点の加重平均で固定され、後続の追加では更新されない
-
-その他のモード（`fixed` / `additive` / `subtractive` / `multiplicative` / `divisive`）:
-
-- 決済価格 = エントリー価格 ± `counter_tp_pips(k)` × pip_size
-- 新しいスロットエントリー追加時に、同レイヤー内の既存エントリーの決済価格も各自の `step` に基づいて再計算される
-
-### 8.4 決済判定
+### 7.3 TP判定
 
 - LONG: $bid \ge close\_price$
 - SHORT: $ask \le close\_price$
 
-## 9. レイヤー進行
+## 8. レイヤー進行
 
-### 9.1 新レイヤー作成の条件
+### 8.1 新レイヤー作成の条件
 
-以下のいずれかの場合に新レイヤーが作成される（レイヤー数 < `f_max` の場合のみ）:
+`needs_new_layer=true`（全スロット使用済み、または sealed スロットに到達）かつ:
 
-1. **全スロット使用済み**: 現在のレイヤーの全 `r_max` スロットにエントリーが配置されている
-2. **クローズ済みスロットに到達**: 次に埋めるべきスロットが `ever_closed=True`（一度クローズされた後に再度逆行した場合）
+1. レイヤー数 < `f_max + 1`
+2. ヘッドが含み損状態
+3. 前レイヤーの最も高いR番号のエントリーから所定の逆行距離に達している
 
-### 9.2 新レイヤー作成時の処理
+### 8.2 レイヤー初期エントリーのTP
 
-1. 新レイヤーを作成（`r_max` 個の空スロット）
-2. `base_units` を `base_units × post_r_max_base_factor` に設定
-3. レイヤー初期エントリーを建玉（`layer_initial` ロール）:
-   - ロット: `trend_lot_size × base_units`
-   - 決済価格（`weighted_avg` モード時）: 前レイヤーの全エントリー（初期/レイヤー初期 + スロットエントリー）と新エントリーの加重平均
-   - 決済価格（その他のモード時）: 現在価格 ± `m_pips` × pip_size
+`layer_initial_close_price` により、前レイヤーの `highest_occupied_slot` の `close_price` をコピーする。前レイヤーにカウンターが残っていない場合は R0 の TP がコピーされる。
 
-### 9.3 $f_{\max}$ 到達時
+フォールバック（前レイヤーに occupied スロットがない場合）: entry ± m_pips × pip_size。
 
-レイヤー数が `f_max` に達した場合、カウンターエントリーの新規追加と新レイヤーの作成を停止する。順行側の回転利確と既存エントリーの決済は継続する。
+## 9. ストップロスと再建
+
+### 9.1 ストップロス価格の計算
+
+各エントリーの建玉時に SL 価格が設定される。計算式:
+
+1. $tp\_pips = |close\_price - entry\_price| / pip\_size$
+2. $next\_entry\_price = entry\_price \mp next\_interval\_pips \times pip\_size$（LONGなら-、SHORTなら+）
+3. $tp\_pips < next\_interval\_pips$ の場合: $SL = next\_entry\_price$
+4. $tp\_pips \ge next\_interval\_pips$ の場合: $SL = next\_entry\_price \mp next\_interval\_pips \times pip\_size$
+
+### 9.2 ストップロスクローズ
+
+各ティックで全エントリーの SL をチェックし、ヒットした全エントリーを一括クローズ:
+
+- LONG: $bid \le stop\_loss\_price$
+- SHORT: $ask \ge stop\_loss\_price$
+
+クローズ時の処理:
+
+1. `StopLossClosedEntry` として `stop_loss_pending_rebuilds` に記録（元の position_id を含む）
+2. スロットを `refillable=true` でクローズ（`ever_closed=false` を維持）
+3. `ClosePositionEvent` を発行（`close_reason="stop_loss"`）
+
+スロットが `refillable=true` でクローズされるため、グリッド上は「存在する」扱いのまま。これにより:
+- `needs_new_layer` が不要に `true` にならない
+- 不要なレイヤー追加が防止される
+- TP順序の逆転が防止される
+
+### 9.3 ストップロス再建
+
+各ティックで `stop_loss_pending_rebuilds` をチェックし、価格が元のエントリー価格に戻ったエントリーを再建:
+
+- LONG: $bid \ge entry\_price$
+- SHORT: $ask \le entry\_price$
+
+再建時の処理:
+
+1. 元のスロットが空で occupied でないことを確認
+2. 新しい `Entry` を作成（元と同じパラメータ、`is_rebuild=true`）
+3. 元のエントリー価格で再建（`entry_price` を上書き）
+4. SL を再計算
+5. スロットに配置（`ever_closed=false` にリセット）
+6. `RebuildPositionEvent` を発行（`original_position_id` を含む）
+7. DB上の元の Position レコードを再オープン（新規レコードは作成しない）
+
+### 9.4 サイクルの PENDING ステータス
+
+SLクローズによりグリッドが空になった場合:
+
+- `stop_loss_pending_rebuilds` に該当サイクルのエントリーがある → PENDING
+- ない → COMPLETED
+
+PENDING サイクルは再建が実行されると ACTIVE に復帰する。
+
+### 9.5 `reseed_on_all_pending`
+
+有効時、ある方向の全サイクルが PENDING の場合、新サイクルを作成して取引を継続する。再建待ちのサイクルは並行して再建を待つ。
 
 ## 10. 証拠金保護
 
-保護レベルは5段階で、各レベルは個別に有効/無効を切り替え可能（緊急停止は常時有効）。
-
 ### 10.1 保護レベル一覧
 
-| レベル | 状態 | 条件 | 有効/無効 |
-| --- | --- | --- | --- |
-| `NORMAL` | 通常 | 全閾値未満 | - |
-| `REBALANCE` | リバランス | `ratio >= rebalance_start_ratio` | `rebalance_enabled` |
-| `SHRINK` | 縮小 | `ratio >= m_th` | `shrink_enabled` |
-| `LOCKED` | ロック | `ratio >= n_th` | `lock_enabled` |
-| `EMERGENCY` | 緊急停止 | `ratio >= 95` | 常時有効 |
+| レベル | 条件 | 有効/無効 |
+| --- | --- | --- |
+| NORMAL | 全閾値未満 | - |
+| SHRINK | `ratio >= m_th` | `shrink_enabled` |
+| LOCKED | `ratio >= n_th` | `lock_enabled` |
+| EMERGENCY | `ratio >= 95` | `emergency_enabled` |
 
-### 10.2 リバランス（`rebalance_enabled = true`）
-
-1. `ratio >= rebalance_start_ratio` に到達したら開始
-2. LONG/SHORT のうち重い側のカウンターエントリーを `step` 番号の若い順（古い順）でクローズ
-3. LONG 合計ユニット数 = SHORT 合計ユニット数になるまで継続
-
-### 10.3 縮小モード（`shrink_enabled = true`、`ratio >= m_th`）
+### 10.2 縮小モード（`ratio >= m_th`）
 
 1. 新規エントリーとカウンター追加を停止
-2. 全アクティブサイクルのスロットエントリーから含み損が最も大きいものを1つクローズ
-3. `ratio < m_th - 5` まで通常モードへ戻さない（ヒステリシス）
+2. 全アクティブサイクルから含み損が最も大きいエントリーを1つクローズ
+3. `ratio < m1_th` まで通常モードへ戻さない
 
-### 10.4 ロックモード（`lock_enabled = true`、`ratio >= n_th`）
+縮小で全ポジションがクローズされても `ratio` が `m1_th` を下回らない場合、戦略を停止する。
+
+### 10.3 ロックモード（`ratio >= n_th`）
 
 ロック開始:
 
-1. 全アクティブサイクルの LONG/SHORT ユニット数の差分を計算
-2. 差分がある場合、ネットエクスポージャを0にするヘッジエントリーを追加（`hedge` ロール）
-3. ヘッジエントリーは最初のアクティブサイクルの `hedge_entries` に格納
-4. 以降は全ての新規/カウンター追加を禁止
+1. LONG/SHORT のネットエクスポージャを計算
+2. 差分をヘッジエントリーで相殺（ネット0に）
+3. 全ての新規/カウンター追加を禁止
 
 ロック解除条件（全て満たす）:
 
-1. `ratio < m_th - 5`
-2. `spread_guard_enabled` の場合: スプレッド ≤ `spread_guard_pips`
-3. `cooldown_sec` 経過
+1. `ratio < m1_th`
+2. `cooldown_sec` 経過
 
-解除後:
+解除後: ヘッジエントリーをクローズし、ratio に応じて縮小モードまたは通常モードへ復帰。
 
-- ヘッジエントリーをクローズ
-- ratio に応じて縮小モードまたは通常モードへ復帰
+### 10.4 緊急停止（`ratio >= 95`）
 
-### 10.5 緊急停止（`ratio >= 95`、常時有効）
-
-戦略を即座に停止し、`should_stop = True` を返す。ポジションの自動クローズは行わない。
-
-```mermaid
-%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#ffffff', 'primaryBorderColor': '#000000', 'primaryTextColor': '#000000', 'lineColor': '#000000', 'secondaryColor': '#ffffff', 'tertiaryColor': '#ffffff', 'fontSize': '11px'}}}%%
-stateDiagram
-    [*] --> NORMAL
-    NORMAL --> REBALANCE: rebalance有効 かつ ratio >= rebalance_start
-    REBALANCE --> NORMAL: BUY/SELL同数達成
-    NORMAL --> SHRINK: shrink有効 かつ ratio >= m_th
-    SHRINK --> NORMAL: ratio < m_th - 5
-    NORMAL --> LOCKED: lock有効 かつ ratio >= n_th
-    SHRINK --> LOCKED: lock有効 かつ ratio >= n_th
-    LOCKED --> SHRINK: lock解除後かつ ratio >= m_th
-    LOCKED --> NORMAL: lock解除後かつ ratio < m_th - 5
-
-    NORMAL --> EMERGENCY: ratio >= 95
-    SHRINK --> EMERGENCY: ratio >= 95
-    LOCKED --> EMERGENCY: ratio >= 95
-    REBALANCE --> EMERGENCY: ratio >= 95
-```
+戦略を即座に停止。ポジションの自動クローズは行わない。
 
 ## 11. tick 処理フロー
 
-各 tick で以下の順序で処理される。各ステップは排他的で、保護系の処理が発生した場合はそこで return する。
+各 tick で以下の順序で処理される。保護系の処理が発生した場合はそこで return する。
 
-1. NAV 更新（口座残高 + 全アクティブサイクルの未実現損益）
+1. NAV 更新（口座残高 + 全エントリーの未実現損益）
 2. 証拠金比率の計算
 3. 緊急停止チェック（`ratio >= 95` → 即停止）
-4. ロック開始チェック（`lock_enabled` かつ `ratio >= n_th` → ヘッジ追加して return）
+4. ロック開始チェック（`ratio >= n_th` → ヘッジ追加して return）
 5. ロック中の解除チェック（解除条件を満たせばヘッジ解消して return）
-6. 縮小モードチェック（`shrink_enabled` かつ `ratio >= m_th` → 最大損失エントリーをクローズして return）
-7. リバランスチェック（`rebalance_enabled` かつ `ratio >= rebalance_start_ratio` → BUY/SELL均衡化して return）
-8. 通常モード復帰
-9. スプレッドガードチェック（`spread_guard_enabled` かつ `spread > spread_guard_pips` → 何もせず return）
-10. 初期化（未初期化の場合、サイクル作成して return）
-11. アクティブサイクルごとに以下を順次実行:
-    1. 順行側: 初期エントリーのTP判定 → 利確＆再エントリー
-    2. 逆行側: スロット決済チェック（最新レイヤーの最大番号スロットから、1件/tick）
-    3. 逆行側: スロット追加チェック（ただし 11-2 で決済が発生した場合はスキップ）
+6. 縮小モードチェック（`ratio >= m_th` → 最大損失エントリーをクローズして return）
+7. 通常モード復帰
+8. 初期化（未初期化の場合、サイクル作成して return）
+9. アクティブサイクルごとに以下を順次実行:
+   1. カウンターTPクローズ（最新レイヤーの最大R番号から、1件/tick）
+   2. ヘッドTPチェック（到達時はフラッシュ＆再エントリー）
+   3. ストップロスクローズ（SLヒットした全エントリーを一括クローズ）
+   4. ストップロス再建（価格が戻ったエントリーを再建）
+   5. カウンター追加（9-1 でクローズが発生した場合はスキップ）
+   6. サイクル完了判定（グリッド空 → PENDING or COMPLETED）
+10. サイクル再シード（全 COMPLETED / 全 PENDING の方向に新サイクル作成）
 
-## 12. 具体例（LONG方向、正常状態）
+## 12. イベント体系
 
-前提:
+| イベント | 説明 | 発行タイミング |
+| --- | --- | --- |
+| `OpenPositionEvent` | 新規ポジション作成 | 初期エントリー、カウンター追加、レイヤー初期エントリー |
+| `ClosePositionEvent` | ポジション決済 | TP、SL、縮小、ロックヘッジ解消 |
+| `RebuildPositionEvent` | SL後のポジション再建 | SL再建時（元の Position を再オープン） |
 
-- 初回 BUY: `100.00`
-- `interval_mode = manual`, `manual_intervals = [30, 30, 25, 20, 16, 14, 12]`
-- `counter_tp_mode = weighted_avg`
-- `r_max = 7`, `f_max = 3`, `base_units = 1000`
-- 想定: 円高進行（`USD/JPY` が下落）時に LONG を積み増す
+`ClosePositionEvent` の `close_reason`:
 
-### 12.1 通常サイクル（レイヤー1）
-
-| スロット | BUY価格 | 間隔 (pip) | ロット | 決済価格 | 備考 |
-| --- | --- | --- | --- | --- | --- |
-| 初期 | `100.00` | - | 1,000 | `100.50`（順行利確） | L1/R0 |
-| R1 | `99.70` | 30 | 2,000 | 加重平均 | L1/R1 |
-| R2 | `99.40` | 30 | 3,000 | 加重平均 | L1/R2 |
-| R3 | `99.15` | 25 | 4,000 | 加重平均 | L1/R3 |
-| R4 | `98.95` | 20 | 5,000 | 加重平均 | L1/R4 |
-| R5 | `98.79` | 16 | 6,000 | 加重平均 | L1/R5 |
-| R6 | `98.65` | 14 | 7,000 | 加重平均 | L1/R6 |
-| R7 | `98.53` | 12 | 8,000 | 加重平均 | L1/R7 |
-
-### 12.2 途中決済後の再逆行
-
-`refill_up_to = 2` の場合の動作:
-
-**R1 または R2 がクローズされた場合（refill_up_to 以下）:**
-
-1. スロットは `ever_closed=False` のまま（再建玉可能）
-2. 再度逆行した場合、同じスロット番号に再びエントリーが配置される
-3. ロットサイズは同じ（R1 なら 2000、R2 なら 3000）
-
-**R3 以降がクローズされた場合（refill_up_to 超）:**
-
-1. R3 スロットが `ever_closed=True` にマークされる（R1, R2 は使用中のまま）
-2. トレンドが再度反転して逆行した場合:
-   - 次に埋めるべきスロットは R4 だが、R3 が `ever_closed=True` のため新レイヤーへ
-   - → 新レイヤー（L2）が作成される
-3. L2 のレイヤー初期エントリーが建玉される（決済価格は L1 全エントリーとの加重平均）
-4. L2 で R1 → R2 → ... と新たにスロットが埋まっていく
-
-**L2 の初期エントリー（R0）がクローズされた場合:**
-
-1. L2 レイヤー全体がリセットされる（全スロットが空・未使用に戻る）
-2. 再度逆行した場合、同じ L2 で R0 から再開する
-
-### 12.3 全スロット使用済みによるレイヤー進行
-
-R7 まで全スロットが埋まった場合（決済なしで到達）:
-
-1. 全スロット使用済みのため新レイヤーが必要と判定される
-2. 新レイヤー（L2）が作成される
-3. L2 の `base_units` = `base_units × post_r_max_base_factor`
-4. L2 のレイヤー初期エントリーのTP = L1 全エントリーと L2 初期エントリーの加重平均
-5. L2 で R1 → R2 → ... と同じロジックでスロットが埋まっていく
-
-### 12.4 レイヤー間の決済順序
-
-トレンドが反転して決済が進む場合の順序:
-
-1. 最新レイヤー（例: L2）の最大番号スロットから順にクローズ
-2. L2 の全スロットが空になったら、L2 のレイヤー初期エントリーのTP判定
-3. L2 のレイヤー初期エントリーがクローズされたら、L1 のスロットの決済判定に移る
-4. L1 の全スロットが空になり、サイクル初期エントリーのTPに到達したらサイクル完了
+| close_reason | 説明 |
+| --- | --- |
+| `tp` | サイクルヘッドの利確 |
+| `counter_tp` | カウンターエントリーの利確 |
+| `layer_initial_tp` | レイヤー初期エントリーの利確 |
+| `stop_loss` | ストップロス |
+| `shrink` | 縮小プロテクション |
+| `lock_hedge_open` | ロックヘッジ開始 |
+| `lock_hedge_neutralize` | ロックヘッジ解消 |
