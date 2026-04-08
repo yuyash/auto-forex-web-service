@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.3...frontend-v1.34.4) (2026-04-08)
+
+
+### Bug Fixes
+
+* **strategy:** correct cycle status, rebuild cycle assignment, and UI improvements ([#382](https://github.com/yuyash/auto-forex-web-service/issues/382)) ([ccceb5b](https://github.com/yuyash/auto-forex-web-service/commit/ccceb5be4efdf7d5c406aea6698b7c7968c52b8b))
+
 ## [1.34.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.2...frontend-v1.34.3) (2026-04-08)
 
 

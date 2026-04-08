@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.7](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.6...backend-v1.28.7) (2026-04-08)
+
+
+### Bug Fixes
+
+* **strategy:** correct cycle status, rebuild cycle assignment, and UI improvements ([#382](https://github.com/yuyash/auto-forex-web-service/issues/382)) ([ccceb5b](https://github.com/yuyash/auto-forex-web-service/commit/ccceb5be4efdf7d5c406aea6698b7c7968c52b8b))
+
 ## [1.28.6](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.5...backend-v1.28.6) (2026-04-08)
 
 
