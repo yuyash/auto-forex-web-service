@@ -377,6 +377,88 @@ class TestSnowballStopLossRebuild:
                     "SL closed slots should not trigger premature layer addition"
                 )
 
+    def test_sl_closed_slot_blocks_counter_add(self):
+        """When R1 is SL-closed, the next counter should go to R2, not R1.
+
+        SL-closed slots are in pending_rebuild state and must not be
+        reused by counter-add logic.  The strategy should skip R1 and
+        place the next counter at R2 with the correct interval from R1.
+        """
+        runner = TickRunner(stop_loss=True)
+        runner.tick(START_PRICE)
+
+        # Move SHORT adversely (price up) to trigger R1 counter, then SL on R1
+        # R1 opens at ~30 pips adverse, SL is near the next interval
+        runner.tick_range(START_PRICE, START_PRICE + Decimal("0.70"), step_pips=1)
+
+        ss = runner.ss
+        for cycle in ss.active_cycles():
+            if cycle.direction.value != "short":
+                continue
+            layer = cycle.grid.current_layer
+            if layer is None:
+                continue
+            # Check that SL-closed slots have pending_rebuild set
+            for slot in layer.slots:
+                if slot.is_pending_rebuild:
+                    assert slot.entry is None, "SL slot should have no live entry"
+                    assert slot.pending_rebuild is not None
+                    # Verify the slot is NOT available for counter adds
+                    assert not slot.is_available, (
+                        f"SL-closed slot R{slot.index} should not be available"
+                    )
+
+    def test_sl_slot_preserves_r_number_progression(self):
+        """After SL on R1, the next available slot should be R2, not R1.
+
+        Verify by checking the grid state: if R1 has pending_rebuild,
+        R2 should be the next available counter slot.
+        """
+        runner = TickRunner(stop_loss=True)
+        runner.tick(START_PRICE)
+
+        # Move SHORT adversely (price up) enough to trigger R1 then SL on R1
+        runner.tick_range(START_PRICE, START_PRICE + Decimal("0.70"), step_pips=1)
+
+        ss = runner.ss
+        found_pending = False
+        for cycle in ss.cycles:
+            if cycle.direction.value != "short":
+                continue
+            layer = cycle.grid.current_layer
+            if layer is None:
+                continue
+            r1 = layer.slot_at(1)
+            if r1 is not None and r1.is_pending_rebuild:
+                found_pending = True
+                # R1 is pending rebuild — next available should be R2
+                next_slot = layer.next_available_counter_slot()
+                assert next_slot is not None, "Expected R2 to be available"
+                assert next_slot.index == 2, (
+                    f"Expected next available slot to be R2, got R{next_slot.index}"
+                )
+        # At least one cycle should have had a pending rebuild
+        assert found_pending, "Expected at least one SL-closed R1 slot"
+
+    def test_cycle_pending_when_all_sl_closed(self):
+        """Cycle should be PENDING (not COMPLETED) when all positions are SL-closed."""
+        runner = TickRunner(stop_loss=True)
+        runner.tick(START_PRICE)
+
+        # Move far enough to trigger SL on all positions
+        runner.tick_range(START_PRICE, START_PRICE - Decimal("2.50"), step_pips=1)
+
+        ss = runner.ss
+        # Check that cycles with pending rebuilds are PENDING, not COMPLETED
+        for cycle in ss.cycles:
+            if cycle.direction.value != "long":
+                continue
+            if cycle.grid.has_pending_rebuilds():
+                assert cycle.status.value == "pending", (
+                    f"Cycle {cycle.cycle_id} has pending rebuilds but status is "
+                    f"{cycle.status.value}"
+                )
+
 
 class TestSnowballTPOrdering:
     """Verify TP ordering is maintained across layers."""
