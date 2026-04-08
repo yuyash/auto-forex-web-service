@@ -292,13 +292,31 @@ class SnowballStrategy(Strategy):
                 for slot in layer.slots:
                     slot.pending_rebuild = None
 
-        new_events, _new_cycle = self._create_cycle(ss, tick, direction)
-        logger.info(
-            "Re-entry (%s) after TP: new cycle_id=%d",
-            direction.value.upper(),
-            _new_cycle.cycle_id,
+        # Only create a new cycle if no other ACTIVE cycle exists for
+        # this direction.  When multiple cycles coexist (e.g. after SL
+        # rebuild reactivation), each TP close used to spawn a new
+        # cycle, causing exponential proliferation.  The re-seed logic
+        # at the end of on_tick will create exactly one new cycle when
+        # the direction has zero active/pending cycles.
+        has_other_active = any(
+            c.is_active and c.cycle_id != cycle.cycle_id and c.direction == direction
+            for c in ss.active_cycles()
         )
-        events.extend(new_events)
+        if not has_other_active:
+            new_events, _new_cycle = self._create_cycle(ss, tick, direction)
+            logger.info(
+                "Re-entry (%s) after TP: new cycle_id=%d",
+                direction.value.upper(),
+                _new_cycle.cycle_id,
+            )
+            events.extend(new_events)
+        else:
+            logger.info(
+                "TP (%s) cycle %d — skipping re-entry, other active cycle(s) exist",
+                direction.value.upper(),
+                cycle.cycle_id,
+            )
+
         return events
 
     def _fail_close_order_violation(
