@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.2...frontend-v1.34.3) (2026-04-08)
+
+
+### Bug Fixes
+
+* positions filter by execution ([#380](https://github.com/yuyash/auto-forex-web-service/issues/380)) ([1ad3464](https://github.com/yuyash/auto-forex-web-service/commit/1ad34649f578a92598a50d1f465468523b737caa))
+
 ## [1.34.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.1...frontend-v1.34.2) (2026-04-07)
 
 
