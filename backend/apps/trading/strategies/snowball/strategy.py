@@ -1147,10 +1147,12 @@ class SnowballStrategy(Strategy):
                 )
             )
 
-            # Close the slot (not refillable — rebuild is handled separately)
+            # Close the slot — keep it refillable so the grid still
+            # considers this position "present" (pending rebuild) and does
+            # not trigger a premature new-layer addition.
             layer.close_slot(
                 entry.retracement_count,
-                refillable=False,
+                refillable=True,
             )
 
             events.append(
