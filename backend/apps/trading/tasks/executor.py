@@ -73,6 +73,7 @@ class ExecutionLoopState:
     stopped_early: bool = False
     stop_reason: str = ""
     is_error: bool = False
+    resume_last_tick_timestamp: datetime | None = None
 
 
 class TaskExecutor:
@@ -407,7 +408,11 @@ class TaskExecutor:
         if self._tracemalloc_enabled:
             self._start_tracemalloc()
         try:
-            loop = ExecutionLoopState(state=self._start_execution())
+            state, resumed = self._start_execution()
+            loop = ExecutionLoopState(
+                state=state,
+                resume_last_tick_timestamp=(state.last_tick_timestamp if resumed else None),
+            )
             self._run_tick_loop(loop)
             self._finalize_execution(loop)
         except Exception as e:
@@ -438,8 +443,13 @@ class TaskExecutor:
             return self.engine.on_resume(state=state)
         return self.engine.on_start(state=state)
 
-    def _start_execution(self) -> ExecutionState:
-        """Initialize coordinator/state and run strategy start hook."""
+    def _start_execution(self) -> tuple[ExecutionState, bool]:
+        """Initialize coordinator/state and run strategy start hook.
+
+        Returns:
+            Tuple of (state, resumed) where resumed indicates whether this
+            execution is continuing from a previous run.
+        """
         logger.info("Starting task execution")
         self.state_manager.start(
             celery_task_id=str(self.task.execution_id) if self.task.execution_id else None,
@@ -470,7 +480,7 @@ class TaskExecutor:
             self._restore_metric_counters()
 
         logger.info("Engine started, events_count=%d", len(result.events))
-        return state
+        return state, resumed
 
     def _run_tick_loop(self, loop: ExecutionLoopState) -> None:
         """Run batch/tick processing loop."""
@@ -554,6 +564,15 @@ class TaskExecutor:
 
     def _process_single_tick(self, loop: ExecutionLoopState, tick) -> bool:
         """Process one tick; return True when execution should stop."""
+        # Skip ticks already processed in a previous run (resume scenario).
+        # last_tick_timestamp is persisted after each tick, so any tick at or
+        # before that timestamp has already been fully handled.
+        resume_ts = loop.resume_last_tick_timestamp
+        if resume_ts is not None:
+            tick_ts = self._coerce_tick_timestamp(tick.timestamp)
+            if tick_ts is not None and tick_ts <= resume_ts:
+                return False
+
         result: StrategyResult = self.engine.on_tick(tick=tick, state=loop.state)
         loop.state = result.state
         events: List[TradingEvent] = self.save_events(result.events)
