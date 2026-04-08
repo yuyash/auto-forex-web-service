@@ -370,31 +370,49 @@ class SnowballStrategy(Strategy):
                 break
 
         if not all_counters_tp_hit:
-            logger.error(
-                "CLOSE ORDER VIOLATION: head TP reached while counter entries "
-                "are still open — cycle_id=%d, direction=%s.",
+            logger.warning(
+                "Head TP reached while some counter TPs are not yet hit — "
+                "force-closing remaining entries at market price. "
+                "cycle_id=%d, direction=%s.",
                 cycle.cycle_id,
                 direction.value,
             )
-            return self._fail_close_order_violation(ss, tick, cycle)
 
-        # All counter TPs are hit on this tick — flush them before
-        # closing the head.  This can happen when stop-loss rebuilds
-        # produce entries whose TPs coincide with the head TP.
+        # Flush all remaining counter entries.  Entries whose TP is
+        # reached close at their TP; others close at the current market
+        # price (force close).
         events: list[StrategyEvent] = []
         for layer in reversed(list(cycle.grid.layers)):
             for slot in reversed(layer.occupied_slots()):
                 counter = slot.entry
                 if counter is None or counter.entry_id == entry.entry_id:
                     continue
+                # Check if this counter's TP is reached on this tick
+                tp_hit = True
+                if counter.close_price <= 0:
+                    tp_hit = False
+                elif counter.is_long and tick.bid < counter.close_price:
+                    tp_hit = False
+                elif counter.is_short and tick.ask > counter.close_price:
+                    tp_hit = False
+
                 exit_price = counter.exit_price(tick)
                 pips_gained = abs(exit_price - counter.entry_price) / self.pip_size
+                if tp_hit:
+                    label = "Counter TP flush"
+                    reason = "counter_tp"
+                    status = "pass"
+                else:
+                    label = "Counter force-close (head TP)"
+                    reason = "counter_tp"
+                    status = "warn"
                 logger.info(
-                    "Counter TP (flush) (%s): L%s/R%s, +%.1f pips",
+                    "%s (%s): L%s/R%s, %.1f pips",
+                    label,
                     counter.direction.value.upper(),
                     counter.layer_number,
                     counter.retracement_count,
-                    pips_gained,
+                    pips_gained if tp_hit else -pips_gained,
                 )
                 layer.close_slot(slot.index)
                 cycle.counter_close_count += 1
@@ -403,14 +421,14 @@ class SnowballStrategy(Strategy):
                         tick,
                         counter,
                         description=(
-                            f"Counter TP flush ({counter.direction.value.upper()}) | "
+                            f"{label} ({counter.direction.value.upper()}) | "
                             f"L{counter.layer_number}/R{counter.retracement_count}, "
                             f"entry={counter.entry_price:.3f}, "
-                            f"exit={exit_price:.3f}, +{pips_gained:.1f} pips"
+                            f"exit={exit_price:.3f}, {'+' if tp_hit else ''}{pips_gained:.1f} pips"
                         ),
-                        close_reason="counter_tp",
+                        close_reason=reason,
                         actual_tp_pips=pips_gained,
-                        validation_status="pass",
+                        validation_status=status,
                     )
                 )
             # Remove empty non-L1 layers
