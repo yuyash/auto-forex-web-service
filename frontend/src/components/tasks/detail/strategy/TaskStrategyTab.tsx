@@ -91,7 +91,7 @@ export function TaskStrategyTab({
   const [snapshotTickTimestamp, setSnapshotTickTimestamp] = useState<
     string | null
   >(null);
-  const [sidebarWidth, setSidebarWidth] = useState(360);
+  const [sidebarWidth, setSidebarWidth] = useState(400);
   const isDragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
@@ -474,8 +474,13 @@ export function TaskStrategyTab({
                 >
                   <Stack
                     direction="row"
-                    spacing={1}
-                    sx={{ mb: 0.5, alignItems: 'center', flexWrap: 'wrap' }}
+                    spacing={0.5}
+                    sx={{
+                      mb: 0.5,
+                      alignItems: 'center',
+                      flexWrap: 'nowrap',
+                      overflow: 'hidden',
+                    }}
                   >
                     <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                       {cycle.direction.toUpperCase()}
@@ -487,6 +492,7 @@ export function TaskStrategyTab({
                         cycle.status.slice(1)
                       }
                       color={getStatusColor(cycle.status)}
+                      sx={{ fontSize: '0.7rem', height: 20 }}
                     />
                     <Chip
                       size="small"
@@ -495,6 +501,7 @@ export function TaskStrategyTab({
                         'common:strategyVisualization.cycleList.tradeCount',
                         { count: cycle.trade_count }
                       )}
+                      sx={{ fontSize: '0.7rem', height: 20 }}
                     />
                     {cycle.has_protection ? (
                       <Chip
@@ -502,7 +509,7 @@ export function TaskStrategyTab({
                         color="error"
                         variant="filled"
                         label={`⚠ ${cycle.protection_count ?? ''}`}
-                        sx={{ fontSize: '0.7rem' }}
+                        sx={{ fontSize: '0.65rem', height: 20 }}
                       />
                     ) : null}
                     {(cycle.rebuild_count ?? 0) > 0 ? (
@@ -511,7 +518,7 @@ export function TaskStrategyTab({
                         color="secondary"
                         variant="outlined"
                         label={`🔄 ${cycle.rebuild_count}`}
-                        sx={{ fontSize: '0.7rem' }}
+                        sx={{ fontSize: '0.65rem', height: 20 }}
                       />
                     ) : null}
                   </Stack>
