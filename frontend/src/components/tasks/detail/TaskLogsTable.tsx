@@ -188,7 +188,8 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     {
       id: 'message',
       label: t('tables.logs.message'),
-      minWidth: 200,
+      width: 500,
+      minWidth: 400,
     },
   ];
 
