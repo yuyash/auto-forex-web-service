@@ -754,6 +754,25 @@ class EventHandler:
             is_rebuild=True,
         )
 
+        if cycle_id is None and event.original_position_id:
+            # For rebuild trades, try to find the cycle from the original
+            # position's existing trades before creating a new cycle.
+            existing_cycle_id = (
+                Trade.objects.filter(
+                    task_type=self.order_service.task_type.value,
+                    task_id=self._task_pk,
+                    execution_id=self._execution_id,
+                    position_id=event.original_position_id,
+                    cycle_id__isnull=False,
+                )
+                .values_list("cycle_id", flat=True)
+                .first()
+            )
+            if existing_cycle_id is not None:
+                cycle_id = str(existing_cycle_id)
+                trade.cycle_id = cycle_id
+                trade.save(update_fields=["cycle_id"])
+
         if cycle_id is None:
             trade.cycle_id = str(trade.id)
             trade.save(update_fields=["cycle_id"])

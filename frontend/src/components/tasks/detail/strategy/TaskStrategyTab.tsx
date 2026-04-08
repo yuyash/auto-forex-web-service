@@ -106,6 +106,9 @@ export function TaskStrategyTab({
   const [lifecycleOpen, setLifecycleOpen] = useState(false);
   const [lifecyclePositionId, setLifecyclePositionId] = useState('');
 
+  // Trade sort order within the detail panel
+  const [tradeSortOrder, setTradeSortOrder] = useState<'asc' | 'desc'>('asc');
+
   const handleOpenLifecycle = useCallback((positionId: string) => {
     setLifecyclePositionId(positionId.slice(0, 8));
     setLifecycleOpen(true);
@@ -502,6 +505,15 @@ export function TaskStrategyTab({
                         sx={{ fontSize: '0.7rem' }}
                       />
                     ) : null}
+                    {(cycle.rebuild_count ?? 0) > 0 ? (
+                      <Chip
+                        size="small"
+                        color="secondary"
+                        variant="outlined"
+                        label={`🔄 ${cycle.rebuild_count}`}
+                        sx={{ fontSize: '0.7rem' }}
+                      />
+                    ) : null}
                   </Stack>
                   <Typography variant="body2" color="text.secondary">
                     {formatDateTime(cycle.started_at)}
@@ -652,6 +664,22 @@ export function TaskStrategyTab({
                 <Typography variant="subtitle1">
                   {t('common:strategyVisualization.cycleList.trades')}
                 </Typography>
+                <Chip
+                  size="small"
+                  clickable
+                  color={tradeSortOrder === 'asc' ? 'primary' : 'default'}
+                  variant={tradeSortOrder === 'asc' ? 'filled' : 'outlined'}
+                  label={t('common:strategyVisualization.cycleList.sortOldest')}
+                  onClick={() => setTradeSortOrder('asc')}
+                />
+                <Chip
+                  size="small"
+                  clickable
+                  color={tradeSortOrder === 'desc' ? 'primary' : 'default'}
+                  variant={tradeSortOrder === 'desc' ? 'filled' : 'outlined'}
+                  label={t('common:strategyVisualization.cycleList.sortNewest')}
+                  onClick={() => setTradeSortOrder('desc')}
+                />
                 <Tooltip title="Select all">
                   <IconButton size="small" onClick={handleSelectAllTrades}>
                     <SelectAllIcon fontSize="small" />
@@ -674,7 +702,10 @@ export function TaskStrategyTab({
                 ) : null}
               </Stack>
               <Divider sx={{ mb: 1 }} />
-              {selectedCycle.trades.map((trade, index) => {
+              {(tradeSortOrder === 'asc'
+                ? selectedCycle.trades
+                : [...selectedCycle.trades].reverse()
+              ).map((trade, index) => {
                 const isInitialEntry = trade.id === selectedCycle.cycle_id;
                 const isSelected = selectedTradeIds.has(trade.id);
                 // Task 1: Initial entry always shows L1, R0

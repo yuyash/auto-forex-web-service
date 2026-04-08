@@ -455,7 +455,8 @@
         "events": {
           "OPENED": "Opened",
           "CLOSED": "Closed",
-          "PARTIAL_CLOSE": "Partial Close"
+          "PARTIAL_CLOSE": "Partial Close",
+          "REBUILT": "Rebuilt"
         },
         "details": {
           "exitFormula": "Exit Formula",

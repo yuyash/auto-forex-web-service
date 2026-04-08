@@ -65,7 +65,7 @@ const formatTimestamp = (ts: string): string =>
     timeZoneName: 'short',
   });
 
-type LifecycleEvent = 'OPENED' | 'CLOSED' | 'PARTIAL_CLOSE';
+type LifecycleEvent = 'OPENED' | 'CLOSED' | 'PARTIAL_CLOSE' | 'REBUILT';
 
 /** Extract the tick timestamp from lifecycle log context.
  *  For OPENED events, use entry_time. For CLOSED/PARTIAL_CLOSE, use exit_time.
@@ -86,7 +86,7 @@ function getTickTimestamp(log: TaskLog): string {
 
 function getLifecycleColor(
   event: LifecycleEvent
-): 'success' | 'error' | 'warning' {
+): 'success' | 'error' | 'warning' | 'info' {
   switch (event) {
     case 'OPENED':
       return 'success';
@@ -94,6 +94,8 @@ function getLifecycleColor(
       return 'error';
     case 'PARTIAL_CLOSE':
       return 'warning';
+    case 'REBUILT':
+      return 'info';
     default:
       return 'success';
   }
