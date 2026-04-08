@@ -768,24 +768,25 @@ function TradeRow({
           size="small"
           label={
             trade.execution_method === 'open_position'
-              ? trade.is_rebuild
+              ? 'OPEN'
+              : trade.execution_method === 'rebuild_position'
                 ? 'REBUILD'
-                : 'OPEN'
-              : trade.execution_method === 'close_position'
-                ? 'CLOSE'
-                : trade.execution_method.replace(/_/g, ' ').toUpperCase()
+                : trade.execution_method === 'close_position'
+                  ? 'CLOSE'
+                  : trade.execution_method.replace(/_/g, ' ').toUpperCase()
           }
           color={
             trade.execution_method === 'open_position'
-              ? trade.is_rebuild
+              ? 'info'
+              : trade.execution_method === 'rebuild_position'
                 ? 'secondary'
-                : 'info'
-              : trade.execution_method === 'close_position'
-                ? 'default'
-                : 'error'
+                : trade.execution_method === 'close_position'
+                  ? 'default'
+                  : 'error'
           }
           variant={
             trade.execution_method === 'open_position' ||
+            trade.execution_method === 'rebuild_position' ||
             trade.execution_method === 'close_position'
               ? 'outlined'
               : 'filled'

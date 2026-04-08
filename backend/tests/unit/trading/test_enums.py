@@ -90,7 +90,7 @@ class TestEventType:
         assert EventType.STRATEGY_STOPPED == "strategy_stopped"
 
     def test_choices_count(self):
-        assert len(EventType.choices) == 19
+        assert len(EventType.choices) == 20
 
     def test_scope_of_trading_event(self):
         assert EventType.scope_of(EventType.OPEN_POSITION) == "trading"

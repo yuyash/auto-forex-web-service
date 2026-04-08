@@ -97,6 +97,7 @@ class EventType(models.TextChoices):
     TAKE_PROFIT = "take_profit", "Take Profit"
     OPEN_POSITION = "open_position", "Open Position"
     CLOSE_POSITION = "close_position", "Close Position"
+    REBUILD_POSITION = "rebuild_position", "Rebuild Position"
     ADD_LAYER = "add_layer", "Add Layer"
     REMOVE_LAYER = "remove_layer", "Remove Layer"
     VOLATILITY_LOCK = "volatility_lock", "Volatility Lock"
@@ -185,6 +186,7 @@ def _build_event_metadata() -> dict[str, EventTypeMetadata]:
         EventScope.TRADING: (
             EventType.OPEN_POSITION,
             EventType.CLOSE_POSITION,
+            EventType.REBUILD_POSITION,
             EventType.VOLATILITY_LOCK,
             EventType.VOLATILITY_HEDGE_NEUTRALIZE,
             EventType.MARGIN_PROTECTION,

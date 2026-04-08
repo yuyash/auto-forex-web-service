@@ -1144,6 +1144,7 @@ class SnowballStrategy(Strategy):
                     root_entry_id=entry.root_entry_id,
                     parent_entry_id=entry.parent_entry_id,
                     cycle_id=cycle.cycle_id,
+                    position_id=entry.position_id,
                 )
             )
 
@@ -1256,8 +1257,9 @@ class SnowballStrategy(Strategy):
                 pending.units,
             )
 
-            evt = entry.to_open_event(
+            evt = entry.to_rebuild_event(
                 timestamp=tick.timestamp,
+                original_position_id=pending.position_id,
                 description=(
                     f"Stop-loss rebuild ({pending.direction.value.upper()}) | "
                     f"L{pending.layer_number}/R{pending.retracement_count}, "

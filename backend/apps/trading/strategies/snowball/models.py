@@ -35,7 +35,12 @@ from apps.trading.strategies.snowball.enums import CycleStatus, ProtectionLevel
 
 if TYPE_CHECKING:
     from apps.trading.dataclasses.tick import Tick
-    from apps.trading.events import ClosePositionEvent, OpenPositionEvent, StrategyEvent
+    from apps.trading.events import (
+        ClosePositionEvent,
+        OpenPositionEvent,
+        RebuildPositionEvent,
+        StrategyEvent,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -348,8 +353,35 @@ class Entry:
             planned_exit_price=self.close_price,
             planned_exit_price_formula=planned_exit_price_formula,
             stop_loss_price=self.stop_loss_price,
-            is_rebuild=self.is_rebuild,
             description=description,
+        )
+        self.apply_metadata_to(event)
+        return event
+
+    def to_rebuild_event(
+        self,
+        *,
+        timestamp: datetime,
+        original_position_id: str | None = None,
+        description: str = "",
+    ) -> "RebuildPositionEvent":
+        from apps.trading.enums import EventType
+        from apps.trading.events import RebuildPositionEvent
+
+        event = RebuildPositionEvent(
+            event_type=EventType.REBUILD_POSITION,
+            timestamp=timestamp,
+            layer_number=self.layer_number,
+            direction=self.direction.value,
+            price=self.entry_price,
+            units=self.units,
+            entry_id=self.entry_id,
+            retracement_count=self.retracement_count,
+            strategy_event_type=f"snowball_{self.role}",
+            planned_exit_price=self.close_price,
+            stop_loss_price=self.stop_loss_price,
+            description=description,
+            original_position_id=original_position_id,
         )
         self.apply_metadata_to(event)
         return event
@@ -533,9 +565,10 @@ class StopLossClosedEntry:
     root_entry_id: int | None = None
     parent_entry_id: int | None = None
     cycle_id: int = 0
+    position_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result = {
             "entry_price": str(self.entry_price),
             "close_price": str(self.close_price),
             "units": self.units,
@@ -548,6 +581,9 @@ class StopLossClosedEntry:
             "parent_entry_id": self.parent_entry_id,
             "cycle_id": self.cycle_id,
         }
+        if self.position_id is not None:
+            result["position_id"] = self.position_id
+        return result
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> "StopLossClosedEntry":
@@ -573,6 +609,7 @@ class StopLossClosedEntry:
                 else None
             ),
             cycle_id=_parse_int(d.get("cycle_id", 0), 0),
+            position_id=d.get("position_id"),
         )
 
 

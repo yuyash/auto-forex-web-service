@@ -5662,6 +5662,7 @@
                     "take_profit",
                     "open_position",
                     "close_position",
+                    "rebuild_position",
                     "add_layer",
                     "remove_layer",
                     "volatility_lock",
@@ -5673,7 +5674,7 @@
                     "strategy_stopped"
                 ],
                 "type": "string",
-                "description": "* `tick_received` - Tick Received\n* `strategy_signal` - Strategy Signal\n* `trade_executed` - Trade Executed\n* `status_changed` - Status Changed\n* `error_occurred` - Error Occurred\n* `initial_entry` - Initial Entry\n* `retracement` - Retracement\n* `take_profit` - Take Profit\n* `open_position` - Open Position\n* `close_position` - Close Position\n* `add_layer` - Add Layer\n* `remove_layer` - Remove Layer\n* `volatility_lock` - Volatility Lock\n* `volatility_hedge_neutralize` - Volatility Hedge Neutralize\n* `margin_protection` - Margin Protection\n* `strategy_started` - Strategy Started\n* `strategy_paused` - Strategy Paused\n* `strategy_resumed` - Strategy Resumed\n* `strategy_stopped` - Strategy Stopped"
+                "description": "* `tick_received` - Tick Received\n* `strategy_signal` - Strategy Signal\n* `trade_executed` - Trade Executed\n* `status_changed` - Status Changed\n* `error_occurred` - Error Occurred\n* `initial_entry` - Initial Entry\n* `retracement` - Retracement\n* `take_profit` - Take Profit\n* `open_position` - Open Position\n* `close_position` - Close Position\n* `rebuild_position` - Rebuild Position\n* `add_layer` - Add Layer\n* `remove_layer` - Remove Layer\n* `volatility_lock` - Volatility Lock\n* `volatility_hedge_neutralize` - Volatility Hedge Neutralize\n* `margin_protection` - Margin Protection\n* `strategy_started` - Strategy Started\n* `strategy_paused` - Strategy Paused\n* `strategy_resumed` - Strategy Resumed\n* `strategy_stopped` - Strategy Stopped"
             },
             "ExecutionInfo": {
                 "type": "object",

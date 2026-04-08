@@ -528,7 +528,6 @@ class OpenPositionEvent(StrategyEvent):
     planned_exit_price: Decimal | None = None
     planned_exit_price_formula: str | None = None
     stop_loss_price: Decimal | None = None
-    is_rebuild: bool = False
     description: str = ""
 
     def __post_init__(self):
@@ -579,8 +578,6 @@ class OpenPositionEvent(StrategyEvent):
             result["planned_exit_price_formula"] = self.planned_exit_price_formula
         if self.stop_loss_price is not None:
             result["stop_loss_price"] = str(self.stop_loss_price)
-        if self.is_rebuild:
-            result["is_rebuild"] = True
         if self.description:
             result["description"] = self.description
         return result
@@ -601,13 +598,108 @@ class OpenPositionEvent(StrategyEvent):
             planned_exit_price=parse_optional_decimal(event_dict.get("planned_exit_price")),
             planned_exit_price_formula=event_dict.get("planned_exit_price_formula"),
             stop_loss_price=parse_optional_decimal(event_dict.get("stop_loss_price")),
-            is_rebuild=bool(event_dict.get("is_rebuild", False)),
             description=str(event_dict.get("description", "")),
         )
         instance.actual_interval_pips = parse_optional_decimal(
             event_dict.get("actual_interval_pips")
         )
         return instance
+
+
+@register_event(EventType.REBUILD_POSITION)
+@dataclass
+class RebuildPositionEvent(StrategyEvent):
+    """Event for rebuilding a previously stop-loss-closed position.
+
+    Instead of creating a new Position record, the handler re-opens the
+    original closed Position by clearing its exit fields and marking it
+    as a rebuild.
+    """
+
+    layer_number: int = 1
+    direction: str = ""
+    price: Decimal = Decimal("0")
+    units: int = 0
+    retracement_count: int = 0
+    entry_id: int | None = None
+    strategy_event_type: str = ""
+    planned_exit_price: Decimal | None = None
+    planned_exit_price_formula: str | None = None
+    stop_loss_price: Decimal | None = None
+    description: str = ""
+    original_position_id: str | None = None
+
+    def __post_init__(self):
+        if not self.event_type:
+            self.event_type = EventType.REBUILD_POSITION
+
+    @property
+    def category(self) -> str:
+        return "entry"
+
+    def activate(self, context: "EventContext") -> None:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.info(
+            "Rebuild position: layer=%s, direction=%s, units=%s, original=%s",
+            self.layer_number,
+            self.direction,
+            self.units,
+            self.original_position_id,
+            extra={
+                "task_id": str(context.task_id),
+                "task_type": context.task_type.value,
+                "instrument": context.instrument,
+                "event_type": self.event_type.value,
+            },
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        result = super().to_dict()
+        result.update(
+            {
+                "layer_number": self.layer_number,
+                "direction": str(self.direction),
+                "price": str(self.price),
+                "units": self.units,
+                "retracement_count": self.retracement_count,
+            }
+        )
+        if self.entry_id is not None:
+            result["entry_id"] = self.entry_id
+        if self.strategy_event_type:
+            result["strategy_event_type"] = self.strategy_event_type
+        if self.planned_exit_price is not None:
+            result["planned_exit_price"] = str(self.planned_exit_price)
+        if self.planned_exit_price_formula:
+            result["planned_exit_price_formula"] = self.planned_exit_price_formula
+        if self.stop_loss_price is not None:
+            result["stop_loss_price"] = str(self.stop_loss_price)
+        if self.description:
+            result["description"] = self.description
+        if self.original_position_id:
+            result["original_position_id"] = self.original_position_id
+        return result
+
+    @classmethod
+    def from_dict(cls, event_dict: dict[str, Any]) -> "RebuildPositionEvent":
+        return cls(
+            event_type=EventType.REBUILD_POSITION,
+            timestamp=parse_datetime(event_dict.get("timestamp")),
+            layer_number=int(event_dict.get("layer_number", 1)),
+            direction=str(event_dict.get("direction", "")),
+            price=parse_decimal(event_dict.get("price", "0")),
+            units=int(event_dict.get("units", 0)),
+            retracement_count=int(event_dict.get("retracement_count", 0)),
+            entry_id=event_dict.get("entry_id"),
+            strategy_event_type=str(event_dict.get("strategy_event_type", "")),
+            planned_exit_price=parse_optional_decimal(event_dict.get("planned_exit_price")),
+            planned_exit_price_formula=event_dict.get("planned_exit_price_formula"),
+            stop_loss_price=parse_optional_decimal(event_dict.get("stop_loss_price")),
+            description=str(event_dict.get("description", "")),
+            original_position_id=event_dict.get("original_position_id"),
+        )
 
 
 @register_event(EventType.CLOSE_POSITION)
