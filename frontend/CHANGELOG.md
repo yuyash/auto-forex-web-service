@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.6...frontend-v1.34.7) (2026-04-08)
+
+
+### Bug Fixes
+
+* **strategy:** prevent cycle proliferation on TP re-entry ([#389](https://github.com/yuyash/auto-forex-web-service/issues/389)) ([7751d8b](https://github.com/yuyash/auto-forex-web-service/commit/7751d8b1586d311e9ed287a9dfd55b78e610074b))
+
 ## [1.34.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.5...frontend-v1.34.6) (2026-04-08)
 
 ### Bug Fixes
