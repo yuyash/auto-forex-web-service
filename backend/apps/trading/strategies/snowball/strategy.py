@@ -231,8 +231,9 @@ class SnowballStrategy(Strategy):
     ) -> list[StrategyEvent]:
         """Close the cycle head (TP hit), create new cycle.
 
-        The cycle transitions to COMPLETED via the unified grid.is_empty()
-        check in on_tick after this method returns.
+        The cycle transitions to COMPLETED (or PENDING when stop-loss
+        rebuilds remain) via the unified grid.is_empty() check in
+        on_tick after this method returns.
         """
         entry = cycle.initial_entry
         if entry is None:
@@ -271,11 +272,26 @@ class SnowballStrategy(Strategy):
                     layer.close_slot(slot.index, refillable=False)
                     break
 
-        # Discard any pending stop-loss rebuilds for this cycle — the
-        # cycle achieved its TP so rebuilding old positions is pointless.
-        ss.stop_loss_pending_rebuilds = [
-            p for p in ss.stop_loss_pending_rebuilds if p.cycle_id != cycle.cycle_id
-        ]
+        # Only discard pending stop-loss rebuilds when the *original*
+        # cycle head (R0) achieved its TP.  When R0 was itself stopped
+        # out and a counter entry was promoted to dynamic head, its TP
+        # does not mean the cycle is truly done — the stopped-out R0
+        # still needs to be rebuilt.  In that case we leave the pending
+        # rebuilds intact so the unified completion check in on_tick
+        # transitions the cycle to PENDING instead of COMPLETED.
+        has_pending = any(p.cycle_id == cycle.cycle_id for p in ss.stop_loss_pending_rebuilds)
+        if has_pending:
+            logger.info(
+                "Dynamic head TP (%s) but %d pending rebuild(s) remain — "
+                "cycle will transition to PENDING",
+                direction.value.upper(),
+                sum(1 for p in ss.stop_loss_pending_rebuilds if p.cycle_id == cycle.cycle_id),
+            )
+        else:
+            # Original head closed the cycle — no rebuilds needed.
+            ss.stop_loss_pending_rebuilds = [
+                p for p in ss.stop_loss_pending_rebuilds if p.cycle_id != cycle.cycle_id
+            ]
 
         new_events, _new_cycle = self._create_cycle(ss, tick, direction)
         logger.info(
