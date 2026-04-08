@@ -232,8 +232,9 @@ def _build_cycle(
     last = trades[-1]
     direction = str(first.get("direction") or "")
 
-    opens = [t for t in trades if t["execution_method"] == "open_position"]
-    closes = [t for t in trades if t["execution_method"] != "open_position"]
+    _OPEN_METHODS = {"open_position", "rebuild_position"}
+    opens = [t for t in trades if t["execution_method"] in _OPEN_METHODS]
+    closes = [t for t in trades if t["execution_method"] not in _OPEN_METHODS]
     open_ids = {str(t["position_id"]) for t in opens if t.get("position_id")}
     close_ids = {str(t["position_id"]) for t in closes if t.get("position_id")}
     has_open_remaining = bool(open_ids - close_ids)
@@ -249,10 +250,24 @@ def _build_cycle(
         )
         initial_closed = str(initial.get("position_id", "")) in close_ids
 
-        if initial_closed:
+        # Check if there are rebuild trades that haven't been closed yet,
+        # indicating pending stop-loss rebuilds that didn't complete.
+        rebuild_open_ids = {
+            str(t["position_id"])
+            for t in trades
+            if t.get("is_rebuild")
+            and t["execution_method"] == "rebuild_position"
+            and t.get("position_id")
+        }
+        has_unresolved_rebuilds = bool(rebuild_open_ids - close_ids)
+
+        if initial_closed and not has_open_remaining and not has_unresolved_rebuilds:
             status = "completed"
         elif has_open_remaining:
             status = "active"
+        elif not has_open_remaining and has_unresolved_rebuilds:
+            # All positions closed but rebuilds pending
+            status = "pending"
         else:
             status = "completed"
 
@@ -264,6 +279,9 @@ def _build_cycle(
         or str(t.get("description") or "").startswith("[PROTECTION]")
     ]
     has_protection = len(protection_trades) > 0
+
+    rebuild_trades = [t for t in trades if t.get("is_rebuild")]
+    rebuild_count = len(rebuild_trades)
 
     return {
         "cycle_id": cycle_id,
@@ -278,6 +296,7 @@ def _build_cycle(
         "close_count": len(closes),
         "has_protection": has_protection,
         "protection_count": len(protection_trades),
+        "rebuild_count": rebuild_count,
         "trades": [_serialize_trade(t, metrics_by_minute) for t in trades],
     }
 

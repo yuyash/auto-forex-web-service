@@ -455,7 +455,8 @@
         "events": {
           "OPENED": "オープン",
           "CLOSED": "クローズ",
-          "PARTIAL_CLOSE": "部分決済"
+          "PARTIAL_CLOSE": "部分決済",
+          "REBUILT": "再建"
         },
         "details": {
           "exitFormula": "決済価格計算式",

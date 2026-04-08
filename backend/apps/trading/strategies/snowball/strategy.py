@@ -211,6 +211,7 @@ class SnowballStrategy(Strategy):
             planned_exit_price_formula=formula,
             description=(
                 f"Initial entry ({direction.value.upper()}) | units={units}, TP={close_price:.3f}"
+                + (f", SL={entry.stop_loss_price:.3f}" if entry.stop_loss_price is not None else "")
             ),
         )
 
@@ -680,6 +681,7 @@ class SnowballStrategy(Strategy):
                 f"Counter add ({direction.value.upper()}) | "
                 f"L{layer.layer_number}/R{slot.index}, units={units}, "
                 f"adverse={adverse:.1f} pips, TP={close_price:.3f}"
+                + (f", SL={entry.stop_loss_price:.3f}" if entry.stop_loss_price is not None else "")
             ),
         )
         slot.fill(entry)
@@ -774,6 +776,11 @@ class SnowballStrategy(Strategy):
             description=(
                 f"Layer initial entry ({direction.value.upper()}) | "
                 f"L{layer.layer_number}/R0, units={layer_entry.units}, TP={close_price:.3f}"
+                + (
+                    f", SL={layer_entry.stop_loss_price:.3f}"
+                    if layer_entry.stop_loss_price is not None
+                    else ""
+                )
             ),
         )
         # Place in R0 of the new layer
@@ -1264,6 +1271,11 @@ class SnowballStrategy(Strategy):
                     f"Stop-loss rebuild ({pending.direction.value.upper()}) | "
                     f"L{pending.layer_number}/R{pending.retracement_count}, "
                     f"units={pending.units}, TP={pending.close_price:.5f}"
+                    + (
+                        f", SL={entry.stop_loss_price:.3f}"
+                        if entry.stop_loss_price is not None
+                        else ""
+                    )
                 ),
             )
             events.append(evt)
