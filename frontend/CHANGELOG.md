@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.4...frontend-v1.34.5) (2026-04-08)
+
+
+### Bug Fixes
+
+* **strategy:** preserve pending rebuilds when dynamic head hits TP ([#384](https://github.com/yuyash/auto-forex-web-service/issues/384)) ([00076ad](https://github.com/yuyash/auto-forex-web-service/commit/00076adf20381cc3a2aada717cc18ad093c732e4))
+
 ## [1.34.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.3...frontend-v1.34.4) (2026-04-08)
 
 
