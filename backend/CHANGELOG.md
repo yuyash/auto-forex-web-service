@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.6](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.5...backend-v1.28.6) (2026-04-08)
+
+
+### Bug Fixes
+
+* positions filter by execution ([#380](https://github.com/yuyash/auto-forex-web-service/issues/380)) ([1ad3464](https://github.com/yuyash/auto-forex-web-service/commit/1ad34649f578a92598a50d1f465468523b737caa))
+
 ## [1.28.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.4...backend-v1.28.5) (2026-04-07)
 
 
