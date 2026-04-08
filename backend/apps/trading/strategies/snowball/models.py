@@ -629,25 +629,49 @@ class Slot:
     States:
     - empty + not ever_closed → available for a new entry
     - occupied → holds an open entry
+    - pending_rebuild → entry was closed by stop-loss, awaiting rebuild.
+      The slot is logically "present" (blocks counter adds and new layers)
+      but has no live entry.
     - empty + ever_closed → sealed; triggers new layer on next adverse move
     """
 
     index: int  # 0-based (R0=0, R1=1, …)
     entry: Entry | None = None
     ever_closed: bool = False
+    pending_rebuild: StopLossClosedEntry | None = None
 
     @property
     def is_occupied(self) -> bool:
+        """True if a live entry is present."""
         return self.entry is not None
+
+    @property
+    def is_present(self) -> bool:
+        """True if the slot holds a live entry OR is awaiting SL rebuild.
+
+        Use this instead of ``is_occupied`` when you need to treat
+        stop-loss-closed positions as still "there" (e.g. for counter-add
+        distance calculations and layer-progression checks).
+        """
+        return self.entry is not None or self.pending_rebuild is not None
 
     @property
     def is_empty(self) -> bool:
         return self.entry is None
 
     @property
+    def is_pending_rebuild(self) -> bool:
+        """True if the slot is awaiting stop-loss rebuild."""
+        return self.pending_rebuild is not None
+
+    @property
     def is_available(self) -> bool:
-        """True if this slot can accept a new entry."""
-        return self.entry is None and not self.ever_closed
+        """True if this slot can accept a new entry.
+
+        A slot with a pending rebuild is NOT available — it is reserved
+        for the rebuild.
+        """
+        return self.entry is None and not self.ever_closed and self.pending_rebuild is None
 
     def fill(self, entry: Entry) -> None:
         self.entry = entry
@@ -659,24 +683,48 @@ class Slot:
             self.ever_closed = True
         return e
 
+    def close_for_stop_loss(self, sl_snapshot: "StopLossClosedEntry") -> Entry | None:
+        """Close the entry due to stop-loss and mark the slot for rebuild.
+
+        The slot transitions to ``pending_rebuild`` state: no live entry,
+        but logically present in the grid.
+        """
+        e = self.entry
+        self.entry = None
+        self.pending_rebuild = sl_snapshot
+        # ever_closed stays False — the slot is reserved for rebuild
+        return e
+
+    def complete_rebuild(self, entry: Entry) -> None:
+        """Fill the slot with a rebuilt entry, clearing the pending state."""
+        self.entry = entry
+        self.pending_rebuild = None
+        self.ever_closed = False
+
     def reset(self) -> None:
         self.entry = None
         self.ever_closed = False
+        self.pending_rebuild = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "index": self.index,
             "entry": self.entry.to_dict() if self.entry else None,
             "ever_closed": self.ever_closed,
         }
+        if self.pending_rebuild is not None:
+            d["pending_rebuild"] = self.pending_rebuild.to_dict()
+        return d
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> "Slot":
         raw_entry = d.get("entry")
+        raw_pending = d.get("pending_rebuild")
         return Slot(
             index=_parse_int(d.get("index", 0), 0),
             entry=Entry.from_dict(raw_entry) if raw_entry else None,
             ever_closed=bool(d.get("ever_closed", False)),
+            pending_rebuild=(StopLossClosedEntry.from_dict(raw_pending) if raw_pending else None),
         )
 
 
@@ -703,9 +751,18 @@ class Layer:
     def occupied_slots(self) -> list[Slot]:
         return [s for s in self.slots if s.is_occupied]
 
+    def present_slots(self) -> list[Slot]:
+        """Return slots that are occupied OR awaiting SL rebuild."""
+        return [s for s in self.slots if s.is_present]
+
     def highest_occupied_slot(self) -> Slot | None:
         occupied = self.occupied_slots()
         return max(occupied, key=lambda s: s.index) if occupied else None
+
+    def highest_present_slot(self) -> Slot | None:
+        """Highest slot that is occupied or pending rebuild."""
+        present = self.present_slots()
+        return max(present, key=lambda s: s.index) if present else None
 
     def lowest_occupied_slot(self) -> Slot | None:
         occupied = self.occupied_slots()
@@ -721,14 +778,19 @@ class Layer:
     def next_available_counter_slot(self) -> Slot | None:
         """Return the next available slot with index >= 1 (counter slots).
 
-        Walks counter slots in order.  Returns None if a sealed slot is
-        encountered before an available one, or all are occupied.
+        Walks counter slots in order.  Returns None if a sealed or
+        pending-rebuild slot is encountered before an available one,
+        or all are occupied.
         """
         for s in self.slots:
             if s.index == 0:
                 continue  # skip R0 (layer-initial)
             if s.is_available:
                 return s
+            if s.is_pending_rebuild:
+                # Slot is reserved for SL rebuild — skip but keep looking
+                # for higher-numbered available slots.
+                continue
             if s.is_empty and s.ever_closed:
                 return None  # sealed → new layer needed
         return None
@@ -739,7 +801,12 @@ class Layer:
         return self.next_available_counter_slot() is None
 
     def has_open_entries(self) -> bool:
+        """True if any slot has a live entry."""
         return any(s.is_occupied for s in self.slots)
+
+    def has_present_entries(self) -> bool:
+        """True if any slot is occupied or pending rebuild."""
+        return any(s.is_present for s in self.slots)
 
     def all_entries(self) -> list[Entry]:
         return [s.entry for s in self.slots if s.entry is not None]
@@ -811,13 +878,18 @@ class Layer:
     ) -> tuple[Decimal, str]:
         """Compute close price for a layer-initial entry.
 
-        Uses the close_price of the highest-numbered occupied slot in the
-        previous layer.  Falls back to m_pips from entry price.
+        Uses the close_price of the highest-numbered present slot
+        (occupied or pending rebuild) in the previous layer.
+        Falls back to m_pips from entry price.
         """
-        highest = prev_layer.highest_occupied_slot()
-        if highest is not None and highest.entry is not None:
-            close_price = highest.entry.close_price
-            return close_price, f"{close_price:.5f}"
+        highest = prev_layer.highest_present_slot()
+        if highest is not None:
+            if highest.entry is not None:
+                close_price = highest.entry.close_price
+                return close_price, f"{close_price:.5f}"
+            if highest.pending_rebuild is not None:
+                close_price = highest.pending_rebuild.close_price
+                return close_price, f"{close_price:.5f}"
 
         if direction == Direction.LONG:
             close_price = new_price + m_pips * pip_size
@@ -943,7 +1015,21 @@ class PositionGrid:
         return False
 
     def is_empty(self) -> bool:
+        """True if no layer has live entries."""
         return all(not layer.has_open_entries() for layer in self.layers)
+
+    def has_pending_rebuilds(self) -> bool:
+        """True if any slot in the grid is awaiting SL rebuild."""
+        return any(s.is_pending_rebuild for layer in self.layers for s in layer.slots)
+
+    def pending_rebuild_slots(self) -> list[tuple["Layer", Slot]]:
+        """Return all (layer, slot) pairs awaiting SL rebuild."""
+        result: list[tuple[Layer, Slot]] = []
+        for layer in self.layers:
+            for s in layer.slots:
+                if s.is_pending_rebuild:
+                    result.append((layer, s))
+        return result
 
     # -- Shrink: close from front --
 
