@@ -91,14 +91,17 @@ def build_execution_metrics(
     unrealized_pnl_acct = summary.pnl.unrealized * conv
     total_pnl_acct = realized_pnl_acct + unrealized_pnl_acct
 
-    total_return = compute_total_return(
-        task=task,
-        task_type=task_type,
-        current_balance=summary.execution.current_balance,
-        unrealized_pnl=summary.pnl.unrealized,
-        total_pnl=total_pnl,
-        mid_rate=mid_rate,
-    )
+    initial_balance = getattr(task, "initial_balance", None)
+    total_return: Decimal | None = None
+    if task_type == "backtest" and initial_balance:
+        try:
+            initial = Decimal(str(initial_balance))
+            if initial != Decimal("0"):
+                total_return = (total_pnl_acct / initial * Decimal("100")).quantize(
+                    Decimal("0.0000000001")
+                )
+        except Exception:
+            pass  # nosec B110
 
     metrics: dict[str, Any] = {
         "total_pnl": total_pnl_acct,
@@ -122,55 +125,6 @@ def build_execution_metrics(
     if total_return is not None:
         metrics["total_return"] = total_return
     return metrics
-
-
-def compute_total_return(
-    *,
-    task,
-    task_type: str,
-    current_balance: Decimal | None,
-    unrealized_pnl: Decimal = Decimal("0"),
-    total_pnl: Decimal,
-    mid_rate: Decimal | None,
-) -> Decimal | None:
-    """Compute total return % from NAV (balance + unrealized PnL) vs initial balance.
-
-    ``current_balance`` only contains realised PnL.  To produce a return
-    figure that is consistent with ``total_pnl`` (realised + unrealised)
-    we must add the unrealised component, converted to account currency,
-    to arrive at the Net Asset Value before comparing with the initial
-    balance.
-    """
-    if task_type != "backtest":
-        return None
-    initial_balance: Decimal | None = getattr(task, "initial_balance", None)
-    if not initial_balance:
-        return None
-    try:
-        initial = Decimal(str(initial_balance))
-        if initial == Decimal("0"):
-            return None
-
-        if current_balance is not None:
-            account_ccy = getattr(task, "account_currency", "USD").upper()
-            instrument = getattr(task, "instrument", "") or ""
-            conv = Decimal("1")
-            if instrument and mid_rate and mid_rate > 0:
-                conv = quote_to_account_rate(instrument, mid_rate, account_currency=account_ccy)
-            # NAV = cash balance (account ccy) + unrealized PnL (converted to account ccy)
-            nav = Decimal(str(current_balance)) + unrealized_pnl * conv
-            pnl_delta = nav - initial
-        else:
-            pnl_delta = total_pnl
-            account_ccy = getattr(task, "account_currency", "USD").upper()
-            instrument = getattr(task, "instrument", "")
-            quote_ccy = instrument.split("_")[-1].upper() if "_" in instrument else ""
-            if quote_ccy and account_ccy != quote_ccy and mid_rate and mid_rate > 0:
-                pnl_delta = pnl_delta / mid_rate
-
-        return (pnl_delta / initial * Decimal("100")).quantize(Decimal("0.0000000001"))
-    except Exception:
-        return None
 
 
 def _abs_units():
