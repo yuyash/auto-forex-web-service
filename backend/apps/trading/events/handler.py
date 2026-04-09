@@ -655,9 +655,9 @@ class EventHandler:
         Returns:
             Position: The newly created position
         """
-        # Create a brand-new position via the open handler so the original
-        # closed position's exit_price (and therefore its realized P&L)
-        # remains intact in the database.
+        # Build an OpenPositionEvent that carries the root/parent entry IDs
+        # so that _resolve_cycle_id_for_open links the new position to the
+        # same cycle as the original.
         open_event = OpenPositionEvent(
             event_type=EventType.OPEN_POSITION,
             timestamp=event.timestamp,
@@ -672,34 +672,14 @@ class EventHandler:
             stop_loss_price=event.stop_loss_price,
             description=event.description,
         )
-        position = self.handle_open_position(open_event)
-        position.is_rebuild = True
-        position.save(update_fields=["is_rebuild"])
+        # Propagate lineage so cycle_id resolution works correctly.
+        open_event.root_entry_id = event.root_entry_id
+        open_event.parent_entry_id = event.parent_entry_id
 
+        # Resolve cycle_id *before* calling handle_open_position so the
+        # DB-fallback lookup can use original_position_id if needed.
         cycle_id = self._resolve_cycle_id_for_open(event)
-
-        self._cache_position(event.layer_number, position)
-        trade = self._record_trade(
-            direction=Direction(event.direction),
-            units=event.units,
-            instrument=position.instrument,
-            price=event.price,
-            execution_method=str(event.event_type.value),
-            timestamp=event.timestamp,
-            layer_index=event.layer_number,
-            retracement_count=event.retracement_count,
-            oanda_trade_id=position.oanda_trade_id,
-            position=position,
-            order=None,
-            description=getattr(event, "description", ""),
-            cycle_id=cycle_id,
-            margin_ratio=event.margin_ratio,
-            is_rebuild=True,
-        )
-
         if cycle_id is None and event.original_position_id:
-            # For rebuild trades, try to find the cycle from the original
-            # position's existing trades before creating a new cycle.
             existing_cycle_id = (
                 Trade.objects.filter(
                     task_type=self.order_service.task_type.value,
@@ -713,18 +693,53 @@ class EventHandler:
             )
             if existing_cycle_id is not None:
                 cycle_id = str(existing_cycle_id)
-                trade.cycle_id = cycle_id
-                trade.save(update_fields=["cycle_id"])
+                # Seed the in-memory mapping so handle_open_position picks
+                # it up via _resolve_cycle_id_for_open on the OpenPositionEvent.
+                if event.root_entry_id is not None:
+                    self._entry_id_to_cycle_id[event.root_entry_id] = cycle_id
+                if event.entry_id is not None:
+                    self._entry_id_to_cycle_id[event.entry_id] = cycle_id
 
-        if cycle_id is None:
-            trade.cycle_id = str(trade.id)
-            trade.save(update_fields=["cycle_id"])
-            cycle_id = str(trade.id)
+        # Create the position (and its open trade) via the standard path.
+        position = self.handle_open_position(open_event)
+        position.is_rebuild = True
+        position.save(update_fields=["is_rebuild"])
 
-        self._last_open_cycle_id = cycle_id
+        # If handle_open_position created a new cycle (cycle_id was None),
+        # update the trade it created with the resolved cycle_id.
+        if cycle_id is not None and self._last_open_cycle_id != cycle_id:
+            # The trade created by handle_open_position may have the wrong
+            # cycle_id.  Fix it.
+            latest_trade = (
+                Trade.objects.filter(
+                    task_type=self.order_service.task_type.value,
+                    task_id=self._task_pk,
+                    execution_id=self._execution_id,
+                    position_id=str(position.id),
+                )
+                .order_by("-created_at")
+                .first()
+            )
+            if latest_trade and str(latest_trade.cycle_id) != cycle_id:
+                latest_trade.cycle_id = cycle_id
+                latest_trade.save(update_fields=["cycle_id"])
+            self._last_open_cycle_id = cycle_id
 
-        if event.entry_id is not None:
-            self._entry_id_to_cycle_id[event.entry_id] = cycle_id
+        # Mark the trade as a rebuild
+        latest_trade = (
+            Trade.objects.filter(
+                task_type=self.order_service.task_type.value,
+                task_id=self._task_pk,
+                execution_id=self._execution_id,
+                position_id=str(position.id),
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if latest_trade and not latest_trade.is_rebuild:
+            latest_trade.is_rebuild = True
+            latest_trade.execution_method = str(event.event_type.value)
+            latest_trade.save(update_fields=["is_rebuild", "execution_method"])
 
         logger.info(
             "Rebuild position executed: layer=%s, direction=%s, units=%s, position_id=%s",
