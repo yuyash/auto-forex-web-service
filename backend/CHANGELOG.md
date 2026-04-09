@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.13](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.12...backend-v1.28.13) (2026-04-09)
+
+
+### Bug Fixes
+
+* **metrics:** align metrics tab PnL with overview tab using quote-currency accumulation ([#395](https://github.com/yuyash/auto-forex-web-service/issues/395)) ([2c3fb31](https://github.com/yuyash/auto-forex-web-service/commit/2c3fb3112d6cf066d38e31b020b0d44677a5632a))
+
 ## [1.28.12](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.11...backend-v1.28.12) (2026-04-09)
 
 
