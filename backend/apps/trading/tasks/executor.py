@@ -239,7 +239,8 @@ class TaskExecutor:
                         Decimal(str(state.current_balance)) + execution_result.realized_pnl_delta
                     )
                     self._runtime_metrics.record_position_closed(
-                        execution_result.realized_pnl_delta
+                        execution_result.realized_pnl_delta,
+                        realized_pnl_quote=execution_result.realized_pnl_delta_quote,
                     )
                 if execution_result.entry_binding is not None:
                     self._runtime_metrics.record_trade()

@@ -163,7 +163,7 @@ class TestHandleClosePosition:
 
         result = handler.handle_close_position(event)
 
-        assert result == Decimal("10.00")
+        assert result[0] == Decimal("10.00")
         svc.close_position.assert_called_once()
 
     def test_no_target_position_returns_zero(self):
@@ -180,7 +180,7 @@ class TestHandleClosePosition:
 
         result = handler.handle_close_position(event)
 
-        assert result == Decimal("0")
+        assert result == (Decimal("0"), Decimal("0"))
         svc.close_position.assert_not_called()
 
     def test_partial_close_iterates_positions(self):
@@ -221,7 +221,7 @@ class TestHandleClosePosition:
         )
 
         result = handler.handle_close_position(event)
-        assert result == Decimal("10.00")
+        assert result[0] == Decimal("10.00")
         assert svc.close_position.call_count == 2
 
 
@@ -255,7 +255,7 @@ class TestHandleVolatilityLock:
 
         result = handler.handle_volatility_lock(event)
 
-        assert result == Decimal("15.00")
+        assert result[0] == Decimal("15.00")
         assert svc.close_position.call_count == 2
 
     def test_clears_caches_after_close(self):
@@ -301,7 +301,7 @@ class TestHandleVolatilityLock:
             reason="test",
         )
         result = handler.handle_volatility_lock(event)
-        assert result == Decimal("5.00")
+        assert result[0] == Decimal("5.00")
 
 
 class TestHandleVolatilityHedgeNeutralize:
@@ -365,7 +365,7 @@ class TestHandleMarginProtection:
 
         result = handler.handle_margin_protection(event)
 
-        assert result == Decimal("-10.00")
+        assert result[0] == Decimal("-10.00")
         svc.close_position.assert_called_once()
 
     def test_respects_units_to_close_limit(self):
