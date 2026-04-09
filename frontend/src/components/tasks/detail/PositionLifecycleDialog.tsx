@@ -559,6 +559,12 @@ const LifecycleDetails: React.FC<{
       t('tables.positions.lifecycle.details.description'),
       ctx.description as string | undefined,
     ],
+    [
+      t('tables.positions.lifecycle.details.originalPositionId'),
+      ctx.original_position_id
+        ? String(ctx.original_position_id).slice(0, 8)
+        : undefined,
+    ],
   ];
 
   const rendered = fields.filter(

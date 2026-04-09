@@ -461,7 +461,8 @@
         "details": {
           "exitFormula": "Exit Formula",
           "closeReason": "Close Reason",
-          "description": "Description"
+          "description": "Description",
+          "originalPositionId": "Original Position"
         }
       }
     },

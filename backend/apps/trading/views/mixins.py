@@ -296,11 +296,20 @@ class TaskSubResourceMixin:
         if query.position_id:
             # Support prefix match for truncated UUIDs (e.g. first 8 chars).
             # Extract the nested JSON text value: details->'context'->>'position_id'
+            # Also match on original_position_id so that rebuild chains are
+            # visible when searching by either the original or rebuilt ID.
+            from django.db.models import Q
             from django.db.models.fields.json import KeyTextTransform
 
             queryset = queryset.annotate(
-                _pos_id=KeyTextTransform("position_id", KeyTextTransform("context", "details"))
-            ).filter(_pos_id__startswith=query.position_id)
+                _pos_id=KeyTextTransform("position_id", KeyTextTransform("context", "details")),
+                _orig_pos_id=KeyTextTransform(
+                    "original_position_id", KeyTextTransform("context", "details")
+                ),
+            ).filter(
+                Q(_pos_id__startswith=query.position_id)
+                | Q(_orig_pos_id__startswith=query.position_id)
+            )
         if query.timestamp_range.start:
             queryset = queryset.filter(timestamp__gte=query.timestamp_range.start)
         if query.timestamp_range.end:

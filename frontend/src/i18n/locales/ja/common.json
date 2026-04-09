@@ -461,7 +461,8 @@
         "details": {
           "exitFormula": "決済価格計算式",
           "closeReason": "決済理由",
-          "description": "説明"
+          "description": "説明",
+          "originalPositionId": "元のポジション"
         }
       }
     },

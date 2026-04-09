@@ -55,7 +55,7 @@ wheels = [
 
 [[package]]
 name = "auto-forex"
-version = "1.28.13"
+version = "1.28.14"
 source = { editable = "." }
 dependencies = [
     { name = "bcrypt" },
