@@ -323,8 +323,10 @@ class EventHandler:
     def _dispatch_close_position(self, strategy_event: StrategyEvent) -> EventExecutionResult:
         if not isinstance(strategy_event, ClosePositionEvent):
             return self._dispatch_type_mismatch(strategy_event, ClosePositionEvent)
+        realized_delta, realized_delta_quote = self.handle_close_position(strategy_event)
         return EventExecutionResult(
-            realized_pnl_delta=self.handle_close_position(strategy_event),
+            realized_pnl_delta=realized_delta,
+            realized_pnl_delta_quote=realized_delta_quote,
         )
 
     def _dispatch_rebuild_position(self, strategy_event: StrategyEvent) -> EventExecutionResult:
@@ -344,8 +346,10 @@ class EventHandler:
     def _dispatch_volatility_lock(self, strategy_event: StrategyEvent) -> EventExecutionResult:
         if not isinstance(strategy_event, VolatilityLockEvent):
             return self._dispatch_type_mismatch(strategy_event, VolatilityLockEvent)
+        realized_delta, realized_delta_quote = self.handle_volatility_lock(strategy_event)
         return EventExecutionResult(
-            realized_pnl_delta=self.handle_volatility_lock(strategy_event),
+            realized_pnl_delta=realized_delta,
+            realized_pnl_delta_quote=realized_delta_quote,
         )
 
     def _dispatch_volatility_hedge_neutralize(
@@ -360,8 +364,10 @@ class EventHandler:
     def _dispatch_margin_protection(self, strategy_event: StrategyEvent) -> EventExecutionResult:
         if not isinstance(strategy_event, MarginProtectionEvent):
             return self._dispatch_type_mismatch(strategy_event, MarginProtectionEvent)
+        realized_delta, realized_delta_quote = self.handle_margin_protection(strategy_event)
         return EventExecutionResult(
-            realized_pnl_delta=self.handle_margin_protection(strategy_event),
+            realized_pnl_delta=realized_delta,
+            realized_pnl_delta_quote=realized_delta_quote,
         )
 
     def _dispatch_informational(self, strategy_event: StrategyEvent) -> EventExecutionResult:
@@ -814,7 +820,7 @@ class EventHandler:
 
         return position
 
-    def handle_close_position(self, event: ClosePositionEvent) -> Decimal:
+    def handle_close_position(self, event: ClosePositionEvent) -> tuple[Decimal, Decimal]:
         """Close one or more positions.
 
         When the requested units exceed a single position's size, this
@@ -825,7 +831,8 @@ class EventHandler:
             event: Close position event with close details
 
         Returns:
-            Decimal: Realized pnl delta from this event
+            tuple[Decimal, Decimal]: (realized_pnl_delta in account currency,
+                realized_pnl_delta in quote currency)
 
         Raises:
             OrderServiceError: If order execution fails
@@ -834,6 +841,7 @@ class EventHandler:
         total_requested = event.units if event.units > 0 else None
         remaining = total_requested
         realized_delta_total = Decimal("0")
+        realized_delta_quote_total = Decimal("0")
 
         while True:
             position = self._find_close_position_target(event)
@@ -871,6 +879,14 @@ class EventHandler:
                 tick_timestamp=event.timestamp,
             )
             realized_delta_total += realized_delta
+
+            # Compute quote-currency PnL from the closed position
+            exit_px = closed_position.exit_price or override_price or Decimal("0")
+            entry_px = Decimal(str(position.entry_price))
+            quote_delta = exit_px - entry_px
+            if position.direction == "short":
+                quote_delta = -quote_delta
+            realized_delta_quote_total += quote_delta * Decimal(str(closed_units))
 
             self._record_trade(
                 direction=Direction(position.direction),
@@ -973,22 +989,24 @@ class EventHandler:
             if remaining <= 0:
                 break
 
-        return realized_delta_total
+        return realized_delta_total, realized_delta_quote_total
 
-    def handle_volatility_lock(self, event: VolatilityLockEvent) -> Decimal:
+    def handle_volatility_lock(self, event: VolatilityLockEvent) -> tuple[Decimal, Decimal]:
         """Close all open positions due to volatility.
 
         Args:
             event: Volatility lock event
 
         Returns:
-            Decimal: Realized pnl delta from this event
+            tuple[Decimal, Decimal]: (realized_pnl_delta in account currency,
+                realized_pnl_delta in quote currency)
 
         Raises:
             OrderServiceError: If order execution fails
         """
         closed_positions: list[Position] = []
         realized_delta_total = Decimal("0")
+        realized_delta_quote_total = Decimal("0")
 
         logger.warning(
             "Volatility lock triggered: %s (closing %s positions)",
@@ -1007,6 +1025,14 @@ class EventHandler:
                 closed_positions.append(closed)
                 self._prune_closed_position(position.layer_index or 0, closed)
                 realized_delta_total += realized_delta
+
+                # Quote-currency PnL
+                exit_px = closed.exit_price or Decimal("0")
+                entry_px = Decimal(str(position.entry_price))
+                q_delta = exit_px - entry_px
+                if position.direction == "short":
+                    q_delta = -q_delta
+                realized_delta_quote_total += q_delta * Decimal(str(abs(position.units)))
                 self._record_trade(
                     direction=Direction(position.direction),
                     units=abs(position.units),
@@ -1068,7 +1094,7 @@ class EventHandler:
 
         logger.info("Volatility lock complete: closed %s positions", len(closed_positions))
 
-        return realized_delta_total
+        return realized_delta_total, realized_delta_quote_total
 
     def handle_volatility_hedge_neutralize(self, event: VolatilityHedgeNeutralizeEvent) -> Decimal:
         """Open hedge positions to neutralize net exposure during volatility spike.
@@ -1150,20 +1176,22 @@ class EventHandler:
         )
         return Decimal("0")
 
-    def handle_margin_protection(self, event: MarginProtectionEvent) -> Decimal:
+    def handle_margin_protection(self, event: MarginProtectionEvent) -> tuple[Decimal, Decimal]:
         """Close all open positions due to margin protection.
 
         Args:
             event: Margin protection event
 
         Returns:
-            Decimal: Realized pnl delta from this event
+            tuple[Decimal, Decimal]: (realized_pnl_delta in account currency,
+                realized_pnl_delta in quote currency)
 
         Raises:
             OrderServiceError: If order execution fails
         """
         closed_positions: list[Position] = []
         realized_delta_total = Decimal("0")
+        realized_delta_quote_total = Decimal("0")
 
         logger.warning(
             "Margin protection triggered: %s (closing %s positions)",
@@ -1201,6 +1229,15 @@ class EventHandler:
                 closed_positions.append(closed)
                 self._prune_closed_position(position.layer_index or 0, closed)
                 realized_delta_total += realized_delta
+
+                # Quote-currency PnL
+                exit_px = closed.exit_price or Decimal("0")
+                entry_px = Decimal(str(position.entry_price))
+                closed_units = units_to_close or abs(position.units)
+                q_delta = exit_px - entry_px
+                if position.direction == "short":
+                    q_delta = -q_delta
+                realized_delta_quote_total += q_delta * Decimal(str(closed_units))
                 self._record_trade(
                     direction=Direction(position.direction),
                     units=units_to_close or abs(position.units),
@@ -1275,7 +1312,7 @@ class EventHandler:
 
         logger.info("Margin protection complete: closed %s positions", len(closed_positions))
 
-        return realized_delta_total
+        return realized_delta_total, realized_delta_quote_total
 
     def get_open_positions(self) -> list[Position]:
         """Get all currently tracked open positions.

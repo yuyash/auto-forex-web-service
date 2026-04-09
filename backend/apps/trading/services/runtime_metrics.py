@@ -51,6 +51,7 @@ class RuntimeMetricsTracker:
         # Cumulative counters for dashboard metrics
         self._initial_balance = initial_balance
         self._realized_pnl = Decimal("0")
+        self._realized_pnl_quote = Decimal("0")
         self._total_trades = 0
         self._closed_positions = 0
         self._winning_trades = 0
@@ -66,10 +67,23 @@ class RuntimeMetricsTracker:
         """Increment the total trade counter (call once per trade created)."""
         self._total_trades += 1
 
-    def record_position_closed(self, realized_pnl: Decimal) -> None:
-        """Record a position closure with its realized PnL."""
+    def record_position_closed(
+        self, realized_pnl: Decimal, *, realized_pnl_quote: Decimal | None = None
+    ) -> None:
+        """Record a position closure with its realized PnL.
+
+        Args:
+            realized_pnl: PnL in account currency (used for current_balance updates).
+            realized_pnl_quote: PnL in quote currency before conversion.  When
+                provided, the metrics tab will use this value (converted at the
+                current mid rate) instead of the per-trade converted amount so
+                that it stays consistent with the overview tab's DB aggregation.
+        """
         self._closed_positions += 1
         self._realized_pnl += realized_pnl
+        self._realized_pnl_quote += (
+            realized_pnl_quote if realized_pnl_quote is not None else Decimal("0")
+        )
         if realized_pnl > 0:
             self._winning_trades += 1
         elif realized_pnl < 0:
@@ -79,6 +93,7 @@ class RuntimeMetricsTracker:
         self,
         *,
         realized_pnl: Decimal,
+        realized_pnl_quote: Decimal = Decimal("0"),
         total_trades: int,
         closed_positions: int,
         winning_trades: int,
@@ -86,6 +101,7 @@ class RuntimeMetricsTracker:
     ) -> None:
         """Restore cumulative counters when resuming an execution."""
         self._realized_pnl = realized_pnl
+        self._realized_pnl_quote = realized_pnl_quote
         self._total_trades = total_trades
         self._closed_positions = closed_positions
         self._winning_trades = winning_trades
@@ -106,17 +122,20 @@ class RuntimeMetricsTracker:
 
         conv = quote_to_account_rate(self.instrument, mid, self.account_currency)
 
-        # Unrealized PnL from cached open positions
-        unrealized_pnl = Decimal("0")
+        # Unrealized PnL from cached open positions (quote currency)
+        unrealized_pnl_quote = Decimal("0")
         for position in self._open_positions.values():
             units = Decimal(str(abs(position.units)))
             entry_price = Decimal(str(position.entry_price))
             if position.direction == "long":
-                unrealized_pnl += (bid - entry_price) * units * conv
+                unrealized_pnl_quote += (bid - entry_price) * units
             else:
-                unrealized_pnl += (entry_price - ask) * units * conv
+                unrealized_pnl_quote += (entry_price - ask) * units
 
-        total_pnl = self._realized_pnl + unrealized_pnl
+        # Convert to account currency using current mid rate (same as overview tab)
+        realized_pnl = self._realized_pnl_quote * conv
+        unrealized_pnl = unrealized_pnl_quote * conv
+        total_pnl = realized_pnl + unrealized_pnl
         total_return = (
             (total_pnl / self._initial_balance * 100) if self._initial_balance > 0 else Decimal("0")
         )
