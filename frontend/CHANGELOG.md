@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.34.8](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.7...frontend-v1.34.8) (2026-04-09)
+
+
+### Bug Fixes
+
+* **metrics:** convert execution PnL to account currency and add quote currency display ([d97f333](https://github.com/yuyash/auto-forex-web-service/commit/d97f333a7b5a54eed2d4ce38973d949cd82310a7))
+* **metrics:** convert execution PnL to account currency and add quote… ([#391](https://github.com/yuyash/auto-forex-web-service/issues/391)) ([d97f333](https://github.com/yuyash/auto-forex-web-service/commit/d97f333a7b5a54eed2d4ce38973d949cd82310a7))
+
 ## [1.34.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.6...frontend-v1.34.7) (2026-04-08)
 
 
