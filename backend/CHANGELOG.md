@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.14](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.13...backend-v1.28.14) (2026-04-09)
+
+
+### Bug Fixes
+
+* backtest pnl and snowball counter adds ([#397](https://github.com/yuyash/auto-forex-web-service/issues/397)) ([ab9c458](https://github.com/yuyash/auto-forex-web-service/commit/ab9c45801482765721fa6df0598b3fc4c7f873b0))
+
 ## [1.28.13](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.12...backend-v1.28.13) (2026-04-09)
 
 
