@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.12](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.11...backend-v1.28.12) (2026-04-09)
+
+
+### Bug Fixes
+
+* **metrics:** compute total_return directly from converted total_pnl ([#393](https://github.com/yuyash/auto-forex-web-service/issues/393)) ([351c4bd](https://github.com/yuyash/auto-forex-web-service/commit/351c4bda95ee40777b295a88bf26e69ef686d603))
+
 ## [1.28.11](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.10...backend-v1.28.11) (2026-04-09)
 
 
