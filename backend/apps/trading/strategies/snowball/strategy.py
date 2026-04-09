@@ -596,31 +596,16 @@ class SnowballStrategy(Strategy):
             return []
 
         head = cycle.initial_entry
-
-        # When all live entries have been stop-loss closed, head is None.
-        # Fall back to the R0 pending-rebuild snapshot so counter adds can
-        # still proceed within the same cycle.
-        head_entry_price: Decimal | None = None
-        head_entry_id: int | None = None
-        head_direction: Direction = cycle.direction
-        if head is not None:
-            head_entry_price = head.entry_price
-            head_entry_id = head.entry_id
-        else:
-            r0 = layer.slot_at(0)
-            if r0 is not None and r0.pending_rebuild is not None:
-                head_entry_price = r0.pending_rebuild.entry_price
-                head_entry_id = r0.pending_rebuild.root_entry_id
-            else:
-                return []
+        head_entry_price, head_entry_id = cycle.effective_head()
+        if head_entry_price is None:
+            return []
 
         def _head_losing() -> bool:
             """Check if the cycle head (or its SL snapshot) is in a losing position."""
             if head is not None:
                 return head.unrealised_loss_pips(tick.mid, self.pip_size) > 0
-            # Fallback: compute from pending-rebuild entry price
             assert head_entry_price is not None  # noqa: S101
-            if head_direction == Direction.LONG:
+            if cycle.direction == Direction.LONG:
                 return (head_entry_price - tick.mid) / self.pip_size > 0
             return (tick.mid - head_entry_price) / self.pip_size > 0
 
