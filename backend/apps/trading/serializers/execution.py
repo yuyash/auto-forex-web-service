@@ -9,10 +9,17 @@ class TaskExecutionMetricsSerializer(serializers.Serializer):
     total_return = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
     total_pnl = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
     unrealized_pnl = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
+    total_pnl_quote = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
+    realized_pnl_quote = serializers.DecimalField(max_digits=20, decimal_places=10, required=False)
+    unrealized_pnl_quote = serializers.DecimalField(
+        max_digits=20, decimal_places=10, required=False
+    )
     total_trades = serializers.IntegerField(required=False)
     winning_trades = serializers.IntegerField(required=False)
     losing_trades = serializers.IntegerField(required=False)
     win_rate = serializers.DecimalField(max_digits=10, decimal_places=4, required=False)
+    pnl_currency = serializers.CharField(required=False)
+    quote_currency = serializers.CharField(required=False)
 
 
 class TaskExecutionSerializer(serializers.Serializer):

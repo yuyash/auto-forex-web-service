@@ -10,6 +10,7 @@ from django.db.models import Case, DecimalField, F, IntegerField, Sum, Value, Wh
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
 from apps.trading.services.summary import TaskSummary
+from apps.trading.utils import quote_to_account_rate
 
 
 def build_execution_metrics(
@@ -76,18 +77,36 @@ def build_execution_metrics(
 
     total_pnl = summary.pnl.realized + summary.pnl.unrealized
     mid_rate = summary.tick.mid or fallback_mid_rate
+
+    # Determine quote→account conversion rate so that PnL values
+    # reported in the overview tab are denominated in the account
+    # currency, consistent with current_balance and the metrics tab.
+    account_ccy = getattr(task, "account_currency", "USD") or "USD"
+    instrument = getattr(task, "instrument", "") or ""
+    conv = Decimal("1")
+    if instrument and mid_rate and mid_rate > 0:
+        conv = quote_to_account_rate(instrument, mid_rate, account_currency=account_ccy)
+
+    realized_pnl_acct = summary.pnl.realized * conv
+    unrealized_pnl_acct = summary.pnl.unrealized * conv
+    total_pnl_acct = realized_pnl_acct + unrealized_pnl_acct
+
     total_return = compute_total_return(
         task=task,
         task_type=task_type,
         current_balance=summary.execution.current_balance,
+        unrealized_pnl=summary.pnl.unrealized,
         total_pnl=total_pnl,
         mid_rate=mid_rate,
     )
 
     metrics: dict[str, Any] = {
-        "total_pnl": total_pnl,
-        "realized_pnl": summary.pnl.realized,
-        "unrealized_pnl": summary.pnl.unrealized,
+        "total_pnl": total_pnl_acct,
+        "realized_pnl": realized_pnl_acct,
+        "unrealized_pnl": unrealized_pnl_acct,
+        "total_pnl_quote": total_pnl,
+        "realized_pnl_quote": summary.pnl.realized,
+        "unrealized_pnl_quote": summary.pnl.unrealized,
         "total_trades": total_trades,
         "winning_trades": winning_trades,
         "losing_trades": losing_trades,
@@ -97,6 +116,8 @@ def build_execution_metrics(
         "open_positions": summary.counts.open_positions,
         "closed_positions": summary.counts.closed_positions,
         "ticks_processed": summary.execution.ticks_processed,
+        "pnl_currency": account_ccy.upper(),
+        "quote_currency": instrument.split("_")[-1].upper() if "_" in instrument else "",
     }
     if total_return is not None:
         metrics["total_return"] = total_return
@@ -108,10 +129,18 @@ def compute_total_return(
     task,
     task_type: str,
     current_balance: Decimal | None,
+    unrealized_pnl: Decimal = Decimal("0"),
     total_pnl: Decimal,
     mid_rate: Decimal | None,
 ) -> Decimal | None:
-    """Compute total return % from current balance vs initial balance."""
+    """Compute total return % from NAV (balance + unrealized PnL) vs initial balance.
+
+    ``current_balance`` only contains realised PnL.  To produce a return
+    figure that is consistent with ``total_pnl`` (realised + unrealised)
+    we must add the unrealised component, converted to account currency,
+    to arrive at the Net Asset Value before comparing with the initial
+    balance.
+    """
     if task_type != "backtest":
         return None
     initial_balance: Decimal | None = getattr(task, "initial_balance", None)
@@ -123,7 +152,14 @@ def compute_total_return(
             return None
 
         if current_balance is not None:
-            pnl_delta = Decimal(str(current_balance)) - initial
+            account_ccy = getattr(task, "account_currency", "USD").upper()
+            instrument = getattr(task, "instrument", "") or ""
+            conv = Decimal("1")
+            if instrument and mid_rate and mid_rate > 0:
+                conv = quote_to_account_rate(instrument, mid_rate, account_currency=account_ccy)
+            # NAV = cash balance (account ccy) + unrealized PnL (converted to account ccy)
+            nav = Decimal(str(current_balance)) + unrealized_pnl * conv
+            pnl_delta = nav - initial
         else:
             pnl_delta = total_pnl
             account_ccy = getattr(task, "account_currency", "USD").upper()
