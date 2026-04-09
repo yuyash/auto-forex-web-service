@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.28.9",
+        "version": "1.28.10",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -8175,6 +8175,21 @@
                         "format": "decimal",
                         "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
                     },
+                    "total_pnl_quote": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
+                    "realized_pnl_quote": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
+                    "unrealized_pnl_quote": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$"
+                    },
                     "total_trades": {
                         "type": "integer"
                     },
@@ -8188,6 +8203,12 @@
                         "type": "string",
                         "format": "decimal",
                         "pattern": "^-?\\d{0,6}(?:\\.\\d{0,4})?$"
+                    },
+                    "pnl_currency": {
+                        "type": "string"
+                    },
+                    "quote_currency": {
+                        "type": "string"
                     }
                 }
             },

@@ -181,24 +181,45 @@ export function ExecutionHistoryTable({
       {
         id: 'metrics.total_pnl',
         label: t('tables.executions.pnl'),
-        width: 130,
-        minWidth: 90,
+        width: 160,
+        minWidth: 110,
         align: 'right' as const,
         render: (row: TaskExecution) => {
           if (row.metrics?.total_pnl == null) return '-';
           const v = parseFloat(String(row.metrics.total_pnl));
           if (isNaN(v)) return '-';
-          const suffix = pnlCurrency ? ` ${pnlCurrency}` : '';
+          const acctCcy = row.metrics?.pnl_currency || '';
+          const quoteCcy = row.metrics?.quote_currency || pnlCurrency || '';
+          const suffix = acctCcy ? ` ${acctCcy}` : '';
+          const hasQuote =
+            row.metrics?.total_pnl_quote != null &&
+            quoteCcy &&
+            quoteCcy !== acctCcy;
+          const qv = hasQuote
+            ? parseFloat(String(row.metrics.total_pnl_quote))
+            : NaN;
           return (
-            <Typography
-              variant="body2"
-              color={v >= 0 ? 'success.main' : 'error.main'}
-              sx={{ whiteSpace: 'nowrap' }}
-            >
-              {v >= 0 ? '+' : ''}
-              {fmt(v)}
-              {suffix}
-            </Typography>
+            <Box>
+              <Typography
+                variant="body2"
+                color={v >= 0 ? 'success.main' : 'error.main'}
+                sx={{ whiteSpace: 'nowrap' }}
+              >
+                {v >= 0 ? '+' : ''}
+                {fmt(v)}
+                {suffix}
+              </Typography>
+              {hasQuote && !isNaN(qv) && (
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ whiteSpace: 'nowrap' }}
+                >
+                  {qv >= 0 ? '+' : ''}
+                  {fmt(qv)} {quoteCcy}
+                </Typography>
+              )}
+            </Box>
           );
         },
       },
