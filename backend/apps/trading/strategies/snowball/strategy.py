@@ -596,8 +596,33 @@ class SnowballStrategy(Strategy):
             return []
 
         head = cycle.initial_entry
-        if not head:
-            return []
+
+        # When all live entries have been stop-loss closed, head is None.
+        # Fall back to the R0 pending-rebuild snapshot so counter adds can
+        # still proceed within the same cycle.
+        head_entry_price: Decimal | None = None
+        head_entry_id: int | None = None
+        head_direction: Direction = cycle.direction
+        if head is not None:
+            head_entry_price = head.entry_price
+            head_entry_id = head.entry_id
+        else:
+            r0 = layer.slot_at(0)
+            if r0 is not None and r0.pending_rebuild is not None:
+                head_entry_price = r0.pending_rebuild.entry_price
+                head_entry_id = r0.pending_rebuild.root_entry_id
+            else:
+                return []
+
+        def _head_losing() -> bool:
+            """Check if the cycle head (or its SL snapshot) is in a losing position."""
+            if head is not None:
+                return head.unrealised_loss_pips(tick.mid, self.pip_size) > 0
+            # Fallback: compute from pending-rebuild entry price
+            assert head_entry_price is not None  # noqa: S101
+            if head_direction == Direction.LONG:
+                return (head_entry_price - tick.mid) / self.pip_size > 0
+            return (tick.mid - head_entry_price) / self.pip_size > 0
 
         # Need a new layer?
         if layer.needs_new_layer:
@@ -605,7 +630,7 @@ class SnowballStrategy(Strategy):
                 return []
 
             # Gate: head must be losing
-            if head.unrealised_loss_pips(tick.mid, self.pip_size) <= 0:
+            if not _head_losing():
                 return []
 
             # Gate: price must have moved adversely from the highest
@@ -638,7 +663,7 @@ class SnowballStrategy(Strategy):
             return []
 
         # Gate: head must be losing
-        if head.unrealised_loss_pips(tick.mid, self.pip_size) <= 0:
+        if not _head_losing():
             return []
 
         # Measure adverse distance from the highest present slot
@@ -664,7 +689,7 @@ class SnowballStrategy(Strategy):
             elif r0 is not None and r0.pending_rebuild is not None:
                 ref_price = r0.pending_rebuild.entry_price
             else:
-                ref_price = head.entry_price
+                ref_price = head_entry_price
 
         if ref_price is None:
             return []
@@ -681,7 +706,7 @@ class SnowballStrategy(Strategy):
         units = (slot.index + 1) * layer.base_units
         new_price = tick.ask if direction == Direction.LONG else tick.bid
 
-        # Reference for weighted avg: R0 of this layer
+        # Reference for weighted avg: R0 of this layer (live or head fallback)
         r0 = layer.slot_at(0)
         layer_ref = r0.entry if r0 is not None and r0.entry is not None else head
 
@@ -698,6 +723,7 @@ class SnowballStrategy(Strategy):
             op = "+" if direction == Direction.LONG else "-"
             formula = f"{new_price} {op} {tp} * {self.pip_size}"
 
+        # Use the resolved head entry_id for root/parent references
         entry = Entry.open(
             state=ss,
             tick=tick,
@@ -708,8 +734,8 @@ class SnowballStrategy(Strategy):
             role="counter",
             layer_number=layer.layer_number,
             retracement_count=slot.index,
-            root_entry_id=head.entry_id,
-            parent_entry_id=head.entry_id,
+            root_entry_id=head_entry_id,
+            parent_entry_id=head_entry_id,
         )
         entry.expected_interval_pips = interval
         entry.actual_interval_pips = adverse
@@ -1479,13 +1505,27 @@ class SnowballStrategy(Strategy):
                 events.extend(self._process_cycle_counter_adds(ss, tick, cycle))
 
             # --- Unified cycle completion check ---
-            # A cycle is completed when its grid has no open positions.
-            # If stop-loss rebuilds are pending (stored on the slots),
-            # the cycle transitions to PENDING instead so rebuilds can
-            # restore positions later.
+            # A cycle is completed when its grid has no open positions
+            # AND no further counter slots can be filled.
+            # If stop-loss rebuilds are pending but there are still
+            # available counter slots, the cycle stays ACTIVE so that
+            # counter adds can continue on adverse price movement.
             if cycle.is_active and cycle.grid.is_empty():
                 if cycle.grid.has_pending_rebuilds():
-                    cycle.status = CycleStatus.PENDING
+                    # Check if there are still available counter slots
+                    current_layer = cycle.current_layer
+                    has_available_slots = (
+                        current_layer is not None
+                        and current_layer.next_available_counter_slot() is not None
+                    )
+                    can_add_layer = (
+                        current_layer is not None
+                        and current_layer.needs_new_layer
+                        and cycle.layer_count < self.config.f_max + 1
+                    )
+                    if not has_available_slots and not can_add_layer:
+                        cycle.status = CycleStatus.PENDING
+                    # else: stay ACTIVE — counter adds can still proceed
                 else:
                     cycle.status = CycleStatus.COMPLETED
 

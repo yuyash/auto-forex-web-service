@@ -641,128 +641,45 @@ class EventHandler:
             return None
 
     def handle_rebuild_position(self, event: RebuildPositionEvent) -> Position:
-        """Re-open a previously stop-loss-closed position.
+        """Create a new position for a stop-loss rebuild.
 
-        Finds the original closed Position by ``original_position_id`` and
-        resets its exit fields so it appears as an open position again.
-        A new Trade record is created to track the rebuild event.
+        Instead of re-opening the original closed position (which would erase
+        its exit_price and hide the stop-loss P&L from DB aggregation), we
+        always create a fresh Position record.  The original closed position
+        retains its exit data so that ``compute_task_summary`` correctly
+        accounts for the stop-loss loss in realized P&L.
 
         Args:
             event: Rebuild position event with original position reference
 
         Returns:
-            Position: The re-opened position
+            Position: The newly created position
         """
-        position: Position | None = None
-        if event.original_position_id:
-            try:
-                position = Position.objects.get(
-                    pk=event.original_position_id,
-                    task_type=self.order_service.task_type,
-                    task_id=self._task_pk,
-                    is_open=False,
-                )
-            except Position.DoesNotExist:
-                logger.warning(
-                    "Rebuild: original position %s not found or still open, "
-                    "falling back to newest closed position for L%s/R%s",
-                    event.original_position_id,
-                    event.layer_number,
-                    event.retracement_count,
-                )
-
-        if position is None:
-            # Fallback: find the most recently closed position matching
-            # layer/retracement/direction for this execution.
-            position = (
-                Position.objects.filter(
-                    task_type=self.order_service.task_type,
-                    task_id=self._task_pk,
-                    execution_id=self._execution_id,
-                    instrument=self.instrument,
-                    direction=event.direction,
-                    layer_index=event.layer_number,
-                    retracement_count=event.retracement_count,
-                    is_open=False,
-                )
-                .order_by("-exit_time")
-                .first()
-            )
-
-        if position is None:
-            logger.error(
-                "Rebuild: no closed position found for L%s/R%s %s — "
-                "falling back to creating a new position",
-                event.layer_number,
-                event.retracement_count,
-                event.direction,
-            )
-            # Ultimate fallback: create a new position via the open handler
-            open_event = OpenPositionEvent(
-                event_type=EventType.OPEN_POSITION,
-                timestamp=event.timestamp,
-                layer_number=event.layer_number,
-                direction=event.direction,
-                price=event.price,
-                units=event.units,
-                retracement_count=event.retracement_count,
-                entry_id=event.entry_id,
-                strategy_event_type=event.strategy_event_type,
-                planned_exit_price=event.planned_exit_price,
-                stop_loss_price=event.stop_loss_price,
-                description=event.description,
-            )
-            position = self.handle_open_position(open_event)
-            position.is_rebuild = True
-            position.save(update_fields=["is_rebuild"])
-            return position
-
-        # Re-open the position
-        position.exit_price = None
-        position.exit_time = None
-        position.is_open = True
-        position.is_rebuild = True
-        position.entry_price = event.price
-        position.planned_exit_price = event.planned_exit_price
-        if event.stop_loss_price is not None:
-            position.stop_loss_price = event.stop_loss_price
-        position.save(
-            update_fields=[
-                "exit_price",
-                "exit_time",
-                "is_open",
-                "is_rebuild",
-                "entry_price",
-                "planned_exit_price",
-                "stop_loss_price",
-                "updated_at",
-            ]
-        )
-
-        cycle_id = self._resolve_cycle_id_for_open(event)
-
-        self._cache_position(event.layer_number, position)
-        trade = self._record_trade(
-            direction=Direction(event.direction),
-            units=event.units,
-            instrument=position.instrument,
-            price=event.price,
-            execution_method=str(event.event_type.value),
+        # Build an OpenPositionEvent that carries the root/parent entry IDs
+        # so that _resolve_cycle_id_for_open links the new position to the
+        # same cycle as the original.
+        open_event = OpenPositionEvent(
+            event_type=EventType.OPEN_POSITION,
             timestamp=event.timestamp,
-            layer_index=event.layer_number,
+            layer_number=event.layer_number,
+            direction=event.direction,
+            price=event.price,
+            units=event.units,
             retracement_count=event.retracement_count,
-            oanda_trade_id=position.oanda_trade_id,
-            position=position,
-            order=None,
-            description=getattr(event, "description", ""),
-            cycle_id=cycle_id,
-            margin_ratio=event.margin_ratio,
-            is_rebuild=True,
+            entry_id=event.entry_id,
+            strategy_event_type=event.strategy_event_type,
+            planned_exit_price=event.planned_exit_price,
+            stop_loss_price=event.stop_loss_price,
+            description=event.description,
         )
+        # Propagate lineage so cycle_id resolution works correctly.
+        open_event.root_entry_id = event.root_entry_id
+        open_event.parent_entry_id = event.parent_entry_id
 
+        # Resolve cycle_id *before* calling handle_open_position so the
+        # DB-fallback lookup can use original_position_id if needed.
+        cycle_id = self._resolve_cycle_id_for_open(event)
         if cycle_id is None and event.original_position_id:
-            # For rebuild trades, try to find the cycle from the original
-            # position's existing trades before creating a new cycle.
             existing_cycle_id = (
                 Trade.objects.filter(
                     task_type=self.order_service.task_type.value,
@@ -776,18 +693,53 @@ class EventHandler:
             )
             if existing_cycle_id is not None:
                 cycle_id = str(existing_cycle_id)
-                trade.cycle_id = cycle_id
-                trade.save(update_fields=["cycle_id"])
+                # Seed the in-memory mapping so handle_open_position picks
+                # it up via _resolve_cycle_id_for_open on the OpenPositionEvent.
+                if event.root_entry_id is not None:
+                    self._entry_id_to_cycle_id[event.root_entry_id] = cycle_id
+                if event.entry_id is not None:
+                    self._entry_id_to_cycle_id[event.entry_id] = cycle_id
 
-        if cycle_id is None:
-            trade.cycle_id = str(trade.id)
-            trade.save(update_fields=["cycle_id"])
-            cycle_id = str(trade.id)
+        # Create the position (and its open trade) via the standard path.
+        position = self.handle_open_position(open_event)
+        position.is_rebuild = True
+        position.save(update_fields=["is_rebuild"])
 
-        self._last_open_cycle_id = cycle_id
+        # If handle_open_position created a new cycle (cycle_id was None),
+        # update the trade it created with the resolved cycle_id.
+        if cycle_id is not None and self._last_open_cycle_id != cycle_id:
+            # The trade created by handle_open_position may have the wrong
+            # cycle_id.  Fix it.
+            latest_trade = (
+                Trade.objects.filter(
+                    task_type=self.order_service.task_type.value,
+                    task_id=self._task_pk,
+                    execution_id=self._execution_id,
+                    position_id=str(position.id),
+                )
+                .order_by("-created_at")
+                .first()
+            )
+            if latest_trade and str(latest_trade.cycle_id) != cycle_id:
+                latest_trade.cycle_id = cycle_id
+                latest_trade.save(update_fields=["cycle_id"])
+            self._last_open_cycle_id = cycle_id
 
-        if event.entry_id is not None:
-            self._entry_id_to_cycle_id[event.entry_id] = cycle_id
+        # Mark the trade as a rebuild
+        latest_trade = (
+            Trade.objects.filter(
+                task_type=self.order_service.task_type.value,
+                task_id=self._task_pk,
+                execution_id=self._execution_id,
+                position_id=str(position.id),
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if latest_trade and not latest_trade.is_rebuild:
+            latest_trade.is_rebuild = True
+            latest_trade.execution_method = str(event.event_type.value)
+            latest_trade.save(update_fields=["is_rebuild", "execution_method"])
 
         logger.info(
             "Rebuild position executed: layer=%s, direction=%s, units=%s, position_id=%s",
