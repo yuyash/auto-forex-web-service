@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.34.9](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.8...frontend-v1.34.9) (2026-04-09)
+
+
+### Bug Fixes
+
+* **trading:** fix weighted-avg TP, lifecycle display, and refactor re… ([#399](https://github.com/yuyash/auto-forex-web-service/issues/399)) ([b4b78dc](https://github.com/yuyash/auto-forex-web-service/commit/b4b78dc7aa6c04709006f2eb5bca51352575079e))
+* **trading:** fix weighted-avg TP, lifecycle display, and refactor rebuild handler ([b4b78dc](https://github.com/yuyash/auto-forex-web-service/commit/b4b78dc7aa6c04709006f2eb5bca51352575079e))
+
 ## [1.34.8](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.7...frontend-v1.34.8) (2026-04-09)
 
 

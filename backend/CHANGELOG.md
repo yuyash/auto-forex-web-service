@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.28.15](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.14...backend-v1.28.15) (2026-04-09)
+
+
+### Bug Fixes
+
+* **trading:** fix weighted-avg TP, lifecycle display, and refactor re… ([#399](https://github.com/yuyash/auto-forex-web-service/issues/399)) ([b4b78dc](https://github.com/yuyash/auto-forex-web-service/commit/b4b78dc7aa6c04709006f2eb5bca51352575079e))
+* **trading:** fix weighted-avg TP, lifecycle display, and refactor rebuild handler ([b4b78dc](https://github.com/yuyash/auto-forex-web-service/commit/b4b78dc7aa6c04709006f2eb5bca51352575079e))
+
 ## [1.28.14](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.13...backend-v1.28.14) (2026-04-09)
 
 
