@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.10](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.9...frontend-v1.34.10) (2026-04-10)
+
+
+### Bug Fixes
+
+* **trading:** refactor cycle lifecycle and stop-loss integration ([#403](https://github.com/yuyash/auto-forex-web-service/issues/403)) ([2fafde3](https://github.com/yuyash/auto-forex-web-service/commit/2fafde317ea605ad5f87974a5743323eba745a0c))
+
 ## [1.34.9](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.8...frontend-v1.34.9) (2026-04-09)
 
 
