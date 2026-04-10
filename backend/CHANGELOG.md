@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.18...backend-v1.29.0) (2026-04-10)
+
+
+### Features
+
+* reseed on all slots pending ([#410](https://github.com/yuyash/auto-forex-web-service/issues/410)) ([1410383](https://github.com/yuyash/auto-forex-web-service/commit/141038387485ecd24f1df13e543950f7b874894f))
+
 ## [1.28.18](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.17...backend-v1.28.18) (2026-04-10)
 
 
