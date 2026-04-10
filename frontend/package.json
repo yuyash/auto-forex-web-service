@@ -76,7 +76,8 @@
     },
     "tldts": "7.0.18",
     "tldts-core": "7.0.18",
-    "react-is": "19.2.4"
+    "react-is": "19.2.4",
+    "yaml": "2.8.3"
   },
   "prettier": {
     "semi": true,
