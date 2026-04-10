@@ -443,7 +443,13 @@ class TestSnowballStopLossRebuild:
         assert found_pending, "Expected at least one SL-closed R1 slot"
 
     def test_cycle_pending_when_all_sl_closed(self):
-        """Cycle should be PENDING (not COMPLETED) when all positions are SL-closed."""
+        """Cycle with pending rebuilds stays ACTIVE if counter slots remain.
+
+        When all positions are SL-closed but there are still available
+        counter slots, the cycle should remain ACTIVE so counter adds
+        can continue.  It only transitions to PENDING when all counter
+        slots are exhausted.
+        """
         runner = TickRunner(stop_loss=True)
         runner.tick(START_PRICE)
 
@@ -451,15 +457,30 @@ class TestSnowballStopLossRebuild:
         runner.tick_range(START_PRICE, START_PRICE - Decimal("2.50"), step_pips=1)
 
         ss = runner.ss
-        # Check that cycles with pending rebuilds are PENDING, not COMPLETED
         for cycle in ss.cycles:
             if cycle.direction.value != "long":
                 continue
             if cycle.grid.has_pending_rebuilds():
-                assert cycle.status.value == "pending", (
-                    f"Cycle {cycle.cycle_id} has pending rebuilds but status is "
-                    f"{cycle.status.value}"
+                current_layer = cycle.current_layer
+                has_available = (
+                    current_layer is not None
+                    and current_layer.next_available_counter_slot() is not None
                 )
+                can_add_layer = (
+                    current_layer is not None
+                    and current_layer.needs_new_layer
+                    and cycle.layer_count < 4  # f_max + 1
+                )
+                if has_available or can_add_layer:
+                    assert cycle.status.value == "active", (
+                        f"Cycle {cycle.cycle_id} has available slots but status is "
+                        f"{cycle.status.value}"
+                    )
+                else:
+                    assert cycle.status.value == "pending", (
+                        f"Cycle {cycle.cycle_id} has no available slots but status is "
+                        f"{cycle.status.value}"
+                    )
 
 
 class TestSnowballTPOrdering:

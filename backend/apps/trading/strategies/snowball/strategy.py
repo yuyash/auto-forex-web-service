@@ -267,10 +267,14 @@ class SnowballStrategy(Strategy):
         )
 
         # Remove the head from the grid so grid.is_empty() becomes true.
+        # When the dynamic head is a counter entry (not R0), keep the
+        # slot refillable so that counter adds can continue in the same
+        # cycle after the head TP close.
+        is_original_head = entry.retracement_count == 0 and entry.layer_number == 1
         for layer in cycle.grid.layers:
             for slot in layer.slots:
                 if slot.entry is not None and slot.entry.entry_id == entry.entry_id:
-                    layer.close_slot(slot.index, refillable=False)
+                    layer.close_slot(slot.index, refillable=not is_original_head)
                     break
 
         # Only discard pending stop-loss rebuilds when the *original*
@@ -1507,16 +1511,28 @@ class SnowballStrategy(Strategy):
             # --- Unified cycle completion check ---
             # A cycle is completed when its grid has no open positions
             # and no pending rebuilds remain.
-            # If stop-loss rebuilds are pending, the cycle transitions to
-            # PENDING so that rebuilds can restore positions later and
-            # the reseed logic can create a fresh cycle for this direction.
+            # If stop-loss rebuilds are pending, the cycle stays ACTIVE
+            # when counter slots (or new layers) are still available so
+            # that counter adds can continue on adverse price movement.
+            # Otherwise it transitions to PENDING so the reseed logic
+            # can create a fresh cycle for this direction.
             if cycle.is_active and cycle.grid.is_empty():
                 if cycle.grid.has_pending_rebuilds():
-                    cycle.status = CycleStatus.PENDING
+                    current_layer = cycle.current_layer
+                    has_available_slots = (
+                        current_layer is not None
+                        and current_layer.next_available_counter_slot() is not None
+                    )
+                    can_add_layer = (
+                        current_layer is not None
+                        and current_layer.needs_new_layer
+                        and cycle.layer_count < self.config.f_max + 1
+                    )
+                    if not has_available_slots and not can_add_layer:
+                        cycle.status = CycleStatus.PENDING
+                    # else: stay ACTIVE — counter adds can still proceed
                 else:
                     # Safety check: verify no open entries remain.
-                    # This guards against bugs where the grid reports empty
-                    # but entries were added in the same tick (e.g. rebuilds).
                     live_entries = cycle.grid.all_entries()
                     if live_entries:
                         logger.error(
@@ -1534,8 +1550,8 @@ class SnowballStrategy(Strategy):
         # positions were stopped-out with no pending rebuilds), start a
         # fresh cycle so the strategy keeps trading.
         # When reseed_on_all_pending is enabled, also re-seed when all
-        # remaining cycles for a direction are in PENDING state (all
-        # positions awaiting stop-loss rebuild with none currently open).
+        # remaining cycles for a direction have no open positions (either
+        # PENDING or ACTIVE with only pending rebuilds / empty slots).
         active = ss.active_cycles()
         for direction in (Direction.LONG, Direction.SHORT):
             if not self._hedging_enabled and direction == Direction.SHORT:
@@ -1549,13 +1565,15 @@ class SnowballStrategy(Strategy):
                 )
                 new_events, _ = self._create_cycle(ss, tick, direction)
                 events.extend(new_events)
-            elif self.config.reseed_on_all_pending and all(c.is_pending for c in dir_cycles):
-                # All cycles for this direction are pending rebuild with
-                # no open positions.  Start a fresh cycle at the current
-                # price so the strategy keeps trading while waiting for
-                # rebuilds.
+            elif self.config.reseed_on_all_pending and all(
+                c.is_pending or (c.is_active and c.grid.is_empty()) for c in dir_cycles
+            ):
+                # All cycles for this direction have no open positions
+                # (pending rebuild or empty grid with pending rebuilds).
+                # Start a fresh cycle at the current price so the
+                # strategy keeps trading while waiting for rebuilds.
                 logger.info(
-                    "All %s cycles pending — creating new cycle (reseed_on_all_pending)",
+                    "All %s cycles idle (pending/empty) — creating new cycle",
                     direction.value.upper(),
                 )
                 new_events, _ = self._create_cycle(ss, tick, direction)
