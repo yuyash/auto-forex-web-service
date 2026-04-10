@@ -723,8 +723,18 @@ class SnowballStrategy(Strategy):
         new_price = tick.ask if direction == Direction.LONG else tick.bid
 
         # Reference for weighted avg: R0 of this layer (live or head fallback)
+        # When R0 is pending rebuild, its price/units are already included
+        # by weighted_avg_close_price via the pending_rebuild slot, so we
+        # do not need to pass it as include_ref (that would double-count).
         r0 = layer.slot_at(0)
-        layer_ref = r0.entry if r0 is not None and r0.entry is not None else head
+        if r0 is not None and r0.entry is not None:
+            layer_ref = r0.entry
+        elif head is not None:
+            layer_ref = head
+        else:
+            # R0 is pending rebuild (or absent) — weighted_avg_close_price
+            # will pick it up from the slot's pending_rebuild directly.
+            layer_ref = None
 
         if cfg.counter_tp_mode == "weighted_avg":
             close_price, formula = layer.weighted_avg_close_price(
