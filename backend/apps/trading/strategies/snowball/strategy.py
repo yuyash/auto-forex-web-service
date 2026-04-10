@@ -1506,28 +1506,28 @@ class SnowballStrategy(Strategy):
 
             # --- Unified cycle completion check ---
             # A cycle is completed when its grid has no open positions
-            # AND no further counter slots can be filled.
-            # If stop-loss rebuilds are pending but there are still
-            # available counter slots, the cycle stays ACTIVE so that
-            # counter adds can continue on adverse price movement.
+            # and no pending rebuilds remain.
+            # If stop-loss rebuilds are pending, the cycle transitions to
+            # PENDING so that rebuilds can restore positions later and
+            # the reseed logic can create a fresh cycle for this direction.
             if cycle.is_active and cycle.grid.is_empty():
                 if cycle.grid.has_pending_rebuilds():
-                    # Check if there are still available counter slots
-                    current_layer = cycle.current_layer
-                    has_available_slots = (
-                        current_layer is not None
-                        and current_layer.next_available_counter_slot() is not None
-                    )
-                    can_add_layer = (
-                        current_layer is not None
-                        and current_layer.needs_new_layer
-                        and cycle.layer_count < self.config.f_max + 1
-                    )
-                    if not has_available_slots and not can_add_layer:
-                        cycle.status = CycleStatus.PENDING
-                    # else: stay ACTIVE — counter adds can still proceed
+                    cycle.status = CycleStatus.PENDING
                 else:
-                    cycle.status = CycleStatus.COMPLETED
+                    # Safety check: verify no open entries remain.
+                    # This guards against bugs where the grid reports empty
+                    # but entries were added in the same tick (e.g. rebuilds).
+                    live_entries = cycle.grid.all_entries()
+                    if live_entries:
+                        logger.error(
+                            "Cycle %d (%s) grid reports empty but %d live entries remain — "
+                            "aborting completion to prevent orphaned positions",
+                            cycle.cycle_id,
+                            cycle.direction.value,
+                            len(live_entries),
+                        )
+                    else:
+                        cycle.status = CycleStatus.COMPLETED
 
         # --- Re-seed directions that have no active cycle ---
         # When every cycle for a direction has completed (e.g. all
