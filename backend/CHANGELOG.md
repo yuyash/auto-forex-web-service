@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.17](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.16...backend-v1.28.17) (2026-04-10)
+
+
+### Bug Fixes
+
+* **trading:** resolve rebuild cycle_id misattribution and error exposure ([#405](https://github.com/yuyash/auto-forex-web-service/issues/405)) ([f54a5a6](https://github.com/yuyash/auto-forex-web-service/commit/f54a5a629a4dbe6aee29655a3a9576aca60e57d9))
+
 ## [1.28.16](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.15...backend-v1.28.16) (2026-04-10)
 
 
