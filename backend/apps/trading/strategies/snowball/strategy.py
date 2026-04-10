@@ -1560,7 +1560,9 @@ class SnowballStrategy(Strategy):
         # A direction needs a new cycle when:
         # 1. All cycles for that direction are COMPLETED, or
         # 2. reseed_on_all_pending is enabled and all remaining cycles
-        #    are PENDING (no open positions, only pending rebuilds).
+        #    are PENDING (no open positions, only pending rebuilds), or
+        # 3. reseed_on_grid_exhausted is enabled and all remaining cycles
+        #    have every slot in pending-rebuild state (grid fully saturated).
         active = ss.active_cycles()  # non-completed cycles
         for direction in (Direction.LONG, Direction.SHORT):
             if not self._hedging_enabled and direction == Direction.SHORT:
@@ -1579,6 +1581,16 @@ class SnowballStrategy(Strategy):
                 # rebuilds, no open positions).  Start a fresh cycle.
                 logger.info(
                     "All %s cycles pending — creating new cycle (reseed_on_all_pending)",
+                    direction.value.upper(),
+                )
+                new_events, _ = self._create_cycle(ss, tick, direction)
+                events.extend(new_events)
+            elif self.config.reseed_on_grid_exhausted and all(
+                c.is_grid_exhausted(self.config.f_max) for c in dir_cycles
+            ):
+                # All cycles have every slot in pending-rebuild state.
+                logger.info(
+                    "All %s cycle grids exhausted — creating new cycle (reseed_on_grid_exhausted)",
                     direction.value.upper(),
                 )
                 new_events, _ = self._create_cycle(ss, tick, direction)
