@@ -20,6 +20,7 @@ from apps.trading.engine import TradingEngine
 from apps.trading.enums import EventScope, EventType, TaskType
 from apps.trading.events import StrategyEvent
 from apps.trading.events.handler import EventHandler as _EventHandlerCompat
+from apps.trading.events.handler import CycleResolutionError  # noqa: F401 — used in handle_events
 from apps.trading.models import BacktestTask, TradingEvent, TradingTask
 from apps.trading.models.state import ExecutionState
 from apps.trading.order import OrderService, OrderServiceError
@@ -261,6 +262,11 @@ class TaskExecutor:
                     exc_info=True,
                 )
                 self._mark_event_processing_error(trading_event, str(e))
+            except CycleResolutionError as e:
+                # Unrecoverable state corruption — record the error on the
+                # event and let the exception propagate to stop the task.
+                self._mark_event_processing_error(trading_event, str(e))
+                raise
 
         self._refresh_open_positions_cache()
 
