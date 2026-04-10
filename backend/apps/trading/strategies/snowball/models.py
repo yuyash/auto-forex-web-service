@@ -1048,13 +1048,15 @@ class PositionGrid:
         """True if any slot in the grid is awaiting SL rebuild."""
         return any(s.is_pending_rebuild for layer in self.layers for s in layer.slots)
 
-    def is_fully_pending(self) -> bool:
-        """True if every slot in every layer is awaiting SL rebuild.
+    def is_fully_pending(self, f_max: int) -> bool:
+        """True if the grid has all layers up to f_max and every slot is pending rebuild.
 
-        All slots must be in ``pending_rebuild`` state — no live entries,
-        no empty/available slots, no sealed slots.  Returns False when
-        the grid has no layers or no slots.
+        The grid must contain exactly ``f_max + 1`` layers (L1 … L(f_max+1))
+        and every slot in every layer must be in ``pending_rebuild`` state.
+        Returns False when layers have not been fully expanded yet.
         """
+        if len(self.layers) < f_max + 1:
+            return False
         slots = [s for layer in self.layers for s in layer.slots]
         return len(slots) > 0 and all(s.is_pending_rebuild for s in slots)
 
@@ -1185,8 +1187,20 @@ class SnowballCycle:
 
     @property
     def is_fully_pending(self) -> bool:
-        """True if the cycle is PENDING and every slot is awaiting rebuild."""
-        return self.is_pending and self.grid.is_fully_pending()
+        """True if the cycle is PENDING and every slot is awaiting rebuild.
+
+        .. note:: This property cannot check ``f_max`` — use
+           :meth:`is_grid_exhausted` when the config is available.
+        """
+        return self.is_pending and self.grid.is_fully_pending(f_max=0)
+
+    def is_grid_exhausted(self, f_max: int) -> bool:
+        """True if the cycle is PENDING and the grid is fully saturated.
+
+        All ``f_max + 1`` layers must exist and every slot in every
+        layer must be in pending-rebuild state.
+        """
+        return self.is_pending and self.grid.is_fully_pending(f_max=f_max)
 
     # -- Convenience --
 

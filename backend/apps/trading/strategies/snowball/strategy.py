@@ -1586,7 +1586,7 @@ class SnowballStrategy(Strategy):
                 new_events, _ = self._create_cycle(ss, tick, direction)
                 events.extend(new_events)
             elif self.config.reseed_on_grid_exhausted and all(
-                c.is_fully_pending for c in dir_cycles
+                c.is_grid_exhausted(self.config.f_max) for c in dir_cycles
             ):
                 # All cycles have every slot in pending-rebuild state.
                 logger.info(
