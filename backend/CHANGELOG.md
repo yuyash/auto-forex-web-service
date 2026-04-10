@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.28.18](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.17...backend-v1.28.18) (2026-04-10)
+
+
+### Bug Fixes
+
+* **strategy:** include pending-rebuild slots in weighted-avg TP calcu… ([#408](https://github.com/yuyash/auto-forex-web-service/issues/408)) ([4243626](https://github.com/yuyash/auto-forex-web-service/commit/42436262e8435bb60d7825ab691cbfa22661fe8c))
+* **strategy:** include pending-rebuild slots in weighted-avg TP calculation ([4243626](https://github.com/yuyash/auto-forex-web-service/commit/42436262e8435bb60d7825ab691cbfa22661fe8c))
+
 ## [1.28.17](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.16...backend-v1.28.17) (2026-04-10)
 
 
