@@ -844,8 +844,7 @@ class Layer:
     ) -> tuple[Decimal, str]:
         """Compute weighted-average close price for a new entry in this layer.
 
-        Includes: new entry + existing occupied slots + pending-rebuild
-        snapshots + optional reference entry.
+        Includes: new entry + existing occupied slots + optional reference entry.
         """
         total_cost = new_price * Decimal(str(new_units))
         total_units = new_units
@@ -856,13 +855,6 @@ class Layer:
                 total_cost += s.entry.entry_price * Decimal(str(s.entry.units))
                 total_units += s.entry.units
                 parts.append(f"{s.entry.entry_price} * {s.entry.units}")
-            elif s.pending_rebuild is not None:
-                pr = s.pending_rebuild
-                pr_units = abs(pr.units)
-                if pr_units > 0:
-                    total_cost += pr.entry_price * Decimal(str(pr_units))
-                    total_units += pr_units
-                    parts.append(f"{pr.entry_price} * {pr_units}")
 
         if include_ref is not None:
             ref_units = abs(include_ref.units)
