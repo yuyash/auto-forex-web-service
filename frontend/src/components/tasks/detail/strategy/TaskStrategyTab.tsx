@@ -24,6 +24,7 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HistoryIcon from '@mui/icons-material/History';
 import ClearIcon from '@mui/icons-material/Clear';
+import CandlestickChartIcon from '@mui/icons-material/CandlestickChart';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SearchIcon from '@mui/icons-material/Search';
 import SelectAllIcon from '@mui/icons-material/SelectAll';
@@ -93,6 +94,7 @@ export function TaskStrategyTab({
   >(null);
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const isDragging = useRef(false);
+  const [showOhlcChart, setShowOhlcChart] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
@@ -616,6 +618,30 @@ export function TaskStrategyTab({
                     <RefreshIcon fontSize="small" />
                   </IconButton>
                 </Tooltip>
+                {instrument && (
+                  <Tooltip
+                    title={
+                      showOhlcChart
+                        ? t(
+                            'common:strategyVisualization.hideOhlcChart',
+                            'Hide OHLC chart'
+                          )
+                        : t(
+                            'common:strategyVisualization.showOhlcChart',
+                            'Show OHLC chart'
+                          )
+                    }
+                  >
+                    <IconButton
+                      size="small"
+                      onClick={() => setShowOhlcChart((v) => !v)}
+                      color={showOhlcChart ? 'primary' : 'default'}
+                      aria-label="Toggle OHLC chart"
+                    >
+                      <CandlestickChartIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                )}
               </Stack>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 {formatDateTime(selectedCycle.started_at)} →{' '}
@@ -637,7 +663,7 @@ export function TaskStrategyTab({
                 })}
               </Typography>
 
-              {instrument ? (
+              {instrument && showOhlcChart ? (
                 <Paper
                   variant="outlined"
                   sx={{

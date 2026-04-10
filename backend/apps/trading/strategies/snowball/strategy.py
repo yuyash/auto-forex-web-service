@@ -230,15 +230,21 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        """Close the cycle head (TP hit), create new cycle.
+        """Close the cycle's R0 (TP hit) and create a new cycle.
 
-        The cycle transitions to COMPLETED (or PENDING when stop-loss
-        rebuilds remain) via the unified grid.is_empty() check in
-        on_tick after this method returns.
+        This is only called when the cycle TP (R0.entry_price ± m_pips)
+        is reached and R0 is a live entry.  The cycle transitions to
+        COMPLETED via the unified status check in on_tick.
         """
-        entry = cycle.initial_entry
-        if entry is None:
+        # Find R0 entry in L1
+        layer = cycle.grid.layers[0] if cycle.grid.layers else None
+        if layer is None:
             return []
+        r0_slot = layer.slot_at(0)
+        if r0_slot is None or r0_slot.entry is None:
+            return []
+
+        entry = r0_slot.entry
         direction = cycle.direction
         exit_price = entry.exit_price(tick)
         pips_gained = abs(exit_price - entry.entry_price) / self.pip_size
@@ -266,31 +272,14 @@ class SnowballStrategy(Strategy):
             )
         )
 
-        # Remove the head from the grid so grid.is_empty() becomes true.
-        for layer in cycle.grid.layers:
-            for slot in layer.slots:
-                if slot.entry is not None and slot.entry.entry_id == entry.entry_id:
-                    layer.close_slot(slot.index, refillable=False)
-                    break
+        # Close R0 slot — not refillable (cycle is ending).
+        layer.close_slot(0, refillable=False)
 
-        # Only discard pending stop-loss rebuilds when the *original*
-        # cycle head (R0) achieved its TP.  When R0 was itself stopped
-        # out and a counter entry was promoted to dynamic head, its TP
-        # does not mean the cycle is truly done — the stopped-out R0
-        # still needs to be rebuilt.  In that case we leave the pending
-        # rebuilds intact so the unified completion check in on_tick
-        # transitions the cycle to PENDING instead of COMPLETED.
-        if cycle.grid.has_pending_rebuilds():
-            logger.info(
-                "Dynamic head TP (%s) but pending rebuild(s) remain — "
-                "cycle will transition to PENDING",
-                direction.value.upper(),
-            )
-        else:
-            # Original head closed the cycle — clear any stale rebuild data.
-            for layer in cycle.grid.layers:
-                for slot in layer.slots:
-                    slot.pending_rebuild = None
+        # Do NOT clear pending rebuilds here.  If other slots have
+        # pending rebuilds, the cycle status update in on_tick will
+        # transition the cycle to PENDING (not COMPLETED).  Those
+        # rebuilds will eventually restore positions and close them
+        # normally, at which point the cycle will finally complete.
 
         # Only create a new cycle if no other ACTIVE cycle exists for
         # this direction.  When multiple cycles coexist (e.g. after SL
@@ -355,32 +344,57 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        """Check if the cycle head hit its TP target.
+        """Check if the cycle's R0 TP target is hit.
 
-        The head must only close when no other entries remain open.
-        If other entries are still present, their TPs should be reached
-        first (they are closer to the current price).
+        The cycle TP is always based on the *original* R0 entry price
+        (or its pending-rebuild snapshot when R0 has been stopped out).
+        This is ``R0.entry_price ± m_pips * pip_size``.
 
-        When stop-loss closes and rebuilds are active, counter entries
-        may end up with TPs that are hit on the same tick as the head.
-        In that case we flush all TP-ready counters first, then close
-        the head — this is not a violation.
+        The R0 position can only close when no other entries remain open
+        in the grid.  If counter entries are still present, their TPs
+        should be reached first (they are closer to the current price).
         """
         if cycle.completed:
             return []
-        entry = cycle.initial_entry  # dynamic head
-        if not entry:
-            return []
-        direction = cycle.direction
-        m_dyn = self.config.m_pips
 
+        direction = cycle.direction
+        cfg = self.config
+
+        # Determine R0's entry price — live entry or pending-rebuild snapshot.
+        layer = cycle.grid.layers[0] if cycle.grid.layers else None
+        if layer is None:
+            return []
+        r0_slot = layer.slot_at(0)
+        if r0_slot is None:
+            return []
+
+        r0_entry = r0_slot.entry
+        r0_pending = r0_slot.pending_rebuild
+        if r0_entry is not None:
+            r0_price = r0_entry.entry_price
+        elif r0_pending is not None:
+            r0_price = r0_pending.entry_price
+        else:
+            return []
+
+        # Check if cycle TP is hit based on R0's entry price.
         hit = False
-        if direction == Direction.LONG and tick.bid >= entry.entry_price + m_dyn * self.pip_size:
+        if direction == Direction.LONG and tick.bid >= r0_price + cfg.m_pips * self.pip_size:
             hit = True
-        elif direction == Direction.SHORT and tick.ask <= entry.entry_price - m_dyn * self.pip_size:
+        elif direction == Direction.SHORT and tick.ask <= r0_price - cfg.m_pips * self.pip_size:
             hit = True
 
         if not hit:
+            return []
+
+        # R0 must be a live entry to close it.  If R0 is pending rebuild,
+        # the TP region is reached but we cannot close — just log and
+        # wait for the rebuild to complete.
+        if r0_entry is None:
+            logger.info(
+                "Cycle TP region reached (%s) but R0 is pending rebuild — waiting",
+                direction.value.upper(),
+            )
             return []
 
         if not cycle.grid.has_counter_entries():
@@ -391,7 +405,7 @@ class SnowballStrategy(Strategy):
         # on this tick.  If so, flush them all and proceed normally.
         all_counters_tp_hit = True
         for e in cycle.grid.all_entries():
-            if e.entry_id == entry.entry_id:
+            if e.entry_id == r0_entry.entry_id:
                 continue
             if e.close_price <= 0:
                 all_counters_tp_hit = False
@@ -412,16 +426,13 @@ class SnowballStrategy(Strategy):
                 direction.value,
             )
 
-        # Flush all remaining counter entries.  Entries whose TP is
-        # reached close at their TP; others close at the current market
-        # price (force close).
+        # Flush all remaining counter entries.
         events: list[StrategyEvent] = []
-        for layer in reversed(list(cycle.grid.layers)):
-            for slot in reversed(layer.occupied_slots()):
+        for layer_iter in reversed(list(cycle.grid.layers)):
+            for slot in reversed(layer_iter.occupied_slots()):
                 counter = slot.entry
-                if counter is None or counter.entry_id == entry.entry_id:
+                if counter is None or counter.entry_id == r0_entry.entry_id:
                     continue
-                # Check if this counter's TP is reached on this tick
                 tp_hit = True
                 if counter.close_price <= 0:
                     tp_hit = False
@@ -448,7 +459,7 @@ class SnowballStrategy(Strategy):
                     counter.retracement_count,
                     pips_gained if tp_hit else -pips_gained,
                 )
-                layer.close_slot(slot.index)
+                layer_iter.close_slot(slot.index)
                 cycle.counter_close_count += 1
                 events.append(
                     self._close_entry(
@@ -466,8 +477,8 @@ class SnowballStrategy(Strategy):
                     )
                 )
             # Remove empty non-L1 layers
-            if layer.layer_number > 1 and not layer.has_open_entries():
-                cycle.grid.layers.remove(layer)
+            if layer_iter.layer_number > 1 and not layer_iter.has_open_entries():
+                cycle.grid.layers.remove(layer_iter)
 
         events.extend(self._close_and_reenter(ss, tick, cycle))
         return events
@@ -480,8 +491,13 @@ class SnowballStrategy(Strategy):
     ) -> list[StrategyEvent]:
         """Close counter entries from the back (newest first), one per tick.
 
-        After all counter slots in a layer are empty, close the layer's R0
-        (layer-initial) if its TP is hit, then remove the layer.
+        Any entry whose close_price (counter TP) is reached gets closed,
+        regardless of whether it is currently the dynamic head.  The only
+        exception is L1/R0 — the original cycle head — which closes via
+        _process_cycle_tp (cycle TP = R0.entry_price ± m_pips).
+
+        After all counter slots in a non-L1 layer are empty, close the
+        layer's R0 (layer-initial) if its TP is hit, then remove the layer.
         """
         if cycle.completed:
             return []
@@ -493,9 +509,9 @@ class SnowballStrategy(Strategy):
                 continue
 
             entry = highest.entry
-            # Skip the cycle head — it closes via _process_cycle_tp
-            head = cycle.initial_entry
-            if head is not None and entry.entry_id == head.entry_id:
+
+            # Skip L1/R0 — it closes via _process_cycle_tp (cycle TP).
+            if entry.layer_number == 1 and entry.retracement_count == 0:
                 continue
 
             if entry.close_price <= 0:
@@ -596,16 +612,31 @@ class SnowballStrategy(Strategy):
             return []
 
         head = cycle.initial_entry
-        head_entry_price, head_entry_id = cycle.effective_head()
-        if head_entry_price is None:
-            return []
+
+        # When all live entries have been stop-loss closed, head is None.
+        # Fall back to the R0 pending-rebuild snapshot so counter adds can
+        # still proceed within the same cycle.
+        head_entry_price: Decimal | None = None
+        head_entry_id: int | None = None
+        head_direction: Direction = cycle.direction
+        if head is not None:
+            head_entry_price = head.entry_price
+            head_entry_id = head.entry_id
+        else:
+            r0 = layer.slot_at(0)
+            if r0 is not None and r0.pending_rebuild is not None:
+                head_entry_price = r0.pending_rebuild.entry_price
+                head_entry_id = r0.pending_rebuild.root_entry_id
+            else:
+                return []
 
         def _head_losing() -> bool:
             """Check if the cycle head (or its SL snapshot) is in a losing position."""
             if head is not None:
                 return head.unrealised_loss_pips(tick.mid, self.pip_size) > 0
+            # Fallback: compute from pending-rebuild entry price
             assert head_entry_price is not None  # noqa: S101
-            if cycle.direction == Direction.LONG:
+            if head_direction == Direction.LONG:
                 return (head_entry_price - tick.mid) / self.pip_size > 0
             return (tick.mid - head_entry_price) / self.pip_size > 0
 
@@ -776,11 +807,21 @@ class SnowballStrategy(Strategy):
         """Open a layer-initial entry (R0) for a new layer."""
         cfg = self.config
         head = cycle.initial_entry
-        if head is None:
+        head_entry_price, head_entry_id = cycle.effective_head()
+        if head_entry_price is None:
             return []
 
-        if head.unrealised_loss_pips(tick.mid, self.pip_size) <= 0:
-            return []
+        # Gate: head (or its SL snapshot) must be losing
+        if head is not None:
+            if head.unrealised_loss_pips(tick.mid, self.pip_size) <= 0:
+                return []
+        else:
+            if cycle.direction == Direction.LONG:
+                if (head_entry_price - tick.mid) / self.pip_size <= 0:
+                    return []
+            else:
+                if (tick.mid - head_entry_price) / self.pip_size <= 0:
+                    return []
 
         direction = cycle.direction
         prev_layer = cycle.current_layer
@@ -801,8 +842,8 @@ class SnowballStrategy(Strategy):
             role="layer_initial",
             layer_number=layer.layer_number,
             retracement_count=0,
-            root_entry_id=head.entry_id,
-            parent_entry_id=head.entry_id,
+            root_entry_id=head_entry_id,
+            parent_entry_id=head_entry_id,
         )
 
         close_price, formula = layer.layer_initial_close_price(
@@ -1489,39 +1530,28 @@ class SnowballStrategy(Strategy):
             if not counter_close_events:
                 events.extend(self._process_cycle_counter_adds(ss, tick, cycle))
 
-            # --- Unified cycle completion check ---
-            # A cycle is completed when its grid has no open positions
-            # AND no further counter slots can be filled.
-            # If stop-loss rebuilds are pending but there are still
-            # available counter slots, the cycle stays ACTIVE so that
-            # counter adds can continue on adverse price movement.
-            if cycle.is_active and cycle.grid.is_empty():
-                if cycle.grid.has_pending_rebuilds():
-                    # Check if there are still available counter slots
-                    current_layer = cycle.current_layer
-                    has_available_slots = (
-                        current_layer is not None
-                        and current_layer.next_available_counter_slot() is not None
-                    )
-                    can_add_layer = (
-                        current_layer is not None
-                        and current_layer.needs_new_layer
-                        and cycle.layer_count < self.config.f_max + 1
-                    )
-                    if not has_available_slots and not can_add_layer:
+            # --- Cycle status update ---
+            # ACTIVE:    at least one open (live) entry exists.
+            # PENDING:   no open entries, but at least one pending rebuild.
+            # COMPLETED: no open entries and no pending rebuilds.
+            if cycle.is_active or cycle.is_pending:
+                has_open = not cycle.grid.is_empty()
+                has_pending = cycle.grid.has_pending_rebuilds()
+                if has_open:
+                    if cycle.is_pending:
+                        cycle.status = CycleStatus.ACTIVE
+                elif has_pending:
+                    if cycle.is_active:
                         cycle.status = CycleStatus.PENDING
-                    # else: stay ACTIVE — counter adds can still proceed
                 else:
                     cycle.status = CycleStatus.COMPLETED
 
-        # --- Re-seed directions that have no active cycle ---
-        # When every cycle for a direction has completed (e.g. all
-        # positions were stopped-out with no pending rebuilds), start a
-        # fresh cycle so the strategy keeps trading.
-        # When reseed_on_all_pending is enabled, also re-seed when all
-        # remaining cycles for a direction are in PENDING state (all
-        # positions awaiting stop-loss rebuild with none currently open).
-        active = ss.active_cycles()
+        # --- Re-seed directions that have no tradable cycle ---
+        # A direction needs a new cycle when:
+        # 1. All cycles for that direction are COMPLETED, or
+        # 2. reseed_on_all_pending is enabled and all remaining cycles
+        #    are PENDING (no open positions, only pending rebuilds).
+        active = ss.active_cycles()  # non-completed cycles
         for direction in (Direction.LONG, Direction.SHORT):
             if not self._hedging_enabled and direction == Direction.SHORT:
                 continue
@@ -1535,10 +1565,8 @@ class SnowballStrategy(Strategy):
                 new_events, _ = self._create_cycle(ss, tick, direction)
                 events.extend(new_events)
             elif self.config.reseed_on_all_pending and all(c.is_pending for c in dir_cycles):
-                # All cycles for this direction are pending rebuild with
-                # no open positions.  Start a fresh cycle at the current
-                # price so the strategy keeps trading while waiting for
-                # rebuilds.
+                # All cycles for this direction are PENDING (only pending
+                # rebuilds, no open positions).  Start a fresh cycle.
                 logger.info(
                     "All %s cycles pending — creating new cycle (reseed_on_all_pending)",
                     direction.value.upper(),
