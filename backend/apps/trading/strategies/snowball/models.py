@@ -844,7 +844,15 @@ class Layer:
     ) -> tuple[Decimal, str]:
         """Compute weighted-average close price for a new entry in this layer.
 
-        Includes: new entry + existing occupied slots + optional reference entry.
+        Includes: new entry + existing occupied slots + slots awaiting
+        stop-loss rebuild + optional reference entry.
+
+        Pending-rebuild slots are included because the position still
+        logically belongs to the cycle — it was closed by stop-loss and
+        will be re-opened when price returns.  Excluding them would
+        collapse the weighted average toward the new entry's price,
+        producing a TP that is too close to (or equal to) the entry
+        price and causing immediate close-reopen churn.
         """
         total_cost = new_price * Decimal(str(new_units))
         total_units = new_units
@@ -855,6 +863,11 @@ class Layer:
                 total_cost += s.entry.entry_price * Decimal(str(s.entry.units))
                 total_units += s.entry.units
                 parts.append(f"{s.entry.entry_price} * {s.entry.units}")
+            elif s.pending_rebuild is not None:
+                pr = s.pending_rebuild
+                total_cost += pr.entry_price * Decimal(str(pr.units))
+                total_units += pr.units
+                parts.append(f"{pr.entry_price} * {pr.units}")
 
         if include_ref is not None:
             ref_units = abs(include_ref.units)
