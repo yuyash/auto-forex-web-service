@@ -307,10 +307,22 @@
 
     "reseed_on_all_pending": {
       "type": "boolean",
-      "title": "Re-seed When All Pending",
-      "title_ja": "全保留時に新規サイクル作成",
-      "description": "When enabled, a new cycle is created for a direction if all existing cycles are in pending state (all positions closed by stop-loss and awaiting rebuild). This keeps the strategy trading at the current price while waiting for rebuilds. Requires stop-loss to be enabled.",
-      "description_ja": "有効時、ある方向のすべてのサイクルが保留状態（全ポジションがロスカットされリビルド待ち）の場合、現在の価格で新しいサイクルを作成します。リビルドを待つ間も取引を継続できます。ロスカットが有効である必要があります。",
+      "title": "Re-seed When Any Pending",
+      "title_ja": "保留発生時に新規サイクル作成",
+      "description": "When enabled, a new cycle is created for a direction if all existing cycles have zero live positions (at least one slot is awaiting stop-loss rebuild, but empty/unused slots may remain). This keeps the strategy trading at the current price as soon as all live entries are stopped out. Mutually exclusive with 'Re-seed When Grid Exhausted'. Requires stop-loss to be enabled.",
+      "description_ja": "有効時、ある方向のすべてのサイクルでライブポジションがゼロになった場合（少なくとも1つのスロットがロスカット後のリビルド待ちだが、未使用スロットが残っている場合も含む）、新しいサイクルを作成します。「グリッド飽和時に新規サイクル作成」とは排他的です。ロスカットが有効である必要があります。",
+      "default": false,
+      "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
+    "reseed_on_grid_exhausted": {
+      "type": "boolean",
+      "title": "Re-seed When Grid Exhausted",
+      "title_ja": "グリッド飽和時に新規サイクル作成",
+      "description": "When enabled, a new cycle is created for a direction only when every slot in every layer of all existing cycles is in pending-rebuild state (the grid is fully saturated with stop-loss closures — no live entries and no empty slots remain). This is stricter than 'Re-seed When Any Pending' and waits until the grid is completely exhausted before starting a new cycle. Mutually exclusive with 'Re-seed When Any Pending'. Requires stop-loss to be enabled.",
+      "description_ja": "有効時、ある方向のすべてのサイクルの全レイヤー・全スロットがリビルド待ち状態になった場合にのみ（ライブポジションも空きスロットも残っていない完全飽和状態）、新しいサイクルを作成します。「保留発生時に新規サイクル作成」より厳格で、グリッドが完全に使い切られるまで新サイクルを作成しません。「保留発生時に新規サイクル作成」とは排他的です。ロスカットが有効である必要があります。",
       "default": false,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
       "group": "Margin Protection",

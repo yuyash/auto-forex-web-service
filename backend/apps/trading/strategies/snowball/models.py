@@ -90,7 +90,14 @@ class SnowballStrategyConfig:
 
     # Cycle re-seed: create a new cycle when all positions in a direction
     # are pending stop-loss rebuild (no open positions).
+    # - reseed_on_all_pending: triggers as soon as every cycle for the
+    #   direction has zero live entries (some slots may still be empty).
+    # - reseed_on_grid_exhausted: triggers only when every slot in every
+    #   layer is in pending-rebuild state (the grid is fully saturated
+    #   with stop-loss closures).
+    # At most one of these may be True.
     reseed_on_all_pending: bool
+    reseed_on_grid_exhausted: bool
 
     @staticmethod
     def from_dict(raw: dict[str, Any]) -> SnowballStrategyConfig:
@@ -129,6 +136,7 @@ class SnowballStrategyConfig:
             emergency_enabled=bool(raw.get("emergency_enabled", True)),
             pip_size=_parse_decimal(raw.get("pip_size", "0.01"), "0.01"),
             reseed_on_all_pending=bool(raw.get("reseed_on_all_pending", False)),
+            reseed_on_grid_exhausted=bool(raw.get("reseed_on_grid_exhausted", False)),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -161,6 +169,7 @@ class SnowballStrategyConfig:
             "emergency_enabled": self.emergency_enabled,
             "pip_size": str(self.pip_size),
             "reseed_on_all_pending": self.reseed_on_all_pending,
+            "reseed_on_grid_exhausted": self.reseed_on_grid_exhausted,
         }
 
     def validate(self) -> None:
@@ -190,6 +199,10 @@ class SnowballStrategyConfig:
                 raise ValueError("All manual_intervals values must be >= 1")
         if not 0 <= self.refill_up_to < self.r_max:
             raise ValueError(f"refill_up_to must be >= 0 and < r_max ({self.r_max})")
+        if self.reseed_on_all_pending and self.reseed_on_grid_exhausted:
+            raise ValueError(
+                "reseed_on_all_pending and reseed_on_grid_exhausted cannot both be true"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -1035,6 +1048,16 @@ class PositionGrid:
         """True if any slot in the grid is awaiting SL rebuild."""
         return any(s.is_pending_rebuild for layer in self.layers for s in layer.slots)
 
+    def is_fully_pending(self) -> bool:
+        """True if every slot in every layer is awaiting SL rebuild.
+
+        All slots must be in ``pending_rebuild`` state — no live entries,
+        no empty/available slots, no sealed slots.  Returns False when
+        the grid has no layers or no slots.
+        """
+        slots = [s for layer in self.layers for s in layer.slots]
+        return len(slots) > 0 and all(s.is_pending_rebuild for s in slots)
+
     def pending_rebuild_slots(self) -> list[tuple["Layer", Slot]]:
         """Return all (layer, slot) pairs awaiting SL rebuild."""
         result: list[tuple[Layer, Slot]] = []
@@ -1159,6 +1182,11 @@ class SnowballCycle:
     @property
     def is_pending(self) -> bool:
         return self.status == CycleStatus.PENDING
+
+    @property
+    def is_fully_pending(self) -> bool:
+        """True if the cycle is PENDING and every slot is awaiting rebuild."""
+        return self.is_pending and self.grid.is_fully_pending()
 
     # -- Convenience --
 
