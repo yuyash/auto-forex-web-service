@@ -25,6 +25,14 @@ logger: Logger = getLogger(name=__name__)
 lifecycle_logger: Logger = getLogger(name="position.lifecycle")
 
 
+class CycleResolutionError(Exception):
+    """Raised when a rebuild cannot resolve its parent cycle.
+
+    This indicates corrupt or inconsistent strategy state — the task
+    must stop because continuing would create orphaned positions.
+    """
+
+
 EventDispatchFn = Callable[[StrategyEvent], EventExecutionResult]
 
 
@@ -607,6 +615,17 @@ class EventHandler:
         if root_eid is not None and root_eid in self._entry_id_to_cycle_id:
             return self._entry_id_to_cycle_id[root_eid]
 
+        # DB fallback: look up cycle_id from the open/rebuild trade that
+        # created this position.  This covers edge cases where the
+        # in-memory mapping was lost or overwritten.
+        cycle_id = self._resolve_cycle_id_from_db(root_eid, eid)
+        if cycle_id is not None:
+            if eid is not None:
+                self._entry_id_to_cycle_id[eid] = cycle_id
+            if root_eid is not None:
+                self._entry_id_to_cycle_id[root_eid] = cycle_id
+            return cycle_id
+
         return None
 
     def _resolve_cycle_id_for_position(self, position: Position) -> str | None:
@@ -643,6 +662,11 @@ class EventHandler:
     def handle_rebuild_position(self, event: RebuildPositionEvent) -> Position:
         """Create a new position for a stop-loss rebuild.
 
+        A rebuild always belongs to an existing cycle — the position being
+        rebuilt was previously opened inside that cycle and then closed by
+        stop-loss.  If the cycle_id cannot be resolved, something is
+        seriously wrong and the task must stop.
+
         Instead of re-opening the original closed position (which would erase
         its exit_price and hide the stop-loss P&L from DB aggregation), we
         always create a fresh Position record.  The original closed position
@@ -654,10 +678,29 @@ class EventHandler:
 
         Returns:
             Position: The newly created position
+
+        Raises:
+            RuntimeError: If cycle_id cannot be resolved — indicates
+                corrupt state that should stop the task.
         """
-        # Build an OpenPositionEvent that carries the root/parent entry IDs
-        # so that _resolve_cycle_id_for_open links the new position to the
-        # same cycle as the original.
+        # ---- Resolve cycle_id (mandatory for rebuilds) ----
+        cycle_id = self._resolve_rebuild_cycle_id(event)
+        if cycle_id is None:
+            raise CycleResolutionError(
+                f"Cannot resolve cycle_id for rebuild: "
+                f"entry_id={event.entry_id}, root_entry_id={event.root_entry_id}, "
+                f"original_position_id={event.original_position_id}. "
+                f"This indicates corrupt strategy state — stopping task."
+            )
+
+        # Seed the mapping so handle_open_position and subsequent close
+        # events resolve to the correct cycle.
+        if event.root_entry_id is not None:
+            self._entry_id_to_cycle_id[event.root_entry_id] = cycle_id
+        if event.entry_id is not None:
+            self._entry_id_to_cycle_id[event.entry_id] = cycle_id
+
+        # ---- Create the position via handle_open_position ----
         open_event = OpenPositionEvent(
             event_type=EventType.OPEN_POSITION,
             timestamp=event.timestamp,
@@ -672,60 +715,17 @@ class EventHandler:
             stop_loss_price=event.stop_loss_price,
             description=event.description,
         )
-        # Propagate lineage so cycle_id resolution works correctly.
         open_event.root_entry_id = event.root_entry_id
         open_event.parent_entry_id = event.parent_entry_id
 
-        # Resolve cycle_id *before* calling handle_open_position so the
-        # DB-fallback lookup can use original_position_id if needed.
-        cycle_id = self._resolve_cycle_id_for_open(event)
-        if cycle_id is None and event.original_position_id:
-            existing_cycle_id = (
-                Trade.objects.filter(
-                    task_type=self.order_service.task_type.value,
-                    task_id=self._task_pk,
-                    execution_id=self._execution_id,
-                    position_id=event.original_position_id,
-                    cycle_id__isnull=False,
-                )
-                .values_list("cycle_id", flat=True)
-                .first()
-            )
-            if existing_cycle_id is not None:
-                cycle_id = str(existing_cycle_id)
-                # Seed the in-memory mapping so handle_open_position picks
-                # it up via _resolve_cycle_id_for_open on the OpenPositionEvent.
-                if event.root_entry_id is not None:
-                    self._entry_id_to_cycle_id[event.root_entry_id] = cycle_id
-                if event.entry_id is not None:
-                    self._entry_id_to_cycle_id[event.entry_id] = cycle_id
-
-        # Create the position (and its open trade) via the standard path.
         position = self.handle_open_position(open_event)
         position.is_rebuild = True
         position.save(update_fields=["is_rebuild"])
 
-        # If handle_open_position created a new cycle (cycle_id was None),
-        # update the trade it created with the resolved cycle_id.
-        if cycle_id is not None and self._last_open_cycle_id != cycle_id:
-            # The trade created by handle_open_position may have the wrong
-            # cycle_id.  Fix it.
-            latest_trade = (
-                Trade.objects.filter(
-                    task_type=self.order_service.task_type.value,
-                    task_id=self._task_pk,
-                    execution_id=self._execution_id,
-                    position_id=str(position.id),
-                )
-                .order_by("-created_at")
-                .first()
-            )
-            if latest_trade and str(latest_trade.cycle_id) != cycle_id:
-                latest_trade.cycle_id = cycle_id
-                latest_trade.save(update_fields=["cycle_id"])
-            self._last_open_cycle_id = cycle_id
-
-        # Mark the trade as a rebuild
+        # ---- Fix trade records ----
+        # handle_open_position may have treated this as a new cycle
+        # (parent_entry_id is None for R0 rebuilds).  Correct the
+        # trade's cycle_id and re-seed the mapping.
         latest_trade = (
             Trade.objects.filter(
                 task_type=self.order_service.task_type.value,
@@ -736,17 +736,33 @@ class EventHandler:
             .order_by("-created_at")
             .first()
         )
-        if latest_trade and not latest_trade.is_rebuild:
-            latest_trade.is_rebuild = True
-            latest_trade.execution_method = str(event.event_type.value)
-            latest_trade.save(update_fields=["is_rebuild", "execution_method"])
+        if latest_trade:
+            needs_save = False
+            if str(latest_trade.cycle_id) != cycle_id:
+                latest_trade.cycle_id = cycle_id
+                needs_save = True
+            if not latest_trade.is_rebuild:
+                latest_trade.is_rebuild = True
+                latest_trade.execution_method = str(event.event_type.value)
+                needs_save = True
+            if needs_save:
+                latest_trade.save(update_fields=["cycle_id", "is_rebuild", "execution_method"])
+
+        # Ensure the mapping is correct after handle_open_position
+        # (which may have overwritten it with the trade's own id).
+        self._last_open_cycle_id = cycle_id
+        if event.entry_id is not None:
+            self._entry_id_to_cycle_id[event.entry_id] = cycle_id
+        if event.root_entry_id is not None:
+            self._entry_id_to_cycle_id[event.root_entry_id] = cycle_id
 
         logger.info(
-            "Rebuild position executed: layer=%s, direction=%s, units=%s, position_id=%s",
+            "Rebuild position executed: layer=%s, direction=%s, units=%s, position_id=%s, cycle_id=%s",
             event.layer_number,
             event.direction,
             event.units,
             position.id,
+            cycle_id,
         )
 
         lifecycle_logger.info(
@@ -767,10 +783,51 @@ class EventHandler:
                 "layer_index": event.layer_number,
                 "retracement_count": event.retracement_count,
                 "original_position_id": event.original_position_id,
+                "cycle_id": cycle_id,
             },
         )
 
         return position
+
+    def _resolve_rebuild_cycle_id(self, event: RebuildPositionEvent) -> str | None:
+        """Resolve cycle_id for a rebuild event.
+
+        Tries, in order:
+        1. In-memory mapping via root_entry_id or entry_id.
+        2. DB lookup via root_entry_id / parent_entry_id in TradingEvent.
+        3. DB lookup via original_position_id in Trade.
+        """
+        root_eid = getattr(event, "root_entry_id", None)
+        entry_eid = getattr(event, "entry_id", None)
+        parent_eid = getattr(event, "parent_entry_id", None)
+
+        # 1. In-memory mapping
+        for eid in (root_eid, entry_eid, parent_eid):
+            if eid is not None and eid in self._entry_id_to_cycle_id:
+                return self._entry_id_to_cycle_id[eid]
+
+        # 2. DB fallback via TradingEvent
+        cycle_id = self._resolve_cycle_id_from_db(root_eid, parent_eid)
+        if cycle_id is not None:
+            return cycle_id
+
+        # 3. DB fallback via original position's Trade record
+        if event.original_position_id:
+            existing = (
+                Trade.objects.filter(
+                    task_type=self.order_service.task_type.value,
+                    task_id=self._task_pk,
+                    execution_id=self._execution_id,
+                    position_id=event.original_position_id,
+                    cycle_id__isnull=False,
+                )
+                .values_list("cycle_id", flat=True)
+                .first()
+            )
+            if existing is not None:
+                return str(existing)
+
+        return None
 
     def handle_close_position(self, event: ClosePositionEvent) -> tuple[Decimal, Decimal]:
         """Close one or more positions.
