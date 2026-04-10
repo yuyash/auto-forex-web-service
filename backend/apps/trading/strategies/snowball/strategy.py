@@ -275,10 +275,11 @@ class SnowballStrategy(Strategy):
         # Close R0 slot — not refillable (cycle is ending).
         layer.close_slot(0, refillable=False)
 
-        # Clear any remaining pending rebuilds — the cycle is done.
-        for grid_layer in cycle.grid.layers:
-            for slot in grid_layer.slots:
-                slot.pending_rebuild = None
+        # Do NOT clear pending rebuilds here.  If other slots have
+        # pending rebuilds, the cycle status update in on_tick will
+        # transition the cycle to PENDING (not COMPLETED).  Those
+        # rebuilds will eventually restore positions and close them
+        # normally, at which point the cycle will finally complete.
 
         # Only create a new cycle if no other ACTIVE cycle exists for
         # this direction.  When multiple cycles coexist (e.g. after SL
@@ -806,11 +807,21 @@ class SnowballStrategy(Strategy):
         """Open a layer-initial entry (R0) for a new layer."""
         cfg = self.config
         head = cycle.initial_entry
-        if head is None:
+        head_entry_price, head_entry_id = cycle.effective_head()
+        if head_entry_price is None:
             return []
 
-        if head.unrealised_loss_pips(tick.mid, self.pip_size) <= 0:
-            return []
+        # Gate: head (or its SL snapshot) must be losing
+        if head is not None:
+            if head.unrealised_loss_pips(tick.mid, self.pip_size) <= 0:
+                return []
+        else:
+            if cycle.direction == Direction.LONG:
+                if (head_entry_price - tick.mid) / self.pip_size <= 0:
+                    return []
+            else:
+                if (tick.mid - head_entry_price) / self.pip_size <= 0:
+                    return []
 
         direction = cycle.direction
         prev_layer = cycle.current_layer
@@ -831,8 +842,8 @@ class SnowballStrategy(Strategy):
             role="layer_initial",
             layer_number=layer.layer_number,
             retracement_count=0,
-            root_entry_id=head.entry_id,
-            parent_entry_id=head.entry_id,
+            root_entry_id=head_entry_id,
+            parent_entry_id=head_entry_id,
         )
 
         close_price, formula = layer.layer_initial_close_price(

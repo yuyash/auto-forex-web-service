@@ -1170,6 +1170,24 @@ class SnowballCycle:
         """Dynamic cycle head — the oldest surviving position."""
         return self.grid.head_entry()
 
+    def effective_head(self) -> tuple[Decimal | None, int | None]:
+        """Return (entry_price, entry_id) for the cycle head.
+
+        Falls back to the R0 pending-rebuild snapshot when no live entry
+        exists, so callers can still compute adverse distance and loss
+        checks even after all positions have been stop-loss closed.
+        """
+        head = self.initial_entry
+        if head is not None:
+            return head.entry_price, head.entry_id
+        layer = self.current_layer
+        if layer is None:
+            return None, None
+        r0 = layer.slot_at(0)
+        if r0 is not None and r0.pending_rebuild is not None:
+            return r0.pending_rebuild.entry_price, r0.pending_rebuild.root_entry_id
+        return None, None
+
     def add_layer(self, layer: Layer) -> None:
         self.grid.add_layer(layer)
 
