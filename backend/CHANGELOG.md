@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.16](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.15...backend-v1.28.16) (2026-04-10)
+
+
+### Bug Fixes
+
+* **trading:** refactor cycle lifecycle and stop-loss integration ([#403](https://github.com/yuyash/auto-forex-web-service/issues/403)) ([2fafde3](https://github.com/yuyash/auto-forex-web-service/commit/2fafde317ea605ad5f87974a5743323eba745a0c))
+
 ## [1.28.15](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.28.14...backend-v1.28.15) (2026-04-09)
 
 
