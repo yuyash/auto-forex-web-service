@@ -84,6 +84,7 @@ class SnowballStrategyConfig:
     n_th: Decimal
     cooldown_sec: int
     stop_loss_enabled: bool
+    disable_loss_cut_after_rebuild: bool
     emergency_enabled: bool
 
     pip_size: Decimal
@@ -133,6 +134,7 @@ class SnowballStrategyConfig:
             n_th=_parse_decimal(raw.get("n_th", "85"), "85"),
             cooldown_sec=_parse_int(raw.get("cooldown_sec", 300), 300),
             stop_loss_enabled=bool(raw.get("stop_loss_enabled", False)),
+            disable_loss_cut_after_rebuild=bool(raw.get("disable_loss_cut_after_rebuild", False)),
             emergency_enabled=bool(raw.get("emergency_enabled", True)),
             pip_size=_parse_decimal(raw.get("pip_size", "0.01"), "0.01"),
             reseed_on_all_pending=bool(raw.get("reseed_on_all_pending", False)),
@@ -166,6 +168,7 @@ class SnowballStrategyConfig:
             "n_th": str(self.n_th),
             "cooldown_sec": self.cooldown_sec,
             "stop_loss_enabled": self.stop_loss_enabled,
+            "disable_loss_cut_after_rebuild": self.disable_loss_cut_after_rebuild,
             "emergency_enabled": self.emergency_enabled,
             "pip_size": str(self.pip_size),
             "reseed_on_all_pending": self.reseed_on_all_pending,

@@ -305,6 +305,18 @@
       "group_ja": "証拠金保護"
     },
 
+    "disable_loss_cut_after_rebuild": {
+      "type": "boolean",
+      "title": "Disable Loss Cut After Rebuild",
+      "title_ja": "再建後ロスカット無効",
+      "description": "When enabled, rebuilt positions are kept open and will not be loss-cut again after a stop-loss rebuild.",
+      "description_ja": "有効時、ロスカット後に再建されたポジションはそのまま保持され、再度ロスカットされません。",
+      "default": false,
+      "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
     "reseed_on_all_pending": {
       "type": "boolean",
       "title": "Re-seed When Any Pending",

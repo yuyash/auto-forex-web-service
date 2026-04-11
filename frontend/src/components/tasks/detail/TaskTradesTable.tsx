@@ -37,6 +37,9 @@ import {
 } from '../../../hooks/useColumnConfig';
 import { buildCopyHandler } from '../../../utils/tableCopyUtils';
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 interface TaskTradesTableProps {
   taskId: string | number;
   taskType: TaskType;
@@ -56,6 +59,10 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
   const [rowsPerPage, setRowsPerPage] = useState(50);
   const [isReloading, setIsReloading] = useState(false);
   const [cycleIdFilter, setCycleIdFilter] = useState('');
+  const hasCycleIdFilter = cycleIdFilter.trim().length > 0;
+  const isCycleIdFilterValid =
+    !hasCycleIdFilter || UUID_PATTERN.test(cycleIdFilter.trim());
+  const effectiveCycleId = isCycleIdFilterValid ? cycleIdFilter.trim() : '';
 
   const { trades, totalCount, isLoading, error, refresh } = useTaskTrades({
     taskId,
@@ -63,7 +70,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     executionRunId,
     page: page + 1,
     pageSize: rowsPerPage,
-    cycleId: cycleIdFilter || undefined,
+    cycleId: effectiveCycleId || undefined,
     enableRealTimeUpdates,
   });
 
@@ -331,6 +338,12 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
             placeholder={t('tables.trades.cycleIdFilter')}
             value={cycleIdFilter}
             onChange={(e) => setCycleIdFilter(e.target.value)}
+            error={hasCycleIdFilter && !isCycleIdFilterValid}
+            helperText={
+              hasCycleIdFilter && !isCycleIdFilterValid
+                ? t('tables.trades.invalidCycleId')
+                : ' '
+            }
             sx={{ width: 280 }}
             slotProps={{
               input: {

@@ -1243,6 +1243,8 @@ class SnowballStrategy(Strategy):
                 entry = slot.entry
                 if entry is None or entry.stop_loss_price is None:
                     continue
+                if entry.is_rebuild and self.config.disable_loss_cut_after_rebuild:
+                    continue
                 if entry.is_hedge:
                     continue
 
@@ -1357,8 +1359,8 @@ class SnowballStrategy(Strategy):
                 entry.validation_status = "pass"
                 entry.is_rebuild = True
 
-                # Compute stop-loss for the rebuilt entry
-                if self.config.stop_loss_enabled:
+                # Optionally keep rebuilt positions exempt from further stop-loss closes.
+                if self.config.stop_loss_enabled and not self.config.disable_loss_cut_after_rebuild:
                     next_interval = counter_interval_pips(
                         pending.retracement_count + 1, self.config
                     )

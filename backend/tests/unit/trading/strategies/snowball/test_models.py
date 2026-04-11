@@ -54,6 +54,7 @@ class TestSnowballStrategyConfig:
         assert cfg.f_max == 3
         assert cfg.interval_mode == "constant"
         assert cfg.counter_tp_mode == "weighted_avg"
+        assert cfg.disable_loss_cut_after_rebuild is False
 
     def test_from_dict_custom(self):
         cfg = SnowballStrategyConfig.from_dict(
@@ -71,11 +72,14 @@ class TestSnowballStrategyConfig:
         assert len(cfg.manual_intervals) == 5
 
     def test_to_dict_roundtrip(self):
-        cfg = SnowballStrategyConfig.from_dict({"m_pips": "30"})
+        cfg = SnowballStrategyConfig.from_dict(
+            {"m_pips": "30", "disable_loss_cut_after_rebuild": True}
+        )
         d = cfg.to_dict()
         cfg2 = SnowballStrategyConfig.from_dict(d)
         assert cfg2.m_pips == Decimal("30")
         assert cfg2.base_units == cfg.base_units
+        assert cfg2.disable_loss_cut_after_rebuild is True
 
     def test_validate_m_th_n_th_order(self):
         with pytest.raises(ValueError, match="m_th < n_th"):

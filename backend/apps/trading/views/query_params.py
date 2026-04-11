@@ -71,7 +71,7 @@ class QueryFieldSpec:
         if self.kind == "datetime":
             return _parse_datetime_value(value)
         if self.kind == "uuid":
-            return _parse_execution_id_value(value)
+            return _parse_uuid_value(value, field_name=self.name)
         if self.kind == "int":
             default = self.default if isinstance(self.default, int) else None
             return _parse_positive_int(
@@ -300,6 +300,11 @@ RANGE_TO_SPEC = QueryFieldSpec(
     name="range_to",
     kind="datetime",
     help_text="RFC3339 upper bound for the chart window.",
+)
+CYCLE_ID_SPEC = QueryFieldSpec(
+    name="cycle_id",
+    kind="uuid",
+    help_text="Filter by cycle ID (UUID).",
 )
 ORDER_STATUS_SPEC = QueryFieldSpec(
     name="status",
@@ -549,6 +554,7 @@ QUERY_GROUP_SPECS = {
         name="TradesQueryParamsSchemaSerializer",
         specs=(
             *EXECUTION_SCOPED_TRADE_POSITION_GROUP,
+            CYCLE_ID_SPEC,
             TRADES_DIRECTION_SPEC,
             TRADE_TIMESTAMP_FROM_SPEC,
             TRADE_TIMESTAMP_TO_SPEC,
@@ -559,6 +565,7 @@ QUERY_GROUP_SPECS = {
         name="PositionsQueryParamsSchemaSerializer",
         specs=(
             *EXECUTION_SCOPED_TRADE_POSITION_GROUP,
+            CYCLE_ID_SPEC,
             POSITION_STATUS_SPEC,
             DIRECTION_SPEC,
             INCLUDE_TRADE_IDS_SPEC,
@@ -732,13 +739,17 @@ def _parse_positive_int(
     return parsed
 
 
-def _parse_execution_id_value(value: str | None) -> UUID | None:
+def _parse_uuid_value(value: str | None, *, field_name: str) -> UUID | None:
     if value is None:
         return None
     try:
         return UUID(value)
     except (TypeError, ValueError) as exc:
-        raise _invalid_query_param(f"Invalid execution_id: {value}") from exc
+        raise _invalid_query_param(f"Invalid {field_name}: {value}") from exc
+
+
+def _parse_execution_id_value(value: str | None) -> UUID | None:
+    return _parse_uuid_value(value, field_name="execution_id")
 
 
 ExecutionScopedQueryParamsSchemaSerializer = _build_query_serializer_alias("execution_scoped")
@@ -839,6 +850,7 @@ class DateRangeQuery:
 @dataclass(frozen=True)
 class PositionQuery:
     execution: ExecutionScopedQuery
+    cycle_id: UUID | None
     position_status: str
     direction: str
     include_trade_ids: bool
@@ -853,7 +865,7 @@ class PositionQuery:
         default_page_size: int = 100,
         max_page_size: int = 1000,
     ) -> PositionQuery:
-        parsed = RUNTIME_QUERY_GROUP_REGISTRY["position_filters"]().parse(request)
+        parsed = _parse_endpoint_group("positions", request)
         return cls(
             execution=_build_execution_scoped_query(
                 request,
@@ -861,6 +873,7 @@ class PositionQuery:
                 default_page_size=default_page_size,
                 max_page_size=max_page_size,
             ),
+            cycle_id=cast(UUID | None, parsed["cycle_id"]),
             position_status=cast(str, parsed["position_status"]),
             direction=cast(str, parsed["direction"]),
             include_trade_ids=cast(bool, parsed["include_trade_ids"]),
@@ -981,6 +994,7 @@ class EventsQueryParams:
 @dataclass(frozen=True)
 class TradesQueryParams:
     execution: ExecutionScopedQuery
+    cycle_id: UUID | None
     direction: str
     timestamp_range: DateRangeQuery
 
@@ -1001,6 +1015,7 @@ class TradesQueryParams:
                 default_page_size=default_page_size,
                 max_page_size=max_page_size,
             ),
+            cycle_id=cast(UUID | None, parsed["cycle_id"]),
             direction=cast(str, parsed["direction"]),
             timestamp_range=_build_date_range_query(
                 request,

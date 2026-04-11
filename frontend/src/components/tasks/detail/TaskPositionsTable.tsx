@@ -56,6 +56,8 @@ import {
 } from '../../../utils/persistentState';
 
 type ViewMode = 'all' | 'byDirection' | 'byStatus';
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const VIEW_MODE_STORAGE_KEY = 'positions_view_mode';
 
@@ -124,6 +126,10 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
 
   // --- Cycle ID filter ---
   const [cycleIdFilter, setCycleIdFilter] = useState('');
+  const hasCycleIdFilter = cycleIdFilter.trim().length > 0;
+  const isCycleIdFilterValid =
+    !hasCycleIdFilter || UUID_PATTERN.test(cycleIdFilter.trim());
+  const effectiveCycleId = isCycleIdFilterValid ? cycleIdFilter.trim() : '';
 
   // --- Selection ---
   const closedLongSel = useTableRowSelection();
@@ -150,7 +156,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     direction: 'long',
     page: closedLongPage + 1,
     pageSize: closedLongRpp,
-    cycleId: cycleIdFilter || undefined,
+    cycleId: effectiveCycleId || undefined,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
   });
   const {
@@ -167,7 +173,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     direction: 'short',
     page: closedShortPage + 1,
     pageSize: closedShortRpp,
-    cycleId: cycleIdFilter || undefined,
+    cycleId: effectiveCycleId || undefined,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
   });
   const {
@@ -184,7 +190,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     direction: 'long',
     page: openLongPage + 1,
     pageSize: openLongRpp,
-    cycleId: cycleIdFilter || undefined,
+    cycleId: effectiveCycleId || undefined,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
   });
   const {
@@ -201,7 +207,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     direction: 'short',
     page: openShortPage + 1,
     pageSize: openShortRpp,
-    cycleId: cycleIdFilter || undefined,
+    cycleId: effectiveCycleId || undefined,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
   });
 
@@ -219,7 +225,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     direction: 'long',
     page: longPage + 1,
     pageSize: longRpp,
-    cycleId: cycleIdFilter || undefined,
+    cycleId: effectiveCycleId || undefined,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byDirection',
   });
   const {
@@ -235,7 +241,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     direction: 'short',
     page: shortPage + 1,
     pageSize: shortRpp,
-    cycleId: cycleIdFilter || undefined,
+    cycleId: effectiveCycleId || undefined,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byDirection',
   });
 
@@ -252,7 +258,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     executionRunId,
     page: allPage + 1,
     pageSize: allRpp,
-    cycleId: cycleIdFilter || undefined,
+    cycleId: effectiveCycleId || undefined,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'all',
   });
 
@@ -1275,6 +1281,12 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
               placeholder={t('tables.positions.cycleIdFilter')}
               value={cycleIdFilter}
               onChange={(e) => setCycleIdFilter(e.target.value)}
+              error={hasCycleIdFilter && !isCycleIdFilterValid}
+              helperText={
+                hasCycleIdFilter && !isCycleIdFilterValid
+                  ? t('tables.positions.invalidCycleId')
+                  : ' '
+              }
               sx={{ width: 280 }}
               slotProps={{
                 input: {
