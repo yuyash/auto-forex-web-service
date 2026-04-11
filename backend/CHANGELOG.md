@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.31.0...backend-v1.32.0) (2026-04-11)
+
+
+### Features
+
+* **strategy:** add snowball grid state indicator ([#426](https://github.com/yuyash/auto-forex-web-service/issues/426)) ([f38445f](https://github.com/yuyash/auto-forex-web-service/commit/f38445fd48b1f8a453673edbe68ed9e1bd71a8bb))
+
 ## [1.31.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.30.3...backend-v1.31.0) (2026-04-11)
 
 
