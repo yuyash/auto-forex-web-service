@@ -464,6 +464,21 @@ class TestSnowballStopLossRebuild:
                     "SL closed slots should not trigger premature layer addition"
                 )
 
+    def test_f_max_caps_total_layers_at_l1_through_l3(self):
+        """f_max=3 should cap a cycle at L1-L3, never L4."""
+        runner = TickRunner(stop_loss=False)
+        runner.tick(START_PRICE)
+
+        # Drive a large adverse move so the strategy keeps attempting to
+        # expand layers after counter slots are exhausted.
+        runner.tick_range(START_PRICE, START_PRICE - Decimal("4.00"), step_pips=1)
+
+        for cycle in runner.ss.cycles:
+            if cycle.direction.value == "long":
+                assert cycle.layer_count <= 3, (
+                    f"LONG cycle has {cycle.layer_count} layers — f_max=3 should allow only L1-L3"
+                )
+
     def test_sl_closed_slot_blocks_counter_add(self):
         """When R1 is SL-closed, the next counter should go to R2, not R1.
 

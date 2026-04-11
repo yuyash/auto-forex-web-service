@@ -11,7 +11,7 @@ Design principles
   the *oldest surviving position* in the grid, determined at query time.
 - **Bidirectional close**: Normal TP closes from the back (newest → oldest).
   Shrink protection closes from the front (oldest → newest).
-- **0-indexed addressing**: Layers are ``L0 … Lf`` (f_max layers total).
+- **1-indexed addressing**: Layers are ``L1 … Lf`` (f_max layers total).
   Retracements within a layer are ``R0 … Rr`` (r_max + 1 slots per layer,
   where R0 is the layer-initial position).
 
@@ -1066,11 +1066,11 @@ class PositionGrid:
     def is_fully_pending(self, f_max: int) -> bool:
         """True if the grid has all layers up to f_max and every slot is pending rebuild.
 
-        The grid must contain exactly ``f_max + 1`` layers (L1 … L(f_max+1))
+        The grid must contain exactly ``f_max`` layers (L1 … Lf)
         and every slot in every layer must be in ``pending_rebuild`` state.
         Returns False when layers have not been fully expanded yet.
         """
-        if len(self.layers) < f_max + 1:
+        if len(self.layers) < f_max:
             return False
         slots = [s for layer in self.layers for s in layer.slots]
         return len(slots) > 0 and all(s.is_pending_rebuild for s in slots)
@@ -1212,7 +1212,7 @@ class SnowballCycle:
     def is_grid_exhausted(self, f_max: int) -> bool:
         """True if the cycle is PENDING and the grid is fully saturated.
 
-        All ``f_max + 1`` layers must exist and every slot in every
+        All ``f_max`` layers must exist and every slot in every
         layer must be in pending-rebuild state.
         """
         return self.is_pending and self.grid.is_fully_pending(f_max=f_max)
