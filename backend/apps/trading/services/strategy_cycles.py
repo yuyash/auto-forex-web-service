@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import timedelta
+from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
@@ -283,6 +284,43 @@ def _build_cycle(
     rebuild_trades = [t for t in trades if t.get("is_rebuild")]
     rebuild_count = len(rebuild_trades)
 
+    # --- PnL calculation ---
+    # Realized PnL: sum of (exit_price - entry_price) * units for closed positions.
+    # For SHORT: PnL = (open_price - close_price) * units.
+    # We pair open trades with their close trades by position_id.
+    realized_pnl = Decimal("0")
+    unrealized_pnl = Decimal("0")
+
+    # Build a map of open_price by position_id (from open/rebuild trades)
+    open_price_by_pos: dict[str, Decimal] = {}
+    for t in opens:
+        pid = str(t["position_id"]) if t.get("position_id") else None
+        if pid:
+            open_price_by_pos[pid] = Decimal(str(t["price"]))
+
+    for t in closes:
+        pid = str(t["position_id"]) if t.get("position_id") else None
+        if pid and pid in open_price_by_pos:
+            entry_px = open_price_by_pos[pid]
+            exit_px = Decimal(str(t["price"]))
+            units = abs(t["units"])
+            if direction.lower() == "long":
+                realized_pnl += (exit_px - entry_px) * units
+            else:
+                realized_pnl += (entry_px - exit_px) * units
+
+    # Unrealized PnL: sum for positions that are still open.
+    # Look up current unrealized_pnl from the Position table.
+    still_open_ids = open_ids - close_ids
+    if still_open_ids:
+        from apps.trading.models.positions import Position
+
+        for pos in Position.objects.filter(id__in=still_open_ids).values_list(
+            "unrealized_pnl", flat=True
+        ):
+            if pos is not None:
+                unrealized_pnl += Decimal(str(pos))
+
     return {
         "cycle_id": cycle_id,
         "direction": direction,
@@ -297,6 +335,8 @@ def _build_cycle(
         "has_protection": has_protection,
         "protection_count": len(protection_trades),
         "rebuild_count": rebuild_count,
+        "realized_pnl": str(realized_pnl),
+        "unrealized_pnl": str(unrealized_pnl),
         "trades": [_serialize_trade(t, metrics_by_minute) for t in trades],
     }
 
