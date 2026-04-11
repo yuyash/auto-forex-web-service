@@ -26,6 +26,8 @@ export interface StrategyCycle {
   has_protection?: boolean;
   protection_count?: number;
   rebuild_count?: number;
+  realized_pnl?: string;
+  unrealized_pnl?: string;
   trades: CycleTrade[];
 }
 

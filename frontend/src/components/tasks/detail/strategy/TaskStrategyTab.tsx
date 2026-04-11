@@ -61,6 +61,21 @@ function getStatusColor(
   return 'default';
 }
 
+function formatCyclePnl(cycle: StrategyCycle): {
+  total: string;
+  color: string;
+} {
+  const realized = parseFloat(cycle.realized_pnl ?? '0');
+  const unrealized = parseFloat(cycle.unrealized_pnl ?? '0');
+  const total = realized + unrealized;
+  const sign = total >= 0 ? '+' : '';
+  return {
+    total: `${sign}${total.toFixed(1)}`,
+    color:
+      total > 0 ? 'success.main' : total < 0 ? 'error.main' : 'text.secondary',
+  };
+}
+
 export function TaskStrategyTab({
   taskId,
   taskType,
@@ -526,6 +541,14 @@ export function TaskStrategyTab({
                   </Stack>
                   <Typography variant="body2" color="text.secondary">
                     {formatDateTime(cycle.started_at)}
+                    <Typography
+                      component="span"
+                      variant="body2"
+                      sx={{ ml: 1, fontWeight: 600 }}
+                      color={formatCyclePnl(cycle).color}
+                    >
+                      {formatCyclePnl(cycle).total}
+                    </Typography>
                   </Typography>
                 </Box>
               ))
@@ -654,13 +677,21 @@ export function TaskStrategyTab({
                 color="text.secondary"
                 sx={{ mb: 1, display: 'block', fontFamily: 'monospace' }}
               >
-                {selectedCycle.cycle_id}
+                Cycle ID: {selectedCycle.cycle_id}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 {t('common:strategyVisualization.cycleList.opensAndCloses', {
                   opens: selectedCycle.open_count,
                   closes: selectedCycle.close_count,
                 })}
+                <Typography
+                  component="span"
+                  variant="body2"
+                  sx={{ ml: 1.5, fontWeight: 600 }}
+                  color={formatCyclePnl(selectedCycle).color}
+                >
+                  PnL: {formatCyclePnl(selectedCycle).total}
+                </Typography>
               </Typography>
 
               {instrument && showOhlcChart ? (
