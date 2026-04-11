@@ -369,6 +369,7 @@
       "noTrades": "No trades recorded",
       "description": "Description",
       "cycleIdFilter": "Filter by Cycle ID",
+      "invalidCycleId": "Enter a valid cycle ID UUID",
       "stopLossPrice": "Stop Loss",
       "isRebuild": "Rebuild",
       "rebuild": "Rebuild"
@@ -444,6 +445,7 @@
       },
       "totalPnl": "Total PnL",
       "cycleIdFilter": "Filter by Cycle ID",
+      "invalidCycleId": "Enter a valid cycle ID UUID",
       "lifecycle": {
         "title": "Position Lifecycle",
         "viewLifecycle": "View position lifecycle",

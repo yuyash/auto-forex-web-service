@@ -99,8 +99,10 @@ def test_events_query_params_defaults_scope_to_all():
 
 
 def test_trades_query_params_parses_direction_and_timestamp_range():
+    cycle_id = uuid4()
     request = _request(
-        "?direction=buy&timestamp_from=2026-01-01T00:00:00Z&timestamp_to=2026-01-01T02:00:00Z"
+        f"?direction=buy&cycle_id={cycle_id}&timestamp_from=2026-01-01T00:00:00Z"
+        "&timestamp_to=2026-01-01T02:00:00Z"
     )
 
     query = TradesQueryParams.from_request(
@@ -110,6 +112,7 @@ def test_trades_query_params_parses_direction_and_timestamp_range():
         max_page_size=TradePositionPagination.max_page_size,
     )
 
+    assert query.cycle_id == cycle_id
     assert query.direction == "buy"
     assert query.timestamp_range.start is not None
     assert query.timestamp_range.end is not None
@@ -131,8 +134,9 @@ def test_orders_query_params_parses_filters():
 
 
 def test_position_query_parses_filters_and_overlap_range():
+    cycle_id = uuid4()
     request = _request(
-        "?position_status=open&direction=long&include_trade_ids=true"
+        f"?position_status=open&direction=long&include_trade_ids=true&cycle_id={cycle_id}"
         "&range_from=2026-01-01T00:00:00Z&range_to=2026-01-01T03:00:00Z"
     )
 
@@ -146,6 +150,7 @@ def test_position_query_parses_filters_and_overlap_range():
     assert query.position_status == "open"
     assert query.direction == "long"
     assert query.include_trade_ids is True
+    assert query.cycle_id == cycle_id
     assert query.range.start is not None
     assert query.range.end is not None
 
@@ -257,3 +262,31 @@ def test_trades_query_params_rejects_invalid_page_size():
         )
 
     assert "maximum allowed value" in str(exc_info.value.detail)
+
+
+def test_trades_query_params_reject_invalid_cycle_id():
+    request = _request("?cycle_id=not-a-uuid")
+
+    with pytest.raises(ValidationError) as exc_info:
+        TradesQueryParams.from_request(
+            request,
+            default_execution_id=None,
+            default_page_size=TradePositionPagination.page_size,
+            max_page_size=TradePositionPagination.max_page_size,
+        )
+
+    assert "Invalid cycle_id" in str(exc_info.value.detail)
+
+
+def test_position_query_reject_invalid_cycle_id():
+    request = _request("?cycle_id=not-a-uuid")
+
+    with pytest.raises(ValidationError) as exc_info:
+        PositionQuery.from_request(
+            request,
+            default_execution_id=None,
+            default_page_size=TradePositionPagination.page_size,
+            max_page_size=TradePositionPagination.max_page_size,
+        )
+
+    assert "Invalid cycle_id" in str(exc_info.value.detail)

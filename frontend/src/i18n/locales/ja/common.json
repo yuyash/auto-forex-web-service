@@ -369,6 +369,7 @@
       "noTrades": "取引記録なし",
       "description": "説明",
       "cycleIdFilter": "サイクルIDでフィルタ",
+      "invalidCycleId": "有効なサイクルID UUID を入力してください",
       "stopLossPrice": "ロスカット価格",
       "isRebuild": "再建玉",
       "rebuild": "再建玉"
@@ -444,6 +445,7 @@
       },
       "totalPnl": "合計損益",
       "cycleIdFilter": "サイクルIDでフィルタ",
+      "invalidCycleId": "有効なサイクルID UUID を入力してください",
       "lifecycle": {
         "title": "ポジションライフサイクル",
         "viewLifecycle": "ライフサイクルを表示",

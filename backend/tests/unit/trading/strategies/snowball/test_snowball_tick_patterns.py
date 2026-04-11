@@ -96,8 +96,13 @@ def _make_tick(ts: datetime, mid: Decimal) -> Any:
     )
 
 
-def _strategy(stop_loss: bool) -> SnowballStrategy:
+def _strategy(
+    stop_loss: bool,
+    overrides: dict[str, Any] | None = None,
+) -> SnowballStrategy:
     params = {**PROD_CONFIG, "stop_loss_enabled": stop_loss}
+    if overrides:
+        params.update(overrides)
     config = SnowballStrategyConfig.from_dict(params)
     return SnowballStrategy("USD_JPY", PIP, config)
 
@@ -105,8 +110,8 @@ def _strategy(stop_loss: bool) -> SnowballStrategy:
 class TickRunner:
     """Run a sequence of mid prices through the strategy and collect results."""
 
-    def __init__(self, stop_loss: bool) -> None:
-        self.strategy = _strategy(stop_loss)
+    def __init__(self, stop_loss: bool, overrides: dict[str, Any] | None = None) -> None:
+        self.strategy = _strategy(stop_loss, overrides)
         self.state = DummyState()
         self.all_events: list[Any] = []
         self.ts = datetime(2026, 1, 1, tzinfo=UTC)
@@ -342,6 +347,34 @@ class TestSnowballStopLossRebuild:
 
         assert len(runner.rebuild_events) >= 1, "Expected rebuild events after price returned"
 
+    def test_rebuild_gets_stop_loss_when_flag_disabled(self):
+        runner = TickRunner(
+            stop_loss=True,
+            overrides={"disable_loss_cut_after_rebuild": False},
+        )
+        runner.tick(START_PRICE)
+
+        bottom = START_PRICE - Decimal("1.50")
+        runner.tick_range(START_PRICE, bottom, step_pips=1)
+        runner.tick_range(bottom, START_PRICE, step_pips=1)
+
+        assert runner.rebuild_events, "Expected at least one rebuilt entry"
+        assert all(evt.stop_loss_price is not None for evt in runner.rebuild_events)
+
+    def test_rebuild_has_no_stop_loss_when_flag_enabled(self):
+        runner = TickRunner(
+            stop_loss=True,
+            overrides={"disable_loss_cut_after_rebuild": True},
+        )
+        runner.tick(START_PRICE)
+
+        bottom = START_PRICE - Decimal("1.50")
+        runner.tick_range(START_PRICE, bottom, step_pips=1)
+        runner.tick_range(bottom, START_PRICE, step_pips=1)
+
+        assert runner.rebuild_events, "Expected at least one rebuilt entry"
+        assert all(evt.stop_loss_price is None for evt in runner.rebuild_events)
+
     def test_rebuild_reuses_position_id(self):
         """Rebuild events should carry original_position_id."""
         runner = TickRunner(stop_loss=True)
@@ -355,6 +388,60 @@ class TestSnowballStopLossRebuild:
             # original_position_id may be None in unit tests (no DB),
             # but the event type should be REBUILD_POSITION
             assert evt.event_type == EventType.REBUILD_POSITION
+
+    def test_rebuilt_position_can_be_loss_cut_again_when_flag_disabled(self):
+        runner = TickRunner(
+            stop_loss=True,
+            overrides={"disable_loss_cut_after_rebuild": False},
+        )
+        runner.tick(START_PRICE)
+
+        bottom = START_PRICE - Decimal("1.50")
+        runner.tick_range(START_PRICE, bottom, step_pips=1)
+        current = bottom
+        rebuild_evt = None
+        while current < START_PRICE:
+            current += PIP
+            runner.tick(current)
+            if runner.rebuild_events:
+                rebuild_evt = runner.rebuild_events[-1]
+                break
+
+        assert rebuild_evt is not None, "Expected a rebuild before second adverse move"
+        assert rebuild_evt.stop_loss_price is not None, (
+            "Expected rebuilt entry to carry a stop-loss"
+        )
+
+        trigger_mid = Decimal(str(rebuild_evt.stop_loss_price))
+        runner.tick_range(current, trigger_mid, step_pips=1)
+
+        rebuilt_stop_loss_closes = [
+            e
+            for e in runner.close_events
+            if getattr(e, "close_reason", "") == "stop_loss" and e.entry_id == rebuild_evt.entry_id
+        ]
+        assert rebuilt_stop_loss_closes, "Expected rebuilt entries to be loss-cut again"
+
+    def test_rebuilt_position_is_not_loss_cut_again_when_flag_enabled(self):
+        runner = TickRunner(
+            stop_loss=True,
+            overrides={"disable_loss_cut_after_rebuild": True},
+        )
+        runner.tick(START_PRICE)
+
+        bottom = START_PRICE - Decimal("1.50")
+        runner.tick_range(START_PRICE, bottom, step_pips=1)
+        runner.tick_range(bottom, START_PRICE, step_pips=1)
+        rebuilt_entry_ids = {evt.entry_id for evt in runner.rebuild_events}
+        assert rebuilt_entry_ids, "Expected a rebuild before verifying second SL behavior"
+        runner.tick_range(START_PRICE, bottom, step_pips=1)
+
+        rebuilt_stop_loss_closes = [
+            e
+            for e in runner.close_events
+            if getattr(e, "close_reason", "") == "stop_loss" and e.entry_id in rebuilt_entry_ids
+        ]
+        assert not rebuilt_stop_loss_closes
 
     def test_no_premature_layer_after_stop_loss(self):
         """Stop-loss closed slots should not trigger new layer addition."""

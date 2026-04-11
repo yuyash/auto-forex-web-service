@@ -554,6 +554,18 @@ class TestTrades:
         assert response.data["count"] == 1
         assert response.data["results"][0]["direction"] == "sell"
 
+    def test_trades_reject_invalid_cycle_id(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/trades/",
+            {"cycle_id": "not-a-uuid"},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "Invalid cycle_id" in str(response.data)
+
 
 @pytest.mark.django_db
 class TestPositions:
@@ -590,6 +602,18 @@ class TestPositions:
         response = client.get(f"/api/trading/tasks/backtest/{task.pk}/positions/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 0
+
+    def test_positions_reject_invalid_cycle_id(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/positions/",
+            {"cycle_id": "not-a-uuid"},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "Invalid cycle_id" in str(response.data)
 
 
 @pytest.mark.django_db

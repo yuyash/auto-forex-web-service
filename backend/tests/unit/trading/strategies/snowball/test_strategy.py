@@ -89,12 +89,14 @@ class TestSnowballStrategyClassMethods:
         result = SnowballStrategy.normalize_parameters({"base_units": 2000})
         assert isinstance(result, dict)
         assert result["base_units"] == 2000
+        assert result["disable_loss_cut_after_rebuild"] is False
 
     def test_default_parameters(self):
         defaults = SnowballStrategy.default_parameters()
         assert isinstance(defaults, dict)
         assert "base_units" in defaults
         assert "m_pips" in defaults
+        assert "disable_loss_cut_after_rebuild" in defaults
 
     def test_validate_parameters_valid(self):
         """validate_parameters should not raise for valid params + schema."""

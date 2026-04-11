@@ -501,9 +501,8 @@ class TaskSubResourceMixin:
             queryset = queryset.filter(timestamp__lte=query.timestamp_range.end)
 
         # Optional cycle_id filter
-        cycle_id = request.query_params.get("cycle_id")
-        if cycle_id:
-            queryset = queryset.filter(cycle_id=cycle_id)
+        if query.cycle_id:
+            queryset = queryset.filter(cycle_id=query.cycle_id)
 
         trades_qs = queryset.values(
             "id",
@@ -594,9 +593,8 @@ class TaskSubResourceMixin:
             )
 
         # Optional cycle_id filter — positions linked via trades
-        cycle_id = request.query_params.get("cycle_id")
-        if cycle_id:
-            queryset = queryset.filter(trades__cycle_id=cycle_id).distinct()
+        if query.cycle_id:
+            queryset = queryset.filter(trades__cycle_id=query.cycle_id).distinct()
 
         paginator = TradePositionPagination()
         page = paginator.paginate_queryset(queryset, request)

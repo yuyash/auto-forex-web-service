@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.29.0",
+        "version": "1.30.1",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -2832,6 +2832,16 @@
                 "parameters": [
                     {
                         "in": "query",
+                        "name": "cycle_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                        },
+                        "description": "Filter by cycle ID (UUID)."
+                    },
+                    {
+                        "in": "query",
                         "name": "direction",
                         "schema": {
                             "type": "string"
@@ -3253,6 +3263,16 @@
                 "operationId": "trading_tasks_backtest_trades_retrieve",
                 "description": "Retrieve paginated task trades.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "cycle_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                        },
+                        "description": "Filter by cycle ID (UUID)."
+                    },
                     {
                         "in": "query",
                         "name": "direction",
@@ -4413,6 +4433,16 @@
                 "parameters": [
                     {
                         "in": "query",
+                        "name": "cycle_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                        },
+                        "description": "Filter by cycle ID (UUID)."
+                    },
+                    {
+                        "in": "query",
                         "name": "direction",
                         "schema": {
                             "type": "string"
@@ -4833,6 +4863,16 @@
                 "operationId": "trading_tasks_trading_trades_retrieve",
                 "description": "Retrieve paginated task trades.",
                 "parameters": [
+                    {
+                        "in": "query",
+                        "name": "cycle_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                        },
+                        "description": "Filter by cycle ID (UUID)."
+                    },
                     {
                         "in": "query",
                         "name": "direction",
