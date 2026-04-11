@@ -840,6 +840,18 @@ class Layer:
                 return s.close(refillable=refillable)
         return None
 
+    def unseal_slots_above(self, index: int) -> None:
+        """Reset ``ever_closed`` on slots above *index*.
+
+        When a refillable slot is re-opened, any higher-numbered slots
+        that were sealed by a previous TP close become reachable again.
+        Without this reset, ``next_available_counter_slot`` would see
+        the sealed slot and incorrectly trigger a new layer.
+        """
+        for s in self.slots:
+            if s.index > index and s.ever_closed and s.entry is None and s.pending_rebuild is None:
+                s.ever_closed = False
+
     def remove_entry(self, entry_id: int) -> None:
         """Remove an entry by ID (used by protection modes).  Seals the slot."""
         for s in self.slots:
