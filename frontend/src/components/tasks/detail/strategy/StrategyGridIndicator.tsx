@@ -85,7 +85,7 @@ export function StrategyGridIndicator({
           sx={{
             display: 'grid',
             gridTemplateColumns: `${headerWidth}px repeat(${slotHeaders.length}, ${cellSize}px)`,
-            gap: 0,
+            gap: '4px',
             alignItems: 'center',
             minWidth: 'fit-content',
           }}
