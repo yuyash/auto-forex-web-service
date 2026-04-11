@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.35.2...frontend-v1.35.3) (2026-04-11)
+
+
+### Bug Fixes
+
+* **frontend:** show strategy pnl currency symbols ([#420](https://github.com/yuyash/auto-forex-web-service/issues/420)) ([e07860c](https://github.com/yuyash/auto-forex-web-service/commit/e07860c2cff49d15fccd338dd9cb793c0b011003))
+
 ## [1.35.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.35.1...frontend-v1.35.2) (2026-04-11)
 
 
