@@ -11,6 +11,8 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from apps.trading.services.strategy_grid_state import build_cycle_grid_state_map
+
 
 class StrategyCyclesService:
     """Build cycle response from Trade records grouped by cycle_id."""
@@ -78,28 +80,35 @@ class StrategyCyclesService:
         for row in rows:
             by_cycle[str(row["cycle_id"])].append(row)
 
-        # Load authoritative cycle statuses from strategy_state so we can
-        # distinguish active / pending / completed accurately.
-        cycle_status_map = _load_cycle_statuses(
+        execution_state = _load_execution_state_snapshot(
             task_type=task_type,
             task_id=str(task.pk),
             execution_id=str(execution_id),
         )
+        strategy_state = (
+            execution_state.get("strategy_state")
+            if isinstance(execution_state.get("strategy_state"), dict)
+            else None
+        )
+        cycle_status_map = _load_cycle_statuses(strategy_state)
+        cycle_grid_state_map = build_cycle_grid_state_map(
+            strategy_type=str(getattr(task.config, "strategy_type", "")),
+            strategy_state=strategy_state,
+        )
 
         cycles = [
-            _build_cycle(cid, trades, metrics_by_minute, cycle_status_map.get(cid))
+            _build_cycle(
+                cid,
+                trades,
+                metrics_by_minute,
+                cycle_status_map.get(cid),
+                cycle_grid_state_map.get(cid),
+            )
             for cid, trades in by_cycle.items()
         ]
         cycles.sort(key=lambda c: c["started_at"] or "")
 
-        # Resolve the last tick timestamp from the execution state so the
-        # frontend can use it as the effective "now" for active (unclosed)
-        # cycles instead of the real wall-clock time.
-        last_tick_ts = _resolve_last_tick_timestamp(
-            task_type=task_type,
-            task_id=str(task.pk),
-            execution_id=str(execution_id),
-        )
+        last_tick_ts = _resolve_last_tick_timestamp(execution_state)
 
         return {
             "execution_id": str(execution_id),
@@ -109,17 +118,13 @@ class StrategyCyclesService:
         }
 
 
-def _resolve_last_tick_timestamp(
+def _load_execution_state_snapshot(
     *,
     task_type: str,
     task_id: str,
     execution_id: str,
-) -> str | None:
-    """Return the ISO-formatted last_tick_timestamp from ExecutionState.
-
-    This is the simulated "current time" for a running or completed backtest,
-    used by the frontend to anchor active-cycle charts instead of wall-clock time.
-    """
+) -> dict[str, Any]:
+    """Return the execution-state fields needed for strategy visualization."""
     from apps.trading.models.state import ExecutionState as ExecutionStateModel
 
     row = (
@@ -128,42 +133,36 @@ def _resolve_last_tick_timestamp(
             task_id=task_id,
             execution_id=execution_id,
         )
-        .values_list("last_tick_timestamp", flat=True)
+        .values("strategy_state", "last_tick_timestamp")
         .first()
     )
+    return row or {}
+
+
+def _resolve_last_tick_timestamp(execution_state: dict[str, Any]) -> str | None:
+    """Return the ISO-formatted last_tick_timestamp from ExecutionState.
+
+    This is the simulated "current time" for a running or completed backtest,
+    used by the frontend to anchor active-cycle charts instead of wall-clock time.
+    """
+    row = execution_state.get("last_tick_timestamp")
     if row is not None:
         return row.isoformat()
     return None
 
 
-def _load_cycle_statuses(
-    *,
-    task_type: str,
-    task_id: str,
-    execution_id: str,
-) -> dict[str, str]:
+def _load_cycle_statuses(strategy_state: dict[str, Any] | None) -> dict[str, str]:
     """Load cycle statuses from the persisted strategy_state.
 
     Returns a mapping of trade_cycle_id (UUID str) → status string
     ("active", "pending", "completed").  Falls back to an empty dict
     if the state is unavailable or cycles lack trade_cycle_id.
     """
-    from apps.trading.models.state import ExecutionState as ExecutionStateModel
-
-    row = (
-        ExecutionStateModel.objects.filter(
-            task_type=task_type,
-            task_id=task_id,
-            execution_id=execution_id,
-        )
-        .values_list("strategy_state", flat=True)
-        .first()
-    )
-    if not isinstance(row, dict):
+    if not isinstance(strategy_state, dict):
         return {}
 
     result: dict[str, str] = {}
-    for cycle_data in row.get("cycles", []):
+    for cycle_data in strategy_state.get("cycles", []):
         tcid = cycle_data.get("trade_cycle_id")
         if not tcid:
             continue
@@ -228,6 +227,7 @@ def _build_cycle(
     trades: list[dict[str, Any]],
     metrics_by_minute: dict[str, dict[str, Any]],
     authoritative_status: str | None = None,
+    grid_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     first = trades[0]
     last = trades[-1]
@@ -337,6 +337,7 @@ def _build_cycle(
         "rebuild_count": rebuild_count,
         "realized_pnl": str(realized_pnl),
         "unrealized_pnl": str(unrealized_pnl),
+        "grid_state": grid_state,
         "trades": [_serialize_trade(t, metrics_by_minute) for t in trades],
     }
 

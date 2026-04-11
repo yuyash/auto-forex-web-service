@@ -17,6 +17,7 @@ from apps.trading.enums import Direction, LogLevel, TaskType
 from apps.trading.models import (
     BacktestTask,
     CeleryTaskStatus,
+    ExecutionState,
     Metrics,
     Order,
     Position,
@@ -395,6 +396,118 @@ class TestEvents:
         assert len(response.data["cycles"]) == 1
         assert response.data["cycles"][0]["cycle_id"] == str(cycle_id)
         assert response.data["summary"]["cycle_count"] == 1
+
+    def test_strategy_events_include_snowball_grid_state(self):
+        task = _make_task(strategy_type="snowball")
+        client = _auth_client(task.user)
+
+        cycle_id = uuid4()
+        position_id = uuid4()
+        Position.objects.create(
+            id=position_id,
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction=Direction.LONG,
+            units=1000,
+            entry_price="150.100",
+            entry_time=datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc),
+            is_open=True,
+        )
+        Trade.objects.create(
+            id=cycle_id,
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc),
+            direction="long",
+            units=1000,
+            instrument="USD_JPY",
+            price="150.100",
+            execution_method="open_position",
+            cycle_id=cycle_id,
+            position_id=position_id,
+            description="Initial entry",
+        )
+        ExecutionState.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            current_balance=Decimal("10000"),
+            ticks_processed=1,
+            strategy_state={
+                "cycles": [
+                    {
+                        "cycle_id": 1,
+                        "direction": "long",
+                        "status": "active",
+                        "trade_cycle_id": str(cycle_id),
+                        "grid": {
+                            "layers": [
+                                {
+                                    "layer_number": 1,
+                                    "base_units": 1000,
+                                    "refill_up_to": 2,
+                                    "slots": [
+                                        {
+                                            "index": 0,
+                                            "entry": {
+                                                "entry_id": 1,
+                                                "step": 1,
+                                                "direction": "long",
+                                                "entry_price": "150.1",
+                                                "close_price": "150.3",
+                                                "units": 1000,
+                                                "opened_at": "2024-06-01T12:00:00+00:00",
+                                                "role": "initial",
+                                                "layer_number": 1,
+                                                "retracement_count": 0,
+                                                "root_entry_id": 1,
+                                                "parent_entry_id": 1,
+                                                "position_id": str(position_id),
+                                                "is_rebuild": False,
+                                            },
+                                            "ever_closed": False,
+                                        },
+                                        {
+                                            "index": 1,
+                                            "entry": None,
+                                            "ever_closed": False,
+                                            "pending_rebuild": {
+                                                "entry_price": "149.9",
+                                                "close_price": "150.2",
+                                                "units": 1000,
+                                                "direction": "long",
+                                                "role": "counter",
+                                                "layer_number": 1,
+                                                "retracement_count": 1,
+                                                "step": 2,
+                                                "root_entry_id": 1,
+                                                "parent_entry_id": 1,
+                                                "cycle_id": 1,
+                                                "position_id": "pending-slot",
+                                            },
+                                        },
+                                    ],
+                                }
+                            ]
+                        },
+                    }
+                ]
+            },
+        )
+
+        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/strategy-events/")
+
+        assert response.status_code == status.HTTP_200_OK
+        grid_state = response.data["cycles"][0]["grid_state"]
+        assert grid_state["summary"]["filled"] == 1
+        assert grid_state["summary"]["stopped"] == 1
+        assert grid_state["summary"]["layer_count"] == 1
+        assert grid_state["layers"][0]["slots"][0]["state"] == "filled"
+        assert grid_state["layers"][0]["slots"][0]["position_id"] == str(position_id)
+        assert grid_state["layers"][0]["slots"][1]["state"] == "stopped"
 
     def test_events_support_created_at_range_filter(self):
         task = _make_task()

@@ -250,6 +250,21 @@
       "pending": "Pending: {{count}}",
       "completed": "Completed: {{count}}",
       "trades": "Trades: {{count}}"
+    },
+    "grid": {
+      "title": "Grid State",
+      "states": {
+        "filled": "Filled",
+        "stopped": "Stop-Loss",
+        "rebuilt": "Rebuilt",
+        "empty": "Empty"
+      },
+      "summary": {
+        "layers": "Layers: {{count}}",
+        "filled": "Filled: {{count}}",
+        "stopped": "SL: {{count}}",
+        "rebuilt": "Rebuilt: {{count}}"
+      }
     }
   },
   "errors": {

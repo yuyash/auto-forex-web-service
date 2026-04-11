@@ -250,6 +250,21 @@
       "pending": "保留: {{count}}",
       "completed": "完了: {{count}}",
       "trades": "トレード: {{count}}"
+    },
+    "grid": {
+      "title": "グリッド状態",
+      "states": {
+        "filled": "建玉中",
+        "stopped": "SL済み",
+        "rebuilt": "再建済み",
+        "empty": "空き"
+      },
+      "summary": {
+        "layers": "レイヤー: {{count}}",
+        "filled": "建玉中: {{count}}",
+        "stopped": "SL済み: {{count}}",
+        "rebuilt": "再建済み: {{count}}"
+      }
     }
   },
   "errors": {
