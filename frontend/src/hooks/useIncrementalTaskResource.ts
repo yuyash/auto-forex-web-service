@@ -198,6 +198,16 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
     void fetchItems(false);
   }, [fetchItems]);
 
+  // Re-fetch when paramsKey changes (e.g. cycleId filter applied).
+  // fetchItems itself may not change because buildParams is accessed
+  // via a ref, so we need a separate effect keyed on paramsKey.
+  useEffect(() => {
+    if (hasInitialFetchRef.current === false) {
+      void fetchItems(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramsKey]);
+
   const pollingPolicy = usePollingPolicy({
     enabled: enableRealTimeUpdates,
     baseIntervalMs: refreshInterval,
