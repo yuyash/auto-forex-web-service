@@ -2,10 +2,9 @@
 
 ## [1.36.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.35.4...frontend-v1.36.0) (2026-04-11)
 
-
 ### Features
 
-* **backtest:** add replay granularity aggregation modes ([#424](https://github.com/yuyash/auto-forex-web-service/issues/424)) ([ebd1e7a](https://github.com/yuyash/auto-forex-web-service/commit/ebd1e7ad6d62900d6911b5facaeda017b6a2fdb3))
+- **backtest:** add replay granularity aggregation modes ([#424](https://github.com/yuyash/auto-forex-web-service/issues/424)) ([ebd1e7a](https://github.com/yuyash/auto-forex-web-service/commit/ebd1e7ad6d62900d6911b5facaeda017b6a2fdb3))
 
 ## [1.35.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.35.3...frontend-v1.35.4) (2026-04-11)
 

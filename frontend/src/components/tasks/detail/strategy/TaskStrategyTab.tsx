@@ -37,6 +37,7 @@ import type {
   CycleTrade,
 } from '../../../../types/strategyVisualization';
 import { StrategyGroupChart } from './StrategyGroupChart';
+import { StrategyGridIndicator } from './StrategyGridIndicator';
 import { PositionLifecycleDialog } from '../PositionLifecycleDialog';
 
 export interface TaskStrategyTabProps {
@@ -587,6 +588,16 @@ export function TaskStrategyTab({
                       {formatCyclePnl(cycle, pnlCurrencyCode).total}
                     </Typography>
                   </Typography>
+                  {cycle.grid_state ? (
+                    <Box sx={{ mt: 1 }}>
+                      <StrategyGridIndicator
+                        gridState={cycle.grid_state}
+                        compact={true}
+                        showLegend={false}
+                        showSummary={false}
+                      />
+                    </Box>
+                  ) : null}
                 </Box>
               ))
             )}
@@ -730,6 +741,14 @@ export function TaskStrategyTab({
                   PnL: {formatCyclePnl(selectedCycle, pnlCurrencyCode).total}
                 </Typography>
               </Typography>
+              {selectedCycle.grid_state ? (
+                <Box sx={{ mb: 2 }}>
+                  <StrategyGridIndicator
+                    gridState={selectedCycle.grid_state}
+                    title={t('common:strategyVisualization.grid.title')}
+                  />
+                </Box>
+              ) : null}
 
               {instrument && showOhlcChart ? (
                 <Paper

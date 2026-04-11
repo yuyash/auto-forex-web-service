@@ -1,3 +1,30 @@
+export type StrategyGridSlotState = 'filled' | 'stopped' | 'rebuilt' | 'empty';
+
+export interface StrategyGridSlot {
+  slot: number;
+  state: StrategyGridSlotState;
+  position_id?: string | null;
+}
+
+export interface StrategyGridLayer {
+  layer: number;
+  slots: StrategyGridSlot[];
+}
+
+export interface StrategyGridSummary {
+  filled: number;
+  stopped: number;
+  rebuilt: number;
+  empty: number;
+  layer_count: number;
+  slot_count_per_layer: number;
+}
+
+export interface StrategyGridState {
+  layers: StrategyGridLayer[];
+  summary: StrategyGridSummary;
+}
+
 export interface CycleTrade {
   id: string;
   direction: 'buy' | 'sell' | null;
@@ -28,6 +55,7 @@ export interface StrategyCycle {
   rebuild_count?: number;
   realized_pnl?: string;
   unrealized_pnl?: string;
+  grid_state?: StrategyGridState | null;
   trades: CycleTrade[];
 }
 
