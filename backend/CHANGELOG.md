@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.30.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.30.0...backend-v1.30.1) (2026-04-11)
+
+
+### Bug Fixes
+
+* **strategy:** unseal higher slots when a refillable counter is re-op… ([#414](https://github.com/yuyash/auto-forex-web-service/issues/414)) ([8249075](https://github.com/yuyash/auto-forex-web-service/commit/82490755d5575db1be2a2ee983b2edd15d2f61b5))
+* **strategy:** unseal higher slots when a refillable counter is re-opened ([8249075](https://github.com/yuyash/auto-forex-web-service/commit/82490755d5575db1be2a2ee983b2edd15d2f61b5))
+
 ## [1.30.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.29.0...backend-v1.30.0) (2026-04-11)
 
 
