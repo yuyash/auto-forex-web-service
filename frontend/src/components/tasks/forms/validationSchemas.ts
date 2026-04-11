@@ -55,6 +55,19 @@ export const backtestTaskSchema = z
       .string()
       .min(1, 'Instrument is required')
       .max(20, 'Instrument must be less than 20 characters'),
+    tick_granularity: z.enum([
+      'tick',
+      '1s',
+      '10s',
+      '15s',
+      '30s',
+      '1m',
+      '5m',
+      '15m',
+      '30m',
+      '1h',
+    ]),
+    tick_window_value_mode: z.enum(['first', 'last', 'average', 'median']),
     sell_at_completion: z.boolean().optional().default(false),
     hedging_enabled: z.boolean().optional().default(true),
   })
@@ -160,6 +173,8 @@ export type BacktestTaskSchemaOutput = {
   commission_per_trade?: number;
   pip_size?: number;
   instrument: string;
+  tick_granularity: string;
+  tick_window_value_mode: string;
   sell_at_completion?: boolean;
   hedging_enabled?: boolean;
 };

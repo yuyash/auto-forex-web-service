@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from apps.market.models import CeleryTaskStatus, TickData
+from apps.market.services.backtest_ticks import iter_aggregated_backtest_ticks
 from apps.market.tasks.backtest import BacktestTickPublisherRunner
 from apps.trading.enums import TaskStatus
 
@@ -151,3 +152,51 @@ class TestBacktestTickPublisherRunnerIntegration:
 
         # Should stop when own stop signal is set
         assert runner._should_stop_publishing("test-request-999")
+
+    @pytest.mark.parametrize(
+        ("mode", "expected_bid", "expected_ask", "expected_mid"),
+        [
+            ("first", Decimal("100.00"), Decimal("100.20"), Decimal("100.10")),
+            ("last", Decimal("102.00"), Decimal("102.20"), Decimal("102.10")),
+            ("average", Decimal("101.00"), Decimal("101.20"), Decimal("101.10")),
+            ("median", Decimal("101.00"), Decimal("101.20"), Decimal("101.10")),
+        ],
+    )
+    def test_iter_aggregated_backtest_ticks_supports_all_modes(
+        self,
+        mode: str,
+        expected_bid: Decimal,
+        expected_ask: Decimal,
+        expected_mid: Decimal,
+    ) -> None:
+        start = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        samples = [
+            (start, "100.00", "100.20", "100.10"),
+            (datetime(2024, 1, 1, 12, 0, 10, tzinfo=UTC), "101.00", "101.20", "101.10"),
+            (datetime(2024, 1, 1, 12, 0, 20, tzinfo=UTC), "102.00", "102.20", "102.10"),
+        ]
+        for ts, bid, ask, mid in samples:
+            TickData.objects.create(
+                instrument="EUR_USD",
+                timestamp=ts,
+                bid=Decimal(bid),
+                ask=Decimal(ask),
+                mid=Decimal(mid),
+            )
+
+        rows = list(
+            iter_aggregated_backtest_ticks(
+                instrument="EUR_USD",
+                start_dt=start,
+                end_dt=datetime(2024, 1, 1, 12, 0, 29, tzinfo=UTC),
+                granularity="30s",
+                mode=mode,
+                batch_size=10,
+            )
+        )
+
+        assert len(rows) == 1
+        assert rows[0].timestamp == start
+        assert rows[0].bid == expected_bid
+        assert rows[0].ask == expected_ask
+        assert rows[0].mid == expected_mid

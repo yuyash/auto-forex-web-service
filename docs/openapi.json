@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.30.2",
+        "version": "1.30.3",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -5163,6 +5163,22 @@
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging) during backtest."
                     },
+                    "tick_granularity": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TickGranularityEnum"
+                            }
+                        ],
+                        "description": "Tick replay granularity for backtests. Use 'tick' for full tick-by-tick replay, or a time bucket such as '1s' or '1m'.\n\n* `tick` - All Ticks\n* `1s` - 1 Second\n* `10s` - 10 Seconds\n* `15s` - 15 Seconds\n* `30s` - 30 Seconds\n* `1m` - 1 Minute\n* `5m` - 5 Minutes\n* `15m` - 15 Minutes\n* `30m` - 30 Minutes\n* `1h` - 1 Hour"
+                    },
+                    "tick_window_value_mode": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TickWindowValueModeEnum"
+                            }
+                        ],
+                        "description": "Representative value to use when replay granularity is aggregated. Ignored when tick_granularity='tick'.\n\n* `first` - First Tick\n* `last` - Last Tick\n* `average` - Average\n* `median` - Median"
+                    },
                     "status": {
                         "allOf": [
                             {
@@ -5305,6 +5321,22 @@
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging) during backtest."
                     },
+                    "tick_granularity": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TickGranularityEnum"
+                            }
+                        ],
+                        "description": "Tick replay granularity for backtests. Use 'tick' for full tick-by-tick replay, or a time bucket such as '1s' or '1m'.\n\n* `tick` - All Ticks\n* `1s` - 1 Second\n* `10s` - 10 Seconds\n* `15s` - 15 Seconds\n* `30s` - 30 Seconds\n* `1m` - 1 Minute\n* `5m` - 5 Minutes\n* `15m` - 15 Minutes\n* `30m` - 30 Minutes\n* `1h` - 1 Hour"
+                    },
+                    "tick_window_value_mode": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TickWindowValueModeEnum"
+                            }
+                        ],
+                        "description": "Representative value to use when replay granularity is aggregated. Ignored when tick_granularity='tick'.\n\n* `first` - First Tick\n* `last` - Last Tick\n* `average` - Average\n* `median` - Median"
+                    },
                     "debug_options": {
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"
                     }
@@ -5396,6 +5428,24 @@
                         "readOnly": true,
                         "description": "Allow simultaneous long and short positions (hedging) during backtest."
                     },
+                    "tick_granularity": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TickGranularityEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "Tick replay granularity for backtests. Use 'tick' for full tick-by-tick replay, or a time bucket such as '1s' or '1m'.\n\n* `tick` - All Ticks\n* `1s` - 1 Second\n* `10s` - 10 Seconds\n* `15s` - 15 Seconds\n* `30s` - 30 Seconds\n* `1m` - 1 Minute\n* `5m` - 5 Minutes\n* `15m` - 15 Minutes\n* `30m` - 30 Minutes\n* `1h` - 1 Hour"
+                    },
+                    "tick_window_value_mode": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TickWindowValueModeEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "Representative value to use when replay granularity is aggregated. Ignored when tick_granularity='tick'.\n\n* `first` - First Tick\n* `last` - Last Tick\n* `average` - Average\n* `median` - Median"
+                    },
                     "status": {
                         "allOf": [
                             {
@@ -5462,6 +5512,8 @@
                     "started_at",
                     "status",
                     "strategy_type",
+                    "tick_granularity",
+                    "tick_window_value_mode",
                     "updated_at",
                     "user_id"
                 ]
@@ -5526,6 +5578,22 @@
                     "hedging_enabled": {
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging) during backtest."
+                    },
+                    "tick_granularity": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TickGranularityEnum"
+                            }
+                        ],
+                        "description": "Tick replay granularity for backtests. Use 'tick' for full tick-by-tick replay, or a time bucket such as '1s' or '1m'.\n\n* `tick` - All Ticks\n* `1s` - 1 Second\n* `10s` - 10 Seconds\n* `15s` - 15 Seconds\n* `30s` - 30 Seconds\n* `1m` - 1 Minute\n* `5m` - 5 Minutes\n* `15m` - 15 Minutes\n* `30m` - 30 Minutes\n* `1h` - 1 Hour"
+                    },
+                    "tick_window_value_mode": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TickWindowValueModeEnum"
+                            }
+                        ],
+                        "description": "Representative value to use when replay granularity is aggregated. Ignored when tick_granularity='tick'.\n\n* `first` - First Tick\n* `last` - Last Tick\n* `average` - Average\n* `median` - Median"
                     },
                     "debug_options": {
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"
@@ -7261,6 +7329,22 @@
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging) during backtest."
                     },
+                    "tick_granularity": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TickGranularityEnum"
+                            }
+                        ],
+                        "description": "Tick replay granularity for backtests. Use 'tick' for full tick-by-tick replay, or a time bucket such as '1s' or '1m'.\n\n* `tick` - All Ticks\n* `1s` - 1 Second\n* `10s` - 10 Seconds\n* `15s` - 15 Seconds\n* `30s` - 30 Seconds\n* `1m` - 1 Minute\n* `5m` - 5 Minutes\n* `15m` - 15 Minutes\n* `30m` - 30 Minutes\n* `1h` - 1 Hour"
+                    },
+                    "tick_window_value_mode": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TickWindowValueModeEnum"
+                            }
+                        ],
+                        "description": "Representative value to use when replay granularity is aggregated. Ignored when tick_granularity='tick'.\n\n* `first` - First Tick\n* `last` - Last Tick\n* `average` - Average\n* `median` - Median"
+                    },
                     "debug_options": {
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"
                     }
@@ -8709,6 +8793,22 @@
                     "min_timestamp"
                 ]
             },
+            "TickGranularityEnum": {
+                "enum": [
+                    "tick",
+                    "1s",
+                    "10s",
+                    "15s",
+                    "30s",
+                    "1m",
+                    "5m",
+                    "15m",
+                    "30m",
+                    "1h"
+                ],
+                "type": "string",
+                "description": "* `tick` - All Ticks\n* `1s` - 1 Second\n* `10s` - 10 Seconds\n* `15s` - 15 Seconds\n* `30s` - 30 Seconds\n* `1m` - 1 Minute\n* `5m` - 5 Minutes\n* `15m` - 15 Minutes\n* `30m` - 30 Minutes\n* `1h` - 1 Hour"
+            },
             "TickInfo": {
                 "type": "object",
                 "description": "Serializer for tick information.",
@@ -8742,6 +8842,16 @@
                     "mid",
                     "timestamp"
                 ]
+            },
+            "TickWindowValueModeEnum": {
+                "enum": [
+                    "first",
+                    "last",
+                    "average",
+                    "median"
+                ],
+                "type": "string",
+                "description": "* `first` - First Tick\n* `last` - Last Tick\n* `average` - Average\n* `median` - Median"
             },
             "TokenRefreshError": {
                 "type": "object",

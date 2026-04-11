@@ -41,6 +41,28 @@ class BacktestTask(UUIDModel):
     Inherits UUID primary key and timestamps from UUIDModel.
     """
 
+    class TickGranularity(models.TextChoices):
+        """Replay granularity for historical tick streams."""
+
+        TICK = "tick", "All Ticks"
+        SECOND_1 = "1s", "1 Second"
+        SECOND_10 = "10s", "10 Seconds"
+        SECOND_15 = "15s", "15 Seconds"
+        SECOND_30 = "30s", "30 Seconds"
+        MINUTE_1 = "1m", "1 Minute"
+        MINUTE_5 = "5m", "5 Minutes"
+        MINUTE_15 = "15m", "15 Minutes"
+        MINUTE_30 = "30m", "30 Minutes"
+        HOUR_1 = "1h", "1 Hour"
+
+    class TickWindowValueMode(models.TextChoices):
+        """Representative value used for aggregated tick windows."""
+
+        FIRST = "first", "First Tick"
+        LAST = "last", "Last Tick"
+        AVERAGE = "average", "Average"
+        MEDIAN = "median", "Median"
+
     objects = BacktestTaskManager()
 
     name = models.CharField(
@@ -110,6 +132,24 @@ class BacktestTask(UUIDModel):
         default=True,
         help_text="Allow simultaneous long and short positions (hedging) during backtest.",
     )
+    tick_granularity = models.CharField(
+        max_length=8,
+        choices=TickGranularity.choices,
+        default=TickGranularity.TICK,
+        help_text=(
+            "Tick replay granularity for backtests. "
+            "Use 'tick' for full tick-by-tick replay, or a time bucket such as '1s' or '1m'."
+        ),
+    )
+    tick_window_value_mode = models.CharField(
+        max_length=16,
+        choices=TickWindowValueMode.choices,
+        default=TickWindowValueMode.LAST,
+        help_text=(
+            "Representative value to use when replay granularity is aggregated. "
+            "Ignored when tick_granularity='tick'."
+        ),
+    )
     status = models.CharField(
         max_length=20,
         default=TaskStatus.CREATED,
@@ -165,6 +205,10 @@ class BacktestTask(UUIDModel):
             models.Index(fields=["execution_id"]),
             models.Index(fields=["status", "created_at"]),
             models.Index(fields=["user", "-created_at"]),
+            models.Index(
+                fields=["instrument", "tick_granularity", "tick_window_value_mode"],
+                name="backtest_ta_instrum_e42678_idx",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
