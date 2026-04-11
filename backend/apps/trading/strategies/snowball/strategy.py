@@ -795,6 +795,11 @@ class SnowballStrategy(Strategy):
         )
         slot.fill(entry)
 
+        # When a refillable slot is re-opened, unseal any higher-numbered
+        # slots so the next adverse move can use them instead of jumping
+        # to a new layer.
+        layer.unseal_slots_above(slot.index)
+
         # Update close prices for non-weighted_avg modes
         if cfg.counter_tp_mode != "weighted_avg":
             for s in layer.slots:
