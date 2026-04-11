@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.35.0...frontend-v1.35.1) (2026-04-11)
+
+
+### Bug Fixes
+
+* **frontend:** cycle ID filter not triggering data refetch ([#416](https://github.com/yuyash/auto-forex-web-service/issues/416)) ([4947898](https://github.com/yuyash/auto-forex-web-service/commit/49478986041694ddf25b55dfc5d5aa926fab5f6d))
+
 ## [1.35.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.10...frontend-v1.35.0) (2026-04-11)
 
 
