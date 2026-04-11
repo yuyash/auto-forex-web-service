@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.30.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.30.1...backend-v1.30.2) (2026-04-11)
+
+
+### Bug Fixes
+
+* **trading:** add snowball rebuild loss-cut toggle ([#418](https://github.com/yuyash/auto-forex-web-service/issues/418)) ([64eb07f](https://github.com/yuyash/auto-forex-web-service/commit/64eb07f469cb6cb2b557b7946f930983b17fec1a))
+
 ## [1.30.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.30.0...backend-v1.30.1) (2026-04-11)
 
 
