@@ -275,6 +275,7 @@ export const useTaskPositions = ({
       rangeFrom,
       rangeTo,
       includeTradeIds,
+      cycleId,
       since,
       canUseIncrementalPolling,
     ]
