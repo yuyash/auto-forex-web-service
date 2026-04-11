@@ -52,6 +52,37 @@ function formatDateTime(value?: string | null): string {
   return new Date(value).toLocaleString();
 }
 
+function getPnlCurrencyCode(instrument?: string): string | null {
+  if (!instrument || !instrument.includes('_')) return null;
+  const [, quoteCurrency] = instrument.split('_');
+  return quoteCurrency?.trim().toUpperCase() || null;
+}
+
+function formatSignedCurrency(
+  value: number,
+  currencyCode: string | null,
+  fractionDigits = 1
+): string {
+  const sign = value >= 0 ? '+' : '-';
+  const absoluteValue = Math.abs(value);
+
+  if (!currencyCode) {
+    return `${sign}${absoluteValue.toFixed(fractionDigits)}`;
+  }
+
+  try {
+    return `${sign}${new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currencyCode,
+      currencyDisplay: 'narrowSymbol',
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    }).format(absoluteValue)}`;
+  } catch {
+    return `${sign}${currencyCode} ${absoluteValue.toFixed(fractionDigits)}`;
+  }
+}
+
 function getStatusColor(
   status: string
 ): 'success' | 'warning' | 'info' | 'default' {
@@ -61,16 +92,18 @@ function getStatusColor(
   return 'default';
 }
 
-function formatCyclePnl(cycle: StrategyCycle): {
+function formatCyclePnl(
+  cycle: StrategyCycle,
+  currencyCode: string | null
+): {
   total: string;
   color: string;
 } {
   const realized = parseFloat(cycle.realized_pnl ?? '0');
   const unrealized = parseFloat(cycle.unrealized_pnl ?? '0');
   const total = realized + unrealized;
-  const sign = total >= 0 ? '+' : '';
   return {
-    total: `${sign}${total.toFixed(1)}`,
+    total: formatSignedCurrency(total, currencyCode, 1),
     color:
       total > 0 ? 'success.main' : total < 0 ? 'error.main' : 'text.secondary',
   };
@@ -93,6 +126,10 @@ export function TaskStrategyTab({
   });
 
   const cycles = useMemo<StrategyCycle[]>(() => data?.cycles ?? [], [data]);
+  const pnlCurrencyCode = useMemo(
+    () => getPnlCurrencyCode(instrument),
+    [instrument]
+  );
 
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [statusFilter, setStatusFilter] = useState<
@@ -545,9 +582,9 @@ export function TaskStrategyTab({
                       component="span"
                       variant="body2"
                       sx={{ ml: 1, fontWeight: 600 }}
-                      color={formatCyclePnl(cycle).color}
+                      color={formatCyclePnl(cycle, pnlCurrencyCode).color}
                     >
-                      {formatCyclePnl(cycle).total}
+                      {formatCyclePnl(cycle, pnlCurrencyCode).total}
                     </Typography>
                   </Typography>
                 </Box>
@@ -688,9 +725,9 @@ export function TaskStrategyTab({
                   component="span"
                   variant="body2"
                   sx={{ ml: 1.5, fontWeight: 600 }}
-                  color={formatCyclePnl(selectedCycle).color}
+                  color={formatCyclePnl(selectedCycle, pnlCurrencyCode).color}
                 >
-                  PnL: {formatCyclePnl(selectedCycle).total}
+                  PnL: {formatCyclePnl(selectedCycle, pnlCurrencyCode).total}
                 </Typography>
               </Typography>
 
