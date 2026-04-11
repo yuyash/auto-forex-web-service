@@ -642,7 +642,7 @@ class SnowballStrategy(Strategy):
 
         # Need a new layer?
         if layer.needs_new_layer:
-            if cycle.layer_count >= cfg.f_max + 1:  # L0…Lf = f_max+1 layers
+            if cycle.layer_count >= cfg.f_max:
                 return []
 
             # Gate: head must be losing

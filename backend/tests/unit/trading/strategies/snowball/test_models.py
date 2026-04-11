@@ -352,6 +352,17 @@ class TestPositionGrid:
         grid = self._grid_with_entries()
         assert len(grid.all_entries()) == 5
 
+    def test_is_fully_pending_uses_f_max_as_total_layer_count(self):
+        grid = PositionGrid()
+        for layer_number in range(1, 4):
+            layer = Layer.create(layer_number, 1, 1000)
+            layer.slot_at(0).pending_rebuild = object()
+            layer.slot_at(1).pending_rebuild = object()
+            grid.add_layer(layer)
+
+        assert grid.is_fully_pending(3) is True
+        assert grid.is_fully_pending(4) is False
+
 
 class TestSnowballCycle:
     def test_initial_entry_is_dynamic_head(self):

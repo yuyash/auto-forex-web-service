@@ -2,54 +2,47 @@
 
 ## [1.35.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.35.1...frontend-v1.35.2) (2026-04-11)
 
-
 ### Bug Fixes
 
-* **trading:** add snowball rebuild loss-cut toggle ([#418](https://github.com/yuyash/auto-forex-web-service/issues/418)) ([64eb07f](https://github.com/yuyash/auto-forex-web-service/commit/64eb07f469cb6cb2b557b7946f930983b17fec1a))
+- **trading:** add snowball rebuild loss-cut toggle ([#418](https://github.com/yuyash/auto-forex-web-service/issues/418)) ([64eb07f](https://github.com/yuyash/auto-forex-web-service/commit/64eb07f469cb6cb2b557b7946f930983b17fec1a))
 
 ## [1.35.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.35.0...frontend-v1.35.1) (2026-04-11)
 
-
 ### Bug Fixes
 
-* **frontend:** cycle ID filter not triggering data refetch ([#416](https://github.com/yuyash/auto-forex-web-service/issues/416)) ([4947898](https://github.com/yuyash/auto-forex-web-service/commit/49478986041694ddf25b55dfc5d5aa926fab5f6d))
+- **frontend:** cycle ID filter not triggering data refetch ([#416](https://github.com/yuyash/auto-forex-web-service/issues/416)) ([4947898](https://github.com/yuyash/auto-forex-web-service/commit/49478986041694ddf25b55dfc5d5aa926fab5f6d))
 
 ## [1.35.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.10...frontend-v1.35.0) (2026-04-11)
 
-
 ### Features
 
-* add pnl to cycle ([#412](https://github.com/yuyash/auto-forex-web-service/issues/412)) ([c036e8e](https://github.com/yuyash/auto-forex-web-service/commit/c036e8e5c4ef34c3743455927a42b60e486eed9e))
+- add pnl to cycle ([#412](https://github.com/yuyash/auto-forex-web-service/issues/412)) ([c036e8e](https://github.com/yuyash/auto-forex-web-service/commit/c036e8e5c4ef34c3743455927a42b60e486eed9e))
 
 ## [1.34.10](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.9...frontend-v1.34.10) (2026-04-10)
 
-
 ### Bug Fixes
 
-* **trading:** refactor cycle lifecycle and stop-loss integration ([#403](https://github.com/yuyash/auto-forex-web-service/issues/403)) ([2fafde3](https://github.com/yuyash/auto-forex-web-service/commit/2fafde317ea605ad5f87974a5743323eba745a0c))
+- **trading:** refactor cycle lifecycle and stop-loss integration ([#403](https://github.com/yuyash/auto-forex-web-service/issues/403)) ([2fafde3](https://github.com/yuyash/auto-forex-web-service/commit/2fafde317ea605ad5f87974a5743323eba745a0c))
 
 ## [1.34.9](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.8...frontend-v1.34.9) (2026-04-09)
 
-
 ### Bug Fixes
 
-* **trading:** fix weighted-avg TP, lifecycle display, and refactor re… ([#399](https://github.com/yuyash/auto-forex-web-service/issues/399)) ([b4b78dc](https://github.com/yuyash/auto-forex-web-service/commit/b4b78dc7aa6c04709006f2eb5bca51352575079e))
-* **trading:** fix weighted-avg TP, lifecycle display, and refactor rebuild handler ([b4b78dc](https://github.com/yuyash/auto-forex-web-service/commit/b4b78dc7aa6c04709006f2eb5bca51352575079e))
+- **trading:** fix weighted-avg TP, lifecycle display, and refactor re… ([#399](https://github.com/yuyash/auto-forex-web-service/issues/399)) ([b4b78dc](https://github.com/yuyash/auto-forex-web-service/commit/b4b78dc7aa6c04709006f2eb5bca51352575079e))
+- **trading:** fix weighted-avg TP, lifecycle display, and refactor rebuild handler ([b4b78dc](https://github.com/yuyash/auto-forex-web-service/commit/b4b78dc7aa6c04709006f2eb5bca51352575079e))
 
 ## [1.34.8](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.7...frontend-v1.34.8) (2026-04-09)
 
-
 ### Bug Fixes
 
-* **metrics:** convert execution PnL to account currency and add quote currency display ([d97f333](https://github.com/yuyash/auto-forex-web-service/commit/d97f333a7b5a54eed2d4ce38973d949cd82310a7))
-* **metrics:** convert execution PnL to account currency and add quote… ([#391](https://github.com/yuyash/auto-forex-web-service/issues/391)) ([d97f333](https://github.com/yuyash/auto-forex-web-service/commit/d97f333a7b5a54eed2d4ce38973d949cd82310a7))
+- **metrics:** convert execution PnL to account currency and add quote currency display ([d97f333](https://github.com/yuyash/auto-forex-web-service/commit/d97f333a7b5a54eed2d4ce38973d949cd82310a7))
+- **metrics:** convert execution PnL to account currency and add quote… ([#391](https://github.com/yuyash/auto-forex-web-service/issues/391)) ([d97f333](https://github.com/yuyash/auto-forex-web-service/commit/d97f333a7b5a54eed2d4ce38973d949cd82310a7))
 
 ## [1.34.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.6...frontend-v1.34.7) (2026-04-08)
 
-
 ### Bug Fixes
 
-* **strategy:** prevent cycle proliferation on TP re-entry ([#389](https://github.com/yuyash/auto-forex-web-service/issues/389)) ([7751d8b](https://github.com/yuyash/auto-forex-web-service/commit/7751d8b1586d311e9ed287a9dfd55b78e610074b))
+- **strategy:** prevent cycle proliferation on TP re-entry ([#389](https://github.com/yuyash/auto-forex-web-service/issues/389)) ([7751d8b](https://github.com/yuyash/auto-forex-web-service/commit/7751d8b1586d311e9ed287a9dfd55b78e610074b))
 
 ## [1.34.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.5...frontend-v1.34.6) (2026-04-08)
 
