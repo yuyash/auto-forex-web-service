@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.37.0...frontend-v1.37.1) (2026-04-11)
+
+
+### Bug Fixes
+
+* **strategy:** tighten grid indicator spacing ([#428](https://github.com/yuyash/auto-forex-web-service/issues/428)) ([30b3d33](https://github.com/yuyash/auto-forex-web-service/commit/30b3d33e18662b20573c1dda78b323bfbbf06853))
+
 ## [1.37.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.36.0...frontend-v1.37.0) (2026-04-11)
 
 
