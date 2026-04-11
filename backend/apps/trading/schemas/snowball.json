@@ -319,10 +319,10 @@
 
     "reseed_on_grid_exhausted": {
       "type": "boolean",
-      "title": "Re-seed When Grid Exhausted",
-      "title_ja": "グリッド飽和時に新規サイクル作成",
-      "description": "When enabled, a new cycle is created for a direction only when every slot in every layer of all existing cycles is in pending-rebuild state (the grid is fully saturated with stop-loss closures — no live entries and no empty slots remain). This is stricter than 'Re-seed When Any Pending' and waits until the grid is completely exhausted before starting a new cycle. Mutually exclusive with 'Re-seed When Any Pending'. Requires stop-loss to be enabled.",
-      "description_ja": "有効時、ある方向のすべてのサイクルの全レイヤー・全スロットがリビルド待ち状態になった場合にのみ（ライブポジションも空きスロットも残っていない完全飽和状態）、新しいサイクルを作成します。「保留発生時に新規サイクル作成」より厳格で、グリッドが完全に使い切られるまで新サイクルを作成しません。「保留発生時に新規サイクル作成」とは排他的です。ロスカットが有効である必要があります。",
+      "title": "Re-seed When All Layers Exhausted",
+      "title_ja": "全レイヤー飽和時に新規サイクル作成",
+      "description": "When enabled, a new cycle is created for a direction only when all layers (up to f_max) have been opened and every slot in every layer is in pending-rebuild state (no live entries and no empty slots remain). This is stricter than 'Re-seed When Any Pending' and waits until all layers are completely exhausted before starting a new cycle. Mutually exclusive with 'Re-seed When Any Pending'. Requires stop-loss to be enabled.",
+      "description_ja": "有効時、ある方向のすべてのレイヤー（f_max個）が作成済みで、かつ全レイヤーの全スロットがリビルド待ち状態になった場合にのみ新しいサイクルを作成します。「保留発生時に新規サイクル作成」より厳格で、全レイヤーが完全に使い切られるまで新サイクルを作成しません。「保留発生時に新規サイクル作成」とは排他的です。ロスカットが有効である必要があります。",
       "default": false,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
       "group": "Margin Protection",
