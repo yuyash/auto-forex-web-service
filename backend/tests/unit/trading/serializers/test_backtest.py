@@ -15,6 +15,8 @@ class TestBacktestTaskSerializer:
         assert "id" in fields
         assert "status" in fields
         assert "data_source" in fields
+        assert "tick_granularity" in fields
+        assert "tick_window_value_mode" in fields
         assert "start_time" in fields
         assert "end_time" in fields
         assert "initial_balance" in fields
@@ -31,6 +33,8 @@ class TestBacktestTaskListSerializer:
         assert "id" in fields
         assert "status" in fields
         assert "data_source" in fields
+        assert "tick_granularity" in fields
+        assert "tick_window_value_mode" in fields
         assert "progress" not in fields
         assert "account_currency" not in fields
 
@@ -43,5 +47,7 @@ class TestBacktestTaskCreateSerializer:
         assert "name" in fields
         assert "config" in fields
         assert "data_source" in fields
+        assert "tick_granularity" in fields
+        assert "tick_window_value_mode" in fields
         assert "start_time" in fields
         assert "end_time" in fields

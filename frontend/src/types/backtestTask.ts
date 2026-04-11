@@ -17,6 +17,8 @@ export interface BacktestTask {
   commission_per_trade: string;
   pip_size?: string;
   instrument: string;
+  tick_granularity: string;
+  tick_window_value_mode: string;
   status: TaskStatus;
   sell_at_completion: boolean;
   hedging_enabled: boolean;
@@ -41,6 +43,8 @@ export interface BacktestTaskCreateData {
   commission_per_trade?: number | string;
   pip_size?: number | string;
   instrument: string;
+  tick_granularity?: string;
+  tick_window_value_mode?: string;
   sell_at_completion?: boolean;
   hedging_enabled?: boolean;
 }
@@ -57,6 +61,8 @@ export interface BacktestTaskFormData {
   commission_per_trade?: number;
   pip_size?: number;
   instrument: string;
+  tick_granularity: string;
+  tick_window_value_mode: string;
   sell_at_completion?: boolean;
   hedging_enabled?: boolean;
 }
@@ -72,6 +78,8 @@ export interface BacktestTaskUpdateData {
   commission_per_trade?: number | string;
   pip_size?: number | string;
   instrument?: string;
+  tick_granularity?: string;
+  tick_window_value_mode?: string;
   sell_at_completion?: boolean;
   hedging_enabled?: boolean;
   debug_options?: Record<string, unknown>;

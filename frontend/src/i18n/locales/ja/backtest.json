@@ -186,6 +186,8 @@
     "pipSizeHelperTextLong": "空欄にすると通貨ペアから自動導出します。一般的な値：0.0001（EUR_USD）、0.01（USD_JPY）",
     "instrumentPlaceholder": "例：EUR_USD、USD_JPY",
     "instrumentHelperText": "バックテストする通貨ペア",
+    "tickGranularity": "リプレイ粒度",
+    "tickWindowValueMode": "ウィンドウ代表値",
     "closePositionsAtCompletion": "バックテスト完了時にすべてのポジションを決済",
     "closePositionsDescription": "有効にすると、バックテスト終了時にすべてのオープンポジションが最終市場価格で自動的に決済されます。",
     "hedgingEnabled": "両建てを有効にする",
@@ -197,6 +199,24 @@
     "dataRange": "{{instrument}}のデータ範囲：",
     "startTimeBeforeMinData": "開始日時が最古のデータ時刻（{{timestamp}}）より前です。",
     "endTimeAfterMaxData": "終了日時が最新のデータ時刻（{{timestamp}}）より後です。",
+    "tickGranularityOptions": {
+      "tick": "全ティック",
+      "1s": "1秒ごと",
+      "10s": "10秒ごと",
+      "15s": "15秒ごと",
+      "30s": "30秒ごと",
+      "1m": "1分ごと",
+      "5m": "5分ごと",
+      "15m": "15分ごと",
+      "30m": "30分ごと",
+      "1h": "1時間ごと"
+    },
+    "tickWindowValueModeOptions": {
+      "first": "最初の値",
+      "last": "最後の値",
+      "average": "平均値",
+      "median": "中央値"
+    },
     "steps": {
       "configuration": "設定構成",
       "parameters": "パラメータ",

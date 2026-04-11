@@ -234,12 +234,14 @@ def trigger_backtest_publisher(task: BacktestTask) -> None:
 
     logger.info(
         "Triggering backtest publisher - task_id=%s, request_id=%s, "
-        "instrument=%s, start=%s, end=%s",
+        "instrument=%s, start=%s, end=%s, tick_granularity=%s, tick_window_value_mode=%s",
         task.pk,
         request_id,
         task.instrument,
         task.start_time,
         task.end_time,
+        task.tick_granularity,
+        task.tick_window_value_mode,
     )
 
     from celery import current_app
@@ -289,6 +291,8 @@ def trigger_backtest_publisher(task: BacktestTask) -> None:
             "start": task.start_time.isoformat(),
             "end": task.end_time.isoformat(),
             "request_id": request_id,
+            "tick_granularity": task.tick_granularity,
+            "tick_window_value_mode": task.tick_window_value_mode,
         },
         queue="backtest",
     )

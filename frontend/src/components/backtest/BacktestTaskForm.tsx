@@ -13,6 +13,10 @@ import {
   Alert,
   FormControlLabel,
   Checkbox,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
@@ -80,6 +84,8 @@ interface ReviewContentProps {
     commission_per_trade: number;
     pip_size?: number;
     instrument: string;
+    tick_granularity: string;
+    tick_window_value_mode: string;
     sell_at_completion?: boolean;
     hedging_enabled?: boolean;
   };
@@ -207,6 +213,28 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
             : t('common:labels.no')}
         </Typography>
       </Grid>
+
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          {t('backtest:form.tickGranularity')}
+        </Typography>
+        <Typography variant="body1">
+          {t(
+            `backtest:form.tickGranularityOptions.${formValues.tick_granularity}`
+          )}
+        </Typography>
+      </Grid>
+
+      <Grid size={{ xs: 12, md: 6 }}>
+        <Typography variant="subtitle2" color="text.secondary">
+          {t('backtest:form.tickWindowValueMode')}
+        </Typography>
+        <Typography variant="body1">
+          {t(
+            `backtest:form.tickWindowValueModeOptions.${formValues.tick_window_value_mode}`
+          )}
+        </Typography>
+      </Grid>
     </Grid>
   );
 }
@@ -243,6 +271,8 @@ export default function BacktestTaskForm({
       commission_per_trade: 0,
       pip_size: 0.01,
       instrument: 'USD_JPY',
+      tick_granularity: 'tick',
+      tick_window_value_mode: 'last',
       sell_at_completion: false,
       hedging_enabled: true,
     };
@@ -369,7 +399,13 @@ export default function BacktestTaskForm({
         fieldsToValidate = ['config_id', 'name'];
         break;
       case 1: // Parameters step
-        fieldsToValidate = ['start_time', 'end_time', 'initial_balance'];
+        fieldsToValidate = [
+          'start_time',
+          'end_time',
+          'initial_balance',
+          'tick_granularity',
+          'tick_window_value_mode',
+        ];
         break;
       default:
         // No validation needed for review step
@@ -426,6 +462,8 @@ export default function BacktestTaskForm({
       commission_per_trade: completeData.commission_per_trade,
       ...(completeData.pip_size != null && { pip_size: completeData.pip_size }),
       instrument: completeData.instrument,
+      tick_granularity: completeData.tick_granularity,
+      tick_window_value_mode: completeData.tick_window_value_mode,
       sell_at_completion: completeData.sell_at_completion,
       hedging_enabled: completeData.hedging_enabled,
     };
@@ -723,6 +761,72 @@ export default function BacktestTaskForm({
                 />
               </Grid>
 
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Controller
+                  name="tick_granularity"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth error={!!errors.tick_granularity}>
+                      <InputLabel id="backtest-tick-granularity-label">
+                        {t('backtest:form.tickGranularity')}
+                      </InputLabel>
+                      <Select
+                        {...field}
+                        labelId="backtest-tick-granularity-label"
+                        label={t('backtest:form.tickGranularity')}
+                      >
+                        {[
+                          'tick',
+                          '1s',
+                          '10s',
+                          '15s',
+                          '30s',
+                          '1m',
+                          '5m',
+                          '15m',
+                          '30m',
+                          '1h',
+                        ].map((value) => (
+                          <MenuItem key={value} value={value}>
+                            {t(`backtest:form.tickGranularityOptions.${value}`)}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Controller
+                  name="tick_window_value_mode"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl
+                      fullWidth
+                      error={!!errors.tick_window_value_mode}
+                    >
+                      <InputLabel id="backtest-tick-window-value-mode-label">
+                        {t('backtest:form.tickWindowValueMode')}
+                      </InputLabel>
+                      <Select
+                        {...field}
+                        labelId="backtest-tick-window-value-mode-label"
+                        label={t('backtest:form.tickWindowValueMode')}
+                      >
+                        {['first', 'last', 'average', 'median'].map((value) => (
+                          <MenuItem key={value} value={value}>
+                            {t(
+                              `backtest:form.tickWindowValueModeOptions.${value}`
+                            )}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
               <Grid size={{ xs: 12 }}>
                 <Controller
                   name="sell_at_completion"
@@ -801,6 +905,8 @@ export default function BacktestTaskForm({
           commission_per_trade: formData.commission_per_trade as number,
           pip_size: formData.pip_size as number | undefined,
           instrument: formData.instrument as string,
+          tick_granularity: formData.tick_granularity as string,
+          tick_window_value_mode: formData.tick_window_value_mode as string,
           sell_at_completion: formData.sell_at_completion as boolean,
           hedging_enabled: formData.hedging_enabled as boolean | undefined,
         };
@@ -817,6 +923,8 @@ export default function BacktestTaskForm({
           commission_per_trade: 'Commission Per Trade',
           pip_size: 'Pip Size',
           instrument: 'Instrument',
+          tick_granularity: 'Tick Granularity',
+          tick_window_value_mode: 'Tick Window Value Mode',
         };
 
         return (

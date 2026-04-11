@@ -46,6 +46,8 @@ export interface BackendBacktestTask {
   pip_size?: string | null;
   instrument: string;
   hedging_enabled: boolean;
+  tick_granularity: string;
+  tick_window_value_mode: string;
   status: string;
   execution_id?: string | null;
   started_at?: string | null;

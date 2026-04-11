@@ -11,6 +11,7 @@ from celery import shared_task
 from django.conf import settings
 
 from apps.market.models import CeleryTaskStatus, TickData
+from apps.market.services.backtest_ticks import iter_aggregated_backtest_ticks
 from apps.market.services.celery import CeleryTaskService
 from apps.market.tasks.base import (
     backtest_channel_for_request,
@@ -26,7 +27,13 @@ logger: Logger = getLogger(name=__name__)
 
 @shared_task(bind=True, name="market.tasks.publish_ticks_for_backtest")
 def publish_ticks_for_backtest(
-    self: Any, instrument: str, start: str, end: str, request_id: str
+    self: Any,
+    instrument: str,
+    start: str,
+    end: str,
+    request_id: str,
+    tick_granularity: str = "tick",
+    tick_window_value_mode: str = "last",
 ) -> None:
     """Publish historical ticks from DB to Redis for a backtest run.
 
@@ -43,10 +50,19 @@ def publish_ticks_for_backtest(
     logger.info(
         f"[CELERY:PUBLISHER] Task started - request_id={request_id}, "
         f"instrument={instrument}, start={start}, end={end}, "
+        f"tick_granularity={tick_granularity}, "
+        f"tick_window_value_mode={tick_window_value_mode}, "
         f"celery_task_id={self.request.id}, worker={self.request.hostname}"
     )
     runner = BacktestTickPublisherRunner()
-    runner.run(instrument, start, end, request_id)
+    runner.run(
+        instrument,
+        start,
+        end,
+        request_id,
+        tick_granularity=tick_granularity,
+        tick_window_value_mode=tick_window_value_mode,
+    )
     logger.info(
         f"[CELERY:PUBLISHER] Task completed - request_id={request_id}, "
         f"celery_task_id={self.request.id}"
@@ -60,7 +76,16 @@ class BacktestTickPublisherRunner:
         """Initialize the backtest publisher runner."""
         self.task_service: CeleryTaskService | None = None
 
-    def run(self, instrument: str, start: str, end: str, request_id: str) -> None:
+    def run(
+        self,
+        instrument: str,
+        start: str,
+        end: str,
+        request_id: str,
+        *,
+        tick_granularity: str = "tick",
+        tick_window_value_mode: str = "last",
+    ) -> None:
         """Execute the backtest tick publishing task.
 
         Args:
@@ -71,7 +96,9 @@ class BacktestTickPublisherRunner:
         """
         logger.info(
             f"[PUBLISHER:RUN] Starting publisher runner - request_id={request_id}, "
-            f"instrument={instrument}, start={start}, end={end}"
+            f"instrument={instrument}, start={start}, end={end}, "
+            f"tick_granularity={tick_granularity}, "
+            f"tick_window_value_mode={tick_window_value_mode}"
         )
 
         task_name = "market.tasks.publish_ticks_for_backtest"
@@ -91,7 +118,13 @@ class BacktestTickPublisherRunner:
         self.task_service.start(
             celery_task_id=current_task_id(),
             worker=lock_value(),
-            meta={"instrument": str(instrument), "start": str(start), "end": str(end)},
+            meta={
+                "instrument": str(instrument),
+                "start": str(start),
+                "end": str(end),
+                "tick_granularity": str(tick_granularity),
+                "tick_window_value_mode": str(tick_window_value_mode),
+            },
         )
 
         channel = backtest_channel_for_request(str(request_id))
@@ -103,7 +136,9 @@ class BacktestTickPublisherRunner:
         logger.info(
             f"[PUBLISHER:RUN] Configuration - request_id={request_id}, "
             f"channel={channel}, batch_size={batch_size}, "
-            f"start_dt={start_dt}, end_dt={end_dt}"
+            f"start_dt={start_dt}, end_dt={end_dt}, "
+            f"tick_granularity={tick_granularity}, "
+            f"tick_window_value_mode={tick_window_value_mode}"
         )
 
         client = redis_client()
@@ -112,7 +147,15 @@ class BacktestTickPublisherRunner:
         try:
             logger.info(f"[PUBLISHER:RUN] Starting tick publishing - request_id={request_id}")
             published, last_tick_ts = self._publish_ticks(
-                client, channel, instrument, start_dt, end_dt, batch_size, request_id
+                client,
+                channel,
+                instrument,
+                start_dt,
+                end_dt,
+                batch_size,
+                request_id,
+                tick_granularity=tick_granularity,
+                tick_window_value_mode=tick_window_value_mode,
             )
 
             # Check for insufficient data coverage
@@ -194,6 +237,9 @@ class BacktestTickPublisherRunner:
         end_dt: datetime,
         batch_size: int,
         request_id: str,
+        *,
+        tick_granularity: str = "tick",
+        tick_window_value_mode: str = "last",
     ) -> tuple[int, datetime | None]:
         """Publish ticks from database to Redis.
 
@@ -204,28 +250,36 @@ class BacktestTickPublisherRunner:
 
         logger.info(
             f"[PUBLISHER:PUBLISH] Starting tick query - request_id={request_id}, "
-            f"instrument={instrument}, start_dt={start_dt}, end_dt={end_dt}"
+            f"instrument={instrument}, start_dt={start_dt}, end_dt={end_dt}, "
+            f"tick_granularity={tick_granularity}, "
+            f"tick_window_value_mode={tick_window_value_mode}"
         )
 
         published = 0
         last_ts: datetime | None = None
 
-        qs = (
-            TickData.objects.filter(
-                instrument=str(instrument),
-                timestamp__gte=start_dt,
-                timestamp__lte=end_dt,
-            )
-            .order_by("timestamp")
-            .values("timestamp", "bid", "ask", "mid")
-        )
-
         logger.info(
             f"[PUBLISHER:PUBLISH] Query created, starting iteration - request_id={request_id}"
         )
 
-        # iterator(chunk_size=...) fetches DB rows in bounded chunks.
-        for row in qs.iterator(chunk_size=batch_size):
+        if tick_granularity == "tick":
+            rows_iter = self._iter_raw_ticks(
+                instrument=instrument,
+                start_dt=start_dt,
+                end_dt=end_dt,
+                batch_size=batch_size,
+            )
+        else:
+            rows_iter = self._iter_aggregated_ticks(
+                instrument=instrument,
+                start_dt=start_dt,
+                end_dt=end_dt,
+                granularity=tick_granularity,
+                mode=tick_window_value_mode,
+                batch_size=batch_size,
+            )
+
+        for row in rows_iter:
             # Check stop signal before every tick
             if self._should_stop_publishing(request_id):
                 logger.info(
@@ -239,7 +293,7 @@ class BacktestTickPublisherRunner:
                 )
                 return published, last_ts
 
-            ts = row.get("timestamp")
+            ts = row["timestamp"]
             if not isinstance(ts, datetime):
                 continue
 
@@ -251,9 +305,9 @@ class BacktestTickPublisherRunner:
                         "request_id": str(request_id),
                         "instrument": str(instrument),
                         "timestamp": isoformat(ts),
-                        "bid": str(row.get("bid")),
-                        "ask": str(row.get("ask")),
-                        "mid": str(row.get("mid")),
+                        "bid": str(row["bid"]),
+                        "ask": str(row["ask"]),
+                        "mid": str(row["mid"]),
                     }
                 ),
             )
@@ -275,6 +329,50 @@ class BacktestTickPublisherRunner:
             f"total_published={published}, last_ts={last_ts}"
         )
         return published, last_ts
+
+    @staticmethod
+    def _iter_raw_ticks(
+        *,
+        instrument: str,
+        start_dt: datetime,
+        end_dt: datetime,
+        batch_size: int,
+    ) -> Any:
+        qs = (
+            TickData.objects.filter(
+                instrument=str(instrument),
+                timestamp__gte=start_dt,
+                timestamp__lte=end_dt,
+            )
+            .order_by("timestamp")
+            .values("timestamp", "bid", "ask", "mid")
+        )
+        return qs.iterator(chunk_size=batch_size)
+
+    @staticmethod
+    def _iter_aggregated_ticks(
+        *,
+        instrument: str,
+        start_dt: datetime,
+        end_dt: datetime,
+        granularity: str,
+        mode: str,
+        batch_size: int,
+    ) -> Any:
+        for row in iter_aggregated_backtest_ticks(
+            instrument=instrument,
+            start_dt=start_dt,
+            end_dt=end_dt,
+            granularity=granularity,
+            mode=mode,
+            batch_size=batch_size,
+        ):
+            yield {
+                "timestamp": row.timestamp,
+                "bid": row.bid,
+                "ask": row.ask,
+                "mid": row.mid,
+            }
 
     @staticmethod
     def _check_data_coverage(

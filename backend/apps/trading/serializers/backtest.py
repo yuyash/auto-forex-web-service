@@ -36,6 +36,8 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "pip_size",
             "instrument",
             "hedging_enabled",
+            "tick_granularity",
+            "tick_window_value_mode",
             "status",
             "execution_id",
             "started_at",
@@ -96,6 +98,8 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "pip_size",
             "instrument",
             "hedging_enabled",
+            "tick_granularity",
+            "tick_window_value_mode",
             "debug_options",
         ]
         # Make fields optional for partial updates (PATCH)
@@ -110,6 +114,8 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "pip_size": {"required": False},
             "instrument": {"required": False},
             "hedging_enabled": {"required": False},
+            "tick_granularity": {"required": False},
+            "tick_window_value_mode": {"required": False},
             "debug_options": {"required": False},
         }
 
@@ -165,7 +171,36 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             )
 
         # Validate configuration parameters
-        config = attrs.get("config")
+        tick_granularity = attrs.get(
+            "tick_granularity",
+            getattr(self.instance, "tick_granularity", BacktestTask.TickGranularity.TICK),
+        )
+        tick_window_value_mode = attrs.get(
+            "tick_window_value_mode",
+            getattr(
+                self.instance,
+                "tick_window_value_mode",
+                BacktestTask.TickWindowValueMode.LAST,
+            ),
+        )
+
+        valid_granularities = {choice for choice, _ in BacktestTask.TickGranularity.choices}
+        if tick_granularity not in valid_granularities:
+            raise serializers.ValidationError(
+                {"tick_granularity": f"Unsupported tick granularity: {tick_granularity}"}
+            )
+
+        valid_modes = {choice for choice, _ in BacktestTask.TickWindowValueMode.choices}
+        if tick_window_value_mode not in valid_modes:
+            raise serializers.ValidationError(
+                {
+                    "tick_window_value_mode": (
+                        f"Unsupported tick window value mode: {tick_window_value_mode}"
+                    )
+                }
+            )
+
+        config = attrs.get("config") or getattr(self.instance, "config", None)
         if not config:
             raise serializers.ValidationError({"config": "Strategy configuration is required"})
 
