@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.10...frontend-v1.35.0) (2026-04-11)
+
+
+### Features
+
+* add pnl to cycle ([#412](https://github.com/yuyash/auto-forex-web-service/issues/412)) ([c036e8e](https://github.com/yuyash/auto-forex-web-service/commit/c036e8e5c4ef34c3743455927a42b60e486eed9e))
+
 ## [1.34.10](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.34.9...frontend-v1.34.10) (2026-04-10)
 
 
