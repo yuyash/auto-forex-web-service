@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.30.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.30.2...backend-v1.30.3) (2026-04-11)
+
+
+### Bug Fixes
+
+* **snowball:** align f_max with max layer count ([#422](https://github.com/yuyash/auto-forex-web-service/issues/422)) ([3b0afad](https://github.com/yuyash/auto-forex-web-service/commit/3b0afada8d75679b580bbe5b2af52f218d718445))
+
 ## [1.30.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.30.1...backend-v1.30.2) (2026-04-11)
 
 

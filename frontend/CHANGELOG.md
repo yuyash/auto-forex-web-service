@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.35.3...frontend-v1.35.4) (2026-04-11)
+
+
+### Bug Fixes
+
+* **snowball:** align f_max with max layer count ([#422](https://github.com/yuyash/auto-forex-web-service/issues/422)) ([3b0afad](https://github.com/yuyash/auto-forex-web-service/commit/3b0afada8d75679b580bbe5b2af52f218d718445))
+
 ## [1.35.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.35.2...frontend-v1.35.3) (2026-04-11)
 
 
