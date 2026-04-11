@@ -29,7 +29,7 @@ export function StrategyGridIndicator({
   }
 
   const cellSize = compact ? 14 : 20;
-  const headerWidth = compact ? 28 : 36;
+  const headerWidth = cellSize;
   const summary = gridState.summary;
   const slotHeaders = Array.from(
     { length: summary.slot_count_per_layer },
@@ -58,18 +58,21 @@ export function StrategyGridIndicator({
         border: '1px solid',
         borderColor: 'divider',
         borderRadius: 2,
-        p: compact ? 1 : 1.5,
+        p: compact ? 0.5 : 1,
         bgcolor: compact ? 'transparent' : 'background.default',
       }}
     >
       {title ? (
-        <Typography variant={compact ? 'caption' : 'subtitle2'} sx={{ mb: 1 }}>
+        <Typography
+          variant={compact ? 'caption' : 'subtitle2'}
+          sx={{ mb: 0.5 }}
+        >
           {title}
         </Typography>
       ) : null}
 
       {showLegend ? (
-        <Stack direction="row" spacing={0.75} sx={{ mb: 1, flexWrap: 'wrap' }}>
+        <Stack direction="row" spacing={0.5} sx={{ mb: 0.5, flexWrap: 'wrap' }}>
           {renderStateChip('filled')}
           {renderStateChip('stopped')}
           {renderStateChip('rebuilt')}
@@ -82,7 +85,7 @@ export function StrategyGridIndicator({
           sx={{
             display: 'grid',
             gridTemplateColumns: `${headerWidth}px repeat(${slotHeaders.length}, ${cellSize}px)`,
-            gap: compact ? 4 : 6,
+            gap: 0,
             alignItems: 'center',
             minWidth: 'fit-content',
           }}
@@ -96,6 +99,7 @@ export function StrategyGridIndicator({
               sx={{
                 textAlign: 'center',
                 fontSize: compact ? '0.62rem' : '0.72rem',
+                lineHeight: 1,
               }}
             >
               R{slot}
@@ -115,7 +119,7 @@ export function StrategyGridIndicator({
       </Box>
 
       {showSummary ? (
-        <Stack direction="row" spacing={0.75} sx={{ mt: 1, flexWrap: 'wrap' }}>
+        <Stack direction="row" spacing={0.5} sx={{ mt: 0.5, flexWrap: 'wrap' }}>
           <Chip
             size="small"
             label={t('common:strategyVisualization.grid.summary.layers', {
@@ -167,9 +171,9 @@ function GridRow({
         color="text.secondary"
         sx={{
           width: headerWidth,
-          textAlign: 'right',
-          pr: 0.5,
+          textAlign: 'center',
           fontSize: compact ? '0.62rem' : '0.72rem',
+          lineHeight: 1,
         }}
       >
         L{layer.layer}
