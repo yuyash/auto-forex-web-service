@@ -9,6 +9,7 @@ import type { Strategy } from '../../../services/api/strategies';
 import { TaskType, type TaskStatus } from '../../../types/common';
 import type { BacktestTask } from '../../../types';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
+import { formatDateTimeInTimezone } from '../../../utils/timezone';
 
 interface BacktestOverviewTabProps {
   taskId: string;
@@ -18,6 +19,8 @@ interface BacktestOverviewTabProps {
   strategies: Strategy[];
   pnlCurrency: string;
   latestMetrics?: MetricPoint | null;
+  timezone: string;
+  language?: string;
   onOpenConfiguration: () => void;
 }
 
@@ -29,6 +32,8 @@ export function BacktestOverviewTab({
   strategies,
   pnlCurrency,
   latestMetrics,
+  timezone,
+  language,
   onOpenConfiguration,
 }: BacktestOverviewTabProps) {
   const { t } = useTranslation(['backtest', 'common']);
@@ -226,7 +231,7 @@ export function BacktestOverviewTab({
                 {t('backtest:detail.startTime')}
               </Typography>
               <Typography variant="body1">
-                {new Date(task.start_time).toLocaleString()}
+                {formatDateTimeInTimezone(task.start_time, timezone, language)}
               </Typography>
             </Box>
             <Box>
@@ -234,7 +239,7 @@ export function BacktestOverviewTab({
                 {t('backtest:detail.endTime')}
               </Typography>
               <Typography variant="body1">
-                {new Date(task.end_time).toLocaleString()}
+                {formatDateTimeInTimezone(task.end_time, timezone, language)}
               </Typography>
             </Box>
           </Box>

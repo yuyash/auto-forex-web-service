@@ -14,6 +14,8 @@ interface TradingTaskCreateRequest {
   description?: string;
   instrument?: string;
   sell_on_stop?: boolean;
+  dry_run?: boolean;
+  hedging_enabled?: boolean;
 }
 
 interface TradingTaskUpdateRequest {
@@ -22,6 +24,9 @@ interface TradingTaskUpdateRequest {
   name?: string;
   description?: string;
   sell_on_stop?: boolean;
+  dry_run?: boolean;
+  hedging_enabled?: boolean;
+  debug_options?: Record<string, unknown>;
 }
 
 function toTradingTask(task: BackendTradingTask): TradingTask {

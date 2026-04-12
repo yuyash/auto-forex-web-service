@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogTitle,
@@ -41,6 +42,7 @@ export const DeleteTaskDialog: React.FC<DeleteTaskDialogProps> = ({
   hasExecutionHistory = false,
   isConfigurationInUse = false,
 }) => {
+  const { t } = useTranslation('common');
   const [confirmed, setConfirmed] = React.useState(false);
 
   // Reset confirmation when dialog opens
@@ -56,12 +58,10 @@ export const DeleteTaskDialog: React.FC<DeleteTaskDialogProps> = ({
   // Build warning messages
   const allWarnings = [...warnings];
   if (hasExecutionHistory) {
-    allWarnings.push('All execution history will be permanently deleted');
+    allWarnings.push(t('deleteTask.warnings.executionHistory'));
   }
   if (isConfigurationInUse) {
-    allWarnings.push(
-      'This task uses a shared configuration that is also used by other tasks'
-    );
+    allWarnings.push(t('deleteTask.warnings.sharedConfiguration'));
   }
 
   const requiresConfirmation = allWarnings.length > 0 || hasExecutionHistory;
@@ -84,7 +84,7 @@ export const DeleteTaskDialog: React.FC<DeleteTaskDialogProps> = ({
       <DialogTitle id="delete-task-dialog-title">
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <DeleteIcon color="error" />
-          Delete Task
+          {t('deleteTask.title')}
         </Box>
       </DialogTitle>
       <DialogContent>
@@ -92,19 +92,19 @@ export const DeleteTaskDialog: React.FC<DeleteTaskDialogProps> = ({
           {isBlocked ? (
             <Alert severity="error" sx={{ mb: 2 }}>
               <Typography variant="body2">
-                Cannot delete a running task. Please stop the task first.
+                {t('deleteTask.blockedRunning')}
               </Typography>
             </Alert>
           ) : (
             <>
               <Typography variant="body1" sx={{ mb: 2 }}>
-                Are you sure you want to delete "{taskName}"?
+                {t('deleteTask.confirmation', { taskName })}
               </Typography>
 
               {allWarnings.length > 0 && (
                 <Alert severity="warning" icon={<WarningIcon />} sx={{ mb: 2 }}>
                   <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-                    Warning: This action cannot be undone
+                    {t('deleteTask.warningTitle')}
                   </Typography>
                   <List dense disablePadding>
                     {allWarnings.map((warning, index) => (
@@ -132,8 +132,7 @@ export const DeleteTaskDialog: React.FC<DeleteTaskDialogProps> = ({
                   }
                   label={
                     <Typography variant="body2">
-                      I understand that this action is permanent and cannot be
-                      undone
+                      {t('deleteTask.acknowledge')}
                     </Typography>
                   }
                 />
@@ -144,7 +143,7 @@ export const DeleteTaskDialog: React.FC<DeleteTaskDialogProps> = ({
       </DialogContent>
       <DialogActions>
         <Button onClick={onCancel} disabled={isLoading}>
-          Cancel
+          {t('actions.cancel')}
         </Button>
         {!isBlocked && (
           <Button
@@ -154,7 +153,7 @@ export const DeleteTaskDialog: React.FC<DeleteTaskDialogProps> = ({
             disabled={isLoading || (requiresConfirmation && !confirmed)}
             startIcon={<DeleteIcon />}
           >
-            {isLoading ? 'Deleting...' : 'Delete Task'}
+            {isLoading ? t('actions.deleting') : t('deleteTask.title')}
           </Button>
         )}
       </DialogActions>

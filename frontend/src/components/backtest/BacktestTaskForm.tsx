@@ -45,7 +45,12 @@ import {
   useSupportedInstruments,
   useTickDataRange,
 } from '../../hooks/useMarketConfig';
+import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../common/useToast';
+import {
+  formatDateTimeInTimezone,
+  formatTimestampWithTimezone,
+} from '../../utils/timezone';
 
 const DEFAULT_DATE_RANGE_DAYS = 30;
 
@@ -67,6 +72,8 @@ interface BacktestTaskFormProps {
 
 // Separate component to avoid infinite loop with watch()
 interface ReviewContentProps {
+  timezone: string;
+  language?: string;
   selectedConfig: {
     name: string;
     id: string;
@@ -91,7 +98,12 @@ interface ReviewContentProps {
   };
 }
 
-function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
+function ReviewContent({
+  timezone,
+  language,
+  selectedConfig,
+  formValues,
+}: ReviewContentProps) {
   const { t } = useTranslation(['backtest', 'common']);
   const {
     name,
@@ -147,8 +159,8 @@ function ReviewContent({ selectedConfig, formValues }: ReviewContentProps) {
           {t('backtest:config.dateRange')}
         </Typography>
         <Typography variant="body1">
-          {new Date(start_time).toLocaleDateString()} -{' '}
-          {new Date(end_time).toLocaleDateString()}
+          {formatDateTimeInTimezone(start_time, timezone, language)} -{' '}
+          {formatDateTimeInTimezone(end_time, timezone, language)}
         </Typography>
       </Grid>
 
@@ -244,8 +256,11 @@ export default function BacktestTaskForm({
   initialData,
 }: BacktestTaskFormProps) {
   const { t } = useTranslation(['backtest', 'common']);
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { showError } = useToast();
+  const timezone = user?.timezone || 'UTC';
+  const language = user?.language;
   const steps = [
     t('backtest:form.steps.configuration'),
     t('backtest:form.steps.parameters'),
@@ -367,7 +382,7 @@ export default function BacktestTaskForm({
       if (start < minTs) {
         warnings.push(
           t('backtest:form.startTimeBeforeMinData', {
-            timestamp: minTs.toLocaleString(),
+            timestamp: formatTimestampWithTimezone(minTs, timezone),
           })
         );
       }
@@ -378,13 +393,20 @@ export default function BacktestTaskForm({
       if (end > maxTs) {
         warnings.push(
           t('backtest:form.endTimeAfterMaxData', {
-            timestamp: maxTs.toLocaleString(),
+            timestamp: formatTimestampWithTimezone(maxTs, timezone),
           })
         );
       }
     }
     return warnings.length > 0 ? warnings.join(' ') : null;
-  }, [dataRange, t, watchedInstrument, watchedStartTime, watchedEndTime]);
+  }, [
+    dataRange,
+    t,
+    timezone,
+    watchedInstrument,
+    watchedStartTime,
+    watchedEndTime,
+  ]);
 
   const handleNext = async () => {
     // Save current form values to state BEFORE validation
@@ -633,6 +655,7 @@ export default function BacktestTaskForm({
                           maxDate={new Date()}
                           required
                           helperText={t('backtest:form.dateRangeHelperText')}
+                          timezone={timezone}
                         />
                       )}
                     />
@@ -661,8 +684,15 @@ export default function BacktestTaskForm({
                     {t('backtest:form.dataRange', {
                       instrument: dataRange.instrument,
                     })}{' '}
-                    {new Date(dataRange.min_timestamp!).toLocaleString()} –{' '}
-                    {new Date(dataRange.max_timestamp!).toLocaleString()}
+                    {formatTimestampWithTimezone(
+                      dataRange.min_timestamp,
+                      timezone
+                    )}{' '}
+                    –{' '}
+                    {formatTimestampWithTimezone(
+                      dataRange.max_timestamp,
+                      timezone
+                    )}
                   </Alert>
                 </Grid>
               )}
@@ -972,6 +1002,8 @@ export default function BacktestTaskForm({
             <Paper sx={{ p: 3 }}>
               {selectedConfig ? (
                 <ReviewContent
+                  timezone={timezone}
+                  language={language}
                   selectedConfig={selectedConfig}
                   formValues={formValues}
                 />

@@ -133,6 +133,21 @@
     "confirmDelete": "Are you sure you want to delete this item?",
     "unsavedChanges": "You have unsaved changes. Are you sure you want to leave?"
   },
+  "cards": {
+    "livePnl": "Live P&L",
+    "totalTrades": "Total Trades"
+  },
+  "deleteTask": {
+    "title": "Delete Task",
+    "blockedRunning": "Cannot delete a running task. Please stop the task first.",
+    "confirmation": "Are you sure you want to delete \"{{taskName}}\"?",
+    "warningTitle": "Warning: This action cannot be undone",
+    "acknowledge": "I understand that this action is permanent and cannot be undone",
+    "warnings": {
+      "executionHistory": "All execution history will be permanently deleted",
+      "sharedConfiguration": "This task uses a shared configuration that is also used by other tasks"
+    }
+  },
   "taskActionDialog": {
     "start": {
       "title": "Start Task",

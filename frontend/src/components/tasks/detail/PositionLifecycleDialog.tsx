@@ -25,8 +25,10 @@ import {
   TrendingDown as ShortIcon,
   TrendingUp as LongIcon,
 } from '@mui/icons-material';
+import { useAuth } from '../../../contexts/AuthContext';
 import { fetchTaskResourceObject } from '../../../services/api/taskResources';
 import { TaskType } from '../../../types/common';
+import { formatDateTimeInTimezone } from '../../../utils/timezone';
 
 interface PositionLifecycleDialogProps {
   open: boolean;
@@ -36,6 +38,7 @@ interface PositionLifecycleDialogProps {
   executionRunId?: string;
   initialPositionId?: string;
   positionData?: unknown | null;
+  timezone?: string;
 }
 
 type LifecycleEventKind =
@@ -98,21 +101,15 @@ interface PositionLifecycleResponse {
   positions: PositionLifecycleItem[];
 }
 
-const getLocale = (language?: string): string =>
-  language?.startsWith('ja') ? 'ja-JP' : 'en-US';
-
-const formatTimestamp = (value?: string | null, language?: string): string =>
-  value
-    ? new Date(value).toLocaleString(getLocale(language), {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        timeZoneName: 'short',
-      })
-    : '-';
+const formatTimestamp = (
+  value?: string | null,
+  language?: string,
+  timezone = 'UTC'
+): string =>
+  formatDateTimeInTimezone(value, timezone, language, {
+    includeSeconds: true,
+    includeTimezone: true,
+  });
 
 const shortId = (value?: string | null): string =>
   value ? value.slice(0, 8) : '-';
@@ -227,7 +224,8 @@ const LifecycleField: React.FC<{
 
 const LifecycleEventRow: React.FC<{
   event: PositionLifecycleEvent;
-}> = ({ event }) => {
+  timezone?: string;
+}> = ({ event, timezone = 'UTC' }) => {
   const { t, i18n } = useTranslation('common');
   const relatedLabel =
     event.kind === 'rebuilt'
@@ -278,7 +276,7 @@ const LifecycleEventRow: React.FC<{
           ) : null}
         </Stack>
         <Typography variant="caption" color="text.secondary">
-          {formatTimestamp(event.timestamp, i18n.language)}
+          {formatTimestamp(event.timestamp, i18n.language, timezone)}
         </Typography>
       </Stack>
       <Stack
@@ -367,7 +365,10 @@ const LifecycleEventRow: React.FC<{
   );
 };
 
-const PositionCard: React.FC<{ item: PositionLifecycleItem }> = ({ item }) => {
+const PositionCard: React.FC<{
+  item: PositionLifecycleItem;
+  timezone?: string;
+}> = ({ item, timezone = 'UTC' }) => {
   const { t, i18n } = useTranslation('common');
   const summary = item.summary;
   const pnlValue = summary.realized_pnl ? Number(summary.realized_pnl) : null;
@@ -470,13 +471,21 @@ const PositionCard: React.FC<{ item: PositionLifecycleItem }> = ({ item }) => {
             />
             <LifecycleField
               label={t('tables.positions.entryTime')}
-              value={formatTimestamp(summary.entry_time, i18n.language)}
+              value={formatTimestamp(
+                summary.entry_time,
+                i18n.language,
+                timezone
+              )}
               noWrap
               minWidth={240}
             />
             <LifecycleField
               label={t('tables.positions.exitTime')}
-              value={formatTimestamp(summary.exit_time, i18n.language)}
+              value={formatTimestamp(
+                summary.exit_time,
+                i18n.language,
+                timezone
+              )}
               noWrap
               minWidth={240}
             />
@@ -546,7 +555,11 @@ const PositionCard: React.FC<{ item: PositionLifecycleItem }> = ({ item }) => {
 
           <Stack spacing={1}>
             {item.events.map((event) => (
-              <LifecycleEventRow key={event.id} event={event} />
+              <LifecycleEventRow
+                key={event.id}
+                event={event}
+                timezone={timezone}
+              />
             ))}
           </Stack>
         </Stack>
@@ -564,8 +577,11 @@ export const PositionLifecycleDialog: React.FC<
   taskType,
   executionRunId,
   initialPositionId,
+  timezone,
 }) => {
   const { t } = useTranslation('common');
+  const { user } = useAuth();
+  const resolvedTimezone = timezone || user?.timezone || 'UTC';
   const [searchValue, setSearchValue] = useState(initialPositionId ?? '');
   const [activePositionId, setActivePositionId] = useState(
     initialPositionId ?? ''
@@ -759,7 +775,11 @@ export const PositionLifecycleDialog: React.FC<
               </Card>
 
               {positions.map((item) => (
-                <PositionCard key={item.position_id} item={item} />
+                <PositionCard
+                  key={item.position_id}
+                  item={item}
+                  timezone={resolvedTimezone}
+                />
               ))}
             </Stack>
           ) : null}

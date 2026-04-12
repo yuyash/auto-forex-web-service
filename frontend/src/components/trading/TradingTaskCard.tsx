@@ -24,8 +24,9 @@ import {
   shouldEnableRealtimeTaskUpdates,
   shouldPollTaskStatus,
 } from '../../hooks/taskResourceQueries';
+import { useTaskSummary } from '../../hooks/useTaskSummary';
 import type { TradingTask } from '../../types/tradingTask';
-import { TaskStatus } from '../../types/common';
+import { TaskStatus, TaskType } from '../../types/common';
 import { StatusBadge } from '../tasks/display/StatusBadge';
 import { StatCard } from '../tasks/display/StatCard';
 import { TaskControlButtons } from '../common/TaskControlButtons';
@@ -39,6 +40,7 @@ import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   useDeleteTradingTask,
   usePauseTradingTask,
@@ -48,6 +50,7 @@ import {
   useStopTradingTask,
 } from '../../hooks/useTradingTaskMutations';
 import { logger } from '../../utils/logger';
+import { formatDateTimeInTimezone } from '../../utils/timezone';
 
 interface TradingTaskCardProps {
   task: TradingTask;
@@ -59,6 +62,7 @@ export default function TradingTaskCard({
   onRefresh,
 }: TradingTaskCardProps) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -79,6 +83,8 @@ export default function TradingTaskCard({
 
   const { t } = useTranslation(['trading', 'common']);
   const { showError, showSuccess, showWarning, showInfo } = useToast();
+  const timezone = user?.timezone || 'UTC';
+  const language = user?.language;
 
   // Fetch strategies for display names
   const { strategies } = useStrategies();
@@ -107,6 +113,17 @@ export default function TradingTaskCard({
 
   // Use original task data (polledStatus only provides status, not full task details)
   const currentTask = polledTask || task;
+  const shouldShowLiveSummary =
+    displayStatus === TaskStatus.RUNNING || displayStatus === TaskStatus.PAUSED;
+  const { summary: liveSummary } = useTaskSummary(
+    shouldShowLiveSummary ? task.id : '',
+    TaskType.TRADING,
+    undefined,
+    {
+      polling: shouldShowLiveSummary,
+      interval: 5000,
+    }
+  );
 
   // Trigger refresh when polled status differs from task prop status
   // This ensures parent component gets updated data
@@ -328,19 +345,24 @@ export default function TradingTaskCard({
   };
 
   const formatDateTime = (dateString: string): string => {
-    return new Date(dateString).toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return formatDateTimeInTimezone(dateString, timezone, language);
   };
 
   const currentPnL = currentTask.latest_execution?.total_pnl
     ? parseFloat(currentTask.latest_execution.total_pnl)
     : 0;
-  const openPositions = 0;
+  const livePnl = shouldShowLiveSummary
+    ? liveSummary.pnl.realized + liveSummary.pnl.unrealized
+    : currentPnL;
+  const openPositions = shouldShowLiveSummary
+    ? liveSummary.counts.openPositions
+    : 0;
+  const closedPositions = shouldShowLiveSummary
+    ? liveSummary.counts.closedPositions
+    : 0;
+  const marginRatio = shouldShowLiveSummary
+    ? liveSummary.execution.marginRatio
+    : null;
 
   return (
     <Card
@@ -469,21 +491,35 @@ export default function TradingTaskCard({
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid size={{ xs: 6, sm: 4 }}>
               <StatCard
-                title="Live P&L"
-                value={`$${currentPnL.toFixed(2)}`}
-                color={currentPnL >= 0 ? 'success' : 'error'}
+                title={t('common:cards.livePnl')}
+                value={`$${livePnl.toFixed(2)}`}
+                color={livePnl >= 0 ? 'success' : 'error'}
               />
             </Grid>
             <Grid size={{ xs: 6, sm: 4 }}>
               <StatCard
-                title="Open Positions"
+                title={t('common:tables.summary.open_positions')}
                 value={openPositions.toString()}
               />
             </Grid>
+            <Grid size={{ xs: 6, sm: 4 }}>
+              <StatCard
+                title={t('common:tables.summary.closed_positions')}
+                value={closedPositions.toString()}
+              />
+            </Grid>
+            {marginRatio != null && (
+              <Grid size={{ xs: 6, sm: 4 }}>
+                <StatCard
+                  title={t('common:tables.summary.margin_ratio')}
+                  value={`${(marginRatio * 100).toFixed(2)}%`}
+                />
+              </Grid>
+            )}
             {currentTask.latest_execution?.total_trades !== undefined && (
               <Grid size={{ xs: 6, sm: 4 }}>
                 <StatCard
-                  title="Total Trades"
+                  title={t('common:cards.totalTrades')}
                   value={currentTask.latest_execution.total_trades.toString()}
                 />
               </Grid>

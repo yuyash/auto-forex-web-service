@@ -84,6 +84,7 @@ export const BacktestTaskDetail: React.FC = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { user } = useAuth();
   const timezone = user?.timezone || 'UTC';
+  const language = user?.language;
 
   // Tab configuration with localStorage persistence
   const defaultTabs: TabItem[] = [
@@ -388,6 +389,8 @@ export const BacktestTaskDetail: React.FC = () => {
               strategies={strategies}
               pnlCurrency={pnlCurrency}
               latestMetrics={metricsResult.latest}
+              timezone={timezone}
+              language={language}
               onOpenConfiguration={() =>
                 navigate(`/configurations/${detailTask.config_id}`)
               }
@@ -406,6 +409,7 @@ export const BacktestTaskDetail: React.FC = () => {
               instrument={detailTask.instrument}
               executionRunId={activeExecutionId}
               enableRealTimeUpdates={enableRealtime}
+              timezone={timezone}
             />
           </LazyTabPanel>
         )}

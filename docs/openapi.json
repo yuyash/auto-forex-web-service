@@ -9301,7 +9301,6 @@
                     },
                     "instrument": {
                         "type": "string",
-                        "description": "Get instrument from configuration parameters.",
                         "readOnly": true
                     },
                     "account_id": {
@@ -9504,7 +9503,6 @@
                     },
                     "instrument": {
                         "type": "string",
-                        "description": "Get instrument from configuration parameters.",
                         "readOnly": true
                     },
                     "account_id": {

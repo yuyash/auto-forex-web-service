@@ -133,6 +133,21 @@
     "confirmDelete": "このアイテムを削除してもよろしいですか？",
     "unsavedChanges": "保存されていない変更があります。本当に離れますか？"
   },
+  "cards": {
+    "livePnl": "Live P&L",
+    "totalTrades": "総取引数"
+  },
+  "deleteTask": {
+    "title": "タスクを削除",
+    "blockedRunning": "実行中のタスクは削除できません。先に停止してください。",
+    "confirmation": "「{{taskName}}」を削除してもよろしいですか？",
+    "warningTitle": "警告: この操作は元に戻せません",
+    "acknowledge": "この操作が永続的で元に戻せないことを理解しています",
+    "warnings": {
+      "executionHistory": "すべての実行履歴が完全に削除されます",
+      "sharedConfiguration": "このタスクは他のタスクでも使われている共有設定を使用しています"
+    }
+  },
   "taskActionDialog": {
     "start": {
       "title": "タスクを開始",
