@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.32.0...backend-v1.32.1) (2026-04-12)
+
+
+### Bug Fixes
+
+* **strategy:** remove empty layer after higher-layer r0 tp ([#442](https://github.com/yuyash/auto-forex-web-service/issues/442)) ([f69139a](https://github.com/yuyash/auto-forex-web-service/commit/f69139a1859f4a825597c30247e8613e85b8c91a))
+
 ## [1.32.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.31.0...backend-v1.32.0) (2026-04-11)
 
 
