@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.33.0...backend-v1.33.1) (2026-04-12)
+
+
+### Bug Fixes
+
+* backtest tick granularity edit ([#449](https://github.com/yuyash/auto-forex-web-service/issues/449)) ([d888807](https://github.com/yuyash/auto-forex-web-service/commit/d88880722bb5cb8364c548413e76f9f6191c0af9))
+
 ## [1.33.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.32.1...backend-v1.33.0) (2026-04-12)
 
 
