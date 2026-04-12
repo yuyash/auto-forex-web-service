@@ -10,6 +10,10 @@ import {
   Alert,
   FormControlLabel,
   Checkbox,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
@@ -57,6 +61,19 @@ const backtestTaskUpdateSchema = z
       .positive('Pip size must be greater than zero')
       .optional(),
     instrument: z.string().min(1, 'Instrument is required'),
+    tick_granularity: z.enum([
+      'tick',
+      '1s',
+      '10s',
+      '15s',
+      '30s',
+      '1m',
+      '5m',
+      '15m',
+      '30m',
+      '1h',
+    ]),
+    tick_window_value_mode: z.enum(['first', 'last', 'average', 'median']),
     sell_at_completion: z.boolean().optional().default(false),
     hedging_enabled: z.boolean().optional().default(true),
   })
@@ -110,6 +127,13 @@ export default function BacktestTaskUpdateForm({
   const configIdString = selectedConfigId || '';
 
   const { data: selectedConfig } = useConfiguration(configIdString);
+  const initialTickGranularity = initialData.tick_granularity;
+  const initialTickWindowValueMode = initialData.tick_window_value_mode;
+  const selectedTickGranularity = watch('tick_granularity');
+  const selectedTickWindowValueMode = watch('tick_window_value_mode');
+  const replaySettingsChanged =
+    selectedTickGranularity !== initialTickGranularity ||
+    selectedTickWindowValueMode !== initialTickWindowValueMode;
 
   const onSubmit = async (data: BacktestTaskUpdateData) => {
     setSubmitError(null);
@@ -126,6 +150,8 @@ export default function BacktestTaskUpdateForm({
           commission_per_trade: data.commission_per_trade?.toString(),
           pip_size: data.pip_size?.toString(),
           instrument: data.instrument,
+          tick_granularity: data.tick_granularity,
+          tick_window_value_mode: data.tick_window_value_mode,
           sell_at_completion: data.sell_at_completion,
           hedging_enabled: data.hedging_enabled,
           debug_options: { tracemalloc },
@@ -259,6 +285,12 @@ export default function BacktestTaskUpdateForm({
           {t('backtest:form.updateParameters')}
         </Typography>
 
+        {replaySettingsChanged && (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            {t('backtest:form.replaySettingsRestartNotice')}
+          </Alert>
+        )}
+
         <Grid container spacing={3}>
           <Grid size={{ xs: 12 }}>
             <Controller
@@ -351,6 +383,69 @@ export default function BacktestTaskUpdateForm({
                     t('backtest:form.pipSizeHelperText')
                   }
                 />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Controller
+              name="tick_granularity"
+              control={control}
+              render={({ field }) => (
+                <FormControl fullWidth error={!!errors.tick_granularity}>
+                  <InputLabel id="backtest-update-tick-granularity-label">
+                    {t('backtest:form.tickGranularity')}
+                  </InputLabel>
+                  <Select
+                    {...field}
+                    labelId="backtest-update-tick-granularity-label"
+                    label={t('backtest:form.tickGranularity')}
+                  >
+                    {[
+                      'tick',
+                      '1s',
+                      '10s',
+                      '15s',
+                      '30s',
+                      '1m',
+                      '5m',
+                      '15m',
+                      '30m',
+                      '1h',
+                    ].map((option) => (
+                      <MenuItem key={option} value={option}>
+                        {t(`backtest:form.tickGranularityOptions.${option}`)}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Controller
+              name="tick_window_value_mode"
+              control={control}
+              render={({ field }) => (
+                <FormControl fullWidth error={!!errors.tick_window_value_mode}>
+                  <InputLabel id="backtest-update-tick-window-value-mode-label">
+                    {t('backtest:form.tickWindowValueMode')}
+                  </InputLabel>
+                  <Select
+                    {...field}
+                    labelId="backtest-update-tick-window-value-mode-label"
+                    label={t('backtest:form.tickWindowValueMode')}
+                  >
+                    {['first', 'last', 'average', 'median'].map((option) => (
+                      <MenuItem key={option} value={option}>
+                        {t(
+                          `backtest:form.tickWindowValueModeOptions.${option}`
+                        )}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               )}
             />
           </Grid>

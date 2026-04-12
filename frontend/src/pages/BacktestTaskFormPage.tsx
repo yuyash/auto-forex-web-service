@@ -55,6 +55,8 @@ export default function BacktestTaskFormPage() {
                 commission_per_trade: parseFloat(task.commission_per_trade),
                 pip_size: task.pip_size ? parseFloat(task.pip_size) : undefined,
                 instrument: task.instrument,
+                tick_granularity: task.tick_granularity,
+                tick_window_value_mode: task.tick_window_value_mode,
                 sell_at_completion: task.sell_at_completion ?? false,
                 hedging_enabled: task.hedging_enabled ?? true,
               }}
