@@ -24,11 +24,15 @@ class StrategyCyclesService:
         task_type: str,
         execution_id: UUID | str | None,
         cycle_id: str | None = None,
+        include_trades: bool | None = None,
     ) -> dict[str, Any]:
         from apps.trading.models.trades import Trade
 
         if not execution_id:
             return {"cycles": [], "summary": _empty_summary(), "last_tick_timestamp": None}
+
+        if include_trades is None:
+            include_trades = bool(cycle_id)
 
         qs = Trade.objects.filter(
             task_type=task_type,
@@ -40,25 +44,30 @@ class StrategyCyclesService:
         if cycle_id:
             qs = qs.filter(cycle_id=cycle_id)
 
-        rows = list(
-            qs.values(
-                "id",
-                "cycle_id",
-                "direction",
-                "units",
-                "instrument",
-                "price",
-                "execution_method",
-                "layer_index",
-                "retracement_count",
-                "description",
-                "timestamp",
-                "position_id",
-                "updated_at",
-                "margin_ratio",
-                "is_rebuild",
+        value_fields = [
+            "id",
+            "cycle_id",
+            "direction",
+            "units",
+            "instrument",
+            "price",
+            "execution_method",
+            "layer_index",
+            "retracement_count",
+            "timestamp",
+            "position_id",
+            "is_rebuild",
+        ]
+        if include_trades:
+            value_fields.extend(
+                [
+                    "description",
+                    "updated_at",
+                    "margin_ratio",
+                ]
             )
-        )
+
+        rows = list(qs.values(*value_fields))
 
         if not rows:
             return {
@@ -69,16 +78,22 @@ class StrategyCyclesService:
             }
 
         # Look up metrics (volatility, margin) at each trade timestamp
-        metrics_by_minute = _load_metrics_for_trades(
-            task_type=task_type,
-            task_id=str(task.pk),
-            execution_id=str(execution_id),
-            trades=rows,
+        metrics_by_minute = (
+            _load_metrics_for_trades(
+                task_type=task_type,
+                task_id=str(task.pk),
+                execution_id=str(execution_id),
+                trades=rows,
+            )
+            if include_trades
+            else {}
         )
 
         by_cycle: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for row in rows:
             by_cycle[str(row["cycle_id"])].append(row)
+
+        unrealized_pnl_by_position = _load_unrealized_pnl_map(rows)
 
         execution_state = _load_execution_state_snapshot(
             task_type=task_type,
@@ -103,6 +118,8 @@ class StrategyCyclesService:
                 metrics_by_minute,
                 cycle_status_map.get(cid),
                 cycle_grid_state_map.get(cid),
+                unrealized_pnl_by_position,
+                include_trades=include_trades,
             )
             for cid, trades in by_cycle.items()
         ]
@@ -228,6 +245,9 @@ def _build_cycle(
     metrics_by_minute: dict[str, dict[str, Any]],
     authoritative_status: str | None = None,
     grid_state: dict[str, Any] | None = None,
+    unrealized_pnl_by_position: dict[str, Decimal] | None = None,
+    *,
+    include_trades: bool = True,
 ) -> dict[str, Any]:
     first = trades[0]
     last = trades[-1]
@@ -310,16 +330,10 @@ def _build_cycle(
                 realized_pnl += (entry_px - exit_px) * units
 
     # Unrealized PnL: sum for positions that are still open.
-    # Look up current unrealized_pnl from the Position table.
     still_open_ids = open_ids - close_ids
     if still_open_ids:
-        from apps.trading.models.positions import Position
-
-        for pos in Position.objects.filter(id__in=still_open_ids).values_list(
-            "unrealized_pnl", flat=True
-        ):
-            if pos is not None:
-                unrealized_pnl += Decimal(str(pos))
+        for position_id in still_open_ids:
+            unrealized_pnl += (unrealized_pnl_by_position or {}).get(position_id, Decimal("0"))
 
     return {
         "cycle_id": cycle_id,
@@ -335,10 +349,13 @@ def _build_cycle(
         "has_protection": has_protection,
         "protection_count": len(protection_trades),
         "rebuild_count": rebuild_count,
+        "position_ids": sorted({str(t["position_id"]) for t in trades if t.get("position_id")}),
         "realized_pnl": str(realized_pnl),
         "unrealized_pnl": str(unrealized_pnl),
         "grid_state": grid_state,
-        "trades": [_serialize_trade(t, metrics_by_minute) for t in trades],
+        "trades": [_serialize_trade(t, metrics_by_minute) for t in trades]
+        if include_trades
+        else [],
     }
 
 
@@ -398,6 +415,27 @@ def _empty_summary() -> dict[str, int]:
         "pending_count": 0,
         "completed_count": 0,
         "total_trades": 0,
+    }
+
+
+def _load_unrealized_pnl_map(trades: list[dict[str, Any]]) -> dict[str, Decimal]:
+    """Load unrealized pnl for any position IDs referenced by open/rebuild trades."""
+    from apps.trading.models.positions import Position
+
+    _OPEN_METHODS = {"open_position", "rebuild_position"}
+    position_ids = {
+        str(t["position_id"])
+        for t in trades
+        if t.get("position_id") and t.get("execution_method") in _OPEN_METHODS
+    }
+    if not position_ids:
+        return {}
+
+    return {
+        str(position_id): Decimal(str(unrealized_pnl or "0"))
+        for position_id, unrealized_pnl in Position.objects.filter(id__in=position_ids).values_list(
+            "id", "unrealized_pnl"
+        )
     }
 
 

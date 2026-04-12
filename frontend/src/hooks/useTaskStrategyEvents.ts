@@ -9,6 +9,8 @@ interface UseTaskStrategyEventsOptions {
   taskId: string | number;
   taskType: TaskType;
   executionRunId?: string;
+  cycleId?: string;
+  enabled?: boolean;
   enableRealTimeUpdates?: boolean;
   refreshInterval?: number;
 }
@@ -24,20 +26,29 @@ export function useTaskStrategyEvents({
   taskId,
   taskType,
   executionRunId,
+  cycleId,
+  enabled = true,
   enableRealTimeUpdates = false,
   refreshInterval = 10_000,
 }: UseTaskStrategyEventsOptions): UseTaskStrategyEventsResult {
   const pollingPolicy = usePollingPolicy({
-    enabled: enableRealTimeUpdates && Boolean(taskId),
+    enabled: enabled && enableRealTimeUpdates && Boolean(taskId),
     baseIntervalMs: refreshInterval,
   });
   const refresh = () =>
-    refreshTaskStrategyEvents(String(taskId), taskType, executionRunId);
+    refreshTaskStrategyEvents(
+      String(taskId),
+      taskType,
+      executionRunId,
+      cycleId
+    );
   const resource = usePolledTaskResource(
-    createTaskStrategyEventsQuery(taskId, taskType, executionRunId),
+    createTaskStrategyEventsQuery(taskId, taskType, executionRunId, cycleId, {
+      enabled,
+    }),
     refresh,
     {
-      pollingEnabled: pollingPolicy.isActive,
+      pollingEnabled: enabled && pollingPolicy.isActive,
       intervalMs: pollingPolicy.intervalMs,
     }
   );

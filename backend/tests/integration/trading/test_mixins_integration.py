@@ -395,6 +395,8 @@ class TestEvents:
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data["cycles"]) == 1
         assert response.data["cycles"][0]["cycle_id"] == str(cycle_id)
+        assert response.data["cycles"][0]["position_ids"] == []
+        assert response.data["cycles"][0]["trades"] == []
         assert response.data["summary"]["cycle_count"] == 1
 
     def test_strategy_events_include_snowball_grid_state(self):
@@ -502,6 +504,8 @@ class TestEvents:
 
         assert response.status_code == status.HTTP_200_OK
         grid_state = response.data["cycles"][0]["grid_state"]
+        assert response.data["cycles"][0]["position_ids"] == [str(position_id)]
+        assert response.data["cycles"][0]["trades"] == []
         assert grid_state["summary"]["filled"] == 1
         assert grid_state["summary"]["stopped"] == 1
         assert grid_state["summary"]["layer_count"] == 1
@@ -592,6 +596,7 @@ class TestEvents:
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data["cycles"]) == 1
         assert response.data["cycles"][0]["cycle_id"] == str(cycle_b)
+        assert len(response.data["cycles"][0]["trades"]) == 1
 
 
 @pytest.mark.django_db

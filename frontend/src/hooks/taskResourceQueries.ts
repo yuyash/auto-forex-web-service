@@ -258,15 +258,18 @@ export function createTaskExecutionQuery(
 export function createTaskStrategyEventsQuery(
   taskId: string | number,
   taskType: TaskType,
-  executionRunId?: string
+  executionRunId?: string,
+  cycleId?: string,
+  options?: { enabled?: boolean }
 ): UseQueryOptions<StrategyCyclesResponse | null> {
   return {
     queryKey: queryKeys.taskResources.strategyEvents(
       taskType,
       String(taskId),
-      executionRunId
+      executionRunId,
+      cycleId
     ),
-    enabled: Boolean(taskId),
+    enabled: Boolean(taskId) && options?.enabled !== false,
     staleTime: 0,
     refetchOnMount: 'always',
     queryFn: async () => {
@@ -278,7 +281,10 @@ export function createTaskStrategyEventsQuery(
           taskType,
           taskId,
           'strategy-events',
-          executionRunId ? { execution_id: executionRunId } : undefined
+          {
+            ...(executionRunId ? { execution_id: executionRunId } : {}),
+            ...(cycleId ? { cycle_id: cycleId } : {}),
+          }
         );
       } catch (err) {
         if (isApiErrorWithStatus(err)) {

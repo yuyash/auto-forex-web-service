@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -153,10 +147,37 @@ export function TaskStrategyTab({
 }: TaskStrategyTabProps) {
   const { t } = useTranslation(['common']);
   const theme = useTheme();
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'active' | 'completed'
+  >('all');
+  const [positionIdFilter, setPositionIdFilter] = useState('');
+  const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(400);
+  const isDragging = useRef(false);
+  const [showOhlcChart, setShowOhlcChart] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
+  const [mobileShowDetail, setMobileShowDetail] = useState(false);
+
   const { data, isLoading, error, refresh } = useTaskStrategyEvents({
     taskId,
     taskType,
     executionRunId,
+    enableRealTimeUpdates: true,
+    refreshInterval: 5_000,
+  });
+  const {
+    data: detailData,
+    isLoading: isDetailLoading,
+    error: detailError,
+    refresh: refreshDetail,
+  } = useTaskStrategyEvents({
+    taskId,
+    taskType,
+    executionRunId,
+    cycleId: selectedCycleId ?? undefined,
+    enabled: Boolean(selectedCycleId),
     enableRealTimeUpdates: true,
     refreshInterval: 5_000,
   });
@@ -166,26 +187,6 @@ export function TaskStrategyTab({
     () => getPnlCurrencyCode(instrument),
     [instrument]
   );
-
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [statusFilter, setStatusFilter] = useState<
-    'all' | 'active' | 'completed'
-  >('all');
-  const [positionIdFilter, setPositionIdFilter] = useState('');
-  const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
-  // Snapshot of the selected cycle — only updated on select or manual refresh
-  const [detailSnapshot, setDetailSnapshot] = useState<StrategyCycle | null>(
-    null
-  );
-  const [snapshotTickTimestamp, setSnapshotTickTimestamp] = useState<
-    string | null
-  >(null);
-  const [sidebarWidth, setSidebarWidth] = useState(400);
-  const isDragging = useRef(false);
-  const [showOhlcChart, setShowOhlcChart] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
-  const [mobileShowDetail, setMobileShowDetail] = useState(false);
 
   // Task 2: Multi-select trades for chart marker highlighting
   const [selectedTradeIds, setSelectedTradeIds] = useState<Set<string>>(
@@ -255,8 +256,8 @@ export function TaskStrategyTab({
     if (positionIdFilter.trim()) {
       const needle = positionIdFilter.trim().toLowerCase();
       list = list.filter((c) =>
-        c.trades.some(
-          (t) => t.position_id && t.position_id.toLowerCase().includes(needle)
+        (c.position_ids ?? []).some((positionId) =>
+          positionId.toLowerCase().includes(needle)
         )
       );
     }
@@ -267,13 +268,9 @@ export function TaskStrategyTab({
     (id: string) => {
       setSelectedCycleId(id);
       setSelectedTradeIds(new Set());
-      // Immediately snapshot from current data
-      const cycle = (data?.cycles ?? []).find((c) => c.cycle_id === id) ?? null;
-      setDetailSnapshot(cycle);
-      setSnapshotTickTimestamp(data?.last_tick_timestamp ?? null);
       if (isMobile) setMobileShowDetail(true);
     },
-    [isMobile, data]
+    [isMobile]
   );
 
   // Task 2: Handle marker click from chart → highlight trade in list
@@ -289,31 +286,20 @@ export function TaskStrategyTab({
     });
   }, []);
 
-  const selectedCycle = detailSnapshot;
+  const selectedCycle = useMemo(
+    () =>
+      (detailData?.cycles ?? []).find((c) => c.cycle_id === selectedCycleId) ??
+      null,
+    [detailData, selectedCycleId]
+  );
   const selectedCycleSlotBuildCounts = useMemo(
     () => buildSlotBuildCounts(selectedCycle),
     [selectedCycle]
   );
 
-  // Manual refresh: re-fetch data then update the snapshot
-  const [detailRefreshSeq, setDetailRefreshSeq] = useState(0);
   const handleRefreshDetail = useCallback(async () => {
-    await refresh();
-    setDetailRefreshSeq((n) => n + 1);
-  }, [refresh]);
-
-  // Update snapshot when detailRefreshSeq changes (user triggered refresh)
-  useEffect(() => {
-    if (detailRefreshSeq > 0 && selectedCycleId && data) {
-      const freshCycle =
-        (data.cycles ?? []).find((c) => c.cycle_id === selectedCycleId) ?? null;
-      if (freshCycle) {
-        setDetailSnapshot(freshCycle);
-        setSnapshotTickTimestamp(data.last_tick_timestamp ?? null);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailRefreshSeq]);
+    await Promise.all([refresh(), refreshDetail()]);
+  }, [refresh, refreshDetail]);
 
   const handleSelectAllTrades = useCallback(() => {
     if (!selectedCycle) return;
@@ -679,7 +665,21 @@ export function TaskStrategyTab({
             minHeight: 0,
           }}
         >
-          {selectedCycle ? (
+          {detailError && selectedCycleId ? (
+            <Box sx={{ p: 3 }}>
+              <Alert severity="error">{detailError.message}</Alert>
+            </Box>
+          ) : isDetailLoading && selectedCycleId && !selectedCycle ? (
+            <Box
+              sx={{
+                p: 3,
+                display: 'flex',
+                justifyContent: 'center',
+              }}
+            >
+              <CircularProgress />
+            </Box>
+          ) : selectedCycle ? (
             <Box sx={{ p: 2 }}>
               {isMobile ? (
                 <Box
@@ -756,7 +756,7 @@ export function TaskStrategyTab({
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 {formatDateTime(selectedCycle.started_at)} →{' '}
                 {formatDateTime(
-                  selectedCycle.ended_at ?? snapshotTickTimestamp
+                  selectedCycle.ended_at ?? detailData?.last_tick_timestamp
                 )}
               </Typography>
               <Typography
@@ -810,7 +810,7 @@ export function TaskStrategyTab({
                     taskId={taskId}
                     taskType={taskType}
                     executionRunId={executionRunId}
-                    lastTickTimestamp={snapshotTickTimestamp}
+                    lastTickTimestamp={detailData?.last_tick_timestamp ?? null}
                     selectedTradeIds={selectedTradeIds}
                     onMarkerClick={handleMarkerClick}
                   />
@@ -863,6 +863,11 @@ export function TaskStrategyTab({
                 ) : null}
               </Stack>
               <Divider sx={{ mb: 1 }} />
+              {isDetailLoading ? (
+                <Box sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
+                  <CircularProgress size={24} />
+                </Box>
+              ) : null}
               {(tradeSortOrder === 'asc'
                 ? selectedCycle.trades
                 : [...selectedCycle.trades].reverse()

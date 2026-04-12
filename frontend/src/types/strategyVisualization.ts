@@ -53,6 +53,7 @@ export interface StrategyCycle {
   has_protection?: boolean;
   protection_count?: number;
   rebuild_count?: number;
+  position_ids?: string[];
   realized_pnl?: string;
   unrealized_pnl?: string;
   grid_state?: StrategyGridState | null;
