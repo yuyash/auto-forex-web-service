@@ -798,6 +798,48 @@ class TestTrades:
         assert response.data["count"] == 1
         assert response.data["results"][0]["direction"] == "sell"
 
+    def test_trades_support_trade_ordering_without_breaking_task_lookup(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        first = Trade.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=now,
+            sequence_number=2,
+            direction=Direction.LONG,
+            units=1000,
+            instrument="USD_JPY",
+            price=Decimal("150.500"),
+            execution_method="initial_entry",
+        )
+        second = Trade.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=now + timedelta(minutes=5),
+            sequence_number=1,
+            direction=Direction.SHORT,
+            units=1000,
+            instrument="USD_JPY",
+            price=Decimal("150.700"),
+            execution_method="take_profit",
+        )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/trades/",
+            {"ordering": "asc"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 2
+        assert [trade["id"] for trade in response.data["results"]] == [
+            str(first.pk),
+            str(second.pk),
+        ]
+
     def test_trades_reject_invalid_cycle_id(self):
         task = _make_task()
         client = _auth_client(task.user)
