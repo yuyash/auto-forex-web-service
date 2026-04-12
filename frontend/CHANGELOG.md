@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.47.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.47.2...frontend-v1.47.3) (2026-04-12)
+
+
+### Bug Fixes
+
+* strategy overview trade pagination ([#453](https://github.com/yuyash/auto-forex-web-service/issues/453)) ([ec02946](https://github.com/yuyash/auto-forex-web-service/commit/ec029467139ba15b19513797f75f380c07967583))
+
 ## [1.47.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.47.1...frontend-v1.47.2) (2026-04-12)
 
 
