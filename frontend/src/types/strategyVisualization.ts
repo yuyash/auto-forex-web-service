@@ -50,9 +50,11 @@ export interface StrategyCycle {
   trade_count: number;
   open_count: number;
   close_count: number;
+  open_units_total?: number;
   has_protection?: boolean;
   protection_count?: number;
   rebuild_count?: number;
+  position_ids?: string[];
   realized_pnl?: string;
   unrealized_pnl?: string;
   grid_state?: StrategyGridState | null;

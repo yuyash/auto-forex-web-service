@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 from django.core.cache import cache
-from django.db.models import Case, F, Sum, Value, When
+from django.db.models import Case, F, IntegerField, Sum, Value, When
 
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
@@ -45,6 +45,8 @@ class CountsInfo:
     total_trades: int
     open_positions: int
     closed_positions: int
+    open_long_units: int
+    open_short_units: int
 
 
 @dataclass(frozen=True)
@@ -136,6 +138,22 @@ def compute_task_summary(
     unrealized_agg = open_qs.aggregate(unrealized_pnl=Sum("unrealized_pnl"))
     unrealized_pnl = unrealized_agg["unrealized_pnl"] or Decimal("0")
     open_position_count = open_qs.count()
+    open_size_agg = open_qs.aggregate(
+        open_long_units=Sum(
+            Case(
+                When(direction="long", then=_abs_units()),
+                default=Value(0),
+                output_field=IntegerField(),
+            )
+        ),
+        open_short_units=Sum(
+            Case(
+                When(direction="short", then=_abs_units()),
+                default=Value(0),
+                output_field=IntegerField(),
+            )
+        ),
+    )
 
     # Closed position count
     closed_position_count = Position.objects.filter(**base_filter, is_open=False).count()
@@ -231,6 +249,8 @@ def compute_task_summary(
             total_trades=total_trades,
             open_positions=open_position_count,
             closed_positions=closed_position_count,
+            open_long_units=int(open_size_agg["open_long_units"] or 0),
+            open_short_units=int(open_size_agg["open_short_units"] or 0),
         ),
         execution=ExecutionInfo(
             current_balance=current_balance,

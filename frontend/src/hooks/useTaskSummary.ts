@@ -33,6 +33,8 @@ export interface CountsInfo {
   totalTrades: number;
   openPositions: number;
   closedPositions: number;
+  openLongUnits: number;
+  openShortUnits: number;
 }
 
 export interface ExecutionInfo {
@@ -78,7 +80,13 @@ export interface UseTaskSummaryResult {
 const INITIAL_SUMMARY: TaskSummary = {
   timestamp: null,
   pnl: { realized: 0, unrealized: 0 },
-  counts: { totalTrades: 0, openPositions: 0, closedPositions: 0 },
+  counts: {
+    totalTrades: 0,
+    openPositions: 0,
+    closedPositions: 0,
+    openLongUnits: 0,
+    openShortUnits: 0,
+  },
   execution: {
     currentBalance: null,
     ticksProcessed: 0,

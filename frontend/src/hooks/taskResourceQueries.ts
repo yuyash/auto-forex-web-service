@@ -28,6 +28,8 @@ interface TaskSummaryResponse {
     total_trades?: number;
     open_positions?: number;
     closed_positions?: number;
+    open_long_units?: number;
+    open_short_units?: number;
   };
   execution?: {
     current_balance?: string | number | null;
@@ -157,6 +159,8 @@ export function createTaskSummaryQuery(
             totalTrades: d.counts?.total_trades ?? 0,
             openPositions: d.counts?.open_positions ?? 0,
             closedPositions: d.counts?.closed_positions ?? 0,
+            openLongUnits: d.counts?.open_long_units ?? 0,
+            openShortUnits: d.counts?.open_short_units ?? 0,
           },
           execution: {
             currentBalance:
@@ -258,15 +262,18 @@ export function createTaskExecutionQuery(
 export function createTaskStrategyEventsQuery(
   taskId: string | number,
   taskType: TaskType,
-  executionRunId?: string
+  executionRunId?: string,
+  cycleId?: string,
+  options?: { enabled?: boolean }
 ): UseQueryOptions<StrategyCyclesResponse | null> {
   return {
     queryKey: queryKeys.taskResources.strategyEvents(
       taskType,
       String(taskId),
-      executionRunId
+      executionRunId,
+      cycleId
     ),
-    enabled: Boolean(taskId),
+    enabled: Boolean(taskId) && options?.enabled !== false,
     staleTime: 0,
     refetchOnMount: 'always',
     queryFn: async () => {
@@ -278,7 +285,10 @@ export function createTaskStrategyEventsQuery(
           taskType,
           taskId,
           'strategy-events',
-          executionRunId ? { execution_id: executionRunId } : undefined
+          {
+            ...(executionRunId ? { execution_id: executionRunId } : {}),
+            ...(cycleId ? { cycle_id: cycleId } : {}),
+          }
         );
       } catch (err) {
         if (isApiErrorWithStatus(err)) {

@@ -239,6 +239,7 @@
       "opens": "{{count}} オープン",
       "closes": "{{count}} クローズ",
       "opensAndCloses": "{{opens}} オープン、{{closes}} クローズ",
+      "openUnitsTotal": "オープンサイズ {{units}} 数量",
       "trades": "トレード",
       "back": "戻る",
       "resetZoom": "ズームリセット",

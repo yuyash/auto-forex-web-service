@@ -395,6 +395,8 @@ class TestEvents:
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data["cycles"]) == 1
         assert response.data["cycles"][0]["cycle_id"] == str(cycle_id)
+        assert response.data["cycles"][0]["position_ids"] == []
+        assert response.data["cycles"][0]["trades"] == []
         assert response.data["summary"]["cycle_count"] == 1
 
     def test_strategy_events_include_snowball_grid_state(self):
@@ -502,6 +504,8 @@ class TestEvents:
 
         assert response.status_code == status.HTTP_200_OK
         grid_state = response.data["cycles"][0]["grid_state"]
+        assert response.data["cycles"][0]["position_ids"] == [str(position_id)]
+        assert response.data["cycles"][0]["trades"] == []
         assert grid_state["summary"]["filled"] == 1
         assert grid_state["summary"]["stopped"] == 1
         assert grid_state["summary"]["layer_count"] == 1
@@ -592,6 +596,133 @@ class TestEvents:
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data["cycles"]) == 1
         assert response.data["cycles"][0]["cycle_id"] == str(cycle_b)
+        assert len(response.data["cycles"][0]["trades"]) == 1
+
+    def test_strategy_events_include_open_units_total(self):
+        task = _make_task(strategy_type="snowball")
+        client = _auth_client(task.user)
+
+        cycle_id = uuid4()
+        long_position = uuid4()
+        closed_position = uuid4()
+        now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        Position.objects.create(
+            id=long_position,
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction=Direction.LONG,
+            units=1000,
+            entry_price="150.100",
+            entry_time=now,
+            is_open=True,
+        )
+        Position.objects.create(
+            id=closed_position,
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction=Direction.LONG,
+            units=2000,
+            entry_price="149.900",
+            entry_time=now + timedelta(minutes=1),
+            exit_price="150.300",
+            exit_time=now + timedelta(minutes=2),
+            is_open=False,
+        )
+
+        Trade.objects.create(
+            id=uuid4(),
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=now,
+            direction="long",
+            units=1000,
+            instrument="USD_JPY",
+            price="150.100",
+            execution_method="open_position",
+            cycle_id=cycle_id,
+            position_id=long_position,
+        )
+        Trade.objects.create(
+            id=uuid4(),
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=now + timedelta(minutes=1),
+            direction="long",
+            units=2000,
+            instrument="USD_JPY",
+            price="149.900",
+            execution_method="open_position",
+            cycle_id=cycle_id,
+            position_id=closed_position,
+        )
+        Trade.objects.create(
+            id=uuid4(),
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=now + timedelta(minutes=2),
+            direction="long",
+            units=-2000,
+            instrument="USD_JPY",
+            price="150.300",
+            execution_method="close_position",
+            cycle_id=cycle_id,
+            position_id=closed_position,
+        )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/strategy-events/",
+            {"cycle_id": str(cycle_id)},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["cycles"][0]["open_units_total"] == 1000
+
+
+@pytest.mark.django_db
+class TestSummary:
+    """GET /api/trading/tasks/backtest/{id}/summary/"""
+
+    def test_summary_includes_open_units_by_direction(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        Position.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction=Direction.LONG,
+            units=1000,
+            entry_price=Decimal("150.500"),
+            entry_time=now,
+            is_open=True,
+        )
+        Position.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction=Direction.SHORT,
+            units=-2500,
+            entry_price=Decimal("150.700"),
+            entry_time=now,
+            is_open=True,
+        )
+
+        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/summary/")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["counts"]["open_long_units"] == 1000
+        assert response.data["counts"]["open_short_units"] == 2500
 
 
 @pytest.mark.django_db

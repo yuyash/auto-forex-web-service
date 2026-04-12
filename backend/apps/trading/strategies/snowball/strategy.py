@@ -79,6 +79,7 @@ class SnowballStrategy(Strategy):
         super().__init__(instrument, pip_size, config)
         self._hedging_enabled: bool = True
         self._close_order_violation: str | None = None
+        self._grid_order_violation: str | None = None
         logger.info(
             "Initialised Snowball engine: instrument=%s, pip_size=%s",
             instrument,
@@ -333,6 +334,58 @@ class SnowballStrategy(Strategy):
         logger.error("Close order violation detail: %s", detail)
         self._close_order_violation = detail
         return []
+
+    def _validate_grid_ordering(self, cycle: SnowballCycle) -> None:
+        """Ensure present slots preserve monotonic entry/TP ordering."""
+        present: list[tuple[int, int, Decimal, Decimal, str]] = []
+        for layer in cycle.grid.layers:
+            for slot in layer.slots:
+                if slot.entry is not None:
+                    present.append(
+                        (
+                            layer.layer_number,
+                            slot.index,
+                            slot.entry.entry_price,
+                            slot.entry.close_price,
+                            "open",
+                        )
+                    )
+                elif slot.pending_rebuild is not None:
+                    pending = slot.pending_rebuild
+                    present.append(
+                        (
+                            layer.layer_number,
+                            slot.index,
+                            pending.entry_price,
+                            pending.close_price,
+                            "pending_rebuild",
+                        )
+                    )
+
+        if len(present) < 2:
+            return
+
+        for prev, curr in zip(present, present[1:], strict=False):
+            if cycle.is_long:
+                entry_ok = prev[2] >= curr[2]
+                tp_ok = prev[3] >= curr[3]
+                expected = "descending"
+            else:
+                entry_ok = prev[2] <= curr[2]
+                tp_ok = prev[3] <= curr[3]
+                expected = "ascending"
+
+            if entry_ok and tp_ok:
+                continue
+
+            self._grid_order_violation = (
+                f"cycle_id={cycle.cycle_id}, direction={cycle.direction.value}, expected={expected}, "
+                f"prev=L{prev[0]}/R{prev[1]}({prev[4]}) entry={prev[2]:.5f} tp={prev[3]:.5f}, "
+                f"curr=L{curr[0]}/R{curr[1]}({curr[4]}) entry={curr[2]:.5f} tp={curr[3]:.5f}, "
+                f"entry_ok={entry_ok}, tp_ok={tp_ok}"
+            )
+            logger.error("Grid ordering violation detail: %s", self._grid_order_violation)
+            return
 
     # ------------------------------------------------------------------
     # Per-cycle tick processing
@@ -730,18 +783,15 @@ class SnowballStrategy(Strategy):
         units = (slot.index + 1) * layer.base_units
         new_price = tick.ask if direction == Direction.LONG else tick.bid
 
-        # Reference for weighted avg: R0 of this layer (live or head fallback)
-        # When R0 is pending rebuild, its price/units are already included
-        # by weighted_avg_close_price via the pending_rebuild slot, so we
-        # do not need to pass it as include_ref (that would double-count).
+        # Reference for weighted avg: do not pass the current layer's R0.
+        # weighted_avg_close_price already includes every live / pending slot
+        # in this layer, so passing R0 again would double-count it.
         r0 = layer.slot_at(0)
-        if r0 is not None and r0.entry is not None:
-            layer_ref = r0.entry
+        if r0 is not None and (r0.entry is not None or r0.pending_rebuild is not None):
+            layer_ref = None
         elif head is not None:
             layer_ref = head
         else:
-            # R0 is pending rebuild (or absent) — weighted_avg_close_price
-            # will pick it up from the slot's pending_rebuild directly.
             layer_ref = None
 
         if cfg.counter_tp_mode == "weighted_avg":
@@ -1478,6 +1528,7 @@ class SnowballStrategy(Strategy):
 
     def on_tick(self, *, tick: Tick, state: ExecutionState) -> StrategyResult:
         """Process a single tick."""
+        self._grid_order_violation = None
         ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
         ss.last_bid = tick.bid
         ss.last_ask = tick.ask
@@ -1574,6 +1625,17 @@ class SnowballStrategy(Strategy):
 
             if not counter_close_events:
                 events.extend(self._process_cycle_counter_adds(ss, tick, cycle))
+
+            self._validate_grid_ordering(cycle)
+            if self._grid_order_violation:
+                state.strategy_state = ss.to_dict()
+                return StrategyResult(
+                    state=state,
+                    events=events,
+                    should_stop=True,
+                    stop_reason=f"Grid ordering violation: {self._grid_order_violation}",
+                    is_error=True,
+                )
 
             # --- Cycle status update ---
             # ACTIVE:    at least one open (live) entry exists.

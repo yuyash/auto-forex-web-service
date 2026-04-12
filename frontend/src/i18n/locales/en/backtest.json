@@ -167,6 +167,10 @@
     "totalTradesCount": "Total Trades (count)",
     "openPositions": "Open Positions",
     "closedPositions": "Closed Positions",
+    "openLongUnits": "Open Long Size",
+    "openShortUnits": "Open Short Size",
+    "tickGranularity": "Tick Granularity",
+    "tickWindowValueMode": "Window Value Mode",
     "ticksProcessed": "Ticks Processed",
     "completed": "completed",
     "viewingHistoricalExecution": "You are viewing a past execution. The data shown below is from this historical run."

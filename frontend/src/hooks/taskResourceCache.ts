@@ -57,13 +57,15 @@ export function refreshTaskSummary(
 export function refreshTaskStrategyEvents(
   taskId: string,
   taskType: TaskType,
-  executionRunId?: string
+  executionRunId?: string,
+  cycleId?: string
 ) {
   return queryClient.invalidateQueries({
     queryKey: queryKeys.taskResources.strategyEvents(
       taskType,
       taskId,
-      executionRunId
+      executionRunId,
+      cycleId
     ),
   });
 }

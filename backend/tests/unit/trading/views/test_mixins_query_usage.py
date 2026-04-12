@@ -63,6 +63,12 @@ def test_strategy_events_uses_strategy_events_query_params():
         response = view.strategy_events(request, pk=1)
 
     from_request.assert_called_once_with(request, default_execution_id="exec-1")
+    build.assert_called_once_with(
+        task=view.get_object(),
+        task_type="backtest",
+        execution_id="exec-1",
+        cycle_id=None,
+    )
     assert response.data == {"cycles": [], "summary": {}}
 
 
