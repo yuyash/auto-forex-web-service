@@ -56,6 +56,7 @@ class TestStrategyConfigAPI:
         response = client.get(f"/api/trading/strategy-configs/{config.id}/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["id"] == str(config.id)
+        assert response.data["has_running_tasks"] is False
 
     def test_update_config(self):
         user = UserFactory()
@@ -65,6 +66,23 @@ class TestStrategyConfigAPI:
         response = client.put(f"/api/trading/strategy-configs/{config.id}/", data, format="json")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["name"] == "Updated Name"
+
+    def test_update_config_blocked_when_any_task_is_running(self):
+        user = UserFactory()
+        config = StrategyConfigurationFactory(user=user)
+        other_config = StrategyConfigurationFactory(user=user)
+        account = OandaAccountFactory(user=user)
+        TradingTaskFactory(
+            user=user,
+            config=other_config,
+            oanda_account=account,
+            status=TaskStatus.RUNNING,
+        )
+        client = self._auth_client(user)
+        data = {"name": "Blocked Update", "parameters": config.parameters}
+        response = client.put(f"/api/trading/strategy-configs/{config.id}/", data, format="json")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "cannot be updated while any task is running" in response.data["detail"].lower()
 
     def test_delete_config(self):
         user = UserFactory()

@@ -38,6 +38,7 @@ const ConfigurationFormPage = () => {
 
   const { createConfiguration, updateConfiguration, isCreating, isUpdating } =
     useConfigurationMutations();
+  const isEditLocked = Boolean(isEditMode && configuration?.has_running_tasks);
 
   // Redirect if configuration not found in edit mode
   useEffect(() => {
@@ -63,7 +64,7 @@ const ConfigurationFormPage = () => {
           strategy_type?: string[];
           parameters?: string | Record<string, unknown>;
           error?: string;
-          detail?: string;
+          detail?: string | string[];
         };
         message?: string;
       };
@@ -87,7 +88,11 @@ const ConfigurationFormPage = () => {
         } else if (error.data.error) {
           setErrorMessage(error.data.error);
         } else if (error.data.detail) {
-          setErrorMessage(error.data.detail);
+          setErrorMessage(
+            Array.isArray(error.data.detail)
+              ? error.data.detail[0]
+              : error.data.detail
+          );
         } else {
           setErrorMessage(error.message || 'Failed to save configuration');
         }
@@ -166,8 +171,14 @@ const ConfigurationFormPage = () => {
         </Alert>
       )}
 
+      {isEditLocked && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {t('configuration:form.editLockedRunningTasks')}
+        </Alert>
+      )}
+
       <Paper elevation={2} sx={{ p: 4 }}>
-        {isEditMode && configuration ? (
+        {isEditMode && configuration && !isEditLocked ? (
           <ConfigurationForm
             mode="edit"
             initialData={{
@@ -177,17 +188,37 @@ const ConfigurationFormPage = () => {
               parameters: configuration.parameters,
             }}
             onSubmit={async (data) => {
-              await updateConfiguration({
-                id: configuration.id,
-                data: {
-                  parameters: data.parameters,
-                },
-              });
-              navigate('/configurations');
+              try {
+                await updateConfiguration({
+                  id: configuration.id,
+                  data: {
+                    parameters: data.parameters,
+                  },
+                });
+                navigate('/configurations');
+              } catch (err: unknown) {
+                const error = err as {
+                  data?: { detail?: string | string[] };
+                  message?: string;
+                };
+                if (error.data?.detail) {
+                  setErrorMessage(
+                    Array.isArray(error.data.detail)
+                      ? error.data.detail[0]
+                      : error.data.detail
+                  );
+                } else {
+                  setErrorMessage(
+                    error.message || 'Failed to save configuration'
+                  );
+                }
+              }
             }}
             onCancel={handleCancel}
             isLoading={isUpdating}
           />
+        ) : isEditMode && isEditLocked ? (
+          <Box />
         ) : (
           <ConfigurationForm
             mode="create"

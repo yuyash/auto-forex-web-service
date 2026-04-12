@@ -18,6 +18,7 @@ class StrategyConfigDetailSerializer(serializers.ModelSerializer):
 
     user_id = serializers.IntegerField(source="user.id", read_only=True)
     is_in_use = serializers.SerializerMethodField()
+    has_running_tasks = serializers.SerializerMethodField()
 
     class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = StrategyConfiguration
@@ -29,14 +30,26 @@ class StrategyConfigDetailSerializer(serializers.ModelSerializer):
             "parameters",
             "description",
             "is_in_use",
+            "has_running_tasks",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "user_id", "is_in_use", "created_at", "updated_at"]
+        read_only_fields = [
+            "id",
+            "user_id",
+            "is_in_use",
+            "has_running_tasks",
+            "created_at",
+            "updated_at",
+        ]
 
     def get_is_in_use(self, obj: StrategyConfiguration) -> bool:
         """Get whether configuration is in use by active tasks."""
         return obj.is_in_use()
+
+    def get_has_running_tasks(self, obj: StrategyConfiguration) -> bool:
+        """Get whether the config owner currently has any running task."""
+        return StrategyConfiguration.user_has_running_tasks(obj.user)
 
 
 class StrategyConfigListSerializer(serializers.ModelSerializer):
@@ -46,6 +59,7 @@ class StrategyConfigListSerializer(serializers.ModelSerializer):
 
     user_id = serializers.IntegerField(source="user.id", read_only=True)
     is_in_use = serializers.SerializerMethodField()
+    has_running_tasks = serializers.SerializerMethodField()
 
     class Meta:  # pylint: disable=missing-class-docstring,too-few-public-methods
         model = StrategyConfiguration
@@ -56,6 +70,7 @@ class StrategyConfigListSerializer(serializers.ModelSerializer):
             "strategy_type",
             "description",
             "is_in_use",
+            "has_running_tasks",
             "created_at",
             "updated_at",
         ]
@@ -64,6 +79,10 @@ class StrategyConfigListSerializer(serializers.ModelSerializer):
     def get_is_in_use(self, obj: StrategyConfiguration) -> bool:
         """Get whether configuration is in use by active tasks."""
         return obj.is_in_use()
+
+    def get_has_running_tasks(self, obj: StrategyConfiguration) -> bool:
+        """Get whether the config owner currently has any running task."""
+        return StrategyConfiguration.user_has_running_tasks(obj.user)
 
 
 class StrategyConfigCreateSerializer(serializers.ModelSerializer):
@@ -156,6 +175,11 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
         self, instance: StrategyConfiguration, validated_data: dict
     ) -> StrategyConfiguration:
         """Update strategy configuration."""
+        if StrategyConfiguration.user_has_running_tasks(instance.user):
+            raise serializers.ValidationError(
+                {"detail": ("Strategy configurations cannot be updated while any task is running.")}
+            )
+
         # Don't allow updating strategy_type if config is in use
         if (
             "strategy_type" in validated_data

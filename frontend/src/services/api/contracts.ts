@@ -105,6 +105,7 @@ export interface BackendStrategyConfig {
   parameters?: Record<string, unknown> | null;
   description: string;
   is_in_use: boolean;
+  has_running_tasks: boolean;
   created_at: string;
   updated_at: string;
 }

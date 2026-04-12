@@ -168,6 +168,22 @@ class StrategyConfiguration(UUIDModel):
             ).exists()
         )
 
+    @classmethod
+    def user_has_running_tasks(cls, user: Any) -> bool:
+        """Return True when the given user has at least one running task.
+
+        Configuration updates are globally locked per user while any trading or
+        backtest task is in RUNNING state.
+        """
+        from apps.trading.enums import TaskStatus
+        from apps.trading.models import BacktestTask, TradingTask
+
+        user_id = getattr(user, "pk", user)
+        return (
+            TradingTask.objects.filter(user=user_id, status=TaskStatus.RUNNING).exists()
+            or BacktestTask.objects.filter(user=user_id, status=TaskStatus.RUNNING).exists()
+        )
+
     def validate_parameters(self) -> tuple[bool, str | None]:
         """Validate parameters through strategy registry plugins.
 

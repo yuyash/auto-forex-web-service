@@ -256,6 +256,7 @@ export default function ConfigurationDetailPage() {
               <Button
                 variant="contained"
                 startIcon={<EditIcon />}
+                disabled={configuration.has_running_tasks}
                 onClick={() =>
                   navigate(`/configurations/${configuration.id}/edit`)
                 }
@@ -264,6 +265,12 @@ export default function ConfigurationDetailPage() {
               </Button>
             </Box>
           </Box>
+
+          {configuration.has_running_tasks && (
+            <Alert severity="warning" sx={{ mb: 3 }}>
+              {t('configuration:form.editLockedRunningTasks')}
+            </Alert>
+          )}
 
           <Paper elevation={2} sx={{ p: 3 }}>
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>

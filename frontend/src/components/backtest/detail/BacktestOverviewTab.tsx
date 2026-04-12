@@ -32,6 +32,14 @@ export function BacktestOverviewTab({
   onOpenConfiguration,
 }: BacktestOverviewTabProps) {
   const { t } = useTranslation(['backtest', 'common']);
+  const latestMarginRatioRaw = latestMetrics?.metrics.margin_ratio;
+  const latestMarginRatio =
+    latestMarginRatioRaw != null && latestMarginRatioRaw !== ''
+      ? Number(latestMarginRatioRaw)
+      : null;
+  const displayedMarginRatio = Number.isFinite(latestMarginRatio)
+    ? latestMarginRatio
+    : summary.execution.marginRatio;
 
   const tracemallocEnabled = Boolean(task.debug_options?.tracemalloc);
 
@@ -348,13 +356,13 @@ export function BacktestOverviewTab({
                 </Typography>
               </Box>
             )}
-            {summary.execution.marginRatio != null && (
+            {displayedMarginRatio != null && (
               <Box>
                 <Typography variant="caption" color="text.secondary">
                   {t('common:labels.marginRatio')}
                 </Typography>
                 <Typography variant="body1">
-                  {(summary.execution.marginRatio * 100).toFixed(1)}%
+                  {(displayedMarginRatio * 100).toFixed(1)}%
                 </Typography>
               </Box>
             )}

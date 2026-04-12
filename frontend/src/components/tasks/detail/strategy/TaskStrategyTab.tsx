@@ -835,7 +835,6 @@ export function TaskStrategyTab({
                 <Box sx={{ mb: 2 }}>
                   <StrategyGridIndicator
                     gridState={selectedCycle.grid_state}
-                    title={t('common:strategyVisualization.grid.title')}
                     showSlotBuildCounts={true}
                     slotBuildCounts={selectedCycleSlotBuildCounts}
                   />

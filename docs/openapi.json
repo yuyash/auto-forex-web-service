@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.33.3",
+        "version": "1.33.4",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -8108,6 +8108,11 @@
                         "description": "Get whether configuration is in use by active tasks.",
                         "readOnly": true
                     },
+                    "has_running_tasks": {
+                        "type": "boolean",
+                        "description": "Get whether the config owner currently has any running task.",
+                        "readOnly": true
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -8123,6 +8128,7 @@
                 },
                 "required": [
                     "created_at",
+                    "has_running_tasks",
                     "id",
                     "is_in_use",
                     "name",
@@ -8165,6 +8171,11 @@
                         "description": "Get whether configuration is in use by active tasks.",
                         "readOnly": true
                     },
+                    "has_running_tasks": {
+                        "type": "boolean",
+                        "description": "Get whether the config owner currently has any running task.",
+                        "readOnly": true
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -8181,6 +8192,7 @@
                 "required": [
                     "created_at",
                     "description",
+                    "has_running_tasks",
                     "id",
                     "is_in_use",
                     "name",

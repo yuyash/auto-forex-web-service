@@ -24,6 +24,7 @@ class TestStrategyConfigDetailSerializer:
         assert "strategy_type" in fields
         assert "parameters" in fields
         assert "is_in_use" in fields
+        assert "has_running_tasks" in fields
 
     def test_get_is_in_use(self):
         serializer = StrategyConfigDetailSerializer()
@@ -37,6 +38,14 @@ class TestStrategyConfigDetailSerializer:
         obj.is_in_use.return_value = False
         assert serializer.get_is_in_use(obj) is False
 
+    @patch("apps.trading.serializers.strategy.StrategyConfiguration.user_has_running_tasks")
+    def test_get_has_running_tasks(self, mock_user_has_running_tasks):
+        serializer = StrategyConfigDetailSerializer()
+        obj = MagicMock()
+        obj.user = MagicMock()
+        mock_user_has_running_tasks.return_value = True
+        assert serializer.get_has_running_tasks(obj) is True
+
 
 class TestStrategyConfigListSerializer:
     """Test StrategyConfigListSerializer."""
@@ -46,6 +55,7 @@ class TestStrategyConfigListSerializer:
         assert "id" in fields
         assert "name" in fields
         assert "strategy_type" in fields
+        assert "has_running_tasks" in fields
         # parameters should NOT be in list view
         assert "parameters" not in fields
 

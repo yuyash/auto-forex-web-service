@@ -44,6 +44,10 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
       navigate(`/configurations/${copied.id}`);
     },
   });
+  const editDisabled = configuration.has_running_tasks;
+  const editTooltip = editDisabled
+    ? t('configuration:form.editLockedRunningTasks')
+    : t('configuration:card.editConfiguration');
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -217,13 +221,14 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
         </CardContent>
 
         <CardActions sx={{ px: 2, pb: 2, pt: 0 }}>
-          <Tooltip title={t('configuration:card.editConfiguration')}>
+          <Tooltip title={editTooltip}>
             <IconButton
               color="primary"
               onClick={(e) => {
                 e.stopPropagation();
                 handleEdit();
               }}
+              disabled={editDisabled}
               sx={{ mr: 1 }}
             >
               <EditIcon fontSize="small" />
@@ -269,9 +274,12 @@ const ConfigurationCard = ({ configuration }: ConfigurationCardProps) => {
           horizontal: 'right',
         }}
       >
-        <MenuItem onClick={handleEdit}>
+        <MenuItem onClick={handleEdit} disabled={editDisabled}>
           <ListItemIcon>
-            <EditIcon fontSize="small" />
+            <EditIcon
+              fontSize="small"
+              color={editDisabled ? 'disabled' : 'inherit'}
+            />
           </ListItemIcon>
           <ListItemText>{t('common:actions.edit')}</ListItemText>
         </MenuItem>

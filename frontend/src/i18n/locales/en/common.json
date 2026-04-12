@@ -418,6 +418,10 @@
       "units": "Units",
       "layer": "Layer",
       "retracement": "Retracement",
+      "entryTime": "Entry Time",
+      "exitTime": "Exit Time",
+      "entryPrice": "Entry Price",
+      "exitPrice": "Exit Price",
       "openPrice": "Open Price",
       "closePrice": "Close Price",
       "pips": "Pips",
@@ -491,6 +495,16 @@
           "rebuiltTo": "Rebuilt To",
           "closeReason": "Close Reason",
           "plannedExitFormula": "Exit Formula"
+        },
+        "closeReasons": {
+          "normal": "Normal Close",
+          "stopLossProtection": "Protection Close (Stop Loss)",
+          "shrinkProtection": "Protection Close (Shrink)",
+          "volatilityLockProtection": "Protection Close (Volatility Lock)",
+          "marginProtection": "Protection Close (Margin Protection)",
+          "counterTp": "Normal Close (Counter TP)",
+          "layerInitialTp": "Normal Close (Layer Initial TP)",
+          "lockHedgeNeutralize": "Normal Close (Lock Hedge Neutralize)"
         },
         "details": {
           "exitFormula": "Exit Formula",
