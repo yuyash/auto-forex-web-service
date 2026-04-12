@@ -87,7 +87,9 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         if search:
             queryset = queryset.filter(Q(name__icontains=search) | Q(description__icontains=search))
 
-        ordering = self.request.query_params.get("ordering", "-created_at")
+        ordering = "-created_at"
+        if self.action == "list":
+            ordering = self.request.query_params.get("ordering", ordering)
         return queryset.order_by(ordering)
 
     # ------------------------------------------------------------------
