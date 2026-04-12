@@ -342,7 +342,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
               size="small"
               onClick={(e) => {
                 e.stopPropagation();
-                handleOpenLifecycle(String(r.id).slice(0, 8), r);
+                handleOpenLifecycle(String(r.id), r);
               }}
               aria-label={t('tables.positions.lifecycle.viewLifecycle')}
               sx={{ p: 0.25 }}

@@ -15,6 +15,7 @@ interface UseIncrementalTaskResourceOptions<TApiItem, TItem> {
   taskType: TaskType;
   endpoint: string;
   paramsKey: string;
+  enabled?: boolean;
   page: number;
   pageSize: number;
   since?: string;
@@ -43,6 +44,7 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
   taskType,
   endpoint,
   paramsKey,
+  enabled = true,
   page,
   pageSize,
   since,
@@ -99,6 +101,19 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
   const fetchItems = useCallback(
     async (incremental = false) => {
       if (!taskId) {
+        setItems([]);
+        setTotalCount(0);
+        setHasNext(false);
+        setHasPrevious(false);
+        setIsLoading(false);
+        return false;
+      }
+
+      if (!enabled) {
+        setItems([]);
+        setTotalCount(0);
+        setHasNext(false);
+        setHasPrevious(false);
         setIsLoading(false);
         return false;
       }
@@ -191,6 +206,7 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
       since,
       taskId,
       taskType,
+      enabled,
     ]
   );
 

@@ -92,6 +92,33 @@ def test_summary_uses_summary_query_params():
     assert response.data == {"task": {"status": "created"}}
 
 
+def test_position_lifecycle_uses_position_lifecycle_query_params():
+    view = DummyTaskSubResourceView()
+    request = _request("/api/tasks/1/position-lifecycle")
+
+    with (
+        patch(
+            "apps.trading.views.mixins.PositionLifecycleQueryParams.from_request"
+        ) as from_request,
+        patch("apps.trading.services.position_lifecycle.PositionLifecycleService.build") as build,
+    ):
+        from_request.return_value = SimpleNamespace(
+            execution_id="exec-1",
+            position_id="abcd1234",
+        )
+        build.return_value = {
+            "requested_position_id": "abcd1234",
+            "matched_position_id": "abcd1234-abcd-abcd-abcd-abcdabcdabcd",
+            "position_ids": [],
+            "positions": [],
+        }
+
+        response = view.position_lifecycle(request, pk=1)
+
+    from_request.assert_called_once_with(request, default_execution_id="exec-1")
+    assert response.status_code == 200
+
+
 def test_executions_uses_executions_query_params():
     view = DummyTaskSubResourceView()
     request = _request("/api/tasks/1/executions")

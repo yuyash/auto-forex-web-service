@@ -29,6 +29,7 @@ export interface TaskTrade {
   description?: string;
   commission?: string;
   cycle_id?: string | null;
+  position_id?: string | null;
   is_rebuild?: boolean;
   stop_loss_price?: string | null;
   updated_at?: string | null;
@@ -39,11 +40,13 @@ interface UseTaskTradesOptions {
   taskType: TaskType;
   /** Filter by execution run ID. When omitted, uses the latest execution run. */
   executionRunId?: string;
+  enabled?: boolean;
   direction?: 'long' | 'short';
   page?: number;
   pageSize?: number;
   /** Filter trades by cycle ID. */
   cycleId?: string;
+  ordering?: 'asc' | 'desc';
   /** ISO 8601 timestamp — only return records updated after this time. */
   since?: string;
   enableRealTimeUpdates?: boolean;
@@ -100,15 +103,17 @@ export const useTaskTrades = ({
   taskId,
   taskType,
   executionRunId,
+  enabled = true,
   direction,
   page = 1,
   pageSize = 100,
   cycleId,
+  ordering = 'asc',
   since,
   enableRealTimeUpdates = false,
   refreshInterval = 5_000,
 }: UseTaskTradesOptions): UseTaskTradesResult => {
-  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${direction}-${page}-${pageSize}-${cycleId ?? ''}-${since ?? ''}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${direction}-${page}-${pageSize}-${cycleId ?? ''}-${ordering}-${since ?? ''}-${enabled ? 'on' : 'off'}`;
   const {
     items: trades,
     totalCount,
@@ -122,6 +127,7 @@ export const useTaskTrades = ({
     taskType,
     endpoint: 'trades',
     paramsKey,
+    enabled,
     page,
     pageSize,
     since,
@@ -137,6 +143,7 @@ export const useTaskTrades = ({
       if (direction === 'long') params.direction = 'buy';
       if (direction === 'short') params.direction = 'sell';
       if (cycleId) params.cycle_id = cycleId;
+      params.ordering = ordering;
       return params;
     },
     getLatestCursor: getLatestUpdatedAt,

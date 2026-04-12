@@ -469,12 +469,28 @@
         "searchPlaceholder": "Enter position ID or prefix (e.g. first 8 chars)",
         "enterPositionId": "Enter a position ID to view its lifecycle.",
         "noLogs": "No lifecycle logs found for this position.",
+        "noData": "No lifecycle data found for this position.",
+        "chainSummary_one": "{{count}} related position",
+        "chainSummary_other": "{{count}} related positions",
         "close": "Close",
         "events": {
           "OPENED": "Opened",
           "CLOSED": "Closed",
           "PARTIAL_CLOSE": "Partial Close",
-          "REBUILT": "Rebuilt"
+          "REBUILT": "Rebuilt",
+          "opened": "Opened",
+          "rebuilt": "Rebuilt",
+          "partial_close": "Partial Close",
+          "closed": "Closed",
+          "stop_loss_closed": "Stop Loss",
+          "rebuilt_into": "Rebuilt Into"
+        },
+        "fields": {
+          "positionId": "Position ID",
+          "rebuiltFrom": "Rebuilt From",
+          "rebuiltTo": "Rebuilt To",
+          "closeReason": "Close Reason",
+          "plannedExitFormula": "Exit Formula"
         },
         "details": {
           "exitFormula": "Exit Formula",

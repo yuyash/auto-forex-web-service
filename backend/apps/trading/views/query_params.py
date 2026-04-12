@@ -341,6 +341,13 @@ TRADES_DIRECTION_SPEC = QueryFieldSpec(
     allow_blank=True,
     help_text="Direction filter (buy/sell/long/short).",
 )
+TRADES_ORDERING_SPEC = QueryFieldSpec(
+    name="ordering",
+    kind="choice",
+    default="asc",
+    choices=("asc", "desc"),
+    help_text="Trade ordering by timestamp/sequence_number.",
+)
 TRADE_TIMESTAMP_FROM_SPEC = QueryFieldSpec(
     name="timestamp_from",
     kind="datetime",
@@ -556,6 +563,7 @@ QUERY_GROUP_SPECS = {
             *EXECUTION_SCOPED_TRADE_POSITION_GROUP,
             CYCLE_ID_SPEC,
             TRADES_DIRECTION_SPEC,
+            TRADES_ORDERING_SPEC,
             TRADE_TIMESTAMP_FROM_SPEC,
             TRADE_TIMESTAMP_TO_SPEC,
         ),
@@ -573,6 +581,12 @@ QUERY_GROUP_SPECS = {
             POSITIONS_RANGE_TO_SPEC,
         ),
         description="OpenAPI serializer for positions query parameters.",
+    ),
+    "position_lifecycle": QueryGroupSpec(
+        name="PositionLifecycleQueryParamsSchemaSerializer",
+        specs=(EXECUTION_ID_SPEC, POSITION_ID_SPEC),
+        description="OpenAPI serializer for position lifecycle query parameters.",
+        base=QueryParamsSerializer,
     ),
     "trend_replay": QueryGroupSpec(
         name="TrendReplayQueryParamsSchemaSerializer",
@@ -624,6 +638,7 @@ ENDPOINT_QUERY_SPECS = {
         "strategy_events",
         "trades",
         "positions",
+        "position_lifecycle",
         "trend_replay",
         "orders",
         "summary",
@@ -760,6 +775,7 @@ EventsQueryParamsSchemaSerializer = _build_query_serializer_alias("events")
 StrategyEventsQueryParamsSchemaSerializer = _build_query_serializer_alias("strategy_events")
 TradesQueryParamsSchemaSerializer = _build_query_serializer_alias("trades")
 PositionsQueryParamsSchemaSerializer = _build_query_serializer_alias("positions")
+PositionLifecycleQueryParamsSchemaSerializer = _build_query_serializer_alias("position_lifecycle")
 TrendReplayQueryParamsSchemaSerializer = _build_query_serializer_alias("trend_replay")
 OrdersQueryParamsSchemaSerializer = _build_query_serializer_alias("orders")
 SummaryQueryParamsSchemaSerializer = _build_query_serializer_alias("summary")
@@ -887,6 +903,28 @@ class PositionQuery:
 
 
 @dataclass(frozen=True)
+class PositionLifecycleQueryParams:
+    execution_id: UUID | None
+    position_id: str
+
+    @classmethod
+    def from_request(
+        cls,
+        request: Request,
+        *,
+        default_execution_id: UUID | None,
+    ) -> PositionLifecycleQueryParams:
+        parsed = _parse_endpoint_group("position_lifecycle", request)
+        position_id = cast(str, parsed["position_id"]).strip()
+        if not position_id:
+            raise _invalid_query_param("position_id is required")
+        return cls(
+            execution_id=cast(UUID | None, parsed["execution_id"]) or default_execution_id,
+            position_id=position_id,
+        )
+
+
+@dataclass(frozen=True)
 class MetricsQueryParams:
     execution: ExecutionScopedQuery
     until: datetime | None
@@ -996,6 +1034,7 @@ class TradesQueryParams:
     execution: ExecutionScopedQuery
     cycle_id: UUID | None
     direction: str
+    ordering: str
     timestamp_range: DateRangeQuery
 
     @classmethod
@@ -1017,6 +1056,7 @@ class TradesQueryParams:
             ),
             cycle_id=cast(UUID | None, parsed["cycle_id"]),
             direction=cast(str, parsed["direction"]),
+            ordering=cast(str, parsed["ordering"]) or "asc",
             timestamp_range=_build_date_range_query(
                 request,
                 start_key="timestamp_from",

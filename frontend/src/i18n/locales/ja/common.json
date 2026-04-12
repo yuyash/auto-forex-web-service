@@ -469,12 +469,28 @@
         "searchPlaceholder": "ポジションIDまたはプレフィックスを入力（例：先頭8文字）",
         "enterPositionId": "ポジションIDを入力してライフサイクルを表示します。",
         "noLogs": "このポジションのライフサイクルログが見つかりません。",
+        "noData": "このポジションのライフサイクル情報が見つかりません。",
+        "chainSummary_one": "{{count}} 件の関連ポジション",
+        "chainSummary_other": "{{count}} 件の関連ポジション",
         "close": "閉じる",
         "events": {
           "OPENED": "オープン",
           "CLOSED": "クローズ",
           "PARTIAL_CLOSE": "部分決済",
-          "REBUILT": "再建"
+          "REBUILT": "再建",
+          "opened": "オープン",
+          "rebuilt": "再建",
+          "partial_close": "部分決済",
+          "closed": "クローズ",
+          "stop_loss_closed": "ロスカット",
+          "rebuilt_into": "再建先作成"
+        },
+        "fields": {
+          "positionId": "ポジションID",
+          "rebuiltFrom": "再建元",
+          "rebuiltTo": "再建先",
+          "closeReason": "決済理由",
+          "plannedExitFormula": "決済価格計算式"
         },
         "details": {
           "exitFormula": "決済価格計算式",
