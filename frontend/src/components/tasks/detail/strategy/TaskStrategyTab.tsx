@@ -110,6 +110,41 @@ function formatCyclePnl(
   };
 }
 
+function getSlotBuildCountKey(layer: number, slot: number): string {
+  return `${layer}:${slot}`;
+}
+
+function buildSlotBuildCounts(
+  cycle: StrategyCycle | null
+): Record<string, number> {
+  if (!cycle) return {};
+
+  const uniquePositionIdsBySlot = new Map<string, Set<string>>();
+
+  for (const trade of cycle.trades) {
+    if (trade.execution_method !== 'open_position') continue;
+    if (!trade.position_id) continue;
+
+    const isInitialEntry = trade.id === cycle.cycle_id;
+    const layer = isInitialEntry ? 1 : trade.layer_index;
+    const slot = isInitialEntry ? 0 : trade.retracement_count;
+
+    if (layer == null || slot == null) continue;
+
+    const key = getSlotBuildCountKey(layer, slot);
+    const positionIds = uniquePositionIdsBySlot.get(key) ?? new Set<string>();
+    positionIds.add(trade.position_id);
+    uniquePositionIdsBySlot.set(key, positionIds);
+  }
+
+  return Object.fromEntries(
+    Array.from(uniquePositionIdsBySlot.entries(), ([key, positionIds]) => [
+      key,
+      positionIds.size,
+    ])
+  );
+}
+
 export function TaskStrategyTab({
   taskId,
   taskType,
@@ -255,6 +290,10 @@ export function TaskStrategyTab({
   }, []);
 
   const selectedCycle = detailSnapshot;
+  const selectedCycleSlotBuildCounts = useMemo(
+    () => buildSlotBuildCounts(selectedCycle),
+    [selectedCycle]
+  );
 
   // Manual refresh: re-fetch data then update the snapshot
   const [detailRefreshSeq, setDetailRefreshSeq] = useState(0);
@@ -746,6 +785,8 @@ export function TaskStrategyTab({
                   <StrategyGridIndicator
                     gridState={selectedCycle.grid_state}
                     title={t('common:strategyVisualization.grid.title')}
+                    showSlotBuildCounts={true}
+                    slotBuildCounts={selectedCycleSlotBuildCounts}
                   />
                 </Box>
               ) : null}
