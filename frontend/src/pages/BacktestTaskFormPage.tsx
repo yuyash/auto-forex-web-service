@@ -5,6 +5,7 @@ import BacktestTaskForm from '../components/backtest/BacktestTaskForm';
 import BacktestTaskUpdateForm from '../components/backtest/BacktestTaskUpdateForm';
 import { useBacktestTask } from '../hooks/useBacktestTasks';
 import { LoadingSpinner, Breadcrumbs } from '../components/common';
+import type { BacktestTaskFormData } from '../types/backtestTask';
 
 export default function BacktestTaskFormPage() {
   const { t } = useTranslation('backtest');
@@ -12,6 +13,12 @@ export default function BacktestTaskFormPage() {
   const taskId = id || undefined;
 
   const { data: task, isLoading } = useBacktestTask(taskId);
+  const tickGranularity = task?.tick_granularity as
+    | BacktestTaskFormData['tick_granularity']
+    | undefined;
+  const tickWindowValueMode = task?.tick_window_value_mode as
+    | BacktestTaskFormData['tick_window_value_mode']
+    | undefined;
 
   if (taskId && (isLoading || !task)) {
     return (
@@ -55,8 +62,8 @@ export default function BacktestTaskFormPage() {
                 commission_per_trade: parseFloat(task.commission_per_trade),
                 pip_size: task.pip_size ? parseFloat(task.pip_size) : undefined,
                 instrument: task.instrument,
-                tick_granularity: task.tick_granularity,
-                tick_window_value_mode: task.tick_window_value_mode,
+                tick_granularity: tickGranularity ?? 'tick',
+                tick_window_value_mode: tickWindowValueMode ?? 'last',
                 sell_at_completion: task.sell_at_completion ?? false,
                 hedging_enabled: task.hedging_enabled ?? true,
               }}
