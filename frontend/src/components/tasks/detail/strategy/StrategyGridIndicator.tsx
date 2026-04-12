@@ -250,7 +250,7 @@ function GridRow({
 function stateMainColor(theme: Theme, state: StrategyGridSlotState): string {
   if (state === 'filled') return theme.palette.success.main;
   if (state === 'stopped') return theme.palette.error.main;
-  if (state === 'rebuilt') return theme.palette.primary.main;
+  if (state === 'rebuilt') return theme.palette.warning.main;
   return theme.palette.grey[500];
 }
 
