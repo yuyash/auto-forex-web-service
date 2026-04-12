@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.32.1...backend-v1.33.0) (2026-04-12)
+
+
+### Features
+
+* **strategy:** preserve highest snowball R on stop-loss ([#447](https://github.com/yuyash/auto-forex-web-service/issues/447)) ([8f1ed6e](https://github.com/yuyash/auto-forex-web-service/commit/8f1ed6ef1b7a8df7bf25db9c713cb7d3a985a88f))
+
 ## [1.32.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.32.0...backend-v1.32.1) (2026-04-12)
 
 
