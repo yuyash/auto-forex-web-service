@@ -2825,6 +2825,62 @@
                 }
             }
         },
+        "/api/trading/tasks/backtest/{id}/position-lifecycle/": {
+            "get": {
+                "operationId": "trading_tasks_backtest_position_lifecycle_retrieve",
+                "description": "Retrieve the full lifecycle chain for one position, including rebuild links.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                        },
+                        "description": "Filter by execution ID (UUID)."
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "position_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional position ID prefix filter."
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskPositionLifecycleResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/backtest/{id}/positions/": {
             "get": {
                 "operationId": "trading_tasks_backtest_positions_retrieve",
@@ -4431,6 +4487,62 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/TradingTask"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/trading/{id}/position-lifecycle/": {
+            "get": {
+                "operationId": "trading_tasks_trading_position_lifecycle_retrieve",
+                "description": "Retrieve the full lifecycle chain for one position, including rebuild links.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                        },
+                        "description": "Filter by execution ID (UUID)."
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "position_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional position ID prefix filter."
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskPositionLifecycleResponse"
                                 }
                             }
                         },
@@ -8606,6 +8718,38 @@
                     "next",
                     "previous",
                     "results"
+                ]
+            },
+            "TaskPositionLifecycleResponse": {
+                "type": "object",
+                "properties": {
+                    "requested_position_id": {
+                        "type": "string"
+                    },
+                    "matched_position_id": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "position_ids": {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "format": "uuid"
+                        }
+                    },
+                    "positions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                        }
+                    }
+                },
+                "required": [
+                    "matched_position_id",
+                    "position_ids",
+                    "positions",
+                    "requested_position_id"
                 ]
             },
             "TaskPositionPaginatedResponse": {

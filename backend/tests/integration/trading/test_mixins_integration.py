@@ -861,6 +861,204 @@ class TestPositions:
 
 
 @pytest.mark.django_db
+class TestPositionLifecycle:
+    """GET /api/trading/tasks/backtest/{id}/position-lifecycle/"""
+
+    def test_returns_chain_and_synthesizes_missing_close(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        old_position_id = uuid4()
+        rebuilt_position_id = uuid4()
+        old_entry_time = datetime(2024, 9, 11, 10, 19, 40, tzinfo=timezone.utc)
+        old_exit_time = datetime(2024, 9, 11, 10, 25, 50, tzinfo=timezone.utc)
+        rebuilt_entry_time = datetime(2024, 9, 11, 10, 26, 5, tzinfo=timezone.utc)
+
+        Position.objects.create(
+            id=old_position_id,
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction="short",
+            units=-7000,
+            entry_price=Decimal("142.2170"),
+            entry_time=old_entry_time,
+            exit_price=Decimal("142.4630"),
+            exit_time=old_exit_time,
+            is_open=False,
+            layer_index=1,
+            retracement_count=6,
+            planned_exit_price=Decimal("141.8240"),
+            stop_loss_price=Decimal("142.4570"),
+        )
+        Position.objects.create(
+            id=rebuilt_position_id,
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction="short",
+            units=-7000,
+            entry_price=Decimal("142.2170"),
+            entry_time=rebuilt_entry_time,
+            is_open=True,
+            is_rebuild=True,
+            layer_index=1,
+            retracement_count=6,
+            planned_exit_price=Decimal("141.8240"),
+            stop_loss_price=Decimal("142.4570"),
+        )
+
+        Trade.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=old_entry_time,
+            direction="short",
+            units=7000,
+            instrument="USD_JPY",
+            price=Decimal("142.2170"),
+            execution_method="open_position",
+            layer_index=1,
+            retracement_count=6,
+            position_id=old_position_id,
+        )
+        Trade.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=old_exit_time,
+            direction="short",
+            units=7000,
+            instrument="USD_JPY",
+            price=Decimal("142.4630"),
+            execution_method="stop_loss",
+            layer_index=1,
+            retracement_count=6,
+            position_id=old_position_id,
+            description="[PROTECTION] Stop loss",
+        )
+        Trade.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=rebuilt_entry_time,
+            direction="short",
+            units=7000,
+            instrument="USD_JPY",
+            price=Decimal("142.2170"),
+            execution_method="rebuild_position",
+            layer_index=1,
+            retracement_count=6,
+            position_id=rebuilt_position_id,
+            is_rebuild=True,
+        )
+
+        TaskLog.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            level=LogLevel.INFO,
+            component="position.lifecycle",
+            message="POSITION_OPENED",
+            details={
+                "context": {
+                    "position_id": str(old_position_id),
+                    "lifecycle_event": "OPENED",
+                    "direction": "short",
+                    "instrument": "USD_JPY",
+                    "units": 7000,
+                    "entry_price": "142.2170",
+                    "entry_time": old_entry_time.isoformat(),
+                    "layer_index": 1,
+                    "retracement_count": 6,
+                    "planned_exit_price": "141.8240",
+                }
+            },
+        )
+        TaskLog.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            level=LogLevel.INFO,
+            component="position.lifecycle",
+            message="POSITION_REBUILT",
+            details={
+                "context": {
+                    "position_id": str(rebuilt_position_id),
+                    "original_position_id": str(old_position_id),
+                    "lifecycle_event": "REBUILT",
+                    "direction": "short",
+                    "instrument": "USD_JPY",
+                    "units": 7000,
+                    "entry_price": "142.2170",
+                    "entry_time": rebuilt_entry_time.isoformat(),
+                    "layer_index": 1,
+                    "retracement_count": 6,
+                    "planned_exit_price": "141.8240",
+                }
+            },
+        )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/position-lifecycle/",
+            {"position_id": str(rebuilt_position_id)},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["matched_position_id"] == str(rebuilt_position_id)
+        assert response.data["position_ids"] == [str(old_position_id), str(rebuilt_position_id)]
+
+        old_position = response.data["positions"][0]
+        rebuilt_position = response.data["positions"][1]
+
+        assert old_position["summary"]["close_reason"] == "stop_loss"
+        assert old_position["summary"]["realized_pnl"] == "-1722.0000000000"
+        assert [event["kind"] for event in old_position["events"]] == [
+            "opened",
+            "stop_loss_closed",
+            "rebuilt_into",
+        ]
+        assert old_position["events"][1]["related_position_id"] == str(rebuilt_position_id)
+
+        assert rebuilt_position["original_position_id"] == str(old_position_id)
+        assert [event["kind"] for event in rebuilt_position["events"]] == ["rebuilt"]
+        assert rebuilt_position["events"][0]["related_position_id"] == str(old_position_id)
+
+    def test_rejects_ambiguous_prefix(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        for raw_id in (
+            "abcd1234-1111-4111-8111-111111111111",
+            "abcd1234-2222-4222-8222-222222222222",
+        ):
+            Position.objects.create(
+                id=raw_id,
+                task_type=TaskType.BACKTEST,
+                task_id=task.pk,
+                execution_id=task.execution_id,
+                instrument="USD_JPY",
+                direction="long",
+                units=1000,
+                entry_price=Decimal("150"),
+                entry_time=datetime(2024, 1, 1, tzinfo=timezone.utc),
+                is_open=True,
+            )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/position-lifecycle/",
+            {"position_id": "abcd1234"},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data == {
+            "code": "invalid_query_param",
+            "detail": "Position ID prefix matched multiple positions; provide a longer ID",
+        }
+
+
+@pytest.mark.django_db
 class TestOrders:
     """GET /api/trading/tasks/backtest/{id}/orders/"""
 

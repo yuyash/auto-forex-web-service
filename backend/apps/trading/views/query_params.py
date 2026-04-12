@@ -582,6 +582,12 @@ QUERY_GROUP_SPECS = {
         ),
         description="OpenAPI serializer for positions query parameters.",
     ),
+    "position_lifecycle": QueryGroupSpec(
+        name="PositionLifecycleQueryParamsSchemaSerializer",
+        specs=(EXECUTION_ID_SPEC, POSITION_ID_SPEC),
+        description="OpenAPI serializer for position lifecycle query parameters.",
+        base=QueryParamsSerializer,
+    ),
     "trend_replay": QueryGroupSpec(
         name="TrendReplayQueryParamsSchemaSerializer",
         specs=(*EXECUTION_SCOPED_TRADE_POSITION_GROUP, RANGE_FROM_SPEC, RANGE_TO_SPEC),
@@ -632,6 +638,7 @@ ENDPOINT_QUERY_SPECS = {
         "strategy_events",
         "trades",
         "positions",
+        "position_lifecycle",
         "trend_replay",
         "orders",
         "summary",
@@ -768,6 +775,7 @@ EventsQueryParamsSchemaSerializer = _build_query_serializer_alias("events")
 StrategyEventsQueryParamsSchemaSerializer = _build_query_serializer_alias("strategy_events")
 TradesQueryParamsSchemaSerializer = _build_query_serializer_alias("trades")
 PositionsQueryParamsSchemaSerializer = _build_query_serializer_alias("positions")
+PositionLifecycleQueryParamsSchemaSerializer = _build_query_serializer_alias("position_lifecycle")
 TrendReplayQueryParamsSchemaSerializer = _build_query_serializer_alias("trend_replay")
 OrdersQueryParamsSchemaSerializer = _build_query_serializer_alias("orders")
 SummaryQueryParamsSchemaSerializer = _build_query_serializer_alias("summary")
@@ -891,6 +899,28 @@ class PositionQuery:
                 end_key="range_to",
                 group_name="positions_range",
             ),
+        )
+
+
+@dataclass(frozen=True)
+class PositionLifecycleQueryParams:
+    execution_id: UUID | None
+    position_id: str
+
+    @classmethod
+    def from_request(
+        cls,
+        request: Request,
+        *,
+        default_execution_id: UUID | None,
+    ) -> PositionLifecycleQueryParams:
+        parsed = _parse_endpoint_group("position_lifecycle", request)
+        position_id = cast(str, parsed["position_id"]).strip()
+        if not position_id:
+            raise _invalid_query_param("position_id is required")
+        return cls(
+            execution_id=cast(UUID | None, parsed["execution_id"]) or default_execution_id,
+            position_id=position_id,
         )
 
 

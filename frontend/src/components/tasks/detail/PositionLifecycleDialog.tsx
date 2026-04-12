@@ -1,48 +1,32 @@
-/**
- * PositionLifecycleDialog Component
- *
- * Displays the lifecycle logs for a specific position in a dialog.
- * Shows when and why a position was opened, and when/why it was closed.
- * Supports searching by position ID prefix (truncated UUID).
- */
-
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Button,
+  Alert,
   Box,
-  Typography,
+  Button,
+  Card,
+  CardContent,
   Chip,
   CircularProgress,
-  Alert,
-  TextField,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
   IconButton,
   InputAdornment,
-  Divider,
+  Stack,
+  TextField,
+  Typography,
 } from '@mui/material';
-import {
-  Timeline,
-  TimelineItem,
-  TimelineSeparator,
-  TimelineConnector,
-  TimelineContent,
-  TimelineDot,
-  TimelineOppositeContent,
-} from '@mui/lab';
 import {
   Close as CloseIcon,
   Search as SearchIcon,
-  TrendingUp as LongIcon,
   TrendingDown as ShortIcon,
+  TrendingUp as LongIcon,
 } from '@mui/icons-material';
-import type { TaskLog } from '../../../hooks/useTaskLogs';
-import { fetchPaginatedTaskResource } from '../../../services/api/taskResources';
+import { fetchTaskResourceObject } from '../../../services/api/taskResources';
 import { TaskType } from '../../../types/common';
-import type { TaskPosition } from '../../../hooks/useTaskPositions';
 
 interface PositionLifecycleDialogProps {
   open: boolean;
@@ -51,55 +35,498 @@ interface PositionLifecycleDialogProps {
   taskType: TaskType;
   executionRunId?: string;
   initialPositionId?: string;
-  positionData?: TaskPosition | null;
+  positionData?: unknown | null;
 }
 
-const formatTimestamp = (ts: string): string =>
-  new Date(ts).toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    timeZoneName: 'short',
-  });
+type LifecycleEventKind =
+  | 'opened'
+  | 'rebuilt'
+  | 'partial_close'
+  | 'closed'
+  | 'stop_loss_closed'
+  | 'rebuilt_into';
 
-type LifecycleEvent = 'OPENED' | 'CLOSED' | 'PARTIAL_CLOSE' | 'REBUILT';
-
-/** Extract the tick timestamp from lifecycle log context.
- *  For OPENED events, use entry_time. For CLOSED/PARTIAL_CLOSE, use exit_time.
- *  Falls back to the log's own timestamp (wall-clock time). */
-function getTickTimestamp(log: TaskLog): string {
-  const ctx = (log.details as Record<string, unknown>)?.context as
-    | Record<string, unknown>
-    | undefined;
-  if (!ctx) return log.timestamp;
-  const event = (ctx.lifecycle_event as string) ?? '';
-  if (event === 'OPENED' && ctx.entry_time) return String(ctx.entry_time);
-  if ((event === 'CLOSED' || event === 'PARTIAL_CLOSE') && ctx.exit_time)
-    return String(ctx.exit_time);
-  // Fallback: try entry_time, then log timestamp
-  if (ctx.entry_time) return String(ctx.entry_time);
-  return log.timestamp;
+interface PositionLifecycleEvent {
+  id: string;
+  kind: LifecycleEventKind;
+  timestamp: string | null;
+  position_id: string;
+  related_position_id?: string | null;
+  direction?: string | null;
+  units?: number | string | null;
+  entry_price?: string | null;
+  exit_price?: string | null;
+  planned_exit_price?: string | null;
+  planned_exit_price_formula?: string | null;
+  description?: string | null;
+  close_reason?: string | null;
+  realized_pnl?: string | null;
 }
 
-function getLifecycleColor(
-  event: LifecycleEvent
-): 'success' | 'error' | 'warning' | 'info' {
-  switch (event) {
-    case 'OPENED':
+interface PositionLifecycleSummary {
+  position_id: string;
+  direction: 'long' | 'short';
+  units: number;
+  is_open: boolean;
+  is_rebuild: boolean;
+  instrument: string;
+  layer_index?: number | null;
+  retracement_count?: number | null;
+  entry_price: string;
+  entry_time: string | null;
+  exit_price?: string | null;
+  exit_time?: string | null;
+  planned_exit_price?: string | null;
+  planned_exit_price_formula?: string | null;
+  stop_loss_price?: string | null;
+  close_reason?: string | null;
+  realized_pnl?: string | null;
+}
+
+interface PositionLifecycleItem {
+  position_id: string;
+  original_position_id?: string | null;
+  rebuilt_position_ids: string[];
+  summary: PositionLifecycleSummary;
+  events: PositionLifecycleEvent[];
+}
+
+interface PositionLifecycleResponse {
+  requested_position_id: string;
+  matched_position_id: string;
+  position_ids: string[];
+  positions: PositionLifecycleItem[];
+}
+
+const formatTimestamp = (value?: string | null): string =>
+  value
+    ? new Date(value).toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZoneName: 'short',
+      })
+    : '-';
+
+const shortId = (value?: string | null): string =>
+  value ? value.slice(0, 8) : '-';
+
+const formatDecimal = (value?: string | null): string => {
+  if (!value) return '-';
+  const parsed = Number(value);
+  return Number.isFinite(parsed)
+    ? parsed.toLocaleString('en-US', { maximumFractionDigits: 6 })
+    : value;
+};
+
+const formatSignedDecimal = (value?: string | null): string => {
+  if (!value) return '-';
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return value;
+  const text = parsed.toLocaleString('en-US', { maximumFractionDigits: 6 });
+  return parsed > 0 ? `+${text}` : text;
+};
+
+function eventColor(
+  kind: LifecycleEventKind
+): 'success' | 'info' | 'warning' | 'default' | 'error' {
+  switch (kind) {
+    case 'opened':
       return 'success';
-    case 'CLOSED':
-      return 'error';
-    case 'PARTIAL_CLOSE':
+    case 'rebuilt':
+      return 'info';
+    case 'partial_close':
       return 'warning';
-    case 'REBUILT':
+    case 'stop_loss_closed':
+      return 'error';
+    case 'rebuilt_into':
       return 'info';
     default:
-      return 'success';
+      return 'default';
   }
 }
+
+const eventDotColor = (kind: LifecycleEventKind): string => {
+  switch (kind) {
+    case 'opened':
+      return 'success.main';
+    case 'rebuilt':
+    case 'rebuilt_into':
+      return 'info.main';
+    case 'partial_close':
+      return 'warning.main';
+    case 'stop_loss_closed':
+      return 'error.main';
+    default:
+      return 'text.secondary';
+  }
+};
+
+function closeReasonLabel(
+  reason?: string | null,
+  t?: (key: string) => string
+): string {
+  if (!reason) return '-';
+  const mapping: Record<string, string> = {
+    normal: 'tables.positions.closeReasonTp',
+    stop_loss: 'tables.positions.closeReasonStopLoss',
+    shrink: 'tables.positions.closeReasonShrink',
+    volatility_lock: 'tables.positions.closeReasonVolatilityLock',
+    margin_protection: 'tables.positions.closeReasonMarginProtection',
+    counter_tp: 'tables.positions.closeReasonCounterTp',
+    layer_initial_tp: 'tables.positions.closeReasonLayerInitialTp',
+    lock_hedge_neutralize: 'tables.positions.closeReasonLockHedgeNeutralize',
+  };
+  const key = mapping[reason];
+  return key && t ? t(key) : reason;
+}
+
+const LifecycleField: React.FC<{
+  label: string;
+  value: React.ReactNode;
+  mono?: boolean;
+}> = ({ label, value, mono = false }) => (
+  <Box sx={{ minWidth: 180, flex: '1 1 180px' }}>
+    <Typography variant="caption" color="text.secondary">
+      {label}
+    </Typography>
+    <Typography
+      variant="body2"
+      sx={{
+        fontFamily: mono ? 'monospace' : 'inherit',
+        wordBreak: 'break-all',
+      }}
+    >
+      {value}
+    </Typography>
+  </Box>
+);
+
+const LifecycleEventRow: React.FC<{
+  event: PositionLifecycleEvent;
+}> = ({ event }) => {
+  const { t } = useTranslation('common');
+  const relatedLabel =
+    event.kind === 'rebuilt'
+      ? t('tables.positions.lifecycle.fields.rebuiltFrom')
+      : event.kind === 'rebuilt_into'
+        ? t('tables.positions.lifecycle.fields.rebuiltTo')
+        : undefined;
+
+  return (
+    <Box
+      sx={{
+        position: 'relative',
+        pl: 3,
+        py: 1.5,
+        borderLeft: 2,
+        borderColor: 'divider',
+      }}
+    >
+      <Box
+        sx={{
+          position: 'absolute',
+          left: -7,
+          top: 20,
+          width: 12,
+          height: 12,
+          borderRadius: '50%',
+          bgcolor: eventDotColor(event.kind),
+        }}
+      />
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        spacing={1}
+        justifyContent="space-between"
+        alignItems={{ xs: 'flex-start', md: 'center' }}
+      >
+        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+          <Chip
+            size="small"
+            color={eventColor(event.kind)}
+            label={t(`tables.positions.lifecycle.events.${event.kind}`)}
+          />
+          {relatedLabel && event.related_position_id ? (
+            <Chip
+              size="small"
+              variant="outlined"
+              label={`${relatedLabel}: ${shortId(event.related_position_id)}`}
+            />
+          ) : null}
+          {event.close_reason ? (
+            <Chip
+              size="small"
+              variant="outlined"
+              label={closeReasonLabel(event.close_reason, t)}
+            />
+          ) : null}
+        </Stack>
+        <Typography variant="caption" color="text.secondary">
+          {formatTimestamp(event.timestamp)}
+        </Typography>
+      </Stack>
+      <Stack
+        direction="row"
+        spacing={2}
+        flexWrap="wrap"
+        useFlexGap
+        sx={{ mt: 1 }}
+      >
+        {event.entry_price ? (
+          <LifecycleField
+            label={t('tables.positions.entryPrice')}
+            value={formatDecimal(event.entry_price)}
+          />
+        ) : null}
+        {event.exit_price ? (
+          <LifecycleField
+            label={t('tables.positions.exitPrice')}
+            value={formatDecimal(event.exit_price)}
+          />
+        ) : null}
+        {event.planned_exit_price ? (
+          <LifecycleField
+            label={t('tables.positions.plannedExitPrice')}
+            value={formatDecimal(event.planned_exit_price)}
+          />
+        ) : null}
+        {event.realized_pnl ? (
+          <LifecycleField
+            label={t('tables.positions.realizedPnl')}
+            value={
+              <Typography
+                component="span"
+                color={
+                  Number(event.realized_pnl) >= 0
+                    ? 'success.main'
+                    : 'error.main'
+                }
+                fontWeight={700}
+              >
+                {formatSignedDecimal(event.realized_pnl)}
+              </Typography>
+            }
+          />
+        ) : null}
+      </Stack>
+      {event.related_position_id ? (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{
+            display: 'block',
+            mt: 1,
+            fontFamily: 'monospace',
+            wordBreak: 'break-all',
+          }}
+        >
+          {event.related_position_id}
+        </Typography>
+      ) : null}
+      {event.description ? (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          {event.description}
+        </Typography>
+      ) : null}
+      {event.planned_exit_price_formula ? (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ display: 'block', mt: 1, wordBreak: 'break-word' }}
+        >
+          {event.planned_exit_price_formula}
+        </Typography>
+      ) : null}
+    </Box>
+  );
+};
+
+const PositionCard: React.FC<{ item: PositionLifecycleItem }> = ({ item }) => {
+  const { t } = useTranslation('common');
+  const summary = item.summary;
+  const pnlValue = summary.realized_pnl ? Number(summary.realized_pnl) : null;
+
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Stack spacing={2}>
+          <Stack
+            direction={{ xs: 'column', md: 'row' }}
+            justifyContent="space-between"
+            spacing={1}
+          >
+            <Box>
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                flexWrap="wrap"
+              >
+                <Typography variant="h6" sx={{ fontFamily: 'monospace' }}>
+                  {shortId(summary.position_id)}
+                </Typography>
+                <Chip
+                  size="small"
+                  label={
+                    summary.direction === 'long'
+                      ? t('tables.positions.long')
+                      : t('tables.positions.short')
+                  }
+                  color={summary.direction === 'long' ? 'success' : 'error'}
+                  icon={
+                    summary.direction === 'long' ? <LongIcon /> : <ShortIcon />
+                  }
+                />
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  color={summary.is_open ? 'success' : 'default'}
+                  label={
+                    summary.is_open
+                      ? t('tables.positions.open')
+                      : t('tables.positions.closed')
+                  }
+                />
+                {summary.is_rebuild ? (
+                  <Chip
+                    size="small"
+                    color="info"
+                    variant="outlined"
+                    label={t('tables.positions.rebuild')}
+                  />
+                ) : null}
+              </Stack>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{
+                  display: 'block',
+                  mt: 0.5,
+                  fontFamily: 'monospace',
+                  wordBreak: 'break-all',
+                }}
+              >
+                {summary.position_id}
+              </Typography>
+            </Box>
+            {pnlValue != null ? (
+              <Typography
+                variant="h6"
+                color={pnlValue >= 0 ? 'success.main' : 'error.main'}
+              >
+                {formatSignedDecimal(summary.realized_pnl)}
+              </Typography>
+            ) : null}
+          </Stack>
+
+          <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+            <LifecycleField
+              label={t('tables.positions.instrument')}
+              value={summary.instrument}
+            />
+            <LifecycleField
+              label={t('tables.positions.units')}
+              value={String(summary.units)}
+            />
+            <LifecycleField
+              label={t('tables.positions.layer')}
+              value={
+                summary.layer_index != null ? `L${summary.layer_index}` : '-'
+              }
+            />
+            <LifecycleField
+              label={t('tables.positions.retracement')}
+              value={
+                summary.retracement_count != null
+                  ? `R${summary.retracement_count}`
+                  : '-'
+              }
+            />
+            <LifecycleField
+              label={t('tables.positions.entryTime')}
+              value={formatTimestamp(summary.entry_time)}
+            />
+            <LifecycleField
+              label={t('tables.positions.exitTime')}
+              value={formatTimestamp(summary.exit_time)}
+            />
+            <LifecycleField
+              label={t('tables.positions.entryPrice')}
+              value={formatDecimal(summary.entry_price)}
+            />
+            <LifecycleField
+              label={t('tables.positions.exitPrice')}
+              value={formatDecimal(summary.exit_price)}
+            />
+            <LifecycleField
+              label={t('tables.positions.plannedExitPrice')}
+              value={formatDecimal(summary.planned_exit_price)}
+            />
+            <LifecycleField
+              label={t('tables.positions.stopLossPrice')}
+              value={formatDecimal(summary.stop_loss_price)}
+            />
+            <LifecycleField
+              label={t('tables.positions.lifecycle.fields.closeReason')}
+              value={closeReasonLabel(summary.close_reason, t)}
+            />
+          </Stack>
+
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            <Chip
+              size="small"
+              variant="outlined"
+              label={`${t('tables.positions.lifecycle.fields.positionId')}: ${shortId(
+                summary.position_id
+              )}`}
+            />
+            {item.original_position_id ? (
+              <Chip
+                size="small"
+                variant="outlined"
+                label={`${t('tables.positions.lifecycle.fields.rebuiltFrom')}: ${shortId(
+                  item.original_position_id
+                )}`}
+              />
+            ) : null}
+            {item.rebuilt_position_ids.map((positionId) => (
+              <Chip
+                key={positionId}
+                size="small"
+                variant="outlined"
+                label={`${t('tables.positions.lifecycle.fields.rebuiltTo')}: ${shortId(
+                  positionId
+                )}`}
+              />
+            ))}
+          </Stack>
+
+          {summary.planned_exit_price_formula ? (
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                {t('tables.positions.lifecycle.fields.plannedExitFormula')}
+              </Typography>
+              <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+                {summary.planned_exit_price_formula}
+              </Typography>
+            </Box>
+          ) : null}
+
+          <Divider />
+
+          <Stack spacing={1}>
+            {item.events.map((event) => (
+              <LifecycleEventRow key={event.id} event={event} />
+            ))}
+          </Stack>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+};
 
 export const PositionLifecycleDialog: React.FC<
   PositionLifecycleDialogProps
@@ -110,65 +537,54 @@ export const PositionLifecycleDialog: React.FC<
   taskType,
   executionRunId,
   initialPositionId,
-  positionData,
 }) => {
   const { t } = useTranslation('common');
   const [searchValue, setSearchValue] = useState(initialPositionId ?? '');
   const [activePositionId, setActivePositionId] = useState(
     initialPositionId ?? ''
   );
-  const [logs, setLogs] = useState<TaskLog[]>([]);
+  const [data, setData] = useState<PositionLifecycleResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // Reset search when dialog opens with a new position
-  React.useEffect(() => {
+  useEffect(() => {
     if (open && initialPositionId) {
       setSearchValue(initialPositionId);
       setActivePositionId(initialPositionId);
     }
-  }, [open, initialPositionId]);
-
-  // Stabilize the component filter array to avoid infinite re-render loops.
-  // useTaskLogs includes `component` in a useCallback dependency array,
-  // so a new array reference on every render triggers fetch → setState → re-render.
-  const componentFilter = useMemo(
-    () => (activePositionId ? ['position.lifecycle'] : undefined),
-    [activePositionId]
-  );
+  }, [initialPositionId, open]);
 
   useEffect(() => {
-    if (!open || !activePositionId) {
-      setLogs([]);
+    if (!open || !activePositionId.trim()) {
+      setData(null);
       setError(null);
       setIsLoading(false);
       return;
     }
 
     let cancelled = false;
-    const fetchLogs = async () => {
+    const run = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const results = await fetchPaginatedTaskResource<TaskLog>(
-          taskType,
-          taskId,
-          'logs',
-          {
-            ...(executionRunId ? { execution_id: executionRunId } : {}),
-            ...(componentFilter
-              ? { component: componentFilter.join(',') }
-              : {}),
-            position_id: activePositionId,
-          }
-        );
+        const response =
+          await fetchTaskResourceObject<PositionLifecycleResponse>(
+            taskType,
+            taskId,
+            'position-lifecycle',
+            {
+              ...(executionRunId ? { execution_id: executionRunId } : {}),
+              position_id: activePositionId.trim(),
+            }
+          );
         if (!cancelled) {
-          setLogs(results);
+          setData(response);
         }
       } catch (err) {
         if (!cancelled) {
+          setData(null);
           setError(
-            err instanceof Error ? err : new Error('Failed to load logs')
+            err instanceof Error ? err.message : 'Failed to load lifecycle'
           );
         }
       } finally {
@@ -178,27 +594,13 @@ export const PositionLifecycleDialog: React.FC<
       }
     };
 
-    void fetchLogs();
+    void run();
     return () => {
       cancelled = true;
     };
-  }, [
-    activePositionId,
-    componentFilter,
-    executionRunId,
-    open,
-    taskId,
-    taskType,
-  ]);
+  }, [activePositionId, executionRunId, open, taskId, taskType]);
 
-  // Sort logs chronologically by tick timestamp (oldest first for timeline)
-  const sortedLogs = useMemo(
-    () =>
-      [...logs].sort((a, b) =>
-        getTickTimestamp(a).localeCompare(getTickTimestamp(b))
-      ),
-    [logs]
-  );
+  const positions = useMemo(() => data?.positions ?? [], [data]);
 
   const handleSearch = () => {
     const trimmed = searchValue.trim();
@@ -207,19 +609,9 @@ export const PositionLifecycleDialog: React.FC<
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleSearch();
-  };
-
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      maxWidth="md"
-      fullWidth
-      aria-labelledby="position-lifecycle-title"
-    >
-      <DialogTitle id="position-lifecycle-title">
+    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
+      <DialogTitle>
         <Box
           sx={{
             display: 'flex',
@@ -235,17 +627,20 @@ export const PositionLifecycleDialog: React.FC<
           </IconButton>
         </Box>
       </DialogTitle>
-      <DialogContent>
-        {/* Search bar */}
-        <Box sx={{ mb: 3 }}>
+      <DialogContent dividers>
+        <Stack spacing={2.5}>
           <TextField
             fullWidth
             size="small"
             label={t('tables.positions.lifecycle.searchLabel')}
             placeholder={t('tables.positions.lifecycle.searchPlaceholder')}
             value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
-            onKeyDown={handleKeyDown}
+            onChange={(event) => setSearchValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                handleSearch();
+              }
+            }}
             slotProps={{
               input: {
                 endAdornment: (
@@ -262,89 +657,86 @@ export const PositionLifecycleDialog: React.FC<
               },
             }}
           />
-        </Box>
 
-        {!activePositionId && (
-          <Alert severity="info">
-            {t('tables.positions.lifecycle.enterPositionId')}
-          </Alert>
-        )}
-
-        {activePositionId && isLoading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <CircularProgress />
-          </Box>
-        )}
-
-        {activePositionId && error && (
-          <Alert severity="error">{error.message}</Alert>
-        )}
-
-        {activePositionId &&
-          !isLoading &&
-          !error &&
-          sortedLogs.length === 0 && (
+          {!activePositionId ? (
             <Alert severity="info">
-              {t('tables.positions.lifecycle.noLogs')}
+              {t('tables.positions.lifecycle.enterPositionId')}
             </Alert>
-          )}
+          ) : null}
 
-        {activePositionId && !isLoading && sortedLogs.length > 0 && (
-          <Box>
-            {/* Position summary */}
-            <PositionSummary logs={sortedLogs} positionData={positionData} />
-            <Divider sx={{ my: 2 }} />
-            {/* Timeline */}
-            <Timeline position="alternate">
-              {sortedLogs.map((log, idx) => {
-                const ctx = (log.details as Record<string, unknown>)
-                  ?.context as Record<string, unknown> | undefined;
-                const lifecycleEvent =
-                  (ctx?.lifecycle_event as LifecycleEvent) ?? 'OPENED';
-                const color = getLifecycleColor(lifecycleEvent);
-                const isLast = idx === sortedLogs.length - 1;
+          {isLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+              <CircularProgress />
+            </Box>
+          ) : null}
 
-                return (
-                  <TimelineItem key={log.id}>
-                    <TimelineOppositeContent
-                      sx={{ m: 'auto 0' }}
-                      variant="body2"
-                      color="text.secondary"
-                    >
-                      {formatTimestamp(getTickTimestamp(log))}
-                    </TimelineOppositeContent>
-                    <TimelineSeparator>
-                      <TimelineConnector sx={{ opacity: idx === 0 ? 0 : 1 }} />
-                      <TimelineDot color={color}>
-                        {ctx?.direction === 'LONG' ||
-                        ctx?.direction === 'long' ? (
-                          <LongIcon fontSize="small" />
-                        ) : (
-                          <ShortIcon fontSize="small" />
-                        )}
-                      </TimelineDot>
-                      <TimelineConnector sx={{ opacity: isLast ? 0 : 1 }} />
-                    </TimelineSeparator>
-                    <TimelineContent sx={{ py: '12px', px: 2 }}>
-                      <Chip
-                        label={t(
-                          `tables.positions.lifecycle.events.${lifecycleEvent}`
-                        )}
-                        color={color}
-                        size="small"
-                        sx={{ mb: 0.5 }}
-                      />
-                      <Typography variant="body2" sx={{ mt: 0.5 }}>
-                        {log.message}
+          {!isLoading && error ? <Alert severity="error">{error}</Alert> : null}
+
+          {!isLoading &&
+          !error &&
+          activePositionId &&
+          positions.length === 0 ? (
+            <Alert severity="info">
+              {t('tables.positions.lifecycle.noData')}
+            </Alert>
+          ) : null}
+
+          {!isLoading && !error && positions.length > 0 && data ? (
+            <Stack spacing={2.5}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Stack
+                    direction={{ xs: 'column', md: 'row' }}
+                    spacing={1.5}
+                    justifyContent="space-between"
+                  >
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        {t('tables.positions.lifecycle.chainSummary', {
+                          count: data.positions.length,
+                        })}
                       </Typography>
-                      <LifecycleDetails ctx={ctx} positionData={positionData} />
-                    </TimelineContent>
-                  </TimelineItem>
-                );
-              })}
-            </Timeline>
-          </Box>
-        )}
+                      <Typography
+                        variant="body2"
+                        sx={{ fontFamily: 'monospace', mt: 0.5 }}
+                      >
+                        {data.matched_position_id}
+                      </Typography>
+                    </Box>
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      flexWrap="wrap"
+                      useFlexGap
+                    >
+                      {data.position_ids.map((positionId) => (
+                        <Chip
+                          key={positionId}
+                          size="small"
+                          variant={
+                            positionId === data.matched_position_id
+                              ? 'filled'
+                              : 'outlined'
+                          }
+                          color={
+                            positionId === data.matched_position_id
+                              ? 'primary'
+                              : 'default'
+                          }
+                          label={shortId(positionId)}
+                        />
+                      ))}
+                    </Stack>
+                  </Stack>
+                </CardContent>
+              </Card>
+
+              {positions.map((item) => (
+                <PositionCard key={item.position_id} item={item} />
+              ))}
+            </Stack>
+          ) : null}
+        </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>
@@ -352,239 +744,6 @@ export const PositionLifecycleDialog: React.FC<
         </Button>
       </DialogActions>
     </Dialog>
-  );
-};
-
-/** Renders a summary card from the first and last lifecycle log entries. */
-const PositionSummary: React.FC<{
-  logs: TaskLog[];
-  positionData?: TaskPosition | null;
-}> = ({ logs, positionData }) => {
-  const { t } = useTranslation('common');
-  const first = logs[0];
-  const last = logs[logs.length - 1];
-  const firstCtx = (first?.details as Record<string, unknown>)?.context as
-    | Record<string, unknown>
-    | undefined;
-  const lastCtx = (last?.details as Record<string, unknown>)?.context as
-    | Record<string, unknown>
-    | undefined;
-
-  // Prefer positionData (from Positions API) over log context
-  const positionId =
-    positionData?.id ?? (firstCtx?.position_id as string) ?? '';
-  const direction =
-    positionData?.direction?.toUpperCase() ??
-    (firstCtx?.direction as string) ??
-    '';
-  const instrument =
-    positionData?.instrument ?? (firstCtx?.instrument as string) ?? '';
-  const entryPrice =
-    positionData?.entry_price ?? (firstCtx?.entry_price as string | undefined);
-  const exitPrice =
-    positionData?.exit_price ?? (lastCtx?.exit_price as string | undefined);
-  const plannedExitPrice =
-    positionData?.planned_exit_price ??
-    (firstCtx?.planned_exit_price as string | undefined);
-  const plannedExitFormula =
-    positionData?.planned_exit_price_formula ??
-    (firstCtx?.planned_exit_price_formula as string | undefined);
-  const units = positionData
-    ? Math.abs(positionData.units)
-    : firstCtx?.units != null
-      ? Number(firstCtx.units)
-      : 0;
-  const isClosed =
-    positionData != null
-      ? !positionData.is_open
-      : lastCtx?.lifecycle_event === 'CLOSED';
-
-  // Calculate realized PnL the same way as the positions table:
-  // (exit - entry) * units for LONG, (entry - exit) * units for SHORT.
-  const computedPnl = (() => {
-    if (!isClosed || !entryPrice || !exitPrice) return null;
-    const ep = parseFloat(entryPrice);
-    const xp = parseFloat(exitPrice);
-    const isLong = direction === 'LONG' || direction === 'long';
-    return isLong ? (xp - ep) * units : (ep - xp) * units;
-  })();
-
-  return (
-    <Box
-      sx={{
-        p: 2,
-        bgcolor: 'background.default',
-        borderRadius: 1,
-        display: 'flex',
-        gap: 3,
-        flexWrap: 'wrap',
-        alignItems: 'center',
-      }}
-    >
-      <Box>
-        <Typography variant="caption" color="text.secondary">
-          {t('tables.positions.positionId')}
-        </Typography>
-        <Typography variant="body2" fontFamily="monospace">
-          {positionId.slice(0, 8)}
-        </Typography>
-      </Box>
-      <Box>
-        <Typography variant="caption" color="text.secondary">
-          {t('tables.positions.instrument')}
-        </Typography>
-        <Typography variant="body2">{instrument}</Typography>
-      </Box>
-      <Box>
-        <Typography variant="caption" color="text.secondary">
-          {t('tables.positions.direction')}
-        </Typography>
-        <Chip
-          label={direction}
-          size="small"
-          color={
-            direction === 'LONG' || direction === 'long' ? 'success' : 'error'
-          }
-        />
-      </Box>
-      {entryPrice && (
-        <Box>
-          <Typography variant="caption" color="text.secondary">
-            {t('tables.positions.openPrice')}
-          </Typography>
-          <Typography variant="body2">
-            ¥{parseFloat(entryPrice).toFixed(3)}
-          </Typography>
-        </Box>
-      )}
-      {isClosed && exitPrice && (
-        <Box>
-          <Typography variant="caption" color="text.secondary">
-            {t('tables.positions.closePrice')}
-          </Typography>
-          <Typography variant="body2">
-            ¥{parseFloat(exitPrice).toFixed(3)}
-          </Typography>
-        </Box>
-      )}
-      {isClosed && computedPnl != null && (
-        <Box>
-          <Typography variant="caption" color="text.secondary">
-            {t('tables.positions.realizedPnl')}
-          </Typography>
-          <Typography
-            variant="body2"
-            fontWeight="bold"
-            color={computedPnl >= 0 ? 'success.main' : 'error.main'}
-          >
-            {computedPnl >= 0 ? '+' : ''}¥{computedPnl.toFixed(2)}
-          </Typography>
-        </Box>
-      )}
-      {plannedExitPrice && (
-        <Box>
-          <Typography variant="caption" color="text.secondary">
-            {t('tables.positions.plannedExitPrice')}
-          </Typography>
-          <Typography variant="body2">
-            ¥{parseFloat(plannedExitPrice).toFixed(3)}
-          </Typography>
-        </Box>
-      )}
-      {plannedExitFormula && (
-        <Box>
-          <Typography variant="caption" color="text.secondary">
-            {t('tables.positions.plannedExitPriceFormula')}
-          </Typography>
-          <Typography variant="body2" fontFamily="monospace" fontSize="0.8rem">
-            {plannedExitFormula}
-          </Typography>
-        </Box>
-      )}
-      <Box>
-        <Typography variant="caption" color="text.secondary">
-          {t('tables.positions.status')}
-        </Typography>
-        <Chip
-          label={
-            isClosed ? t('tables.positions.closed') : t('tables.positions.open')
-          }
-          size="small"
-          color={isClosed ? 'default' : 'info'}
-        />
-      </Box>
-    </Box>
-  );
-};
-
-/** Renders detail fields from lifecycle log context. */
-const LifecycleDetails: React.FC<{
-  ctx: Record<string, unknown> | undefined;
-  positionData?: TaskPosition | null;
-}> = ({ ctx, positionData }) => {
-  const { t } = useTranslation('common');
-  if (!ctx) return null;
-
-  const formula =
-    (ctx.planned_exit_price_formula as string | undefined) ??
-    positionData?.planned_exit_price_formula ??
-    undefined;
-
-  const fields: [string, string | undefined][] = [
-    [
-      t('tables.positions.units'),
-      ctx.units != null
-        ? String(ctx.units)
-        : ctx.units_closed != null
-          ? String(ctx.units_closed)
-          : undefined,
-    ],
-    [
-      t('tables.positions.layer'),
-      ctx.layer_index != null ? String(ctx.layer_index) : undefined,
-    ],
-    [
-      t('tables.positions.retracement'),
-      ctx.retracement_count != null ? String(ctx.retracement_count) : undefined,
-    ],
-    [
-      t('tables.positions.lifecycle.details.exitFormula'),
-      formula != null ? String(formula) : undefined,
-    ],
-    [
-      t('tables.positions.lifecycle.details.closeReason'),
-      ctx.close_reason as string | undefined,
-    ],
-    [
-      t('tables.positions.lifecycle.details.description'),
-      ctx.description as string | undefined,
-    ],
-    [
-      t('tables.positions.lifecycle.details.originalPositionId'),
-      ctx.original_position_id
-        ? String(ctx.original_position_id).slice(0, 8)
-        : undefined,
-    ],
-  ];
-
-  const rendered = fields.filter(
-    ([, v]) => v != null && v !== '' && v !== 'None'
-  );
-  if (rendered.length === 0) return null;
-
-  return (
-    <Box sx={{ mt: 0.5 }}>
-      {rendered.map(([label, value]) => (
-        <Typography
-          key={label}
-          variant="caption"
-          color="text.secondary"
-          display="block"
-        >
-          {label}: {value}
-        </Typography>
-      ))}
-    </Box>
   );
 };
 
