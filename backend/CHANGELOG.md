@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.33.1...backend-v1.33.2) (2026-04-12)
+
+
+### Bug Fixes
+
+* snowball weighted avg double count r0 ([#451](https://github.com/yuyash/auto-forex-web-service/issues/451)) ([254cb91](https://github.com/yuyash/auto-forex-web-service/commit/254cb91947e6d706caa8007e86d6381285aa2f54))
+
 ## [1.33.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.33.0...backend-v1.33.1) (2026-04-12)
 
 
