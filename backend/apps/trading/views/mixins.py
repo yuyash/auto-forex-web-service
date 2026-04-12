@@ -656,7 +656,9 @@ class TaskSubResourceMixin:
                 )
             )
         except ValueError as exc:
-            raise ValidationError({"code": "invalid_query_param", "detail": str(exc)}) from exc
+            raise ValidationError(
+                {"code": "invalid_query_param", "detail": "Invalid query parameters."}
+            ) from exc
         return Response(payload)
 
     @extend_schema(
