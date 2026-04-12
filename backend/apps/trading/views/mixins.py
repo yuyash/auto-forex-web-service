@@ -484,7 +484,7 @@ class TaskSubResourceMixin:
             task_type=self.task_type_label,
             task_id=task.pk,
             execution_id=query.execution.execution_id,
-        ).order_by("timestamp", "sequence_number")
+        )
         if query.direction:
             if query.direction == "buy":
                 queryset = queryset.filter(direction="long")
@@ -503,6 +503,11 @@ class TaskSubResourceMixin:
         # Optional cycle_id filter
         if query.cycle_id:
             queryset = queryset.filter(cycle_id=query.cycle_id)
+
+        ordering = ("-timestamp", "-sequence_number")
+        if query.ordering == "asc":
+            ordering = ("timestamp", "sequence_number")
+        queryset = queryset.order_by(*ordering)
 
         trades_qs = queryset.values(
             "id",

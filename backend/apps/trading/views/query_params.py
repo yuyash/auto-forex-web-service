@@ -341,6 +341,13 @@ TRADES_DIRECTION_SPEC = QueryFieldSpec(
     allow_blank=True,
     help_text="Direction filter (buy/sell/long/short).",
 )
+TRADES_ORDERING_SPEC = QueryFieldSpec(
+    name="ordering",
+    kind="choice",
+    default="asc",
+    choices=("asc", "desc"),
+    help_text="Trade ordering by timestamp/sequence_number.",
+)
 TRADE_TIMESTAMP_FROM_SPEC = QueryFieldSpec(
     name="timestamp_from",
     kind="datetime",
@@ -556,6 +563,7 @@ QUERY_GROUP_SPECS = {
             *EXECUTION_SCOPED_TRADE_POSITION_GROUP,
             CYCLE_ID_SPEC,
             TRADES_DIRECTION_SPEC,
+            TRADES_ORDERING_SPEC,
             TRADE_TIMESTAMP_FROM_SPEC,
             TRADE_TIMESTAMP_TO_SPEC,
         ),
@@ -996,6 +1004,7 @@ class TradesQueryParams:
     execution: ExecutionScopedQuery
     cycle_id: UUID | None
     direction: str
+    ordering: str
     timestamp_range: DateRangeQuery
 
     @classmethod
@@ -1017,6 +1026,7 @@ class TradesQueryParams:
             ),
             cycle_id=cast(UUID | None, parsed["cycle_id"]),
             direction=cast(str, parsed["direction"]),
+            ordering=cast(str, parsed["ordering"]) or "asc",
             timestamp_range=_build_date_range_query(
                 request,
                 start_key="timestamp_from",

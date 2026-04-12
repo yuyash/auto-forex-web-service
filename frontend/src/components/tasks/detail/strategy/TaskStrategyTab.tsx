@@ -9,6 +9,7 @@ import {
   InputAdornment,
   Paper,
   Stack,
+  TablePagination,
   TextField,
   Tooltip,
   Typography,
@@ -25,6 +26,7 @@ import SelectAllIcon from '@mui/icons-material/SelectAll';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { useTaskStrategyEvents } from '../../../../hooks/useTaskStrategyEvents';
+import { useTaskTrades } from '../../../../hooks/useTaskTrades';
 import { TaskType } from '../../../../types/common';
 import type {
   StrategyCycle,
@@ -159,6 +161,8 @@ export function TaskStrategyTab({
   const containerRef = useRef<HTMLDivElement>(null);
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
+  const [tradePage, setTradePage] = useState(0);
+  const [tradeRowsPerPage, setTradeRowsPerPage] = useState(50);
 
   const { data, isLoading, error, refresh } = useTaskStrategyEvents({
     taskId,
@@ -268,6 +272,7 @@ export function TaskStrategyTab({
     (id: string) => {
       setSelectedCycleId(id);
       setSelectedTradeIds(new Set());
+      setTradePage(0);
       if (isMobile) setMobileShowDetail(true);
     },
     [isMobile]
@@ -297,14 +302,53 @@ export function TaskStrategyTab({
     [selectedCycle]
   );
 
+  const {
+    trades: pagedTradesRaw,
+    totalCount: pagedTradeCount,
+    isLoading: isPagedTradesLoading,
+    error: pagedTradesError,
+    refresh: refreshPagedTrades,
+  } = useTaskTrades({
+    taskId,
+    taskType,
+    executionRunId,
+    cycleId: selectedCycleId ?? undefined,
+    enabled: Boolean(selectedCycleId),
+    page: tradePage + 1,
+    pageSize: tradeRowsPerPage,
+    ordering: tradeSortOrder,
+  });
+
+  const pagedTrades = useMemo<CycleTrade[]>(
+    () =>
+      pagedTradesRaw.map((trade) => ({
+        id: String(trade.id),
+        direction:
+          trade.direction === 'long'
+            ? 'buy'
+            : trade.direction === 'short'
+              ? 'sell'
+              : null,
+        units: Number(trade.units),
+        price: trade.price,
+        execution_method: trade.execution_method ?? '',
+        layer_index: trade.layer_index,
+        retracement_count: trade.retracement_count,
+        description: trade.description,
+        timestamp: trade.timestamp,
+        position_id: trade.position_id ?? null,
+        is_rebuild: trade.is_rebuild,
+      })),
+    [pagedTradesRaw]
+  );
+
   const handleRefreshDetail = useCallback(async () => {
-    await Promise.all([refresh(), refreshDetail()]);
-  }, [refresh, refreshDetail]);
+    await Promise.all([refresh(), refreshDetail(), refreshPagedTrades()]);
+  }, [refresh, refreshDetail, refreshPagedTrades]);
 
   const handleSelectAllTrades = useCallback(() => {
-    if (!selectedCycle) return;
-    setSelectedTradeIds(new Set(selectedCycle.trades.map((t) => t.id)));
-  }, [selectedCycle]);
+    setSelectedTradeIds(new Set(pagedTrades.map((t) => t.id)));
+  }, [pagedTrades]);
 
   const summary = data?.summary;
 
@@ -830,7 +874,8 @@ export function TaskStrategyTab({
                 sx={{ mb: 1, alignItems: 'center' }}
               >
                 <Typography variant="subtitle1">
-                  {t('common:strategyVisualization.cycleList.trades')}
+                  {t('common:strategyVisualization.cycleList.trades')} (
+                  {pagedTradeCount})
                 </Typography>
                 <Chip
                   size="small"
@@ -838,7 +883,10 @@ export function TaskStrategyTab({
                   color={tradeSortOrder === 'asc' ? 'primary' : 'default'}
                   variant={tradeSortOrder === 'asc' ? 'filled' : 'outlined'}
                   label={t('common:strategyVisualization.cycleList.sortOldest')}
-                  onClick={() => setTradeSortOrder('asc')}
+                  onClick={() => {
+                    setTradeSortOrder('asc');
+                    setTradePage(0);
+                  }}
                 />
                 <Chip
                   size="small"
@@ -846,7 +894,10 @@ export function TaskStrategyTab({
                   color={tradeSortOrder === 'desc' ? 'primary' : 'default'}
                   variant={tradeSortOrder === 'desc' ? 'filled' : 'outlined'}
                   label={t('common:strategyVisualization.cycleList.sortNewest')}
-                  onClick={() => setTradeSortOrder('desc')}
+                  onClick={() => {
+                    setTradeSortOrder('desc');
+                    setTradePage(0);
+                  }}
                 />
                 <Tooltip title="Select all">
                   <IconButton size="small" onClick={handleSelectAllTrades}>
@@ -865,20 +916,22 @@ export function TaskStrategyTab({
                 ) : null}
                 {selectedTradeIds.size > 0 ? (
                   <Typography variant="caption" color="text.secondary">
-                    {selectedTradeIds.size}/{selectedCycle.trades.length}
+                    {selectedTradeIds.size}/{pagedTrades.length}
                   </Typography>
                 ) : null}
               </Stack>
               <Divider sx={{ mb: 1 }} />
-              {isDetailLoading ? (
+              {pagedTradesError ? (
+                <Box sx={{ pb: 2 }}>
+                  <Alert severity="error">{pagedTradesError.message}</Alert>
+                </Box>
+              ) : null}
+              {isPagedTradesLoading ? (
                 <Box sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
                   <CircularProgress size={24} />
                 </Box>
               ) : null}
-              {(tradeSortOrder === 'asc'
-                ? selectedCycle.trades
-                : [...selectedCycle.trades].reverse()
-              ).map((trade, index) => {
+              {pagedTrades.map((trade, index) => {
                 const isInitialEntry = trade.id === selectedCycle.cycle_id;
                 const isSelected = selectedTradeIds.has(trade.id);
                 // Task 1: Initial entry always shows L1, R0
@@ -896,12 +949,22 @@ export function TaskStrategyTab({
                       onToggleSelection={handleToggleTradeSelection}
                       onOpenLifecycle={handleOpenLifecycle}
                     />
-                    {index < selectedCycle.trades.length - 1 ? (
-                      <Divider />
-                    ) : null}
+                    {index < pagedTrades.length - 1 ? <Divider /> : null}
                   </React.Fragment>
                 );
               })}
+              <TablePagination
+                component="div"
+                count={pagedTradeCount}
+                page={tradePage}
+                onPageChange={(_e, newPage) => setTradePage(newPage)}
+                rowsPerPage={tradeRowsPerPage}
+                onRowsPerPageChange={(e) => {
+                  setTradeRowsPerPage(parseInt(e.target.value, 10));
+                  setTradePage(0);
+                }}
+                rowsPerPageOptions={[10, 25, 50, 100, 200, 500, 1000]}
+              />
             </Box>
           ) : (
             <Box sx={{ p: 3 }}>
