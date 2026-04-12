@@ -151,6 +151,91 @@ class TestBacktestTaskCreateSerializer:
         assert not serializer.is_valid()
         assert "initial_balance" in serializer.errors
 
+    def test_update_keeps_created_status_when_replay_settings_change_before_first_run(self):
+        user = UserFactory()
+        now = datetime.now(timezone.utc)
+        TickData.objects.create(
+            instrument="USD_JPY",
+            timestamp=now - timedelta(days=11),
+            bid=Decimal("150.000"),
+            ask=Decimal("150.005"),
+            mid=Decimal("150.0025"),
+        )
+        TickData.objects.create(
+            instrument="USD_JPY",
+            timestamp=now - timedelta(hours=12),
+            bid=Decimal("151.000"),
+            ask=Decimal("151.005"),
+            mid=Decimal("151.0025"),
+        )
+        task = BacktestTaskFactory(
+            user=user,
+            config=StrategyConfigurationFactory(user=user),
+            status=TaskStatus.CREATED,
+            execution_id=None,
+            start_time=now - timedelta(days=10),
+            end_time=now - timedelta(days=1),
+            tick_granularity="tick",
+            tick_window_value_mode="last",
+        )
+
+        request = _fake_request(user)
+        serializer = BacktestTaskCreateSerializer(
+            task,
+            data={"tick_granularity": "1m"},
+            context={"request": request},
+            partial=True,
+        )
+
+        assert serializer.is_valid(), serializer.errors
+        updated = serializer.save()
+
+        assert updated.tick_granularity == "1m"
+        assert updated.status == TaskStatus.CREATED
+
+    def test_update_forces_restart_only_when_replay_settings_change_after_execution(self):
+        user = UserFactory()
+        now = datetime.now(timezone.utc)
+        TickData.objects.create(
+            instrument="USD_JPY",
+            timestamp=now - timedelta(days=11),
+            bid=Decimal("150.000"),
+            ask=Decimal("150.005"),
+            mid=Decimal("150.0025"),
+        )
+        TickData.objects.create(
+            instrument="USD_JPY",
+            timestamp=now - timedelta(hours=12),
+            bid=Decimal("151.000"),
+            ask=Decimal("151.005"),
+            mid=Decimal("151.0025"),
+        )
+        task = BacktestTaskFactory(
+            user=user,
+            config=StrategyConfigurationFactory(user=user),
+            status=TaskStatus.PAUSED,
+            execution_id="a5dd2e8d-9dc2-49f2-944a-07083d2d47ab",
+            start_time=now - timedelta(days=10),
+            end_time=now - timedelta(days=1),
+            tick_granularity="tick",
+            tick_window_value_mode="last",
+        )
+
+        request = _fake_request(user)
+        serializer = BacktestTaskCreateSerializer(
+            task,
+            data={"tick_granularity": "1m", "tick_window_value_mode": "average"},
+            context={"request": request},
+            partial=True,
+        )
+
+        assert serializer.is_valid(), serializer.errors
+        updated = serializer.save()
+
+        assert updated.tick_granularity == "1m"
+        assert updated.tick_window_value_mode == "average"
+        assert updated.status == TaskStatus.STOPPED
+
 
 @pytest.mark.django_db
 class TestTradingTaskSerializer:

@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
+from apps.trading.enums import TaskStatus
 from apps.trading.models import BacktestTask, StrategyConfiguration
 
 logger = logging.getLogger(__name__)
@@ -142,8 +143,8 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
         """Validate date ranges and configuration."""
         from django.utils import timezone
 
-        start_time = attrs.get("start_time")
-        end_time = attrs.get("end_time")
+        start_time = attrs.get("start_time", getattr(self.instance, "start_time", None))
+        end_time = attrs.get("end_time", getattr(self.instance, "end_time", None))
         now = timezone.now()
 
         # Validate date range
@@ -209,7 +210,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"config": error_message})
 
         # Validate instrument is provided
-        instrument = attrs.get("instrument")
+        instrument = attrs.get("instrument", getattr(self.instance, "instrument", None))
         if not instrument:
             raise serializers.ValidationError({"instrument": "Instrument is required"})
 
@@ -272,10 +273,22 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
     def update(self, instance: BacktestTask, validated_data: dict) -> BacktestTask:
         """Update backtest task."""
         # Don't allow updating if task is running
-        if instance.status == "running":
+        if instance.status == TaskStatus.RUNNING:
             raise serializers.ValidationError("Cannot update a running task. Stop it first.")
+
+        replay_settings_changed = any(
+            field in validated_data and validated_data[field] != getattr(instance, field)
+            for field in ("tick_granularity", "tick_window_value_mode")
+        )
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+
+        if replay_settings_changed and instance.status != TaskStatus.CREATED:
+            # Replay settings affect execution continuity. Existing runs must start fresh.
+            instance.status = TaskStatus.CREATED
+            if instance.execution_id is not None or instance.started_at or instance.completed_at:
+                instance.status = TaskStatus.STOPPED
+
         instance.save()
         return instance
