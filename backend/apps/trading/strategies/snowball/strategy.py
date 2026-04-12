@@ -1233,6 +1233,24 @@ class SnowballStrategy(Strategy):
             next_interval_pips,
         )
 
+    def _is_stop_loss_temporarily_protected(self, layer: Layer, entry: Entry) -> bool:
+        """Return True when the layer's highest live R should ignore stop-loss.
+
+        Protection is dynamic per tick and per layer. Only the current
+        highest occupied slot is eligible, and only when its R-number is at
+        or above the configured threshold. R0 is never protected.
+        """
+        threshold = self.config.preserve_highest_r_from
+        if threshold <= 0:
+            return False
+
+        highest = layer.highest_occupied_slot()
+        if highest is None or highest.entry is None:
+            return False
+        if highest.index == 0 or highest.index < threshold:
+            return False
+        return highest.entry.entry_id == entry.entry_id
+
     def _process_stop_loss_closes(
         self,
         ss: SnowballStrategyState,
@@ -1254,6 +1272,8 @@ class SnowballStrategy(Strategy):
                 if entry.is_rebuild and self.config.disable_loss_cut_after_rebuild:
                     continue
                 if entry.is_hedge:
+                    continue
+                if self._is_stop_loss_temporarily_protected(layer, entry):
                     continue
 
                 hit = False
