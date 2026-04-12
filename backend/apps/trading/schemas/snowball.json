@@ -317,6 +317,19 @@
       "group_ja": "証拠金保護"
     },
 
+    "preserve_highest_r_from": {
+      "type": "integer",
+      "title": "Preserve Highest R From",
+      "title_ja": "最上位R保護開始番号",
+      "description": "Keep the highest live R-slot in each layer open even when stop-loss is hit, but only when that highest slot number is at or above this threshold. Set to 0 to disable.",
+      "description_ja": "各レイヤーでライブ中の最上位Rスロットがロスカット価格に達しても、そのR番号がこの閾値以上なら維持します。0で無効です。",
+      "default": 0,
+      "minimum": 0,
+      "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
     "reseed_on_all_pending": {
       "type": "boolean",
       "title": "Re-seed When Any Pending",

@@ -85,6 +85,7 @@ class SnowballStrategyConfig:
     cooldown_sec: int
     stop_loss_enabled: bool
     disable_loss_cut_after_rebuild: bool
+    preserve_highest_r_from: int
     emergency_enabled: bool
 
     pip_size: Decimal
@@ -135,6 +136,7 @@ class SnowballStrategyConfig:
             cooldown_sec=_parse_int(raw.get("cooldown_sec", 300), 300),
             stop_loss_enabled=bool(raw.get("stop_loss_enabled", False)),
             disable_loss_cut_after_rebuild=bool(raw.get("disable_loss_cut_after_rebuild", False)),
+            preserve_highest_r_from=_parse_int(raw.get("preserve_highest_r_from", 0), 0),
             emergency_enabled=bool(raw.get("emergency_enabled", True)),
             pip_size=_parse_decimal(raw.get("pip_size", "0.01"), "0.01"),
             reseed_on_all_pending=bool(raw.get("reseed_on_all_pending", False)),
@@ -169,6 +171,7 @@ class SnowballStrategyConfig:
             "cooldown_sec": self.cooldown_sec,
             "stop_loss_enabled": self.stop_loss_enabled,
             "disable_loss_cut_after_rebuild": self.disable_loss_cut_after_rebuild,
+            "preserve_highest_r_from": self.preserve_highest_r_from,
             "emergency_enabled": self.emergency_enabled,
             "pip_size": str(self.pip_size),
             "reseed_on_all_pending": self.reseed_on_all_pending,
@@ -179,6 +182,8 @@ class SnowballStrategyConfig:
         """Raise ``ValueError`` on invalid combinations."""
         if self.stop_loss_enabled and self.shrink_enabled:
             raise ValueError("stop_loss_enabled and shrink_enabled cannot both be true")
+        if not 0 <= self.preserve_highest_r_from <= self.r_max:
+            raise ValueError(f"preserve_highest_r_from must be >= 0 and <= r_max ({self.r_max})")
         if self.shrink_enabled and self.lock_enabled and not self.m_th < self.n_th < Decimal("100"):
             raise ValueError("Must satisfy m_th < n_th < 100")
         if self.shrink_enabled and not Decimal("0") < self.m_th < Decimal("100"):

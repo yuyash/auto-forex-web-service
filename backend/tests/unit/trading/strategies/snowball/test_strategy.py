@@ -10,8 +10,11 @@ from typing import Any
 import pytest
 
 from apps.trading.dataclasses.tick import Tick
-from apps.trading.enums import EventType, StrategyType
+from apps.trading.enums import Direction, EventType, StrategyType
 from apps.trading.strategies.snowball.models import (
+    Entry,
+    Layer,
+    SnowballCycle,
     SnowballStrategyConfig,
     SnowballStrategyState,
 )
@@ -90,6 +93,7 @@ class TestSnowballStrategyClassMethods:
         assert isinstance(result, dict)
         assert result["base_units"] == 2000
         assert result["disable_loss_cut_after_rebuild"] is False
+        assert result["preserve_highest_r_from"] == 0
 
     def test_default_parameters(self):
         defaults = SnowballStrategy.default_parameters()
@@ -97,6 +101,7 @@ class TestSnowballStrategyClassMethods:
         assert "base_units" in defaults
         assert "m_pips" in defaults
         assert "disable_loss_cut_after_rebuild" in defaults
+        assert "preserve_highest_r_from" in defaults
 
     def test_validate_parameters_valid(self):
         """validate_parameters should not raise for valid params + schema."""
@@ -162,6 +167,113 @@ class TestSnowballOnTickInit:
         # next_entry_id should not jump dramatically (no re-init)
         assert ss_after_second.initialised is True
         assert ss_after_second.next_entry_id >= entry_count
+
+
+class TestSnowballStopLossProtectionThreshold:
+    def _make_cycle_with_entries(self) -> tuple[SnowballStrategyState, SnowballCycle, Entry, Entry]:
+        ss = SnowballStrategyState()
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        layer = Layer.create(1, 3, 1000, 2)
+
+        r1 = Entry(
+            entry_id=1,
+            step=2,
+            direction=Direction.LONG,
+            entry_price=Decimal("155.00"),
+            close_price=Decimal("155.30"),
+            units=2000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="counter",
+            layer_number=1,
+            retracement_count=1,
+            stop_loss_price=Decimal("154.60"),
+        )
+        r2 = Entry(
+            entry_id=2,
+            step=3,
+            direction=Direction.LONG,
+            entry_price=Decimal("154.70"),
+            close_price=Decimal("155.00"),
+            units=3000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="counter",
+            layer_number=1,
+            retracement_count=2,
+            stop_loss_price=Decimal("154.40"),
+        )
+
+        layer.slot_at(1).fill(r1)
+        layer.slot_at(2).fill(r2)
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+        return ss, cycle, r1, r2
+
+    def test_highest_live_r_is_preserved_when_at_or_above_threshold(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "preserve_highest_r_from": 2,
+            }
+        )
+        ss, cycle, r1, r2 = self._make_cycle_with_entries()
+        tick = _make_tick(datetime(2026, 1, 1, tzinfo=UTC), "154.39", "154.41")
+
+        events = s._process_stop_loss_closes(ss, tick, cycle)
+
+        closed_ids = {event.entry_id for event in events}
+        assert r1.entry_id in closed_ids
+        assert r2.entry_id not in closed_ids
+        layer = cycle.grid.layers[0]
+        assert layer.slot_at(1).pending_rebuild is not None
+        assert layer.slot_at(2).entry is r2
+
+    def test_highest_live_r_is_not_preserved_below_threshold(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "preserve_highest_r_from": 3,
+            }
+        )
+        ss, cycle, r1, r2 = self._make_cycle_with_entries()
+        tick = _make_tick(datetime(2026, 1, 1, tzinfo=UTC), "154.39", "154.41")
+
+        events = s._process_stop_loss_closes(ss, tick, cycle)
+
+        closed_ids = {event.entry_id for event in events}
+        assert r1.entry_id in closed_ids
+        assert r2.entry_id in closed_ids
+
+    def test_r0_only_layer_is_never_preserved(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "preserve_highest_r_from": 1,
+            }
+        )
+        ss = SnowballStrategyState()
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        layer = Layer.create(1, 3, 1000, 2)
+        r0 = Entry(
+            entry_id=1,
+            step=1,
+            direction=Direction.LONG,
+            entry_price=Decimal("155.00"),
+            close_price=Decimal("155.50"),
+            units=1000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="initial",
+            layer_number=1,
+            retracement_count=0,
+            stop_loss_price=Decimal("154.60"),
+        )
+        layer.slot_at(0).fill(r0)
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+        tick = _make_tick(datetime(2026, 1, 1, tzinfo=UTC), "154.59", "154.61")
+
+        events = s._process_stop_loss_closes(ss, tick, cycle)
+
+        assert [event.entry_id for event in events] == [r0.entry_id]
 
 
 # ===================================================================

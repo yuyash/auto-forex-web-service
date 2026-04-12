@@ -55,6 +55,7 @@ class TestSnowballStrategyConfig:
         assert cfg.interval_mode == "constant"
         assert cfg.counter_tp_mode == "weighted_avg"
         assert cfg.disable_loss_cut_after_rebuild is False
+        assert cfg.preserve_highest_r_from == 0
 
     def test_from_dict_custom(self):
         cfg = SnowballStrategyConfig.from_dict(
@@ -73,13 +74,18 @@ class TestSnowballStrategyConfig:
 
     def test_to_dict_roundtrip(self):
         cfg = SnowballStrategyConfig.from_dict(
-            {"m_pips": "30", "disable_loss_cut_after_rebuild": True}
+            {
+                "m_pips": "30",
+                "disable_loss_cut_after_rebuild": True,
+                "preserve_highest_r_from": 3,
+            }
         )
         d = cfg.to_dict()
         cfg2 = SnowballStrategyConfig.from_dict(d)
         assert cfg2.m_pips == Decimal("30")
         assert cfg2.base_units == cfg.base_units
         assert cfg2.disable_loss_cut_after_rebuild is True
+        assert cfg2.preserve_highest_r_from == 3
 
     def test_validate_m_th_n_th_order(self):
         with pytest.raises(ValueError, match="m_th < n_th"):
@@ -109,6 +115,16 @@ class TestSnowballStrategyConfig:
             }
         )
         cfg.validate()
+
+    def test_validate_rejects_preserve_highest_r_from_above_r_max(self):
+        with pytest.raises(ValueError, match="preserve_highest_r_from"):
+            SnowballStrategyConfig.from_dict(
+                {
+                    "m_pips": "30",
+                    "r_max": 4,
+                    "preserve_highest_r_from": 5,
+                }
+            ).validate()
 
 
 class TestBasketEntry:
