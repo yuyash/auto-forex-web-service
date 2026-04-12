@@ -12,6 +12,8 @@ interface StrategyGridIndicatorProps {
   title?: string;
   showLegend?: boolean;
   showSummary?: boolean;
+  showSlotBuildCounts?: boolean;
+  slotBuildCounts?: Record<string, number>;
 }
 
 export function StrategyGridIndicator({
@@ -20,6 +22,8 @@ export function StrategyGridIndicator({
   title,
   showLegend = !compact,
   showSummary = !compact,
+  showSlotBuildCounts = false,
+  slotBuildCounts,
 }: StrategyGridIndicatorProps) {
   const { t } = useTranslation(['common']);
   const theme = useTheme();
@@ -28,8 +32,9 @@ export function StrategyGridIndicator({
     return null;
   }
 
-  const cellSize = compact ? 14 : 20;
-  const headerWidth = cellSize;
+  const cellHeight = compact ? 14 : 20;
+  const cellWidth = compact ? 14 : showSlotBuildCounts ? 36 : 20;
+  const headerWidth = cellHeight;
   const summary = gridState.summary;
   const slotHeaders = Array.from(
     { length: summary.slot_count_per_layer },
@@ -84,7 +89,7 @@ export function StrategyGridIndicator({
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: `${headerWidth}px repeat(${slotHeaders.length}, ${cellSize}px)`,
+            gridTemplateColumns: `${headerWidth}px repeat(${slotHeaders.length}, ${cellWidth}px)`,
             gap: '4px',
             alignItems: 'center',
             minWidth: 'fit-content',
@@ -109,10 +114,13 @@ export function StrategyGridIndicator({
           {gridState.layers.map((layer) => (
             <GridRow
               key={layer.layer}
-              cellSize={cellSize}
+              cellHeight={cellHeight}
+              cellWidth={cellWidth}
               compact={compact}
               headerWidth={headerWidth}
               layer={layer}
+              showSlotBuildCounts={showSlotBuildCounts}
+              slotBuildCounts={slotBuildCounts}
             />
           ))}
         </Box>
@@ -153,13 +161,19 @@ export function StrategyGridIndicator({
 function GridRow({
   layer,
   compact,
-  cellSize,
+  cellHeight,
+  cellWidth,
   headerWidth,
+  showSlotBuildCounts,
+  slotBuildCounts,
 }: {
   layer: StrategyGridState['layers'][number];
   compact: boolean;
-  cellSize: number;
+  cellHeight: number;
+  cellWidth: number;
   headerWidth: number;
+  showSlotBuildCounts: boolean;
+  slotBuildCounts?: Record<string, number>;
 }) {
   const { t } = useTranslation(['common']);
   const theme = useTheme();
@@ -180,6 +194,10 @@ function GridRow({
       </Typography>
       {layer.slots.map((slot) => {
         const color = stateMainColor(theme, slot.state);
+        const buildCount = Math.min(
+          slotBuildCounts?.[getSlotBuildCountKey(layer.layer, slot.slot)] ?? 0,
+          999
+        );
         const tooltip = `L${layer.layer}/R${slot.slot} ${t(
           `common:strategyVisualization.grid.states.${slot.state}`
         )}`;
@@ -188,8 +206,8 @@ function GridRow({
           <Tooltip key={`${layer.layer}-${slot.slot}`} title={tooltip}>
             <Box
               sx={{
-                width: cellSize,
-                height: cellSize,
+                width: cellWidth,
+                height: cellHeight,
                 borderRadius: compact ? 0.75 : 1,
                 border: '1px solid',
                 borderColor:
@@ -200,8 +218,28 @@ function GridRow({
                   slot.state === 'empty'
                     ? alpha(theme.palette.grey[500], 0.12)
                     : alpha(color, 0.24),
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
               }}
-            />
+            >
+              {showSlotBuildCounts ? (
+                <Typography
+                  component="span"
+                  sx={{
+                    fontSize: compact ? '0.55rem' : '0.72rem',
+                    fontWeight: 700,
+                    lineHeight: 1,
+                    color:
+                      slot.state === 'empty'
+                        ? theme.palette.text.secondary
+                        : color,
+                  }}
+                >
+                  {buildCount}
+                </Typography>
+              ) : null}
+            </Box>
           </Tooltip>
         );
       })}
@@ -212,8 +250,12 @@ function GridRow({
 function stateMainColor(theme: Theme, state: StrategyGridSlotState): string {
   if (state === 'filled') return theme.palette.success.main;
   if (state === 'stopped') return theme.palette.error.main;
-  if (state === 'rebuilt') return theme.palette.info.main;
+  if (state === 'rebuilt') return theme.palette.primary.main;
   return theme.palette.grey[500];
+}
+
+function getSlotBuildCountKey(layer: number, slot: number): string {
+  return `${layer}:${slot}`;
 }
 
 export default StrategyGridIndicator;
