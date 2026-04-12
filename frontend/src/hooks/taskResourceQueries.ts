@@ -28,6 +28,8 @@ interface TaskSummaryResponse {
     total_trades?: number;
     open_positions?: number;
     closed_positions?: number;
+    open_long_units?: number;
+    open_short_units?: number;
   };
   execution?: {
     current_balance?: string | number | null;
@@ -157,6 +159,8 @@ export function createTaskSummaryQuery(
             totalTrades: d.counts?.total_trades ?? 0,
             openPositions: d.counts?.open_positions ?? 0,
             closedPositions: d.counts?.closed_positions ?? 0,
+            openLongUnits: d.counts?.open_long_units ?? 0,
+            openShortUnits: d.counts?.open_short_units ?? 0,
           },
           execution: {
             currentBalance:

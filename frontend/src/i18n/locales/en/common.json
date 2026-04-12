@@ -239,6 +239,7 @@
       "opens": "{{count}} opens",
       "closes": "{{count}} closes",
       "opensAndCloses": "{{opens}} opens, {{closes}} closes",
+      "openUnitsTotal": "open size {{units}} units",
       "trades": "Trades",
       "back": "Back",
       "resetZoom": "Reset zoom",

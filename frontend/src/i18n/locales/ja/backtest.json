@@ -167,6 +167,10 @@
     "totalTradesCount": "総取引数",
     "openPositions": "オープンポジション",
     "closedPositions": "クローズドポジション",
+    "openLongUnits": "オープンLONGサイズ",
+    "openShortUnits": "オープンSHORTサイズ",
+    "tickGranularity": "Tick粒度",
+    "tickWindowValueMode": "ウィンドウ代表値",
     "ticksProcessed": "処理ティック数",
     "completed": "完了",
     "viewingHistoricalExecution": "過去の実行を表示しています。以下のデータはこの実行のものです。"

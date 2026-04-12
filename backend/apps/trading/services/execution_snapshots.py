@@ -169,6 +169,8 @@ def _deserialize_summary(raw: dict[str, Any]) -> TaskSummary:
             total_trades=int(counts.get("total_trades") or 0),
             open_positions=int(counts.get("open_positions") or 0),
             closed_positions=int(counts.get("closed_positions") or 0),
+            open_long_units=int(counts.get("open_long_units") or 0),
+            open_short_units=int(counts.get("open_short_units") or 0),
         ),
         execution=ExecutionInfo(
             current_balance=_to_optional_decimal(execution.get("current_balance")),

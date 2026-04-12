@@ -331,7 +331,13 @@ def _build_cycle(
 
     # Unrealized PnL: sum for positions that are still open.
     still_open_ids = open_ids - close_ids
+    open_units_total = 0
     if still_open_ids:
+        open_units_total = sum(
+            abs(int(t["units"]))
+            for t in opens
+            if str(t.get("position_id")) in still_open_ids and t.get("position_id")
+        )
         for position_id in still_open_ids:
             unrealized_pnl += (unrealized_pnl_by_position or {}).get(position_id, Decimal("0"))
 
@@ -346,6 +352,7 @@ def _build_cycle(
         "trade_count": len(trades),
         "open_count": len(opens),
         "close_count": len(closes),
+        "open_units_total": open_units_total,
         "has_protection": has_protection,
         "protection_count": len(protection_trades),
         "rebuild_count": rebuild_count,

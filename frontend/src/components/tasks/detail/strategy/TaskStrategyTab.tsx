@@ -771,6 +771,13 @@ export function TaskStrategyTab({
                   opens: selectedCycle.open_count,
                   closes: selectedCycle.close_count,
                 })}
+                <Typography component="span" variant="body2" sx={{ ml: 1.5 }}>
+                  {t('common:strategyVisualization.cycleList.openUnitsTotal', {
+                    units: (
+                      selectedCycle.open_units_total ?? 0
+                    ).toLocaleString(),
+                  })}
+                </Typography>
                 <Typography
                   component="span"
                   variant="body2"

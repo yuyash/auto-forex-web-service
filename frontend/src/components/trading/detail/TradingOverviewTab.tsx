@@ -273,6 +273,22 @@ export function TradingOverviewTab({
                 {summary.counts.closedPositions}
               </Typography>
             </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                {t('trading:detail.openLongUnits')}
+              </Typography>
+              <Typography variant="body1">
+                {(summary.counts.openLongUnits ?? 0).toLocaleString()}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                {t('trading:detail.openShortUnits')}
+              </Typography>
+              <Typography variant="body1">
+                {(summary.counts.openShortUnits ?? 0).toLocaleString()}
+              </Typography>
+            </Box>
             {summary.execution.ticksProcessed > 0 && (
               <Box>
                 <Typography variant="caption" color="text.secondary">

@@ -5693,11 +5693,19 @@
                     },
                     "closed_positions": {
                         "type": "integer"
+                    },
+                    "open_long_units": {
+                        "type": "integer"
+                    },
+                    "open_short_units": {
+                        "type": "integer"
                     }
                 },
                 "required": [
                     "closed_positions",
+                    "open_long_units",
                     "open_positions",
+                    "open_short_units",
                     "total_trades"
                 ]
             },
