@@ -538,6 +538,14 @@ class SnowballStrategy(Strategy):
             layer.close_slot(highest.index)
             cycle.counter_close_count += 1
 
+            # When a higher-layer R0 is the only live slot left, it can be
+            # selected directly by the generic back-to-front TP close above.
+            # Remove that now-empty layer immediately; otherwise the next
+            # counter add sees the stale empty layer as current and resumes at
+            # R1, leaving an impossible-looking "hole" at R0.
+            if layer.layer_number > 1 and highest.index == 0 and not layer.has_open_entries():
+                cycle.grid.layers.remove(layer)
+
             events: list[StrategyEvent] = [
                 self._close_entry(
                     tick,

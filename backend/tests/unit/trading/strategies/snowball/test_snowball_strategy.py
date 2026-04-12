@@ -173,6 +173,92 @@ class TestCounterCloses:
         # Should close the counter entry
         assert any(e.close_reason == "counter_tp" for e in closes)
 
+    def test_non_primary_layer_r0_close_removes_empty_layer(self):
+        from apps.trading.strategies.snowball.models import (
+            SnowballCycle,
+            SnowballStrategyState,
+        )
+
+        s = _strategy(counter_tp_mode="fixed", counter_tp_pips="25")
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.SHORT)
+
+        layer2 = Layer.create(2, 7, 1000)
+        layer2.slot_at(5).fill(
+            Entry(
+                entry_id=25,
+                step=6,
+                direction=Direction.SHORT,
+                entry_price=Decimal("143.203"),
+                close_price=Decimal("142.667"),
+                units=6000,
+                opened_at=T0,
+                role="counter",
+                layer_number=2,
+                retracement_count=5,
+            )
+        )
+        layer2.slot_at(6).fill(
+            Entry(
+                entry_id=26,
+                step=7,
+                direction=Direction.SHORT,
+                entry_price=Decimal("143.342"),
+                close_price=Decimal("142.815"),
+                units=7000,
+                opened_at=T0,
+                role="counter",
+                layer_number=2,
+                retracement_count=6,
+            )
+        )
+        layer2.slot_at(7).fill(
+            Entry(
+                entry_id=27,
+                step=8,
+                direction=Direction.SHORT,
+                entry_price=Decimal("143.471"),
+                close_price=Decimal("142.946"),
+                units=8000,
+                opened_at=T0,
+                role="counter",
+                layer_number=2,
+                retracement_count=7,
+            )
+        )
+
+        layer3 = Layer.create(3, 7, 1000)
+        layer3.slot_at(0).fill(
+            Entry(
+                entry_id=30,
+                step=1,
+                direction=Direction.SHORT,
+                entry_price=Decimal("143.587"),
+                close_price=Decimal("142.946"),
+                units=1000,
+                opened_at=T0,
+                role="layer_initial",
+                layer_number=3,
+                retracement_count=0,
+            )
+        )
+
+        cycle.add_layer(layer2)
+        cycle.add_layer(layer3)
+        ss.cycles.append(cycle)
+        state = DummyState(strategy_state=ss.to_dict())
+
+        result = s.on_tick(tick=_tick(T0 + timedelta(minutes=1), "142.918", "142.938"), state=state)
+
+        closes = _close_events(result)
+        assert any(e.layer_number == 3 and e.retracement_count == 0 for e in closes)
+
+        from apps.trading.strategies.snowball.models import SnowballStrategyState
+
+        updated = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        updated_cycle = updated.cycles[0]
+        assert [layer.layer_number for layer in updated_cycle.grid.layers] == [2]
+
 
 # ==================================================================
 # 4. Trend TP (cycle head close)
