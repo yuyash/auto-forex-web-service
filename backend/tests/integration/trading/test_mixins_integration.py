@@ -1054,7 +1054,7 @@ class TestPositionLifecycle:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.data == {
             "code": "invalid_query_param",
-            "detail": "Position ID prefix matched multiple positions; provide a longer ID",
+            "detail": "Invalid query parameters.",
         }
 
 
