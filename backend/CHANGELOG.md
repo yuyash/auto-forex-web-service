@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.33.3...backend-v1.33.4) (2026-04-12)
+
+
+### Bug Fixes
+
+* **api:** ignore task ordering on subresources ([#455](https://github.com/yuyash/auto-forex-web-service/issues/455)) ([7496dea](https://github.com/yuyash/auto-forex-web-service/commit/7496dea00144d3bffa6bf47ba7df6336c0fc2d4b))
+
 ## [1.33.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.33.2...backend-v1.33.3) (2026-04-12)
 
 
