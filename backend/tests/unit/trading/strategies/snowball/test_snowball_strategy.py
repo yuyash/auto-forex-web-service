@@ -20,7 +20,13 @@ from apps.trading.events import (
     GenericStrategyEvent,
     OpenPositionEvent,
 )
-from apps.trading.strategies.snowball.models import Entry, Layer, SnowballStrategyConfig
+from apps.trading.strategies.snowball.models import (
+    Entry,
+    Layer,
+    SnowballCycle,
+    SnowballStrategyConfig,
+    SnowballStrategyState,
+)
 from apps.trading.strategies.snowball.strategy import SnowballStrategy
 
 # ------------------------------------------------------------------
@@ -149,6 +155,59 @@ class TestCounterAdds:
         assert len(opens) >= 1
         # Should be at R1 (index 1)
         assert any(e.retracement_count == 1 for e in opens)
+
+    def test_weighted_avg_counter_add_does_not_double_count_live_r0(self):
+        s = _strategy(counter_tp_mode="weighted_avg", interval_mode="constant", n_pips_head="30")
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+
+        layer1 = Layer.create(1, 7, 1000, 3)
+        layer1.slot_at(0).fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("161.787"),
+                close_price=Decimal("162.287"),
+                units=1000,
+                opened_at=T0,
+                role="initial",
+                layer_number=1,
+                retracement_count=0,
+                root_entry_id=1,
+            )
+        )
+
+        layer3 = Layer.create(3, 7, 1000, 3)
+        layer3.slot_at(0).fill(
+            Entry(
+                entry_id=2,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("157.497"),
+                close_price=Decimal("158.0395"),
+                units=1000,
+                opened_at=T0,
+                role="layer_initial",
+                layer_number=3,
+                retracement_count=0,
+                root_entry_id=1,
+                parent_entry_id=1,
+            )
+        )
+
+        cycle.add_layer(layer1)
+        cycle.add_layer(layer3)
+        ss.cycles.append(cycle)
+
+        tick = _tick(T0 + timedelta(minutes=1), "157.174", "157.194")
+        events = s._process_cycle_counter_adds(ss, tick, cycle)
+
+        assert len(events) == 1
+        event = events[0]
+        assert event.retracement_count == 1
+        assert event.planned_exit_price_formula == "(157.194 * 2000 + 157.497 * 1000) / 3000"
+        assert event.planned_exit_price == Decimal("157.295")
 
 
 # ==================================================================
@@ -426,3 +485,97 @@ class TestEmergencyStop:
         result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"), state=state)
         assert result.should_stop is True
         assert "Emergency stop" in (result.stop_reason or "")
+
+
+class TestGridOrderingValidation:
+    def test_long_cycle_fails_when_entry_prices_are_not_descending(self):
+        s = _strategy(counter_tp_mode="fixed", counter_tp_pips="25")
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        layer = Layer.create(1, 7, 1000, 3)
+        layer.slot_at(0).fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("160.000"),
+                close_price=Decimal("160.500"),
+                units=1000,
+                opened_at=T0,
+                role="initial",
+                layer_number=1,
+                retracement_count=0,
+                root_entry_id=1,
+            )
+        )
+        layer.slot_at(1).fill(
+            Entry(
+                entry_id=2,
+                step=2,
+                direction=Direction.LONG,
+                entry_price=Decimal("160.100"),
+                close_price=Decimal("160.400"),
+                units=2000,
+                opened_at=T0,
+                role="counter",
+                layer_number=1,
+                retracement_count=1,
+                root_entry_id=1,
+                parent_entry_id=1,
+            )
+        )
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+
+        state = DummyState(strategy_state=ss.to_dict())
+        result = s.on_tick(tick=_tick(T0 + timedelta(minutes=1), "160.10", "160.12"), state=state)
+
+        assert result.should_stop is True
+        assert result.is_error is True
+        assert "Grid ordering violation" in (result.stop_reason or "")
+
+    def test_short_cycle_fails_when_tp_prices_are_not_ascending(self):
+        s = _strategy(counter_tp_mode="fixed", counter_tp_pips="25")
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=2, direction=Direction.SHORT)
+        layer = Layer.create(1, 7, 1000, 3)
+        layer.slot_at(0).fill(
+            Entry(
+                entry_id=10,
+                step=1,
+                direction=Direction.SHORT,
+                entry_price=Decimal("150.000"),
+                close_price=Decimal("149.500"),
+                units=1000,
+                opened_at=T0,
+                role="initial",
+                layer_number=1,
+                retracement_count=0,
+                root_entry_id=10,
+            )
+        )
+        layer.slot_at(1).fill(
+            Entry(
+                entry_id=11,
+                step=2,
+                direction=Direction.SHORT,
+                entry_price=Decimal("150.300"),
+                close_price=Decimal("149.400"),
+                units=2000,
+                opened_at=T0,
+                role="counter",
+                layer_number=1,
+                retracement_count=1,
+                root_entry_id=10,
+                parent_entry_id=10,
+            )
+        )
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+
+        state = DummyState(strategy_state=ss.to_dict())
+        result = s.on_tick(tick=_tick(T0 + timedelta(minutes=1), "149.90", "149.92"), state=state)
+
+        assert result.should_stop is True
+        assert result.is_error is True
+        assert "Grid ordering violation" in (result.stop_reason or "")
