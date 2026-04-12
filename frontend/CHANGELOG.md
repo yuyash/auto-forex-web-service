@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.46.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.46.0...frontend-v1.46.1) (2026-04-12)
+
+
+### Bug Fixes
+
+* **strategy:** clarify grid rebuild indicator ([#445](https://github.com/yuyash/auto-forex-web-service/issues/445)) ([13a4412](https://github.com/yuyash/auto-forex-web-service/commit/13a4412e9a98e4a08cb3ec0f4209923f1714317a))
+
 ## [1.46.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.45.0...frontend-v1.46.0) (2026-04-12)
 
 
