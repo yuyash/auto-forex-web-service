@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.47.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.47.6...frontend-v1.47.7) (2026-04-13)
+
+
+### Bug Fixes
+
+* **frontend:** stack position actions on account detail ([#467](https://github.com/yuyash/auto-forex-web-service/issues/467)) ([787c695](https://github.com/yuyash/auto-forex-web-service/commit/787c695a192c45ed751122a8d3ad14944d1ac21b))
+
 ## [1.47.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.47.5...frontend-v1.47.6) (2026-04-13)
 
 

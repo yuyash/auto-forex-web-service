@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.10](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.33.9...backend-v1.33.10) (2026-04-13)
+
+
+### Bug Fixes
+
+* **frontend:** stack position actions on account detail ([#467](https://github.com/yuyash/auto-forex-web-service/issues/467)) ([787c695](https://github.com/yuyash/auto-forex-web-service/commit/787c695a192c45ed751122a8d3ad14944d1ac21b))
+
 ## [1.33.9](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.33.8...backend-v1.33.9) (2026-04-13)
 
 
