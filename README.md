@@ -39,6 +39,7 @@ See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed local development setup instru
 ## Deployment
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for the steps to deploy the application.
+Production releases are managed through GitHub Actions workflows.
 
 ## Architecture
 
