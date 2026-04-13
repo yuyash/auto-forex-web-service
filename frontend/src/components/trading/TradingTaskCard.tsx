@@ -352,9 +352,26 @@ export default function TradingTaskCard({
     return formatDateTimeInTimezone(dateString, timezone, language);
   };
 
-  const currentPnL = currentTask.latest_execution?.total_pnl
-    ? parseFloat(currentTask.latest_execution.total_pnl)
-    : 0;
+  const quoteCurrency =
+    liveSummary.execution.displayCurrency ||
+    currentTask.latest_execution?.quote_currency ||
+    currentTask.instrument.split('_').at(-1) ||
+    'JPY';
+  const formatPnl = (value: number, currency: string): string => {
+    const absValue = Math.abs(value);
+    const sign = value >= 0 ? '+' : '-';
+    const formatted = new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(absValue);
+    return `${sign}${formatted} ${currency}`;
+  };
+
+  const currentPnL = currentTask.latest_execution?.total_pnl_quote
+    ? parseFloat(currentTask.latest_execution.total_pnl_quote)
+    : currentTask.latest_execution?.total_pnl
+      ? parseFloat(currentTask.latest_execution.total_pnl)
+      : 0;
   const livePnl = shouldShowLiveSummary
     ? liveSummary.pnl.realized + liveSummary.pnl.unrealized
     : currentPnL;
@@ -496,7 +513,7 @@ export default function TradingTaskCard({
             <Grid size={{ xs: 6, sm: 4 }}>
               <StatCard
                 title={t('common:cards.livePnl')}
-                value={`$${livePnl.toFixed(2)}`}
+                value={formatPnl(livePnl, quoteCurrency)}
                 color={livePnl >= 0 ? 'success' : 'error'}
               />
             </Grid>

@@ -124,10 +124,15 @@ export interface ExecutionSummary {
   error_message?: string;
   total_return?: string;
   total_pnl?: string;
+  total_pnl_quote?: string;
+  realized_pnl_quote?: string;
+  unrealized_pnl_quote?: string;
   total_trades?: number;
   winning_trades?: number;
   losing_trades?: number;
   win_rate?: string;
+  pnl_currency?: string;
+  quote_currency?: string;
 }
 
 export interface ExecutionListParams {

@@ -53,6 +53,7 @@ export interface BackendBacktestTask {
   started_at?: string | null;
   completed_at?: string | null;
   error_message?: string | null;
+  latest_execution?: BackendTaskExecutionSummary | null;
   created_at: string;
   updated_at: string;
   debug_options?: Record<string, unknown>;
@@ -79,6 +80,7 @@ export interface BackendTradingTask {
   started_at?: string | null;
   completed_at?: string | null;
   error_message?: string | null;
+  latest_execution?: BackendTaskExecutionSummary | null;
   has_strategy_state: boolean;
   can_resume: boolean;
   created_at: string;
