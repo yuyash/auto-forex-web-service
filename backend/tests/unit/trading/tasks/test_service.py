@@ -223,6 +223,7 @@ class TestRecoverTradingTask:
         mock_run_trading_task.apply_async.assert_called_once_with(
             args=[locked.pk],
             task_id=str(task.execution_id),
+            queue="trading",
         )
 
     @patch("apps.trading.tasks.service.transaction.atomic")
@@ -305,6 +306,7 @@ class TestResumeTask:
         mock_run_backtest_task.apply_async.assert_called_once_with(
             args=[task_id],
             task_id=str(execution_id),
+            queue="backtest",
         )
 
     @patch("apps.trading.tasks.service.transaction.atomic")
@@ -353,7 +355,10 @@ class TestStopTask:
         assert result is True
         assert task.status == TaskStatus.STOPPING
         task.save.assert_called()
-        mock_stop.delay.assert_called_once_with(task_id)
+        mock_stop.apply_async.assert_called_once_with(
+            args=[task_id],
+            queue="system",
+        )
 
     @patch("apps.trading.tasks.service.BacktestTask")
     @patch("apps.trading.tasks.service.TradingTask")
@@ -413,7 +418,10 @@ class TestStopTask:
         mock_app.control.revoke.assert_called_once_with(
             str(execution_id), terminate=True, signal="SIGKILL"
         )
-        mock_stop.delay.assert_called_once_with(task_id, "immediate")
+        mock_stop.apply_async.assert_called_once_with(
+            args=[task_id, "immediate"],
+            queue="system",
+        )
 
     @patch("apps.trading.tasks.service.stop_trading_task")
     @patch("celery.current_app")
@@ -436,7 +444,10 @@ class TestStopTask:
         assert TaskService().stop_task(task_id, mode="graceful_close") is True
         assert task.sell_on_stop is True
         mock_app.control.revoke.assert_not_called()
-        mock_stop.delay.assert_called_once_with(task_id, "graceful_close")
+        mock_stop.apply_async.assert_called_once_with(
+            args=[task_id, "graceful_close"],
+            queue="system",
+        )
 
 
 class TestPauseTask:
