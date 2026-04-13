@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.34.0...backend-v1.34.1) (2026-04-13)
+
+
+### Bug Fixes
+
+* **frontend:** add task summary locale keys ([#472](https://github.com/yuyash/auto-forex-web-service/issues/472)) ([2aa4d31](https://github.com/yuyash/auto-forex-web-service/commit/2aa4d310fc8b91fad2dc585e2dbe1f7cd789de05))
+
 ## [1.34.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.33.10...backend-v1.34.0) (2026-04-13)
 
 
