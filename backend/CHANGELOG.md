@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.34.2...backend-v1.34.3) (2026-04-13)
+
+
+### Bug Fixes
+
+* stop live broker drift and repair deploy drain ([#479](https://github.com/yuyash/auto-forex-web-service/issues/479)) ([85395bb](https://github.com/yuyash/auto-forex-web-service/commit/85395bb377bc4a1e628fd53932b39cde4c7f233b))
+
 ## [1.34.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.34.1...backend-v1.34.2) (2026-04-13)
 
 
