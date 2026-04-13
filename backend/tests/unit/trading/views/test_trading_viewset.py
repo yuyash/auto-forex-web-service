@@ -253,6 +253,7 @@ class TestStart:
 
         response = vs.start(request, pk=1)
         assert response.status_code == http_status.HTTP_409_CONFLICT
+        assert response.data["error"] == "Task cannot be started due to a conflict"
 
     @patch("apps.trading.views.trading.TradingTask")
     def test_start_capacity_error_returns_409(self, MockModel):
@@ -408,7 +409,7 @@ class TestRestart:
 
         response = vs.restart(request, pk=1)
         assert response.status_code == http_status.HTTP_400_BAD_REQUEST
-        assert response.data["detail"] == "bad state"
+        assert response.data["error"] == "Invalid restart request for current task state"
 
     def test_restart_capacity_error_returns_409(self):
         task = _make_task(task_status=TaskStatus.STOPPED)

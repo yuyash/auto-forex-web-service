@@ -197,6 +197,7 @@ class TestStart:
 
         response = vs.start(request, pk=1)
         assert response.status_code == http_status.HTTP_400_BAD_REQUEST
+        assert response.data["error"] == "Invalid start request for current task state"
 
     def test_start_submission_error_returns_500(self):
         task = _make_task(task_status=TaskStatus.CREATED)
@@ -384,7 +385,7 @@ class TestRestart:
 
         response = vs.restart(request, pk=1)
         assert response.status_code == http_status.HTTP_400_BAD_REQUEST
-        assert response.data["detail"] == "retry limit"
+        assert response.data["error"] == "Invalid restart request for current task state"
 
     def test_restart_capacity_error_returns_409(self):
         task = _make_task(task_status=TaskStatus.STOPPED)
