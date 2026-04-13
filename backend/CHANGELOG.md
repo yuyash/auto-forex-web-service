@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.33.4...backend-v1.33.5) (2026-04-13)
+
+
+### Bug Fixes
+
+* lifecycle summary strategy guards ([#457](https://github.com/yuyash/auto-forex-web-service/issues/457)) ([69ae249](https://github.com/yuyash/auto-forex-web-service/commit/69ae2497a7f47565be156fcb3796db3a8bea8be5))
+
 ## [1.33.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.33.3...backend-v1.33.4) (2026-04-12)
 
 
