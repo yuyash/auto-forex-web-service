@@ -6384,6 +6384,11 @@
                         "format": "date-time",
                         "nullable": true
                     },
+                    "close_time": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
                     "state": {
                         "type": "string"
                     },

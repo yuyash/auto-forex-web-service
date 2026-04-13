@@ -515,6 +515,40 @@ class TestGetOrderHistory:
         assert result[0].order_id == "1"
         assert result[1].order_type == OrderType.LIMIT
 
+    def test_success_with_attribute_based_orders(self):
+        account = OandaAccountFactory()
+        svc = OandaService(account=account)
+        svc.api = MagicMock()
+
+        order_one = MagicMock()
+        order_one.id = "10"
+        order_one.instrument = "USD_JPY"
+        order_one.type = "MARKET"
+        order_one.units = "1000"
+        order_one.state = "FILLED"
+        order_one.createTime = "2024-01-15T10:00:00Z"
+        order_one.filledTime = "2024-01-15T10:00:01Z"
+
+        order_two = MagicMock()
+        order_two.id = "11"
+        order_two.instrument = "USD_JPY"
+        order_two.type = "LIMIT"
+        order_two.units = "-500"
+        order_two.price = "150.00"
+        order_two.state = "PENDING"
+        order_two.timeInForce = "GTC"
+        order_two.createTime = "2024-01-15T11:00:00Z"
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.body = {"orders": [order_one, order_two]}
+        svc.api.order.list.return_value = mock_response
+
+        result = svc.get_order_history(instrument="USD_JPY", count=10)
+        assert len(result) == 2
+        assert result[0].order_id == "10"
+        assert result[1].order_type == OrderType.LIMIT
+
     def test_error(self):
         account = OandaAccountFactory()
         svc = OandaService(account=account)

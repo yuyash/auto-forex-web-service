@@ -35,6 +35,7 @@ class MarketPositionListItemSerializer(serializers.Serializer):  # pylint: disab
     entry_price = serializers.CharField()
     unrealized_pnl = serializers.CharField()
     open_time = serializers.DateTimeField(allow_null=True)
+    close_time = serializers.DateTimeField(allow_null=True, required=False)
     state = serializers.CharField()
     account_name = serializers.CharField()
     account_db_id = serializers.IntegerField()
@@ -230,31 +231,36 @@ class PositionView(APIView):
             try:
                 client = OandaService(account)
 
-                if position_status in ["open", "all"]:
-                    # Get open trades (individual position entries)
+                if position_status == "open":
                     trades = client.get_open_trades(instrument=instrument)
-                    for trade in trades:
-                        all_positions.append(
-                            {
-                                "id": trade.trade_id,
-                                "instrument": trade.instrument,
-                                "direction": trade.direction.value,
-                                "units": str(trade.units),
-                                "entry_price": str(trade.entry_price),
-                                "unrealized_pnl": str(trade.unrealized_pnl),
-                                "open_time": (
-                                    trade.open_time.isoformat() if trade.open_time else None
-                                ),
-                                "state": trade.state,
-                                "account_name": account.account_id,
-                                "account_db_id": account.pk,
-                                "status": "open",
-                            }
-                        )
+                else:
+                    trades = client.get_trades(instrument=instrument, state="ALL")
 
-                # Note: OANDA doesn't provide a direct "closed positions" API
-                # Closed positions must be retrieved from transaction history
-                # For now, we only show open positions from OANDA
+                for trade in trades:
+                    is_open = str(trade.state).upper() == "OPEN"
+                    if position_status == "closed" and is_open:
+                        continue
+                    pnl_value = (
+                        trade.unrealized_pnl if is_open else (trade.realized_pnl or Decimal("0"))
+                    )
+                    all_positions.append(
+                        {
+                            "id": trade.trade_id,
+                            "instrument": trade.instrument,
+                            "direction": trade.direction.value,
+                            "units": str(trade.units),
+                            "entry_price": str(trade.entry_price),
+                            "unrealized_pnl": str(pnl_value),
+                            "open_time": trade.open_time.isoformat() if trade.open_time else None,
+                            "close_time": (
+                                trade.close_time.isoformat() if trade.close_time else None
+                            ),
+                            "state": trade.state,
+                            "account_name": account.account_id,
+                            "account_db_id": account.pk,
+                            "status": "open" if is_open else "closed",
+                        }
+                    )
 
             except OandaAPIError as e:
                 logger.error(

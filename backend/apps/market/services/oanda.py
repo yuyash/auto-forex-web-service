@@ -137,6 +137,8 @@ class OpenTrade:
     open_time: datetime | None
     state: str
     account_id: str
+    close_time: datetime | None = None
+    realized_pnl: Decimal | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1051,14 +1053,22 @@ class OandaService:
                 internal_detail=str(e),
             ) from e
 
-    def get_open_trades(self, instrument: str | None = None) -> list[OpenTrade]:
+    def get_trades(
+        self,
+        instrument: str | None = None,
+        *,
+        state: str = "OPEN",
+        count: int = 500,
+    ) -> list[OpenTrade]:
         """
-        Fetch open trades from OANDA API.
+        Fetch trades from OANDA API.
 
         Trades are individual position entries, while positions are aggregated.
 
         Args:
             instrument: Optional filter by instrument
+            state: Trade state filter to send to OANDA.
+            count: Maximum number of trades to request when using history.
 
         Returns:
             List of trade dictionaries
@@ -1070,7 +1080,15 @@ class OandaService:
         assert self.account is not None, "Account not initialized"
 
         try:
-            response = self.api.trade.list_open(self.account.account_id)
+            normalized_state = state.strip().upper() if state else "OPEN"
+            if normalized_state == "OPEN":
+                response = self.api.trade.list_open(self.account.account_id)
+            else:
+                response = self.api.trade.list(
+                    self.account.account_id,
+                    state=normalized_state,
+                    count=count,
+                )
 
             if response.status != 200:
                 raise OandaAPIError(f"Failed to fetch trades: status {response.status}")
@@ -1101,12 +1119,15 @@ class OandaService:
                         open_time=self._parse_iso_datetime(self._object_field(trade, "openTime")),
                         state=str(self._object_field(trade, "state") or ""),
                         account_id=str(self.account.account_id),
+                        close_time=self._parse_iso_datetime(self._object_field(trade, "closeTime")),
+                        realized_pnl=self._to_decimal(self._object_field(trade, "realizedPL")),
                     )
                 )
             logger.info(
-                "Fetched %d open trades from OANDA for account %s",
+                "Fetched %d trades from OANDA for account %s (state=%s)",
                 len(trades),
                 self.account.account_id,
+                normalized_state,
             )
             return trades
         except OandaAPIError:
@@ -1123,6 +1144,9 @@ class OandaService:
                 internal_detail=str(e),
             ) from e
 
+    def get_open_trades(self, instrument: str | None = None) -> list[OpenTrade]:
+        return self.get_trades(instrument=instrument, state="OPEN")
+
     def get_pending_orders(self, instrument: str | None = None) -> list[PendingOrder]:
         assert self.api is not None, "API client not initialized"
         assert self.account is not None, "Account not initialized"
@@ -1134,7 +1158,7 @@ class OandaService:
 
             orders: list[PendingOrder] = []
             for order_data in response.body.get("orders", []):
-                if instrument and order_data.get("instrument", "") != instrument:
+                if instrument and self._object_field(order_data, "instrument") != instrument:
                     continue
                 order_obj = self._parse_order(order_data)
                 orders.append(self._as_pending_order(order_obj))
@@ -1538,15 +1562,15 @@ class OandaService:
         except ValueError:
             return None
 
-    def _parse_order(self, order: dict[str, Any]) -> Order:
-        raw_type = str(order.get("type", "")).upper()
+    def _parse_order(self, order: Any) -> Order:
+        raw_type = str(self._object_field(order, "type") or "").upper()
         order_type = {
             "MARKET": OrderType.MARKET,
             "LIMIT": OrderType.LIMIT,
             "STOP": OrderType.STOP,
         }.get(raw_type, OrderType.MARKET)
 
-        units_signed = self._to_decimal(order.get("units")) or Decimal("0")
+        units_signed = self._to_decimal(self._object_field(order, "units")) or Decimal("0")
         direction = (
             OrderDirection.LONG
             if units_signed > 0
@@ -1555,16 +1579,17 @@ class OandaService:
             else OrderDirection.LONG
         )
         units_abs = abs(units_signed)
-        price = self._to_decimal(order.get("price"))
+        price = self._to_decimal(self._object_field(order, "price"))
 
-        create_time = self._parse_iso_datetime(order.get("createTime"))
-        fill_time = self._parse_iso_datetime(order.get("filledTime"))
-        cancel_time = self._parse_iso_datetime(order.get("cancelledTime"))
-        state = OrderState.from_raw(order.get("state"))
-        time_in_force = str(order.get("timeInForce")) if order.get("timeInForce") else None
+        create_time = self._parse_iso_datetime(self._object_field(order, "createTime"))
+        fill_time = self._parse_iso_datetime(self._object_field(order, "filledTime"))
+        cancel_time = self._parse_iso_datetime(self._object_field(order, "cancelledTime"))
+        state = OrderState.from_raw(self._object_field(order, "state"))
+        time_in_force_raw = self._object_field(order, "timeInForce")
+        time_in_force = str(time_in_force_raw) if time_in_force_raw else None
 
-        order_id = str(order.get("id", ""))
-        instrument = str(order.get("instrument", ""))
+        order_id = str(self._object_field(order, "id") or "")
+        instrument = str(self._object_field(order, "instrument") or "")
 
         if order_type == OrderType.LIMIT:
             return LimitOrder(

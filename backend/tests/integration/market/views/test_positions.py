@@ -35,6 +35,8 @@ class TestPositionView:
         mock_trade.entry_price = Decimal("1.10000")
         mock_trade.unrealized_pnl = Decimal("10.50")
         mock_trade.open_time = None
+        mock_trade.close_time = None
+        mock_trade.realized_pnl = None
         mock_trade.state = "OPEN"
 
         mock_service_instance = MagicMock()
@@ -49,6 +51,41 @@ class TestPositionView:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 1
         assert response.data["results"][0]["instrument"] == "EUR_USD"
+
+    @patch("apps.market.views.positions.OandaService")
+    def test_get_positions_all_includes_closed(self, mock_service: Any, user: Any) -> None:
+        """Test all-position retrieval includes closed trades."""
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-001",
+            api_type=ApiType.PRACTICE,
+            is_active=True,
+        )
+
+        mock_trade = MagicMock()
+        mock_trade.trade_id = "124"
+        mock_trade.instrument = "USD_JPY"
+        mock_trade.direction.value = "short"
+        mock_trade.units = Decimal("1000")
+        mock_trade.entry_price = Decimal("159.552")
+        mock_trade.unrealized_pnl = Decimal("0")
+        mock_trade.realized_pnl = Decimal("155")
+        mock_trade.open_time = None
+        mock_trade.close_time = None
+        mock_trade.state = "CLOSED"
+
+        mock_service_instance = MagicMock()
+        mock_service_instance.get_trades.return_value = [mock_trade]
+        mock_service.return_value = mock_service_instance
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.get(f"/api/market/positions/?account_id={account.id}&status=all")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 1
+        assert response.data["results"][0]["status"] == "closed"
 
     def test_get_positions_no_accounts(self, user: Any) -> None:
         """Test getting positions when no accounts exist."""
