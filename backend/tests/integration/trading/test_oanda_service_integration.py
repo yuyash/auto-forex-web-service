@@ -301,6 +301,34 @@ class TestCreateMarketOrder:
         assert result.price == Decimal("1.1050")
         assert result.trade_id == "T100"
 
+    def test_fill_from_dict_body(self):
+        account = OandaAccountFactory()
+        svc = self._make_service(account)
+
+        mock_response = MagicMock()
+        mock_response.status = 201
+        mock_response.orderFillTransaction = None
+        mock_response.orderCreateTransaction = None
+        mock_response.orderRejectTransaction = None
+        mock_response.body = {
+            "orderCreateTransaction": {"id": "99"},
+            "orderFillTransaction": {
+                "id": "100",
+                "price": "1.1050",
+                "time": "2024-01-15T10:00:00Z",
+                "tradeOpened": {"tradeID": "T100"},
+            },
+        }
+
+        with patch.object(svc, "_execute_with_retry", return_value=mock_response):
+            request = MarketOrderRequest(instrument="EUR_USD", units=Decimal("1000"))
+            result = svc.create_market_order(request)
+
+        assert isinstance(result, MarketOrder)
+        assert result.state == OrderState.FILLED
+        assert result.price == Decimal("1.1050")
+        assert result.trade_id == "T100"
+
     def test_reject(self):
         account = OandaAccountFactory()
         svc = self._make_service(account)
@@ -354,6 +382,36 @@ class TestCreateLimitOrder:
         assert result.order_type == OrderType.LIMIT
         assert result.price == Decimal("1.0900")
 
+    def test_success_from_dict_body(self):
+        account = OandaAccountFactory()
+        svc = OandaService(account=account)
+        svc.api = MagicMock()
+        svc.event_service = MagicMock()
+        svc.compliance_manager = MagicMock()
+        svc.compliance_manager.validate_order.return_value = (True, None)
+
+        mock_response = MagicMock()
+        mock_response.status = 201
+        mock_response.orderCreateTransaction = None
+        mock_response.body = {
+            "orderCreateTransaction": {
+                "id": "200",
+                "time": "2024-01-15T10:00:00Z",
+            }
+        }
+
+        with patch.object(svc, "_execute_with_retry", return_value=mock_response):
+            request = LimitOrderRequest(
+                instrument="EUR_USD",
+                units=Decimal("1000"),
+                price=Decimal("1.0900"),
+            )
+            result = svc.create_limit_order(request)
+
+        assert isinstance(result, LimitOrder)
+        assert result.order_id == "200"
+        assert result.state == OrderState.PENDING
+
 
 @pytest.mark.django_db
 class TestCreateStopOrder:
@@ -386,6 +444,36 @@ class TestCreateStopOrder:
         assert isinstance(result, StopOrder)
         assert result.state == OrderState.PENDING
         assert result.direction == OrderDirection.SHORT
+
+    def test_success_from_dict_body(self):
+        account = OandaAccountFactory()
+        svc = OandaService(account=account)
+        svc.api = MagicMock()
+        svc.event_service = MagicMock()
+        svc.compliance_manager = MagicMock()
+        svc.compliance_manager.validate_order.return_value = (True, None)
+
+        mock_response = MagicMock()
+        mock_response.status = 201
+        mock_response.orderCreateTransaction = None
+        mock_response.body = {
+            "orderCreateTransaction": {
+                "id": "300",
+                "time": "2024-01-15T10:00:00Z",
+            }
+        }
+
+        with patch.object(svc, "_execute_with_retry", return_value=mock_response):
+            request = StopOrderRequest(
+                instrument="EUR_USD",
+                units=Decimal("-500"),
+                price=Decimal("1.0800"),
+            )
+            result = svc.create_stop_order(request)
+
+        assert isinstance(result, StopOrder)
+        assert result.order_id == "300"
+        assert result.state == OrderState.PENDING
 
 
 @pytest.mark.django_db
