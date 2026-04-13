@@ -272,6 +272,45 @@ class TestCounterAdds:
         assert event.retracement_count == 1
         assert event.price == Decimal("156.92")
 
+    def test_counter_add_uses_entry_side_price_not_mid(self):
+        s = _strategy(counter_tp_mode="weighted_avg", interval_mode="constant", n_pips_head="30")
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+
+        layer = Layer.create(3, 7, 1000, 3)
+        slot0 = layer.slot_at(0)
+        assert slot0 is not None
+        slot0.fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("157.230"),
+                close_price=Decimal("157.95129"),
+                units=1000,
+                opened_at=T0,
+                role="layer_initial",
+                layer_number=3,
+                retracement_count=0,
+                root_entry_id=1,
+            )
+        )
+
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+
+        bad_tick = Tick(
+            instrument="USD_JPY",
+            timestamp=T0 + timedelta(minutes=1),
+            bid=Decimal("146.202"),
+            ask=Decimal("163.225"),
+            mid=Decimal("154.7135"),
+        )
+
+        events = s._process_cycle_counter_adds(ss, bad_tick, cycle)
+
+        assert events == []
+
 
 # ==================================================================
 # 3. Counter TP closes

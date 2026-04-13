@@ -393,6 +393,16 @@ class SnowballStrategy(Strategy):
     # Per-cycle tick processing
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _entry_side_price(direction: Direction, tick: Tick) -> Decimal:
+        """Return the executable entry-side price for a direction."""
+        return tick.ask if direction == Direction.LONG else tick.bid
+
+    @staticmethod
+    def _exit_side_price(direction: Direction, tick: Tick) -> Decimal:
+        """Return the executable exit-side price for a direction."""
+        return tick.bid if direction == Direction.LONG else tick.ask
+
     def _process_cycle_tp(
         self,
         ss: SnowballStrategyState,
@@ -696,12 +706,22 @@ class SnowballStrategy(Strategy):
         def _head_losing() -> bool:
             """Check if the cycle head (or its SL snapshot) is in a losing position."""
             if head is not None:
-                return head.unrealised_loss_pips(tick.mid, self.pip_size) > 0
+                return (
+                    head.unrealised_loss_pips(
+                        self._exit_side_price(head.direction, tick),
+                        self.pip_size,
+                    )
+                    > 0
+                )
             # Fallback: compute from pending-rebuild entry price
             assert head_entry_price is not None  # noqa: S101
             if head_direction == Direction.LONG:
-                return (head_entry_price - tick.mid) / self.pip_size > 0
-            return (tick.mid - head_entry_price) / self.pip_size > 0
+                return (
+                    head_entry_price - self._exit_side_price(head_direction, tick)
+                ) / self.pip_size > 0
+            return (
+                self._exit_side_price(head_direction, tick) - head_entry_price
+            ) / self.pip_size > 0
 
         # Need a new layer?
         if layer.needs_new_layer:
@@ -726,10 +746,11 @@ class SnowballStrategy(Strategy):
                     else None
                 )
                 if ref_price is not None:
+                    current_entry_price = self._entry_side_price(direction, tick)
                     if direction == Direction.LONG:
-                        adverse = (ref_price - tick.mid) / self.pip_size
+                        adverse = (ref_price - current_entry_price) / self.pip_size
                     else:
-                        adverse = (tick.mid - ref_price) / self.pip_size
+                        adverse = (current_entry_price - ref_price) / self.pip_size
                     interval = counter_interval_pips(highest.index + 1, cfg)
                     if adverse < interval:
                         return []
@@ -771,10 +792,11 @@ class SnowballStrategy(Strategy):
 
         if ref_price is None:
             return []
+        current_entry_price = self._entry_side_price(direction, tick)
         if direction == Direction.LONG:
-            adverse = (ref_price - tick.mid) / self.pip_size
+            adverse = (ref_price - current_entry_price) / self.pip_size
         else:
-            adverse = (tick.mid - ref_price) / self.pip_size
+            adverse = (current_entry_price - ref_price) / self.pip_size
 
         interval = counter_interval_pips(slot.index, cfg)
         if adverse < interval:
@@ -887,14 +909,24 @@ class SnowballStrategy(Strategy):
 
         # Gate: head (or its SL snapshot) must be losing
         if head is not None:
-            if head.unrealised_loss_pips(tick.mid, self.pip_size) <= 0:
+            if (
+                head.unrealised_loss_pips(
+                    self._exit_side_price(head.direction, tick),
+                    self.pip_size,
+                )
+                <= 0
+            ):
                 return []
         else:
             if cycle.direction == Direction.LONG:
-                if (head_entry_price - tick.mid) / self.pip_size <= 0:
+                if (
+                    head_entry_price - self._exit_side_price(cycle.direction, tick)
+                ) / self.pip_size <= 0:
                     return []
             else:
-                if (tick.mid - head_entry_price) / self.pip_size <= 0:
+                if (
+                    self._exit_side_price(cycle.direction, tick) - head_entry_price
+                ) / self.pip_size <= 0:
                     return []
 
         direction = cycle.direction
