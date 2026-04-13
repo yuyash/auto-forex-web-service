@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.47.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.47.4...frontend-v1.47.5) (2026-04-13)
+
+
+### Bug Fixes
+
+* **market:** harden trading task tick orchestration ([#463](https://github.com/yuyash/auto-forex-web-service/issues/463)) ([8d5384a](https://github.com/yuyash/auto-forex-web-service/commit/8d5384ac3361ed4fe1e57921c042c91b598d437d))
+
 ## [1.47.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.47.3...frontend-v1.47.4) (2026-04-13)
 
 
