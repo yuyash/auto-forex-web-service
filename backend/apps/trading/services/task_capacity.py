@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 
 from django.conf import settings
+from django.utils import timezone
 
 from apps.market.models import CeleryTaskStatus as MarketCeleryTaskStatus
 from apps.trading.enums import TaskStatus
@@ -48,6 +50,17 @@ class TaskAdmissionDecision:
 class TaskCapacityService:
     """Evaluate whether the system has capacity to start a task."""
 
+    def _market_task_cutoff(self):
+        stale_after_seconds = int(getattr(settings, "CELERY_MARKET_TASK_STALE_AFTER_SECONDS", 90))
+        return timezone.now() - timedelta(seconds=stale_after_seconds)
+
+    def _fresh_market_tasks(self, *, task_name: str):
+        return MarketCeleryTaskStatus.objects.filter(
+            task_name=task_name,
+            status__in=ACTIVE_MARKET_STATUSES,
+            last_heartbeat_at__gte=self._market_task_cutoff(),
+        )
+
     def get_task_admission(self, task: BacktestTask | TradingTask) -> TaskAdmissionDecision:
         if isinstance(task, BacktestTask):
             return self._admit_backtest()
@@ -55,9 +68,8 @@ class TaskCapacityService:
 
     def _admit_backtest(self) -> TaskAdmissionDecision:
         active_backtests = BacktestTask.objects.filter(status__in=ACTIVE_TASK_STATUSES).count()
-        active_publishers = MarketCeleryTaskStatus.objects.filter(
-            task_name="market.tasks.publish_ticks_for_backtest",
-            status__in=ACTIVE_MARKET_STATUSES,
+        active_publishers = self._fresh_market_tasks(
+            task_name="market.tasks.publish_ticks_for_backtest"
         ).count()
 
         backtest_snapshot = QueueCapacitySnapshot(
@@ -101,22 +113,18 @@ class TaskCapacityService:
         )
 
         market_limit = int(getattr(settings, "CELERY_MARKET_WORKER_CONCURRENCY", 1))
-        active_publishers = MarketCeleryTaskStatus.objects.filter(
-            task_name="market.tasks.publish_oanda_ticks",
-            status__in=ACTIVE_MARKET_STATUSES,
+        active_publishers = self._fresh_market_tasks(
+            task_name="market.tasks.publish_oanda_ticks"
         ).count()
-        subscriber_running = MarketCeleryTaskStatus.objects.filter(
-            task_name="market.tasks.subscribe_ticks_to_db",
-            status__in=ACTIVE_MARKET_STATUSES,
+        subscriber_running = self._fresh_market_tasks(
+            task_name="market.tasks.subscribe_ticks_to_db"
         ).exists()
         account_id = getattr(task, "oanda_account_id", None)
         account_key = str(account_id) if account_id else ""
         publisher_exists_for_account = (
-            MarketCeleryTaskStatus.objects.filter(
-                task_name="market.tasks.publish_oanda_ticks",
-                instance_key=account_key,
-                status__in=ACTIVE_MARKET_STATUSES,
-            ).exists()
+            self._fresh_market_tasks(task_name="market.tasks.publish_oanda_ticks")
+            .filter(instance_key=account_key)
+            .exists()
             if account_key
             else False
         )
