@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.7](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.33.6...backend-v1.33.7) (2026-04-13)
+
+
+### Bug Fixes
+
+* **trading:** ignore stale market heartbeats in capacity ([#461](https://github.com/yuyash/auto-forex-web-service/issues/461)) ([f065d18](https://github.com/yuyash/auto-forex-web-service/commit/f065d181111fa32580715886fbb8d81ae82f699c))
+
 ## [1.33.6](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.33.5...backend-v1.33.6) (2026-04-13)
 
 
