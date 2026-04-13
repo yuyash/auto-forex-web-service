@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from apps.market.enums import ApiType
-from apps.market.models import OandaAccounts
-from apps.market.tasks.supervisor import TickSupervisorRunner
+from apps.market.models import CeleryTaskStatus, OandaAccounts
+from apps.market.tasks.supervisor import AccountStreamTarget, TickSupervisorRunner
 from apps.trading.enums import TaskStatus
 from apps.trading.models import StrategyConfiguration, TradingTask
 
@@ -69,6 +69,16 @@ class TestTickSupervisorRunnerExtendedIntegration:
         runner = TickSupervisorRunner()
 
         assert runner._target_account_pks() == [practice.pk, live.pk]
+        assert runner._target_account_targets() == [
+            AccountStreamTarget(
+                account_pk=practice.pk,
+                instruments=("USD_JPY",),
+            ),
+            AccountStreamTarget(
+                account_pk=live.pk,
+                instruments=("USD_JPY",),
+            ),
+        ]
 
     @patch("apps.market.tasks.publish_oanda_ticks.delay")
     def test_ensure_publishers_running(
@@ -79,9 +89,43 @@ class TestTickSupervisorRunnerExtendedIntegration:
         mock_client.exists.side_effect = [False, True]
 
         runner = TickSupervisorRunner()
-        runner._ensure_publishers_running(client=mock_client, account_pks=[1, 2])
+        runner._ensure_publishers_running(
+            client=mock_client,
+            account_targets=[
+                AccountStreamTarget(1, ("USD_JPY",)),
+                AccountStreamTarget(2, ("EUR_USD",)),
+            ],
+        )
 
-        mock_pub_delay.assert_called_once_with(account_id=1)
+        mock_pub_delay.assert_called_once_with(account_id=1, instruments=["USD_JPY"])
+
+    @patch("apps.market.tasks.publish_oanda_ticks.delay")
+    def test_requests_restart_when_running_publisher_has_wrong_instruments(
+        self,
+        mock_pub_delay: Any,
+    ) -> None:
+        CeleryTaskStatus.objects.create(
+            task_name="market.tasks.publish_oanda_ticks",
+            instance_key="1",
+            status=CeleryTaskStatus.Status.RUNNING,
+            meta={"account_id": 1, "instruments": ["EUR_USD"]},
+        )
+        mock_client = MagicMock()
+        mock_client.exists.return_value = True
+
+        runner = TickSupervisorRunner()
+        runner._ensure_publishers_running(
+            client=mock_client,
+            account_targets=[AccountStreamTarget(1, ("USD_JPY",))],
+        )
+
+        mock_pub_delay.assert_not_called()
+        row = CeleryTaskStatus.objects.get(
+            task_name="market.tasks.publish_oanda_ticks",
+            instance_key="1",
+        )
+        assert row.status == CeleryTaskStatus.Status.STOPPING
+        assert "USD_JPY" in row.status_message
 
     @patch("apps.market.tasks.subscribe_ticks_to_db.delay")
     def test_ensure_subscriber_running(self, mock_sub_delay: Any) -> None:

@@ -3,18 +3,28 @@
 from __future__ import annotations
 
 import contextlib
+from dataclasses import dataclass
 from logging import Logger, getLogger
 from typing import Any
 
 from celery import shared_task
 from django.conf import settings
+from django.db.models import QuerySet
 
-from apps.market.models import CeleryTaskStatus, OandaAccounts
+from apps.market.models import CeleryTaskStatus
 from apps.market.services.celery import CeleryTaskService
 from apps.market.tasks.publisher import publisher_lock_key_for_account
 from apps.market.tasks.base import acquire_lock, current_task_id, lock_value, redis_client
 
 logger: Logger = getLogger(name=__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class AccountStreamTarget:
+    """Desired streaming configuration for a single OANDA account."""
+
+    account_pk: int
+    instruments: tuple[str, ...]
 
 
 @shared_task(bind=True, name="market.tasks.ensure_tick_pubsub_running")
@@ -83,18 +93,18 @@ class TickSupervisorRunner:
         try:
             self.task_service.heartbeat(status_message="running", force=True)
 
-            account_pks = self._target_account_pks()
-            if not account_pks:
+            account_targets = self._target_account_targets()
+            if not account_targets:
                 logger.warning(
                     "Supervisor: no active trading-task accounts found — "
                     "tick streaming will stay idle until a trading task starts"
                 )
             else:
                 logger.info(
-                    "Supervisor: ensuring tick publishers for account_pks=%s",
-                    account_pks,
+                    "Supervisor: ensuring tick publishers for targets=%s",
+                    account_targets,
                 )
-                self._ensure_publishers_running(client, account_pks)
+                self._ensure_publishers_running(client, account_targets)
 
             # Check and restart subscriber if needed
             self._ensure_subscriber_running(client)
@@ -128,9 +138,10 @@ class TickSupervisorRunner:
         logger.info("Supervisor: scheduling next check in %ss", interval_seconds)
         ensure_tick_pubsub_running.apply_async(countdown=interval_seconds)
 
-    def _target_account_pks(self) -> list[int]:
-        """Return active OANDA account PKs required by active trading tasks."""
+    def _active_trading_tasks(self) -> QuerySet[Any]:
+        """Return active trading tasks that require live market data."""
         from apps.trading.enums import TaskStatus as TradingTaskStatus
+        from apps.trading.models import TradingTask
 
         active_statuses = (
             TradingTaskStatus.STARTING,
@@ -138,34 +149,106 @@ class TickSupervisorRunner:
             TradingTaskStatus.PAUSED,
             TradingTaskStatus.STOPPING,
         )
-        return list(
-            OandaAccounts.objects.filter(
-                is_active=True,
-                trading_tasks__status__in=active_statuses,
+
+        return (
+            TradingTask.objects.filter(
+                status__in=active_statuses,
+                oanda_account__is_active=True,
             )
-            .distinct()
-            .order_by("created_at")
-            .values_list("pk", flat=True)
+            .select_related("oanda_account")
+            .order_by("oanda_account_id", "instrument", "created_at")
         )
 
-    def _ensure_publishers_running(self, client: Any, account_pks: list[int]) -> None:
-        """Ensure account-specific publisher tasks are running."""
+    def _target_account_targets(self) -> list[AccountStreamTarget]:
+        """Return account targets with the exact instruments required."""
+        targets: dict[int, set[str]] = {}
+        for task in self._active_trading_tasks():
+            if not task.oanda_account_id:
+                continue
+            targets.setdefault(int(task.oanda_account_id), set()).add(str(task.instrument))
+
+        return [
+            AccountStreamTarget(account_pk=account_pk, instruments=tuple(sorted(instruments)))
+            for account_pk, instruments in sorted(targets.items())
+        ]
+
+    def _target_account_pks(self) -> list[int]:
+        """Return active OANDA account PKs required by active trading tasks."""
+        return [target.account_pk for target in self._target_account_targets()]
+
+    def _publisher_matches_target(self, account_pk: int, instruments: tuple[str, ...]) -> bool:
+        """Return whether the persisted publisher configuration matches the target."""
+        publisher = (
+            CeleryTaskStatus.objects.filter(
+                task_name="market.tasks.publish_oanda_ticks",
+                instance_key=str(account_pk),
+                status__in=(
+                    CeleryTaskStatus.Status.RUNNING,
+                    CeleryTaskStatus.Status.STOPPING,
+                ),
+            )
+            .only("meta")
+            .first()
+        )
+        if publisher is None:
+            return False
+
+        meta = publisher.meta if isinstance(publisher.meta, dict) else {}
+        configured = tuple(sorted(str(item) for item in meta.get("instruments", []) if item))
+        return configured == instruments
+
+    def _request_publisher_restart(self, account_pk: int, instruments: tuple[str, ...]) -> None:
+        """Request a running publisher to restart with an updated instrument set."""
+        updated = CeleryTaskStatus.objects.filter(
+            task_name="market.tasks.publish_oanda_ticks",
+            instance_key=str(account_pk),
+            status=CeleryTaskStatus.Status.RUNNING,
+        ).update(
+            status=CeleryTaskStatus.Status.STOPPING,
+            status_message=(
+                "Restarting publisher with updated instruments: " + ", ".join(instruments)
+            ),
+        )
+        if updated:
+            logger.warning(
+                "Supervisor: requested publisher restart for account_pk=%s with instruments=%s",
+                account_pk,
+                instruments,
+            )
+
+    def _ensure_publishers_running(
+        self, client: Any, account_targets: list[AccountStreamTarget]
+    ) -> None:
+        """Ensure account-specific publisher tasks are running with the required instruments."""
         from apps.market.tasks import publish_oanda_ticks
 
-        for account_pk in account_pks:
-            publisher_lock = publisher_lock_key_for_account(int(account_pk))
+        for target in account_targets:
+            publisher_lock = publisher_lock_key_for_account(int(target.account_pk))
             publisher_alive = bool(client.exists(publisher_lock))
-            logger.info(
-                "Supervisor: publisher status for account_pk=%s is %s",
-                account_pk,
-                "running" if publisher_alive else "NOT running",
+            publisher_matches = self._publisher_matches_target(
+                target.account_pk,
+                target.instruments,
             )
+            logger.info(
+                "Supervisor: publisher status for account_pk=%s is %s (matches_target=%s, instruments=%s)",
+                target.account_pk,
+                "running" if publisher_alive else "NOT running",
+                publisher_matches,
+                target.instruments,
+            )
+            if publisher_alive and not publisher_matches:
+                self._request_publisher_restart(target.account_pk, target.instruments)
+                continue
             if not publisher_alive:
                 logger.info(
-                    "Supervisor: spawning publisher task (account_pk=%s)",
-                    account_pk,
+                    "Supervisor: spawning publisher task (account_pk=%s, instruments=%s)",
+                    target.account_pk,
+                    target.instruments,
                 )
-                publish_oanda_ticks.delay(account_id=int(account_pk))
+                publish_oanda_ticks.delay(
+                    account_id=int(target.account_pk),
+                    instruments=list(target.instruments),
+                )
 
     def _ensure_subscriber_running(self, client: Any) -> None:
         """Ensure the shared DB subscriber task is running."""

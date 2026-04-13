@@ -30,6 +30,13 @@ def publisher_lock_key_for_account(account_id: int) -> str:
     return f"{base_key}:{account_id}"
 
 
+def normalize_instruments(instruments: list[str] | tuple[str, ...] | None) -> list[str]:
+    """Return a stable, de-duplicated instrument list for publisher state."""
+    source = instruments or getattr(settings, "MARKET_TICK_INSTRUMENTS", ["EUR_USD"])
+    normalized = sorted({str(instrument) for instrument in source if instrument})
+    return normalized or ["EUR_USD"]
+
+
 @shared_task(bind=True, name="market.tasks.publish_oanda_ticks")
 def publish_oanda_ticks(self: Any, account_id: int, instruments: list[str] | None = None) -> None:
     """Stream live pricing ticks from OANDA and publish to Redis pub/sub.
@@ -57,6 +64,7 @@ class TickPublisherRunner:
             account_id: OANDA account ID
             instruments: List of instruments to stream (optional)
         """
+        instruments_list = normalize_instruments(instruments)
         task_name = "market.tasks.publish_oanda_ticks"
         instance_key = str(account_id)
         self.task_service = CeleryTaskService(
@@ -68,7 +76,7 @@ class TickPublisherRunner:
         self.task_service.start(
             celery_task_id=current_task_id(),
             worker=lock_value(),
-            meta={"account_id": account_id},
+            meta={"account_id": account_id, "instruments": instruments_list},
         )
 
         redis_url = settings.MARKET_REDIS_URL
@@ -98,7 +106,6 @@ class TickPublisherRunner:
         if not self._validate_account(client, lock_key, account_id):
             return
 
-        instruments_list = instruments or getattr(settings, "MARKET_TICK_INSTRUMENTS", ["EUR_USD"])
         logger.info(
             "Publisher: streaming instruments=%s from OANDA account (pk=%s, oanda_id=%s)",
             instruments_list,

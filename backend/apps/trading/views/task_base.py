@@ -166,7 +166,10 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 exc,
             )
             return Response(
-                {"error": "Task capacity exhausted", "detail": str(exc)},
+                {
+                    "error": "Task capacity exhausted",
+                    "detail": "Worker capacity is exhausted. Stop running tasks or increase worker concurrency.",
+                },
                 status=status.HTTP_409_CONFLICT,
             )
         except TaskConflictError as exc:
