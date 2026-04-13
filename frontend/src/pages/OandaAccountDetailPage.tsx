@@ -366,21 +366,23 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
 
   return (
     <Box>
-      <Box
-        display="flex"
-        justifyContent="space-between"
-        alignItems="center"
-        mb={1}
-      >
+      <Box mb={1}>
         <Typography variant="subtitle1">
           {t('common:tables.positions.openPositions')} ({totalCount})
         </Typography>
-        <Box display="flex" alignItems="center" gap={0.5}>
+        <Box
+          display="flex"
+          alignItems="center"
+          gap={0.5}
+          flexWrap="wrap"
+          mt={1}
+        >
           <Button
             size="small"
             variant="outlined"
             startIcon={<AddIcon />}
             onClick={() => setOpenDialogOpen(true)}
+            sx={{ minWidth: { xs: 'calc(50% - 4px)', sm: 'auto' } }}
           >
             {t('common:actions.add')}
           </Button>
@@ -391,6 +393,7 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
             startIcon={<CloseIcon />}
             onClick={handleCloseSelected}
             disabled={selection.selectedRowIds.size === 0 || closingSelected}
+            sx={{ minWidth: { xs: 'calc(50% - 4px)', sm: 'auto' } }}
           >
             {closingSelected ? (
               <CircularProgress size={16} />
