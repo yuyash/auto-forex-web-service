@@ -33,6 +33,7 @@ interface TaskDetailHeaderProps {
   timezone: string;
   isMobile: boolean;
   progress: number;
+  showProgress?: boolean;
   currentAtr?: number | null;
   completedLabel: string;
   editLabel: string;
@@ -107,6 +108,7 @@ export function TaskDetailHeader({
   timezone,
   isMobile,
   progress,
+  showProgress = true,
   currentAtr,
   completedLabel,
   editLabel,
@@ -306,17 +308,18 @@ export function TaskDetailHeader({
               </Box>
             )}
 
-            {(status === TaskStatus.RUNNING ||
-              status === TaskStatus.STARTING) && (
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ pl: '4px', fontWeight: 600 }}
-              >
-                {Math.round(Math.min(Math.max(progress, 0), 100))}%{' '}
-                {completedLabel}
-              </Typography>
-            )}
+            {showProgress &&
+              (status === TaskStatus.RUNNING ||
+                status === TaskStatus.STARTING) && (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ pl: '4px', fontWeight: 600 }}
+                >
+                  {Math.round(Math.min(Math.max(progress, 0), 100))}%{' '}
+                  {completedLabel}
+                </Typography>
+              )}
           </Box>
         </Collapse>
       </Box>
