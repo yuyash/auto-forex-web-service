@@ -318,6 +318,26 @@ class OandaService:
         return OandaService._make_jsonable(value)
 
     @staticmethod
+    def _response_field(response: Any, field_name: str) -> Any:
+        value = getattr(response, field_name, None)
+        if value is not None:
+            return value
+
+        body = getattr(response, "body", None)
+        if isinstance(body, dict):
+            return body.get(field_name)
+
+        return None
+
+    @staticmethod
+    def _object_field(value: Any, field_name: str) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, dict):
+            return value.get(field_name)
+        return getattr(value, field_name, None)
+
+    @staticmethod
     def _account_object_to_dict(account_data: Any) -> dict[str, Any]:
         if account_data is None:
             return {}
@@ -459,15 +479,12 @@ class OandaService:
                     f"Failed to close trade {trade.trade_id}: status {response.status}"
                 )
 
-            fill_tx = getattr(response, "orderFillTransaction", None)
-            if not fill_tx and isinstance(getattr(response, "body", None), dict):
-                fill_tx = response.body.get("orderFillTransaction")
+            fill_tx = self._response_field(response, "orderFillTransaction")
 
-            fill_time = self._parse_iso_datetime(
-                getattr(fill_tx, "time", None) if fill_tx else None
-            )
-            fill_price = self._to_decimal(getattr(fill_tx, "price", None) if fill_tx else None)
-            order_id = str(getattr(fill_tx, "id", "")) if fill_tx else ""
+            fill_time = self._parse_iso_datetime(self._object_field(fill_tx, "time"))
+            fill_price = self._to_decimal(self._object_field(fill_tx, "price"))
+            order_id_raw = self._object_field(fill_tx, "id")
+            order_id = str(order_id_raw) if order_id_raw is not None else ""
 
             # Closing a trade is effectively a filled market order.
             return MarketOrder(
@@ -558,24 +575,15 @@ class OandaService:
                     f"Failed to close position {position.instrument}: status {response.status}"
                 )
 
-            fill_tx = None
             if position.direction == OrderDirection.LONG:
-                fill_tx = getattr(response, "longOrderFillTransaction", None)
+                fill_tx = self._response_field(response, "longOrderFillTransaction")
             else:
-                fill_tx = getattr(response, "shortOrderFillTransaction", None)
+                fill_tx = self._response_field(response, "shortOrderFillTransaction")
 
-            if not fill_tx and isinstance(getattr(response, "body", None), dict):
-                body = response.body
-                if position.direction == OrderDirection.LONG:
-                    fill_tx = body.get("longOrderFillTransaction")
-                else:
-                    fill_tx = body.get("shortOrderFillTransaction")
-
-            fill_time = self._parse_iso_datetime(
-                getattr(fill_tx, "time", None) if fill_tx else None
-            )
-            fill_price = self._to_decimal(getattr(fill_tx, "price", None) if fill_tx else None)
-            order_id = str(getattr(fill_tx, "id", "")) if fill_tx else ""
+            fill_time = self._parse_iso_datetime(self._object_field(fill_tx, "time"))
+            fill_price = self._to_decimal(self._object_field(fill_tx, "price"))
+            order_id_raw = self._object_field(fill_tx, "id")
+            order_id = str(order_id_raw) if order_id_raw is not None else ""
 
             return MarketOrder(
                 order_id=order_id,
@@ -634,9 +642,10 @@ class OandaService:
             order_data["stopLossOnFill"] = StopLossDetails(price=str(request.stop_loss)).__dict__
 
         response = self._execute_with_retry(order_data)
-        create_tx = getattr(response, "orderCreateTransaction", None)
-        order_id = getattr(create_tx, "id", "")
-        created_time = self._parse_iso_datetime(getattr(create_tx, "time", None))
+        create_tx = self._response_field(response, "orderCreateTransaction")
+        order_id_raw = self._object_field(create_tx, "id")
+        order_id = str(order_id_raw) if order_id_raw is not None else ""
+        created_time = self._parse_iso_datetime(self._object_field(create_tx, "time"))
 
         self.event_service.log_trading_event(
             event_type=MarketEventType.ORDER_SUBMITTED,
@@ -713,21 +722,24 @@ class OandaService:
 
         response = self._execute_with_retry(order_data)
 
-        fill_tx = getattr(response, "orderFillTransaction", None)
-        create_tx = getattr(response, "orderCreateTransaction", None)
-        reject_tx = getattr(response, "orderRejectTransaction", None)
+        fill_tx = self._response_field(response, "orderFillTransaction")
+        create_tx = self._response_field(response, "orderCreateTransaction")
+        reject_tx = self._response_field(response, "orderRejectTransaction")
 
         if fill_tx:
-            order_id = getattr(fill_tx, "id", None) or getattr(create_tx, "id", "")
-            fill_price_raw = getattr(fill_tx, "price", None)
+            order_id = (
+                self._object_field(fill_tx, "id") or self._object_field(create_tx, "id") or ""
+            )
+            fill_price_raw = self._object_field(fill_tx, "price")
             fill_price = Decimal(str(fill_price_raw)) if fill_price_raw is not None else None
-            fill_time = self._parse_iso_datetime(getattr(fill_tx, "time", None))
+            fill_time = self._parse_iso_datetime(self._object_field(fill_tx, "time"))
 
             # Extract OANDA trade ID from the fill transaction
             trade_id: str | None = None
-            trade_opened = getattr(fill_tx, "tradeOpened", None)
+            trade_opened = self._object_field(fill_tx, "tradeOpened")
             if trade_opened:
-                trade_id = str(getattr(trade_opened, "tradeID", "")) or None
+                trade_id_raw = self._object_field(trade_opened, "tradeID")
+                trade_id = str(trade_id_raw) if trade_id_raw not in (None, "") else None
 
             self.event_service.log_trading_event(
                 event_type=MarketEventType.ORDER_SUBMITTED,
@@ -766,7 +778,7 @@ class OandaService:
                 trade_id=trade_id,
             )
 
-        reject_reason = getattr(reject_tx, "rejectReason", None) if reject_tx else None
+        reject_reason = self._object_field(reject_tx, "rejectReason")
         if not reject_reason and hasattr(response, "body") and isinstance(response.body, dict):
             reject_reason = response.body.get("errorMessage") or response.body.get("rejectReason")
         reject_reason_str = str(reject_reason) if reject_reason else "Unknown rejection reason"
@@ -820,9 +832,10 @@ class OandaService:
             order_data["stopLossOnFill"] = StopLossDetails(price=str(request.stop_loss)).__dict__
 
         response = self._execute_with_retry(order_data)
-        create_tx = getattr(response, "orderCreateTransaction", None)
-        order_id = getattr(create_tx, "id", "")
-        created_time = self._parse_iso_datetime(getattr(create_tx, "time", None))
+        create_tx = self._response_field(response, "orderCreateTransaction")
+        order_id_raw = self._object_field(create_tx, "id")
+        order_id = str(order_id_raw) if order_id_raw is not None else ""
+        created_time = self._parse_iso_datetime(self._object_field(create_tx, "time"))
 
         self.event_service.log_trading_event(
             event_type=MarketEventType.ORDER_SUBMITTED,
