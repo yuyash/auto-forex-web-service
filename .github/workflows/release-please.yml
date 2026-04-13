@@ -99,70 +99,71 @@ jobs:
 
           docker compose config > /dev/null
           if docker compose ps --services --status running | grep -qx backend; then
-            docker compose exec -T backend python manage.py shell <<'PY'
-            from __future__ import annotations
+            docker compose exec -T backend python manage.py shell -c "import textwrap; exec(textwrap.dedent(\"\"\"
+              import sys
+              import time
 
-            import sys
-            import time
+              from apps.trading.enums import TaskStatus
+              from apps.trading.models import TradingTask
+              from apps.trading.tasks.service import TaskService
 
-            from apps.trading.enums import TaskStatus
-            from apps.trading.models import TradingTask
-            from apps.trading.tasks.service import TaskService
-
-            ACTIVE_STATUSES = (
-                TaskStatus.STARTING,
-                TaskStatus.RUNNING,
-                TaskStatus.STOPPING,
-            )
-            TIMEOUT_SECONDS = 180
-            POLL_INTERVAL_SECONDS = 2
+              ACTIVE_STATUSES = (
+                  TaskStatus.STARTING,
+                  TaskStatus.RUNNING,
+                  TaskStatus.STOPPING,
+              )
+              TIMEOUT_SECONDS = 180
+              POLL_INTERVAL_SECONDS = 2
 
 
-            def active_tasks() -> list[TradingTask]:
-                return list(
-                    TradingTask.objects.select_related("config", "oanda_account", "user")
-                    .filter(status__in=ACTIVE_STATUSES)
-                    .order_by("created_at")
-                )
+              def active_tasks():
+                  return list(
+                      TradingTask.objects.select_related('config', 'oanda_account', 'user')
+                      .filter(status__in=ACTIVE_STATUSES)
+                      .order_by('created_at')
+                  )
 
 
-            tasks = active_tasks()
-            if not tasks:
-                print("No active trading tasks to drain.")
-                raise SystemExit(0)
+              tasks = active_tasks()
+              if not tasks:
+                  print('No active trading tasks to drain.')
+                  raise SystemExit(0)
 
-            service = TaskService()
-            print(f"Draining {len(tasks)} active trading task(s) before deployment.")
-            for task in tasks:
-                print(
-                    "Requesting stop for "
-                    f"{task.pk} ({task.name}, strategy={task.config.strategy_type}, "
-                    f"account={task.oanda_account.account_id}, status={task.status})"
-                )
-                if task.status != TaskStatus.STOPPING:
-                    service.stop_task(task.pk, mode="graceful")
+              service = TaskService()
+              print(f'Draining {len(tasks)} active trading task(s) before deployment.')
+              for task in tasks:
+                  print(
+                      f'Requesting stop for {task.pk} ({task.name}, '
+                      f'strategy={task.config.strategy_type}, '
+                      f'account={task.oanda_account.account_id}, status={task.status})'
+                  )
+                  if task.status != TaskStatus.STOPPING:
+                      service.stop_task(task.pk, mode='graceful')
 
-            deadline = time.monotonic() + TIMEOUT_SECONDS
-            while time.monotonic() < deadline:
-                remaining = active_tasks()
-                if not remaining:
-                    print("All active trading tasks drained.")
-                    raise SystemExit(0)
-                summary = ", ".join(
-                    f"{task.pk}:{task.status}:{task.config.strategy_type}:{task.oanda_account.account_id}"
-                    for task in remaining
-                )
-                print(f"Waiting for {len(remaining)} task(s): {summary}")
-                time.sleep(POLL_INTERVAL_SECONDS)
+              deadline = time.monotonic() + TIMEOUT_SECONDS
+              while time.monotonic() < deadline:
+                  remaining = active_tasks()
+                  if not remaining:
+                      print('All active trading tasks drained.')
+                      raise SystemExit(0)
+                  summary = ', '.join(
+                      f'{task.pk}:{task.status}:{task.config.strategy_type}:{task.oanda_account.account_id}'
+                      for task in remaining
+                  )
+                  print(f'Waiting for {len(remaining)} task(s): {summary}')
+                  time.sleep(POLL_INTERVAL_SECONDS)
 
-            remaining = active_tasks()
-            summary = ", ".join(
-                f"{task.pk}:{task.status}:{task.config.strategy_type}:{task.oanda_account.account_id}"
-                for task in remaining
-            )
-            print(f"Timed out draining active trading tasks before deployment: {summary}", file=sys.stderr)
-            raise SystemExit(1)
-            PY
+              remaining = active_tasks()
+              summary = ', '.join(
+                  f'{task.pk}:{task.status}:{task.config.strategy_type}:{task.oanda_account.account_id}'
+                  for task in remaining
+              )
+              print(
+                  f'Timed out draining active trading tasks before deployment: {summary}',
+                  file=sys.stderr,
+              )
+              raise SystemExit(1)
+            \"\"\"))"
           else
             echo "Backend is not currently running; skipping trading drain."
           fi

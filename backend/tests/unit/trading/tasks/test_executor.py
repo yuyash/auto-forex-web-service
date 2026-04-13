@@ -712,6 +712,93 @@ class TestTradingExecutorSafety:
         mock_reconciler_cls.return_value.reconcile.assert_called_once_with(resumed=False)
 
     @patch("apps.trading.tasks.executor.EventHandler")
+    @patch("apps.trading.tasks.executor.StateManager")
+    @patch("apps.trading.tasks.executor.OrderService")
+    @patch("apps.trading.services.reconciliation.TradingResumeReconciler")
+    def test_after_batch_processed_fails_on_runtime_broker_drift(
+        self,
+        mock_reconciler_cls,
+        _mock_order_service,
+        _mock_state_manager,
+        _mock_handler,
+    ):
+        from apps.trading.models import TradingTask
+        from apps.trading.tasks.executor import ExecutionLoopState, TradingExecutor
+        from apps.trading.services.reconciliation import ReconciliationReport, TradingSafetyError
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.execution_id = uuid4()
+        task.instrument = "EUR_USD"
+        task.pip_size = Decimal("0.0001")
+        task.dry_run = False
+        task.config.strategy_type = "floor"
+        task.config.config_dict = {}
+        task.oanda_account.balance = Decimal("10000")
+        task.oanda_account.currency = "USD"
+
+        with patch(
+            "apps.trading.tasks.executor.TaskExecutor._get_initial_balance",
+            return_value=Decimal("10000"),
+        ):
+            executor = TradingExecutor(
+                task=task,
+                engine=MagicMock(),
+                data_source=MagicMock(),
+            )
+
+        loop = ExecutionLoopState(state=MagicMock(), batch_count=5)
+        mock_reconciler_cls.return_value.detect_runtime_drift.return_value = ReconciliationReport(
+            blockers=["broker trade missing"]
+        )
+
+        with pytest.raises(TradingSafetyError, match="broker state drift was detected"):
+            executor._after_batch_processed(loop)
+
+        mock_reconciler_cls.return_value.detect_runtime_drift.assert_called_once_with()
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    @patch("apps.trading.tasks.executor.StateManager")
+    @patch("apps.trading.tasks.executor.OrderService")
+    @patch("apps.trading.services.reconciliation.TradingResumeReconciler")
+    def test_after_batch_processed_skips_runtime_check_between_intervals(
+        self,
+        mock_reconciler_cls,
+        _mock_order_service,
+        _mock_state_manager,
+        _mock_handler,
+    ):
+        from apps.trading.models import TradingTask
+        from apps.trading.tasks.executor import ExecutionLoopState, TradingExecutor
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.execution_id = uuid4()
+        task.instrument = "EUR_USD"
+        task.pip_size = Decimal("0.0001")
+        task.dry_run = False
+        task.config.strategy_type = "floor"
+        task.config.config_dict = {}
+        task.oanda_account.balance = Decimal("10000")
+        task.oanda_account.currency = "USD"
+
+        with patch(
+            "apps.trading.tasks.executor.TaskExecutor._get_initial_balance",
+            return_value=Decimal("10000"),
+        ):
+            executor = TradingExecutor(
+                task=task,
+                engine=MagicMock(),
+                data_source=MagicMock(),
+            )
+
+        loop = ExecutionLoopState(state=MagicMock(), batch_count=4)
+
+        executor._after_batch_processed(loop)
+
+        mock_reconciler_cls.return_value.detect_runtime_drift.assert_not_called()
+
+    @patch("apps.trading.tasks.executor.EventHandler")
     def test_process_single_tick_persists_state_before_handling_events(self, mock_handler):
         from apps.trading.dataclasses.result import StrategyResult
         from apps.trading.models import TradingTask
