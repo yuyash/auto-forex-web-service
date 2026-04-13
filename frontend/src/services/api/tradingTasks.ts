@@ -4,7 +4,10 @@ import type {
   TradingTask,
   TradingTaskListParams,
 } from '../../types';
-import type { BackendTradingTask } from './contracts';
+import type {
+  BackendTaskExecutionSummary,
+  BackendTradingTask,
+} from './contracts';
 import { createTaskApi } from './taskApiFactory';
 
 interface TradingTaskCreateRequest {
@@ -29,11 +32,26 @@ interface TradingTaskUpdateRequest {
   debug_options?: Record<string, unknown>;
 }
 
+function toExecutionSummary(
+  execution?: BackendTaskExecutionSummary | null
+): TradingTask['latest_execution'] {
+  if (!execution) return undefined;
+  return {
+    ...execution,
+    execution_number: Number(execution.execution_number),
+    status: execution.status as TradingTask['status'],
+    started_at: execution.started_at ?? execution.created_at,
+    completed_at: execution.completed_at ?? undefined,
+    error_message: execution.error_message ?? undefined,
+  };
+}
+
 function toTradingTask(task: BackendTradingTask): TradingTask {
   return {
     ...task,
     account_id: String(task.account_id),
     status: task.status as TradingTask['status'],
+    latest_execution: toExecutionSummary(task.latest_execution),
     pip_size: task.pip_size ?? undefined,
     execution_id: task.execution_id ?? undefined,
     started_at: task.started_at ?? undefined,

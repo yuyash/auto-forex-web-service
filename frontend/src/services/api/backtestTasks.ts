@@ -4,8 +4,25 @@ import type {
   BacktestTaskListParams,
   BacktestTaskUpdateData,
 } from '../../types';
-import type { BackendBacktestTask } from './contracts';
+import type {
+  BackendBacktestTask,
+  BackendTaskExecutionSummary,
+} from './contracts';
 import { createTaskApi } from './taskApiFactory';
+
+function toExecutionSummary(
+  execution?: BackendTaskExecutionSummary | null
+): BacktestTask['latest_execution'] {
+  if (!execution) return undefined;
+  return {
+    ...execution,
+    execution_number: Number(execution.execution_number),
+    status: execution.status as BacktestTask['status'],
+    started_at: execution.started_at ?? execution.created_at,
+    completed_at: execution.completed_at ?? undefined,
+    error_message: execution.error_message ?? undefined,
+  };
+}
 
 function toBacktestTask(task: BackendBacktestTask): BacktestTask {
   return {
@@ -13,6 +30,7 @@ function toBacktestTask(task: BackendBacktestTask): BacktestTask {
     data_source: task.data_source as BacktestTask['data_source'],
     status: task.status as BacktestTask['status'],
     sell_at_completion: false,
+    latest_execution: toExecutionSummary(task.latest_execution),
     pip_size: task.pip_size ?? undefined,
     execution_id: task.execution_id ?? undefined,
     started_at: task.started_at ?? undefined,
