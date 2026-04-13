@@ -61,7 +61,7 @@ def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
             },
             "recover-orphaned-tasks": {
                 "task": "trading.tasks.recover_orphaned_tasks",
-                "schedule": 300,
+                "schedule": 60,
                 "options": {"queue": "system"},
             },
             "cleanup-expired-refresh-tokens": {

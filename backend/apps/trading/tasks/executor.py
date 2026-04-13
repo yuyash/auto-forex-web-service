@@ -1109,25 +1109,41 @@ class TradingExecutor(TaskExecutor):
         state: ExecutionState,
         resumed: bool,
     ) -> ExecutionState:
-        """Reconcile broker/local state before resuming a recovered run."""
-        if not resumed:
+        """Reconcile broker/local state before live trading starts or resumes."""
+        trading_task = cast(TradingTask, self.task)
+        if getattr(trading_task, "dry_run", False):
             return state
 
-        from apps.trading.services.reconciliation import TradingResumeReconciler
+        from apps.trading.services.reconciliation import TradingResumeReconciler, TradingSafetyError
 
-        trading_task = cast(TradingTask, self.task)
         reconciler = TradingResumeReconciler(
             task=trading_task,
             state=state,
         )
-        report = reconciler.reconcile()
+        report = reconciler.reconcile(resumed=resumed)
+        if report.has_blockers:
+            for blocker in report.blockers:
+                logger.error(
+                    "Trading safety blocker - task_id=%s, execution_id=%s, blocker=%s",
+                    self.task.pk,
+                    self.task.execution_id,
+                    blocker,
+                )
+            raise TradingSafetyError(
+                "Trading task blocked by broker reconciliation safety checks. "
+                "Review task logs and reconcile the OANDA account before restarting."
+            )
+
+        lifecycle = "resume" if resumed else "start"
         logger.info(
-            "Trading resume reconciliation complete - task_id=%s, execution_id=%s, "
-            "account=%s, closed_local=%d, created_local=%d, updated_local=%d, "
-            "removed_entries=%d, synthesized_entries=%d, relinked_entries=%d",
+            "Trading %s reconciliation complete - task_id=%s, execution_id=%s, "
+            "open_trades=%d, pending_orders=%d, closed_local=%d, created_local=%d, "
+            "updated_local=%d, removed_entries=%d, synthesized_entries=%d, relinked_entries=%d",
+            lifecycle,
             self.task.pk,
             self.task.execution_id,
-            report.updated_account_snapshot,
+            report.broker_open_positions,
+            report.pending_broker_orders,
             report.closed_local_positions,
             report.created_local_positions,
             report.updated_local_positions,

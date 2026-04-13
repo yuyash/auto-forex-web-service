@@ -21,6 +21,9 @@ from django.conf import settings
 from apps.trading.dataclasses import Tick
 
 logger: Logger = getLogger(name=__name__)
+_MAX_BACKTEST_SPREAD_PIPS = Decimal(
+    str(getattr(settings, "TRADING_MAX_BACKTEST_SPREAD_PIPS", "50"))
+)
 
 
 class TickDataSource(ABC):
@@ -270,6 +273,9 @@ class RedisTickDataSource(TickDataSource):
                     except (ValueError, InvalidOperation):
                         continue  # Skip ticks with invalid prices
 
+                    if not self._is_valid_backtest_tick(tick):
+                        continue
+
                     batch.append(tick)
 
                     # Yield batch when it reaches the target size
@@ -296,6 +302,54 @@ class RedisTickDataSource(TickDataSource):
                 self.client.close()
             except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
                 logger_local.debug("Failed to close Redis client: %s", exc)
+
+    @staticmethod
+    def _is_valid_backtest_tick(tick: Tick) -> bool:
+        """Return True when a replay tick has sane executable prices."""
+        from apps.trading.utils import pip_size_for_instrument
+
+        if tick.ask < tick.bid:
+            logger.warning(
+                "RedisTickDataSource: dropping invalid backtest tick with ask < bid "
+                "(instrument=%s, timestamp=%s, bid=%s, ask=%s)",
+                tick.instrument,
+                tick.timestamp,
+                tick.bid,
+                tick.ask,
+            )
+            return False
+
+        if tick.mid < tick.bid or tick.mid > tick.ask:
+            logger.warning(
+                "RedisTickDataSource: dropping invalid backtest tick with mid outside bid/ask "
+                "(instrument=%s, timestamp=%s, bid=%s, ask=%s, mid=%s)",
+                tick.instrument,
+                tick.timestamp,
+                tick.bid,
+                tick.ask,
+                tick.mid,
+            )
+            return False
+
+        pip_size = pip_size_for_instrument(tick.instrument)
+        if pip_size <= 0:
+            return True
+
+        spread_pips = (tick.ask - tick.bid) / pip_size
+        if spread_pips > _MAX_BACKTEST_SPREAD_PIPS:
+            logger.warning(
+                "RedisTickDataSource: dropping anomalous backtest tick spread "
+                "(instrument=%s, timestamp=%s, bid=%s, ask=%s, spread_pips=%s, max=%s)",
+                tick.instrument,
+                tick.timestamp,
+                tick.bid,
+                tick.ask,
+                spread_pips,
+                _MAX_BACKTEST_SPREAD_PIPS,
+            )
+            return False
+
+        return True
 
 
 class LiveTickDataSource(TickDataSource):

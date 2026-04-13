@@ -529,6 +529,11 @@
         }
       }
     },
+    "summary": {
+      "margin_ratio": "Margin Closeout Ratio",
+      "open_positions": "Open Positions",
+      "closed_positions": "Closed Positions"
+    },
     "logs": {
       "title": "Task Logs",
       "timestamp": "Timestamp",

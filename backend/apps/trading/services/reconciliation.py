@@ -6,7 +6,7 @@ orphaned live trading execution.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from logging import Logger, getLogger
 from typing import Any
@@ -21,17 +21,29 @@ from apps.trading.models.state import ExecutionState
 logger: Logger = getLogger(name=__name__)
 
 
+class TradingSafetyError(RuntimeError):
+    """Raised when broker state is unsafe for automatic trading continuation."""
+
+
 @dataclass(slots=True)
 class ReconciliationReport:
     """Summary of broker/local state reconciliation."""
 
     updated_account_snapshot: bool = False
+    broker_open_positions: int = 0
+    pending_broker_orders: int = 0
     closed_local_positions: int = 0
     created_local_positions: int = 0
     updated_local_positions: int = 0
     removed_open_entries: int = 0
     synthesized_open_entries: int = 0
     relinked_open_entries: int = 0
+    blockers: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+    @property
+    def has_blockers(self) -> bool:
+        return bool(self.blockers)
 
 
 def _safe_int(value: Any, default: int = 0) -> int:
@@ -62,12 +74,15 @@ class TradingResumeReconciler:
         self.execution_id = task.execution_id
         self.oanda_service = OandaService(account=task.oanda_account, dry_run=False)
 
-    def reconcile(self) -> ReconciliationReport:
+    def reconcile(self, *, resumed: bool) -> ReconciliationReport:
         """Run full reconciliation and return a summary report."""
         report = ReconciliationReport()
         self._sync_account_snapshot(report)
+        self._check_pending_orders(report)
         open_positions = self._sync_positions_with_broker(report)
         self._sync_strategy_state_with_positions(open_positions, report)
+        self._validate_safety(report=report, resumed=resumed)
+        self._record_reconciliation_metadata(report=report)
         self.state.save()
         return report
 
@@ -95,11 +110,26 @@ class TradingResumeReconciler:
         self.state.current_balance = details.balance
         report.updated_account_snapshot = True
 
+    def _check_pending_orders(self, report: ReconciliationReport) -> None:
+        try:
+            pending_orders = self.oanda_service.get_pending_orders(instrument=self.task.instrument)
+        except OandaAPIError as exc:
+            raise RuntimeError(f"Failed to fetch pending orders from OANDA: {exc}") from exc
+
+        report.pending_broker_orders = len(pending_orders)
+        if pending_orders:
+            report.blockers.append(
+                f"OANDA account has {len(pending_orders)} pending order(s) for "
+                f"{self.task.instrument}. Automatic trading is blocked until the "
+                "account is reconciled manually."
+            )
+
     def _sync_positions_with_broker(self, report: ReconciliationReport) -> list[Position]:
         try:
             broker_trades = self.oanda_service.get_open_trades(instrument=self.task.instrument)
         except OandaAPIError as exc:
             raise RuntimeError(f"Failed to fetch open trades from OANDA: {exc}") from exc
+        report.broker_open_positions = len(broker_trades)
 
         local_open_positions = list(
             Position.objects.filter(
@@ -110,6 +140,11 @@ class TradingResumeReconciler:
                 is_open=True,
             ).order_by("entry_time", "created_at")
         )
+        if any(not position.oanda_trade_id for position in local_open_positions):
+            report.blockers.append(
+                "Found local open position(s) without OANDA trade ids. Automatic resume "
+                "cannot safely reconcile broker exposure."
+            )
 
         broker_by_trade_id = {trade.trade_id: trade for trade in broker_trades if trade.trade_id}
         local_by_trade_id = {
@@ -118,24 +153,15 @@ class TradingResumeReconciler:
             if position.oanda_trade_id
         }
 
-        now = dj_timezone.now()
         for trade_id, local_position in local_by_trade_id.items():
             broker_trade = broker_by_trade_id.get(trade_id)
             if broker_trade is None:
-                local_position.is_open = False
-                local_position.exit_time = now
-                local_position.exit_price = local_position.entry_price
-                local_position.unrealized_pnl = Decimal("0")
-                local_position.save(
-                    update_fields=[
-                        "is_open",
-                        "exit_time",
-                        "exit_price",
-                        "unrealized_pnl",
-                        "updated_at",
-                    ]
-                )
                 report.closed_local_positions += 1
+                report.blockers.append(
+                    f"OANDA trade {trade_id} for local position {local_position.pk} is no longer "
+                    "open. Automatic close reconciliation is blocked to avoid losing "
+                    "realized PnL or strategy state."
+                )
                 continue
 
             updated_fields: list[str] = []
@@ -159,6 +185,9 @@ class TradingResumeReconciler:
                 updated_fields.append("updated_at")
                 local_position.save(update_fields=updated_fields)
                 report.updated_local_positions += 1
+                report.warnings.append(
+                    f"Updated local position {local_position.pk} to match OANDA trade {trade_id}."
+                )
 
         for trade_id, broker_trade in broker_by_trade_id.items():
             if trade_id in local_by_trade_id:
@@ -185,6 +214,9 @@ class TradingResumeReconciler:
                 unrealized_pnl=broker_trade.unrealized_pnl,
             )
             report.created_local_positions += 1
+            report.warnings.append(
+                f"Created a missing local position for OANDA trade {trade_id} during reconciliation."
+            )
 
         refreshed_open_positions = list(
             Position.objects.filter(
@@ -196,8 +228,57 @@ class TradingResumeReconciler:
             ).order_by("entry_time", "created_at")
         )
 
+        return refreshed_open_positions
+
+    def _validate_safety(self, *, report: ReconciliationReport, resumed: bool) -> None:
+        strategy_type = str(getattr(self.task.config, "strategy_type", "") or "").lower()
+        strategy_state = (
+            self.state.strategy_state if isinstance(self.state.strategy_state, dict) else {}
+        )
+
+        if not resumed:
+            if report.broker_open_positions > 0:
+                report.blockers.append(
+                    f"OANDA account already has {report.broker_open_positions} open trade(s) for "
+                    f"{self.task.instrument}. Refusing to start a fresh execution on top of "
+                    "existing broker exposure."
+                )
+            return
+
+        if strategy_type != "floor" and (
+            report.created_local_positions > 0
+            or report.updated_local_positions > 0
+            or report.closed_local_positions > 0
+        ):
+            report.blockers.append(
+                f"Automatic broker reconciliation is only state-aware for the floor strategy. "
+                f"Task strategy '{strategy_type or 'unknown'}' requires manual review before resume."
+            )
+
+        if report.closed_local_positions > 0 or report.removed_open_entries > 0:
+            report.blockers.append(
+                "Broker exposure changed while the worker was down. Automatic resume was stopped "
+                "to avoid continuing with drifted strategy state."
+            )
+
+        if report.broker_open_positions > 0 and not strategy_state:
+            report.blockers.append(
+                "Broker open trades exist but no persisted strategy state was found for this "
+                "execution. Automatic resume is unsafe."
+            )
+
+    def _record_reconciliation_metadata(self, *, report: ReconciliationReport) -> None:
         unrealized_total = sum(
-            (_safe_decimal(position.unrealized_pnl) for position in refreshed_open_positions),
+            (
+                _safe_decimal(position.unrealized_pnl)
+                for position in Position.objects.filter(
+                    task_type=TaskType.TRADING,
+                    task_id=self.task.pk,
+                    execution_id=self.execution_id,
+                    instrument=self.task.instrument,
+                    is_open=True,
+                )
+            ),
             Decimal("0"),
         )
         strategy_state = (
@@ -205,9 +286,13 @@ class TradingResumeReconciler:
         )
         strategy_state["broker_reconciled_at"] = dj_timezone.now().isoformat()
         strategy_state["broker_unrealized_pnl"] = str(unrealized_total)
+        strategy_state["broker_open_trade_count"] = report.broker_open_positions
+        strategy_state["broker_pending_order_count"] = report.pending_broker_orders
+        if report.warnings:
+            strategy_state["broker_reconciliation_warnings"] = report.warnings
+        if report.blockers:
+            strategy_state["broker_reconciliation_blockers"] = report.blockers
         self.state.strategy_state = strategy_state
-
-        return refreshed_open_positions
 
     def _sync_strategy_state_with_positions(
         self,

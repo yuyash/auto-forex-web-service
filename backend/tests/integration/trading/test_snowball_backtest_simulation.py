@@ -469,6 +469,6 @@ class TestSnowballBacktestSimulation:
         occupied = sum(1 for s in cycle["grid"]["layers"][0]["slots"] if s.get("entry") is not None)
         assert occupied == 3  # R0 (initial) + 2 counter entries
         assert counter_adds == [
-            (1, 7, 5.0),
-            (2, 11, 10.0),
+            (1, 6, 5.0),
+            (2, 10, 10.0),
         ]

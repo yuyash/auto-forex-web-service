@@ -111,7 +111,7 @@ class TestRecoverOrphanedTasks:
 
         recent_cts = MagicMock()
         recent_cts.instance_key = f"{task.pk}:{task.execution_id}"
-        recent_cts.last_heartbeat_at = dj_timezone.now() - timedelta(minutes=1)
+        recent_cts.last_heartbeat_at = dj_timezone.now() - timedelta(seconds=30)
         # Prefetch returns the recent heartbeat
         cts.objects.filter.return_value.__iter__ = MagicMock(return_value=iter([recent_cts]))
 
@@ -119,6 +119,7 @@ class TestRecoverOrphanedTasks:
 
         result = recover_orphaned_tasks(source="test")
         assert result["backtest"] == 0
+        tl.objects.create.assert_not_called()
 
     @pytest.mark.usefixtures("_mock_models")
     def test_marks_failed_when_resubmit_fails(self, _mock_models):
@@ -193,6 +194,37 @@ class TestRecoverOrphanedTasks:
         assert result["trading"] == 1
         service_instance.recover_trading_task.assert_called_once_with(task)
         service_instance.start_task.assert_not_called()
+        tl.objects.create.assert_called_once()
+        assert "persisted strategy and grid state" in tl.objects.create.call_args.kwargs["message"]
+
+    @pytest.mark.usefixtures("_mock_models")
+    def test_backtest_recovery_logs_restart_from_beginning(self, _mock_models):
+        bt, tt, cts, tl, svc_cls = _mock_models
+
+        task = MagicMock()
+        task.pk = uuid4()
+        task.status = TaskStatus.RUNNING
+        bt.objects.filter.return_value = _make_qs([task])
+
+        stale_cts = MagicMock()
+        stale_cts.instance_key = f"{task.pk}:{task.execution_id}"
+        stale_cts.last_heartbeat_at = dj_timezone.now() - timedelta(minutes=2)
+        cts.objects.filter.return_value.__iter__ = MagicMock(return_value=iter([stale_cts]))
+
+        type(task).objects = MagicMock()
+        type(task).objects.filter.return_value.update.return_value = 1
+
+        service_instance = MagicMock()
+        svc_cls.return_value = service_instance
+
+        from apps.trading.tasks.recovery import recover_orphaned_tasks
+
+        result = recover_orphaned_tasks(source="worker_ready")
+        assert result["backtest"] == 1
+        tl.objects.create.assert_called_once()
+        message = tl.objects.create.call_args.kwargs["message"]
+        assert "previous partial run was discarded" in message
+        assert "restarting from the beginning" in message
 
     @pytest.mark.usefixtures("_mock_models")
     def test_failed_trading_recovery_is_not_counted(self, _mock_models):

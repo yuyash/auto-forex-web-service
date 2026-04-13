@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from decimal import Decimal
 from unittest.mock import MagicMock
+
+from apps.trading.dataclasses.tick import Tick
 
 
 class TestRedisTickDataSourceInit:
@@ -58,6 +62,36 @@ class TestRedisTickDataSourceClose:
 
         # Should not raise
         source.close()
+
+
+class TestRedisTickDataSourceValidation:
+    """Tests for replay tick sanity validation."""
+
+    def test_accepts_normal_tick(self):
+        from apps.trading.tasks.source import RedisTickDataSource
+
+        tick = Tick(
+            instrument="USD_JPY",
+            timestamp=datetime(2026, 1, 1, tzinfo=UTC),
+            bid=Decimal("157.240"),
+            ask=Decimal("157.250"),
+            mid=Decimal("157.245"),
+        )
+
+        assert RedisTickDataSource._is_valid_backtest_tick(tick) is True
+
+    def test_rejects_tick_with_extreme_spread(self):
+        from apps.trading.tasks.source import RedisTickDataSource
+
+        tick = Tick(
+            instrument="USD_JPY",
+            timestamp=datetime(2026, 1, 1, tzinfo=UTC),
+            bid=Decimal("157.545"),
+            ask=Decimal("163.425"),
+            mid=Decimal("160.485"),
+        )
+
+        assert RedisTickDataSource._is_valid_backtest_tick(tick) is False
 
     def test_close_handles_pubsub_exception(self):
         from apps.trading.tasks.source import RedisTickDataSource
