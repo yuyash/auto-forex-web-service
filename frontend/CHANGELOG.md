@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.47.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.47.5...frontend-v1.47.6) (2026-04-13)
+
+
+### Bug Fixes
+
+* task capacity and snowball ordering ([#465](https://github.com/yuyash/auto-forex-web-service/issues/465)) ([48e3fa0](https://github.com/yuyash/auto-forex-web-service/commit/48e3fa0087b90ea9efebf521fa73702a24d36251))
+
 ## [1.47.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.47.4...frontend-v1.47.5) (2026-04-13)
 
 
