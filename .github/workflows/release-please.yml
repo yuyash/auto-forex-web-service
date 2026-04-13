@@ -98,6 +98,11 @@ jobs:
           fi
 
           docker compose config > /dev/null
+          if docker compose ps --services --status running | grep -qx backend; then
+            docker compose exec -T backend python manage.py drain_trading_for_deploy --timeout 180
+          else
+            echo "Backend is not currently running; skipping trading drain."
+          fi
           docker compose pull
           docker compose down
           docker compose up -d
