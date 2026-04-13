@@ -123,9 +123,11 @@ class TaskService:
     @staticmethod
     def _dispatch_task(task: BacktestTask | TradingTask, task_type: str) -> None:
         celery_task = run_backtest_task if task_type == "backtest" else run_trading_task
+        queue = "backtest" if task_type == "backtest" else "trading"
         celery_task.apply_async(
             args=[task.pk],
             task_id=str(task.execution_id),
+            queue=queue,
         )
 
     @staticmethod

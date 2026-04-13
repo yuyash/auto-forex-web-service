@@ -99,10 +99,14 @@ class BacktestSignalHandler(SignalHandler):
         if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
             from apps.market.tasks import publish_ticks_for_backtest
 
-            publish_ticks_for_backtest.delay(**task_kwargs)
+            publish_ticks_for_backtest.apply_async(kwargs=task_kwargs, queue="backtest_publisher")
             return
 
-        current_app.send_task("market.tasks.publish_ticks_for_backtest", kwargs=task_kwargs)
+        current_app.send_task(
+            "market.tasks.publish_ticks_for_backtest",
+            kwargs=task_kwargs,
+            queue="backtest_publisher",
+        )
 
 
 # Create singleton instance

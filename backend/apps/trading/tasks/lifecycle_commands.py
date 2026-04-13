@@ -59,9 +59,12 @@ def _default_dispatch_stop(task_id: UUID, is_backtest: bool, stop_mode: StopMode
     from apps.trading.tasks import service as service_module
 
     if is_backtest:
-        service_module.stop_backtest_task.delay(task_id)
+        service_module.stop_backtest_task.apply_async(args=[task_id], queue="system")
     else:
-        service_module.stop_trading_task.delay(task_id, stop_mode.value)
+        service_module.stop_trading_task.apply_async(
+            args=[task_id, stop_mode.value],
+            queue="system",
+        )
 
 
 class TaskLifecycleCommands:

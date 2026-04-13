@@ -82,10 +82,10 @@ class TestTickSupervisorRunnerExtendedIntegration:
             ),
         ]
 
-    @patch("apps.market.tasks.publish_oanda_ticks.delay")
+    @patch("apps.market.tasks.publish_oanda_ticks.apply_async")
     def test_ensure_publishers_running(
         self,
-        mock_pub_delay: Any,
+        mock_pub_apply_async: Any,
     ) -> None:
         mock_client = MagicMock()
         mock_client.get.return_value = None
@@ -106,12 +106,15 @@ class TestTickSupervisorRunnerExtendedIntegration:
             ],
         )
 
-        mock_pub_delay.assert_called_once_with(account_id=1, instruments=["USD_JPY"])
+        mock_pub_apply_async.assert_called_once_with(
+            kwargs={"account_id": 1, "instruments": ["USD_JPY"]},
+            queue="market",
+        )
 
-    @patch("apps.market.tasks.publish_oanda_ticks.delay")
+    @patch("apps.market.tasks.publish_oanda_ticks.apply_async")
     def test_requests_restart_when_running_publisher_has_wrong_instruments(
         self,
-        mock_pub_delay: Any,
+        mock_pub_apply_async: Any,
     ) -> None:
         CeleryTaskStatus.objects.create(
             task_name="market.tasks.publish_oanda_ticks",
@@ -129,7 +132,7 @@ class TestTickSupervisorRunnerExtendedIntegration:
             account_targets=[AccountStreamTarget(1, ("USD_JPY",))],
         )
 
-        mock_pub_delay.assert_not_called()
+        mock_pub_apply_async.assert_not_called()
         row = CeleryTaskStatus.objects.get(
             task_name="market.tasks.publish_oanda_ticks",
             instance_key="1",
@@ -137,15 +140,15 @@ class TestTickSupervisorRunnerExtendedIntegration:
         assert row.status == CeleryTaskStatus.Status.STOPPING
         assert "USD_JPY" in row.status_message
 
-    @patch("apps.market.tasks.subscribe_ticks_to_db.delay")
-    def test_ensure_subscriber_running(self, mock_sub_delay: Any) -> None:
+    @patch("apps.market.tasks.subscribe_ticks_to_db.apply_async")
+    def test_ensure_subscriber_running(self, mock_sub_apply_async: Any) -> None:
         mock_client = MagicMock()
         mock_client.get.return_value = None
 
         runner = TickSupervisorRunner()
         runner._ensure_subscriber_running(mock_client)
 
-        mock_sub_delay.assert_called_once()
+        mock_sub_apply_async.assert_called_once_with(queue="market")
 
     def test_fresh_market_task_ignores_stale_rows(self) -> None:
         CeleryTaskStatus.objects.create(
