@@ -11,6 +11,7 @@ from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
 from apps.trading.enums import TaskStatus
+from apps.trading.services.task_capacity import TaskAdmissionDecision, QueueCapacitySnapshot
 from apps.trading.tasks.service import TaskCapacityError, TaskSubmissionError, TaskValidationError
 from apps.trading.views.backtest import BacktestTaskViewSet
 
@@ -213,7 +214,22 @@ class TestStart:
         task = _make_task(task_status=TaskStatus.CREATED)
         vs = _build_viewset(action="start")
         vs.get_object = MagicMock(return_value=task)
-        vs.task_service.start_task.side_effect = TaskCapacityError("queue full")
+        vs.task_service.start_task.side_effect = TaskCapacityError(
+            "queue full",
+            decision=TaskAdmissionDecision(
+                allowed=False,
+                reason="queue full",
+                details=(QueueCapacitySnapshot(queue="backtest", used=1, limit=1),),
+                required_stops=(
+                    {
+                        "queue": "backtest",
+                        "count": 1,
+                        "task_type": "backtest task",
+                        "message": "Stop at least 1 backtest task.",
+                    },
+                ),
+            ),
+        )
 
         request = _drf_post()
         vs.request = request
@@ -221,6 +237,7 @@ class TestStart:
         response = vs.start(request, pk=1)
         assert response.status_code == http_status.HTTP_409_CONFLICT
         assert response.data["error"] == "Task capacity exhausted"
+        assert response.data["required_stops"][0]["task_type"] == "backtest task"
 
     def test_start_unexpected_error_returns_500(self):
         task = _make_task(task_status=TaskStatus.CREATED)
@@ -367,6 +384,27 @@ class TestRestart:
 
         response = vs.restart(request, pk=1)
         assert response.status_code == http_status.HTTP_400_BAD_REQUEST
+        assert response.data["detail"] == "retry limit"
+
+    def test_restart_capacity_error_returns_409(self):
+        task = _make_task(task_status=TaskStatus.STOPPED)
+        vs = _build_viewset(action="restart")
+        vs.get_object = MagicMock(return_value=task)
+        vs.task_service.restart_task.side_effect = TaskCapacityError(
+            "publisher full",
+            decision=TaskAdmissionDecision(
+                allowed=False,
+                reason="publisher full",
+                details=(QueueCapacitySnapshot(queue="backtest_publisher", used=1, limit=1),),
+            ),
+        )
+
+        request = _drf_post()
+        vs.request = request
+
+        response = vs.restart(request, pk=1)
+        assert response.status_code == http_status.HTTP_409_CONFLICT
+        assert response.data["detail"] == "publisher full"
 
     def test_restart_runtime_error_returns_500(self):
         task = _make_task(task_status=TaskStatus.STOPPED)

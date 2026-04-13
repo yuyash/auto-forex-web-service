@@ -62,6 +62,8 @@ import { TaskMetricsTab } from '../tasks/detail/TaskMetricsTab';
 import { BacktestOverviewTab } from './detail/BacktestOverviewTab';
 import { useTaskMetrics } from '../../hooks/useTaskMetrics';
 import { computeAutoInterval } from '../../utils/autoGranularity';
+import { useToast } from '../common';
+import { formatTaskActionError } from '../../utils/taskActionError';
 
 export const BacktestTaskDetail: React.FC = () => {
   const { t } = useTranslation(['backtest', 'common']);
@@ -82,6 +84,7 @@ export const BacktestTaskDetail: React.FC = () => {
   const stopTask = useStopBacktestTask();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { showError } = useToast();
   const { user } = useAuth();
   const timezone = user?.timezone || 'UTC';
   const language = user?.language;
@@ -591,7 +594,8 @@ export const BacktestTaskDetail: React.FC = () => {
               }
               cancelAction();
               await refreshTask();
-            } catch {
+            } catch (error) {
+              showError(formatTaskActionError(error, 'Failed to update task'));
               cancelAction();
             }
           }}

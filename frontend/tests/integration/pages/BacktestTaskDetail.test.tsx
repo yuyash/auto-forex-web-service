@@ -16,12 +16,14 @@ const {
   mockBacktestPause,
   mockBacktestResume,
   mockBacktestRestart,
+  mockShowError,
 } = vi.hoisted(() => ({
   mockBacktestStart: vi.fn(),
   mockBacktestStop: vi.fn(),
   mockBacktestPause: vi.fn(),
   mockBacktestResume: vi.fn(),
   mockBacktestRestart: vi.fn(),
+  mockShowError: vi.fn(),
 }));
 
 // Mock API services
@@ -117,6 +119,19 @@ vi.mock('../../../src/hooks/useBacktestTaskMutations', () => ({
   })),
   useDeleteBacktestTask: vi.fn(() => ({ mutate: vi.fn(), isLoading: false })),
 }));
+
+vi.mock('../../../src/components/common', async () => {
+  const actual = await vi.importActual('../../../src/components/common');
+  return {
+    ...actual,
+    useToast: vi.fn(() => ({
+      showError: mockShowError,
+      showSuccess: vi.fn(),
+      showInfo: vi.fn(),
+      showWarning: vi.fn(),
+    })),
+  };
+});
 
 // Mock child components to isolate page-level behavior
 vi.mock('../../../src/hooks/useTaskMetrics', () => ({
@@ -390,6 +405,36 @@ describe('BacktestTaskDetail', () => {
 
     await waitFor(() => {
       expect(mockBacktestRestart).toHaveBeenCalledWith('1');
+    });
+  });
+
+  it('shows backend action failure details', async () => {
+    const mod = await import('../../../src/hooks/useBacktestTasks');
+    const { ApiError } = await import('../../../src/api/apiClient');
+    vi.mocked(mod.useBacktestTask).mockReturnValueOnce({
+      data: { ...mockTaskData, status: TaskStatus.CREATED },
+      isLoading: false,
+      error: null,
+      refresh: vi.fn(),
+    });
+    mockBacktestStart.mockRejectedValueOnce(
+      new ApiError('/api/test', 409, 'Conflict', {
+        detail: 'Backtest capacity exhausted for backtest.',
+        required_stops: [{ message: 'Stop at least 1 backtest task.' }],
+      })
+    );
+    const user = userEvent.setup();
+
+    render(<BacktestTaskDetail />, { wrapper: createWrapper() });
+
+    await user.click(screen.getByRole('button', { name: 'Start' }));
+    const confirmButtons = screen.getAllByRole('button', { name: 'Start' });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(mockShowError).toHaveBeenCalledWith(
+        'Backtest capacity exhausted for backtest. Stop at least 1 backtest task.'
+      );
     });
   });
 });

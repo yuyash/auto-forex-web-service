@@ -785,6 +785,11 @@ class Layer:
         present = self.present_slots()
         return max(present, key=lambda s: s.index) if present else None
 
+    def previous_present_slot(self, index: int) -> Slot | None:
+        """Highest present slot with index lower than ``index``."""
+        present = [s for s in self.present_slots() if s.index < index]
+        return max(present, key=lambda s: s.index) if present else None
+
     def lowest_occupied_slot(self) -> Slot | None:
         occupied = self.occupied_slots()
         return min(occupied, key=lambda s: s.index) if occupied else None

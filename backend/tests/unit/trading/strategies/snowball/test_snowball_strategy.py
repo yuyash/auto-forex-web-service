@@ -219,6 +219,59 @@ class TestCounterAdds:
         assert initial_open.retracement_count == 0
         assert initial_open.stop_loss_price == Decimal("99.70")
 
+    def test_refill_counter_uses_previous_slot_order_not_highest_present_slot(self):
+        s = _strategy(counter_tp_mode="fixed", counter_tp_pips="25", n_pips_head="30")
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+
+        layer = Layer.create(3, 7, 1000, 3)
+        r0 = layer.slot_at(0)
+        assert r0 is not None
+        r0.fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("157.230"),
+                close_price=Decimal("157.950"),
+                units=1000,
+                opened_at=T0,
+                role="layer_initial",
+                layer_number=3,
+                retracement_count=0,
+                root_entry_id=1,
+            )
+        )
+        r3 = layer.slot_at(3)
+        assert r3 is not None
+        r3.fill(
+            Entry(
+                entry_id=2,
+                step=4,
+                direction=Direction.LONG,
+                entry_price=Decimal("156.000"),
+                close_price=Decimal("156.250"),
+                units=4000,
+                opened_at=T0,
+                role="counter",
+                layer_number=3,
+                retracement_count=3,
+                root_entry_id=1,
+                parent_entry_id=1,
+            )
+        )
+
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+
+        tick = _tick(T0 + timedelta(minutes=1), "156.90", "156.92")
+        events = s._process_cycle_counter_adds(ss, tick, cycle)
+
+        assert len(events) == 1
+        event = events[0]
+        assert event.retracement_count == 1
+        assert event.price == Decimal("156.92")
+
 
 # ==================================================================
 # 3. Counter TP closes

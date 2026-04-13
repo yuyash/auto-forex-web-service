@@ -128,7 +128,7 @@ def test_backtest_capacity_ignores_stale_publishers(settings) -> None:
     assert decision.allowed is True
 
 
-def test_queue_usage_counts_active_and_reserved_for_dedicated_queue() -> None:
+def test_queue_usage_counts_only_active_tasks_for_dedicated_queue() -> None:
     inspector = MagicMock()
     inspector.active_queues.return_value = {
         "worker-market@host": [{"name": "market"}],
@@ -145,4 +145,4 @@ def test_queue_usage_counts_active_and_reserved_for_dedicated_queue() -> None:
 
     with patch("apps.trading.services.task_capacity.current_app.control.inspect") as mock_inspect:
         mock_inspect.return_value = inspector
-        assert TaskCapacityService()._queue_usage("market") == 2
+        assert TaskCapacityService()._queue_usage("market") == 1

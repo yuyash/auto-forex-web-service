@@ -750,14 +750,13 @@ class SnowballStrategy(Strategy):
         # count for R-number progression — the next counter must be
         # placed at the correct interval from the last known position.
         direction = cycle.direction
-        present = [s for s in layer.present_slots() if s.index >= 1]
-        if present:
-            latest = max(present, key=lambda s: s.index)
+        previous_slot = layer.previous_present_slot(slot.index)
+        if previous_slot is not None:
             ref_price: Decimal | None = (
-                latest.entry.entry_price
-                if latest.entry is not None
-                else latest.pending_rebuild.entry_price
-                if latest.pending_rebuild is not None
+                previous_slot.entry.entry_price
+                if previous_slot.entry is not None
+                else previous_slot.pending_rebuild.entry_price
+                if previous_slot.pending_rebuild is not None
                 else None
             )
         else:

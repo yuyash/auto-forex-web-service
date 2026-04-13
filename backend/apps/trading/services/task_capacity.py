@@ -46,6 +46,7 @@ class TaskAdmissionDecision:
     allowed: bool
     reason: str = ""
     details: tuple[QueueCapacitySnapshot, ...] = ()
+    required_stops: tuple[dict[str, object], ...] = ()
 
 
 class TaskCapacityService:
@@ -55,7 +56,7 @@ class TaskCapacityService:
         return current_app.control.inspect(timeout=2.0)
 
     def _queue_usage(self, queue: str) -> int | None:
-        """Return active + reserved task count for a dedicated queue.
+        """Return active task count for a dedicated queue.
 
         Returns ``None`` when inspection is unavailable so callers can fall
         back to persisted liveness data.
@@ -64,7 +65,6 @@ class TaskCapacityService:
             inspector = self._queue_inspector()
             active_queues = inspector.active_queues() or {}
             active = inspector.active() or {}
-            reserved = inspector.reserved() or {}
         except Exception:
             return None
 
@@ -77,8 +77,22 @@ class TaskCapacityService:
             return 0
 
         active_count = sum(len(active.get(worker_name) or []) for worker_name in workers)
-        reserved_count = sum(len(reserved.get(worker_name) or []) for worker_name in workers)
-        return active_count + reserved_count
+        return active_count
+
+    @staticmethod
+    def _required_stop(queue: str, count: int) -> dict[str, object]:
+        task_type = "task"
+        if queue in {"trading", "market"}:
+            task_type = "trading task"
+        elif queue in {"backtest", "backtest_publisher"}:
+            task_type = "backtest task"
+        plural = "" if count == 1 else "s"
+        return {
+            "queue": queue,
+            "count": count,
+            "task_type": task_type,
+            "message": f"Stop at least {count} {task_type}{plural}.",
+        }
 
     def _market_task_cutoff(self):
         stale_after_seconds = int(getattr(settings, "CELERY_MARKET_TASK_STALE_AFTER_SECONDS", 90))
@@ -124,6 +138,14 @@ class TaskCapacityService:
             if snapshot.used + 1 > snapshot.limit
         ]
         if shortages:
+            required_stops = []
+            backtest_stop_count = max(
+                backtest_snapshot.used + 1 - backtest_snapshot.limit,
+                publisher_snapshot.used + 1 - publisher_snapshot.limit,
+                0,
+            )
+            if backtest_stop_count > 0:
+                required_stops.append(self._required_stop("backtest", backtest_stop_count))
             return TaskAdmissionDecision(
                 allowed=False,
                 reason=(
@@ -132,6 +154,7 @@ class TaskCapacityService:
                     + ". Stop running tasks or increase worker concurrency."
                 ),
                 details=(backtest_snapshot, publisher_snapshot),
+                required_stops=tuple(required_stops),
             )
 
         return TaskAdmissionDecision(
@@ -192,6 +215,13 @@ class TaskCapacityService:
             shortages.append("market")
 
         if shortages:
+            required_stops = []
+            trading_stop_count = max(trading_snapshot.used + 1 - trading_snapshot.limit, 0)
+            market_stop_count = max(market_snapshot.used - market_snapshot.limit, 0)
+            if trading_stop_count > 0:
+                required_stops.append(self._required_stop("trading", trading_stop_count))
+            if market_stop_count > 0:
+                required_stops.append(self._required_stop("market", market_stop_count))
             return TaskAdmissionDecision(
                 allowed=False,
                 reason=(
@@ -200,6 +230,7 @@ class TaskCapacityService:
                     + ". Stop running tasks or increase worker concurrency."
                 ),
                 details=(trading_snapshot, market_snapshot),
+                required_stops=tuple(required_stops),
             )
 
         return TaskAdmissionDecision(

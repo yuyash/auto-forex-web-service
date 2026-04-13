@@ -60,6 +60,8 @@ import { TaskMetricsTab } from '../tasks/detail/TaskMetricsTab';
 import { TradingOverviewTab } from './detail/TradingOverviewTab';
 import { useTaskMetrics } from '../../hooks/useTaskMetrics';
 import { computeAutoInterval } from '../../utils/autoGranularity';
+import { useToast } from '../common';
+import { formatTaskActionError } from '../../utils/taskActionError';
 
 export const TradingTaskDetail: React.FC = () => {
   const { t } = useTranslation(['trading', 'common']);
@@ -79,6 +81,7 @@ export const TradingTaskDetail: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { user } = useAuth();
+  const { showError } = useToast();
   const timezone = user?.timezone || 'UTC';
 
   const defaultTabs: TabItem[] = [
@@ -550,7 +553,8 @@ export const TradingTaskDetail: React.FC = () => {
               }
               cancelAction();
               await refreshTask();
-            } catch {
+            } catch (error) {
+              showError(formatTaskActionError(error, 'Failed to update task'));
               cancelAction();
             }
           }}

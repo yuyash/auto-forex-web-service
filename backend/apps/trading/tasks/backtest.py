@@ -294,7 +294,7 @@ def trigger_backtest_publisher(task: BacktestTask) -> None:
             "tick_granularity": task.tick_granularity,
             "tick_window_value_mode": task.tick_window_value_mode,
         },
-        queue="backtest",
+        queue="backtest_publisher",
     )
     logger.info(
         "Publisher task submitted - task_id=%s, publisher_celery_task_id=%s, "

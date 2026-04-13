@@ -50,6 +50,7 @@ import {
 } from '../../hooks/useBacktestTaskMutations';
 import { useToast } from '../common';
 import { logger } from '../../utils/logger';
+import { formatTaskActionError } from '../../utils/taskActionError';
 
 interface BacktestTaskCardProps {
   task: BacktestTask;
@@ -151,8 +152,7 @@ export default function BacktestTaskCard({
         error: error instanceof Error ? error.message : String(error),
       });
       setOptimisticStatus(null);
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to start task';
+      const errorMessage = formatTaskActionError(error, 'Failed to start task');
       showError(errorMessage, 8000, {
         label: 'Retry',
         onClick: () => handleStart(taskId),
@@ -176,8 +176,7 @@ export default function BacktestTaskCard({
         error: error instanceof Error ? error.message : String(error),
       });
       setOptimisticStatus(null);
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to stop task';
+      const errorMessage = formatTaskActionError(error, 'Failed to stop task');
       showError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -204,8 +203,10 @@ export default function BacktestTaskCard({
         error: error instanceof Error ? error.message : String(error),
       });
       setOptimisticStatus(null);
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to resume task';
+      const errorMessage = formatTaskActionError(
+        error,
+        'Failed to resume task'
+      );
       showError(errorMessage, 8000, {
         label: 'Retry',
         onClick: () => handleResume(taskId),
@@ -228,8 +229,7 @@ export default function BacktestTaskCard({
         error: error instanceof Error ? error.message : String(error),
       });
       setOptimisticStatus(null);
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to pause task';
+      const errorMessage = formatTaskActionError(error, 'Failed to pause task');
       showError(errorMessage, 8000, {
         label: 'Retry',
         onClick: () => handlePause(taskId),
@@ -252,8 +252,10 @@ export default function BacktestTaskCard({
         error: error instanceof Error ? error.message : String(error),
       });
       setOptimisticStatus(null);
-      const errorMessage =
-        error instanceof Error ? error.message : 'Failed to restart task';
+      const errorMessage = formatTaskActionError(
+        error,
+        'Failed to restart task'
+      );
       showError(errorMessage, 8000, {
         label: 'Retry',
         onClick: () => handleRestart(taskId),

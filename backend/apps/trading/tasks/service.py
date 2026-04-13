@@ -52,6 +52,15 @@ class TaskConflictError(TaskServiceError, ValueError):
 class TaskCapacityError(TaskConflictError):
     """Raised when worker capacity is insufficient for a new task."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        decision: object | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.decision = decision
+
 
 class TaskSubmissionError(TaskServiceError, RuntimeError):
     """Raised when dispatching a task to workers fails."""
@@ -218,7 +227,7 @@ class TaskService:
         admission = self.capacity.get_task_admission(task)
         if admission.allowed:
             return
-        raise TaskCapacityError(admission.reason)
+        raise TaskCapacityError(admission.reason, decision=admission)
 
     def _finalize_terminal_task(
         self,

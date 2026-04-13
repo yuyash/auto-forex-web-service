@@ -132,6 +132,30 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         """Extra fields to include in the stop response body."""
         return {}
 
+    @staticmethod
+    def _capacity_error_payload(exc: TaskCapacityError) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "error": "Task capacity exhausted",
+            "detail": str(exc),
+        }
+        decision = getattr(exc, "decision", None)
+        if decision is None:
+            return payload
+
+        payload["capacity"] = [
+            {
+                "queue": snapshot.queue,
+                "used": snapshot.used,
+                "limit": snapshot.limit,
+                "available": snapshot.available,
+            }
+            for snapshot in getattr(decision, "details", ())
+        ]
+        required_stops = getattr(decision, "required_stops", ())
+        if required_stops:
+            payload["required_stops"] = list(required_stops)
+        return payload
+
     @action(detail=True, methods=["post"])
     def start(self, request: Request, pk: str | None = None) -> Response:
         """Submit task for execution."""
@@ -166,10 +190,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 exc,
             )
             return Response(
-                {
-                    "error": "Task capacity exhausted",
-                    "detail": "Worker capacity is exhausted. Stop running tasks or increase worker concurrency.",
-                },
+                self._capacity_error_payload(exc),
                 status=status.HTTP_409_CONFLICT,
             )
         except TaskConflictError as exc:
@@ -179,7 +200,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 exc,
             )
             return Response(
-                {"error": "Account already has an active task"},
+                {"error": "Account already has an active task", "detail": str(exc)},
                 status=status.HTTP_409_CONFLICT,
             )
         except TaskValidationError as exc:
@@ -189,7 +210,10 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 exc,
             )
             return Response(
-                {"error": "Task validation failed. Check configuration and try again."},
+                {
+                    "error": "Task validation failed. Check configuration and try again.",
+                    "detail": str(exc),
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except TaskSubmissionError:
@@ -317,16 +341,22 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         task = self.get_object()
         try:
             restarted = self.task_service.restart_task(task.pk)
+        except TaskCapacityError as exc:
+            logger.warning("Restart capacity exhausted: task_id=%s, detail=%s", task.pk, exc)
+            return Response(
+                self._capacity_error_payload(exc),
+                status=status.HTTP_409_CONFLICT,
+            )
         except TaskConflictError as exc:
             logger.warning("Restart conflict: task_id=%s, detail=%s", task.pk, exc)
             return Response(
-                {"error": "Task cannot be restarted due to a conflict"},
+                {"error": "Task cannot be restarted due to a conflict", "detail": str(exc)},
                 status=status.HTTP_409_CONFLICT,
             )
         except ValueError as exc:
             logger.warning("Restart validation failed: task_id=%s, detail=%s", task.pk, exc)
             return Response(
-                {"error": "Invalid restart request for current task state"},
+                {"error": "Invalid restart request for current task state", "detail": str(exc)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception:

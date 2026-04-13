@@ -11,6 +11,7 @@ from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
 from apps.trading.enums import TaskStatus
+from apps.trading.services.task_capacity import TaskAdmissionDecision, QueueCapacitySnapshot
 from apps.trading.tasks.service import TaskCapacityError, TaskConflictError
 from apps.trading.views.trading import TradingTaskViewSet
 
@@ -258,7 +259,22 @@ class TestStart:
         task = _make_task(task_status=TaskStatus.CREATED)
         vs = _build_viewset(action="start")
         vs.get_object = MagicMock(return_value=task)
-        vs.task_service.start_task.side_effect = TaskCapacityError("queue full")
+        vs.task_service.start_task.side_effect = TaskCapacityError(
+            "queue full",
+            decision=TaskAdmissionDecision(
+                allowed=False,
+                reason="queue full",
+                details=(QueueCapacitySnapshot(queue="market", used=2, limit=2),),
+                required_stops=(
+                    {
+                        "queue": "market",
+                        "count": 1,
+                        "task_type": "trading task",
+                        "message": "Stop at least 1 trading task.",
+                    },
+                ),
+            ),
+        )
 
         request = _drf_post()
         vs.request = request
@@ -266,6 +282,7 @@ class TestStart:
         response = vs.start(request, pk=1)
         assert response.status_code == http_status.HTTP_409_CONFLICT
         assert response.data["error"] == "Task capacity exhausted"
+        assert response.data["required_stops"][0]["count"] == 1
 
     @patch("apps.trading.views.trading.TradingTask")
     def test_start_exception_returns_500(self, MockModel):
@@ -391,6 +408,27 @@ class TestRestart:
 
         response = vs.restart(request, pk=1)
         assert response.status_code == http_status.HTTP_400_BAD_REQUEST
+        assert response.data["detail"] == "bad state"
+
+    def test_restart_capacity_error_returns_409(self):
+        task = _make_task(task_status=TaskStatus.STOPPED)
+        vs = _build_viewset(action="restart")
+        vs.get_object = MagicMock(return_value=task)
+        vs.task_service.restart_task.side_effect = TaskCapacityError(
+            "market full",
+            decision=TaskAdmissionDecision(
+                allowed=False,
+                reason="market full",
+                details=(QueueCapacitySnapshot(queue="market", used=2, limit=2),),
+            ),
+        )
+
+        request = _drf_post()
+        vs.request = request
+
+        response = vs.restart(request, pk=1)
+        assert response.status_code == http_status.HTTP_409_CONFLICT
+        assert response.data["detail"] == "market full"
 
     def test_restart_exception_returns_500(self):
         task = _make_task(task_status=TaskStatus.STOPPED)
