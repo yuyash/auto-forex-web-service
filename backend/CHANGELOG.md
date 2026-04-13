@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.9](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.33.8...backend-v1.33.9) (2026-04-13)
+
+
+### Bug Fixes
+
+* task capacity and snowball ordering ([#465](https://github.com/yuyash/auto-forex-web-service/issues/465)) ([48e3fa0](https://github.com/yuyash/auto-forex-web-service/commit/48e3fa0087b90ea9efebf521fa73702a24d36251))
+
 ## [1.33.8](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.33.7...backend-v1.33.8) (2026-04-13)
 
 
