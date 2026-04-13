@@ -22,19 +22,9 @@ class TestTradingTaskSerializer:
         assert "has_strategy_state" in fields
         assert "can_resume" in fields
 
-    def test_get_instrument_from_config(self):
-        serializer = TradingTaskSerializer()
-        obj = MagicMock()
-        obj.config.parameters = {"instrument": "USD_JPY"}
-        result = serializer.get_instrument(obj)
-        assert result == "USD_JPY"
-
-    def test_get_instrument_default(self):
-        serializer = TradingTaskSerializer()
-        obj = MagicMock()
-        obj.config = None
-        result = serializer.get_instrument(obj)
-        assert result == "EUR_USD"
+    def test_instrument_is_model_field(self):
+        fields = TradingTaskSerializer().get_fields()
+        assert fields["instrument"].read_only is True
 
     def test_get_has_strategy_state(self):
         serializer = TradingTaskSerializer()
@@ -59,12 +49,9 @@ class TestTradingTaskListSerializer:
         # List view should not have has_strategy_state
         assert "has_strategy_state" not in fields
 
-    def test_get_instrument_from_config(self):
-        serializer = TradingTaskListSerializer()
-        obj = MagicMock()
-        obj.config.parameters = {"instrument": "GBP_USD"}
-        result = serializer.get_instrument(obj)
-        assert result == "GBP_USD"
+    def test_instrument_is_model_field(self):
+        fields = TradingTaskListSerializer().get_fields()
+        assert fields["instrument"].read_only is True
 
 
 class TestTradingTaskCreateSerializer:

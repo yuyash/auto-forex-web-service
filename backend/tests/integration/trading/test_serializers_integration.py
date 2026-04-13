@@ -274,7 +274,12 @@ class TestTradingTaskSerializer:
             },
         )
         account = OandaAccountFactory(user=user)
-        task = TradingTaskFactory(user=user, config=config, oanda_account=account)
+        task = TradingTaskFactory(
+            user=user,
+            config=config,
+            oanda_account=account,
+            instrument="EUR_USD",
+        )
         serializer = TradingTaskSerializer(task)
         assert serializer.data["instrument"] == "EUR_USD"
 

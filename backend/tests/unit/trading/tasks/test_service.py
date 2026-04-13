@@ -63,8 +63,9 @@ class TestStartTask:
 
     @patch("celery.current_app")
     @patch("apps.trading.tasks.service.uuid4")
+    @patch("apps.market.tasks.ensure_tick_pubsub_running.apply_async")
     @patch("apps.trading.tasks.service.run_trading_task")
-    def test_start_trading_task(self, mock_celery_task, mock_uuid, mock_app):
+    def test_start_trading_task(self, mock_celery_task, mock_supervisor, mock_uuid, mock_app):
         from apps.trading.tasks.service import TaskService
 
         task = MagicMock(spec=TradingTask)
@@ -85,6 +86,7 @@ class TestStartTask:
 
         assert result is task
         assert task.status == TaskStatus.STARTING
+        mock_supervisor.assert_called_once_with(countdown=0, queue="system")
 
     def test_rejects_non_created_status(self):
         from apps.trading.tasks.service import TaskService
