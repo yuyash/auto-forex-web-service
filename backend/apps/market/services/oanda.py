@@ -1079,25 +1079,27 @@ class OandaService:
             oanda_trades = response.body.get("trades", [])
 
             for trade in oanda_trades:
-                trade_instrument = trade.get("instrument", "")
+                trade_instrument = self._object_field(trade, "instrument") or ""
 
                 if instrument and trade_instrument != instrument:
                     continue
 
-                units = Decimal(str(trade.get("currentUnits", "0")))
+                units = Decimal(str(self._object_field(trade, "currentUnits") or "0"))
 
                 direction = OrderDirection.LONG if units > 0 else OrderDirection.SHORT
 
                 trades.append(
                     OpenTrade(
-                        trade_id=str(trade.get("id", "")),
+                        trade_id=str(self._object_field(trade, "id") or ""),
                         instrument=str(trade_instrument),
                         direction=direction,
                         units=abs(units),
-                        entry_price=Decimal(str(trade.get("price", "0"))),
-                        unrealized_pnl=Decimal(str(trade.get("unrealizedPL", "0"))),
-                        open_time=self._parse_iso_datetime(trade.get("openTime")),
-                        state=str(trade.get("state", "")),
+                        entry_price=Decimal(str(self._object_field(trade, "price") or "0")),
+                        unrealized_pnl=Decimal(
+                            str(self._object_field(trade, "unrealizedPL") or "0")
+                        ),
+                        open_time=self._parse_iso_datetime(self._object_field(trade, "openTime")),
+                        state=str(self._object_field(trade, "state") or ""),
                         account_id=str(self.account.account_id),
                     )
                 )

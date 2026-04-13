@@ -645,6 +645,34 @@ class TestGetOpenTrades:
         assert trades[0].trade_id == "T1"
         assert trades[0].direction == OrderDirection.LONG
 
+    @patch("apps.market.services.oanda.v20.Context")
+    @patch("apps.market.services.oanda.ComplianceService")
+    @patch("apps.market.services.oanda.MarketEventService")
+    def test_returns_attribute_based_trades(self, mock_event_svc, mock_compliance, mock_v20_ctx):
+        account = _make_mock_account()
+        svc = OandaService(account=account)
+
+        trade = MagicMock()
+        trade.id = "T2"
+        trade.instrument = "USD_JPY"
+        trade.currentUnits = "-1000"
+        trade.price = "159.552"
+        trade.unrealizedPL = "150.0"
+        trade.openTime = "2026-04-13T16:41:41.313075382Z"
+        trade.state = "OPEN"
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.body = {"trades": [trade]}
+        svc.api.trade.list_open.return_value = mock_response
+
+        trades = svc.get_open_trades()
+        assert len(trades) == 1
+        assert trades[0].trade_id == "T2"
+        assert trades[0].instrument == "USD_JPY"
+        assert trades[0].direction == OrderDirection.SHORT
+        assert trades[0].units == Decimal("1000")
+
 
 # ---------------------------------------------------------------------------
 # get_pending_orders
