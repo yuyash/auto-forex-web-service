@@ -9,6 +9,7 @@ import type { Strategy } from '../../../services/api/strategies';
 import { TaskType, type TaskStatus } from '../../../types/common';
 import type { BacktestTask } from '../../../types';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
+import { formatDateTimeInTimezone } from '../../../utils/timezone';
 
 interface BacktestOverviewTabProps {
   taskId: string;
@@ -18,6 +19,8 @@ interface BacktestOverviewTabProps {
   strategies: Strategy[];
   pnlCurrency: string;
   latestMetrics?: MetricPoint | null;
+  timezone: string;
+  language?: string;
   onOpenConfiguration: () => void;
 }
 
@@ -29,9 +32,19 @@ export function BacktestOverviewTab({
   strategies,
   pnlCurrency,
   latestMetrics,
+  timezone,
+  language,
   onOpenConfiguration,
 }: BacktestOverviewTabProps) {
   const { t } = useTranslation(['backtest', 'common']);
+  const latestMarginRatioRaw = latestMetrics?.metrics.margin_ratio;
+  const latestMarginRatio =
+    latestMarginRatioRaw != null && latestMarginRatioRaw !== ''
+      ? Number(latestMarginRatioRaw)
+      : null;
+  const displayedMarginRatio = Number.isFinite(latestMarginRatio)
+    ? latestMarginRatio
+    : summary.execution.marginRatio;
 
   const tracemallocEnabled = Boolean(task.debug_options?.tracemalloc);
 
@@ -218,7 +231,7 @@ export function BacktestOverviewTab({
                 {t('backtest:detail.startTime')}
               </Typography>
               <Typography variant="body1">
-                {new Date(task.start_time).toLocaleString()}
+                {formatDateTimeInTimezone(task.start_time, timezone, language)}
               </Typography>
             </Box>
             <Box>
@@ -226,7 +239,7 @@ export function BacktestOverviewTab({
                 {t('backtest:detail.endTime')}
               </Typography>
               <Typography variant="body1">
-                {new Date(task.end_time).toLocaleString()}
+                {formatDateTimeInTimezone(task.end_time, timezone, language)}
               </Typography>
             </Box>
           </Box>
@@ -348,13 +361,13 @@ export function BacktestOverviewTab({
                 </Typography>
               </Box>
             )}
-            {summary.execution.marginRatio != null && (
+            {displayedMarginRatio != null && (
               <Box>
                 <Typography variant="caption" color="text.secondary">
                   {t('common:labels.marginRatio')}
                 </Typography>
                 <Typography variant="body1">
-                  {(summary.execution.marginRatio * 100).toFixed(1)}%
+                  {(displayedMarginRatio * 100).toFixed(1)}%
                 </Typography>
               </Box>
             )}

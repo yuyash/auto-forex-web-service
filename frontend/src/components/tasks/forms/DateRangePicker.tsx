@@ -3,6 +3,10 @@ import { Box, FormHelperText } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import {
+  fromTimezonePickerDate,
+  toTimezonePickerDate,
+} from '../../../utils/timezone';
 
 interface DateRangePickerProps {
   startDate: Date | string | null;
@@ -17,6 +21,7 @@ interface DateRangePickerProps {
   helperText?: string;
   minDate?: Date;
   maxDate?: Date;
+  timezone?: string;
 }
 
 export const DateRangePicker: React.FC<DateRangePickerProps> = ({
@@ -32,27 +37,26 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   helperText,
   minDate,
   maxDate,
+  timezone = 'UTC',
 }) => {
-  // Convert string to Date if needed (may return Invalid Date for bad input)
-  const toDate = (value: Date | string | null): Date | null => {
-    if (!value) return null;
-    if (value instanceof Date) return value;
-    const d = new Date(value);
-    return isNaN(d.getTime()) ? null : d;
-  };
-
-  const startDateValue = toDate(startDate);
-  const endDateValue = toDate(endDate);
+  const startDateValue = toTimezonePickerDate(startDate, timezone);
+  const endDateValue = toTimezonePickerDate(endDate, timezone);
+  const minDateValue = toTimezonePickerDate(minDate ?? null, timezone);
+  const maxDateValue = toTimezonePickerDate(maxDate ?? null, timezone);
 
   const isValidDate = (d: Date | null): d is Date =>
     d instanceof Date && !isNaN(d.getTime());
 
   const handleStartChange = (date: Date | null) => {
-    onStartDateChange(date && isValidDate(date) ? date.toISOString() : null);
+    onStartDateChange(
+      date && isValidDate(date) ? fromTimezonePickerDate(date, timezone) : null
+    );
   };
 
   const handleEndChange = (date: Date | null) => {
-    onEndDateChange(date && isValidDate(date) ? date.toISOString() : null);
+    onEndDateChange(
+      date && isValidDate(date) ? fromTimezonePickerDate(date, timezone) : null
+    );
   };
   // Validation
   const startError = React.useMemo(() => {
@@ -73,14 +77,14 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     }
     if (
       startDateValue &&
-      maxDate &&
+      maxDateValue &&
       isValidDate(startDateValue) &&
-      startDateValue > maxDate
+      startDateValue > maxDateValue
     ) {
-      return `Start date must be before ${maxDate.toLocaleDateString()}`;
+      return `Start date must be before ${maxDateValue.toLocaleDateString()}`;
     }
     return null;
-  }, [startDateValue, endDateValue, required, maxDate]);
+  }, [endDateValue, maxDateValue, required, startDateValue]);
 
   const endError = React.useMemo(() => {
     if (!endDateValue && required) {
@@ -100,14 +104,14 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     }
     if (
       endDateValue &&
-      minDate &&
+      minDateValue &&
       isValidDate(endDateValue) &&
-      endDateValue < minDate
+      endDateValue < minDateValue
     ) {
-      return `End date must be after ${minDate.toLocaleDateString()}`;
+      return `End date must be after ${minDateValue.toLocaleDateString()}`;
     }
     return null;
-  }, [startDateValue, endDateValue, required, minDate]);
+  }, [endDateValue, minDateValue, required, startDateValue]);
 
   const hasError = !!error || !!startError || !!endError;
   const displayError = error || startError || endError;
@@ -122,8 +126,8 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
               value={startDateValue}
               onChange={handleStartChange}
               disabled={disabled}
-              minDate={minDate}
-              maxDate={endDateValue || maxDate}
+              minDate={minDateValue ?? undefined}
+              maxDate={endDateValue || maxDateValue || undefined}
               slotProps={{
                 textField: {
                   required,
@@ -139,8 +143,8 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
               value={endDateValue}
               onChange={handleEndChange}
               disabled={disabled}
-              minDate={startDateValue || minDate}
-              maxDate={maxDate}
+              minDate={startDateValue || minDateValue || undefined}
+              maxDate={maxDateValue ?? undefined}
               slotProps={{
                 textField: {
                   required,

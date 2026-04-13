@@ -133,6 +133,21 @@
     "confirmDelete": "このアイテムを削除してもよろしいですか？",
     "unsavedChanges": "保存されていない変更があります。本当に離れますか？"
   },
+  "cards": {
+    "livePnl": "Live P&L",
+    "totalTrades": "総取引数"
+  },
+  "deleteTask": {
+    "title": "タスクを削除",
+    "blockedRunning": "実行中のタスクは削除できません。先に停止してください。",
+    "confirmation": "「{{taskName}}」を削除してもよろしいですか？",
+    "warningTitle": "警告: この操作は元に戻せません",
+    "acknowledge": "この操作が永続的で元に戻せないことを理解しています",
+    "warnings": {
+      "executionHistory": "すべての実行履歴が完全に削除されます",
+      "sharedConfiguration": "このタスクは他のタスクでも使われている共有設定を使用しています"
+    }
+  },
   "taskActionDialog": {
     "start": {
       "title": "タスクを開始",
@@ -239,7 +254,7 @@
       "opens": "{{count}} オープン",
       "closes": "{{count}} クローズ",
       "opensAndCloses": "{{opens}} オープン、{{closes}} クローズ",
-      "openUnitsTotal": "オープンサイズ {{units}} 数量",
+      "openUnitsTotal": "オープンサイズ {{units}} ユニット",
       "trades": "トレード",
       "back": "戻る",
       "resetZoom": "ズームリセット",
@@ -418,6 +433,10 @@
       "units": "数量",
       "layer": "段階",
       "retracement": "増し玉",
+      "entryTime": "エントリー日時",
+      "exitTime": "決済日時",
+      "entryPrice": "エントリー価格",
+      "exitPrice": "決済価格",
       "openPrice": "注文価格",
       "closePrice": "決済価格",
       "pips": "Pips",
@@ -491,6 +510,16 @@
           "rebuiltTo": "再建先",
           "closeReason": "決済理由",
           "plannedExitFormula": "決済価格計算式"
+        },
+        "closeReasons": {
+          "normal": "通常決済",
+          "stopLossProtection": "プロテクション決済（ロスカット）",
+          "shrinkProtection": "プロテクション決済（縮退）",
+          "volatilityLockProtection": "プロテクション決済（ボラティリティロック）",
+          "marginProtection": "プロテクション決済（証拠金保護）",
+          "counterTp": "通常決済（逆行利確）",
+          "layerInitialTp": "通常決済（初期レイヤー利確）",
+          "lockHedgeNeutralize": "通常決済（ロックヘッジ中和）"
         },
         "details": {
           "exitFormula": "決済価格計算式",

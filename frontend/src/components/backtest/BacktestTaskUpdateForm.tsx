@@ -31,6 +31,7 @@ import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
+import { useAuth } from '../../contexts/AuthContext';
 import { logger } from '../../utils/logger';
 
 // Update schema - only editable fields
@@ -100,7 +101,9 @@ export default function BacktestTaskUpdateForm({
   debugOptions,
 }: BacktestTaskUpdateFormProps) {
   const { t } = useTranslation(['backtest', 'common']);
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const timezone = user?.timezone || 'UTC';
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [tracemalloc, setTracemalloc] = useState(
     Boolean(debugOptions?.tracemalloc)
@@ -309,6 +312,7 @@ export default function BacktestTaskUpdateForm({
                       maxDate={new Date()}
                       required
                       helperText={t('backtest:form.dateRangeHelperText')}
+                      timezone={timezone}
                     />
                   )}
                 />

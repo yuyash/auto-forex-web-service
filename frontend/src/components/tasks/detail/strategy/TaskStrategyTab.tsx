@@ -35,6 +35,7 @@ import type {
 import { StrategyGroupChart } from './StrategyGroupChart';
 import { StrategyGridIndicator } from './StrategyGridIndicator';
 import { PositionLifecycleDialog } from '../PositionLifecycleDialog';
+import { formatDateTimeInTimezone } from '../../../../utils/timezone';
 
 export interface TaskStrategyTabProps {
   taskId: string | number;
@@ -42,11 +43,12 @@ export interface TaskStrategyTabProps {
   instrument?: string;
   executionRunId?: string;
   enableRealTimeUpdates?: boolean;
+  timezone?: string;
 }
 
-function formatDateTime(value?: string | null): string {
+function formatDateTime(value?: string | null, timezone = 'UTC'): string {
   if (!value) return '-';
-  return new Date(value).toLocaleString();
+  return formatDateTimeInTimezone(value, timezone);
 }
 
 function getPnlCurrencyCode(instrument?: string): string | null {
@@ -146,6 +148,7 @@ export function TaskStrategyTab({
   taskType,
   instrument,
   executionRunId,
+  timezone = 'UTC',
 }: TaskStrategyTabProps) {
   const { t } = useTranslation(['common']);
   const theme = useTheme();
@@ -647,7 +650,7 @@ export function TaskStrategyTab({
                     ) : null}
                   </Stack>
                   <Typography variant="body2" color="text.secondary">
-                    {formatDateTime(cycle.started_at)}
+                    {formatDateTime(cycle.started_at, timezone)}
                     <Typography
                       component="span"
                       variant="body2"
@@ -798,9 +801,10 @@ export function TaskStrategyTab({
                 )}
               </Stack>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                {formatDateTime(selectedCycle.started_at)} →{' '}
+                {formatDateTime(selectedCycle.started_at, timezone)} →{' '}
                 {formatDateTime(
-                  selectedCycle.ended_at ?? detailData?.last_tick_timestamp
+                  selectedCycle.ended_at ?? detailData?.last_tick_timestamp,
+                  timezone
                 )}
               </Typography>
               <Typography
@@ -835,7 +839,6 @@ export function TaskStrategyTab({
                 <Box sx={{ mb: 2 }}>
                   <StrategyGridIndicator
                     gridState={selectedCycle.grid_state}
-                    title={t('common:strategyVisualization.grid.title')}
                     showSlotBuildCounts={true}
                     slotBuildCounts={selectedCycleSlotBuildCounts}
                   />
@@ -946,6 +949,7 @@ export function TaskStrategyTab({
                       isSelected={isSelected}
                       displayLayer={displayLayer}
                       displayRet={displayRet}
+                      timezone={timezone}
                       onToggleSelection={handleToggleTradeSelection}
                       onOpenLifecycle={handleOpenLifecycle}
                     />
@@ -984,6 +988,7 @@ export function TaskStrategyTab({
         taskType={taskType}
         executionRunId={executionRunId}
         initialPositionId={lifecyclePositionId}
+        timezone={timezone}
       />
     </Box>
   );
@@ -996,6 +1001,7 @@ function TradeRow({
   isSelected,
   displayLayer,
   displayRet,
+  timezone,
   onToggleSelection,
   onOpenLifecycle,
 }: {
@@ -1004,6 +1010,7 @@ function TradeRow({
   isSelected: boolean;
   displayLayer: number | null | undefined;
   displayRet: number | null | undefined;
+  timezone: string;
   onToggleSelection: (id: string) => void;
   onOpenLifecycle: (positionId: string) => void;
 }) {
@@ -1141,7 +1148,7 @@ function TradeRow({
         color="text.secondary"
         sx={{ display: 'block' }}
       >
-        {formatDateTime(trade.timestamp)}
+        {formatDateTime(trade.timestamp, timezone)}
       </Typography>
     </Box>
   );

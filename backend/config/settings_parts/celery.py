@@ -39,6 +39,11 @@ def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
             "trading.tasks.stop_trading_task": {"queue": "trading"},
         },
         "CELERY_BEAT_SCHEDULE": {
+            "ensure-tick-pubsub-running": {
+                "task": "market.tasks.ensure_tick_pubsub_running",
+                "schedule": 30,
+                "options": {"queue": "system"},
+            },
             "recover-orphaned-tasks": {
                 "task": "trading.tasks.recover_orphaned_tasks",
                 "schedule": 300,

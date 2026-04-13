@@ -332,11 +332,20 @@ class LiveTickDataSource(TickDataSource):
         self.client = redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
         self.pubsub = self.client.pubsub(ignore_subscribe_messages=True)
         self.pubsub.subscribe(self.channel)
+        logger.info("LiveTickDataSource subscribed to channel: %s", self.channel)
+
+        # Give Redis a brief moment to establish the subscription before we
+        # start relying on the stream. This mirrors the backtest source and
+        # avoids missing the first tick when the publisher resumes immediately.
+        import time
+
+        time.sleep(0.1)
 
         try:
             idle_seconds = 0
             reconnect_attempts = 0
             max_reconnect_attempts = 5
+            ticks_received = 0
             while True:
                 try:
                     message = self.pubsub.get_message(timeout=1.0)
@@ -381,6 +390,12 @@ class LiveTickDataSource(TickDataSource):
                     continue
 
                 idle_seconds = 0
+                ticks_received += 1
+                if ticks_received == 1:
+                    logger.info(
+                        "LiveTickDataSource first tick received on channel %s",
+                        self.channel,
+                    )
 
                 if message.get("type") != "message":
                     continue

@@ -78,6 +78,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       # Secrets only - all other config comes from environment variables
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
+      DB_APPLICATION_NAME: auto-forex-backend
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
       OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:-}
     volumes:
@@ -115,6 +116,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       # Secrets only - all other config comes from environment variables
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
+      DB_APPLICATION_NAME: auto-forex-celery
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
       OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:-}
       # Daily tick data loading (optional — task skips if DATABASE/TABLE are empty)
@@ -152,6 +154,7 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       # Secrets only - all other config comes from environment variables
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
+      DB_APPLICATION_NAME: auto-forex-celery-beat
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
       OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:-}
     volumes:

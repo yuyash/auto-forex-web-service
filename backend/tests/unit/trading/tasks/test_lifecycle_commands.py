@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
+
+import pytest
 
 from apps.trading.enums import StopMode, TaskStatus
 from apps.trading.tasks.lifecycle_commands import (
@@ -89,3 +91,47 @@ def test_stop_continues_when_signal_adapter_fails() -> None:
 
     assert result is True
     adapters.dispatch_stop.assert_called_once()
+
+
+@patch("apps.market.tasks.ensure_tick_pubsub_running.apply_async")
+@pytest.mark.django_db
+def test_start_trading_task_kicks_market_supervisor(mock_apply_async, settings) -> None:
+    settings.CELERY_TASK_ALWAYS_EAGER = False
+    task = type("TradingTaskStub", (), {})()
+    task.pk = uuid4()
+    task.status = TaskStatus.CREATED
+    task.execution_id = uuid4()
+    task.instrument = "USD_JPY"
+    service = MagicMock()
+    service._dispatch_task = MagicMock()
+    commands, _ = _make_commands(service)
+    commands._prepare_start = MagicMock(return_value=task)
+    commands._log_worker_state = MagicMock()
+
+    result = commands.start(task)
+
+    assert result is task
+    mock_apply_async.assert_called_once_with(countdown=0, queue="system")
+
+
+@patch("apps.market.tasks.ensure_tick_pubsub_running.apply_async")
+@pytest.mark.django_db
+def test_start_trading_task_skips_market_supervisor_in_eager_mode(
+    mock_apply_async, settings
+) -> None:
+    settings.CELERY_TASK_ALWAYS_EAGER = True
+    task = type("TradingTaskStub", (), {})()
+    task.pk = uuid4()
+    task.status = TaskStatus.CREATED
+    task.execution_id = uuid4()
+    task.instrument = "USD_JPY"
+    service = MagicMock()
+    service._dispatch_task = MagicMock()
+    commands, _ = _make_commands(service)
+    commands._prepare_start = MagicMock(return_value=task)
+    commands._log_worker_state = MagicMock()
+
+    result = commands.start(task)
+
+    assert result is task
+    mock_apply_async.assert_not_called()

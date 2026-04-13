@@ -25,8 +25,10 @@ import {
   TrendingDown as ShortIcon,
   TrendingUp as LongIcon,
 } from '@mui/icons-material';
+import { useAuth } from '../../../contexts/AuthContext';
 import { fetchTaskResourceObject } from '../../../services/api/taskResources';
 import { TaskType } from '../../../types/common';
+import { formatDateTimeInTimezone } from '../../../utils/timezone';
 
 interface PositionLifecycleDialogProps {
   open: boolean;
@@ -36,6 +38,7 @@ interface PositionLifecycleDialogProps {
   executionRunId?: string;
   initialPositionId?: string;
   positionData?: unknown | null;
+  timezone?: string;
 }
 
 type LifecycleEventKind =
@@ -98,36 +101,41 @@ interface PositionLifecycleResponse {
   positions: PositionLifecycleItem[];
 }
 
-const formatTimestamp = (value?: string | null): string =>
-  value
-    ? new Date(value).toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        timeZoneName: 'short',
-      })
-    : '-';
+const formatTimestamp = (
+  value?: string | null,
+  language?: string,
+  timezone = 'UTC'
+): string =>
+  formatDateTimeInTimezone(value, timezone, language, {
+    includeSeconds: true,
+    includeTimezone: true,
+  });
 
 const shortId = (value?: string | null): string =>
   value ? value.slice(0, 8) : '-';
 
-const formatDecimal = (value?: string | null): string => {
+const formatPrice = (value?: string | null): string => {
   if (!value) return '-';
   const parsed = Number(value);
   return Number.isFinite(parsed)
-    ? parsed.toLocaleString('en-US', { maximumFractionDigits: 6 })
+    ? `¥${parsed.toLocaleString('en-US', {
+        minimumFractionDigits: 3,
+        maximumFractionDigits: 3,
+      })}`
     : value;
 };
 
-const formatSignedDecimal = (value?: string | null): string => {
+const formatSignedPnl = (value?: string | null): string => {
   if (!value) return '-';
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return value;
-  const text = parsed.toLocaleString('en-US', { maximumFractionDigits: 6 });
-  return parsed > 0 ? `+${text}` : text;
+  const text = `¥${Math.abs(parsed).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+  if (parsed > 0) return `+${text}`;
+  if (parsed < 0) return `-${text}`;
+  return text;
 };
 
 function eventColor(
@@ -171,25 +179,33 @@ function closeReasonLabel(
 ): string {
   if (!reason) return '-';
   const mapping: Record<string, string> = {
-    normal: 'tables.positions.closeReasonTp',
-    stop_loss: 'tables.positions.closeReasonStopLoss',
-    shrink: 'tables.positions.closeReasonShrink',
-    volatility_lock: 'tables.positions.closeReasonVolatilityLock',
-    margin_protection: 'tables.positions.closeReasonMarginProtection',
-    counter_tp: 'tables.positions.closeReasonCounterTp',
-    layer_initial_tp: 'tables.positions.closeReasonLayerInitialTp',
-    lock_hedge_neutralize: 'tables.positions.closeReasonLockHedgeNeutralize',
+    normal: 'tables.positions.lifecycle.closeReasons.normal',
+    tp: 'tables.positions.lifecycle.closeReasons.normal',
+    close_position: 'tables.positions.lifecycle.closeReasons.normal',
+    stop_loss: 'tables.positions.lifecycle.closeReasons.stopLossProtection',
+    shrink: 'tables.positions.lifecycle.closeReasons.shrinkProtection',
+    volatility_lock:
+      'tables.positions.lifecycle.closeReasons.volatilityLockProtection',
+    margin_protection:
+      'tables.positions.lifecycle.closeReasons.marginProtection',
+    counter_tp: 'tables.positions.lifecycle.closeReasons.counterTp',
+    layer_initial_tp: 'tables.positions.lifecycle.closeReasons.layerInitialTp',
+    lock_hedge_neutralize:
+      'tables.positions.lifecycle.closeReasons.lockHedgeNeutralize',
   };
   const key = mapping[reason];
-  return key && t ? t(key) : reason;
+  if (key && t) return t(key);
+  return reason.replace(/_/g, ' ');
 }
 
 const LifecycleField: React.FC<{
   label: string;
   value: React.ReactNode;
   mono?: boolean;
-}> = ({ label, value, mono = false }) => (
-  <Box sx={{ minWidth: 180, flex: '1 1 180px' }}>
+  noWrap?: boolean;
+  minWidth?: number;
+}> = ({ label, value, mono = false, noWrap = false, minWidth = 180 }) => (
+  <Box sx={{ minWidth, flex: `1 1 ${minWidth}px` }}>
     <Typography variant="caption" color="text.secondary">
       {label}
     </Typography>
@@ -197,7 +213,8 @@ const LifecycleField: React.FC<{
       variant="body2"
       sx={{
         fontFamily: mono ? 'monospace' : 'inherit',
-        wordBreak: 'break-all',
+        wordBreak: noWrap ? 'normal' : mono ? 'break-all' : 'break-word',
+        whiteSpace: noWrap ? 'nowrap' : 'normal',
       }}
     >
       {value}
@@ -207,8 +224,9 @@ const LifecycleField: React.FC<{
 
 const LifecycleEventRow: React.FC<{
   event: PositionLifecycleEvent;
-}> = ({ event }) => {
-  const { t } = useTranslation('common');
+  timezone?: string;
+}> = ({ event, timezone = 'UTC' }) => {
+  const { t, i18n } = useTranslation('common');
   const relatedLabel =
     event.kind === 'rebuilt'
       ? t('tables.positions.lifecycle.fields.rebuiltFrom')
@@ -256,16 +274,9 @@ const LifecycleEventRow: React.FC<{
               label={`${relatedLabel}: ${shortId(event.related_position_id)}`}
             />
           ) : null}
-          {event.close_reason ? (
-            <Chip
-              size="small"
-              variant="outlined"
-              label={closeReasonLabel(event.close_reason, t)}
-            />
-          ) : null}
         </Stack>
         <Typography variant="caption" color="text.secondary">
-          {formatTimestamp(event.timestamp)}
+          {formatTimestamp(event.timestamp, i18n.language, timezone)}
         </Typography>
       </Stack>
       <Stack
@@ -278,19 +289,19 @@ const LifecycleEventRow: React.FC<{
         {event.entry_price ? (
           <LifecycleField
             label={t('tables.positions.entryPrice')}
-            value={formatDecimal(event.entry_price)}
+            value={formatPrice(event.entry_price)}
           />
         ) : null}
         {event.exit_price ? (
           <LifecycleField
             label={t('tables.positions.exitPrice')}
-            value={formatDecimal(event.exit_price)}
+            value={formatPrice(event.exit_price)}
           />
         ) : null}
         {event.planned_exit_price ? (
           <LifecycleField
             label={t('tables.positions.plannedExitPrice')}
-            value={formatDecimal(event.planned_exit_price)}
+            value={formatPrice(event.planned_exit_price)}
           />
         ) : null}
         {event.realized_pnl ? (
@@ -306,12 +317,22 @@ const LifecycleEventRow: React.FC<{
                 }
                 fontWeight={700}
               >
-                {formatSignedDecimal(event.realized_pnl)}
+                {formatSignedPnl(event.realized_pnl)}
               </Typography>
             }
           />
         ) : null}
       </Stack>
+      {event.close_reason ? (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ mt: 1, display: 'block' }}
+        >
+          {t('tables.positions.lifecycle.fields.closeReason')}:{' '}
+          {closeReasonLabel(event.close_reason, t)}
+        </Typography>
+      ) : null}
       {event.related_position_id ? (
         <Typography
           variant="caption"
@@ -344,8 +365,11 @@ const LifecycleEventRow: React.FC<{
   );
 };
 
-const PositionCard: React.FC<{ item: PositionLifecycleItem }> = ({ item }) => {
-  const { t } = useTranslation('common');
+const PositionCard: React.FC<{
+  item: PositionLifecycleItem;
+  timezone?: string;
+}> = ({ item, timezone = 'UTC' }) => {
+  const { t, i18n } = useTranslation('common');
   const summary = item.summary;
   const pnlValue = summary.realized_pnl ? Number(summary.realized_pnl) : null;
 
@@ -417,7 +441,7 @@ const PositionCard: React.FC<{ item: PositionLifecycleItem }> = ({ item }) => {
                 variant="h6"
                 color={pnlValue >= 0 ? 'success.main' : 'error.main'}
               >
-                {formatSignedDecimal(summary.realized_pnl)}
+                {formatSignedPnl(summary.realized_pnl)}
               </Typography>
             ) : null}
           </Stack>
@@ -447,27 +471,39 @@ const PositionCard: React.FC<{ item: PositionLifecycleItem }> = ({ item }) => {
             />
             <LifecycleField
               label={t('tables.positions.entryTime')}
-              value={formatTimestamp(summary.entry_time)}
+              value={formatTimestamp(
+                summary.entry_time,
+                i18n.language,
+                timezone
+              )}
+              noWrap
+              minWidth={240}
             />
             <LifecycleField
               label={t('tables.positions.exitTime')}
-              value={formatTimestamp(summary.exit_time)}
+              value={formatTimestamp(
+                summary.exit_time,
+                i18n.language,
+                timezone
+              )}
+              noWrap
+              minWidth={240}
             />
             <LifecycleField
               label={t('tables.positions.entryPrice')}
-              value={formatDecimal(summary.entry_price)}
+              value={formatPrice(summary.entry_price)}
             />
             <LifecycleField
               label={t('tables.positions.exitPrice')}
-              value={formatDecimal(summary.exit_price)}
+              value={formatPrice(summary.exit_price)}
             />
             <LifecycleField
               label={t('tables.positions.plannedExitPrice')}
-              value={formatDecimal(summary.planned_exit_price)}
+              value={formatPrice(summary.planned_exit_price)}
             />
             <LifecycleField
               label={t('tables.positions.stopLossPrice')}
-              value={formatDecimal(summary.stop_loss_price)}
+              value={formatPrice(summary.stop_loss_price)}
             />
             <LifecycleField
               label={t('tables.positions.lifecycle.fields.closeReason')}
@@ -519,7 +555,11 @@ const PositionCard: React.FC<{ item: PositionLifecycleItem }> = ({ item }) => {
 
           <Stack spacing={1}>
             {item.events.map((event) => (
-              <LifecycleEventRow key={event.id} event={event} />
+              <LifecycleEventRow
+                key={event.id}
+                event={event}
+                timezone={timezone}
+              />
             ))}
           </Stack>
         </Stack>
@@ -537,8 +577,11 @@ export const PositionLifecycleDialog: React.FC<
   taskType,
   executionRunId,
   initialPositionId,
+  timezone,
 }) => {
   const { t } = useTranslation('common');
+  const { user } = useAuth();
+  const resolvedTimezone = timezone || user?.timezone || 'UTC';
   const [searchValue, setSearchValue] = useState(initialPositionId ?? '');
   const [activePositionId, setActivePositionId] = useState(
     initialPositionId ?? ''
@@ -732,7 +775,11 @@ export const PositionLifecycleDialog: React.FC<
               </Card>
 
               {positions.map((item) => (
-                <PositionCard key={item.position_id} item={item} />
+                <PositionCard
+                  key={item.position_id}
+                  item={item}
+                  timezone={resolvedTimezone}
+                />
               ))}
             </Stack>
           ) : null}

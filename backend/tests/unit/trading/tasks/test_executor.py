@@ -731,3 +731,66 @@ class TestCommonRuntimeMetrics:
         metrics = state.strategy_state["metrics"]
         assert metrics["margin_ratio"] == "0"
         assert "current_atr" in metrics
+
+
+class TestHandleEmptyBatch:
+    """Tests for empty-batch handling in the executor loop."""
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_live_trading_keeps_waiting_after_empty_batch_threshold(self, mock_handler):
+        from apps.trading.models import TradingTask
+        from apps.trading.tasks.executor import ExecutionLoopState, TaskExecutor
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.instrument = "USD_JPY"
+        task.pip_size = Decimal("0.01")
+        task.execution_id = uuid4()
+
+        executor = TaskExecutor(
+            task=task,
+            engine=MagicMock(),
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=MagicMock(),
+            state_manager=MagicMock(),
+        )
+
+        loop = ExecutionLoopState(state=MagicMock())
+        loop.no_tick_batches = loop.max_no_tick_batches - 1
+
+        with patch("apps.trading.tasks.executor.is_forex_market_closed", return_value=False):
+            should_stop = executor._handle_empty_batch(loop)
+
+        assert should_stop is False
+        assert loop.no_tick_batches == loop.max_no_tick_batches
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_backtest_stops_after_empty_batch_threshold(self, mock_handler):
+        from apps.trading.models import BacktestTask
+        from apps.trading.tasks.executor import ExecutionLoopState, TaskExecutor
+
+        task = MagicMock(spec=BacktestTask)
+        task.pk = uuid4()
+        task.instrument = "USD_JPY"
+        task.pip_size = Decimal("0.01")
+        task.initial_balance = Decimal("10000")
+        task.account_currency = "JPY"
+        task.config.config_dict = {}
+        task.execution_id = uuid4()
+
+        executor = TaskExecutor(
+            task=task,
+            engine=MagicMock(),
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=MagicMock(),
+            state_manager=MagicMock(),
+        )
+
+        loop = ExecutionLoopState(state=MagicMock())
+        loop.no_tick_batches = loop.max_no_tick_batches - 1
+
+        should_stop = executor._handle_empty_batch(loop)
+
+        assert should_stop is True

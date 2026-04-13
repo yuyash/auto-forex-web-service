@@ -24,6 +24,12 @@ from apps.market.tasks.base import (
 logger: Logger = getLogger(name=__name__)
 
 
+def publisher_lock_key_for_account(account_id: int) -> str:
+    """Return the Redis lock key for a specific publisher account."""
+    base_key = getattr(settings, "MARKET_TICK_PUBLISHER_LOCK_KEY", "market:tick_publisher:lock")
+    return f"{base_key}:{account_id}"
+
+
 @shared_task(bind=True, name="market.tasks.publish_oanda_ticks")
 def publish_oanda_ticks(self: Any, account_id: int, instruments: list[str] | None = None) -> None:
     """Stream live pricing ticks from OANDA and publish to Redis pub/sub.
@@ -75,7 +81,7 @@ class TickPublisherRunner:
         )
 
         client = redis_client()
-        lock_key = getattr(settings, "MARKET_TICK_PUBLISHER_LOCK_KEY", "market:tick_publisher:lock")
+        lock_key = publisher_lock_key_for_account(account_id)
 
         if self.task_service.should_stop(force=True):
             logger.info("Publisher exiting: stop requested before streaming")
@@ -121,13 +127,15 @@ class TickPublisherRunner:
     ) -> None:
         """Stream ticks from OANDA to Redis.
 
-        Each tick is published to ``live:{oanda_account_id}:{instrument}``
-        so that :class:`LiveTickDataSource` instances can subscribe to the
-        exact channel for their trading task.
+        Each tick is published to both the shared market channel and the
+        account-specific ``live:{oanda_account_id}:{instrument}`` channel.
+        The shared channel feeds DB persistence while the account channel
+        serves trading tasks that must follow the exact OANDA account.
         """
         assert self.account is not None
         assert self.task_service is not None
         oanda_account_id = self.account.account_id
+        shared_channel = getattr(settings, "MARKET_TICK_CHANNEL", "market:ticks")
 
         ticks_published = 0
         try:
@@ -155,7 +163,6 @@ class TickPublisherRunner:
                             break
 
                         instrument = str(tick.instrument)
-                        channel = f"live:{oanda_account_id}:{instrument}"
                         payload = {
                             "instrument": instrument,
                             "timestamp": isoformat(tick.timestamp),
@@ -163,7 +170,9 @@ class TickPublisherRunner:
                             "ask": str(tick.ask),
                             "mid": str(tick.mid),
                         }
-                        client.publish(channel, json.dumps(payload))
+                        encoded_payload = json.dumps(payload)
+                        client.publish(shared_channel, encoded_payload)
+                        client.publish(f"live:{oanda_account_id}:{instrument}", encoded_payload)
                         ticks_published += 1
 
                         if ticks_published == 1:

@@ -536,6 +536,23 @@ class TaskExecutor:
             return False
 
         loop.no_tick_batches += 1
+        if self.task_type == TaskType.TRADING:
+            if loop.no_tick_batches == loop.max_no_tick_batches:
+                logger.warning(
+                    "No ticks received for %d consecutive batches on live trading task. "
+                    "Keeping task alive and waiting for the market data stream to resume.",
+                    loop.no_tick_batches,
+                )
+            elif (
+                loop.no_tick_batches > loop.max_no_tick_batches
+                and loop.no_tick_batches % loop.max_no_tick_batches == 0
+            ):
+                logger.warning(
+                    "Still waiting for live ticks after %d consecutive empty batches.",
+                    loop.no_tick_batches,
+                )
+            return False
+
         if loop.no_tick_batches < loop.max_no_tick_batches:
             return False
 

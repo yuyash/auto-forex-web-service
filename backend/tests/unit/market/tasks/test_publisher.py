@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from apps.market.tasks.publisher import TickPublisherRunner
+from apps.market.tasks.publisher import TickPublisherRunner, publisher_lock_key_for_account
 
 
 class TestTickPublisherRunnerInit:
@@ -15,6 +15,12 @@ class TestTickPublisherRunnerInit:
 
         assert runner.task_service is None
         assert runner.account is None
+
+
+def test_publisher_lock_key_for_account_appends_account_id(settings):
+    settings.MARKET_TICK_PUBLISHER_LOCK_KEY = "lock:pub"
+
+    assert publisher_lock_key_for_account(7) == "lock:pub:7"
 
 
 class TestTickPublisherRunnerRun:

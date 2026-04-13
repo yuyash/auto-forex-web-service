@@ -383,6 +383,7 @@ export const TradingTaskDetail: React.FC = () => {
               instrument={detailTask.instrument}
               executionRunId={activeExecutionId}
               enableRealTimeUpdates={enableRealtime}
+              timezone={timezone}
             />
           </LazyTabPanel>
         )}

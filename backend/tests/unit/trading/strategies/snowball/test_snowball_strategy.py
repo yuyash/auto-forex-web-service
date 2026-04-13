@@ -209,6 +209,16 @@ class TestCounterAdds:
         assert event.planned_exit_price_formula == "(157.194 * 2000 + 157.497 * 1000) / 3000"
         assert event.planned_exit_price == Decimal("157.295")
 
+    def test_initial_r0_stop_loss_matches_r1_interval_distance(self):
+        s = _strategy(m_pips="50", n_pips_head="30", stop_loss_enabled=True)
+        state = DummyState()
+
+        result = s.on_tick(tick=_tick(T0, "100.00", "100.00"), state=state)
+
+        initial_open = _open_events(result)[0]
+        assert initial_open.retracement_count == 0
+        assert initial_open.stop_loss_price == Decimal("99.70")
+
 
 # ==================================================================
 # 3. Counter TP closes

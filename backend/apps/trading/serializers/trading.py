@@ -20,7 +20,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     config_id = serializers.UUIDField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
-    instrument = serializers.SerializerMethodField()
+    instrument = serializers.CharField(read_only=True)
     account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
     account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
     account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
@@ -80,14 +80,6 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
-    def get_instrument(self, obj: TradingTask) -> str:
-        """Get instrument from configuration parameters."""
-        if obj.config and obj.config.parameters:
-            instrument = obj.config.parameters.get("instrument")
-            if instrument:
-                return str(instrument)
-        return "EUR_USD"
-
     def get_has_strategy_state(self, obj: TradingTask) -> bool:
         """Check if task has saved strategy state."""
         return obj.has_strategy_state()
@@ -106,7 +98,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     config_id = serializers.UUIDField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
-    instrument = serializers.SerializerMethodField()
+    instrument = serializers.CharField(read_only=True)
     account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
     account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
     account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
@@ -138,14 +130,6 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = fields
-
-    def get_instrument(self, obj: TradingTask) -> str:
-        """Get instrument from configuration parameters."""
-        if obj.config and obj.config.parameters:
-            instrument = obj.config.parameters.get("instrument")
-            if instrument:
-                return str(instrument)
-        return "EUR_USD"
 
 
 class TradingTaskCreateSerializer(serializers.ModelSerializer):

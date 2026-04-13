@@ -133,6 +133,21 @@
     "confirmDelete": "Are you sure you want to delete this item?",
     "unsavedChanges": "You have unsaved changes. Are you sure you want to leave?"
   },
+  "cards": {
+    "livePnl": "Live P&L",
+    "totalTrades": "Total Trades"
+  },
+  "deleteTask": {
+    "title": "Delete Task",
+    "blockedRunning": "Cannot delete a running task. Please stop the task first.",
+    "confirmation": "Are you sure you want to delete \"{{taskName}}\"?",
+    "warningTitle": "Warning: This action cannot be undone",
+    "acknowledge": "I understand that this action is permanent and cannot be undone",
+    "warnings": {
+      "executionHistory": "All execution history will be permanently deleted",
+      "sharedConfiguration": "This task uses a shared configuration that is also used by other tasks"
+    }
+  },
   "taskActionDialog": {
     "start": {
       "title": "Start Task",
@@ -418,6 +433,10 @@
       "units": "Units",
       "layer": "Layer",
       "retracement": "Retracement",
+      "entryTime": "Entry Time",
+      "exitTime": "Exit Time",
+      "entryPrice": "Entry Price",
+      "exitPrice": "Exit Price",
       "openPrice": "Open Price",
       "closePrice": "Close Price",
       "pips": "Pips",
@@ -491,6 +510,16 @@
           "rebuiltTo": "Rebuilt To",
           "closeReason": "Close Reason",
           "plannedExitFormula": "Exit Formula"
+        },
+        "closeReasons": {
+          "normal": "Normal Close",
+          "stopLossProtection": "Protection Close (Stop Loss)",
+          "shrinkProtection": "Protection Close (Shrink)",
+          "volatilityLockProtection": "Protection Close (Volatility Lock)",
+          "marginProtection": "Protection Close (Margin Protection)",
+          "counterTp": "Normal Close (Counter TP)",
+          "layerInitialTp": "Normal Close (Layer Initial TP)",
+          "lockHedgeNeutralize": "Normal Close (Lock Hedge Neutralize)"
         },
         "details": {
           "exitFormula": "Exit Formula",

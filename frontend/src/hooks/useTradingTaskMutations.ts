@@ -35,7 +35,10 @@ export function useCreateTradingTask(options?: {
         account_id: variables.account_id,
         name: variables.name,
         description: variables.description,
+        instrument: variables.instrument,
         sell_on_stop: variables.sell_on_stop,
+        dry_run: variables.dry_run,
+        hedging_enabled: variables.hedging_enabled,
       }),
     {
       onSuccess: async (data) => {
@@ -61,6 +64,9 @@ export function useUpdateTradingTask(options?: {
         name: variables.data.name,
         description: variables.data.description,
         sell_on_stop: variables.data.sell_on_stop,
+        dry_run: variables.data.dry_run,
+        hedging_enabled: variables.data.hedging_enabled,
+        debug_options: variables.data.debug_options,
       }),
     {
       onSuccess: async (data) => {

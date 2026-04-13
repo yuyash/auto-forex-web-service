@@ -220,7 +220,9 @@ class SnowballStrategy(Strategy):
         cycle = SnowballCycle(cycle_id=entry.entry_id, direction=direction)
         # L1 with R0 (initial) + R1…R(r_max) counter slots
         layer0 = Layer.create(1, cfg.r_max, cfg.base_units, cfg.refill_up_to)
-        layer0.slot_at(0).fill(entry)
+        slot0 = layer0.slot_at(0)
+        assert slot0 is not None  # noqa: S101
+        slot0.fill(entry)
         cycle.add_layer(layer0)
         ss.cycles.append(cycle)
         return [evt], cycle
@@ -972,7 +974,9 @@ class SnowballStrategy(Strategy):
             ),
         )
         # Place in R0 of the new layer
-        layer.slot_at(0).fill(layer_entry)
+        slot0 = layer.slot_at(0)
+        assert slot0 is not None  # noqa: S101
+        slot0.fill(layer_entry)
 
         return [evt]
 
@@ -1255,6 +1259,8 @@ class SnowballStrategy(Strategy):
         deterministic: ``entry_price ∓ next_interval_pips * pip_size``.
 
         Formula:
+        - R0 entries use a one-interval stop so the distance to SL matches the
+          distance from R0 to R1.
         - tp_pips = |close_price - entry_price| / pip_size
         - next_entry_price = entry_price - next_interval_pips * pip_size  (LONG)
                              entry_price + next_interval_pips * pip_size  (SHORT)
@@ -1265,10 +1271,13 @@ class SnowballStrategy(Strategy):
         tp_pips = abs(entry.close_price - entry.entry_price) / self.pip_size
         if entry.is_long:
             next_entry_price = entry.entry_price - next_interval_pips * self.pip_size
-            sl = stop_loss_price(tp_pips, next_entry_price, next_interval_pips, self.pip_size)
+            if entry.retracement_count == 0:
+                sl = next_entry_price
+            else:
+                sl = stop_loss_price(tp_pips, next_entry_price, next_interval_pips, self.pip_size)
         else:
             next_entry_price = entry.entry_price + next_interval_pips * self.pip_size
-            if tp_pips < next_interval_pips:
+            if entry.retracement_count == 0 or tp_pips < next_interval_pips:
                 sl = next_entry_price
             else:
                 sl = next_entry_price + next_interval_pips * self.pip_size
