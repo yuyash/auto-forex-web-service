@@ -131,9 +131,9 @@ services:
       CELERY_ENABLE_STARTUP_RECOVERY: "1"
       CELERY_DEFAULT_WORKER_CONCURRENCY: ${CELERY_DEFAULT_WORKER_CONCURRENCY:-2}
       CELERY_CONTROL_WORKER_CONCURRENCY: ${CELERY_CONTROL_WORKER_CONCURRENCY:-2}
-      CELERY_MARKET_WORKER_CONCURRENCY: ${CELERY_MARKET_WORKER_CONCURRENCY:-2}
-      CELERY_BACKTEST_WORKER_CONCURRENCY: ${CELERY_BACKTEST_WORKER_CONCURRENCY:-2}
-      CELERY_BACKTEST_PUBLISHER_CONCURRENCY: ${CELERY_BACKTEST_PUBLISHER_CONCURRENCY:-2}
+      CELERY_MARKET_WORKER_CONCURRENCY: ${CELERY_MARKET_WORKER_CONCURRENCY:-3}
+      CELERY_BACKTEST_WORKER_CONCURRENCY: ${CELERY_BACKTEST_WORKER_CONCURRENCY:-4}
+      CELERY_BACKTEST_PUBLISHER_CONCURRENCY: ${CELERY_BACKTEST_PUBLISHER_CONCURRENCY:-4}
       CELERY_TRADING_WORKER_CONCURRENCY: ${CELERY_TRADING_WORKER_CONCURRENCY:-2}
       CELERY_WORKER_PREFETCH_MULTIPLIER: ${CELERY_WORKER_PREFETCH_MULTIPLIER:-1}
       # Daily tick data loading (optional — task skips if DATABASE/TABLE are empty)
@@ -226,13 +226,13 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key required}
       OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:?OANDA token encryption key required}
       CELERY_START_MARKET_TICK_SUPERVISOR: "1"
-      CELERY_MARKET_WORKER_CONCURRENCY: ${CELERY_MARKET_WORKER_CONCURRENCY:-2}
+      CELERY_MARKET_WORKER_CONCURRENCY: ${CELERY_MARKET_WORKER_CONCURRENCY:-3}
       CELERY_WORKER_PREFETCH_MULTIPLIER: ${CELERY_WORKER_PREFETCH_MULTIPLIER:-1}
     volumes:
       - ./logs:/app/logs
       - ./backups:/app/backups
       - ${HOME}/.aws:/root/.aws:ro
-    command: celery -A config worker -l info --concurrency=${CELERY_MARKET_WORKER_CONCURRENCY:-2} -Q market
+    command: celery -A config worker -l info --concurrency=${CELERY_MARKET_WORKER_CONCURRENCY:-3} -Q market
     mem_limit: 4g
     memswap_limit: 4g
     restart: unless-stopped
@@ -259,13 +259,13 @@ services:
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key required}
       OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:?OANDA token encryption key required}
-      CELERY_BACKTEST_WORKER_CONCURRENCY: ${CELERY_BACKTEST_WORKER_CONCURRENCY:-2}
+      CELERY_BACKTEST_WORKER_CONCURRENCY: ${CELERY_BACKTEST_WORKER_CONCURRENCY:-4}
       CELERY_WORKER_PREFETCH_MULTIPLIER: ${CELERY_WORKER_PREFETCH_MULTIPLIER:-1}
     volumes:
       - ./logs:/app/logs
       - ./backups:/app/backups
       - ${HOME}/.aws:/root/.aws:ro
-    command: celery -A config worker -l info --concurrency=${CELERY_BACKTEST_WORKER_CONCURRENCY:-2} -Q backtest
+    command: celery -A config worker -l info --concurrency=${CELERY_BACKTEST_WORKER_CONCURRENCY:-4} -Q backtest
     mem_limit: 4g
     memswap_limit: 4g
     restart: unless-stopped
@@ -292,13 +292,13 @@ services:
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key required}
       OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:?OANDA token encryption key required}
-      CELERY_BACKTEST_PUBLISHER_CONCURRENCY: ${CELERY_BACKTEST_PUBLISHER_CONCURRENCY:-2}
+      CELERY_BACKTEST_PUBLISHER_CONCURRENCY: ${CELERY_BACKTEST_PUBLISHER_CONCURRENCY:-4}
       CELERY_WORKER_PREFETCH_MULTIPLIER: ${CELERY_WORKER_PREFETCH_MULTIPLIER:-1}
     volumes:
       - ./logs:/app/logs
       - ./backups:/app/backups
       - ${HOME}/.aws:/root/.aws:ro
-    command: celery -A config worker -l info --concurrency=${CELERY_BACKTEST_PUBLISHER_CONCURRENCY:-2} -Q backtest_publisher
+    command: celery -A config worker -l info --concurrency=${CELERY_BACKTEST_PUBLISHER_CONCURRENCY:-4} -Q backtest_publisher
     mem_limit: 4g
     memswap_limit: 4g
     restart: unless-stopped

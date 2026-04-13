@@ -10,9 +10,9 @@ def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
     broker_url = redis_url.replace(f"/{redis_db}", "/2")
     default_concurrency = int(os.getenv("CELERY_DEFAULT_WORKER_CONCURRENCY", "2"))
     control_concurrency = int(os.getenv("CELERY_CONTROL_WORKER_CONCURRENCY", "2"))
-    market_concurrency = int(os.getenv("CELERY_MARKET_WORKER_CONCURRENCY", "2"))
-    backtest_concurrency = int(os.getenv("CELERY_BACKTEST_WORKER_CONCURRENCY", "2"))
-    backtest_publisher_concurrency = int(os.getenv("CELERY_BACKTEST_PUBLISHER_CONCURRENCY", "2"))
+    market_concurrency = int(os.getenv("CELERY_MARKET_WORKER_CONCURRENCY", "3"))
+    backtest_concurrency = int(os.getenv("CELERY_BACKTEST_WORKER_CONCURRENCY", "4"))
+    backtest_publisher_concurrency = int(os.getenv("CELERY_BACKTEST_PUBLISHER_CONCURRENCY", "4"))
     trading_concurrency = int(os.getenv("CELERY_TRADING_WORKER_CONCURRENCY", "2"))
     return {
         "CELERY_BROKER_URL": broker_url,
