@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.47.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.47.3...frontend-v1.47.4) (2026-04-13)
+
+
+### Bug Fixes
+
+* lifecycle summary strategy guards ([#457](https://github.com/yuyash/auto-forex-web-service/issues/457)) ([69ae249](https://github.com/yuyash/auto-forex-web-service/commit/69ae2497a7f47565be156fcb3796db3a8bea8be5))
+
 ## [1.47.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.47.2...frontend-v1.47.3) (2026-04-12)
 
 
