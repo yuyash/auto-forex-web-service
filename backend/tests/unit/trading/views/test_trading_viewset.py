@@ -11,7 +11,7 @@ from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
 from apps.trading.enums import TaskStatus
-from apps.trading.tasks.service import TaskConflictError
+from apps.trading.tasks.service import TaskCapacityError, TaskConflictError
 from apps.trading.views.trading import TradingTaskViewSet
 
 factory = APIRequestFactory()
@@ -252,6 +252,20 @@ class TestStart:
 
         response = vs.start(request, pk=1)
         assert response.status_code == http_status.HTTP_409_CONFLICT
+
+    @patch("apps.trading.views.trading.TradingTask")
+    def test_start_capacity_error_returns_409(self, MockModel):
+        task = _make_task(task_status=TaskStatus.CREATED)
+        vs = _build_viewset(action="start")
+        vs.get_object = MagicMock(return_value=task)
+        vs.task_service.start_task.side_effect = TaskCapacityError("queue full")
+
+        request = _drf_post()
+        vs.request = request
+
+        response = vs.start(request, pk=1)
+        assert response.status_code == http_status.HTTP_409_CONFLICT
+        assert response.data["error"] == "Task capacity exhausted"
 
     @patch("apps.trading.views.trading.TradingTask")
     def test_start_exception_returns_500(self, MockModel):

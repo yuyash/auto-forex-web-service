@@ -9,6 +9,7 @@ import pytest
 
 from apps.trading.enums import TaskStatus
 from apps.trading.models import BacktestTask, TradingTask
+from apps.trading.services.task_capacity import TaskAdmissionDecision
 
 
 class _DoesNotExist(Exception):
@@ -54,6 +55,9 @@ class TestStartTask:
         mock_app.control.inspect.return_value.active.return_value = {"worker1": []}
 
         service = TaskService()
+        service.capacity.get_task_admission = MagicMock(
+            return_value=TaskAdmissionDecision(allowed=True)
+        )
         result = service.start_task(task)
 
         assert result is task
@@ -84,6 +88,9 @@ class TestStartTask:
         mock_app.control.inspect.return_value.active.return_value = {"worker1": []}
 
         service = TaskService()
+        service.capacity.get_task_admission = MagicMock(
+            return_value=TaskAdmissionDecision(allowed=True)
+        )
         with patch.object(TradingTask, "objects") as mock_objects:
             mock_objects.filter.return_value.exclude.return_value.first.return_value = None
             result = service.start_task(task)
@@ -112,8 +119,34 @@ class TestStartTask:
         task.instrument = "EUR_USD"
         task.validate_configuration.return_value = (False, "Missing strategy")
 
+        service = TaskService()
+        service.capacity.get_task_admission = MagicMock(
+            return_value=TaskAdmissionDecision(allowed=True)
+        )
+
         with pytest.raises(ValueError, match="Missing strategy"):
-            TaskService().start_task(task)
+            service.start_task(task)
+
+    def test_rejects_when_capacity_exhausted(self):
+        from apps.trading.services.task_capacity import TaskAdmissionDecision
+        from apps.trading.tasks.service import TaskCapacityError, TaskService
+
+        task = MagicMock(spec=BacktestTask)
+        task.pk = uuid4()
+        task.status = TaskStatus.CREATED
+        task.instrument = "EUR_USD"
+        task.validate_configuration.return_value = (True, None)
+
+        service = TaskService()
+        service.capacity.get_task_admission = MagicMock(
+            return_value=TaskAdmissionDecision(
+                allowed=False,
+                reason="Backtest capacity exhausted",
+            )
+        )
+
+        with pytest.raises(TaskCapacityError, match="Backtest capacity exhausted"):
+            service.start_task(task)
 
     @patch("apps.trading.tasks.service.run_backtest_task")
     def test_rolls_back_on_celery_failure(self, mock_celery_task):
@@ -126,8 +159,13 @@ class TestStartTask:
         task.validate_configuration.return_value = (True, None)
         mock_celery_task.apply_async.side_effect = ConnectionError("broker down")
 
+        service = TaskService()
+        service.capacity.get_task_admission = MagicMock(
+            return_value=TaskAdmissionDecision(allowed=True)
+        )
+
         with pytest.raises(RuntimeError, match="Failed to submit"):
-            TaskService().start_task(task)
+            service.start_task(task)
 
         assert task.status == TaskStatus.CREATED
         assert task.execution_id is None

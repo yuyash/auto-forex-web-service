@@ -49,6 +49,10 @@ class TaskConflictError(TaskServiceError, ValueError):
     """Raised when a task conflicts with current system state."""
 
 
+class TaskCapacityError(TaskConflictError):
+    """Raised when worker capacity is insufficient for a new task."""
+
+
 class TaskSubmissionError(TaskServiceError, RuntimeError):
     """Raised when dispatching a task to workers fails."""
 
@@ -67,9 +71,12 @@ class TaskService:
     """
 
     def __init__(self) -> None:
+        from apps.trading.services.task_capacity import TaskCapacityService
+
         self.writer = TaskLifecycleWriter(logger=logger)
         self.events = TaskLifecycleEventPublisher(logger=logger)
         self.commands = TaskLifecycleCommands(service=self, logger=logger, events=self.events)
+        self.capacity = TaskCapacityService()
 
     @staticmethod
     def get_celery_result(celery_task_id: str | None) -> AsyncResult | None:
@@ -172,6 +179,7 @@ class TaskService:
             )
             if isinstance(locked_task, TradingTask):
                 self._ensure_trading_account_available(locked_task)
+            self._ensure_worker_capacity_available(locked_task)
 
             is_valid, error_message = locked_task.validate_configuration()
             if not is_valid:
@@ -192,6 +200,7 @@ class TaskService:
         )
         if isinstance(task, TradingTask):
             self._ensure_trading_account_available(task)
+        self._ensure_worker_capacity_available(task)
 
         is_valid, error_message = task.validate_configuration()
         if not is_valid:
@@ -204,6 +213,12 @@ class TaskService:
         except TypeError:
             task.save()
         return task
+
+    def _ensure_worker_capacity_available(self, task: BacktestTask | TradingTask) -> None:
+        admission = self.capacity.get_task_admission(task)
+        if admission.allowed:
+            return
+        raise TaskCapacityError(admission.reason)
 
     def _finalize_terminal_task(
         self,

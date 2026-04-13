@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from apps.market.tasks.publisher import TickPublisherRunner, publisher_lock_key_for_account
+from apps.market.tasks.publisher import (
+    TickPublisherRunner,
+    normalize_instruments,
+    publisher_lock_key_for_account,
+)
 
 
 class TestTickPublisherRunnerInit:
@@ -21,6 +25,21 @@ def test_publisher_lock_key_for_account_appends_account_id(settings):
     settings.MARKET_TICK_PUBLISHER_LOCK_KEY = "lock:pub"
 
     assert publisher_lock_key_for_account(7) == "lock:pub:7"
+
+
+def test_normalize_instruments_sorts_and_deduplicates(settings):
+    settings.MARKET_TICK_INSTRUMENTS = ["EUR_USD"]
+
+    assert normalize_instruments(["USD_JPY", "EUR_USD", "USD_JPY"]) == [
+        "EUR_USD",
+        "USD_JPY",
+    ]
+
+
+def test_normalize_instruments_falls_back_to_settings(settings):
+    settings.MARKET_TICK_INSTRUMENTS = ["USD_JPY"]
+
+    assert normalize_instruments(None) == ["USD_JPY"]
 
 
 class TestTickPublisherRunnerRun:
@@ -85,6 +104,8 @@ class TestTickPublisherRunnerRun:
         runner.run(account_id=999)
 
         svc_instance.mark_stopped.assert_called_once()
+        assert MockService.call_args is not None
+        assert svc_instance.start.call_args.kwargs["meta"]["instruments"] == ["EUR_USD"]
 
     @patch("apps.market.tasks.publisher.redis_client")
     @patch("apps.market.tasks.publisher.acquire_lock", return_value=True)

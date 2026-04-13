@@ -16,6 +16,7 @@ from rest_framework.viewsets import ModelViewSet
 
 from apps.trading.enums import TaskStatus
 from apps.trading.tasks.service import (
+    TaskCapacityError,
     TaskConflictError,
     TaskService,
     TaskSubmissionError,
@@ -158,6 +159,19 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         try:
             started = self.task_service.start_task(task)
             return Response(self._serialize_detail(started))
+        except TaskCapacityError as exc:
+            logger.warning(
+                "Task capacity exhausted on start: task_id=%s, detail=%s",
+                task.pk,
+                exc,
+            )
+            return Response(
+                {
+                    "error": "Task capacity exhausted",
+                    "detail": "Worker capacity is exhausted. Stop running tasks or increase worker concurrency.",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
         except TaskConflictError as exc:
             logger.warning(
                 "Task conflict on start: task_id=%s, detail=%s",
