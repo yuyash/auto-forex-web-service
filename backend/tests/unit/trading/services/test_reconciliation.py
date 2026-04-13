@@ -139,12 +139,15 @@ class TestReconciliationReport:
     def test_defaults(self):
         report = ReconciliationReport()
         assert report.updated_account_snapshot is False
+        assert report.broker_open_positions == 0
+        assert report.pending_broker_orders == 0
         assert report.closed_local_positions == 0
         assert report.created_local_positions == 0
         assert report.updated_local_positions == 0
         assert report.removed_open_entries == 0
         assert report.synthesized_open_entries == 0
         assert report.relinked_open_entries == 0
+        assert report.has_blockers is False
 
 
 # ── Tests for _sync_account_snapshot ────────────────────────────────
@@ -189,7 +192,7 @@ class TestSyncAccountSnapshot:
 
 class TestSyncPositionsWithBroker:
     @patch("apps.trading.services.reconciliation.Position")
-    def test_closes_local_position_not_on_broker(self, mock_pos_model):
+    def test_marks_missing_broker_trade_as_blocker(self, mock_pos_model):
         reconciler = _make_reconciler()
         reconciler.oanda_service.get_open_trades.return_value = []
 
@@ -200,8 +203,9 @@ class TestSyncPositionsWithBroker:
         reconciler._sync_positions_with_broker(report)
 
         assert report.closed_local_positions == 1
-        assert local_pos.is_open is False
-        local_pos.save.assert_called()
+        assert report.has_blockers is True
+        assert "Automatic close reconciliation is blocked" in report.blockers[0]
+        local_pos.save.assert_not_called()
 
     @patch("apps.trading.services.reconciliation.Position")
     def test_creates_local_position_for_broker_trade(self, mock_pos_model):
@@ -308,14 +312,41 @@ class TestReconcile:
     def test_full_reconcile_non_floor_strategy(self, mock_pos_model):
         reconciler = _make_reconciler()
         reconciler.oanda_service.get_account_details.return_value = _make_account_details()
+        reconciler.oanda_service.get_pending_orders.return_value = []
         reconciler.oanda_service.get_open_trades.return_value = []
         mock_pos_model.objects.filter.return_value.order_by.return_value = []
 
-        report = reconciler.reconcile()
+        report = reconciler.reconcile(resumed=True)
 
         assert isinstance(report, ReconciliationReport)
         assert report.updated_account_snapshot is True
         reconciler.state.save.assert_called_once()
+
+    @patch("apps.trading.services.reconciliation.Position")
+    def test_fresh_start_blocks_when_broker_has_open_trades(self, mock_pos_model):
+        reconciler = _make_reconciler()
+        reconciler.oanda_service.get_account_details.return_value = _make_account_details()
+        reconciler.oanda_service.get_pending_orders.return_value = []
+        reconciler.oanda_service.get_open_trades.return_value = [_make_open_trade()]
+        mock_pos_model.objects.filter.return_value.order_by.return_value = []
+
+        report = reconciler.reconcile(resumed=False)
+
+        assert report.has_blockers is True
+        assert "Refusing to start a fresh execution" in " ".join(report.blockers)
+
+    @patch("apps.trading.services.reconciliation.Position")
+    def test_blocks_when_pending_orders_exist(self, mock_pos_model):
+        reconciler = _make_reconciler()
+        reconciler.oanda_service.get_account_details.return_value = _make_account_details()
+        reconciler.oanda_service.get_pending_orders.return_value = [MagicMock()]
+        reconciler.oanda_service.get_open_trades.return_value = []
+        mock_pos_model.objects.filter.return_value.order_by.return_value = []
+
+        report = reconciler.reconcile(resumed=True)
+
+        assert report.has_blockers is True
+        assert "pending order" in " ".join(report.blockers).lower()
 
 
 # ── Tests for _match_position_for_entry ─────────────────────────────

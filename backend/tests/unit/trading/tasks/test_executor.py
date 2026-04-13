@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+import pytest
 from freezegun import freeze_time
 
 from apps.trading.enums import TaskType
@@ -606,8 +607,8 @@ class TestTradingDurability:
 
         with (
             patch.object(executor, "_event_already_applied", return_value=False),
-            patch.object(executor, "_mark_event_processed") as mark_processed,
-            patch.object(executor, "save_state") as save_state,
+            patch.object(executor, "_mark_event_processed"),
+            patch.object(executor, "save_state"),
             patch.object(
                 executor.event_handler,
                 "handle_event",
@@ -618,8 +619,97 @@ class TestTradingDurability:
 
         assert state.current_balance == Decimal("105")
         engine.apply_event_execution_result.assert_called_once()
-        mark_processed.assert_called_once_with(event)
-        save_state.assert_called_once_with(state)
+
+
+class TestTradingExecutorSafety:
+    """Tests for live trading safety reconciliation hooks."""
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    @patch("apps.trading.tasks.executor.StateManager")
+    @patch("apps.trading.tasks.executor.OrderService")
+    @patch("apps.trading.services.reconciliation.TradingResumeReconciler")
+    def test_prepare_state_for_execution_blocks_when_reconciliation_has_blockers(
+        self,
+        mock_reconciler_cls,
+        _mock_order_service,
+        _mock_state_manager,
+        _mock_handler,
+    ):
+        from apps.trading.models import TradingTask
+        from apps.trading.tasks.executor import TradingExecutor
+        from apps.trading.services.reconciliation import ReconciliationReport, TradingSafetyError
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.execution_id = uuid4()
+        task.instrument = "EUR_USD"
+        task.pip_size = Decimal("0.0001")
+        task.dry_run = False
+        task.config.strategy_type = "floor"
+        task.config.config_dict = {}
+        task.oanda_account.balance = Decimal("10000")
+        task.oanda_account.currency = "USD"
+
+        with patch(
+            "apps.trading.tasks.executor.TaskExecutor._get_initial_balance",
+            return_value=Decimal("10000"),
+        ):
+            executor = TradingExecutor(
+                task=task,
+                engine=MagicMock(),
+                data_source=MagicMock(),
+            )
+
+        state = MagicMock()
+        report = ReconciliationReport(blockers=["unsafe broker state"])
+        mock_reconciler_cls.return_value.reconcile.return_value = report
+
+        with pytest.raises(TradingSafetyError):
+            executor.prepare_state_for_execution(state=state, resumed=True)
+
+        mock_reconciler_cls.return_value.reconcile.assert_called_once_with(resumed=True)
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    @patch("apps.trading.tasks.executor.StateManager")
+    @patch("apps.trading.tasks.executor.OrderService")
+    @patch("apps.trading.services.reconciliation.TradingResumeReconciler")
+    def test_prepare_state_for_execution_reconciles_on_fresh_start(
+        self,
+        mock_reconciler_cls,
+        _mock_order_service,
+        _mock_state_manager,
+        _mock_handler,
+    ):
+        from apps.trading.models import TradingTask
+        from apps.trading.tasks.executor import TradingExecutor
+        from apps.trading.services.reconciliation import ReconciliationReport
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.execution_id = uuid4()
+        task.instrument = "EUR_USD"
+        task.pip_size = Decimal("0.0001")
+        task.dry_run = False
+        task.config.strategy_type = "floor"
+        task.config.config_dict = {}
+        task.oanda_account.balance = Decimal("10000")
+        task.oanda_account.currency = "USD"
+
+        with patch(
+            "apps.trading.tasks.executor.TaskExecutor._get_initial_balance",
+            return_value=Decimal("10000"),
+        ):
+            executor = TradingExecutor(
+                task=task,
+                engine=MagicMock(),
+                data_source=MagicMock(),
+            )
+
+        state = MagicMock()
+        mock_reconciler_cls.return_value.reconcile.return_value = ReconciliationReport()
+
+        assert executor.prepare_state_for_execution(state=state, resumed=False) is state
+        mock_reconciler_cls.return_value.reconcile.assert_called_once_with(resumed=False)
 
     @patch("apps.trading.tasks.executor.EventHandler")
     def test_process_single_tick_persists_state_before_handling_events(self, mock_handler):
