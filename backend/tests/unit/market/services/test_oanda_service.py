@@ -645,6 +645,66 @@ class TestGetOpenTrades:
         assert trades[0].trade_id == "T1"
         assert trades[0].direction == OrderDirection.LONG
 
+    @patch("apps.market.services.oanda.v20.Context")
+    @patch("apps.market.services.oanda.ComplianceService")
+    @patch("apps.market.services.oanda.MarketEventService")
+    def test_returns_attribute_based_trades(self, mock_event_svc, mock_compliance, mock_v20_ctx):
+        account = _make_mock_account()
+        svc = OandaService(account=account)
+
+        trade = MagicMock()
+        trade.id = "T2"
+        trade.instrument = "USD_JPY"
+        trade.currentUnits = "-1000"
+        trade.price = "159.552"
+        trade.unrealizedPL = "150.0"
+        trade.openTime = "2026-04-13T16:41:41.313075382Z"
+        trade.state = "OPEN"
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.body = {"trades": [trade]}
+        svc.api.trade.list_open.return_value = mock_response
+
+        trades = svc.get_open_trades()
+        assert len(trades) == 1
+        assert trades[0].trade_id == "T2"
+        assert trades[0].instrument == "USD_JPY"
+        assert trades[0].direction == OrderDirection.SHORT
+        assert trades[0].units == Decimal("1000")
+
+    @patch("apps.market.services.oanda.v20.Context")
+    @patch("apps.market.services.oanda.ComplianceService")
+    @patch("apps.market.services.oanda.MarketEventService")
+    def test_get_trades_all_returns_closed_trade_history(
+        self, mock_event_svc, mock_compliance, mock_v20_ctx
+    ):
+        account = _make_mock_account()
+        svc = OandaService(account=account)
+
+        trade = MagicMock()
+        trade.id = "T3"
+        trade.instrument = "USD_JPY"
+        trade.currentUnits = "0"
+        trade.price = "159.552"
+        trade.unrealizedPL = None
+        trade.openTime = "2026-04-13T16:41:41.313075382Z"
+        trade.closeTime = "2026-04-13T17:40:42.944649123Z"
+        trade.realizedPL = "155.0"
+        trade.state = "CLOSED"
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.body = {"trades": [trade]}
+        svc.api.trade.list.return_value = mock_response
+
+        trades = svc.get_trades(state="ALL")
+        assert len(trades) == 1
+        assert trades[0].trade_id == "T3"
+        assert trades[0].state == "CLOSED"
+        assert trades[0].close_time is not None
+        assert trades[0].realized_pnl == Decimal("155.0")
+
 
 # ---------------------------------------------------------------------------
 # get_pending_orders
@@ -681,6 +741,35 @@ class TestGetPendingOrders:
         assert len(orders) == 1
         assert orders[0].order_id == "O1"
         assert orders[0].state == OrderState.PENDING
+
+    @patch("apps.market.services.oanda.v20.Context")
+    @patch("apps.market.services.oanda.ComplianceService")
+    @patch("apps.market.services.oanda.MarketEventService")
+    def test_returns_attribute_based_pending_orders(
+        self, mock_event_svc, mock_compliance, mock_v20_ctx
+    ):
+        account = _make_mock_account()
+        svc = OandaService(account=account)
+
+        order = MagicMock()
+        order.id = "O2"
+        order.instrument = "USD_JPY"
+        order.type = "LIMIT"
+        order.units = "1000"
+        order.price = "159.000"
+        order.state = "PENDING"
+        order.timeInForce = "GTC"
+        order.createTime = "2024-01-01T00:00:00Z"
+
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.body = {"orders": [order]}
+        svc.api.order.list_pending.return_value = mock_response
+
+        orders = svc.get_pending_orders()
+        assert len(orders) == 1
+        assert orders[0].order_id == "O2"
+        assert orders[0].instrument == "USD_JPY"
 
 
 # ---------------------------------------------------------------------------

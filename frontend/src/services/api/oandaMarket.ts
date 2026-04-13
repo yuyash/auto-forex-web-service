@@ -9,6 +9,7 @@ export interface OandaPosition {
   entry_price: string;
   unrealized_pnl: string;
   open_time: string | null;
+  close_time?: string | null;
   state: string;
   account_name: string;
   account_db_id: number;

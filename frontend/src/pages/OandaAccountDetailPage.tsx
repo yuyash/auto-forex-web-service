@@ -21,6 +21,8 @@ import {
   Select,
   TablePagination,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -112,6 +114,9 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [isReloading, setIsReloading] = useState(false);
   const [colConfigOpen, setColConfigOpen] = useState(false);
+  const [positionStatusFilter, setPositionStatusFilter] = useState<
+    'open' | 'all'
+  >('open');
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [positionToClose, setPositionToClose] = useState<OandaPosition | null>(
     null
@@ -138,11 +143,17 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['oanda-positions', accountDbId, page, rowsPerPage],
+    queryKey: [
+      'oanda-positions',
+      accountDbId,
+      positionStatusFilter,
+      page,
+      rowsPerPage,
+    ],
     queryFn: () =>
       oandaMarketApi.getPositions({
         account_id: accountDbId,
-        status: 'open',
+        status: positionStatusFilter,
         page: page + 1,
         page_size: rowsPerPage,
       }),
@@ -231,28 +242,35 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
       width: 180,
       render: (row) => fmtTs(row.open_time),
     },
+    {
+      id: 'close_time' as keyof OandaPosition,
+      label: t('common:tables.positions.closeTimestamp'),
+      width: 180,
+      render: (row) => fmtTs(row.close_time ?? null),
+    },
     { id: 'state', label: t('common:tables.positions.status'), width: 80 },
     {
       id: 'actions' as keyof OandaPosition,
       label: '',
       width: 60,
       sortable: false,
-      render: (row) => (
-        <Tooltip title={t('common:actions.closePosition')}>
-          <IconButton
-            size="small"
-            color="error"
-            onClick={(e) => {
-              e.stopPropagation();
-              setPositionToClose(row);
-              setCloseUnits('');
-              setCloseDialogOpen(true);
-            }}
-          >
-            <CloseIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      ),
+      render: (row) =>
+        row.status === 'open' ? (
+          <Tooltip title={t('common:actions.closePosition')}>
+            <IconButton
+              size="small"
+              color="error"
+              onClick={(e) => {
+                e.stopPropagation();
+                setPositionToClose(row);
+                setCloseUnits('');
+                setCloseDialogOpen(true);
+              }}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        ) : null,
     },
   ];
 
@@ -272,6 +290,7 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
     entry_price: (r: OandaPosition) => r.entry_price,
     unrealized_pnl: (r: OandaPosition) => r.unrealized_pnl,
     open_time: (r: OandaPosition) => r.open_time ?? '',
+    close_time: (r: OandaPosition) => r.close_time ?? '',
     state: (r: OandaPosition) => r.state,
   };
   const dataMap = new Map(positions.map((r) => [getRowId(r), r]));
@@ -311,7 +330,9 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
   };
 
   const handleCloseSelected = async () => {
-    const ids = [...selection.selectedRowIds];
+    const ids = [...selection.selectedRowIds].filter(
+      (id) => dataMap.get(id)?.status === 'open'
+    );
     if (ids.length === 0) return;
     setClosingSelected(true);
     let ok = 0;
@@ -368,7 +389,10 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
     <Box>
       <Box mb={1}>
         <Typography variant="subtitle1">
-          {t('common:tables.positions.openPositions')} ({totalCount})
+          {positionStatusFilter === 'open'
+            ? t('common:tables.positions.openPositions')
+            : t('common:tables.positions.allPositions')}{' '}
+          ({totalCount})
         </Typography>
         <Box
           display="flex"
@@ -377,6 +401,24 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
           flexWrap="wrap"
           mt={1}
         >
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={positionStatusFilter}
+            onChange={(_event, value: 'open' | 'all' | null) => {
+              if (!value) return;
+              setPositionStatusFilter(value);
+              setPage(0);
+              selection.resetSelection();
+            }}
+          >
+            <ToggleButton value="open">
+              {t('common:tables.positions.open')}
+            </ToggleButton>
+            <ToggleButton value="all">
+              {t('common:tables.positions.allPositions')}
+            </ToggleButton>
+          </ToggleButtonGroup>
           <Button
             size="small"
             variant="outlined"
@@ -392,7 +434,11 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
             color="error"
             startIcon={<CloseIcon />}
             onClick={handleCloseSelected}
-            disabled={selection.selectedRowIds.size === 0 || closingSelected}
+            disabled={
+              selection.selectedRowIds.size === 0 ||
+              closingSelected ||
+              positionStatusFilter !== 'open'
+            }
             sx={{ minWidth: { xs: 'calc(50% - 4px)', sm: 'auto' } }}
           >
             {closingSelected ? (
@@ -660,6 +706,9 @@ function OrdersTable({ accountDbId }: { accountDbId: number }) {
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [isReloading, setIsReloading] = useState(false);
   const [colConfigOpen, setColConfigOpen] = useState(false);
+  const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'pending'>(
+    'all'
+  );
 
   const {
     data: ordersData,
@@ -667,11 +716,17 @@ function OrdersTable({ accountDbId }: { accountDbId: number }) {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['oanda-orders', accountDbId, page, rowsPerPage],
+    queryKey: [
+      'oanda-orders',
+      accountDbId,
+      orderStatusFilter,
+      page,
+      rowsPerPage,
+    ],
     queryFn: () =>
       oandaMarketApi.getOrders({
         account_id: accountDbId,
-        status: 'pending',
+        status: orderStatusFilter,
         page: page + 1,
         page_size: rowsPerPage,
       }),
@@ -787,11 +842,27 @@ function OrdersTable({ accountDbId }: { accountDbId: number }) {
         justifyContent="space-between"
         alignItems="center"
         mb={1}
+        gap={1}
+        flexWrap="wrap"
       >
         <Typography variant="subtitle1">
           {t('tables.orders.title')} ({totalCount})
         </Typography>
         <Box display="flex" alignItems="center" gap={0.5}>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={orderStatusFilter}
+            onChange={(_event, value: 'all' | 'pending' | null) => {
+              if (!value) return;
+              setOrderStatusFilter(value);
+              setPage(0);
+              selection.resetSelection();
+            }}
+          >
+            <ToggleButton value="all">{t('actions.viewAll')}</ToggleButton>
+            <ToggleButton value="pending">{t('status.pending')}</ToggleButton>
+          </ToggleButtonGroup>
           <TableSelectionToolbar
             selectedCount={selection.selectedRowIds.size}
             onCopy={handleCopy}
