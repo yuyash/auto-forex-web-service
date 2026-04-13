@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.1...frontend-v1.48.2) (2026-04-13)
+
+
+### Bug Fixes
+
+* **api:** normalize latest execution summaries ([#476](https://github.com/yuyash/auto-forex-web-service/issues/476)) ([b893d65](https://github.com/yuyash/auto-forex-web-service/commit/b893d655b39457862bc9c605093b478656993752))
+
 ## [1.48.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.0...frontend-v1.48.1) (2026-04-13)
 
 
