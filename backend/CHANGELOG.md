@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.34.3...backend-v1.34.4) (2026-04-13)
+
+
+### Bug Fixes
+
+* **backtest:** avoid false orphan restart failures ([#482](https://github.com/yuyash/auto-forex-web-service/issues/482)) ([c227b62](https://github.com/yuyash/auto-forex-web-service/commit/c227b62991a1cb4aafb84c1f8621335b8bb8e0d9))
+
 ## [1.34.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.34.2...backend-v1.34.3) (2026-04-13)
 
 
