@@ -104,6 +104,17 @@ vi.mock('../../../src/hooks/useStrategies', () => ({
 vi.mock('../../../src/hooks/useTaskSummary', () => ({
   useTaskSummary: () => ({
     summary: {
+      pnl: {
+        realized: 0,
+        unrealized: 0,
+      },
+      counts: {
+        openPositions: 0,
+        closedPositions: 0,
+      },
+      execution: {
+        marginRatio: null,
+      },
       task: { progress: 42 },
     },
   }),
@@ -115,6 +126,15 @@ vi.mock('../../../src/hooks/useBacktestTasks', () => ({
 
 vi.mock('../../../src/hooks/useTradingTasks', () => ({
   useTradingTask: () => ({ data: null }),
+}));
+
+vi.mock('../../../src/contexts/AuthContext', () => ({
+  useAuth: () => ({
+    user: {
+      timezone: 'UTC',
+      language: 'en',
+    },
+  }),
 }));
 
 vi.mock('../../../src/hooks/useTradingTaskMutations', () => ({
