@@ -171,6 +171,7 @@ class TestTriggerBacktestPublisher:
         }
         trigger_backtest_publisher(task)
         mock_publish.apply_async.assert_called_once()
+        assert mock_publish.apply_async.call_args.kwargs["queue"] == "backtest_publisher"
 
     @patch("apps.market.tasks.publish_ticks_for_backtest")
     @patch("celery.current_app")

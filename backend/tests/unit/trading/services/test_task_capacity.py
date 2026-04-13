@@ -68,6 +68,36 @@ def test_trading_capacity_counts_new_market_publisher_and_subscriber(settings) -
     assert "market" in decision.reason
 
 
+def test_trading_capacity_allows_second_account_when_market_has_three_slots(settings) -> None:
+    settings.CELERY_TRADING_WORKER_CONCURRENCY = 2
+    settings.CELERY_MARKET_WORKER_CONCURRENCY = 3
+
+    task = MagicMock(spec=TradingTask)
+    task.oanda_account_id = 99
+
+    with (
+        patch(
+            "apps.trading.services.task_capacity.TradingTask.objects.filter"
+        ) as mock_trading_filter,
+        patch.object(TaskCapacityService, "_queue_usage", return_value=None),
+        patch.object(TaskCapacityService, "_fresh_market_tasks") as mock_fresh_market_tasks,
+    ):
+        mock_trading_filter.return_value.count.return_value = 1
+
+        active_publishers = MagicMock()
+        active_publishers.count.return_value = 1
+        subscriber_qs = MagicMock()
+        subscriber_qs.exists.return_value = True
+        account_qs = MagicMock()
+        account_qs.filter.return_value.exists.return_value = False
+        account_qs.exists.return_value = False
+        mock_fresh_market_tasks.side_effect = [active_publishers, subscriber_qs, account_qs]
+
+        decision = TaskCapacityService().get_task_admission(task)
+
+    assert decision.allowed is True
+
+
 @pytest.mark.django_db
 def test_trading_capacity_ignores_stale_market_publishers(settings) -> None:
     settings.CELERY_TRADING_WORKER_CONCURRENCY = 2
@@ -128,7 +158,7 @@ def test_backtest_capacity_ignores_stale_publishers(settings) -> None:
     assert decision.allowed is True
 
 
-def test_queue_usage_counts_active_and_reserved_for_dedicated_queue() -> None:
+def test_queue_usage_counts_only_active_tasks_for_dedicated_queue() -> None:
     inspector = MagicMock()
     inspector.active_queues.return_value = {
         "worker-market@host": [{"name": "market"}],
@@ -145,4 +175,4 @@ def test_queue_usage_counts_active_and_reserved_for_dedicated_queue() -> None:
 
     with patch("apps.trading.services.task_capacity.current_app.control.inspect") as mock_inspect:
         mock_inspect.return_value = inspector
-        assert TaskCapacityService()._queue_usage("market") == 2
+        assert TaskCapacityService()._queue_usage("market") == 1

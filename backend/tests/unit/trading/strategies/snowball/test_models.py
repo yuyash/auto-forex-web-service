@@ -225,6 +225,15 @@ class TestLayer:
         layer.close_slot(3)  # R3 > refill_up_to=2 → sealed
         assert layer.slots[3].ever_closed
 
+    def test_previous_present_slot_returns_nearest_lower_present_slot(self):
+        layer = Layer.create(1, 4, 1000)
+        layer.slots[0].fill(_entry(entry_id=1, retracement_count=0))
+        layer.slots[3].fill(_entry(entry_id=2, retracement_count=3))
+
+        previous = layer.previous_present_slot(1)
+        assert previous is not None
+        assert previous.index == 0
+
     def test_to_dict_roundtrip(self):
         layer = Layer.create(2, 3, 1500)
         d = layer.to_dict()

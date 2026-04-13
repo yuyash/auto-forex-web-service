@@ -52,6 +52,15 @@ class TaskConflictError(TaskServiceError, ValueError):
 class TaskCapacityError(TaskConflictError):
     """Raised when worker capacity is insufficient for a new task."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        decision: object | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.decision = decision
+
 
 class TaskSubmissionError(TaskServiceError, RuntimeError):
     """Raised when dispatching a task to workers fails."""
@@ -114,9 +123,11 @@ class TaskService:
     @staticmethod
     def _dispatch_task(task: BacktestTask | TradingTask, task_type: str) -> None:
         celery_task = run_backtest_task if task_type == "backtest" else run_trading_task
+        queue = "backtest" if task_type == "backtest" else "trading"
         celery_task.apply_async(
             args=[task.pk],
             task_id=str(task.execution_id),
+            queue=queue,
         )
 
     @staticmethod
@@ -218,7 +229,7 @@ class TaskService:
         admission = self.capacity.get_task_admission(task)
         if admission.allowed:
             return
-        raise TaskCapacityError(admission.reason)
+        raise TaskCapacityError(admission.reason, decision=admission)
 
     def _finalize_terminal_task(
         self,

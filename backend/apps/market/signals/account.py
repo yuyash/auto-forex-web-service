@@ -64,7 +64,7 @@ class AccountSignalHandler(SignalHandler):
 
                 from apps.market.tasks import ensure_tick_pubsub_running
 
-                ensure_tick_pubsub_running.delay()
+                ensure_tick_pubsub_running.apply_async(queue="system")
 
             except Exception as exc:
                 logger.exception("Failed to bootstrap tick pub/sub tasks: %s", exc)

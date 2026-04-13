@@ -15,12 +15,14 @@ const {
   mockTradingPause,
   mockTradingResume,
   mockTradingRestart,
+  mockShowError,
 } = vi.hoisted(() => ({
   mockTradingStart: vi.fn(),
   mockTradingStop: vi.fn(),
   mockTradingPause: vi.fn(),
   mockTradingResume: vi.fn(),
   mockTradingRestart: vi.fn(),
+  mockShowError: vi.fn(),
 }));
 
 const mockTaskData = {
@@ -113,6 +115,19 @@ vi.mock('../../../src/hooks/useTradingTaskMutations', () => ({
   })),
   useDeleteTradingTask: vi.fn(() => ({ mutate: vi.fn(), isLoading: false })),
 }));
+
+vi.mock('../../../src/components/common', async () => {
+  const actual = await vi.importActual('../../../src/components/common');
+  return {
+    ...actual,
+    useToast: vi.fn(() => ({
+      showError: mockShowError,
+      showSuccess: vi.fn(),
+      showInfo: vi.fn(),
+      showWarning: vi.fn(),
+    })),
+  };
+});
 
 vi.mock('../../../src/hooks/useOptimisticTaskStatus', () => ({
   useOptimisticTaskStatus: vi.fn(() => ({
@@ -320,6 +335,38 @@ describe('TradingTaskDetail', () => {
 
     await waitFor(() => {
       expect(mockTradingRestart).toHaveBeenCalledWith('1');
+    });
+  });
+
+  it('shows backend action failure details', async () => {
+    const mod = await import('../../../src/hooks/useTradingTasks');
+    const { ApiError } = await import('../../../src/api/apiClient');
+    vi.mocked(mod.useTradingTask).mockReturnValueOnce({
+      data: { ...mockTaskData, status: TaskStatus.CREATED },
+      isLoading: false,
+      error: null,
+      refresh: vi.fn(),
+    });
+    mockTradingStart.mockRejectedValueOnce(
+      new ApiError('/api/test', 409, 'Conflict', {
+        detail: 'Trading capacity exhausted for market.',
+        required_stops: [{ message: 'Stop at least 1 trading task.' }],
+      })
+    );
+    const user = userEvent.setup();
+
+    render(<TradingTaskDetail />, { wrapper: createWrapper() });
+
+    await user.click(screen.getByRole('button', { name: 'Start' }));
+    const startConfirmButtons = screen.getAllByRole('button', {
+      name: 'Start',
+    });
+    await user.click(startConfirmButtons[startConfirmButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(mockShowError).toHaveBeenCalledWith(
+        'Trading capacity exhausted for market. Stop at least 1 trading task.'
+      );
     });
   });
 });

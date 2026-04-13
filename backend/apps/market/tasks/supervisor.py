@@ -149,7 +149,7 @@ class TickSupervisorRunner:
         from apps.market.tasks import ensure_tick_pubsub_running
 
         logger.info("Supervisor: scheduling next check in %ss", interval_seconds)
-        ensure_tick_pubsub_running.apply_async(countdown=interval_seconds)
+        ensure_tick_pubsub_running.apply_async(countdown=interval_seconds, queue="system")
 
     def _active_trading_tasks(self) -> QuerySet[Any]:
         """Return active trading tasks that require live market data."""
@@ -284,9 +284,12 @@ class TickSupervisorRunner:
                     target.account_pk,
                     target.instruments,
                 )
-                publish_oanda_ticks.delay(
-                    account_id=int(target.account_pk),
-                    instruments=list(target.instruments),
+                publish_oanda_ticks.apply_async(
+                    kwargs={
+                        "account_id": int(target.account_pk),
+                        "instruments": list(target.instruments),
+                    },
+                    queue="market",
                 )
 
     def _ensure_subscriber_running(self, client: Any) -> None:
@@ -308,4 +311,4 @@ class TickSupervisorRunner:
         )
         if not subscriber_alive:
             logger.info("Supervisor: spawning subscriber task")
-            subscribe_ticks_to_db.delay()
+            subscribe_ticks_to_db.apply_async(queue="market")
