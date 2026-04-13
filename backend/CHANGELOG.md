@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.6](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.33.5...backend-v1.33.6) (2026-04-13)
+
+
+### Bug Fixes
+
+* **celery:** isolate control workers and gate task starts ([#459](https://github.com/yuyash/auto-forex-web-service/issues/459)) ([791ded4](https://github.com/yuyash/auto-forex-web-service/commit/791ded457da8ba058f579a01559304ae7deece84))
+
 ## [1.33.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.33.4...backend-v1.33.5) (2026-04-13)
 
 
