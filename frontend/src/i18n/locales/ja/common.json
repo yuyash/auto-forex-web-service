@@ -529,6 +529,11 @@
         }
       }
     },
+    "summary": {
+      "margin_ratio": "証拠金清算割合",
+      "open_positions": "オープンポジション数",
+      "closed_positions": "クローズポジション数"
+    },
     "logs": {
       "title": "タスクログ",
       "timestamp": "日時",
