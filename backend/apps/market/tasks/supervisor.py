@@ -9,9 +9,9 @@ from typing import Any
 from celery import shared_task
 from django.conf import settings
 
-from apps.market.enums import ApiType
 from apps.market.models import CeleryTaskStatus, OandaAccounts
 from apps.market.services.celery import CeleryTaskService
+from apps.market.tasks.publisher import publisher_lock_key_for_account
 from apps.market.tasks.base import acquire_lock, current_task_id, lock_value, redis_client
 
 logger: Logger = getLogger(name=__name__)
@@ -19,12 +19,14 @@ logger: Logger = getLogger(name=__name__)
 
 @shared_task(bind=True, name="market.tasks.ensure_tick_pubsub_running")
 def ensure_tick_pubsub_running(self: Any) -> None:
-    """Ensure there is exactly one active publisher/subscriber pair.
+    """Ensure the required publisher/subscriber tasks are active.
 
-    If either side isn't running (lock missing), re-creates the task.
+    Publishers are maintained per active trading account. The subscriber
+    remains a singleton because it persists the shared market channel.
     This task re-schedules itself periodically and is also triggered on:
     - worker startup
-    - first LIVE OANDA account creation
+    - OANDA account creation
+    - trading-task starts
     """
     runner = TickSupervisorRunner()
     runner.run()
@@ -81,34 +83,28 @@ class TickSupervisorRunner:
         try:
             self.task_service.heartbeat(status_message="running", force=True)
 
-            # Get or initialize account
-            account = self._get_or_initialize_account(client)
-            if account is None:
+            account_pks = self._target_account_pks()
+            if not account_pks:
                 logger.warning(
-                    "Supervisor: no LIVE OANDA account found — "
-                    "tick streaming will not start until a LIVE account is created"
+                    "Supervisor: no active trading-task accounts found — "
+                    "tick streaming will stay idle until a trading task starts"
                 )
-                return
-
-            account_pk = int(account.pk)
-
-            if account.api_type != ApiType.LIVE:
+            else:
                 logger.info(
-                    "Supervisor: cached account %s is no longer LIVE (api_type=%s), skipping",
-                    account_pk,
-                    account.api_type,
+                    "Supervisor: ensuring tick publishers for account_pks=%s",
+                    account_pks,
                 )
-                return
+                self._ensure_publishers_running(client, account_pks)
 
-            logger.info(
-                "Supervisor: using OANDA account (pk=%s, oanda_id=%s, api_type=%s)",
-                account_pk,
-                account.account_id,
-                account.api_type,
-            )
+            # Check and restart subscriber if needed
+            self._ensure_subscriber_running(client)
 
-            # Check and restart publisher/subscriber if needed
-            self._ensure_tasks_running(client, account_pk)
+            # Best-effort cleanup of stale legacy single-account cache keys.
+            account_key = getattr(settings, "MARKET_TICK_ACCOUNT_KEY", "market:tick_pubsub:account")
+            init_key = getattr(settings, "MARKET_TICK_PUBSUB_INIT_KEY", "market:tick_pubsub:init")
+            with contextlib.suppress(Exception):
+                client.delete(account_key)
+                client.delete(init_key)
 
         finally:
             with contextlib.suppress(Exception):
@@ -132,91 +128,57 @@ class TickSupervisorRunner:
         logger.info("Supervisor: scheduling next check in %ss", interval_seconds)
         ensure_tick_pubsub_running.apply_async(countdown=interval_seconds)
 
-    def _get_or_initialize_account(self, client: Any) -> OandaAccounts | None:
-        """Get or initialize the OANDA account for tick streaming."""
-        account_key = getattr(settings, "MARKET_TICK_ACCOUNT_KEY", "market:tick_pubsub:account")
-        init_key = getattr(settings, "MARKET_TICK_PUBSUB_INIT_KEY", "market:tick_pubsub:init")
+    def _target_account_pks(self) -> list[int]:
+        """Return active OANDA account PKs required by active trading tasks."""
+        from apps.trading.enums import TaskStatus as TradingTaskStatus
 
-        account_id_raw = client.get(account_key)
-        account: OandaAccounts | None = None
-
-        if account_id_raw:
-            try:
-                account_id = int(str(account_id_raw))
-                logger.info(
-                    "Supervisor: found cached account pk=%s in Redis (key=%s)",
-                    account_id,
-                    account_key,
-                )
-                account = OandaAccounts.objects.filter(id=account_id).first()
-                if account is None:
-                    logger.warning(
-                        "Supervisor: cached account pk=%s no longer exists in DB, "
-                        "will search for another LIVE account",
-                        account_id,
-                    )
-            except Exception:  # pylint: disable=broad-exception-caught
-                logger.warning(
-                    "Supervisor: failed to parse cached account id '%s', "
-                    "will search for another LIVE account",
-                    account_id_raw,
-                )
-                account = None
-
-        if account is None:
-            account = (
-                OandaAccounts.objects.filter(api_type=ApiType.LIVE).order_by("created_at").first()
-            )
-            if account is None:
-                return None
-
-            account_pk = int(account.pk)
-            logger.info(
-                "Supervisor: selected first LIVE account from DB "
-                "(pk=%s, oanda_id=%s, created_at=%s)",
-                account_pk,
-                account.account_id,
-                account.created_at,
-            )
-
-            # Persist the "first live" account id exactly once.
-            client.setnx(account_key, str(account_pk))
-            client.setnx(init_key, "1")
-
-        return account
-
-    def _ensure_tasks_running(
-        self,
-        client: Any,
-        account_pk: int,
-    ) -> None:
-        """Ensure publisher and subscriber tasks are running."""
-        # Import here to avoid circular dependency at module level
-        from apps.market.tasks import publish_oanda_ticks, subscribe_ticks_to_db
-
-        publisher_lock = getattr(
-            settings, "MARKET_TICK_PUBLISHER_LOCK_KEY", "market:tick_publisher:lock"
+        active_statuses = (
+            TradingTaskStatus.STARTING,
+            TradingTaskStatus.RUNNING,
+            TradingTaskStatus.PAUSED,
+            TradingTaskStatus.STOPPING,
         )
+        return list(
+            OandaAccounts.objects.filter(
+                is_active=True,
+                trading_tasks__status__in=active_statuses,
+            )
+            .distinct()
+            .order_by("created_at")
+            .values_list("pk", flat=True)
+        )
+
+    def _ensure_publishers_running(self, client: Any, account_pks: list[int]) -> None:
+        """Ensure account-specific publisher tasks are running."""
+        from apps.market.tasks import publish_oanda_ticks
+
+        for account_pk in account_pks:
+            publisher_lock = publisher_lock_key_for_account(int(account_pk))
+            publisher_alive = bool(client.exists(publisher_lock))
+            logger.info(
+                "Supervisor: publisher status for account_pk=%s is %s",
+                account_pk,
+                "running" if publisher_alive else "NOT running",
+            )
+            if not publisher_alive:
+                logger.info(
+                    "Supervisor: spawning publisher task (account_pk=%s)",
+                    account_pk,
+                )
+                publish_oanda_ticks.delay(account_id=int(account_pk))
+
+    def _ensure_subscriber_running(self, client: Any) -> None:
+        """Ensure the shared DB subscriber task is running."""
+        from apps.market.tasks import subscribe_ticks_to_db
+
         subscriber_lock = getattr(
             settings, "MARKET_TICK_SUBSCRIBER_LOCK_KEY", "market:tick_subscriber:lock"
         )
-
-        publisher_alive = client.exists(publisher_lock)
-        subscriber_alive = client.exists(subscriber_lock)
-
+        subscriber_alive = bool(client.exists(subscriber_lock))
         logger.info(
-            "Supervisor: task status — publisher=%s, subscriber=%s",
-            "running" if publisher_alive else "NOT running",
+            "Supervisor: subscriber status is %s",
             "running" if subscriber_alive else "NOT running",
         )
-
-        if not publisher_alive:
-            logger.info(
-                "Supervisor: spawning publisher task (account_pk=%s)",
-                account_pk,
-            )
-            publish_oanda_ticks.delay(account_id=account_pk)
-
         if not subscriber_alive:
             logger.info("Supervisor: spawning subscriber task")
             subscribe_ticks_to_db.delay()

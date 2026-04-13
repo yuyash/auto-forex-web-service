@@ -113,6 +113,10 @@ class TaskLifecycleCommands:
                 task.execution_id,
             )
             self.service._dispatch_task(task, task_type)
+            if task_type == "trading":
+                from apps.market.tasks import ensure_tick_pubsub_running
+
+                ensure_tick_pubsub_running.apply_async(countdown=0, queue="system")
             self.logger.info(
                 "[SERVICE:START] Task submitted to Celery - task_id=%s, execution_id=%s, new_status=%s",
                 task.pk,
