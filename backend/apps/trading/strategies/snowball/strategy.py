@@ -220,7 +220,9 @@ class SnowballStrategy(Strategy):
         cycle = SnowballCycle(cycle_id=entry.entry_id, direction=direction)
         # L1 with R0 (initial) + R1…R(r_max) counter slots
         layer0 = Layer.create(1, cfg.r_max, cfg.base_units, cfg.refill_up_to)
-        layer0.slot_at(0).fill(entry)
+        slot0 = layer0.slot_at(0)
+        assert slot0 is not None  # noqa: S101
+        slot0.fill(entry)
         cycle.add_layer(layer0)
         ss.cycles.append(cycle)
         return [evt], cycle
@@ -972,7 +974,9 @@ class SnowballStrategy(Strategy):
             ),
         )
         # Place in R0 of the new layer
-        layer.slot_at(0).fill(layer_entry)
+        slot0 = layer.slot_at(0)
+        assert slot0 is not None  # noqa: S101
+        slot0.fill(layer_entry)
 
         return [evt]
 

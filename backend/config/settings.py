@@ -133,6 +133,12 @@ DATABASES = {
     }
 }
 
+db_application_name = os.getenv("DB_APPLICATION_NAME", "").strip()
+if db_application_name:
+    db_options = DATABASES["default"].get("OPTIONS")
+    if isinstance(db_options, dict):
+        db_options["application_name"] = db_application_name
+
 
 # =============================================================================
 # Redis Configuration
