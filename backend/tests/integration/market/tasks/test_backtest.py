@@ -153,6 +153,39 @@ class TestBacktestTickPublisherRunnerIntegration:
         # Should stop when own stop signal is set
         assert runner._should_stop_publishing("test-request-999")
 
+    @patch("apps.market.tasks.backtest.redis_client")
+    @patch("apps.market.tasks.backtest.CeleryTaskService")
+    def test_run_does_not_report_insufficient_data_when_stopped(
+        self,
+        mock_service: Any,
+        mock_redis: Any,
+    ) -> None:
+        """Explicit stop should not be misreported as missing tick data."""
+        mock_service_instance = MagicMock()
+        mock_service.return_value = mock_service_instance
+        mock_redis.return_value = MagicMock()
+
+        runner = BacktestTickPublisherRunner()
+        runner._publish_ticks = MagicMock(  # type: ignore[method-assign]
+            return_value=(0, None, True)
+        )
+        runner._check_data_coverage = MagicMock(return_value="unexpected gap")  # type: ignore[method-assign]
+        runner._mark_backtest_task_failed = MagicMock()  # type: ignore[method-assign]
+
+        start = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
+        end = datetime(2024, 1, 2, 0, 0, 0, tzinfo=UTC)
+
+        runner.run(
+            instrument="EUR_USD",
+            start=start.isoformat(),
+            end=end.isoformat(),
+            request_id="test-request-stop",
+        )
+
+        runner._check_data_coverage.assert_not_called()
+        runner._mark_backtest_task_failed.assert_not_called()
+        mock_service_instance.mark_stopped.assert_not_called()
+
     @pytest.mark.parametrize(
         ("mode", "expected_bid", "expected_ask", "expected_mid"),
         [
