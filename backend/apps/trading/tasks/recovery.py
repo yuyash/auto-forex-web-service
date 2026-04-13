@@ -26,11 +26,12 @@ from apps.trading.models.celery import CeleryTaskStatus
 
 logger = logging.getLogger(__name__)
 
-# A task whose last heartbeat is older than this threshold is considered
-# orphaned. The value must remain comfortably larger than the heartbeat
-# interval (5 s) to avoid false positives during normal execution, while
-# recovering quickly after deployments that replace the worker containers.
-ORPHAN_HEARTBEAT_THRESHOLD = timedelta(minutes=1)
+# A task whose last heartbeat is older than its threshold is considered
+# orphaned. Backtests tolerate a longer gap because they can spend longer
+# between executor heartbeats while waiting for their publisher/data-source
+# path to come online, especially around restart/recovery windows.
+TRADING_ORPHAN_HEARTBEAT_THRESHOLD = timedelta(minutes=1)
+BACKTEST_ORPHAN_HEARTBEAT_THRESHOLD = timedelta(minutes=5)
 
 # Statuses that indicate a task *should* be actively running.
 _ACTIVE_STATUSES = [TaskStatus.RUNNING, TaskStatus.STARTING]
@@ -66,7 +67,6 @@ def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
     """
     from apps.trading.tasks.service import TaskService
 
-    cutoff = dj_timezone.now() - ORPHAN_HEARTBEAT_THRESHOLD
     service = TaskService()
     counts: dict[str, int] = {"backtest": 0, "trading": 0}
 
@@ -78,7 +78,11 @@ def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
     )
     backtest_heartbeats = _prefetch_heartbeats(orphaned_backtest, "trading.tasks.run_backtest_task")
     for task in orphaned_backtest:
-        if not _is_orphaned_prefetched(task, backtest_heartbeats, cutoff):
+        if not _is_orphaned_prefetched(
+            task,
+            backtest_heartbeats,
+            dj_timezone.now() - BACKTEST_ORPHAN_HEARTBEAT_THRESHOLD,
+        ):
             continue
         if _recover_task(task, TaskType.BACKTEST, service, source):
             counts["backtest"] += 1
@@ -91,7 +95,11 @@ def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
     )
     trading_heartbeats = _prefetch_heartbeats(orphaned_trading, "trading.tasks.run_trading_task")
     for task in orphaned_trading:
-        if not _is_orphaned_prefetched(task, trading_heartbeats, cutoff):
+        if not _is_orphaned_prefetched(
+            task,
+            trading_heartbeats,
+            dj_timezone.now() - TRADING_ORPHAN_HEARTBEAT_THRESHOLD,
+        ):
             continue
         if _recover_task(task, TaskType.TRADING, service, source):
             counts["trading"] += 1

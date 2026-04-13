@@ -208,7 +208,7 @@ class TestRecoverOrphanedTasks:
 
         stale_cts = MagicMock()
         stale_cts.instance_key = f"{task.pk}:{task.execution_id}"
-        stale_cts.last_heartbeat_at = dj_timezone.now() - timedelta(minutes=2)
+        stale_cts.last_heartbeat_at = dj_timezone.now() - timedelta(minutes=6)
         cts.objects.filter.return_value.__iter__ = MagicMock(return_value=iter([stale_cts]))
 
         type(task).objects = MagicMock()
@@ -225,6 +225,28 @@ class TestRecoverOrphanedTasks:
         message = tl.objects.create.call_args.kwargs["message"]
         assert "previous partial run was discarded" in message
         assert "restarting from the beginning" in message
+
+    @pytest.mark.usefixtures("_mock_models")
+    def test_backtest_uses_longer_stale_heartbeat_threshold(self, _mock_models):
+        bt, tt, cts, tl, svc_cls = _mock_models
+
+        task = MagicMock()
+        task.pk = uuid4()
+        task.status = TaskStatus.RUNNING
+        bt.objects.filter.return_value = _make_qs([task])
+
+        recent_for_backtest = MagicMock()
+        recent_for_backtest.instance_key = f"{task.pk}:{task.execution_id}"
+        recent_for_backtest.last_heartbeat_at = dj_timezone.now() - timedelta(minutes=2)
+        cts.objects.filter.return_value.__iter__ = MagicMock(
+            return_value=iter([recent_for_backtest])
+        )
+
+        from apps.trading.tasks.recovery import recover_orphaned_tasks
+
+        result = recover_orphaned_tasks(source="test")
+        assert result["backtest"] == 0
+        tl.objects.create.assert_not_called()
 
     @pytest.mark.usefixtures("_mock_models")
     def test_failed_trading_recovery_is_not_counted(self, _mock_models):
@@ -250,6 +272,32 @@ class TestRecoverOrphanedTasks:
 
         result = recover_orphaned_tasks(source="test")
         assert result["trading"] == 0
+
+    @pytest.mark.usefixtures("_mock_models")
+    def test_trading_still_uses_shorter_stale_heartbeat_threshold(self, _mock_models):
+        bt, tt, cts, tl, svc_cls = _mock_models
+
+        task = MagicMock()
+        task.pk = uuid4()
+        task.status = TaskStatus.RUNNING
+
+        optimistic_lock_qs = MagicMock()
+        optimistic_lock_qs.update.return_value = 1
+        tt.objects.filter.side_effect = [_make_qs([task]), optimistic_lock_qs]
+
+        stale_for_trading = MagicMock()
+        stale_for_trading.instance_key = f"{task.pk}:{task.execution_id}"
+        stale_for_trading.last_heartbeat_at = dj_timezone.now() - timedelta(minutes=2)
+        cts.objects.filter.return_value.__iter__ = MagicMock(return_value=iter([stale_for_trading]))
+
+        service_instance = MagicMock()
+        svc_cls.return_value = service_instance
+
+        from apps.trading.tasks.recovery import recover_orphaned_tasks
+
+        result = recover_orphaned_tasks(source="test")
+        assert result["trading"] == 1
+        service_instance.recover_trading_task.assert_called_once_with(task)
 
 
 class TestRecoverOrphanedTasksBeat:

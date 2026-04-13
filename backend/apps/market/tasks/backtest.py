@@ -146,7 +146,7 @@ class BacktestTickPublisherRunner:
 
         try:
             logger.info(f"[PUBLISHER:RUN] Starting tick publishing - request_id={request_id}")
-            published, last_tick_ts = self._publish_ticks(
+            published, last_tick_ts, stopped_early = self._publish_ticks(
                 client,
                 channel,
                 instrument,
@@ -157,6 +157,13 @@ class BacktestTickPublisherRunner:
                 tick_granularity=tick_granularity,
                 tick_window_value_mode=tick_window_value_mode,
             )
+
+            if stopped_early:
+                logger.info(
+                    f"[PUBLISHER:RUN] Publishing stopped before completion - request_id={request_id}, "
+                    f"published={published}, last_tick_ts={last_tick_ts}"
+                )
+                return
 
             # Check for insufficient data coverage
             data_gap = self._check_data_coverage(
@@ -240,11 +247,11 @@ class BacktestTickPublisherRunner:
         *,
         tick_granularity: str = "tick",
         tick_window_value_mode: str = "last",
-    ) -> tuple[int, datetime | None]:
+    ) -> tuple[int, datetime | None, bool]:
         """Publish ticks from database to Redis.
 
         Returns:
-            Tuple of (published_count, last_tick_timestamp).
+            Tuple of (published_count, last_tick_timestamp, stopped_early).
         """
         assert self.task_service is not None
 
@@ -291,7 +298,7 @@ class BacktestTickPublisherRunner:
                     status=CeleryTaskStatus.Status.STOPPED,
                     status_message=f"published={published}",
                 )
-                return published, last_ts
+                return published, last_ts, True
 
             ts = row["timestamp"]
             if not isinstance(ts, datetime):
@@ -328,7 +335,7 @@ class BacktestTickPublisherRunner:
             f"[PUBLISHER:PUBLISH] Iteration complete - request_id={request_id}, "
             f"total_published={published}, last_ts={last_ts}"
         )
-        return published, last_ts
+        return published, last_ts, False
 
     @staticmethod
     def _iter_raw_ticks(
