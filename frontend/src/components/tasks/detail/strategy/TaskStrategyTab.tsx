@@ -949,6 +949,7 @@ export function TaskStrategyTab({
                       isSelected={isSelected}
                       displayLayer={displayLayer}
                       displayRet={displayRet}
+                      timezone={timezone}
                       onToggleSelection={handleToggleTradeSelection}
                       onOpenLifecycle={handleOpenLifecycle}
                     />
@@ -1000,6 +1001,7 @@ function TradeRow({
   isSelected,
   displayLayer,
   displayRet,
+  timezone,
   onToggleSelection,
   onOpenLifecycle,
 }: {
@@ -1008,6 +1010,7 @@ function TradeRow({
   isSelected: boolean;
   displayLayer: number | null | undefined;
   displayRet: number | null | undefined;
+  timezone: string;
   onToggleSelection: (id: string) => void;
   onOpenLifecycle: (positionId: string) => void;
 }) {
