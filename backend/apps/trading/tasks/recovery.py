@@ -27,9 +27,10 @@ from apps.trading.models.celery import CeleryTaskStatus
 logger = logging.getLogger(__name__)
 
 # A task whose last heartbeat is older than this threshold is considered
-# orphaned.  The value must be comfortably larger than the heartbeat
-# interval (5 s) to avoid false positives during normal execution.
-ORPHAN_HEARTBEAT_THRESHOLD = timedelta(minutes=5)
+# orphaned. The value must remain comfortably larger than the heartbeat
+# interval (5 s) to avoid false positives during normal execution, while
+# recovering quickly after deployments that replace the worker containers.
+ORPHAN_HEARTBEAT_THRESHOLD = timedelta(minutes=1)
 
 # Statuses that indicate a task *should* be actively running.
 _ACTIVE_STATUSES = [TaskStatus.RUNNING, TaskStatus.STARTING]
@@ -242,8 +243,9 @@ def _recover_task(
         level="WARNING",
         component=__name__,
         message=(
-            f"Task recovered from orphaned {task.status} state "
-            f"(source={source}). Re-queuing for execution."
+            f"Backtest task recovered from orphaned {task.status} state "
+            f"(source={source}). The previous partial run was discarded and the "
+            "backtest is restarting from the beginning."
         ),
     )
 
@@ -287,7 +289,8 @@ def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, sou
         component=__name__,
         message=(
             f"Trading task recovered from orphaned {task.status} state "
-            f"(source={source}). Resuming same execution run."
+            f"(source={source}). Resuming the same execution run with the "
+            "persisted strategy and grid state."
         ),
     )
 
