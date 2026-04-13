@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
 
+from celery import current_app
 from django.conf import settings
 from django.utils import timezone
 
@@ -50,6 +51,35 @@ class TaskAdmissionDecision:
 class TaskCapacityService:
     """Evaluate whether the system has capacity to start a task."""
 
+    def _queue_inspector(self):
+        return current_app.control.inspect(timeout=2.0)
+
+    def _queue_usage(self, queue: str) -> int | None:
+        """Return active + reserved task count for a dedicated queue.
+
+        Returns ``None`` when inspection is unavailable so callers can fall
+        back to persisted liveness data.
+        """
+        try:
+            inspector = self._queue_inspector()
+            active_queues = inspector.active_queues() or {}
+            active = inspector.active() or {}
+            reserved = inspector.reserved() or {}
+        except Exception:
+            return None
+
+        workers = [
+            worker_name
+            for worker_name, queue_entries in active_queues.items()
+            if any(str(entry.get("name") or "") == queue for entry in (queue_entries or []))
+        ]
+        if not workers:
+            return 0
+
+        active_count = sum(len(active.get(worker_name) or []) for worker_name in workers)
+        reserved_count = sum(len(reserved.get(worker_name) or []) for worker_name in workers)
+        return active_count + reserved_count
+
     def _market_task_cutoff(self):
         stale_after_seconds = int(getattr(settings, "CELERY_MARKET_TASK_STALE_AFTER_SECONDS", 90))
         return timezone.now() - timedelta(seconds=stale_after_seconds)
@@ -67,10 +97,15 @@ class TaskCapacityService:
         return self._admit_trading(task)
 
     def _admit_backtest(self) -> TaskAdmissionDecision:
-        active_backtests = BacktestTask.objects.filter(status__in=ACTIVE_TASK_STATUSES).count()
-        active_publishers = self._fresh_market_tasks(
-            task_name="market.tasks.publish_ticks_for_backtest"
-        ).count()
+        active_backtests = self._queue_usage("backtest")
+        if active_backtests is None:
+            active_backtests = BacktestTask.objects.filter(status__in=ACTIVE_TASK_STATUSES).count()
+
+        active_publishers = self._queue_usage("backtest_publisher")
+        if active_publishers is None:
+            active_publishers = self._fresh_market_tasks(
+                task_name="market.tasks.publish_ticks_for_backtest"
+            ).count()
 
         backtest_snapshot = QueueCapacitySnapshot(
             queue="backtest",
@@ -105,7 +140,9 @@ class TaskCapacityService:
         )
 
     def _admit_trading(self, task: TradingTask) -> TaskAdmissionDecision:
-        active_trading = TradingTask.objects.filter(status__in=ACTIVE_TASK_STATUSES).count()
+        active_trading = self._queue_usage("trading")
+        if active_trading is None:
+            active_trading = TradingTask.objects.filter(status__in=ACTIVE_TASK_STATUSES).count()
         trading_snapshot = QueueCapacitySnapshot(
             queue="trading",
             used=active_trading,
@@ -113,6 +150,7 @@ class TaskCapacityService:
         )
 
         market_limit = int(getattr(settings, "CELERY_MARKET_WORKER_CONCURRENCY", 1))
+        market_usage = self._queue_usage("market")
         active_publishers = self._fresh_market_tasks(
             task_name="market.tasks.publish_oanda_ticks"
         ).count()
@@ -128,11 +166,18 @@ class TaskCapacityService:
             if account_key
             else False
         )
-        projected_market_usage = active_publishers
-        if not publisher_exists_for_account:
-            projected_market_usage += 1
-        if not subscriber_running:
-            projected_market_usage += 1
+        if market_usage is None:
+            projected_market_usage = active_publishers
+            if not publisher_exists_for_account:
+                projected_market_usage += 1
+            if not subscriber_running:
+                projected_market_usage += 1
+        else:
+            projected_market_usage = market_usage
+            if not publisher_exists_for_account:
+                projected_market_usage += 1
+            if not subscriber_running:
+                projected_market_usage += 1
 
         market_snapshot = QueueCapacitySnapshot(
             queue="market",

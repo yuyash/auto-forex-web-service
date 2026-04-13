@@ -1,9 +1,11 @@
 """Extended integration tests for supervisor task."""
 
+from datetime import timedelta
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from django.utils import timezone
 
 from apps.market.enums import ApiType
 from apps.market.models import CeleryTaskStatus, OandaAccounts
@@ -86,7 +88,14 @@ class TestTickSupervisorRunnerExtendedIntegration:
         mock_pub_delay: Any,
     ) -> None:
         mock_client = MagicMock()
-        mock_client.exists.side_effect = [False, True]
+        mock_client.get.return_value = None
+        CeleryTaskStatus.objects.create(
+            task_name="market.tasks.publish_oanda_ticks",
+            instance_key="2",
+            status=CeleryTaskStatus.Status.RUNNING,
+            last_heartbeat_at=timezone.now(),
+            meta={"account_id": 2, "instruments": ["EUR_USD"]},
+        )
 
         runner = TickSupervisorRunner()
         runner._ensure_publishers_running(
@@ -108,10 +117,11 @@ class TestTickSupervisorRunnerExtendedIntegration:
             task_name="market.tasks.publish_oanda_ticks",
             instance_key="1",
             status=CeleryTaskStatus.Status.RUNNING,
+            last_heartbeat_at=timezone.now(),
             meta={"account_id": 1, "instruments": ["EUR_USD"]},
         )
         mock_client = MagicMock()
-        mock_client.exists.return_value = True
+        mock_client.get.return_value = None
 
         runner = TickSupervisorRunner()
         runner._ensure_publishers_running(
@@ -130,9 +140,28 @@ class TestTickSupervisorRunnerExtendedIntegration:
     @patch("apps.market.tasks.subscribe_ticks_to_db.delay")
     def test_ensure_subscriber_running(self, mock_sub_delay: Any) -> None:
         mock_client = MagicMock()
-        mock_client.exists.return_value = False
+        mock_client.get.return_value = None
 
         runner = TickSupervisorRunner()
         runner._ensure_subscriber_running(mock_client)
 
         mock_sub_delay.assert_called_once()
+
+    def test_fresh_market_task_ignores_stale_rows(self) -> None:
+        CeleryTaskStatus.objects.create(
+            task_name="market.tasks.subscribe_ticks_to_db",
+            instance_key="default",
+            status=CeleryTaskStatus.Status.RUNNING,
+            last_heartbeat_at=timezone.now() - timedelta(minutes=10),
+            meta={"kind": "subscriber"},
+        )
+
+        runner = TickSupervisorRunner()
+
+        assert (
+            runner._fresh_market_task(
+                task_name="market.tasks.subscribe_ticks_to_db",
+                instance_key="default",
+            )
+            is None
+        )

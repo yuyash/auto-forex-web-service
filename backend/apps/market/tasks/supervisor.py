@@ -4,17 +4,25 @@ from __future__ import annotations
 
 import contextlib
 from dataclasses import dataclass
+from datetime import timedelta
 from logging import Logger, getLogger
 from typing import Any
 
 from celery import shared_task
 from django.conf import settings
 from django.db.models import QuerySet
+from django.utils import timezone
 
 from apps.market.models import CeleryTaskStatus
 from apps.market.services.celery import CeleryTaskService
 from apps.market.tasks.publisher import publisher_lock_key_for_account
-from apps.market.tasks.base import acquire_lock, current_task_id, lock_value, redis_client
+from apps.market.tasks.base import (
+    acquire_lock,
+    current_task_id,
+    lock_value,
+    redis_client,
+    release_lock_if_owner,
+)
 
 logger: Logger = getLogger(name=__name__)
 
@@ -61,21 +69,7 @@ class TickSupervisorRunner:
             stop_check_interval_seconds=5.0,
             heartbeat_interval_seconds=10.0,
         )
-        self.task_service.start(
-            celery_task_id=current_task_id(),
-            worker=lock_value(),
-            meta={"kind": "supervisor"},
-        )
-
         logger.info("Supervisor starting (worker=%s)", lock_value())
-
-        if self.task_service.should_stop(force=True):
-            logger.info("Supervisor exiting: stop requested before main loop")
-            self.task_service.mark_stopped(
-                status=CeleryTaskStatus.Status.STOPPED,
-                status_message="Stop requested",
-            )
-            return
 
         client = redis_client()
 
@@ -83,14 +77,31 @@ class TickSupervisorRunner:
         supervisor_lock = getattr(
             settings, "MARKET_TICK_SUPERVISOR_LOCK_KEY", "market:tick_supervisor:lock"
         )
-        if not acquire_lock(client, supervisor_lock, ttl_seconds=interval_seconds + 30):
+        owner = acquire_lock(client, supervisor_lock, ttl_seconds=interval_seconds + 30)
+        if owner is None:
             logger.info(
                 "Supervisor exiting: another instance holds the lock (lock=%s)", supervisor_lock
             )
+            with contextlib.suppress(Exception):
+                client.close()
             return
 
         stop_requested = False
         try:
+            self.task_service.start(
+                celery_task_id=current_task_id(),
+                worker=lock_value(),
+                meta={"kind": "supervisor", "lock_owner": owner},
+            )
+
+            if self.task_service.should_stop(force=True):
+                logger.info("Supervisor exiting: stop requested before main loop")
+                self.task_service.mark_stopped(
+                    status=CeleryTaskStatus.Status.STOPPED,
+                    status_message="Stop requested",
+                )
+                return
+
             self.task_service.heartbeat(status_message="running", force=True)
 
             account_targets = self._target_account_targets()
@@ -117,6 +128,8 @@ class TickSupervisorRunner:
                 client.delete(init_key)
 
         finally:
+            with contextlib.suppress(Exception):
+                release_lock_if_owner(client, supervisor_lock, owner)
             with contextlib.suppress(Exception):
                 client.close()
 
@@ -178,17 +191,9 @@ class TickSupervisorRunner:
 
     def _publisher_matches_target(self, account_pk: int, instruments: tuple[str, ...]) -> bool:
         """Return whether the persisted publisher configuration matches the target."""
-        publisher = (
-            CeleryTaskStatus.objects.filter(
-                task_name="market.tasks.publish_oanda_ticks",
-                instance_key=str(account_pk),
-                status__in=(
-                    CeleryTaskStatus.Status.RUNNING,
-                    CeleryTaskStatus.Status.STOPPING,
-                ),
-            )
-            .only("meta")
-            .first()
+        publisher = self._fresh_market_task(
+            task_name="market.tasks.publish_oanda_ticks",
+            instance_key=str(account_pk),
         )
         if publisher is None:
             return False
@@ -196,6 +201,34 @@ class TickSupervisorRunner:
         meta = publisher.meta if isinstance(publisher.meta, dict) else {}
         configured = tuple(sorted(str(item) for item in meta.get("instruments", []) if item))
         return configured == instruments
+
+    def _market_task_cutoff(self):
+        stale_after_seconds = int(getattr(settings, "CELERY_MARKET_TASK_STALE_AFTER_SECONDS", 90))
+        return timezone.now() - timedelta(seconds=stale_after_seconds)
+
+    def _fresh_market_task(self, *, task_name: str, instance_key: str) -> CeleryTaskStatus | None:
+        return (
+            CeleryTaskStatus.objects.filter(
+                task_name=task_name,
+                instance_key=instance_key,
+                status__in=(
+                    CeleryTaskStatus.Status.RUNNING,
+                    CeleryTaskStatus.Status.STOPPING,
+                ),
+                last_heartbeat_at__gte=self._market_task_cutoff(),
+            )
+            .only("meta", "status", "status_message", "last_heartbeat_at")
+            .first()
+        )
+
+    @staticmethod
+    def _lock_matches_row(client: Any, lock_key: str, row: CeleryTaskStatus | None) -> bool:
+        if row is None or not isinstance(row.meta, dict):
+            return False
+        owner = str(row.meta.get("lock_owner") or "")
+        if not owner:
+            return False
+        return str(client.get(lock_key) or "") == owner
 
     def _request_publisher_restart(self, account_pk: int, instruments: tuple[str, ...]) -> None:
         """Request a running publisher to restart with an updated instrument set."""
@@ -224,15 +257,21 @@ class TickSupervisorRunner:
 
         for target in account_targets:
             publisher_lock = publisher_lock_key_for_account(int(target.account_pk))
-            publisher_alive = bool(client.exists(publisher_lock))
+            publisher_row = self._fresh_market_task(
+                task_name="market.tasks.publish_oanda_ticks",
+                instance_key=str(target.account_pk),
+            )
+            publisher_alive = publisher_row is not None
+            lock_matches = self._lock_matches_row(client, publisher_lock, publisher_row)
             publisher_matches = self._publisher_matches_target(
                 target.account_pk,
                 target.instruments,
             )
             logger.info(
-                "Supervisor: publisher status for account_pk=%s is %s (matches_target=%s, instruments=%s)",
+                "Supervisor: publisher status for account_pk=%s is %s (lock_matches=%s, matches_target=%s, instruments=%s)",
                 target.account_pk,
                 "running" if publisher_alive else "NOT running",
+                lock_matches,
                 publisher_matches,
                 target.instruments,
             )
@@ -257,10 +296,15 @@ class TickSupervisorRunner:
         subscriber_lock = getattr(
             settings, "MARKET_TICK_SUBSCRIBER_LOCK_KEY", "market:tick_subscriber:lock"
         )
-        subscriber_alive = bool(client.exists(subscriber_lock))
+        subscriber_row = self._fresh_market_task(
+            task_name="market.tasks.subscribe_ticks_to_db",
+            instance_key="default",
+        )
+        subscriber_alive = subscriber_row is not None
         logger.info(
-            "Supervisor: subscriber status is %s",
+            "Supervisor: subscriber status is %s (lock_matches=%s)",
             "running" if subscriber_alive else "NOT running",
+            self._lock_matches_row(client, subscriber_lock, subscriber_row),
         )
         if not subscriber_alive:
             logger.info("Supervisor: spawning subscriber task")
