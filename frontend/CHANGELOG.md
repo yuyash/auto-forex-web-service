@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.47.7...frontend-v1.48.0) (2026-04-13)
+
+
+### Features
+
+* **market:** add account detail history filters ([#470](https://github.com/yuyash/auto-forex-web-service/issues/470)) ([2110d30](https://github.com/yuyash/auto-forex-web-service/commit/2110d3035adc7d98fa7db34140d4c3fec4ffbc33))
+
 ## [1.47.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.47.6...frontend-v1.47.7) (2026-04-13)
 
 
