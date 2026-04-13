@@ -86,6 +86,82 @@ class TradingResumeReconciler:
         self.state.save()
         return report
 
+    def detect_runtime_drift(self) -> ReconciliationReport:
+        """Detect broker/local drift without mutating local state.
+
+        This is used while a live trading task is actively running. Any mismatch
+        is treated as unsafe because continuing would make strategy decisions on
+        stale broker exposure.
+        """
+        report = ReconciliationReport()
+        self._check_pending_orders(report)
+
+        try:
+            broker_trades = self.oanda_service.get_open_trades(instrument=self.task.instrument)
+        except OandaAPIError as exc:
+            raise RuntimeError(f"Failed to fetch open trades from OANDA: {exc}") from exc
+        report.broker_open_positions = len(broker_trades)
+
+        local_open_positions = list(
+            Position.objects.filter(
+                task_type=TaskType.TRADING,
+                task_id=self.task.pk,
+                execution_id=self.execution_id,
+                instrument=self.task.instrument,
+                is_open=True,
+            ).order_by("entry_time", "created_at")
+        )
+        if any(not position.oanda_trade_id for position in local_open_positions):
+            report.blockers.append(
+                "Found local open position(s) without OANDA trade ids while live trading is "
+                "running. Broker drift detection cannot verify exposure safely."
+            )
+
+        broker_by_trade_id = {trade.trade_id: trade for trade in broker_trades if trade.trade_id}
+        local_by_trade_id = {
+            str(position.oanda_trade_id): position
+            for position in local_open_positions
+            if position.oanda_trade_id
+        }
+
+        for trade_id, local_position in local_by_trade_id.items():
+            broker_trade = broker_by_trade_id.get(trade_id)
+            if broker_trade is None:
+                report.blockers.append(
+                    f"OANDA trade {trade_id} for local position {local_position.pk} is no longer "
+                    "open while the trading task is running."
+                )
+                continue
+
+            broker_direction = (
+                Direction.LONG if broker_trade.direction == OrderDirection.LONG else Direction.SHORT
+            )
+            broker_units = int(abs(broker_trade.units))
+            local_units = int(abs(local_position.units))
+
+            if local_position.direction != broker_direction:
+                report.blockers.append(
+                    f"OANDA trade {trade_id} direction changed from local "
+                    f"{local_position.direction} to broker {broker_direction.value} while the "
+                    "trading task is running."
+                )
+
+            if local_units != broker_units:
+                report.blockers.append(
+                    f"OANDA trade {trade_id} units changed from local {local_units} to broker "
+                    f"{broker_units} while the trading task is running."
+                )
+
+        for trade_id, broker_trade in broker_by_trade_id.items():
+            if trade_id in local_by_trade_id:
+                continue
+            report.blockers.append(
+                f"OANDA trade {trade_id} for {broker_trade.instrument} is open at the broker "
+                "but is not tracked locally while the trading task is running."
+            )
+
+        return report
+
     def _sync_account_snapshot(self, report: ReconciliationReport) -> None:
         try:
             details = self.oanda_service.get_account_details()

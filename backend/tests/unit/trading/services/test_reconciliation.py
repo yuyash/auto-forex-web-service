@@ -312,6 +312,58 @@ class TestSyncPositionsWithBroker:
         assert call_kwargs["units"] == -500
 
 
+class TestDetectRuntimeDrift:
+    @patch("apps.trading.services.reconciliation.Position")
+    def test_reports_missing_broker_trade_as_runtime_drift(self, mock_pos_model):
+        reconciler = _make_reconciler()
+        reconciler.oanda_service.get_pending_orders.return_value = []
+        reconciler.oanda_service.get_open_trades.return_value = []
+
+        local_pos = _make_position(oanda_trade_id="T100")
+        mock_pos_model.objects.filter.return_value.order_by.return_value = [local_pos]
+
+        report = reconciler.detect_runtime_drift()
+
+        assert report.has_blockers is True
+        assert any(
+            "no longer open while the trading task is running" in blocker
+            for blocker in report.blockers
+        )
+
+    @patch("apps.trading.services.reconciliation.Position")
+    def test_reports_extra_broker_trade_as_runtime_drift(self, mock_pos_model):
+        reconciler = _make_reconciler()
+        reconciler.oanda_service.get_pending_orders.return_value = []
+        reconciler.oanda_service.get_open_trades.return_value = [_make_open_trade(trade_id="T200")]
+        mock_pos_model.objects.filter.return_value.order_by.return_value = []
+
+        report = reconciler.detect_runtime_drift()
+
+        assert report.has_blockers is True
+        assert any(
+            "is open at the broker but is not tracked locally" in blocker
+            for blocker in report.blockers
+        )
+
+    @patch("apps.trading.services.reconciliation.Position")
+    def test_reports_unit_mismatch_as_runtime_drift(self, mock_pos_model):
+        reconciler = _make_reconciler()
+        reconciler.oanda_service.get_pending_orders.return_value = []
+        reconciler.oanda_service.get_open_trades.return_value = [
+            _make_open_trade(trade_id="T100", units=Decimal("2000"))
+        ]
+
+        local_pos = _make_position(oanda_trade_id="T100", units=1000)
+        mock_pos_model.objects.filter.return_value.order_by.return_value = [local_pos]
+
+        report = reconciler.detect_runtime_drift()
+
+        assert report.has_blockers is True
+        assert any(
+            "units changed from local 1000 to broker 2000" in blocker for blocker in report.blockers
+        )
+
+
 # ── Tests for reconcile (full flow) ─────────────────────────────────
 
 

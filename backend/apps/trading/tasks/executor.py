@@ -506,6 +506,7 @@ class TaskExecutor:
             self._process_tick_batch(loop, tick_batch)
             loop.batch_count += 1
             self._persist_batch_progress(loop)
+            self._after_batch_processed(loop)
 
             if loop.stopped_early:
                 break
@@ -526,6 +527,10 @@ class TaskExecutor:
         logger.info("Stop signal received - ticks_processed=%d", loop.state.ticks_processed)
         loop.stopped_early = True
         return True
+
+    def _after_batch_processed(self, loop: ExecutionLoopState) -> None:
+        """Hook for executor-specific checks after each processed batch."""
+        _ = loop
 
     def _handle_empty_batch(self, loop: ExecutionLoopState) -> bool:
         """Handle empty tick batch; return True when loop should terminate."""
@@ -1102,6 +1107,42 @@ class BacktestExecutor(TaskExecutor):
 
 class TradingExecutor(TaskExecutor):
     """Executor for live trading tasks."""
+
+    _RUNTIME_DRIFT_CHECK_EVERY_BATCHES = 5
+
+    def _after_batch_processed(self, loop: ExecutionLoopState) -> None:
+        super()._after_batch_processed(loop)
+        trading_task = cast(TradingTask, self.task)
+        if getattr(trading_task, "dry_run", False):
+            return
+        if loop.batch_count % self._RUNTIME_DRIFT_CHECK_EVERY_BATCHES != 0:
+            return
+        self._assert_runtime_broker_sync(state=loop.state)
+
+    def _assert_runtime_broker_sync(self, *, state: ExecutionState) -> None:
+        """Fail fast when broker exposure drifts during a live execution."""
+        trading_task = cast(TradingTask, self.task)
+        from apps.trading.services.reconciliation import TradingResumeReconciler, TradingSafetyError
+
+        reconciler = TradingResumeReconciler(
+            task=trading_task,
+            state=state,
+        )
+        report = reconciler.detect_runtime_drift()
+        if not report.has_blockers:
+            return
+
+        for blocker in report.blockers:
+            logger.error(
+                "Live broker drift detected - task_id=%s, execution_id=%s, blocker=%s",
+                self.task.pk,
+                self.task.execution_id,
+                blocker,
+            )
+        raise TradingSafetyError(
+            "Trading task stopped because broker state drift was detected while it was running. "
+            "Review task logs and reconcile the OANDA account before restarting."
+        )
 
     def prepare_state_for_execution(
         self,
