@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Callable, cast
 from uuid import UUID
 
 from celery.result import AsyncResult
+from django.conf import settings
 from django.db import transaction
 
 from apps.trading.enums import StopMode, TaskStatus
@@ -114,9 +115,7 @@ class TaskLifecycleCommands:
             )
             self.service._dispatch_task(task, task_type)
             if task_type == "trading":
-                from apps.market.tasks import ensure_tick_pubsub_running
-
-                ensure_tick_pubsub_running.apply_async(countdown=0, queue="system")
+                self._kick_market_supervisor()
             self.logger.info(
                 "[SERVICE:START] Task submitted to Celery - task_id=%s, execution_id=%s, new_status=%s",
                 task.pk,
@@ -134,6 +133,16 @@ class TaskLifecycleCommands:
         except Exception:
             self._reset_failed_start(task=task, model_class=model_class)
             raise
+
+    def _kick_market_supervisor(self) -> None:
+        """Kick the market tick supervisor outside eager test execution."""
+        if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
+            self.logger.info("[SERVICE:START] Skipping market supervisor kick in eager Celery mode")
+            return
+
+        from apps.market.tasks import ensure_tick_pubsub_running
+
+        ensure_tick_pubsub_running.apply_async(countdown=0, queue="system")
 
     def stop(self, task_id: UUID, mode: str = "graceful") -> bool:
         self.logger.info("[SERVICE:STOP] Stopping task - task_id=%s, mode=%s", task_id, mode)

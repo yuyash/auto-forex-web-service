@@ -65,9 +65,13 @@ class TestStartTask:
     @patch("apps.trading.tasks.service.uuid4")
     @patch("apps.market.tasks.ensure_tick_pubsub_running.apply_async")
     @patch("apps.trading.tasks.service.run_trading_task")
-    def test_start_trading_task(self, mock_celery_task, mock_supervisor, mock_uuid, mock_app):
+    @pytest.mark.django_db
+    def test_start_trading_task(
+        self, mock_celery_task, mock_supervisor, mock_uuid, mock_app, settings
+    ):
         from apps.trading.tasks.service import TaskService
 
+        settings.CELERY_TASK_ALWAYS_EAGER = False
         task = MagicMock(spec=TradingTask)
         task.pk = uuid4()
         task.status = TaskStatus.CREATED
