@@ -104,7 +104,7 @@ services:
     networks:
       - forex_network
 
-  # Celery Worker for Background Tasks
+  # Celery Control Worker for Background Tasks
   celery:
     image: ${DOCKERHUB_USERNAME}/forex-trading-backend:latest
     container_name: celery
@@ -124,10 +124,17 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       # Secrets only - all other config comes from environment variables
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
-      DB_APPLICATION_NAME: auto-forex-celery
+      DB_APPLICATION_NAME: auto-forex-celery-control
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key required}
       OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:?OANDA token encryption key required}
+      CELERY_ENABLE_STARTUP_RECOVERY: "1"
+      CELERY_CONTROL_WORKER_CONCURRENCY: ${CELERY_CONTROL_WORKER_CONCURRENCY:-2}
+      CELERY_MARKET_WORKER_CONCURRENCY: ${CELERY_MARKET_WORKER_CONCURRENCY:-2}
+      CELERY_BACKTEST_WORKER_CONCURRENCY: ${CELERY_BACKTEST_WORKER_CONCURRENCY:-2}
+      CELERY_BACKTEST_PUBLISHER_CONCURRENCY: ${CELERY_BACKTEST_PUBLISHER_CONCURRENCY:-2}
+      CELERY_TRADING_WORKER_CONCURRENCY: ${CELERY_TRADING_WORKER_CONCURRENCY:-2}
+      CELERY_WORKER_PREFETCH_MULTIPLIER: ${CELERY_WORKER_PREFETCH_MULTIPLIER:-1}
       # Daily tick data loading (optional — task skips if DATABASE/TABLE are empty)
       LOAD_DATA_DATABASE: ${LOAD_DATA_DATABASE:-}
       LOAD_DATA_TABLE: ${LOAD_DATA_TABLE:-}
@@ -146,7 +153,140 @@ services:
       - ./logs:/app/logs
       - ./backups:/app/backups
       - ${HOME}/.aws:/root/.aws:ro
-    command: celery -A config worker -l info --concurrency=8 -Q default,trading,market,backtest,system
+    command: celery -A config worker -l info --concurrency=${CELERY_CONTROL_WORKER_CONCURRENCY:-2} -Q default,system
+    mem_limit: 4g
+    memswap_limit: 4g
+    restart: unless-stopped
+    networks:
+      - forex_network
+
+  celery-market:
+    image: ${DOCKERHUB_USERNAME}/forex-trading-backend:latest
+    container_name: celery_market
+    depends_on:
+      - backend
+      - redis
+      - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    environment:
+      DJANGO_ENV: production
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      DB_PASSWORD: ${DB_PASSWORD:?Database password required}
+      DB_APPLICATION_NAME: auto-forex-celery-market
+      SECRET_KEY: ${SECRET_KEY:?Django secret key required}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key required}
+      OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:?OANDA token encryption key required}
+      CELERY_START_MARKET_TICK_SUPERVISOR: "1"
+      CELERY_MARKET_WORKER_CONCURRENCY: ${CELERY_MARKET_WORKER_CONCURRENCY:-2}
+      CELERY_WORKER_PREFETCH_MULTIPLIER: ${CELERY_WORKER_PREFETCH_MULTIPLIER:-1}
+    volumes:
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+      - ${HOME}/.aws:/root/.aws:ro
+    command: celery -A config worker -l info --concurrency=${CELERY_MARKET_WORKER_CONCURRENCY:-2} -Q market
+    mem_limit: 4g
+    memswap_limit: 4g
+    restart: unless-stopped
+    networks:
+      - forex_network
+
+  celery-backtest:
+    image: ${DOCKERHUB_USERNAME}/forex-trading-backend:latest
+    container_name: celery_backtest
+    depends_on:
+      - backend
+      - redis
+      - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    environment:
+      DJANGO_ENV: production
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      DB_PASSWORD: ${DB_PASSWORD:?Database password required}
+      DB_APPLICATION_NAME: auto-forex-celery-backtest
+      SECRET_KEY: ${SECRET_KEY:?Django secret key required}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key required}
+      OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:?OANDA token encryption key required}
+      CELERY_BACKTEST_WORKER_CONCURRENCY: ${CELERY_BACKTEST_WORKER_CONCURRENCY:-2}
+      CELERY_WORKER_PREFETCH_MULTIPLIER: ${CELERY_WORKER_PREFETCH_MULTIPLIER:-1}
+    volumes:
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+      - ${HOME}/.aws:/root/.aws:ro
+    command: celery -A config worker -l info --concurrency=${CELERY_BACKTEST_WORKER_CONCURRENCY:-2} -Q backtest
+    mem_limit: 4g
+    memswap_limit: 4g
+    restart: unless-stopped
+    networks:
+      - forex_network
+
+  celery-backtest-publisher:
+    image: ${DOCKERHUB_USERNAME}/forex-trading-backend:latest
+    container_name: celery_backtest_publisher
+    depends_on:
+      - backend
+      - redis
+      - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    environment:
+      DJANGO_ENV: production
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      DB_PASSWORD: ${DB_PASSWORD:?Database password required}
+      DB_APPLICATION_NAME: auto-forex-celery-backtest-publisher
+      SECRET_KEY: ${SECRET_KEY:?Django secret key required}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key required}
+      OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:?OANDA token encryption key required}
+      CELERY_BACKTEST_PUBLISHER_CONCURRENCY: ${CELERY_BACKTEST_PUBLISHER_CONCURRENCY:-2}
+      CELERY_WORKER_PREFETCH_MULTIPLIER: ${CELERY_WORKER_PREFETCH_MULTIPLIER:-1}
+    volumes:
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+      - ${HOME}/.aws:/root/.aws:ro
+    command: celery -A config worker -l info --concurrency=${CELERY_BACKTEST_PUBLISHER_CONCURRENCY:-2} -Q backtest_publisher
+    mem_limit: 4g
+    memswap_limit: 4g
+    restart: unless-stopped
+    networks:
+      - forex_network
+
+  celery-trading:
+    image: ${DOCKERHUB_USERNAME}/forex-trading-backend:latest
+    container_name: celery_trading
+    depends_on:
+      - backend
+      - redis
+      - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect ping || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    environment:
+      DJANGO_ENV: production
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      DB_PASSWORD: ${DB_PASSWORD:?Database password required}
+      DB_APPLICATION_NAME: auto-forex-celery-trading
+      SECRET_KEY: ${SECRET_KEY:?Django secret key required}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key required}
+      OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:?OANDA token encryption key required}
+      CELERY_TRADING_WORKER_CONCURRENCY: ${CELERY_TRADING_WORKER_CONCURRENCY:-2}
+      CELERY_WORKER_PREFETCH_MULTIPLIER: ${CELERY_WORKER_PREFETCH_MULTIPLIER:-1}
+    volumes:
+      - ./logs:/app/logs
+      - ./backups:/app/backups
+      - ${HOME}/.aws:/root/.aws:ro
+    command: celery -A config worker -l info --concurrency=${CELERY_TRADING_WORKER_CONCURRENCY:-2} -Q trading
     mem_limit: 4g
     memswap_limit: 4g
     restart: unless-stopped

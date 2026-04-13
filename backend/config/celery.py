@@ -44,6 +44,14 @@ def _recover_orphaned_tasks_on_startup(**_kwargs: object) -> None:
     Runs with a short countdown to let Django fully initialise and to give
     the database connection pool time to warm up.
     """
+    if str(os.getenv("CELERY_ENABLE_STARTUP_RECOVERY", "0")).strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return
+
     from apps.trading.tasks.recovery import recover_orphaned_tasks_beat
 
     try:
