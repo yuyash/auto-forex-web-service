@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.34.1...backend-v1.34.2) (2026-04-13)
+
+
+### Bug Fixes
+
+* **trading:** resume snowball tasks after deploy ([#474](https://github.com/yuyash/auto-forex-web-service/issues/474)) ([bb679f6](https://github.com/yuyash/auto-forex-web-service/commit/bb679f68ddec3f2348659d97734d07ac60fc33b3))
+
 ## [1.34.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.34.0...backend-v1.34.1) (2026-04-13)
 
 
