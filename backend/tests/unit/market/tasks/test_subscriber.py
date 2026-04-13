@@ -25,7 +25,7 @@ class TestTickSubscriberRunnerRun:
     """Tests for run method."""
 
     @patch("apps.market.tasks.subscriber.redis_client")
-    @patch("apps.market.tasks.subscriber.acquire_lock", return_value=False)
+    @patch("apps.market.tasks.subscriber.acquire_lock", return_value=None)
     @patch("apps.market.tasks.subscriber.current_task_id", return_value="task-1")
     @patch("apps.market.tasks.subscriber.lock_value", return_value="worker-1")
     @patch("apps.market.tasks.subscriber.CeleryTaskService")
@@ -47,16 +47,25 @@ class TestTickSubscriberRunnerRun:
         runner = TickSubscriberRunner()
         runner.run()
 
-        svc_instance.mark_stopped.assert_called_once()
+        svc_instance.start.assert_not_called()
+        client.close.assert_called_once()
 
     @patch("apps.market.tasks.subscriber.redis_client")
-    @patch("apps.market.tasks.subscriber.acquire_lock", return_value=True)
+    @patch("apps.market.tasks.subscriber.acquire_lock", return_value="owner-1")
+    @patch("apps.market.tasks.subscriber.LockHeartbeat")
     @patch("apps.market.tasks.subscriber.current_task_id", return_value="task-1")
     @patch("apps.market.tasks.subscriber.lock_value", return_value="worker-1")
     @patch("apps.market.tasks.subscriber.CeleryTaskService")
     @patch("apps.market.tasks.subscriber.settings")
     def test_run_stop_requested_immediately(
-        self, mock_settings, MockService, mock_lock_val, mock_task_id, mock_acquire, mock_redis
+        self,
+        mock_settings,
+        MockService,
+        mock_lock_val,
+        mock_task_id,
+        MockHeartbeat,
+        mock_acquire,
+        mock_redis,
     ):
         mock_settings.MARKET_REDIS_URL = "redis://localhost"
         mock_settings.MARKET_TICK_CHANNEL = "ticks"
@@ -72,6 +81,8 @@ class TestTickSubscriberRunnerRun:
         runner = TickSubscriberRunner()
         runner.run()
 
+        MockHeartbeat.return_value.start.assert_called_once()
+        svc_instance.start.assert_called_once()
         svc_instance.mark_stopped.assert_called_once()
 
 
@@ -219,40 +230,51 @@ class TestCleanupAndStop:
         runner = TickSubscriberRunner()
         runner.task_service = MagicMock()
         runner.buffer = []
+        runner.lock_owner = "owner-1"
+        lock_heartbeat = MagicMock()
+        runner.lock_heartbeat = lock_heartbeat
 
         client = MagicMock()
         pubsub = MagicMock()
 
-        runner._cleanup_and_stop(client, "lock:key", pubsub, "done")
+        with patch("apps.market.tasks.subscriber.release_lock_if_owner") as mock_release:
+            runner._cleanup_and_stop(client, "lock:key", pubsub, "done")
 
         pubsub.close.assert_called_once()
-        client.delete.assert_called_once_with("lock:key")
+        mock_release.assert_called_once_with(client, "lock:key", "owner-1")
         client.close.assert_called_once()
+        lock_heartbeat.stop.assert_called_once()
         runner.task_service.mark_stopped.assert_called_once()
 
     def test_handles_none_pubsub(self):
         runner = TickSubscriberRunner()
         runner.task_service = MagicMock()
         runner.buffer = []
+        runner.lock_owner = "owner-1"
 
         client = MagicMock()
 
         # Should not raise
-        runner._cleanup_and_stop(client, "lock:key", None, "done")
-        runner.task_service.mark_stopped.assert_called_once()
+        with patch("apps.market.tasks.subscriber.release_lock_if_owner"):
+            runner._cleanup_and_stop(client, "lock:key", None, "done")
+            runner.task_service.mark_stopped.assert_called_once()
 
     def test_handles_client_errors_gracefully(self):
         runner = TickSubscriberRunner()
         runner.task_service = MagicMock()
         runner.buffer = []
+        runner.lock_owner = "owner-1"
 
         client = MagicMock()
-        client.delete.side_effect = Exception("redis down")
         client.close.side_effect = Exception("redis down")
 
         pubsub = MagicMock()
         pubsub.close.side_effect = Exception("redis down")
 
         # Should not raise
-        runner._cleanup_and_stop(client, "lock:key", pubsub, "done")
-        runner.task_service.mark_stopped.assert_called_once()
+        with patch(
+            "apps.market.tasks.subscriber.release_lock_if_owner",
+            side_effect=Exception("redis down"),
+        ):
+            runner._cleanup_and_stop(client, "lock:key", pubsub, "done")
+            runner.task_service.mark_stopped.assert_called_once()

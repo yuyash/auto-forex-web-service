@@ -21,6 +21,7 @@ def test_backtest_capacity_blocks_when_execution_queue_is_full(settings) -> None
         patch(
             "apps.trading.services.task_capacity.BacktestTask.objects.filter"
         ) as mock_backtest_filter,
+        patch.object(TaskCapacityService, "_queue_usage", return_value=None),
         patch(
             "apps.trading.services.task_capacity.MarketCeleryTaskStatus.objects.filter"
         ) as mock_market_filter,
@@ -47,6 +48,7 @@ def test_trading_capacity_counts_new_market_publisher_and_subscriber(settings) -
         patch(
             "apps.trading.services.task_capacity.TradingTask.objects.filter"
         ) as mock_trading_filter,
+        patch.object(TaskCapacityService, "_queue_usage", return_value=None),
         patch.object(TaskCapacityService, "_fresh_market_tasks") as mock_fresh_market_tasks,
     ):
         mock_trading_filter.return_value.count.return_value = 0
@@ -89,9 +91,12 @@ def test_trading_capacity_ignores_stale_market_publishers(settings) -> None:
     task = MagicMock(spec=TradingTask)
     task.oanda_account_id = 42
 
-    with patch(
-        "apps.trading.services.task_capacity.TradingTask.objects.filter"
-    ) as mock_trading_filter:
+    with (
+        patch(
+            "apps.trading.services.task_capacity.TradingTask.objects.filter"
+        ) as mock_trading_filter,
+        patch.object(TaskCapacityService, "_queue_usage", return_value=None),
+    ):
         mock_trading_filter.return_value.count.return_value = 0
         decision = TaskCapacityService().get_task_admission(task)
 
@@ -111,10 +116,33 @@ def test_backtest_capacity_ignores_stale_publishers(settings) -> None:
         last_heartbeat_at=timezone.now() - timedelta(minutes=10),
     )
 
-    with patch(
-        "apps.trading.services.task_capacity.BacktestTask.objects.filter"
-    ) as mock_backtest_filter:
+    with (
+        patch(
+            "apps.trading.services.task_capacity.BacktestTask.objects.filter"
+        ) as mock_backtest_filter,
+        patch.object(TaskCapacityService, "_queue_usage", return_value=None),
+    ):
         mock_backtest_filter.return_value.count.return_value = 0
         decision = TaskCapacityService().get_task_admission(BacktestTask())
 
     assert decision.allowed is True
+
+
+def test_queue_usage_counts_active_and_reserved_for_dedicated_queue() -> None:
+    inspector = MagicMock()
+    inspector.active_queues.return_value = {
+        "worker-market@host": [{"name": "market"}],
+        "worker-trading@host": [{"name": "trading"}],
+    }
+    inspector.active.return_value = {
+        "worker-market@host": [{"name": "market.tasks.subscribe_ticks_to_db"}],
+        "worker-trading@host": [{"name": "trading.tasks.run_trading_task"}],
+    }
+    inspector.reserved.return_value = {
+        "worker-market@host": [{"name": "market.tasks.publish_oanda_ticks"}],
+        "worker-trading@host": [],
+    }
+
+    with patch("apps.trading.services.task_capacity.current_app.control.inspect") as mock_inspect:
+        mock_inspect.return_value = inspector
+        assert TaskCapacityService()._queue_usage("market") == 2

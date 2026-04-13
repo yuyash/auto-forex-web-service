@@ -8,6 +8,7 @@ import os
 def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
     """Return Celery settings derived from the Redis configuration."""
     broker_url = redis_url.replace(f"/{redis_db}", "/2")
+    default_concurrency = int(os.getenv("CELERY_DEFAULT_WORKER_CONCURRENCY", "2"))
     control_concurrency = int(os.getenv("CELERY_CONTROL_WORKER_CONCURRENCY", "2"))
     market_concurrency = int(os.getenv("CELERY_MARKET_WORKER_CONCURRENCY", "2"))
     backtest_concurrency = int(os.getenv("CELERY_BACKTEST_WORKER_CONCURRENCY", "2"))
@@ -31,6 +32,7 @@ def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
         "CELERY_WORKER_PREFETCH_MULTIPLIER": int(
             os.getenv("CELERY_WORKER_PREFETCH_MULTIPLIER", "1")
         ),
+        "CELERY_DEFAULT_WORKER_CONCURRENCY": default_concurrency,
         "CELERY_CONTROL_WORKER_CONCURRENCY": control_concurrency,
         "CELERY_MARKET_WORKER_CONCURRENCY": market_concurrency,
         "CELERY_BACKTEST_WORKER_CONCURRENCY": backtest_concurrency,

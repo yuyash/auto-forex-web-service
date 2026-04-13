@@ -17,7 +17,9 @@ from apps.market.tasks.base import (
     acquire_lock,
     current_task_id,
     isoformat,
+    LockHeartbeat,
     lock_value,
+    release_lock_if_owner,
     redis_client,
 )
 
@@ -56,6 +58,8 @@ class TickPublisherRunner:
         """Initialize the publisher runner."""
         self.task_service: CeleryTaskService | None = None
         self.account: OandaAccounts | None = None
+        self.lock_owner: str | None = None
+        self.lock_heartbeat: LockHeartbeat | None = None
 
     def run(self, account_id: int, instruments: list[str] | None = None) -> None:
         """Execute the tick publisher task.
@@ -73,12 +77,6 @@ class TickPublisherRunner:
             stop_check_interval_seconds=1.0,
             heartbeat_interval_seconds=5.0,
         )
-        self.task_service.start(
-            celery_task_id=current_task_id(),
-            worker=lock_value(),
-            meta={"account_id": account_id, "instruments": instruments_list},
-        )
-
         redis_url = settings.MARKET_REDIS_URL
 
         logger.info(
@@ -91,14 +89,32 @@ class TickPublisherRunner:
         client = redis_client()
         lock_key = publisher_lock_key_for_account(account_id)
 
+        owner = acquire_lock(client, lock_key, ttl_seconds=60)
+        if owner is None:
+            logger.warning("Publisher exiting: another instance holds the lock (lock=%s)", lock_key)
+            client.close()
+            return
+        self.lock_owner = owner
+        self.task_service.start(
+            celery_task_id=current_task_id(),
+            worker=lock_value(),
+            meta={
+                "account_id": account_id,
+                "instruments": instruments_list,
+                "lock_owner": owner,
+            },
+        )
+        self.lock_heartbeat = LockHeartbeat(
+            client=client,
+            key=lock_key,
+            owner=owner,
+            ttl_seconds=60,
+        )
+        self.lock_heartbeat.start()
+
         if self.task_service.should_stop(force=True):
             logger.info("Publisher exiting: stop requested before streaming")
             self._cleanup_and_stop(client, lock_key, "Stop requested")
-            return
-
-        if not acquire_lock(client, lock_key, ttl_seconds=60):
-            logger.warning("Publisher exiting: another instance holds the lock (lock=%s)", lock_key)
-            self._cleanup_and_stop(client, lock_key, "Already running")
             return
 
         # Validate account
@@ -155,9 +171,6 @@ class TickPublisherRunner:
                     break
 
                 try:
-                    # Refresh lock TTL periodically (best-effort).
-                    client.expire(lock_key, 60)
-
                     logger.info(
                         "Publisher: connecting to OANDA pricing stream "
                         "(instruments=%s, account_id=%s)",
@@ -204,7 +217,6 @@ class TickPublisherRunner:
                                 status_message=f"published={ticks_published}",
                                 meta_update={"published": ticks_published},
                             )
-                            client.expire(lock_key, 60)
 
                 except Exception as exc:  # pylint: disable=broad-exception-caught
                     logger.exception(
@@ -229,14 +241,19 @@ class TickPublisherRunner:
         """Cleanup resources and mark task as stopped."""
         logger.info("Publisher: cleaning up (reason=%s)", message)
 
+        if self.lock_heartbeat is not None:
+            self.lock_heartbeat.stop()
+            self.lock_heartbeat = None
+
         try:
-            client.delete(lock_key)
+            release_lock_if_owner(client, lock_key, self.lock_owner)
         except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
             logger.debug("Failed to delete lock key: %s", exc)
         try:
             client.close()
         except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
             logger.debug("Failed to close Redis client: %s", exc)
+        self.lock_owner = None
 
         if self.task_service:
             status_value = (

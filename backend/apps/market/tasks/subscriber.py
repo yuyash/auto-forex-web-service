@@ -17,8 +17,10 @@ from apps.market.services.celery import CeleryTaskService
 from apps.market.tasks.base import (
     acquire_lock,
     current_task_id,
+    LockHeartbeat,
     lock_value,
     parse_iso_datetime,
+    release_lock_if_owner,
     redis_client,
 )
 
@@ -41,6 +43,8 @@ class TickSubscriberRunner:
         self.buffer: list[TickData] = []
         self.buffer_max: int = 200
         self.flush_interval_seconds: int = 2
+        self.lock_owner: str | None = None
+        self.lock_heartbeat: LockHeartbeat | None = None
 
     def run(self) -> None:
         """Execute the tick subscriber task."""
@@ -52,12 +56,6 @@ class TickSubscriberRunner:
             stop_check_interval_seconds=1.0,
             heartbeat_interval_seconds=5.0,
         )
-        self.task_service.start(
-            celery_task_id=current_task_id(),
-            worker=lock_value(),
-            meta={"kind": "subscriber"},
-        )
-
         redis_url = settings.MARKET_REDIS_URL
         channel = settings.MARKET_TICK_CHANNEL
 
@@ -73,16 +71,30 @@ class TickSubscriberRunner:
             settings, "MARKET_TICK_SUBSCRIBER_LOCK_KEY", "market:tick_subscriber:lock"
         )
 
-        if self.task_service.should_stop(force=True):
-            logger.info("Subscriber exiting: stop requested before subscribing")
-            self._cleanup_and_stop(client, lock_key, None, "Stop requested")
-            return
-
-        if not acquire_lock(client, lock_key, ttl_seconds=60):
+        owner = acquire_lock(client, lock_key, ttl_seconds=60)
+        if owner is None:
             logger.warning(
                 "Subscriber exiting: another instance holds the lock (lock=%s)", lock_key
             )
-            self._cleanup_and_stop(client, lock_key, None, "Already running")
+            client.close()
+            return
+        self.lock_owner = owner
+        self.task_service.start(
+            celery_task_id=current_task_id(),
+            worker=lock_value(),
+            meta={"kind": "subscriber", "lock_owner": owner},
+        )
+        self.lock_heartbeat = LockHeartbeat(
+            client=client,
+            key=lock_key,
+            owner=owner,
+            ttl_seconds=60,
+        )
+        self.lock_heartbeat.start()
+
+        if self.task_service.should_stop(force=True):
+            logger.info("Subscriber exiting: stop requested before subscribing")
+            self._cleanup_and_stop(client, lock_key, None, "Stop requested")
             return
 
         self.buffer_max = int(getattr(settings, "MARKET_TICK_SUBSCRIBER_BATCH_SIZE", 200))
@@ -112,9 +124,6 @@ class TickSubscriberRunner:
                     break
 
                 try:
-                    # Refresh lock TTL.
-                    client.expire(lock_key, 60)
-
                     pubsub = client.pubsub(ignore_subscribe_messages=True)
                     pubsub.subscribe(channel)
                     logger.info(
@@ -165,10 +174,6 @@ class TickSubscriberRunner:
                                 ticks_received,
                                 len(self.buffer),
                             )
-
-                        # Keep lock alive.
-                        if len(self.buffer) % 50 == 0:
-                            client.expire(lock_key, 60)
 
                 except Exception as exc:  # pylint: disable=broad-exception-caught
                     logger.exception("Subscriber: error in listen loop, retrying in 5s: %s", exc)
@@ -276,14 +281,19 @@ class TickSubscriberRunner:
         except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
             logger.debug("Failed to close pubsub: %s", exc)
 
+        if self.lock_heartbeat is not None:
+            self.lock_heartbeat.stop()
+            self.lock_heartbeat = None
+
         try:
-            client.delete(lock_key)
+            release_lock_if_owner(client, lock_key, self.lock_owner)
         except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
             logger.debug("Failed to delete lock key: %s", exc)
         try:
             client.close()
         except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
             logger.debug("Failed to close Redis client: %s", exc)
+        self.lock_owner = None
 
         if self.task_service:
             self.task_service.mark_stopped(

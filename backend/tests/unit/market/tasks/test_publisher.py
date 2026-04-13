@@ -46,7 +46,7 @@ class TestTickPublisherRunnerRun:
     """Tests for run method."""
 
     @patch("apps.market.tasks.publisher.redis_client")
-    @patch("apps.market.tasks.publisher.acquire_lock", return_value=False)
+    @patch("apps.market.tasks.publisher.acquire_lock", return_value=None)
     @patch("apps.market.tasks.publisher.current_task_id", return_value="task-1")
     @patch("apps.market.tasks.publisher.lock_value", return_value="worker-1")
     @patch("apps.market.tasks.publisher.CeleryTaskService")
@@ -68,10 +68,12 @@ class TestTickPublisherRunnerRun:
         runner = TickPublisherRunner()
         runner.run(account_id=1)
 
-        svc_instance.mark_stopped.assert_called_once()
+        svc_instance.start.assert_not_called()
+        client.close.assert_called_once()
 
     @patch("apps.market.tasks.publisher.redis_client")
-    @patch("apps.market.tasks.publisher.acquire_lock", return_value=True)
+    @patch("apps.market.tasks.publisher.acquire_lock", return_value="owner-1")
+    @patch("apps.market.tasks.publisher.LockHeartbeat")
     @patch("apps.market.tasks.publisher.current_task_id", return_value="task-1")
     @patch("apps.market.tasks.publisher.lock_value", return_value="worker-1")
     @patch("apps.market.tasks.publisher.CeleryTaskService")
@@ -84,6 +86,7 @@ class TestTickPublisherRunnerRun:
         MockService,
         mock_lock_val,
         mock_task_id,
+        MockHeartbeat,
         mock_acquire,
         mock_redis,
     ):
@@ -103,18 +106,28 @@ class TestTickPublisherRunnerRun:
         runner = TickPublisherRunner()
         runner.run(account_id=999)
 
+        MockHeartbeat.return_value.start.assert_called_once()
+        svc_instance.start.assert_called_once()
         svc_instance.mark_stopped.assert_called_once()
         assert MockService.call_args is not None
         assert svc_instance.start.call_args.kwargs["meta"]["instruments"] == ["EUR_USD"]
 
     @patch("apps.market.tasks.publisher.redis_client")
-    @patch("apps.market.tasks.publisher.acquire_lock", return_value=True)
+    @patch("apps.market.tasks.publisher.acquire_lock", return_value="owner-1")
+    @patch("apps.market.tasks.publisher.LockHeartbeat")
     @patch("apps.market.tasks.publisher.current_task_id", return_value="task-1")
     @patch("apps.market.tasks.publisher.lock_value", return_value="worker-1")
     @patch("apps.market.tasks.publisher.CeleryTaskService")
     @patch("apps.market.tasks.publisher.settings")
     def test_run_stop_requested_immediately(
-        self, mock_settings, MockService, mock_lock_val, mock_task_id, mock_acquire, mock_redis
+        self,
+        mock_settings,
+        MockService,
+        mock_lock_val,
+        mock_task_id,
+        MockHeartbeat,
+        mock_acquire,
+        mock_redis,
     ):
         mock_settings.MARKET_REDIS_URL = "redis://localhost"
         mock_settings.MARKET_TICK_CHANNEL = "ticks"
@@ -130,6 +143,8 @@ class TestTickPublisherRunnerRun:
         runner = TickPublisherRunner()
         runner.run(account_id=1)
 
+        MockHeartbeat.return_value.start.assert_called_once()
+        svc_instance.start.assert_called_once()
         svc_instance.mark_stopped.assert_called_once()
 
 
@@ -172,18 +187,25 @@ class TestCleanupAndStop:
     def test_deletes_lock_and_closes_client(self):
         runner = TickPublisherRunner()
         runner.task_service = MagicMock()
+        runner.lock_owner = "owner-1"
+        lock_heartbeat = MagicMock()
+        runner.lock_heartbeat = lock_heartbeat
 
         client = MagicMock()
-        runner._cleanup_and_stop(client, "lock:key", "done")
+        with patch("apps.market.tasks.publisher.release_lock_if_owner") as mock_release:
+            runner._cleanup_and_stop(client, "lock:key", "done")
 
-        client.delete.assert_called_once_with("lock:key")
+        mock_release.assert_called_once_with(client, "lock:key", "owner-1")
         client.close.assert_called_once()
+        lock_heartbeat.stop.assert_called_once()
 
     def test_marks_stopped(self):
         runner = TickPublisherRunner()
         runner.task_service = MagicMock()
+        runner.lock_owner = "owner-1"
 
-        runner._cleanup_and_stop(MagicMock(), "lock:key", "done")
+        with patch("apps.market.tasks.publisher.release_lock_if_owner"):
+            runner._cleanup_and_stop(MagicMock(), "lock:key", "done")
 
         runner.task_service.mark_stopped.assert_called_once()
 
@@ -192,8 +214,10 @@ class TestCleanupAndStop:
 
         runner = TickPublisherRunner()
         runner.task_service = MagicMock()
+        runner.lock_owner = "owner-1"
 
-        runner._cleanup_and_stop(MagicMock(), "lock:key", "error", failed=True)
+        with patch("apps.market.tasks.publisher.release_lock_if_owner"):
+            runner._cleanup_and_stop(MagicMock(), "lock:key", "error", failed=True)
 
         call_kwargs = runner.task_service.mark_stopped.call_args.kwargs
         assert call_kwargs["status"] == CeleryTaskStatus.Status.FAILED
@@ -201,11 +225,15 @@ class TestCleanupAndStop:
     def test_handles_client_errors_gracefully(self):
         runner = TickPublisherRunner()
         runner.task_service = MagicMock()
+        runner.lock_owner = "owner-1"
 
         client = MagicMock()
-        client.delete.side_effect = Exception("redis down")
         client.close.side_effect = Exception("redis down")
 
         # Should not raise
-        runner._cleanup_and_stop(client, "lock:key", "done")
-        runner.task_service.mark_stopped.assert_called_once()
+        with patch(
+            "apps.market.tasks.publisher.release_lock_if_owner",
+            side_effect=Exception("redis down"),
+        ):
+            runner._cleanup_and_stop(client, "lock:key", "done")
+            runner.task_service.mark_stopped.assert_called_once()
