@@ -90,7 +90,10 @@ export function useAppSettings() {
           return;
         }
       }
-      setSettings(readAppSettings());
+      setSettings((prev) => {
+        const next = readAppSettings();
+        return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+      });
     };
 
     window.addEventListener('storage', syncSettings);
