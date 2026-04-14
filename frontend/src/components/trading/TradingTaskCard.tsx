@@ -589,7 +589,7 @@ export default function TradingTaskCard({
         {displayStatus === TaskStatus.FAILED && (
           <Alert severity="error" sx={{ mt: 2 }}>
             <Typography variant="body2" fontWeight="bold">
-              Task execution failed
+              {t('trading:card.taskExecutionFailed')}
             </Typography>
             {currentTask.latest_execution?.error_message && (
               <Typography variant="body2" sx={{ mt: 0.5 }}>
