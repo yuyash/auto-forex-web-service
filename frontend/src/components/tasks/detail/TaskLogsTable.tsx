@@ -9,10 +9,12 @@ import { useTranslation } from 'react-i18next';
 import {
   Box,
   Chip,
+  Checkbox,
   FormControl,
   IconButton,
   InputLabel,
   MenuItem,
+  Paper,
   Select,
   Tooltip,
   Typography,
@@ -21,6 +23,7 @@ import {
   TextField,
   type SelectChangeEvent,
 } from '@mui/material';
+import { useMediaQuery, useTheme } from '@mui/material';
 import FilterListOffIcon from '@mui/icons-material/FilterListOff';
 import { Settings as SettingsIcon } from '@mui/icons-material';
 import DataTable, { type Column } from '../../common/DataTable';
@@ -51,6 +54,8 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
   enableRealTimeUpdates = false,
 }) => {
   const { t } = useTranslation('common');
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [levelFilter, setLevelFilter] = useState<string[]>([]);
   const [componentFilter, setComponentFilter] = useState<string[]>([]);
   const [timestampFrom, setTimestampFrom] = useState<string>('');
@@ -195,10 +200,10 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
           sx={{
             display: 'block',
             maxWidth: '100%',
-            overflowX: 'auto',
-            whiteSpace: 'pre',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            overflowWrap: 'anywhere',
             fontFamily: 'monospace',
-            WebkitOverflowScrolling: 'touch',
           }}
         >
           {String(row.message ?? '')}
@@ -233,6 +238,16 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     );
     selection.copySelectedRows(headers, formatRow, pageRowIds);
   }, [logs, selection, visibleColumns, pageRowIds]);
+
+  const renderMobileCell = useCallback(
+    (column: Column<TaskLog>, row: TaskLog) => {
+      if (column.render) {
+        return column.render(row);
+      }
+      return String((row as Record<string, unknown>)[String(column.id)] ?? '');
+    },
+    []
+  );
 
   if (error) {
     return (
@@ -384,25 +399,128 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
         />
       </Box>
 
-      <DataTable
-        columns={visibleColumns}
-        data={logs}
-        isLoading={isLoading}
-        emptyMessage={t('tables.logs.noLogs')}
-        defaultRowsPerPage={rowsPerPage}
-        rowsPerPageOptions={[rowsPerPage]}
-        storageKey="task-logs"
-        tableMaxHeight="none"
-        hidePagination
-        selectable
-        getRowId={getRowId}
-        selectedRowIds={selection.selectedRowIds}
-        onToggleRow={selection.toggleRowSelection}
-        allPageSelected={selection.isAllPageSelected(pageRowIds)}
-        indeterminate={selection.isIndeterminate(pageRowIds)}
-        onToggleAll={handleToggleAll}
-        fillEmptyRows
-      />
+      {isMobile ? (
+        <Box sx={{ display: 'grid', gap: 1.5 }}>
+          {isLoading && logs.length === 0 ? (
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography color="text.secondary">
+                {t('common.loading')}
+              </Typography>
+            </Paper>
+          ) : logs.length === 0 ? (
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Typography color="text.secondary">
+                {t('tables.logs.noLogs')}
+              </Typography>
+            </Paper>
+          ) : (
+            logs.map((row) => {
+              const rowId = getRowId(row);
+              const isSelected = selection.selectedRowIds.has(rowId);
+              return (
+                <Paper key={rowId} variant="outlined" sx={{ p: 1.5 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      justifyContent: 'space-between',
+                      gap: 1,
+                      mb: 1,
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" fontWeight={600}>
+                        {formatTimestamp(row.timestamp as string)}
+                      </Typography>
+                      <Box
+                        sx={{
+                          mt: 0.75,
+                          display: 'flex',
+                          gap: 0.75,
+                          flexWrap: 'wrap',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Chip
+                          label={row.level as string}
+                          color={getLevelColor(row.level as string)}
+                          size="small"
+                        />
+                        <Chip
+                          label={String(row.component ?? '-')}
+                          size="small"
+                          variant="outlined"
+                        />
+                      </Box>
+                    </Box>
+                    <Checkbox
+                      checked={isSelected}
+                      onChange={() => selection.toggleRowSelection(rowId)}
+                    />
+                  </Box>
+
+                  <Box sx={{ display: 'grid', gap: 1 }}>
+                    {visibleColumns
+                      .filter(
+                        (column) =>
+                          String(column.id) !== 'timestamp' &&
+                          String(column.id) !== 'level' &&
+                          String(column.id) !== 'component'
+                      )
+                      .map((column) => (
+                        <Box key={String(column.id)}>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ display: 'block', mb: 0.25 }}
+                          >
+                            {column.label}
+                          </Typography>
+                          <Box
+                            sx={{
+                              whiteSpace:
+                                String(column.id) === 'message'
+                                  ? 'pre-wrap'
+                                  : 'normal',
+                              wordBreak: 'break-word',
+                              overflowWrap: 'anywhere',
+                              fontFamily:
+                                String(column.id) === 'message'
+                                  ? 'monospace'
+                                  : 'inherit',
+                            }}
+                          >
+                            {renderMobileCell(column, row)}
+                          </Box>
+                        </Box>
+                      ))}
+                  </Box>
+                </Paper>
+              );
+            })
+          )}
+        </Box>
+      ) : (
+        <DataTable
+          columns={visibleColumns}
+          data={logs}
+          isLoading={isLoading}
+          emptyMessage={t('tables.logs.noLogs')}
+          defaultRowsPerPage={rowsPerPage}
+          rowsPerPageOptions={[rowsPerPage]}
+          storageKey="task-logs"
+          tableMaxHeight="none"
+          hidePagination
+          selectable
+          getRowId={getRowId}
+          selectedRowIds={selection.selectedRowIds}
+          onToggleRow={selection.toggleRowSelection}
+          allPageSelected={selection.isAllPageSelected(pageRowIds)}
+          indeterminate={selection.isIndeterminate(pageRowIds)}
+          onToggleAll={handleToggleAll}
+          fillEmptyRows
+        />
+      )}
 
       <TablePagination
         component="div"
