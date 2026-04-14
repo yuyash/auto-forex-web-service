@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.4...frontend-v1.48.5) (2026-04-14)
+
+
+### Bug Fixes
+
+* trigger production release ([#490](https://github.com/yuyash/auto-forex-web-service/issues/490)) ([0d9d0cf](https://github.com/yuyash/auto-forex-web-service/commit/0d9d0cf7448acaab761171f39476ee91bc21ff4b))
+
 ## [1.48.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.3...frontend-v1.48.4) (2026-04-14)
 
 

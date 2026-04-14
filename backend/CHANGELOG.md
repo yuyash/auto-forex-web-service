@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.7](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.34.6...backend-v1.34.7) (2026-04-14)
+
+
+### Bug Fixes
+
+* trigger production release ([#490](https://github.com/yuyash/auto-forex-web-service/issues/490)) ([0d9d0cf](https://github.com/yuyash/auto-forex-web-service/commit/0d9d0cf7448acaab761171f39476ee91bc21ff4b))
+
 ## [1.34.6](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.34.5...backend-v1.34.6) (2026-04-14)
 
 
