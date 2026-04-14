@@ -31,6 +31,8 @@ import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
 import { StatusBadge } from './StatusBadge';
 import { TaskType } from '../../../types/common';
 import type { TaskExecution } from '../../../types/execution';
+import { useAuth } from '../../../contexts/AuthContext';
+import { formatDateTimeInTimezone } from '../../../utils/timezone';
 
 interface ExecutionHistoryTableProps {
   taskId: string;
@@ -44,6 +46,7 @@ export function ExecutionHistoryTable({
   instrument,
 }: ExecutionHistoryTableProps) {
   const { t } = useTranslation('common');
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -58,11 +61,18 @@ export function ExecutionHistoryTable({
 
   const executions = data?.results ?? [];
   const totalCount = data?.count ?? 0;
+  const timezone = user?.timezone || 'UTC';
+  const language = user?.language;
 
-  const formatDate = (v: string | undefined | null): string => {
-    if (!v) return '-';
-    return new Date(v).toLocaleString();
-  };
+  const formatDate = useCallback(
+    (v: string | undefined | null): string => {
+      if (!v) return '-';
+      return formatDateTimeInTimezone(v, timezone, language, {
+        includeTimezone: true,
+      });
+    },
+    [language, timezone]
+  );
 
   const formatDuration = (exec: TaskExecution): string => {
     if (exec.duration != null) {
@@ -260,7 +270,7 @@ export function ExecutionHistoryTable({
           ),
       },
     ],
-    [t, pnlCurrency]
+    [formatDate, pnlCurrency, t]
   );
 
   const defaultColItems = useMemo(() => columnsToDefaults(columns), [columns]);
