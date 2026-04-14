@@ -84,7 +84,8 @@ jobs:
 
           scp -P ${SSH_PORT} -r nginx ${SERVER_USER}@${SERVER_HOST}:${DEPLOY_PATH}/
 
-          ssh -p ${SSH_PORT} ${SERVER_USER}@${SERVER_HOST} 'bash -se' << EOF
+          ssh -p ${SSH_PORT} ${SERVER_USER}@${SERVER_HOST} \
+            "DEPLOY_PATH='${DEPLOY_PATH}' DOCKERHUB_USERNAME='${DOCKERHUB_USERNAME}' bash -se" << 'EOF'
             set -euo pipefail
             cd ${DEPLOY_PATH}
 
