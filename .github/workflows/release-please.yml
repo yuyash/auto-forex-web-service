@@ -99,7 +99,7 @@ jobs:
 
           docker compose config > /dev/null
           if docker compose ps --services --status running | grep -qx backend; then
-            docker compose exec -T backend python manage.py shell -c "import textwrap; exec(textwrap.dedent(\"\"\"
+            docker compose exec --interactive=false -T backend python manage.py shell -c "import textwrap; exec(textwrap.dedent(\"\"\"
               import sys
               import time
 
@@ -163,7 +163,7 @@ jobs:
                   file=sys.stderr,
               )
               raise SystemExit(1)
-            \"\"\"))"
+            \"\"\"))" </dev/null
           else
             echo "Backend is not currently running; skipping trading drain."
           fi
