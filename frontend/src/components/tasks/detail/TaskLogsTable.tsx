@@ -244,7 +244,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
       if (column.render) {
         return column.render(row);
       }
-      return String((row as Record<string, unknown>)[String(column.id)] ?? '');
+      return String(row[column.id as keyof TaskLog] ?? '');
     },
     []
   );
