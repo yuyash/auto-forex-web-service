@@ -418,44 +418,26 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
 
   return (
     <Box>
-      <Box mb={1}>
+      <Box
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
+        mb={1}
+        gap={1}
+        flexWrap="wrap"
+      >
         <Typography variant="subtitle1">
           {positionStatusFilter === 'open'
             ? t('common:tables.positions.openPositions')
             : t('common:tables.positions.allPositions')}{' '}
           ({totalCount})
         </Typography>
-        <Box
-          display="flex"
-          alignItems="center"
-          gap={0.5}
-          flexWrap="wrap"
-          mt={1}
-        >
-          <ToggleButtonGroup
-            size="small"
-            exclusive
-            value={positionStatusFilter}
-            onChange={(_event, value: 'open' | 'all' | null) => {
-              if (!value) return;
-              setPositionStatusFilter(value);
-              setPage(0);
-              selection.resetSelection();
-            }}
-          >
-            <ToggleButton value="open">
-              {t('common:tables.positions.open')}
-            </ToggleButton>
-            <ToggleButton value="all">
-              {t('common:tables.positions.allPositions')}
-            </ToggleButton>
-          </ToggleButtonGroup>
+        <Box display="flex" alignItems="center" gap={0.5} flexWrap="wrap">
           <Button
             size="small"
             variant="outlined"
             startIcon={<AddIcon />}
             onClick={() => setOpenDialogOpen(true)}
-            sx={{ minWidth: { xs: 'calc(50% - 4px)', sm: 'auto' } }}
           >
             {t('common:actions.add')}
           </Button>
@@ -470,7 +452,6 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
               closingSelected ||
               positionStatusFilter !== 'open'
             }
-            sx={{ minWidth: { xs: 'calc(50% - 4px)', sm: 'auto' } }}
           >
             {closingSelected ? (
               <CircularProgress size={16} />
@@ -478,20 +459,47 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
               t('common:actions.closePosition')
             )}
           </Button>
-          <TableSelectionToolbar
-            selectedCount={selection.selectedRowIds.size}
-            onCopy={handleCopy}
-            onSelectAll={handleToggleAll}
-            onReset={selection.resetSelection}
-            onReload={handleReload}
-            isReloading={isReloading}
-          />
-          <Tooltip title={t('common:columnConfig.configureColumns')}>
-            <IconButton onClick={() => setColConfigOpen(true)}>
-              <SettingsIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
         </Box>
+      </Box>
+      <Box
+        display="flex"
+        justifyContent="flex-end"
+        alignItems="center"
+        gap={0.5}
+        flexWrap="wrap"
+        mb={1}
+      >
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={positionStatusFilter}
+          onChange={(_event, value: 'open' | 'all' | null) => {
+            if (!value) return;
+            setPositionStatusFilter(value);
+            setPage(0);
+            selection.resetSelection();
+          }}
+        >
+          <ToggleButton value="open">
+            {t('common:tables.positions.open')}
+          </ToggleButton>
+          <ToggleButton value="all">
+            {t('common:tables.positions.allPositions')}
+          </ToggleButton>
+        </ToggleButtonGroup>
+        <TableSelectionToolbar
+          selectedCount={selection.selectedRowIds.size}
+          onCopy={handleCopy}
+          onSelectAll={handleToggleAll}
+          onReset={selection.resetSelection}
+          onReload={handleReload}
+          isReloading={isReloading}
+        />
+        <Tooltip title={t('common:columnConfig.configureColumns')}>
+          <IconButton onClick={() => setColConfigOpen(true)}>
+            <SettingsIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       </Box>
 
       <DataTable
@@ -1032,41 +1040,43 @@ export default function OandaAccountDetailPage() {
   return (
     <Container maxWidth={false} sx={containerSx}>
       <Breadcrumbs />
-      <Box
-        display="flex"
-        alignItems="center"
-        justifyContent="space-between"
-        mb={2}
-      >
+      <Box mb={2}>
         <Typography variant="h5">
           {t('settings:accounts.accountDetails')}: {account.account_id}
         </Typography>
-        <Box display="flex" gap={1} alignItems="center">
-          {/* Market Status */}
-          {marketStatus && (
-            <Chip
-              label={
-                marketStatus.is_open
-                  ? t('settings:accounts.marketOpen')
-                  : t('settings:accounts.marketClosed')
-              }
-              color={marketStatus.is_open ? 'success' : 'default'}
-              size="small"
-            />
-          )}
-          <Tooltip title={t('common:actions.reload')}>
-            <IconButton onClick={handleReloadAll}>
-              <RefreshIcon />
-            </IconButton>
-          </Tooltip>
-          <Button
-            variant="outlined"
-            startIcon={<CodeIcon />}
-            onClick={() => setRawDataOpen(true)}
-          >
-            {t('settings:accounts.rawData')}
-          </Button>
-        </Box>
+      </Box>
+      <Box
+        display="flex"
+        alignItems="center"
+        justifyContent={{ xs: 'flex-end', sm: 'flex-end' }}
+        gap={1}
+        flexWrap="wrap"
+        mb={2}
+      >
+        {/* Market Status */}
+        {marketStatus && (
+          <Chip
+            label={
+              marketStatus.is_open
+                ? t('settings:accounts.marketOpen')
+                : t('settings:accounts.marketClosed')
+            }
+            color={marketStatus.is_open ? 'success' : 'default'}
+            size="small"
+          />
+        )}
+        <Tooltip title={t('common:actions.reload')}>
+          <IconButton onClick={handleReloadAll}>
+            <RefreshIcon />
+          </IconButton>
+        </Tooltip>
+        <Button
+          variant="outlined"
+          startIcon={<CodeIcon />}
+          onClick={() => setRawDataOpen(true)}
+        >
+          {t('settings:accounts.rawData')}
+        </Button>
       </Box>
 
       {/* Account Summary */}
