@@ -77,7 +77,7 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
 
         # Mark as stopped (trading tasks run until stopped)
         task.refresh_from_db()
-        if task.status not in [TaskStatus.STOPPED, TaskStatus.STOPPING]:
+        if task.status not in [TaskStatus.STOPPED, TaskStatus.STOPPING, TaskStatus.PAUSED]:
             rows_updated = finalize_task_terminal_lifecycle(
                 logger=logger,
                 task=task,
@@ -100,7 +100,9 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
                 )
                 return
         else:
-            logger.info("Already in terminal state: %s - task_id=%s", task.status, task_id)
+            logger.info(
+                "Execution already finalized with status=%s - task_id=%s", task.status, task_id
+            )
 
     except TradingTask.DoesNotExist:
         logger.error("TradingTask %s not found", task_id)

@@ -214,9 +214,9 @@ export default function TradingTasksPage() {
             <Button
               variant="outlined"
               startIcon={<SettingsIcon />}
-              onClick={() => navigate('/settings?tab=accounts')}
+              onClick={() => navigate('/oanda-accounts')}
             >
-              {t('settings:accounts.title', 'Account Settings')}
+              {t('settings:accounts.title', 'OANDA Accounts')}
             </Button>
             <Button
               variant="outlined"

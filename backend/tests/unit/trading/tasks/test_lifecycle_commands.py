@@ -20,6 +20,7 @@ def _make_commands(service: MagicMock) -> tuple[TaskLifecycleCommands, MagicMock
     adapters = LifecycleCommandAdapters(
         inspect_workers=MagicMock(return_value={"worker1": {}}),
         signal_stop=MagicMock(),
+        signal_pause=MagicMock(),
         revoke_execution=MagicMock(),
         dispatch_stop=MagicMock(),
         sleep=MagicMock(),
@@ -91,6 +92,23 @@ def test_stop_continues_when_signal_adapter_fails() -> None:
 
     assert result is True
     adapters.dispatch_stop.assert_called_once()
+
+
+def test_pause_uses_injected_adapter() -> None:
+    task_id = uuid4()
+    execution_id = uuid4()
+    task = MagicMock(pk=task_id, status=TaskStatus.RUNNING, execution_id=execution_id)
+    service = MagicMock()
+    service._get_task_and_type.return_value = (task, "trading")
+    service.writer.persist_state = MagicMock()
+
+    commands, adapters = _make_commands(service)
+
+    result = commands.pause(task_id)
+
+    assert result is True
+    service.writer.persist_state.assert_called_once_with(task, status=TaskStatus.PAUSED)
+    adapters.signal_pause.assert_called_once()
 
 
 @patch("apps.market.tasks.ensure_tick_pubsub_running.apply_async")

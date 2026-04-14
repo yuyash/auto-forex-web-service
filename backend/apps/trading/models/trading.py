@@ -174,6 +174,7 @@ class TradingTask(UUIDModel):
                     status__in=[
                         TaskStatus.STARTING,
                         TaskStatus.RUNNING,
+                        TaskStatus.PAUSED,
                         TaskStatus.STOPPING,
                     ]
                 ),

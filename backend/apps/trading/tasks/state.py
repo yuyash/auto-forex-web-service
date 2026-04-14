@@ -70,8 +70,10 @@ class StateManager:
         # Throttling state
         self._last_stop_check = 0.0
         self._cached_should_stop = False
+        self._cached_should_pause = False
         self._last_db_stop_check = 0.0
         self._cached_should_stop_db = False
+        self._cached_should_pause_db = False
         self._last_heartbeat = 0.0
 
     def start(
@@ -179,13 +181,18 @@ class StateManager:
         """
         now = time.monotonic()
         if not force and (now - self._last_stop_check) < self.stop_check_interval_seconds:
-            return TaskControl(should_stop=self._cached_should_stop)
+            return TaskControl(
+                should_stop=self._cached_should_stop,
+                should_pause=self._cached_should_pause,
+            )
 
         should_stop_redis = False
+        should_pause_redis = False
         redis_available = True
         try:
             redis_status = self.redis.hget(self.redis_key, "status")
             should_stop_redis = redis_status == "stopping"
+            should_pause_redis = redis_status == "pausing"
         except Exception:
             redis_available = False
 
@@ -194,17 +201,21 @@ class StateManager:
             or not redis_available
             or ((now - self._last_db_stop_check) >= self.db_fallback_interval_seconds)
         )
-        if should_check_db and not should_stop_redis:
-            self._cached_should_stop_db = self._check_db_should_stop()
+        if should_check_db and not should_stop_redis and not should_pause_redis:
+            self._cached_should_stop_db, self._cached_should_pause_db = self._check_db_control()
             self._last_db_stop_check = now
 
         self._cached_should_stop = should_stop_redis or self._cached_should_stop_db
+        self._cached_should_pause = should_pause_redis or self._cached_should_pause_db
         self._last_stop_check = now
 
-        return TaskControl(should_stop=self._cached_should_stop)
+        return TaskControl(
+            should_stop=self._cached_should_stop,
+            should_pause=self._cached_should_pause,
+        )
 
-    def _check_db_should_stop(self) -> bool:
-        """Check DB fallback stop flag."""
+    def _check_db_control(self) -> tuple[bool, bool]:
+        """Check DB fallback control flags."""
         try:
             from apps.trading.models import BacktestTask, TradingTask
 
@@ -220,9 +231,9 @@ class StateManager:
                     .first()
                 )
 
-            return task == TaskStatus.STOPPING
+            return task == TaskStatus.STOPPING, task == TaskStatus.PAUSED
         except Exception:
-            return False
+            return False, False
 
     def stop(
         self,
@@ -283,6 +294,44 @@ class StateManager:
             ).update(**db_updates)
         except Exception:
             logger.exception("Failed to persist CeleryTaskStatus stop state")
+
+    def pause(
+        self,
+        *,
+        status_message: str | None = None,
+    ) -> None:
+        """Mark task as paused in Redis."""
+        now = time.time()
+        updates: dict[str, str | float] = {
+            "status": "paused",
+            "stopped_at": now,
+            "last_heartbeat_at": now,
+        }
+
+        if status_message is not None:
+            updates["status_message"] = status_message
+
+        self.redis.hset(self.redis_key, mapping=updates)  # type: ignore[arg-type]
+        self.redis.expire(self.redis_key, 300)
+
+        try:
+            from apps.trading.models.celery import CeleryTaskStatus
+
+            now_dt = dj_timezone.now()
+            db_updates: dict[str, Any] = {
+                "status": CeleryTaskStatus.Status.PAUSED,
+                "stopped_at": now_dt,
+                "last_heartbeat_at": now_dt,
+            }
+            if status_message is not None:
+                db_updates["status_message"] = status_message
+
+            CeleryTaskStatus.objects.filter(
+                task_name=self.task_name,
+                instance_key=self.instance_key,
+            ).update(**db_updates)
+        except Exception:
+            logger.exception("Failed to persist CeleryTaskStatus pause state")
 
     def cleanup(self, *, delete_key: bool = False) -> None:
         """Cleanup Redis resources.
