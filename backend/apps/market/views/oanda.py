@@ -63,6 +63,56 @@ OandaAccountUpdateRequestSerializer = inline_serializer(
 )
 
 
+def _apply_live_account_snapshot(
+    *,
+    account: OandaAccounts,
+    response_data: dict,
+    include_account_resource: bool = False,
+) -> None:
+    """Populate response data from the latest OANDA account snapshot."""
+    client = OandaService(account)
+    live_data = client.get_account_details()
+
+    response_data["currency"] = live_data.currency
+    response_data["balance"] = str(live_data.balance)
+    response_data["margin_used"] = str(live_data.margin_used)
+    response_data["margin_available"] = str(live_data.margin_available)
+    response_data["unrealized_pnl"] = str(live_data.unrealized_pl)
+    response_data["nav"] = str(live_data.nav)
+    response_data["open_trade_count"] = live_data.open_trade_count
+    response_data["open_position_count"] = live_data.open_position_count
+    response_data["pending_order_count"] = live_data.pending_order_count
+    response_data["live_data"] = True
+
+    updated_fields: list[str] = []
+    if account.currency != live_data.currency:
+        account.currency = live_data.currency
+        updated_fields.append("currency")
+    if account.balance != live_data.balance:
+        account.balance = live_data.balance
+        updated_fields.append("balance")
+    if account.margin_used != live_data.margin_used:
+        account.margin_used = live_data.margin_used
+        updated_fields.append("margin_used")
+    if account.margin_available != live_data.margin_available:
+        account.margin_available = live_data.margin_available
+        updated_fields.append("margin_available")
+    if account.unrealized_pnl != live_data.unrealized_pl:
+        account.unrealized_pnl = live_data.unrealized_pl
+        updated_fields.append("unrealized_pnl")
+    if updated_fields:
+        account.save(update_fields=[*updated_fields, "updated_at"])
+
+    if not include_account_resource:
+        return
+
+    account_resource = client.get_account_resource()
+    hedging_enabled = bool(account_resource.get("hedgingEnabled", False))
+    response_data["hedging_enabled"] = hedging_enabled
+    response_data["position_mode"] = "hedging" if hedging_enabled else "netting"
+    response_data["oanda_account"] = client.make_jsonable(account_resource)
+
+
 class OandaAccountView(APIView):
     """
     API endpoint for OANDA accounts.
@@ -89,6 +139,18 @@ class OandaAccountView(APIView):
             .order_by("-created_at")
         )
         serializer = self.serializer_class(accounts, many=True)
+        response_data = list(serializer.data)
+        for account, account_data in zip(accounts, response_data, strict=False):
+            try:
+                _apply_live_account_snapshot(account=account, response_data=account_data)
+            except Exception as e:
+                logger.warning(
+                    "Failed to fetch live data from OANDA for account %s: %s",
+                    account.account_id,
+                    str(e),
+                )
+                account_data["live_data"] = False
+                account_data["live_data_error"] = "Failed to fetch live data from OANDA"
         logger.info(
             "User %s retrieved %s OANDA accounts",
             request.user.email,
@@ -99,7 +161,6 @@ class OandaAccountView(APIView):
                 "count": accounts.count(),
             },
         )
-        response_data = serializer.data
         return Response(response_data, status=status.HTTP_200_OK)
 
     @extend_schema(
@@ -176,25 +237,11 @@ class OandaAccountDetailView(APIView):
         serializer = self.serializer_class(account)
         response_data = serializer.data
         try:
-            client = OandaService(account)
-            live_data = client.get_account_details()
-
-            account_resource = client.get_account_resource()
-            hedging_enabled = bool(account_resource.get("hedgingEnabled", False))
-
-            response_data["balance"] = str(live_data.balance)
-            response_data["margin_used"] = str(live_data.margin_used)
-            response_data["margin_available"] = str(live_data.margin_available)
-            response_data["unrealized_pnl"] = str(live_data.unrealized_pl)
-            response_data["nav"] = str(live_data.nav)
-            response_data["open_trade_count"] = live_data.open_trade_count
-            response_data["open_position_count"] = live_data.open_position_count
-            response_data["pending_order_count"] = live_data.pending_order_count
-
-            response_data["hedging_enabled"] = hedging_enabled
-            response_data["position_mode"] = "hedging" if hedging_enabled else "netting"
-            response_data["oanda_account"] = client.make_jsonable(account_resource)
-            response_data["live_data"] = True
+            _apply_live_account_snapshot(
+                account=account,
+                response_data=response_data,
+                include_account_resource=True,
+            )
         except Exception as e:
             logger.warning(
                 "Failed to fetch live data from OANDA for account %s: %s",

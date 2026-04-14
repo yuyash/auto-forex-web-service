@@ -353,9 +353,9 @@ export default function TradingTaskCard({
   };
 
   const quoteCurrency =
-    liveSummary.execution.displayCurrency ||
-    currentTask.latest_execution?.quote_currency ||
     currentTask.instrument.split('_').at(-1) ||
+    currentTask.latest_execution?.quote_currency ||
+    liveSummary.execution.displayCurrency ||
     'JPY';
   const formatPnl = (value: number, currency: string): string => {
     const absValue = Math.abs(value);
