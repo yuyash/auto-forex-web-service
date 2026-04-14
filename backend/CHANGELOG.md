@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.34.4...backend-v1.34.5) (2026-04-14)
+
+
+### Bug Fixes
+
+* trading restart recovery UI ([#484](https://github.com/yuyash/auto-forex-web-service/issues/484)) ([1e6573c](https://github.com/yuyash/auto-forex-web-service/commit/1e6573cdc42e7bca630b25ed5c08940454d725e5))
+
 ## [1.34.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.34.3...backend-v1.34.4) (2026-04-13)
 
 
