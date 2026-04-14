@@ -140,6 +140,25 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
       ),
     },
     {
+      id: 'replayed_at',
+      label: 'Replay',
+      width: 105,
+      minWidth: 90,
+      render: (row) =>
+        row.replayed_at ? (
+          <Tooltip title={`Replayed at ${formatTimestamp(row.replayed_at)}`}>
+            <Chip
+              label="REPLAY"
+              size="small"
+              color="warning"
+              variant="filled"
+            />
+          </Tooltip>
+        ) : (
+          '-'
+        ),
+    },
+    {
       id: 'direction',
       label: t('tables.orders.direction'),
       width: 120,
@@ -187,6 +206,34 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
           size="small"
         />
       ),
+    },
+    {
+      id: 'broker_order_id',
+      label: 'Broker Order',
+      width: 180,
+      minWidth: 140,
+      render: (row) =>
+        row.broker_order_id ? (
+          <Typography variant="body2" fontFamily="monospace">
+            {row.broker_order_id}
+          </Typography>
+        ) : (
+          '-'
+        ),
+    },
+    {
+      id: 'oanda_trade_id',
+      label: 'OANDA Trade',
+      width: 150,
+      minWidth: 120,
+      render: (row) =>
+        row.oanda_trade_id ? (
+          <Typography variant="body2" fontFamily="monospace">
+            {row.oanda_trade_id}
+          </Typography>
+        ) : (
+          '-'
+        ),
     },
     {
       id: 'requested_price',
@@ -244,7 +291,11 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
 
   // Column config
   const [colConfigOpen, setColConfigOpen] = useState(false);
-  const defaultColItems = columnsToDefaults(columns);
+  const defaultColItems = columnsToDefaults(columns).map((column) =>
+    ['replayed_at', 'broker_order_id', 'oanda_trade_id'].includes(column.id)
+      ? { ...column, visible: false }
+      : column
+  );
   const {
     columns: colConfig,
     updateColumns,
@@ -263,6 +314,10 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
       direction: (r) => r.direction ?? '-',
       units: (r) => String(Math.abs(r.units)),
       status: (r) => r.status ?? '-',
+      replayed_at: (r) =>
+        r.replayed_at ? formatTimestamp(r.replayed_at) : '-',
+      broker_order_id: (r) => r.broker_order_id ?? '-',
+      oanda_trade_id: (r) => r.oanda_trade_id ?? '-',
       requested_price: (r) =>
         r.requested_price ? parseFloat(r.requested_price).toFixed(5) : '-',
       fill_price: (r) =>

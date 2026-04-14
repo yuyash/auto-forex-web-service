@@ -651,6 +651,22 @@ class TestResumeLifecycle:
 class TestTradingDurability:
     """Tests for trading-specific durability behavior."""
 
+    def test_classify_replay_event_flags_trade_impacting(self):
+        from apps.trading.tasks.executor import TaskExecutor
+
+        event = MagicMock()
+        event.event_type = "open_position"
+
+        assert TaskExecutor._classify_replay_event(event) == "trade-impacting"
+
+    def test_classify_replay_event_flags_lifecycle(self):
+        from apps.trading.tasks.executor import TaskExecutor
+
+        event = MagicMock()
+        event.event_type = "strategy_stopped"
+
+        assert TaskExecutor._classify_replay_event(event) == "lifecycle"
+
     @patch("apps.trading.tasks.executor.EventHandler")
     def test_handle_events_persists_state_per_processed_event(self, mock_handler):
         from apps.trading.dataclasses.execution import EventExecutionResult
@@ -688,7 +704,7 @@ class TestTradingDurability:
             patch.object(executor, "save_state"),
             patch.object(
                 executor.event_handler,
-                "handle_event",
+                "handle_event_with_replay",
                 return_value=EventExecutionResult(realized_pnl_delta=Decimal("5")),
             ),
         ):
