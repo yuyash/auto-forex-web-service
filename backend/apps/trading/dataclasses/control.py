@@ -13,6 +13,8 @@ class TaskControl:
     These flags are checked periodically during execution to handle stop requests.
 
     Attributes:
-        should_stop: Flag indicating the task should stop"""
+        should_stop: Flag indicating the task should stop
+        should_pause: Flag indicating the task should pause"""
 
     should_stop: bool = False
+    should_pause: bool = False

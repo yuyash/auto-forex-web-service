@@ -1,4 +1,4 @@
-"""Gracefully stop active trading tasks before deployment."""
+"""Pause or stop active backtest tasks before deployment."""
 
 from __future__ import annotations
 
@@ -7,16 +7,16 @@ from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError
 
-from apps.trading.models import TradingTask
-from apps.trading.models.celery import CeleryTaskStatus
 from apps.trading.enums import TaskStatus
+from apps.trading.models import BacktestTask
+from apps.trading.models.celery import CeleryTaskStatus
 from apps.trading.tasks.service import TaskService
 
 
 class Command(BaseCommand):
-    """Drain live trading tasks before replacing worker containers."""
+    """Drain live backtest tasks before replacing worker containers."""
 
-    help = "Pause or stop active trading tasks and wait for the workers to quiesce"
+    help = "Pause or stop active backtest tasks and wait for the workers to quiesce"
 
     active_statuses = (
         TaskStatus.STARTING,
@@ -30,14 +30,14 @@ class Command(BaseCommand):
             "--mode",
             type=str,
             default="pause",
-            choices=["pause", "immediate", "graceful", "graceful_close"],
-            help="Lifecycle action to request for active trading tasks.",
+            choices=["pause", "immediate", "graceful"],
+            help="Lifecycle action to request for active backtest tasks.",
         )
         parser.add_argument(
             "--timeout",
             type=int,
             default=180,
-            help="Seconds to wait for active trading tasks to stop.",
+            help="Seconds to wait for active backtest tasks to settle.",
         )
         parser.add_argument(
             "--poll-interval",
@@ -48,7 +48,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--emit-task-ids",
             action="store_true",
-            help="Emit drained trading task IDs in a machine-readable format.",
+            help="Emit drained backtest task IDs in a machine-readable format.",
         )
 
     def handle(self, *args: Any, **options: Any) -> None:
@@ -60,15 +60,15 @@ class Command(BaseCommand):
 
         service = TaskService()
         active_tasks = list(
-            TradingTask.objects.select_related("config", "oanda_account", "user")
+            BacktestTask.objects.select_related("config", "user")
             .filter(status__in=self.active_statuses)
             .order_by("created_at")
         )
 
         if not active_tasks:
-            self.stdout.write("No active trading tasks to drain.")
+            self.stdout.write("No active backtest tasks to drain.")
             if emit_task_ids:
-                self.stdout.write("DRAINED_TASK_IDS=")
+                self.stdout.write("DRAINED_BACKTEST_TASK_IDS=")
             return
 
         resumable_tasks = [
@@ -80,14 +80,14 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.WARNING(
-                f"Draining {len(active_tasks)} active trading task(s) with mode={stop_mode}."
+                f"Draining {len(active_tasks)} active backtest task(s) with mode={stop_mode}."
             )
         )
 
         for task in active_tasks:
             self.stdout.write(
                 f"- Requesting {stop_mode} for {task.pk} "
-                f"({task.name}, strategy={task.config.strategy_type}, account={task.oanda_account.account_id}, "
+                f"({task.name}, strategy={task.config.strategy_type}, instrument={task.instrument}, "
                 f"status={task.status})"
             )
             try:
@@ -101,7 +101,7 @@ class Command(BaseCommand):
                 else:
                     service.stop_task(task.pk, mode=stop_mode)
             except ValueError as exc:
-                raise CommandError(f"Failed to transition trading task {task.pk}: {exc}") from exc
+                raise CommandError(f"Failed to transition backtest task {task.pk}: {exc}") from exc
 
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -110,16 +110,16 @@ class Command(BaseCommand):
                 resumable_tasks=resumable_tasks,
             )
             if not remaining:
-                self.stdout.write(self.style.SUCCESS("All active trading tasks drained."))
+                self.stdout.write(self.style.SUCCESS("All active backtest tasks drained."))
                 if emit_task_ids:
-                    self.stdout.write(f"DRAINED_TASK_IDS={drained_task_ids}")
+                    self.stdout.write(f"DRAINED_BACKTEST_TASK_IDS={drained_task_ids}")
                 return
 
             summary = ", ".join(
-                f"{task.pk}:{task.status}:{task.config.strategy_type}:{task.oanda_account.account_id}"
+                f"{task.pk}:{task.status}:{task.config.strategy_type}:{task.instrument}"
                 for task in remaining
             )
-            self.stdout.write(f"Waiting for {len(remaining)} task(s): {summary}")
+            self.stdout.write(f"Waiting for {len(remaining)} backtest task(s): {summary}")
             time.sleep(poll_interval)
 
         remaining = self._get_remaining_tasks(
@@ -127,30 +127,30 @@ class Command(BaseCommand):
             resumable_tasks=resumable_tasks,
         )
         summary = ", ".join(
-            f"{task.pk}:{task.status}:{task.config.strategy_type}:{task.oanda_account.account_id}"
+            f"{task.pk}:{task.status}:{task.config.strategy_type}:{task.instrument}"
             for task in remaining
         )
         raise CommandError(
-            "Timed out draining active trading tasks before deployment. "
+            "Timed out draining active backtest tasks before deployment. "
             f"Remaining task(s): {summary}"
         )
 
     def _get_remaining_tasks(
-        self, *, stop_mode: str, resumable_tasks: list[TradingTask]
-    ) -> list[TradingTask]:
+        self, *, stop_mode: str, resumable_tasks: list[BacktestTask]
+    ) -> list[BacktestTask]:
         """Return tasks that are not yet safe for deployment."""
         resumable_task_ids = [task.pk for task in resumable_tasks]
-        current_tasks: list[TradingTask] = []
+        current_tasks: list[BacktestTask] = []
         if resumable_task_ids:
             current_tasks = list(
-                TradingTask.objects.select_related("config", "oanda_account", "user")
+                BacktestTask.objects.select_related("config", "user")
                 .filter(pk__in=resumable_task_ids)
                 .order_by("created_at")
             )
         current_by_id = {task.pk: task for task in current_tasks}
 
         active_remaining = list(
-            TradingTask.objects.select_related("config", "oanda_account", "user")
+            BacktestTask.objects.select_related("config", "user")
             .filter(status__in=self.active_statuses)
             .order_by("created_at")
         )
@@ -172,7 +172,7 @@ class Command(BaseCommand):
         return list(remaining_by_id.values())
 
     @staticmethod
-    def _is_pause_settled(task: TradingTask) -> bool:
+    def _is_pause_settled(task: BacktestTask) -> bool:
         """Check whether the paused task has actually quiesced on the worker side."""
         execution_id = getattr(task, "execution_id", None)
         if not execution_id:
@@ -181,7 +181,7 @@ class Command(BaseCommand):
         instance_key = f"{task.pk}:{execution_id}"
         celery_status = (
             CeleryTaskStatus.objects.filter(
-                task_name="trading.tasks.run_trading_task",
+                task_name="trading.tasks.run_backtest_task",
                 instance_key=instance_key,
             )
             .values_list("status", flat=True)

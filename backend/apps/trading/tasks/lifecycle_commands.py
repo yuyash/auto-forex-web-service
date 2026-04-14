@@ -26,6 +26,7 @@ class LifecycleCommandAdapters:
 
     inspect_workers: Callable[[], dict[str, object] | None]
     signal_stop: Callable[[UUID, str, object], None]
+    signal_pause: Callable[[UUID, str, object], None]
     revoke_execution: Callable[[object], None]
     dispatch_stop: Callable[[UUID, bool, StopMode], None]
     sleep: Callable[[float], None]
@@ -45,6 +46,18 @@ def _default_signal_stop(task_id: UUID, task_name: str, execution_id: object) ->
     redis_instance_key = f"{task_id}:{execution_id}"
     redis_key = f"task:coord:{task_name}:{redis_instance_key}"
     redis_client.hset(redis_key, "status", "stopping")
+    redis_client.expire(redis_key, 3600)
+    redis_client.close()
+
+
+def _default_signal_pause(task_id: UUID, task_name: str, execution_id: object) -> None:
+    import redis
+    from django.conf import settings
+
+    redis_client = redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
+    redis_instance_key = f"{task_id}:{execution_id}"
+    redis_key = f"task:coord:{task_name}:{redis_instance_key}"
+    redis_client.hset(redis_key, "status", "pausing")
     redis_client.expire(redis_key, 3600)
     redis_client.close()
 
@@ -84,6 +97,7 @@ class TaskLifecycleCommands:
         self.adapters = adapters or LifecycleCommandAdapters(
             inspect_workers=_default_inspect_workers,
             signal_stop=_default_signal_stop,
+            signal_pause=_default_signal_pause,
             revoke_execution=_default_revoke_execution,
             dispatch_stop=_default_dispatch_stop,
             sleep=time.sleep,
@@ -202,17 +216,28 @@ class TaskLifecycleCommands:
         task, task_type = self.service._get_task_and_type(task_id)
         self.service._ensure_task_status(
             task,
-            allowed=(TaskStatus.RUNNING,),
+            allowed=(TaskStatus.STARTING, TaskStatus.RUNNING),
             message=(
-                f"Task cannot be paused in {task.status} state. Only RUNNING tasks can be paused."
+                f"Task cannot be paused in {task.status} state. "
+                "Only STARTING or RUNNING tasks can be paused."
             ),
         )
+        task_name = (
+            "trading.tasks.run_backtest_task"
+            if task_type == "backtest"
+            else "trading.tasks.run_trading_task"
+        )
         self.service.writer.persist_state(task, status=TaskStatus.PAUSED)
+        self._signal_redis_pause(
+            task_id=task_id,
+            task_name=task_name,
+            execution_id=task.execution_id,
+        )
         self.events.publish(
             task=task,
             task_type=task_type,
-            kind="task_paused",
-            description="Task paused",
+            kind="task_pause_requested",
+            description="Task pause requested",
         )
         return True
 
@@ -369,6 +394,22 @@ class TaskLifecycleCommands:
         except Exception as exc:  # pragma: no cover - defensive logging path
             self.logger.warning(
                 "[SERVICE:STOP] Redis signal failed (non-fatal) - task_id=%s, error=%s",
+                task_id,
+                exc,
+            )
+
+    def _signal_redis_pause(
+        self,
+        *,
+        task_id: UUID,
+        task_name: str,
+        execution_id: object,
+    ) -> None:
+        try:
+            self.adapters.signal_pause(task_id, task_name, execution_id)
+        except Exception as exc:  # pragma: no cover - defensive logging path
+            self.logger.warning(
+                "[SERVICE:PAUSE] Redis signal failed (non-fatal) - task_id=%s, error=%s",
                 task_id,
                 exc,
             )

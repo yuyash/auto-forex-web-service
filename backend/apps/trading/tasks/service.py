@@ -156,7 +156,12 @@ class TaskService:
 
     @staticmethod
     def _ensure_trading_account_available(task: TradingTask) -> None:
-        active_statuses = [TaskStatus.STARTING, TaskStatus.RUNNING, TaskStatus.STOPPING]
+        active_statuses = [
+            TaskStatus.STARTING,
+            TaskStatus.RUNNING,
+            TaskStatus.PAUSED,
+            TaskStatus.STOPPING,
+        ]
         active_task = (
             TradingTask.objects.filter(
                 oanda_account=task.oanda_account,

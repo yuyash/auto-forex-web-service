@@ -144,6 +144,83 @@ class TestGetInitialBalance:
         assert executor.initial_balance == Decimal("25000")
 
 
+class TestExecutorPauseControl:
+    """Tests for pause control handling in the executor."""
+
+    def test_should_stop_before_batch_honors_pause_signal(self):
+        from apps.trading.tasks.executor import ExecutionLoopState, TaskExecutor
+
+        task_model = type("DummyTradingTask", (), {"objects": MagicMock()})
+        task = task_model()
+        task.pk = uuid4()
+        task.execution_id = uuid4()
+        task.instrument = "EUR_USD"
+        task.pip_size = Decimal("0.0001")
+        task.oanda_account = SimpleNamespace(balance=Decimal("10000"))
+
+        state_manager = MagicMock()
+        state_manager.check_control.return_value = SimpleNamespace(
+            should_stop=False, should_pause=True
+        )
+
+        with patch.object(TaskExecutor, "_get_initial_balance", return_value=Decimal("10000")):
+            executor = TaskExecutor(
+                task=task,
+                engine=MagicMock(),
+                data_source=MagicMock(),
+                event_context=MagicMock(),
+                order_service=MagicMock(),
+                state_manager=state_manager,
+            )
+
+        loop = ExecutionLoopState(state=MagicMock())
+
+        assert executor._should_stop_before_batch(loop) is True
+        assert loop.paused_early is True
+        assert loop.stopped_early is False
+
+    def test_finalize_execution_marks_task_paused(self):
+        from apps.trading.tasks.executor import ExecutionLoopState, TaskExecutor
+
+        task_model = type("DummyTradingTask", (), {"objects": MagicMock()})
+        task = task_model()
+        task.pk = uuid4()
+        task.execution_id = uuid4()
+        task.instrument = "EUR_USD"
+        task.pip_size = Decimal("0.0001")
+        task.oanda_account = SimpleNamespace(balance=Decimal("10000"))
+        task.refresh_from_db = MagicMock()
+        task_model.objects.filter.return_value.update.return_value = 1
+
+        engine = MagicMock()
+        engine.on_stop.return_value = SimpleNamespace(state=MagicMock(), events=[])
+        state_manager = MagicMock()
+
+        with patch.object(TaskExecutor, "_get_initial_balance", return_value=Decimal("10000")):
+            executor = TaskExecutor(
+                task=task,
+                engine=engine,
+                data_source=MagicMock(),
+                event_context=MagicMock(),
+                order_service=MagicMock(),
+                state_manager=state_manager,
+            )
+
+        executor.save_events = MagicMock(return_value=[])
+        executor.save_state = MagicMock()
+        executor._metrics_aggregator = MagicMock()
+
+        state = MagicMock()
+        state.current_balance = Decimal("10000")
+        state.ticks_processed = 12
+        loop = ExecutionLoopState(state=state, paused_early=True)
+
+        executor._finalize_execution(loop)
+
+        task_model.objects.filter.assert_called_once()
+        state_manager.pause.assert_called_once_with(status_message="Execution paused")
+
+
 class TestTaskType:
     """Tests for TaskExecutor.task_type property."""
 

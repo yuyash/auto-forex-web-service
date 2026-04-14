@@ -129,9 +129,9 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
 
         # Check if task was stopped during execution
         task.refresh_from_db()
-        if task.status in [TaskStatus.STOPPED, TaskStatus.STOPPING]:
+        if task.status in [TaskStatus.STOPPED, TaskStatus.STOPPING, TaskStatus.PAUSED]:
             logger.info(
-                "Task was stopped during execution - task_id=%s, status=%s",
+                "Task execution interrupted - task_id=%s, status=%s",
                 task_id,
                 task.status,
             )

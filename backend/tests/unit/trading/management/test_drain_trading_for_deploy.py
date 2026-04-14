@@ -10,6 +10,8 @@ import pytest
 from django.core.management import call_command
 from django.core.management.base import CommandError
 
+from apps.trading.management.commands.drain_trading_for_deploy import Command
+
 
 def _make_task(*, status: str = "running") -> MagicMock:
     task = MagicMock()
@@ -23,24 +25,83 @@ def _make_task(*, status: str = "running") -> MagicMock:
 
 @patch("apps.trading.management.commands.drain_trading_for_deploy.TaskService")
 @patch("apps.trading.management.commands.drain_trading_for_deploy.TradingTask")
-def test_drain_trading_for_deploy_stops_and_waits(mock_task_model, mock_service_cls):
+@patch.object(Command, "_get_remaining_tasks", return_value=[])
+def test_drain_trading_for_deploy_stops_and_waits(
+    _mock_remaining,
+    mock_task_model,
+    mock_service_cls,
+):
     task = _make_task()
     mock_qs = mock_task_model.objects.select_related.return_value.filter.return_value
-    mock_qs.order_by.side_effect = [[task], []]
+    mock_qs.order_by.return_value = [task]
 
     out = StringIO()
     call_command("drain_trading_for_deploy", stdout=out)
 
-    mock_service_cls.return_value.stop_task.assert_called_once_with(task.pk, mode="graceful")
+    mock_service_cls.return_value.pause_task.assert_called_once_with(task.pk)
     output = out.getvalue()
     assert "Draining 1 active trading task" in output
+    assert "mode=pause" in output
     assert "All active trading tasks drained." in output
+
+
+@patch("apps.trading.management.commands.drain_trading_for_deploy.TaskService")
+@patch("apps.trading.management.commands.drain_trading_for_deploy.TradingTask")
+@patch.object(Command, "_get_remaining_tasks", return_value=[])
+def test_drain_trading_for_deploy_emits_drained_task_ids(
+    _mock_remaining,
+    mock_task_model,
+    mock_service_cls,
+):
+    task = _make_task()
+    mock_qs = mock_task_model.objects.select_related.return_value.filter.return_value
+    mock_qs.order_by.return_value = [task]
+
+    out = StringIO()
+    call_command("drain_trading_for_deploy", emit_task_ids=True, stdout=out)
+
+    mock_service_cls.return_value.pause_task.assert_called_once_with(task.pk)
+    assert f"DRAINED_TASK_IDS={task.pk}" in out.getvalue()
+
+
+@patch("apps.trading.management.commands.drain_trading_for_deploy.TaskService")
+@patch("apps.trading.management.commands.drain_trading_for_deploy.TradingTask")
+@patch.object(Command, "_get_remaining_tasks", return_value=[])
+def test_drain_trading_for_deploy_can_use_stop_mode(
+    _mock_remaining,
+    mock_task_model,
+    mock_service_cls,
+):
+    task = _make_task()
+    mock_qs = mock_task_model.objects.select_related.return_value.filter.return_value
+    mock_qs.order_by.return_value = [task]
+
+    out = StringIO()
+    call_command("drain_trading_for_deploy", mode="graceful", stdout=out)
+
+    mock_service_cls.return_value.stop_task.assert_called_once_with(task.pk, mode="graceful")
+    mock_service_cls.return_value.pause_task.assert_not_called()
+
+
+@patch("apps.trading.management.commands.drain_trading_for_deploy.TaskService")
+@patch("apps.trading.management.commands.drain_trading_for_deploy.TradingTask")
+def test_drain_trading_for_deploy_emits_empty_ids_when_no_tasks(mock_task_model, _mock_service_cls):
+    mock_qs = mock_task_model.objects.select_related.return_value.filter.return_value
+    mock_qs.order_by.return_value = []
+
+    out = StringIO()
+    call_command("drain_trading_for_deploy", emit_task_ids=True, stdout=out)
+
+    assert "No active trading tasks to drain." in out.getvalue()
+    assert "DRAINED_TASK_IDS=" in out.getvalue()
 
 
 @patch("apps.trading.management.commands.drain_trading_for_deploy.time.sleep", return_value=None)
 @patch("apps.trading.management.commands.drain_trading_for_deploy.TaskService")
 @patch("apps.trading.management.commands.drain_trading_for_deploy.TradingTask")
+@patch.object(Command, "_get_remaining_tasks")
 def test_drain_trading_for_deploy_raises_on_timeout(
+    mock_remaining,
     mock_task_model,
     _mock_service_cls,
     _mock_sleep,
@@ -48,6 +109,28 @@ def test_drain_trading_for_deploy_raises_on_timeout(
     task = _make_task(status="stopping")
     mock_qs = mock_task_model.objects.select_related.return_value.filter.return_value
     mock_qs.order_by.return_value = [task]
+    mock_remaining.return_value = [task]
 
     with pytest.raises(CommandError, match="Timed out draining active trading tasks"):
         call_command("drain_trading_for_deploy", timeout=1, poll_interval=0.1)
+
+
+@patch("apps.trading.management.commands.drain_trading_for_deploy.TaskService")
+@patch("apps.trading.management.commands.drain_trading_for_deploy.TradingTask")
+@patch.object(Command, "_get_remaining_tasks", return_value=[])
+def test_drain_trading_for_deploy_only_resumes_starting_or_running_tasks(
+    _mock_remaining,
+    mock_task_model,
+    mock_service_cls,
+):
+    running_task = _make_task(status="running")
+    stopping_task = _make_task(status="stopping")
+    mock_qs = mock_task_model.objects.select_related.return_value.filter.return_value
+    mock_qs.order_by.return_value = [running_task, stopping_task]
+
+    out = StringIO()
+    call_command("drain_trading_for_deploy", emit_task_ids=True, stdout=out)
+
+    mock_service_cls.return_value.pause_task.assert_called_once_with(running_task.pk)
+    assert f"DRAINED_TASK_IDS={running_task.pk}" in out.getvalue()
+    assert str(stopping_task.pk) not in out.getvalue().split("DRAINED_TASK_IDS=")[-1]

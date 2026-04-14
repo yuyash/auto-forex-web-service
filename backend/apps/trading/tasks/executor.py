@@ -17,7 +17,7 @@ from django.utils import timezone as dj_timezone
 
 from apps.trading.dataclasses import EventContext, EventExecutionResult, StrategyResult
 from apps.trading.engine import TradingEngine
-from apps.trading.enums import EventScope, EventType, TaskType
+from apps.trading.enums import EventScope, EventType, TaskStatus, TaskType
 from apps.trading.events import StrategyEvent
 from apps.trading.events.handler import EventHandler as _EventHandlerCompat
 from apps.trading.events.handler import CycleResolutionError  # noqa: F401 — used in handle_events
@@ -72,6 +72,7 @@ class ExecutionLoopState:
     no_tick_batches: int = 0
     max_no_tick_batches: int = 60
     stopped_early: bool = False
+    paused_early: bool = False
     stop_reason: str = ""
     is_error: bool = False
     resume_last_tick_timestamp: datetime | None = None
@@ -188,7 +189,8 @@ class TaskExecutor:
 
     def _create_runtime_metrics_tracker(self) -> RuntimeMetricsTracker:
         """Create a tracker for strategy-agnostic runtime metrics."""
-        raw_config_dict = getattr(self.task.config, "config_dict", {}) or {}
+        task_config = getattr(self.task, "config", None)
+        raw_config_dict = getattr(task_config, "config_dict", {}) or {}
         config_dict = raw_config_dict if isinstance(raw_config_dict, dict) else {}
         account_currency = getattr(self.task, "account_currency", "") or getattr(
             getattr(self.task, "oanda_account", None), "currency", ""
@@ -521,11 +523,18 @@ class TaskExecutor:
     def _should_stop_before_batch(self, loop: ExecutionLoopState) -> bool:
         """Check external stop signal before processing a batch."""
         control = self.state_manager.check_control()
-        if not control.should_stop:
+        should_stop = getattr(control, "should_stop", False) is True
+        should_pause = getattr(control, "should_pause", False) is True
+        if should_stop:
+            logger.info("Stop signal received - ticks_processed=%d", loop.state.ticks_processed)
+            loop.stopped_early = True
+            return True
+
+        if not should_pause:
             return False
 
-        logger.info("Stop signal received - ticks_processed=%d", loop.state.ticks_processed)
-        loop.stopped_early = True
+        logger.info("Pause signal received - ticks_processed=%d", loop.state.ticks_processed)
+        loop.paused_early = True
         return True
 
     def _after_batch_processed(self, loop: ExecutionLoopState) -> None:
@@ -578,17 +587,30 @@ class TaskExecutor:
     def _should_stop_during_batch(self, loop: ExecutionLoopState, tick_idx: int) -> bool:
         """Check stop signal during long batch processing."""
         control = self.state_manager.check_control()
-        if not control.should_stop:
+        should_stop = getattr(control, "should_stop", False) is True
+        should_pause = getattr(control, "should_pause", False) is True
+        if should_stop:
+            logger.info(
+                "Stop signal received during batch processing - task_id=%s, task_type=%s, ticks_processed=%d, tick_idx=%d",
+                self.task.pk,
+                self.task_type.value,
+                loop.state.ticks_processed,
+                tick_idx,
+            )
+            loop.stopped_early = True
+            return True
+
+        if not should_pause:
             return False
 
         logger.info(
-            "Stop signal received during batch processing - task_id=%s, task_type=%s, ticks_processed=%d, tick_idx=%d",
+            "Pause signal received during batch processing - task_id=%s, task_type=%s, ticks_processed=%d, tick_idx=%d",
             self.task.pk,
             self.task_type.value,
             loop.state.ticks_processed,
             tick_idx,
         )
-        loop.stopped_early = True
+        loop.paused_early = True
         return True
 
     def _process_single_tick(self, loop: ExecutionLoopState, tick) -> bool:
@@ -1023,13 +1045,30 @@ class TaskExecutor:
             )
             raise StrategyError(loop.stop_reason)
 
-        if loop.stopped_early:
+        if loop.paused_early:
             logger.info(
-                "Execution stopped by user - ticks_processed=%d, final_balance=%s",
+                "Execution paused - ticks_processed=%d, final_balance=%s",
                 loop.state.ticks_processed,
                 loop.state.current_balance,
             )
-            self.state_manager.stop(status_message="Execution stopped by user")
+            type(self.task).objects.filter(
+                pk=self.task.pk,
+                status__in=(TaskStatus.RUNNING, TaskStatus.PAUSED),
+            ).update(
+                status=TaskStatus.PAUSED,
+                completed_at=None,
+            )
+            self.task.refresh_from_db()
+            self.state_manager.pause(status_message="Execution paused")
+            return
+
+        if loop.stopped_early:
+            logger.info(
+                "Execution stopped by external signal - ticks_processed=%d, final_balance=%s",
+                loop.state.ticks_processed,
+                loop.state.current_balance,
+            )
+            self.state_manager.stop(status_message="Execution stopped by external signal")
             return
 
         logger.info(
