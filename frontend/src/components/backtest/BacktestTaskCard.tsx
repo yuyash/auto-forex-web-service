@@ -292,7 +292,7 @@ export default function BacktestTaskCard({
 
   const formatDate = (dateString: string): string => {
     return new Date(dateString).toLocaleDateString(
-      getLocaleForLanguage(i18n.resolvedLanguage),
+      getLocaleForLanguage(i18n?.resolvedLanguage),
       {
         year: 'numeric',
         month: 'short',
@@ -303,7 +303,7 @@ export default function BacktestTaskCard({
 
   const formatDateTime = (dateString: string): string => {
     return new Date(dateString).toLocaleString(
-      getLocaleForLanguage(i18n.resolvedLanguage),
+      getLocaleForLanguage(i18n?.resolvedLanguage),
       {
         year: 'numeric',
         month: 'short',
