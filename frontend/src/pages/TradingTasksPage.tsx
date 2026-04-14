@@ -29,8 +29,9 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { shouldPollTaskStatus } from '../hooks/taskResourceQueries';
+import { refreshTaskSummary } from '../hooks/taskResourceCache';
 import { useTradingTasks } from '../hooks/useTradingTasks';
-import { TaskStatus } from '../types/common';
+import { TaskStatus, TaskType } from '../types/common';
 import TradingTaskCard from '../components/trading/TradingTaskCard';
 import { Breadcrumbs } from '../components/common';
 import { LoadingSpinner } from '../components/common';
@@ -147,7 +148,13 @@ export default function TradingTasksPage() {
   );
 
   const handleRefresh = () => {
-    void refresh();
+    const visibleTaskIds = data?.results.map((task) => String(task.id)) ?? [];
+    void Promise.all([
+      refresh(),
+      ...visibleTaskIds.map((taskId) =>
+        refreshTaskSummary(taskId, TaskType.TRADING)
+      ),
+    ]);
   };
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
