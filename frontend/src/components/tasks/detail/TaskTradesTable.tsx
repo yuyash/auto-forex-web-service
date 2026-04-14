@@ -29,6 +29,7 @@ import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
 import { useTaskTrades, type TaskTrade } from '../../../hooks/useTaskTrades';
 import { TaskType } from '../../../types/common';
+import { useAuth } from '../../../contexts/AuthContext';
 import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
 import {
   useColumnConfig,
@@ -36,6 +37,8 @@ import {
   applyColumnConfig,
 } from '../../../hooks/useColumnConfig';
 import { buildCopyHandler } from '../../../utils/tableCopyUtils';
+import { formatAppNumber } from '../../../utils/numberFormat';
+import { formatDateTimeInTimezone } from '../../../utils/timezone';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -55,6 +58,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
   enableRealTimeUpdates = false,
 }) => {
   const { t } = useTranslation('common');
+  const { user } = useAuth();
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(50);
   const [isReloading, setIsReloading] = useState(false);
@@ -94,16 +98,34 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     setIsReloading(false);
   }, [refresh]);
 
-  const formatTimestamp = (timestamp: string): string => {
-    return new Date(timestamp).toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  };
+  const formatTimestamp = useCallback(
+    (timestamp: string): string =>
+      formatDateTimeInTimezone(
+        timestamp,
+        user?.timezone || 'UTC',
+        user?.language,
+        {
+          includeSeconds: true,
+          includeTimezone: true,
+        }
+      ),
+    [user?.language, user?.timezone]
+  );
+
+  const formatPrice = useCallback(
+    (value: string | number | null | undefined, digits = 5): string => {
+      if (value == null || value === '') return '-';
+      const numericValue =
+        typeof value === 'string' ? parseFloat(value) : Number(value);
+      if (!Number.isFinite(numericValue)) return '-';
+      return formatAppNumber(numericValue, {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+        useGrouping: false,
+      });
+    },
+    []
+  );
 
   const columns: Column<TaskTrade>[] = [
     {
@@ -209,6 +231,8 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       width: 100,
       minWidth: 100,
       align: 'right',
+      render: (row) =>
+        row.units != null ? formatAppNumber(Number(row.units)) : '-',
     },
     {
       id: 'price',
@@ -216,8 +240,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       width: 120,
       minWidth: 120,
       align: 'right',
-      render: (row: TaskTrade) =>
-        row.price ? parseFloat(row.price).toFixed(5) : '-',
+      render: (row: TaskTrade) => formatPrice(row.price, 5),
     },
     {
       id: 'order_id',
@@ -278,9 +301,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       minWidth: 90,
       align: 'right',
       render: (row: TaskTrade) =>
-        row.stop_loss_price
-          ? `¥${parseFloat(row.stop_loss_price).toFixed(3)}`
-          : '-',
+        row.stop_loss_price ? `¥${formatPrice(row.stop_loss_price, 3)}` : '-',
     },
     {
       id: 'is_rebuild',
@@ -329,8 +350,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     const tradesMap = new Map(trades.map((tr) => [String(tr.id), tr]));
     const extractors: Record<string, (r: TaskTrade) => string> = {
       id: (r) => (r.id ? String(r.id).slice(0, 8) : '-'),
-      timestamp: (r) =>
-        r.timestamp ? new Date(r.timestamp).toLocaleString() : '-',
+      timestamp: (r) => (r.timestamp ? formatTimestamp(r.timestamp) : '-'),
       instrument: (r) => r.instrument ?? '-',
       execution_method: (r) => {
         const methodKey = r.execution_method || '';
@@ -344,8 +364,8 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       direction: (r) => String(r.direction ?? '').toUpperCase(),
       replayed_at: (r) =>
         r.replayed_at ? formatTimestamp(r.replayed_at) : '-',
-      units: (r) => String(r.units ?? '-'),
-      price: (r) => (r.price ? parseFloat(r.price).toFixed(5) : '-'),
+      units: (r) => (r.units != null ? formatAppNumber(Number(r.units)) : '-'),
+      price: (r) => formatPrice(r.price, 5),
       order_id: (r) => r.order_id ?? '-',
       oanda_trade_id: (r) => r.oanda_trade_id ?? '-',
       layer_index: (r) => (r.layer_index != null ? String(r.layer_index) : '-'),
@@ -353,9 +373,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
         r.retracement_count != null ? String(r.retracement_count) : '-',
       description: (r) => r.description || '-',
       stop_loss_price: (r) =>
-        r.stop_loss_price
-          ? `¥${parseFloat(r.stop_loss_price).toFixed(3)}`
-          : '-',
+        r.stop_loss_price ? `¥${formatPrice(r.stop_loss_price, 3)}` : '-',
       is_rebuild: (r) => (r.is_rebuild ? 'Yes' : '-'),
     };
     const { headers, formatRow } = buildCopyHandler(
@@ -364,7 +382,15 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       tradesMap
     );
     selection.copySelectedRows(headers, formatRow, pageRowIds);
-  }, [t, trades, selection, visibleColumns, pageRowIds]);
+  }, [
+    formatPrice,
+    formatTimestamp,
+    pageRowIds,
+    selection,
+    t,
+    trades,
+    visibleColumns,
+  ]);
 
   if (error) {
     return (

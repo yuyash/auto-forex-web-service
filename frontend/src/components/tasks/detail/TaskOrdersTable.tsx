@@ -21,6 +21,7 @@ import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
 import { useTaskOrders, type TaskOrder } from '../../../hooks/useTaskOrders';
 import { TaskType } from '../../../types/common';
+import { useAuth } from '../../../contexts/AuthContext';
 import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
 import {
   useColumnConfig,
@@ -28,6 +29,8 @@ import {
   applyColumnConfig,
 } from '../../../hooks/useColumnConfig';
 import { buildCopyHandler } from '../../../utils/tableCopyUtils';
+import { formatAppNumber } from '../../../utils/numberFormat';
+import { formatDateTimeInTimezone } from '../../../utils/timezone';
 
 interface TaskOrdersTableProps {
   taskId: string | number;
@@ -43,6 +46,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
   enableRealTimeUpdates = false,
 }) => {
   const { t } = useTranslation('common');
+  const { user } = useAuth();
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(50);
   const [isReloading, setIsReloading] = useState(false);
@@ -74,16 +78,34 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     setIsReloading(false);
   }, [refresh]);
 
-  const formatTimestamp = (timestamp: string): string => {
-    return new Date(timestamp).toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  };
+  const formatTimestamp = useCallback(
+    (timestamp: string): string =>
+      formatDateTimeInTimezone(
+        timestamp,
+        user?.timezone || 'UTC',
+        user?.language,
+        {
+          includeSeconds: true,
+          includeTimezone: true,
+        }
+      ),
+    [user?.language, user?.timezone]
+  );
+
+  const formatPrice = useCallback(
+    (value: string | number | null | undefined, digits = 5): string => {
+      if (value == null || value === '') return '-';
+      const numericValue =
+        typeof value === 'string' ? parseFloat(value) : Number(value);
+      if (!Number.isFinite(numericValue)) return '-';
+      return formatAppNumber(numericValue, {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+        useGrouping: false,
+      });
+    },
+    []
+  );
 
   const statusColor = (
     status: string
@@ -192,7 +214,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
       width: 70,
       minWidth: 55,
       align: 'right',
-      render: (row) => String(Math.abs(row.units)),
+      render: (row) => formatAppNumber(Math.abs(row.units)),
     },
     {
       id: 'status',
@@ -241,8 +263,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
       width: 120,
       minWidth: 120,
       align: 'right',
-      render: (row) =>
-        row.requested_price ? parseFloat(row.requested_price).toFixed(5) : '-',
+      render: (row) => formatPrice(row.requested_price, 5),
     },
     {
       id: 'fill_price',
@@ -250,8 +271,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
       width: 120,
       minWidth: 120,
       align: 'right',
-      render: (row) =>
-        row.fill_price ? parseFloat(row.fill_price).toFixed(5) : '-',
+      render: (row) => formatPrice(row.fill_price, 5),
     },
     {
       id: 'filled_at',
@@ -266,8 +286,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
       width: 95,
       minWidth: 80,
       align: 'right',
-      render: (row) =>
-        row.stop_loss ? parseFloat(row.stop_loss).toFixed(5) : '-',
+      render: (row) => formatPrice(row.stop_loss, 5),
     },
     {
       id: 'error_message',
@@ -308,24 +327,20 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     const extractors: Record<string, (r: TaskOrder) => string> = {
       id: (r) => (r.id ? String(r.id).slice(0, 8) : '-'),
       submitted_at: (r) =>
-        r.submitted_at ? new Date(r.submitted_at).toLocaleString() : '-',
+        r.submitted_at ? formatTimestamp(r.submitted_at) : '-',
       instrument: (r) => r.instrument ?? '-',
       order_type: (r) => r.order_type ?? '-',
       direction: (r) => r.direction ?? '-',
-      units: (r) => String(Math.abs(r.units)),
+      units: (r) => formatAppNumber(Math.abs(r.units)),
       status: (r) => r.status ?? '-',
       replayed_at: (r) =>
         r.replayed_at ? formatTimestamp(r.replayed_at) : '-',
       broker_order_id: (r) => r.broker_order_id ?? '-',
       oanda_trade_id: (r) => r.oanda_trade_id ?? '-',
-      requested_price: (r) =>
-        r.requested_price ? parseFloat(r.requested_price).toFixed(5) : '-',
-      fill_price: (r) =>
-        r.fill_price ? parseFloat(r.fill_price).toFixed(5) : '-',
-      filled_at: (r) =>
-        r.filled_at ? new Date(r.filled_at).toLocaleString() : '-',
-      stop_loss: (r) =>
-        r.stop_loss ? parseFloat(r.stop_loss).toFixed(5) : '-',
+      requested_price: (r) => formatPrice(r.requested_price, 5),
+      fill_price: (r) => formatPrice(r.fill_price, 5),
+      filled_at: (r) => (r.filled_at ? formatTimestamp(r.filled_at) : '-'),
+      stop_loss: (r) => formatPrice(r.stop_loss, 5),
       error_message: (r) => r.error_message || '-',
     };
     const { headers, formatRow } = buildCopyHandler(
@@ -334,7 +349,14 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
       orderMap
     );
     selection.copySelectedRows(headers, formatRow, pageRowIds);
-  }, [orders, selection, visibleColumns, pageRowIds]);
+  }, [
+    formatPrice,
+    formatTimestamp,
+    orders,
+    pageRowIds,
+    selection,
+    visibleColumns,
+  ]);
 
   if (error) {
     return (

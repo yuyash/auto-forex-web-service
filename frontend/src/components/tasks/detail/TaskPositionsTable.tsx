@@ -39,6 +39,7 @@ import {
 } from '../../../hooks/useTaskPositions';
 import { useTaskSummary } from '../../../hooks/useTaskSummary';
 import { TaskType } from '../../../types/common';
+import { useAuth } from '../../../contexts/AuthContext';
 import { PositionLifecycleDialog } from './PositionLifecycleDialog';
 import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
 import {
@@ -54,6 +55,8 @@ import {
   readRawStoredValue,
   writeRawStoredValue,
 } from '../../../utils/persistentState';
+import { formatAppNumber } from '../../../utils/numberFormat';
+import { formatDateTimeInTimezone } from '../../../utils/timezone';
 
 type ViewMode = 'all' | 'byDirection' | 'byStatus';
 const UUID_PATTERN =
@@ -87,6 +90,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   pipSize,
 }) => {
   const { t } = useTranslation('common');
+  const { user } = useAuth();
 
   // --- View mode ---
   const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
@@ -316,14 +320,40 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   );
 
   const formatTimestamp = (ts: string): string =>
-    new Date(ts).toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
+    formatDateTimeInTimezone(ts, user?.timezone || 'UTC', user?.language, {
+      includeSeconds: true,
+      includeTimezone: true,
     });
+
+  const formatPrice = (
+    value: string | number | null | undefined,
+    digits = 3
+  ): string => {
+    if (value == null || value === '') return '-';
+    const numericValue =
+      typeof value === 'string' ? parseFloat(value) : Number(value);
+    if (!Number.isFinite(numericValue)) return '-';
+    return formatAppNumber(numericValue, {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+      useGrouping: false,
+    });
+  };
+
+  const formatPips = (value: number): string =>
+    formatAppNumber(value, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+      signed: value >= 0,
+      useGrouping: false,
+    });
+
+  const formatSignedYen = (value: number): string =>
+    `¥${formatAppNumber(value, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      signed: true,
+    })}`;
 
   // --- Shared column fragments ---
   const idCol: Column<TaskPosition> = {
@@ -433,7 +463,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     width: 90,
     minWidth: 70,
     align: 'right',
-    render: (r) => String(Math.abs(r.units)),
+    render: (r) => formatAppNumber(Math.abs(r.units)),
   };
   const layerCol: Column<TaskPosition> = {
     id: 'layer_index',
@@ -458,8 +488,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     width: 110,
     minWidth: 80,
     align: 'right',
-    render: (r) =>
-      r.entry_price ? `¥${parseFloat(r.entry_price).toFixed(3)}` : '-',
+    render: (r) => (r.entry_price ? `¥${formatPrice(r.entry_price, 3)}` : '-'),
   };
   const exitPriceCol: Column<TaskPosition> = {
     id: 'exit_price',
@@ -467,8 +496,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     width: 110,
     minWidth: 80,
     align: 'right',
-    render: (r) =>
-      r.exit_price ? `¥${parseFloat(r.exit_price).toFixed(3)}` : '-',
+    render: (r) => (r.exit_price ? `¥${formatPrice(r.exit_price, 3)}` : '-'),
   };
   const plannedExitPriceCol: Column<TaskPosition> = {
     id: 'planned_exit_price',
@@ -477,9 +505,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     minWidth: 90,
     align: 'right',
     render: (r) =>
-      r.planned_exit_price
-        ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
-        : '-',
+      r.planned_exit_price ? `¥${formatPrice(r.planned_exit_price, 3)}` : '-',
   };
   const plannedExitFormulaCol: Column<TaskPosition> = {
     id: 'planned_exit_price_formula',
@@ -495,7 +521,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     minWidth: 70,
     align: 'right',
     render: (r) =>
-      r.adverse_pips != null ? parseFloat(r.adverse_pips).toFixed(1) : '-',
+      r.adverse_pips != null ? formatPrice(r.adverse_pips, 1) : '-',
   };
   const stopLossPriceCol: Column<TaskPosition> = {
     id: 'stop_loss_price',
@@ -504,7 +530,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     minWidth: 90,
     align: 'right',
     render: (r) =>
-      r.stop_loss_price ? `¥${parseFloat(r.stop_loss_price).toFixed(3)}` : '-',
+      r.stop_loss_price ? `¥${formatPrice(r.stop_loss_price, 3)}` : '-',
   };
   const oandaTradeIdCol: Column<TaskPosition> = {
     id: 'oanda_trade_id',
@@ -621,8 +647,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             color={pips >= 0 ? 'success.main' : 'error.main'}
             fontWeight="bold"
           >
-            {pips >= 0 ? '+' : ''}
-            {pips.toFixed(1)}
+            {formatPips(pips)}
           </Typography>
         );
       }
@@ -636,8 +661,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             color={pips >= 0 ? 'success.main' : 'error.main'}
             fontWeight="bold"
           >
-            {pips >= 0 ? '+' : ''}
-            {pips.toFixed(1)}
+            {formatPips(pips)}
           </Typography>
         );
       }
@@ -668,7 +692,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             color={val >= 0 ? 'success.main' : 'error.main'}
             fontWeight="bold"
           >
-            {val >= 0 ? '+' : ''}¥{val.toFixed(2)}
+            {formatSignedYen(val)}
           </Typography>
         );
       }
@@ -683,7 +707,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             color={val >= 0 ? 'success.main' : 'error.main'}
             fontWeight="bold"
           >
-            {val >= 0 ? '+' : ''}¥{val.toFixed(2)}
+            {formatSignedYen(val)}
           </Typography>
         );
       }
@@ -709,7 +733,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
           color={val >= 0 ? 'success.main' : 'error.main'}
           fontWeight="bold"
         >
-          {val >= 0 ? '+' : ''}¥{val.toFixed(2)}
+          {formatSignedYen(val)}
         </Typography>
       );
     },
@@ -733,7 +757,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
           color={val >= 0 ? 'success.main' : 'error.main'}
           fontWeight="bold"
         >
-          {val >= 0 ? '+' : ''}¥{val.toFixed(2)}
+          {formatSignedYen(val)}
         </Typography>
       );
     },
@@ -952,18 +976,16 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     entry_time: (r) => (r.entry_time ? formatTimestamp(r.entry_time) : '-'),
     exit_time: (r) => (r.exit_time ? formatTimestamp(r.exit_time) : '-'),
     instrument: (r) => r.instrument ?? '-',
-    units: (r) => String(Math.abs(r.units)),
+    units: (r) => formatAppNumber(Math.abs(r.units)),
     layer_index: (r) => (r.layer_index != null ? String(r.layer_index) : '-'),
     retracement_count: (r) =>
       r.retracement_count != null ? String(r.retracement_count) : '-',
     entry_price: (r) =>
-      r.entry_price ? `¥${parseFloat(r.entry_price).toFixed(3)}` : '-',
+      r.entry_price ? `¥${formatPrice(r.entry_price, 3)}` : '-',
     exit_price: (r) =>
-      r.exit_price ? `¥${parseFloat(r.exit_price).toFixed(3)}` : '-',
+      r.exit_price ? `¥${formatPrice(r.exit_price, 3)}` : '-',
     planned_exit_price: (r) =>
-      r.planned_exit_price
-        ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
-        : '-',
+      r.planned_exit_price ? `¥${formatPrice(r.planned_exit_price, 3)}` : '-',
     planned_exit_price_formula: (r) => r.planned_exit_price_formula ?? '-',
     oanda_trade_id: (r) => r.oanda_trade_id ?? '-',
     pips: (r) => {
@@ -971,7 +993,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       const xp = r.exit_price ? parseFloat(r.exit_price) : null;
       if (ep != null && xp != null && pipSize) {
         const pips = (dir === 'long' ? xp - ep : ep - xp) / pipSize;
-        if (Number.isFinite(pips)) return pips.toFixed(1);
+        if (Number.isFinite(pips)) return formatPrice(pips, 1);
       }
       return '-';
     },
@@ -981,13 +1003,16 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       if (ep != null && xp != null) {
         const u = Math.abs(r.units ?? 0);
         const val = dir === 'long' ? (xp - ep) * u : (ep - xp) * u;
-        return val.toFixed(2);
+        return formatAppNumber(val, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
       }
       return '-';
     },
     close_reason: (r) => r.close_reason ?? '-',
     stop_loss_price: (r) =>
-      r.stop_loss_price ? `¥${parseFloat(r.stop_loss_price).toFixed(3)}` : '-',
+      r.stop_loss_price ? `¥${formatPrice(r.stop_loss_price, 3)}` : '-',
     is_rebuild: (r) => (r.is_rebuild ? 'Yes' : '-'),
   });
 
@@ -998,16 +1023,14 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     replayed_at: (r) => (r.replayed_at ? formatTimestamp(r.replayed_at) : '-'),
     entry_time: (r) => (r.entry_time ? formatTimestamp(r.entry_time) : '-'),
     instrument: (r) => r.instrument ?? '-',
-    units: (r) => String(Math.abs(r.units)),
+    units: (r) => formatAppNumber(Math.abs(r.units)),
     layer_index: (r) => (r.layer_index != null ? String(r.layer_index) : '-'),
     retracement_count: (r) =>
       r.retracement_count != null ? String(r.retracement_count) : '-',
     entry_price: (r) =>
-      r.entry_price ? `¥${parseFloat(r.entry_price).toFixed(3)}` : '-',
+      r.entry_price ? `¥${formatPrice(r.entry_price, 3)}` : '-',
     planned_exit_price: (r) =>
-      r.planned_exit_price
-        ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
-        : '-',
+      r.planned_exit_price ? `¥${formatPrice(r.planned_exit_price, 3)}` : '-',
     planned_exit_price_formula: (r) => r.planned_exit_price_formula ?? '-',
     oanda_trade_id: (r) => r.oanda_trade_id ?? '-',
     pips: (r) => {
@@ -1015,7 +1038,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       if (currentPrice != null && ep != null && pipSize) {
         const pips =
           (dir === 'long' ? currentPrice - ep : ep - currentPrice) / pipSize;
-        if (Number.isFinite(pips)) return pips.toFixed(1);
+        if (Number.isFinite(pips)) return formatPrice(pips, 1);
       }
       return '-';
     },
@@ -1025,12 +1048,15 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         const u = Math.abs(r.units ?? 0);
         const val =
           dir === 'long' ? (currentPrice - ep) * u : (ep - currentPrice) * u;
-        return val.toFixed(2);
+        return formatAppNumber(val, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
       }
       return '-';
     },
     stop_loss_price: (r) =>
-      r.stop_loss_price ? `¥${parseFloat(r.stop_loss_price).toFixed(3)}` : '-',
+      r.stop_loss_price ? `¥${formatPrice(r.stop_loss_price, 3)}` : '-',
     is_rebuild: (r) => (r.is_rebuild ? 'Yes' : '-'),
   });
 
@@ -1042,18 +1068,16 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     entry_time: (r) => (r.entry_time ? formatTimestamp(r.entry_time) : '-'),
     exit_time: (r) => (r.exit_time ? formatTimestamp(r.exit_time) : '-'),
     instrument: (r) => r.instrument ?? '-',
-    units: (r) => String(Math.abs(r.units)),
+    units: (r) => formatAppNumber(Math.abs(r.units)),
     layer_index: (r) => (r.layer_index != null ? String(r.layer_index) : '-'),
     retracement_count: (r) =>
       r.retracement_count != null ? String(r.retracement_count) : '-',
     entry_price: (r) =>
-      r.entry_price ? `¥${parseFloat(r.entry_price).toFixed(3)}` : '-',
+      r.entry_price ? `¥${formatPrice(r.entry_price, 3)}` : '-',
     exit_price: (r) =>
-      r.exit_price ? `¥${parseFloat(r.exit_price).toFixed(3)}` : '-',
+      r.exit_price ? `¥${formatPrice(r.exit_price, 3)}` : '-',
     planned_exit_price: (r) =>
-      r.planned_exit_price
-        ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
-        : '-',
+      r.planned_exit_price ? `¥${formatPrice(r.planned_exit_price, 3)}` : '-',
     planned_exit_price_formula: (r) => r.planned_exit_price_formula ?? '-',
     oanda_trade_id: (r) => r.oanda_trade_id ?? '-',
     pips: (r) => {
@@ -1062,12 +1086,12 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       const xp = r.exit_price ? parseFloat(r.exit_price) : null;
       if (ep != null && xp != null && pipSize) {
         const pips = (dir === 'long' ? xp - ep : ep - xp) / pipSize;
-        if (Number.isFinite(pips)) return pips.toFixed(1);
+        if (Number.isFinite(pips)) return formatPrice(pips, 1);
       }
       if (r.is_open && currentPrice != null && ep != null && pipSize) {
         const pips =
           (dir === 'long' ? currentPrice - ep : ep - currentPrice) / pipSize;
-        if (Number.isFinite(pips)) return pips.toFixed(1);
+        if (Number.isFinite(pips)) return formatPrice(pips, 1);
       }
       return '-';
     },
@@ -1077,18 +1101,25 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       const xp = r.exit_price ? parseFloat(r.exit_price) : null;
       const u = Math.abs(r.units ?? 0);
       if (!r.is_open && ep != null && xp != null) {
-        return (dir === 'long' ? (xp - ep) * u : (ep - xp) * u).toFixed(2);
+        return formatAppNumber(dir === 'long' ? (xp - ep) * u : (ep - xp) * u, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
       }
       if (r.is_open && currentPrice != null && ep != null) {
-        return (
-          dir === 'long' ? (currentPrice - ep) * u : (ep - currentPrice) * u
-        ).toFixed(2);
+        return formatAppNumber(
+          dir === 'long' ? (currentPrice - ep) * u : (ep - currentPrice) * u,
+          {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }
+        );
       }
       return '-';
     },
     close_reason: (r) => r.close_reason ?? '-',
     stop_loss_price: (r) =>
-      r.stop_loss_price ? `¥${parseFloat(r.stop_loss_price).toFixed(3)}` : '-',
+      r.stop_loss_price ? `¥${formatPrice(r.stop_loss_price, 3)}` : '-',
     is_rebuild: (r) => (r.is_rebuild ? 'Yes' : '-'),
   };
 
@@ -1137,7 +1168,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             fontWeight="bold"
             color={pnlValue >= 0 ? 'success.main' : 'error.main'}
           >
-            {pnlLabel}: {pnlValue >= 0 ? '+' : ''}¥{pnlValue.toFixed(2)}
+            {pnlLabel}: {formatSignedYen(pnlValue)}
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -1376,7 +1407,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
                 fontWeight="bold"
                 color={pnlValue >= 0 ? 'success.main' : 'error.main'}
               >
-                {pnlLabel}: {pnlValue >= 0 ? '+' : ''}¥{pnlValue.toFixed(2)}
+                {pnlLabel}: {formatSignedYen(pnlValue)}
               </Typography>
             )}
             <Tooltip title={t('common:columnConfig.configureColumns')}>
@@ -1479,8 +1510,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             fontWeight="bold"
             color={totalPnl >= 0 ? 'success.main' : 'error.main'}
           >
-            {t('tables.positions.totalPnl')}: {totalPnl >= 0 ? '+' : ''}¥
-            {totalPnl.toFixed(2)}
+            {t('tables.positions.totalPnl')}: {formatSignedYen(totalPnl)}
           </Typography>
         )}
       </Box>
