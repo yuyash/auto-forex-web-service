@@ -309,7 +309,7 @@ class TradingResumeReconciler:
         return refreshed_open_positions
 
     def _validate_safety(self, *, report: ReconciliationReport, resumed: bool) -> None:
-        strategy_type = str(getattr(self.task.config, "strategy_type", "") or "").lower()
+        strategy_type = str(getattr(self.task.config, "strategy_type", "") or "").strip().lower()
         strategy_state = (
             self.state.strategy_state if isinstance(self.state.strategy_state, dict) else {}
         )
@@ -329,7 +329,8 @@ class TradingResumeReconciler:
             or report.closed_local_positions > 0
         ):
             report.blockers.append(
-                f"Automatic broker reconciliation is only state-aware for the floor strategy. "
+                f"Automatic broker reconciliation is only state-aware for the floor and snowball "
+                "strategies. "
                 f"Task strategy '{strategy_type or 'unknown'}' requires manual review before resume."
             )
 
@@ -377,7 +378,7 @@ class TradingResumeReconciler:
         open_positions: list[Position],
         report: ReconciliationReport,
     ) -> None:
-        strategy_type = str(getattr(self.task.config, "strategy_type", "") or "").lower()
+        strategy_type = str(getattr(self.task.config, "strategy_type", "") or "").strip().lower()
 
         if strategy_type == "floor":
             self._sync_floor_state_with_positions(open_positions, report)

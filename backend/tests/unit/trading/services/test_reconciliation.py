@@ -462,6 +462,30 @@ class TestSnowballReconciliation:
 
         assert report.has_blockers is False
 
+    def test_validate_safety_normalizes_snowball_strategy_type(self):
+        task = MagicMock()
+        task.pk = uuid4()
+        task.instrument = "EUR_USD"
+        task.oanda_account = MagicMock()
+        task.execution_id = uuid4()
+        config = MagicMock()
+        config.strategy_type = " SnowBall "
+        config.config_dict = {}
+        task.config = config
+
+        state = MagicMock()
+        state.strategy_state = {"cycles": []}
+
+        reconciler = _make_reconciler(task=task, state=state)
+        report = ReconciliationReport(
+            broker_open_positions=1,
+            updated_local_positions=1,
+        )
+
+        reconciler._validate_safety(report=report, resumed=True)
+
+        assert report.has_blockers is False
+
     def test_sync_snowball_state_relinks_position_ids(self):
         task = MagicMock()
         task.pk = uuid4()

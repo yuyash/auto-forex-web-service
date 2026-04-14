@@ -74,7 +74,8 @@ class TestRecoverOrphanedTasks:
 
         result = recover_orphaned_tasks(source="test")
         assert result["backtest"] == 1
-        service_instance.start_task.assert_called_once()
+        service_instance.start_task.assert_not_called()
+        type(task).objects.filter.return_value.update.assert_called_once()
 
     @pytest.mark.usefixtures("_mock_models")
     def test_recovers_orphaned_backtest_stale_heartbeat(self, _mock_models):
@@ -100,6 +101,7 @@ class TestRecoverOrphanedTasks:
 
         result = recover_orphaned_tasks(source="test")
         assert result["backtest"] == 1
+        service_instance.start_task.assert_not_called()
 
     @pytest.mark.usefixtures("_mock_models")
     def test_skips_task_with_recent_heartbeat(self, _mock_models):
@@ -176,7 +178,7 @@ class TestRecoverOrphanedTasks:
         tl.objects.create.assert_not_called()
 
     @pytest.mark.usefixtures("_mock_models")
-    def test_marks_failed_when_resubmit_fails(self, _mock_models):
+    def test_backtest_recovery_no_longer_attempts_resubmit(self, _mock_models):
         bt, tt, cts, tl, svc_cls = _mock_models
 
         task = MagicMock()
@@ -190,14 +192,13 @@ class TestRecoverOrphanedTasks:
         type(task).objects.filter.return_value.update.return_value = 1
 
         service_instance = MagicMock()
-        service_instance.start_task.side_effect = RuntimeError("Celery down")
         svc_cls.return_value = service_instance
 
         from apps.trading.tasks.recovery import recover_orphaned_tasks
 
         result = recover_orphaned_tasks(source="test")
-        assert result["backtest"] == 0
-        assert type(task).objects.filter.return_value.update.call_count == 2
+        assert result["backtest"] == 1
+        service_instance.start_task.assert_not_called()
 
     @pytest.mark.usefixtures("_mock_models")
     def test_race_condition_reset_returns_zero(self, _mock_models):
@@ -252,7 +253,7 @@ class TestRecoverOrphanedTasks:
         assert "persisted strategy and grid state" in tl.objects.create.call_args.kwargs["message"]
 
     @pytest.mark.usefixtures("_mock_models")
-    def test_backtest_recovery_logs_restart_from_beginning(self, _mock_models):
+    def test_backtest_recovery_logs_marked_stopped_instead_of_restart(self, _mock_models):
         bt, tt, cts, tl, svc_cls = _mock_models
 
         task = MagicMock()
@@ -277,8 +278,35 @@ class TestRecoverOrphanedTasks:
         assert result["backtest"] == 1
         tl.objects.create.assert_called_once()
         message = tl.objects.create.call_args.kwargs["message"]
-        assert "previous partial run was discarded" in message
-        assert "restarting from the beginning" in message
+        assert "marked stopped" in message
+        assert "restarting the backtest from the beginning automatically" in message
+
+    @pytest.mark.usefixtures("_mock_models")
+    def test_backtest_recovery_updates_existing_celery_status_to_stopped(self, _mock_models):
+        bt, tt, cts, tl, svc_cls = _mock_models
+
+        task = MagicMock()
+        task.pk = uuid4()
+        task.status = TaskStatus.RUNNING
+        bt.objects.filter.return_value = _make_qs([task])
+
+        stale_cts = MagicMock()
+        stale_cts.instance_key = f"{task.pk}:{task.execution_id}"
+        stale_cts.last_heartbeat_at = dj_timezone.now() - timedelta(minutes=6)
+
+        trading_cts_qs = MagicMock()
+        trading_cts_qs.__iter__.return_value = iter([stale_cts])
+        cts.objects.filter.return_value = trading_cts_qs
+
+        type(task).objects = MagicMock()
+        type(task).objects.filter.return_value.update.return_value = 1
+
+        from apps.trading.tasks.recovery import recover_orphaned_tasks
+
+        result = recover_orphaned_tasks(source="test")
+
+        assert result["backtest"] == 1
+        trading_cts_qs.update.assert_called_once()
 
     @pytest.mark.usefixtures("_mock_models")
     def test_backtest_uses_longer_stale_heartbeat_threshold(self, _mock_models):
