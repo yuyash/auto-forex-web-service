@@ -249,7 +249,7 @@ def _recover_task(
     service: Any,
     source: str,
 ) -> bool:
-    """Reset an orphaned task to CREATED and re-submit it."""
+    """Handle an orphaned task according to its task type."""
     logger.warning(
         "[RECOVERY:%s] Recovering orphaned task - task_id=%s, type=%s, "
         "old_status=%s, execution_id=%s",
@@ -265,27 +265,36 @@ def _recover_task(
     if task_type == TaskType.TRADING:
         return _recover_trading_task(task=task, service=service, source=source)
 
-    # Backtest recovery: reset to CREATED and submit as a fresh run.
+    # Backtests are not resumable and restarting them automatically from the
+    # beginning can create duplicate executions after a false orphan signal.
+    # Prefer stopping the interrupted run and requiring an explicit restart.
+    now = dj_timezone.now()
     rows = model_class.objects.filter(
         pk=task.pk,
         status__in=_ACTIVE_STATUSES,
     ).update(
-        status=TaskStatus.CREATED,
-        execution_id=None,
-        started_at=None,
-        completed_at=None,
-        error_message=None,
-        error_traceback=None,
+        status=TaskStatus.STOPPED,
+        completed_at=now,
+        error_message=(
+            "Backtest execution was interrupted and marked stopped during recovery. "
+            "Restart manually to rerun it from the beginning."
+        ),
     )
 
     if rows == 0:
         logger.info("[RECOVERY:%s] Task already transitioned - task_id=%s", source, task.pk)
         return False
 
-    CeleryTaskStatus.objects.filter(
+    heartbeat_qs = CeleryTaskStatus.objects.filter(
         task_name="trading.tasks.run_backtest_task",
         instance_key=_instance_key(task),
-    ).delete()
+    )
+    heartbeat_qs.update(
+        status=CeleryTaskStatus.Status.STOPPED,
+        status_message="recovery_marked_stopped",
+        stopped_at=now,
+        last_heartbeat_at=now,
+    )
 
     TaskLog.objects.create(
         task_type=task_type,
@@ -295,23 +304,17 @@ def _recover_task(
         component=__name__,
         message=(
             f"Backtest task recovered from orphaned {task.status} state "
-            f"(source={source}). The previous partial run was discarded and the "
-            "backtest is restarting from the beginning."
+            f"(source={source}). The interrupted run was marked stopped to avoid "
+            "restarting the backtest from the beginning automatically."
         ),
     )
 
-    task.refresh_from_db()
-    try:
-        service.start_task(task)
-        logger.info("[RECOVERY:%s] Task re-submitted - task_id=%s", source, task.pk)
-        return True
-    except Exception:
-        logger.exception("[RECOVERY:%s] Failed to re-submit task - task_id=%s", source, task.pk)
-        model_class.objects.filter(pk=task.pk).update(
-            status=TaskStatus.FAILED,
-            error_message=f"Recovery failed after crash (source={source})",
-        )
-        return False
+    logger.info(
+        "[RECOVERY:%s] Backtest marked STOPPED instead of auto-restart - task_id=%s",
+        source,
+        task.pk,
+    )
+    return True
 
 
 def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, source: str) -> bool:
