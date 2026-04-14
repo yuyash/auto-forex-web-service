@@ -105,9 +105,12 @@ class TradeSerializer(serializers.Serializer):
     description = serializers.CharField(required=False, allow_blank=True, default="")
     timestamp = serializers.DateTimeField()
     position_id = serializers.UUIDField(required=False, allow_null=True)
+    order_id = serializers.UUIDField(required=False, allow_null=True)
+    oanda_trade_id = serializers.CharField(required=False, allow_null=True)
     cycle_id = serializers.UUIDField(required=False, allow_null=True)
     is_rebuild = serializers.BooleanField(required=False, default=False)
     stop_loss_price = serializers.SerializerMethodField()
+    replayed_at = serializers.DateTimeField(required=False, allow_null=True)
     updated_at = serializers.DateTimeField(required=False, allow_null=True)
 
     def get_stop_loss_price(self, obj: object) -> str | None:
@@ -162,8 +165,10 @@ class PositionSerializer(serializers.Serializer):
         max_digits=20, decimal_places=10, required=False, allow_null=True
     )
     is_rebuild = serializers.BooleanField(required=False, default=False)
+    oanda_trade_id = serializers.CharField(required=False, allow_null=True)
     close_reason = serializers.SerializerMethodField()
     trade_ids = serializers.SerializerMethodField()
+    replayed_at = serializers.DateTimeField(required=False, allow_null=True)
     updated_at = serializers.DateTimeField(required=False, allow_null=True)
 
     _PROTECTION_METHODS = frozenset(
@@ -251,3 +256,4 @@ class OrderSerializer(serializers.Serializer):
     is_dry_run = serializers.BooleanField()
     layer_index = serializers.IntegerField(required=False, allow_null=True)
     retracement_count = serializers.IntegerField(required=False, allow_null=True)
+    replayed_at = serializers.DateTimeField(required=False, allow_null=True)

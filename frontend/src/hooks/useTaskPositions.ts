@@ -39,6 +39,8 @@ export interface TaskPosition {
   adverse_pips?: string | null;
   stop_loss_price?: string | null;
   is_rebuild?: boolean;
+  oanda_trade_id?: string | null;
+  replayed_at?: string | null;
   unrealized_pnl?: string | null;
   is_open: boolean;
   layer_index?: number | null;

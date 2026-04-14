@@ -114,6 +114,25 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       render: (row) => (row.id ? String(row.id).slice(0, 8) : '-'),
     },
     {
+      id: 'replayed_at',
+      label: 'Replay',
+      width: 105,
+      minWidth: 90,
+      render: (row) =>
+        row.replayed_at ? (
+          <Tooltip title={`Replayed at ${formatTimestamp(row.replayed_at)}`}>
+            <Chip
+              label="REPLAY"
+              size="small"
+              color="warning"
+              variant="filled"
+            />
+          </Tooltip>
+        ) : (
+          '-'
+        ),
+    },
+    {
       id: 'timestamp',
       label: t('tables.trades.timestamp'),
       width: 220,
@@ -201,6 +220,34 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
         row.price ? parseFloat(row.price).toFixed(5) : '-',
     },
     {
+      id: 'order_id',
+      label: 'Order',
+      width: 140,
+      minWidth: 110,
+      render: (row: TaskTrade) =>
+        row.order_id ? (
+          <Typography variant="body2" fontFamily="monospace">
+            {row.order_id}
+          </Typography>
+        ) : (
+          '-'
+        ),
+    },
+    {
+      id: 'oanda_trade_id',
+      label: 'OANDA Trade',
+      width: 150,
+      minWidth: 120,
+      render: (row: TaskTrade) =>
+        row.oanda_trade_id ? (
+          <Typography variant="body2" fontFamily="monospace">
+            {row.oanda_trade_id}
+          </Typography>
+        ) : (
+          '-'
+        ),
+    },
+    {
       id: 'layer_index',
       label: t('tables.trades.layer'),
       width: 80,
@@ -261,7 +308,13 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
   // Column config
   const [colConfigOpen, setColConfigOpen] = useState(false);
   const defaultColItems = columnsToDefaults(columns).map((c) =>
-    ['stop_loss_price', 'is_rebuild'].includes(c.id)
+    [
+      'stop_loss_price',
+      'is_rebuild',
+      'replayed_at',
+      'order_id',
+      'oanda_trade_id',
+    ].includes(c.id)
       ? { ...c, visible: false }
       : c
   );
@@ -289,8 +342,12 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
         );
       },
       direction: (r) => String(r.direction ?? '').toUpperCase(),
+      replayed_at: (r) =>
+        r.replayed_at ? formatTimestamp(r.replayed_at) : '-',
       units: (r) => String(r.units ?? '-'),
       price: (r) => (r.price ? parseFloat(r.price).toFixed(5) : '-'),
+      order_id: (r) => r.order_id ?? '-',
+      oanda_trade_id: (r) => r.oanda_trade_id ?? '-',
       layer_index: (r) => (r.layer_index != null ? String(r.layer_index) : '-'),
       retracement_count: (r) =>
         r.retracement_count != null ? String(r.retracement_count) : '-',

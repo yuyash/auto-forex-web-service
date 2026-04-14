@@ -216,7 +216,13 @@ class TaskExecutor:
             initial_balance=self.initial_balance,
         )
 
-    def handle_events(self, state: ExecutionState, events: List[TradingEvent]) -> None:
+    def handle_events(
+        self,
+        state: ExecutionState,
+        events: List[TradingEvent],
+        *,
+        replaying: bool = False,
+    ) -> None:
         """Handle events from strategy execution.
 
         Args:
@@ -226,16 +232,44 @@ class TaskExecutor:
             if getattr(trading_event, "is_processed", False):
                 continue
 
+            replay_classification = self._classify_replay_event(trading_event)
+            if replaying:
+                logger.warning(
+                    "Replaying event - task_id=%s, event_id=%s, event_type=%s, "
+                    "strategy_event_type=%s, classification=%s, position_id=%s",
+                    self.task.pk,
+                    trading_event.pk,
+                    trading_event.event_type,
+                    (
+                        trading_event.details.get("strategy_event_type")
+                        if isinstance(trading_event.details, dict)
+                        else None
+                    ),
+                    replay_classification,
+                    trading_event.position_id,
+                )
+
             if self.task_type == TaskType.TRADING and self._event_already_applied(
                 trading_event=trading_event,
                 state=state,
             ):
                 self._mark_event_processed(trading_event)
+                if replaying:
+                    logger.info(
+                        "Skipped replayed event already reflected in state - task_id=%s, "
+                        "event_id=%s, classification=%s",
+                        self.task.pk,
+                        trading_event.pk,
+                        replay_classification,
+                    )
                 continue
 
             try:
-                execution_result: EventExecutionResult = self.event_handler.handle_event(
-                    trading_event
+                execution_result: EventExecutionResult = (
+                    self.event_handler.handle_event_with_replay(
+                        trading_event,
+                        replaying=replaying,
+                    )
                 )
                 if execution_result.realized_pnl_delta != Decimal("0"):
                     state.current_balance = (
@@ -252,6 +286,21 @@ class TaskExecutor:
                     execution_result=execution_result,
                 )
                 self._mark_event_processed(trading_event)
+
+                if replaying:
+                    logger.warning(
+                        "Replay applied - task_id=%s, event_id=%s, classification=%s, "
+                        "position_ids=%s, order_ids=%s, trade_ids=%s, "
+                        "broker_order_ids=%s, oanda_trade_ids=%s",
+                        self.task.pk,
+                        trading_event.pk,
+                        replay_classification,
+                        list(execution_result.position_ids),
+                        list(execution_result.order_ids),
+                        list(execution_result.trade_ids),
+                        list(execution_result.broker_order_ids),
+                        list(execution_result.oanda_trade_ids),
+                    )
 
                 # Trading resume requires state durability at event granularity.
                 if self.task_type == TaskType.TRADING:
@@ -793,8 +842,21 @@ class TaskExecutor:
             len(pending_events),
             self.task.pk,
         )
-        self.handle_events(state, pending_events)
+        self.handle_events(state, pending_events, replaying=True)
         self.save_state(state)
+
+    @staticmethod
+    def _classify_replay_event(trading_event: TradingEvent) -> str:
+        """Classify replayed events by potential PnL impact."""
+        trade_impacting = {
+            "open_position",
+            "close_position",
+            "rebuild_position",
+            "volatility_lock",
+            "volatility_hedge_neutralize",
+            "margin_protection",
+        }
+        return "trade-impacting" if trading_event.event_type in trade_impacting else "lifecycle"
 
     def _event_already_applied(
         self,

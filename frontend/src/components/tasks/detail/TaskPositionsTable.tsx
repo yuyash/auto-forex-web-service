@@ -375,6 +375,21 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     ),
   };
 
+  const replayCol: Column<TaskPosition> = {
+    id: 'replayed_at',
+    label: 'Replay',
+    width: 105,
+    minWidth: 90,
+    render: (r) =>
+      r.replayed_at ? (
+        <Tooltip title={`Replayed at ${formatTimestamp(r.replayed_at)}`}>
+          <Chip label="REPLAY" size="small" color="warning" variant="filled" />
+        </Tooltip>
+      ) : (
+        '-'
+      ),
+  };
+
   const statusCol: Column<TaskPosition> = {
     id: 'is_open',
     label: t('tables.positions.status'),
@@ -490,6 +505,20 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     align: 'right',
     render: (r) =>
       r.stop_loss_price ? `¥${parseFloat(r.stop_loss_price).toFixed(3)}` : '-',
+  };
+  const oandaTradeIdCol: Column<TaskPosition> = {
+    id: 'oanda_trade_id',
+    label: 'OANDA Trade',
+    width: 150,
+    minWidth: 120,
+    render: (r) =>
+      r.oanda_trade_id ? (
+        <Typography variant="body2" fontFamily="monospace">
+          {r.oanda_trade_id}
+        </Typography>
+      ) : (
+        '-'
+      ),
   };
   const isRebuildCol: Column<TaskPosition> = {
     id: 'is_rebuild',
@@ -714,6 +743,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   /** byStatus: closed positions (direction known) */
   const closedCols = (dir: 'long' | 'short'): Column<TaskPosition>[] => [
     idCol,
+    replayCol,
     entryTimeCol,
     exitTimeCol,
     instrumentCol,
@@ -725,6 +755,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     exitPriceCol,
     plannedExitPriceCol,
     plannedExitFormulaCol,
+    oandaTradeIdCol,
     stopLossPriceCol,
     pipsCol(dir),
     realizedPnlCol(dir),
@@ -734,6 +765,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   /** byStatus: open positions (direction known) */
   const openCols = (dir: 'long' | 'short'): Column<TaskPosition>[] => [
     idCol,
+    replayCol,
     entryTimeCol,
     instrumentCol,
     unitsCol,
@@ -743,6 +775,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     entryPriceCol,
     plannedExitPriceCol,
     plannedExitFormulaCol,
+    oandaTradeIdCol,
     stopLossPriceCol,
     pipsCol(dir),
     unrealizedPnlCol(dir),
@@ -751,6 +784,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   /** byDirection: all statuses for a known direction */
   const dirCols = (dir: 'long' | 'short'): Column<TaskPosition>[] => [
     idCol,
+    replayCol,
     statusCol,
     entryTimeCol,
     exitTimeCol,
@@ -763,6 +797,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     exitPriceCol,
     plannedExitPriceCol,
     plannedExitFormulaCol,
+    oandaTradeIdCol,
     stopLossPriceCol,
     pipsCol(dir),
     pnlCol(dir),
@@ -772,6 +807,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   /** all: every position */
   const allCols = (): Column<TaskPosition>[] => [
     idCol,
+    replayCol,
     directionCol,
     statusCol,
     entryTimeCol,
@@ -785,6 +821,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     exitPriceCol,
     plannedExitPriceCol,
     plannedExitFormulaCol,
+    oandaTradeIdCol,
     stopLossPriceCol,
     pipsCol(),
     pnlCol(),
@@ -799,30 +836,46 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   const [allColConfigOpen, setAllColConfigOpen] = useState(false);
 
   const closedColDefaults = columnsToDefaults(closedCols('long')).map((c) =>
-    ['planned_exit_price_formula', 'stop_loss_price', 'is_rebuild'].includes(
-      c.id
-    )
+    [
+      'planned_exit_price_formula',
+      'stop_loss_price',
+      'is_rebuild',
+      'oanda_trade_id',
+      'replayed_at',
+    ].includes(c.id)
       ? { ...c, visible: false }
       : c
   );
   const openColDefaults = columnsToDefaults(openCols('long')).map((c) =>
-    ['planned_exit_price_formula', 'stop_loss_price', 'is_rebuild'].includes(
-      c.id
-    )
+    [
+      'planned_exit_price_formula',
+      'stop_loss_price',
+      'is_rebuild',
+      'oanda_trade_id',
+      'replayed_at',
+    ].includes(c.id)
       ? { ...c, visible: false }
       : c
   );
   const dirColDefaults = columnsToDefaults(dirCols('long')).map((c) =>
-    ['planned_exit_price_formula', 'stop_loss_price', 'is_rebuild'].includes(
-      c.id
-    )
+    [
+      'planned_exit_price_formula',
+      'stop_loss_price',
+      'is_rebuild',
+      'oanda_trade_id',
+      'replayed_at',
+    ].includes(c.id)
       ? { ...c, visible: false }
       : c
   );
   const allColDefaults = columnsToDefaults(allCols()).map((c) =>
-    ['planned_exit_price_formula', 'stop_loss_price', 'is_rebuild'].includes(
-      c.id
-    )
+    [
+      'planned_exit_price_formula',
+      'stop_loss_price',
+      'is_rebuild',
+      'oanda_trade_id',
+      'replayed_at',
+    ].includes(c.id)
       ? { ...c, visible: false }
       : c
   );
@@ -895,6 +948,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     dir: 'long' | 'short'
   ): CopyValueExtractors<TaskPosition> => ({
     id: (r) => (r.id ? String(r.id).slice(0, 8) : '-'),
+    replayed_at: (r) => (r.replayed_at ? formatTimestamp(r.replayed_at) : '-'),
     entry_time: (r) => (r.entry_time ? formatTimestamp(r.entry_time) : '-'),
     exit_time: (r) => (r.exit_time ? formatTimestamp(r.exit_time) : '-'),
     instrument: (r) => r.instrument ?? '-',
@@ -911,6 +965,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
         : '-',
     planned_exit_price_formula: (r) => r.planned_exit_price_formula ?? '-',
+    oanda_trade_id: (r) => r.oanda_trade_id ?? '-',
     pips: (r) => {
       const ep = r.entry_price ? parseFloat(r.entry_price) : null;
       const xp = r.exit_price ? parseFloat(r.exit_price) : null;
@@ -940,6 +995,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     dir: 'long' | 'short'
   ): CopyValueExtractors<TaskPosition> => ({
     id: (r) => (r.id ? String(r.id).slice(0, 8) : '-'),
+    replayed_at: (r) => (r.replayed_at ? formatTimestamp(r.replayed_at) : '-'),
     entry_time: (r) => (r.entry_time ? formatTimestamp(r.entry_time) : '-'),
     instrument: (r) => r.instrument ?? '-',
     units: (r) => String(Math.abs(r.units)),
@@ -953,6 +1009,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
         : '-',
     planned_exit_price_formula: (r) => r.planned_exit_price_formula ?? '-',
+    oanda_trade_id: (r) => r.oanda_trade_id ?? '-',
     pips: (r) => {
       const ep = r.entry_price ? parseFloat(r.entry_price) : null;
       if (currentPrice != null && ep != null && pipSize) {
@@ -979,6 +1036,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
 
   const genericExtractors: CopyValueExtractors<TaskPosition> = {
     id: (r) => (r.id ? String(r.id).slice(0, 8) : '-'),
+    replayed_at: (r) => (r.replayed_at ? formatTimestamp(r.replayed_at) : '-'),
     direction: (r) => r.direction ?? '-',
     is_open: (r) => (r.is_open ? 'Open' : 'Closed'),
     entry_time: (r) => (r.entry_time ? formatTimestamp(r.entry_time) : '-'),
@@ -997,6 +1055,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         ? `¥${parseFloat(r.planned_exit_price).toFixed(3)}`
         : '-',
     planned_exit_price_formula: (r) => r.planned_exit_price_formula ?? '-',
+    oanda_trade_id: (r) => r.oanda_trade_id ?? '-',
     pips: (r) => {
       const dir = r.direction;
       const ep = r.entry_price ? parseFloat(r.entry_price) : null;

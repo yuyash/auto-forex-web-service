@@ -145,6 +145,12 @@ class Position(models.Model):
         auto_now=True,
         help_text="Timestamp when this record was last updated",
     )
+    replayed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="When this position was created or updated by resumed event replay.",
+    )
 
     class Meta:
         db_table = "positions"

@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Callable
+from dataclasses import replace
 from decimal import Decimal
 from logging import Logger, getLogger
+
+from django.utils import timezone as dj_timezone
 
 from apps.trading.dataclasses import EntryExecutionBinding, EventExecutionResult
 from apps.trading.enums import Direction, EventType
@@ -84,6 +87,8 @@ class EventHandler:
         self._entry_id_to_cycle_id: dict[int, str] = {}
         # Sequence number from the current TradingEvent being processed.
         self._current_sequence_number: int = 0
+        self._current_replay_mode = False
+        self._affected_refs = self._new_affected_refs()
 
     @staticmethod
     def _event_type_key(strategy_event: StrategyEvent) -> str:
@@ -297,8 +302,21 @@ class EventHandler:
         Raises:
             OrderServiceError: If order execution fails
         """
+        return self._handle_event(trading_event, replaying=False)
+
+    def handle_event_with_replay(
+        self, trading_event: TradingEvent, *, replaying: bool
+    ) -> EventExecutionResult:
+        """Handle a single trading event with optional replay context."""
+        return self._handle_event(trading_event, replaying=replaying)
+
+    def _handle_event(
+        self, trading_event: TradingEvent, *, replaying: bool
+    ) -> EventExecutionResult:
         strategy_event = StrategyEvent.from_dict(trading_event.details)
         self._current_sequence_number = getattr(trading_event, "sequence_number", 0) or 0
+        self._current_replay_mode = replaying
+        self._affected_refs = self._new_affected_refs()
         # Restore cycle-tracking fields from TradingEvent model columns
         # (these are not stored in the details JSON).
         if trading_event.root_entry_id is not None:
@@ -307,12 +325,18 @@ class EventHandler:
             strategy_event.parent_entry_id = trading_event.parent_entry_id
         event_key = self._event_type_key(strategy_event)
         event_handler = self._event_dispatch.get(event_key)
-        if event_handler:
-            return event_handler(strategy_event)
-
-        category = str(getattr(strategy_event, "category", "info"))
-        category_handler = self._category_dispatch.get(category, self._dispatch_informational)
-        return category_handler(strategy_event)
+        try:
+            if event_handler:
+                result = event_handler(strategy_event)
+            else:
+                category = str(getattr(strategy_event, "category", "info"))
+                category_handler = self._category_dispatch.get(
+                    category, self._dispatch_informational
+                )
+                result = category_handler(strategy_event)
+            return replace(result, **self._snapshot_affected_refs())
+        finally:
+            self._current_replay_mode = False
 
     def _dispatch_open_position(self, strategy_event: StrategyEvent) -> EventExecutionResult:
         if not isinstance(strategy_event, OpenPositionEvent):
@@ -534,6 +558,8 @@ class EventHandler:
             position.stop_loss_price = sl_price
             position.save(update_fields=["stop_loss_price"])
 
+        self._mark_replay_records(position, order)
+
         self._cache_position(event.layer_number, position)
         trade = self._record_trade(
             direction=direction,
@@ -551,6 +577,8 @@ class EventHandler:
             cycle_id=cycle_id,
             margin_ratio=event.margin_ratio,
         )
+        self._mark_replay_records(trade)
+        self._record_affected_entities(position=position, order=order, trade=trade)
 
         # New cycle: back-fill cycle_id = trade's own id.
         if cycle_id is None:
@@ -897,7 +925,7 @@ class EventHandler:
                 quote_delta = -quote_delta
             realized_delta_quote_total += quote_delta * Decimal(str(closed_units))
 
-            self._record_trade(
+            trade = self._record_trade(
                 direction=Direction(position.direction),
                 units=closed_units,
                 instrument=position.instrument,
@@ -916,6 +944,12 @@ class EventHandler:
                 description=getattr(event, "description", ""),
                 cycle_id=self._resolve_cycle_id_for_close(event),
                 margin_ratio=event.margin_ratio,
+            )
+            self._mark_replay_records(closed_position, close_order, trade)
+            self._record_affected_entities(
+                position=closed_position,
+                order=close_order,
+                trade=trade,
             )
 
             self._prune_closed_position(event.layer_number, closed_position)
@@ -999,6 +1033,55 @@ class EventHandler:
                 break
 
         return realized_delta_total, realized_delta_quote_total
+
+    @staticmethod
+    def _new_affected_refs() -> dict[str, set[str]]:
+        return {
+            "position_ids": set(),
+            "order_ids": set(),
+            "trade_ids": set(),
+            "broker_order_ids": set(),
+            "oanda_trade_ids": set(),
+        }
+
+    def _record_affected_entities(
+        self,
+        *,
+        position: Position | None = None,
+        order: Order | None = None,
+        trade: Trade | None = None,
+    ) -> None:
+        """Track entities touched by the current event execution."""
+        if position is not None:
+            self._affected_refs["position_ids"].add(str(position.id))
+            if position.oanda_trade_id:
+                self._affected_refs["oanda_trade_ids"].add(str(position.oanda_trade_id))
+        if order is not None:
+            self._affected_refs["order_ids"].add(str(order.id))
+            if order.broker_order_id:
+                self._affected_refs["broker_order_ids"].add(str(order.broker_order_id))
+            if order.oanda_trade_id:
+                self._affected_refs["oanda_trade_ids"].add(str(order.oanda_trade_id))
+        if trade is not None:
+            self._affected_refs["trade_ids"].add(str(trade.id))
+            if trade.oanda_trade_id:
+                self._affected_refs["oanda_trade_ids"].add(str(trade.oanda_trade_id))
+
+    def _snapshot_affected_refs(self) -> dict[str, tuple[str, ...]]:
+        """Return a stable snapshot of affected entity IDs."""
+        return {key: tuple(sorted(values)) for key, values in self._affected_refs.items()}
+
+    def _mark_replay_records(self, *records: Position | Order | Trade | None) -> None:
+        """Mark persisted records as touched by replay when applicable."""
+        if not self._current_replay_mode:
+            return
+
+        replayed_at = dj_timezone.now()
+        for record in records:
+            if record is None:
+                continue
+            type(record).objects.filter(pk=record.pk).update(replayed_at=replayed_at)
+            record.replayed_at = replayed_at
 
     def handle_volatility_lock(self, event: VolatilityLockEvent) -> tuple[Decimal, Decimal]:
         """Close all open positions due to volatility.

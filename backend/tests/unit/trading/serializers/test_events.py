@@ -56,6 +56,8 @@ class TestTradeSerializer:
         assert "units" in serializer.fields
         assert "instrument" in serializer.fields
         assert "price" in serializer.fields
+        assert "oanda_trade_id" in serializer.fields
+        assert "replayed_at" in serializer.fields
 
     def test_get_execution_method_display_valid(self):
         serializer = TradeSerializer()
@@ -87,6 +89,8 @@ class TestPositionSerializer:
         assert "instrument" in serializer.fields
         assert "direction" in serializer.fields
         assert "is_open" in serializer.fields
+        assert "oanda_trade_id" in serializer.fields
+        assert "replayed_at" in serializer.fields
 
     def test_get_trade_ids_with_prefetched(self):
         serializer = PositionSerializer(context={"include_trade_ids": True})
@@ -111,3 +115,6 @@ class TestOrderSerializer:
         assert "instrument" in serializer.fields
         assert "status" in serializer.fields
         assert "is_dry_run" in serializer.fields
+        assert "broker_order_id" in serializer.fields
+        assert "oanda_trade_id" in serializer.fields
+        assert "replayed_at" in serializer.fields

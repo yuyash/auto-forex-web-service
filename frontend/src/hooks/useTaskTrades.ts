@@ -30,8 +30,11 @@ export interface TaskTrade {
   commission?: string;
   cycle_id?: string | null;
   position_id?: string | null;
+  order_id?: string | null;
+  oanda_trade_id?: string | null;
   is_rebuild?: boolean;
   stop_loss_price?: string | null;
+  replayed_at?: string | null;
   updated_at?: string | null;
 }
 

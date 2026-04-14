@@ -27,6 +27,7 @@ export interface TaskOrder {
   stop_loss?: string | null;
   error_message?: string | null;
   is_dry_run: boolean;
+  replayed_at?: string | null;
   updated_at?: string | null;
 }
 
