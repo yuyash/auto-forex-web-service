@@ -91,6 +91,9 @@ export function MetricsOhlcChart({
   const observerRef = useRef<ResizeObserver | null>(null);
   const seqLineRef = useRef<SequencePositionLine | null>(null);
   const [chartHeight, setChartHeight] = useState(200);
+  const [liveEndTime, setLiveEndTime] = useState(
+    () => endTime ?? new Date().toISOString()
+  );
 
   // Compute chart canvas height to fill the card minus header and padding
   useEffect(() => {
@@ -101,7 +104,13 @@ export function MetricsOhlcChart({
     setChartHeight(Math.max(100, available));
   }, [cardHeight]);
 
-  const fallbackEnd = endTime ?? new Date().toISOString();
+  useEffect(() => {
+    if (endTime) {
+      setLiveEndTime(endTime);
+    }
+  }, [endTime]);
+
+  const fallbackEnd = endTime ?? liveEndTime;
 
   const resolvedAutoGranularity = useMemo(
     () => autoGranularity(startTime, fallbackEnd),
@@ -143,9 +152,13 @@ export function MetricsOhlcChart({
     if (candles.length === 0) return null;
     const startSec = Math.floor(new Date(startTime).getTime() / 1000);
     const endSec = Math.floor(new Date(fallbackEnd).getTime() / 1000);
-    const span = endSec - startSec;
-    const pad = Math.max(60, Math.floor(span * 0.05));
-    return { from: (startSec - pad) as Time, to: (endSec + pad) as Time };
+    const span = Math.max(60, endSec - startSec);
+    const leftPad = Math.max(60, Math.floor(span * 0.05));
+    const rightPad = Math.max(60, Math.floor((span + leftPad) / 3));
+    return {
+      from: (startSec - leftPad) as Time,
+      to: (endSec + rightPad) as Time,
+    };
   }, [startTime, fallbackEnd, candles]);
 
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -273,8 +286,12 @@ export function MetricsOhlcChart({
 
   const handleReload = useCallback(() => {
     destroyChart();
+    if (!endTime) {
+      setLiveEndTime(new Date().toISOString());
+      return;
+    }
     void replaceWithCountWindow();
-  }, [destroyChart, replaceWithCountWindow]);
+  }, [destroyChart, endTime, replaceWithCountWindow]);
 
   const displayInstrument = instrument.replace('_', '/');
 
