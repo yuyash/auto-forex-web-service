@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.6...frontend-v1.48.7) (2026-04-14)
+
+
+### Bug Fixes
+
+* replay event markers ([#495](https://github.com/yuyash/auto-forex-web-service/issues/495)) ([e4636b3](https://github.com/yuyash/auto-forex-web-service/commit/e4636b371675385b809cf44fc5d110c655257617))
+
 ## [1.48.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.5...frontend-v1.48.6) (2026-04-14)
 
 

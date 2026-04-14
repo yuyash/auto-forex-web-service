@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.9](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.34.8...backend-v1.34.9) (2026-04-14)
+
+
+### Bug Fixes
+
+* replay event markers ([#495](https://github.com/yuyash/auto-forex-web-service/issues/495)) ([e4636b3](https://github.com/yuyash/auto-forex-web-service/commit/e4636b371675385b809cf44fc5d110c655257617))
+
 ## [1.34.8](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.34.7...backend-v1.34.8) (2026-04-14)
 
 
