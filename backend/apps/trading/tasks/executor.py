@@ -523,12 +523,14 @@ class TaskExecutor:
     def _should_stop_before_batch(self, loop: ExecutionLoopState) -> bool:
         """Check external stop signal before processing a batch."""
         control = self.state_manager.check_control()
-        if control.should_stop:
+        should_stop = getattr(control, "should_stop", False) is True
+        should_pause = getattr(control, "should_pause", False) is True
+        if should_stop:
             logger.info("Stop signal received - ticks_processed=%d", loop.state.ticks_processed)
             loop.stopped_early = True
             return True
 
-        if not control.should_pause:
+        if not should_pause:
             return False
 
         logger.info("Pause signal received - ticks_processed=%d", loop.state.ticks_processed)
@@ -585,7 +587,9 @@ class TaskExecutor:
     def _should_stop_during_batch(self, loop: ExecutionLoopState, tick_idx: int) -> bool:
         """Check stop signal during long batch processing."""
         control = self.state_manager.check_control()
-        if control.should_stop:
+        should_stop = getattr(control, "should_stop", False) is True
+        should_pause = getattr(control, "should_pause", False) is True
+        if should_stop:
             logger.info(
                 "Stop signal received during batch processing - task_id=%s, task_type=%s, ticks_processed=%d, tick_idx=%d",
                 self.task.pk,
@@ -596,7 +600,7 @@ class TaskExecutor:
             loop.stopped_early = True
             return True
 
-        if not control.should_pause:
+        if not should_pause:
             return False
 
         logger.info(
