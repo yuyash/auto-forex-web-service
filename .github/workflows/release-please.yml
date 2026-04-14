@@ -98,14 +98,20 @@ jobs:
           fi
 
           docker compose config > /dev/null
-          DRAINED_TASK_IDS=""
+          DRAINED_TRADING_TASK_IDS=""
+          DRAINED_BACKTEST_TASK_IDS=""
           if docker compose ps --services --status running | grep -qx backend; then
-            DRAIN_OUTPUT=$(docker compose exec --interactive=false -T backend \
+            TRADING_DRAIN_OUTPUT=$(docker compose exec --interactive=false -T backend \
               python manage.py drain_trading_for_deploy --mode pause --emit-task-ids </dev/null)
-            printf '%s\n' "$DRAIN_OUTPUT"
-            DRAINED_TASK_IDS=$(printf '%s\n' "$DRAIN_OUTPUT" | sed -n 's/^DRAINED_TASK_IDS=//p' | tail -n 1)
+            printf '%s\n' "$TRADING_DRAIN_OUTPUT"
+            DRAINED_TRADING_TASK_IDS=$(printf '%s\n' "$TRADING_DRAIN_OUTPUT" | sed -n 's/^DRAINED_TASK_IDS=//p' | tail -n 1)
+
+            BACKTEST_DRAIN_OUTPUT=$(docker compose exec --interactive=false -T backend \
+              python manage.py drain_backtests_for_deploy --mode pause --emit-task-ids </dev/null)
+            printf '%s\n' "$BACKTEST_DRAIN_OUTPUT"
+            DRAINED_BACKTEST_TASK_IDS=$(printf '%s\n' "$BACKTEST_DRAIN_OUTPUT" | sed -n 's/^DRAINED_BACKTEST_TASK_IDS=//p' | tail -n 1)
           else
-            echo "Backend is not currently running; skipping trading drain."
+            echo "Backend is not currently running; skipping task drain."
           fi
           docker compose pull
           docker compose down
@@ -128,11 +134,11 @@ jobs:
             exit 1
           fi
 
-          if [ -n "$DRAINED_TASK_IDS" ]; then
-            echo "Resuming drained trading tasks: $DRAINED_TASK_IDS"
+          if [ -n "$DRAINED_TRADING_TASK_IDS" ]; then
+            echo "Resuming drained trading tasks: $DRAINED_TRADING_TASK_IDS"
             OLD_IFS=$IFS
             IFS=','
-            for task_id in $DRAINED_TASK_IDS; do
+            for task_id in $DRAINED_TRADING_TASK_IDS; do
               [ -z "$task_id" ] && continue
               docker compose exec --interactive=false -T backend \
                 python manage.py resume_trading "$task_id" </dev/null
@@ -140,6 +146,20 @@ jobs:
             IFS=$OLD_IFS
           else
             echo "No trading tasks needed resume after deployment."
+          fi
+
+          if [ -n "$DRAINED_BACKTEST_TASK_IDS" ]; then
+            echo "Resuming drained backtest tasks: $DRAINED_BACKTEST_TASK_IDS"
+            OLD_IFS=$IFS
+            IFS=','
+            for task_id in $DRAINED_BACKTEST_TASK_IDS; do
+              [ -z "$task_id" ] && continue
+              docker compose exec --interactive=false -T backend \
+                python manage.py resume_backtest "$task_id" </dev/null
+            done
+            IFS=$OLD_IFS
+          else
+            echo "No backtest tasks needed resume after deployment."
           fi
 
           docker image prune -af
