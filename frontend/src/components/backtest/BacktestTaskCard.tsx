@@ -51,6 +51,7 @@ import {
 import { useToast } from '../common';
 import { logger } from '../../utils/logger';
 import { formatTaskActionError } from '../../utils/taskActionError';
+import { getLocaleForLanguage } from '../../utils/timezone';
 
 interface BacktestTaskCardProps {
   task: BacktestTask;
@@ -61,7 +62,7 @@ export default function BacktestTaskCard({
   task,
   onRefresh,
 }: BacktestTaskCardProps) {
-  const { t } = useTranslation(['backtest', 'common']);
+  const { t, i18n } = useTranslation(['backtest', 'common']);
   const navigate = useNavigate();
   const { showError, showSuccess } = useToast();
   const theme = useTheme();
@@ -290,21 +291,27 @@ export default function BacktestTaskCard({
   };
 
   const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
+    return new Date(dateString).toLocaleDateString(
+      getLocaleForLanguage(i18n.resolvedLanguage),
+      {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      }
+    );
   };
 
   const formatDateTime = (dateString: string): string => {
-    return new Date(dateString).toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return new Date(dateString).toLocaleString(
+      getLocaleForLanguage(i18n.resolvedLanguage),
+      {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }
+    );
   };
 
   // Get progress from summary endpoint
@@ -371,7 +378,7 @@ export default function BacktestTaskCard({
               )}
             </Box>
             <Typography variant="body2" color="text.secondary">
-              {formatDate(currentTask.start_time)} to{' '}
+              {formatDate(currentTask.start_time)} -{' '}
               {formatDate(currentTask.end_time)}
             </Typography>
           </Box>
