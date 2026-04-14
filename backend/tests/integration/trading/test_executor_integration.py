@@ -99,8 +99,11 @@ class TestHandleEvents:
         # Mock the event handler to avoid complex order execution
         with patch.object(
             executor.event_handler,
-            "handle_event",
-            return_value=EventExecutionResult(realized_pnl_delta=Decimal("0")),
+            "handle_event_with_replay",
+            return_value=EventExecutionResult(
+                realized_pnl_delta=Decimal("0"),
+                realized_pnl_delta_quote=Decimal("0"),
+            ),
         ):
             executor.handle_events(state, [event])
 
@@ -133,8 +136,11 @@ class TestHandleEvents:
         # Simulate a realized PnL of +250
         with patch.object(
             executor.event_handler,
-            "handle_event",
-            return_value=EventExecutionResult(realized_pnl_delta=Decimal("250")),
+            "handle_event_with_replay",
+            return_value=EventExecutionResult(
+                realized_pnl_delta=Decimal("250"),
+                realized_pnl_delta_quote=Decimal("250"),
+            ),
         ):
             executor.handle_events(state, [event])
 
