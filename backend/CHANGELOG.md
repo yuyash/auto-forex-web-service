@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.6](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.34.5...backend-v1.34.6) (2026-04-14)
+
+
+### Bug Fixes
+
+* **trading:** harden task recovery after deploy restarts ([#487](https://github.com/yuyash/auto-forex-web-service/issues/487)) ([3afd1bc](https://github.com/yuyash/auto-forex-web-service/commit/3afd1bc0f03aa807dd47ff8433fe9bfa36403061))
+
 ## [1.34.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.34.4...backend-v1.34.5) (2026-04-14)
 
 
