@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.9](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.8...frontend-v1.48.9) (2026-04-14)
+
+
+### Bug Fixes
+
+* **trading:** refresh live task card summaries ([#499](https://github.com/yuyash/auto-forex-web-service/issues/499)) ([29b4aff](https://github.com/yuyash/auto-forex-web-service/commit/29b4aff5244657ee585a35d3b9343f00932c023b))
+
 ## [1.48.8](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.7...frontend-v1.48.8) (2026-04-14)
 
 
