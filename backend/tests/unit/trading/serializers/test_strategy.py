@@ -38,12 +38,10 @@ class TestStrategyConfigDetailSerializer:
         obj.is_in_use.return_value = False
         assert serializer.get_is_in_use(obj) is False
 
-    @patch("apps.trading.serializers.strategy.StrategyConfiguration.user_has_running_tasks")
-    def test_get_has_running_tasks(self, mock_user_has_running_tasks):
+    def test_get_has_running_tasks(self):
         serializer = StrategyConfigDetailSerializer()
         obj = MagicMock()
-        obj.user = MagicMock()
-        mock_user_has_running_tasks.return_value = True
+        obj.has_active_tasks.return_value = True
         assert serializer.get_has_running_tasks(obj) is True
 
 
@@ -95,6 +93,29 @@ class TestStrategyConfigCreateSerializer:
         serializer = StrategyConfigCreateSerializer()
         result = serializer.validate_parameters({"key": "value"})
         assert result == {"key": "value"}
+
+    def test_update_blocks_only_when_this_configuration_has_running_tasks(self):
+        serializer = StrategyConfigCreateSerializer()
+        instance = MagicMock()
+        instance.has_active_tasks.return_value = True
+        serializer.instance = instance
+
+        with pytest.raises(ValidationError) as exc_info:
+            serializer.update(instance, {"parameters": {"foo": "bar"}})
+
+        assert "tasks using this configuration are running" in str(exc_info.value.detail["detail"])
+
+    def test_update_allows_edit_when_other_tasks_are_running(self):
+        serializer = StrategyConfigCreateSerializer()
+        instance = MagicMock()
+        instance.has_active_tasks.return_value = False
+        instance.is_in_use.return_value = True
+
+        updated = serializer.update(instance, {"parameters": {"foo": "bar"}})
+
+        assert updated is instance
+        assert instance.parameters == {"foo": "bar"}
+        instance.save.assert_called_once()
 
     @patch("apps.trading.strategies.registry.registry")
     def test_validate_hides_internal_value_error_details(self, mock_registry):
