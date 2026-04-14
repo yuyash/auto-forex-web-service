@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.10](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.9...frontend-v1.48.10) (2026-04-14)
+
+
+### Bug Fixes
+
+* **frontend:** extend display formatting usage ([#501](https://github.com/yuyash/auto-forex-web-service/issues/501)) ([be2586c](https://github.com/yuyash/auto-forex-web-service/commit/be2586c85f497bf90db4f62f26a8c090bc7b4b1d))
+
 ## [1.48.9](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.8...frontend-v1.48.9) (2026-04-14)
 
 
