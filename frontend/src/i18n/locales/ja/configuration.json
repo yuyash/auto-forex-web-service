@@ -40,7 +40,7 @@
     "parameters": "パラメータ",
     "otherParameters": "その他のパラメータ",
     "saveConfiguration": "設定を保存",
-    "editLockedRunningTasks": "Running 状態のタスクが1つでもある間は、戦略設定を変更できません。",
+    "editLockedRunningTasks": "この戦略設定を使用中のタスクが Running 状態の間は、戦略設定を変更できません。",
     "requiredFields": "必須項目",
     "loadingStrategies": "戦略を読み込み中…",
     "failedToLoadStrategies": "戦略の読み込みに失敗しました。もう一度お試しください。",

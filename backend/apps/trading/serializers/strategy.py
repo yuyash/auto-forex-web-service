@@ -48,8 +48,8 @@ class StrategyConfigDetailSerializer(serializers.ModelSerializer):
         return obj.is_in_use()
 
     def get_has_running_tasks(self, obj: StrategyConfiguration) -> bool:
-        """Get whether the config owner currently has any running task."""
-        return StrategyConfiguration.user_has_running_tasks(obj.user)
+        """Get whether this configuration is currently used by a running task."""
+        return obj.has_active_tasks()
 
 
 class StrategyConfigListSerializer(serializers.ModelSerializer):
@@ -81,8 +81,8 @@ class StrategyConfigListSerializer(serializers.ModelSerializer):
         return obj.is_in_use()
 
     def get_has_running_tasks(self, obj: StrategyConfiguration) -> bool:
-        """Get whether the config owner currently has any running task."""
-        return StrategyConfiguration.user_has_running_tasks(obj.user)
+        """Get whether this configuration is currently used by a running task."""
+        return obj.has_active_tasks()
 
 
 class StrategyConfigCreateSerializer(serializers.ModelSerializer):
@@ -175,9 +175,14 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
         self, instance: StrategyConfiguration, validated_data: dict
     ) -> StrategyConfiguration:
         """Update strategy configuration."""
-        if StrategyConfiguration.user_has_running_tasks(instance.user):
+        if instance.has_active_tasks():
             raise serializers.ValidationError(
-                {"detail": ("Strategy configurations cannot be updated while any task is running.")}
+                {
+                    "detail": (
+                        "Strategy configurations cannot be updated while tasks using this "
+                        "configuration are running."
+                    )
+                }
             )
 
         # Don't allow updating strategy_type if config is in use

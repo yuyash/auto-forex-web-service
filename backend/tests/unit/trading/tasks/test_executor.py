@@ -715,6 +715,50 @@ class TestTradingExecutorSafety:
     @patch("apps.trading.tasks.executor.StateManager")
     @patch("apps.trading.tasks.executor.OrderService")
     @patch("apps.trading.services.reconciliation.TradingResumeReconciler")
+    def test_prepare_state_for_execution_allows_fresh_start_with_reconciliation_warnings(
+        self,
+        mock_reconciler_cls,
+        _mock_order_service,
+        _mock_state_manager,
+        _mock_handler,
+    ):
+        from apps.trading.models import TradingTask
+        from apps.trading.tasks.executor import TradingExecutor
+        from apps.trading.services.reconciliation import ReconciliationReport
+
+        task = MagicMock(spec=TradingTask)
+        task.pk = uuid4()
+        task.execution_id = uuid4()
+        task.instrument = "EUR_USD"
+        task.pip_size = Decimal("0.0001")
+        task.dry_run = False
+        task.config.strategy_type = "floor"
+        task.config.config_dict = {}
+        task.oanda_account.balance = Decimal("10000")
+        task.oanda_account.currency = "USD"
+
+        with patch(
+            "apps.trading.tasks.executor.TaskExecutor._get_initial_balance",
+            return_value=Decimal("10000"),
+        ):
+            executor = TradingExecutor(
+                task=task,
+                engine=MagicMock(),
+                data_source=MagicMock(),
+            )
+
+        state = MagicMock()
+        mock_reconciler_cls.return_value.reconcile.return_value = ReconciliationReport(
+            warnings=["adopted broker positions"]
+        )
+
+        assert executor.prepare_state_for_execution(state=state, resumed=False) is state
+        mock_reconciler_cls.return_value.reconcile.assert_called_once_with(resumed=False)
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    @patch("apps.trading.tasks.executor.StateManager")
+    @patch("apps.trading.tasks.executor.OrderService")
+    @patch("apps.trading.services.reconciliation.TradingResumeReconciler")
     def test_after_batch_processed_fails_on_runtime_broker_drift(
         self,
         mock_reconciler_cls,

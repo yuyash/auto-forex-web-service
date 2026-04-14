@@ -52,10 +52,10 @@ def _recover_orphaned_tasks_on_startup(**_kwargs: object) -> None:
     }:
         return
 
-    from apps.trading.tasks.recovery import recover_orphaned_tasks_beat
+    from apps.trading.tasks.recovery import recover_orphaned_tasks_startup
 
     try:
-        recover_orphaned_tasks_beat.apply_async(countdown=10, queue="system")
+        recover_orphaned_tasks_startup.apply_async(countdown=10, queue="system")
     except Exception:
         logger.exception("Failed to schedule orphaned task recovery on worker startup")
 

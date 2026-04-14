@@ -383,7 +383,7 @@ class TestReconcile:
         reconciler.state.save.assert_called_once()
 
     @patch("apps.trading.services.reconciliation.Position")
-    def test_fresh_start_blocks_when_broker_has_open_trades(self, mock_pos_model):
+    def test_fresh_start_adopts_broker_open_trades_without_blocking(self, mock_pos_model):
         reconciler = _make_reconciler()
         reconciler.oanda_service.get_account_details.return_value = _make_account_details()
         reconciler.oanda_service.get_pending_orders.return_value = []
@@ -392,8 +392,12 @@ class TestReconcile:
 
         report = reconciler.reconcile(resumed=False)
 
-        assert report.has_blockers is True
-        assert "Refusing to start a fresh execution" in " ".join(report.blockers)
+        assert report.has_blockers is False
+        assert report.created_local_positions == 1
+        assert any(
+            "Fresh start will adopt the broker exposure into the new execution" in warning
+            for warning in report.warnings
+        )
 
     @patch("apps.trading.services.reconciliation.Position")
     def test_blocks_when_pending_orders_exist(self, mock_pos_model):

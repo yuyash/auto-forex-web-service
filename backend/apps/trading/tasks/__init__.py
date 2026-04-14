@@ -8,7 +8,7 @@ from typing import List
 
 from apps.trading.tasks.backtest import run_backtest_task, stop_backtest_task
 from apps.trading.tasks.executor import BacktestExecutor, TaskExecutor, TradingExecutor
-from apps.trading.tasks.recovery import recover_orphaned_tasks_beat
+from apps.trading.tasks.recovery import recover_orphaned_tasks_beat, recover_orphaned_tasks_startup
 from apps.trading.tasks.source import (
     LiveTickDataSource,
     RedisTickDataSource,
@@ -22,6 +22,7 @@ __all__: List[str] = [
     "stop_backtest_task",
     "stop_trading_task",
     "recover_orphaned_tasks_beat",
+    "recover_orphaned_tasks_startup",
     "TaskExecutor",
     "BacktestExecutor",
     "TradingExecutor",

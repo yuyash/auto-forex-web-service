@@ -190,6 +190,20 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
       label: t('tables.logs.message'),
       width: 500,
       minWidth: 400,
+      render: (row) => (
+        <Box
+          sx={{
+            display: 'block',
+            maxWidth: '100%',
+            overflowX: 'auto',
+            whiteSpace: 'pre',
+            fontFamily: 'monospace',
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
+          {String(row.message ?? '')}
+        </Box>
+      ),
     },
   ];
 

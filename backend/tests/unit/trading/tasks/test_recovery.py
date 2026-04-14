@@ -30,6 +30,7 @@ def _mock_models():
         patch("apps.trading.tasks.recovery.CeleryTaskStatus") as cts,
         patch("apps.trading.tasks.recovery.TaskLog") as tl,
         patch("apps.trading.tasks.service.TaskService") as svc_cls,
+        patch("apps.trading.tasks.recovery._active_celery_task_ids", return_value=set()),
     ):
         bt.objects.filter.return_value = _make_qs([])
         tt.objects.filter.return_value = _make_qs([])
@@ -118,6 +119,59 @@ class TestRecoverOrphanedTasks:
         from apps.trading.tasks.recovery import recover_orphaned_tasks
 
         result = recover_orphaned_tasks(source="test")
+        assert result["backtest"] == 0
+        tl.objects.create.assert_not_called()
+
+    @pytest.mark.usefixtures("_mock_models")
+    def test_worker_ready_recovers_even_with_recent_heartbeat_when_no_active_celery_task(
+        self, _mock_models
+    ):
+        bt, tt, cts, tl, svc_cls = _mock_models
+
+        task = MagicMock()
+        task.pk = uuid4()
+        task.status = TaskStatus.RUNNING
+        tt.objects.filter.side_effect = [
+            _make_qs([task]),
+            MagicMock(update=MagicMock(return_value=1)),
+        ]
+
+        recent_cts = MagicMock()
+        recent_cts.instance_key = f"{task.pk}:{task.execution_id}"
+        recent_cts.last_heartbeat_at = dj_timezone.now() - timedelta(seconds=5)
+        cts.objects.filter.return_value.__iter__ = MagicMock(return_value=iter([recent_cts]))
+
+        service_instance = MagicMock()
+        svc_cls.return_value = service_instance
+
+        from apps.trading.tasks.recovery import recover_orphaned_tasks
+
+        result = recover_orphaned_tasks(source="worker_ready")
+        assert result["trading"] == 1
+        service_instance.recover_trading_task.assert_called_once_with(task)
+
+    @pytest.mark.usefixtures("_mock_models")
+    def test_worker_ready_skips_task_when_execution_is_still_active(self, _mock_models):
+        bt, tt, cts, tl, svc_cls = _mock_models
+
+        task = MagicMock()
+        task.pk = uuid4()
+        task.status = TaskStatus.RUNNING
+        bt.objects.filter.return_value = _make_qs([task])
+
+        recent_cts = MagicMock()
+        recent_cts.instance_key = f"{task.pk}:{task.execution_id}"
+        recent_cts.last_heartbeat_at = dj_timezone.now() - timedelta(seconds=5)
+        cts.objects.filter.return_value.__iter__ = MagicMock(return_value=iter([recent_cts]))
+
+        with patch(
+            "apps.trading.tasks.recovery._active_celery_task_ids",
+            return_value={str(task.execution_id)},
+        ):
+            from apps.trading.tasks.recovery import recover_orphaned_tasks
+
+            result = recover_orphaned_tasks(source="worker_ready")
+
         assert result["backtest"] == 0
         tl.objects.create.assert_not_called()
 
@@ -312,3 +366,13 @@ class TestRecoverOrphanedTasksBeat:
         result = recover_orphaned_tasks_beat()
         mock_recover.assert_called_once_with(source="celery_beat")
         assert result == {"backtest": 0, "trading": 0}
+
+    @patch("apps.trading.tasks.recovery.recover_orphaned_tasks")
+    def test_startup_wrapper_uses_worker_ready_source(self, mock_recover):
+        mock_recover.return_value = {"backtest": 0, "trading": 1}
+
+        from apps.trading.tasks.recovery import recover_orphaned_tasks_startup
+
+        result = recover_orphaned_tasks_startup()
+        mock_recover.assert_called_once_with(source="worker_ready")
+        assert result == {"backtest": 0, "trading": 1}

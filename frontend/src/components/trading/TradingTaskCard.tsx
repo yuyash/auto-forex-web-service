@@ -353,9 +353,9 @@ export default function TradingTaskCard({
   };
 
   const quoteCurrency =
-    liveSummary.execution.displayCurrency ||
-    currentTask.latest_execution?.quote_currency ||
     currentTask.instrument.split('_').at(-1) ||
+    currentTask.latest_execution?.quote_currency ||
+    liveSummary.execution.displayCurrency ||
     'JPY';
   const formatPnl = (value: number, currency: string): string => {
     const absValue = Math.abs(value);
@@ -589,7 +589,7 @@ export default function TradingTaskCard({
         {displayStatus === TaskStatus.FAILED && (
           <Alert severity="error" sx={{ mt: 2 }}>
             <Typography variant="body2" fontWeight="bold">
-              Task execution failed
+              {t('trading:card.taskExecutionFailed')}
             </Typography>
             {currentTask.latest_execution?.error_message && (
               <Typography variant="body2" sx={{ mt: 0.5 }}>

@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from celery import shared_task
+from celery import current_app
 from django.utils import timezone as dj_timezone
 
 from apps.trading.enums import TaskStatus, TaskType
@@ -76,12 +77,15 @@ def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
             status__in=_ACTIVE_STATUSES,
         ).order_by("started_at")[:_MAX_RECOVERY_BATCH]
     )
+    active_task_ids = _active_celery_task_ids()
     backtest_heartbeats = _prefetch_heartbeats(orphaned_backtest, "trading.tasks.run_backtest_task")
     for task in orphaned_backtest:
         if not _is_orphaned_prefetched(
             task,
             backtest_heartbeats,
             dj_timezone.now() - BACKTEST_ORPHAN_HEARTBEAT_THRESHOLD,
+            source=source,
+            active_task_ids=active_task_ids,
         ):
             continue
         if _recover_task(task, TaskType.BACKTEST, service, source):
@@ -99,6 +103,8 @@ def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
             task,
             trading_heartbeats,
             dj_timezone.now() - TRADING_ORPHAN_HEARTBEAT_THRESHOLD,
+            source=source,
+            active_task_ids=active_task_ids,
         ):
             continue
         if _recover_task(task, TaskType.TRADING, service, source):
@@ -145,8 +151,24 @@ def _is_orphaned_prefetched(
     task: BacktestTask | TradingTask,
     heartbeats: dict[str, CeleryTaskStatus],
     cutoff: datetime,
+    *,
+    source: str,
+    active_task_ids: set[str],
 ) -> bool:
     """Return True if the task has no recent heartbeat (using prefetched data)."""
+    execution_id = str(task.execution_id or "")
+    if execution_id and execution_id in active_task_ids:
+        return False
+
+    if source == "worker_ready":
+        logger.info(
+            "[RECOVERY] No active Celery execution found during startup for task_id=%s "
+            "(execution_id=%s) — treating as orphaned immediately",
+            task.pk,
+            task.execution_id,
+        )
+        return True
+
     cts = heartbeats.get(_instance_key(task))
 
     if cts is None:
@@ -166,6 +188,27 @@ def _is_orphaned_prefetched(
         return True
 
     return False
+
+
+def _active_celery_task_ids() -> set[str]:
+    """Return the task ids currently reported as active by Celery workers."""
+    try:
+        active = current_app.control.inspect(timeout=3.0).active() or {}
+    except Exception:
+        logger.exception("[RECOVERY] Failed to inspect active Celery tasks")
+        return set()
+
+    task_ids: set[str] = set()
+    for worker_tasks in active.values():
+        if not isinstance(worker_tasks, list):
+            continue
+        for task in worker_tasks:
+            if not isinstance(task, dict):
+                continue
+            task_id = str(task.get("id") or "").strip()
+            if task_id:
+                task_ids.add(task_id)
+    return task_ids
 
 
 def _is_orphaned(
@@ -333,3 +376,9 @@ def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, sou
 def recover_orphaned_tasks_beat() -> dict[str, int]:
     """Periodic Celery Beat task to detect and recover orphaned tasks."""
     return recover_orphaned_tasks(source="celery_beat")
+
+
+@shared_task(name="trading.tasks.recover_orphaned_tasks_startup")
+def recover_orphaned_tasks_startup() -> dict[str, int]:
+    """Startup recovery task that prefers immediate orphan detection."""
+    return recover_orphaned_tasks(source="worker_ready")

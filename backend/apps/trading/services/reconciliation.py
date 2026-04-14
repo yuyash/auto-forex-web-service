@@ -169,12 +169,14 @@ class TradingResumeReconciler:
             raise RuntimeError(f"Failed to fetch account snapshot from OANDA: {exc}") from exc
 
         account = self.task.oanda_account
+        account.currency = details.currency
         account.balance = details.balance
         account.margin_used = details.margin_used
         account.margin_available = details.margin_available
         account.unrealized_pnl = details.unrealized_pl
         account.save(
             update_fields=[
+                "currency",
                 "balance",
                 "margin_used",
                 "margin_available",
@@ -314,10 +316,10 @@ class TradingResumeReconciler:
 
         if not resumed:
             if report.broker_open_positions > 0:
-                report.blockers.append(
-                    f"OANDA account already has {report.broker_open_positions} open trade(s) for "
-                    f"{self.task.instrument}. Refusing to start a fresh execution on top of "
-                    "existing broker exposure."
+                report.warnings.append(
+                    f"OANDA account has {report.broker_open_positions} existing open trade(s) for "
+                    f"{self.task.instrument}. Fresh start will adopt the broker exposure into the "
+                    "new execution instead of blocking the restart."
                 )
             return
 

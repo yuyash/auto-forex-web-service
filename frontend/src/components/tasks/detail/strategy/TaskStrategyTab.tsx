@@ -48,7 +48,9 @@ export interface TaskStrategyTabProps {
 
 function formatDateTime(value?: string | null, timezone = 'UTC'): string {
   if (!value) return '-';
-  return formatDateTimeInTimezone(value, timezone);
+  return formatDateTimeInTimezone(value, timezone, undefined, {
+    includeTimezone: true,
+  });
 }
 
 function getPnlCurrencyCode(instrument?: string): string | null {

@@ -40,7 +40,7 @@
     "parameters": "Parameters",
     "otherParameters": "Other Parameters",
     "saveConfiguration": "Save Configuration",
-    "editLockedRunningTasks": "Strategy configurations cannot be changed while any task is running.",
+    "editLockedRunningTasks": "Strategy configurations cannot be changed while tasks using this configuration are running.",
     "requiredFields": "Required fields",
     "loadingStrategies": "Loading strategies…",
     "failedToLoadStrategies": "Failed to load strategies. Please try again.",
