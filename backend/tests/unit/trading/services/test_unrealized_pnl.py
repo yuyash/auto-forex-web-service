@@ -15,7 +15,8 @@ class TestUpdateUnrealizedPnl:
         result = update_unrealized_pnl(
             task_type="trading",
             task_id="abc-123",
-            current_price=Decimal("1.12345"),
+            bid_price=Decimal("1.12340"),
+            ask_price=Decimal("1.12350"),
         )
 
         assert result == 3
@@ -30,7 +31,8 @@ class TestUpdateUnrealizedPnl:
         update_unrealized_pnl(
             task_type="backtest",
             task_id="def-456",
-            current_price=Decimal("1.00"),
+            bid_price=Decimal("1.00"),
+            ask_price=Decimal("1.01"),
             execution_id="celery-xyz",
         )
 
@@ -45,7 +47,8 @@ class TestUpdateUnrealizedPnl:
         update_unrealized_pnl(
             task_type="trading",
             task_id="ghi-789",
-            current_price=Decimal("1.00"),
+            bid_price=Decimal("1.00"),
+            ask_price=Decimal("1.01"),
             execution_id=5,
         )
 
@@ -60,7 +63,8 @@ class TestUpdateUnrealizedPnl:
         update_unrealized_pnl(
             task_type="trading",
             task_id="jkl-000",
-            current_price=Decimal("1.50"),
+            bid_price=Decimal("1.50"),
+            ask_price=Decimal("1.51"),
         )
 
         filter_kwargs = mock_pos.objects.filter.call_args[1]

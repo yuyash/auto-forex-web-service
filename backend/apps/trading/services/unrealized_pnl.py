@@ -18,19 +18,21 @@ from apps.trading.models.positions import Position
 def update_unrealized_pnl(
     task_type: str,
     task_id: str,
-    current_price: Decimal,
+    bid_price: Decimal,
+    ask_price: Decimal,
     execution_id=None,
 ) -> int:
     """Bulk-update unrealized_pnl for all open positions of a task.
 
     Formula:
-      LONG:  (current_price - entry_price) * abs(units)
-      SHORT: (entry_price - current_price) * abs(units)
+      LONG:  (bid_price - entry_price) * abs(units)
+      SHORT: (entry_price - ask_price) * abs(units)
 
     Args:
         task_type: "backtest" or "trading".
         task_id: UUID of the task.
-        current_price: Latest mid price from the tick.
+        bid_price: Latest executable bid price from the tick.
+        ask_price: Latest executable ask price from the tick.
         execution_id: Optional execution UUID filter.
 
     Returns:
@@ -53,11 +55,11 @@ def update_unrealized_pnl(
         unrealized_pnl=Case(
             When(
                 direction="long",
-                then=(Value(current_price) - F("entry_price")) * abs_units,
+                then=(Value(bid_price) - F("entry_price")) * abs_units,
             ),
             When(
                 direction="short",
-                then=(F("entry_price") - Value(current_price)) * abs_units,
+                then=(F("entry_price") - Value(ask_price)) * abs_units,
             ),
             default=Value(Decimal("0")),
         )

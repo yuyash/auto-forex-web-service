@@ -976,13 +976,14 @@ class TaskExecutor:
 
     def _update_unrealized_pnl(self, state: ExecutionState) -> None:
         """Recalculate unrealized pnl for open positions from latest tick."""
-        if state.last_tick_price is None:
+        if state.last_tick_bid is None or state.last_tick_ask is None:
             return
 
         update_unrealized_pnl(
             task_type=self.task_type.value,
             task_id=str(self.task.pk),
-            current_price=Decimal(str(state.last_tick_price)),
+            bid_price=Decimal(str(state.last_tick_bid)),
+            ask_price=Decimal(str(state.last_tick_ask)),
             execution_id=self.task.execution_id,
         )
 

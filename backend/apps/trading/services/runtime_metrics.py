@@ -122,17 +122,16 @@ class RuntimeMetricsTracker:
 
         conv = quote_to_account_rate(self.instrument, mid, self.account_currency)
 
-        # Unrealized PnL from cached open positions (quote currency).
-        # Use mid so the live metrics stream matches the DB-backed summary
-        # service, which also stores unrealized PnL from the latest mid price.
+        # Unrealized PnL from cached open positions (quote currency),
+        # marked to executable close prices.
         unrealized_pnl_quote = Decimal("0")
         for position in self._open_positions.values():
             units = Decimal(str(abs(position.units)))
             entry_price = Decimal(str(position.entry_price))
             if position.direction == "long":
-                unrealized_pnl_quote += (mid - entry_price) * units
+                unrealized_pnl_quote += (bid - entry_price) * units
             else:
-                unrealized_pnl_quote += (entry_price - mid) * units
+                unrealized_pnl_quote += (entry_price - ask) * units
 
         # Convert to account currency using current mid rate (same as overview tab)
         realized_pnl = self._realized_pnl_quote * conv

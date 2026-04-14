@@ -80,7 +80,7 @@ class TestRuntimeMetricsTracker:
         assert Decimal(metrics["baseline_atr"]) > Decimal("0")
         assert Decimal(metrics["volatility_threshold"]) > Decimal("0")
 
-    def test_build_metrics_uses_mid_price_for_unrealized_pnl(self):
+    def test_build_metrics_uses_executable_prices_for_unrealized_pnl(self):
         tracker = RuntimeMetricsTracker(
             instrument="USD_JPY",
             pip_size=Decimal("0.01"),
@@ -104,5 +104,5 @@ class TestRuntimeMetricsTracker:
         )
 
         assert Decimal(metrics["realized_pnl"]) == Decimal("0")
-        assert Decimal(metrics["unrealized_pnl"]) == Decimal("1.000")
-        assert Decimal(metrics["total_pnl"]) == Decimal("1.000")
+        assert Decimal(metrics["unrealized_pnl"]) == Decimal("-69.000")
+        assert Decimal(metrics["total_pnl"]) == Decimal("-69.000")
