@@ -1,5 +1,16 @@
 import { z } from 'zod';
 
+export const STORAGE_CHANGE_EVENT = 'app-storage-change';
+
+function dispatchStorageChange(key: string): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent(STORAGE_CHANGE_EVENT, {
+      detail: { key },
+    })
+  );
+}
+
 export function readRawStoredValue(key: string): string | null {
   try {
     return localStorage.getItem(key);
@@ -48,6 +59,7 @@ export function readStoredStringValue<T extends string>(
 export function writeStoredValue<T>(key: string, value: T): void {
   try {
     localStorage.setItem(key, JSON.stringify(value));
+    dispatchStorageChange(key);
   } catch {
     // ignore storage write failures
   }
@@ -56,6 +68,7 @@ export function writeStoredValue<T>(key: string, value: T): void {
 export function writeRawStoredValue(key: string, value: string): void {
   try {
     localStorage.setItem(key, value);
+    dispatchStorageChange(key);
   } catch {
     // ignore storage write failures
   }
@@ -64,6 +77,7 @@ export function writeRawStoredValue(key: string, value: string): void {
 export function writeStoredStringValue(key: string, value: string): void {
   try {
     localStorage.setItem(key, value);
+    dispatchStorageChange(key);
   } catch {
     // ignore storage write failures
   }
@@ -72,6 +86,7 @@ export function writeStoredStringValue(key: string, value: string): void {
 export function removeStoredValue(key: string): void {
   try {
     localStorage.removeItem(key);
+    dispatchStorageChange(key);
   } catch {
     // ignore storage removal failures
   }

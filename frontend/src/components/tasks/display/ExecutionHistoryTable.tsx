@@ -32,6 +32,8 @@ import { StatusBadge } from './StatusBadge';
 import { TaskType } from '../../../types/common';
 import type { TaskExecution } from '../../../types/execution';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useAppSettings } from '../../../hooks/useAppSettings';
+import { formatAppNumber, formatAppPercent } from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
 
 interface ExecutionHistoryTableProps {
@@ -47,6 +49,7 @@ export function ExecutionHistoryTable({
 }: ExecutionHistoryTableProps) {
   const { t } = useTranslation('common');
   const { user } = useAuth();
+  const { settings: appSettings } = useAppSettings();
   const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -56,7 +59,10 @@ export function ExecutionHistoryTable({
     taskId,
     taskType,
     { page: page + 1, page_size: rowsPerPage, include_metrics: true },
-    { enablePolling: true, pollingInterval: 5000 }
+    {
+      enablePolling: true,
+      pollingInterval: appSettings.healthCheckIntervalSeconds * 1000,
+    }
   );
 
   const executions = data?.results ?? [];
@@ -100,13 +106,18 @@ export function ExecutionHistoryTable({
   const fmt = (v: string | number | undefined | null): string => {
     if (v == null) return '-';
     const n = typeof v === 'string' ? parseFloat(v) : v;
-    return isNaN(n) ? '-' : n.toFixed(2);
+    return isNaN(n)
+      ? '-'
+      : formatAppNumber(n, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
   };
 
   const pnlCurrency = instrument?.includes('_') ? instrument.split('_')[1] : '';
 
-  const columns: Column<TaskExecution>[] = useMemo(
-    () => [
+  const columns: Column<TaskExecution>[] = useMemo(() => {
+    const baseColumns: Column<TaskExecution>[] = [
       {
         id: 'execution_number',
         label: t('tables.executions.executionId'),
@@ -128,14 +139,6 @@ export function ExecutionHistoryTable({
         width: 120,
         minWidth: 90,
         render: (row: TaskExecution) => <StatusBadge status={row.status} />,
-      },
-      {
-        id: 'progress',
-        label: t('tables.executions.progress'),
-        width: 90,
-        minWidth: 70,
-        align: 'right' as const,
-        render: (row: TaskExecution) => `${row.progress}%`,
       },
       {
         id: 'started_at',
@@ -180,7 +183,7 @@ export function ExecutionHistoryTable({
             );
           return (
             <Chip
-              label={`${v >= 0 ? '+' : ''}${v.toFixed(2)}%`}
+              label={formatAppPercent(v, 2, true)}
               color={v >= 0 ? 'success' : 'error'}
               size="small"
               sx={{ minWidth: 70 }}
@@ -248,7 +251,9 @@ export function ExecutionHistoryTable({
         minWidth: 70,
         align: 'right' as const,
         render: (row: TaskExecution) =>
-          row.metrics?.win_rate != null ? `${fmt(row.metrics.win_rate)}%` : '-',
+          row.metrics?.win_rate != null
+            ? formatAppPercent(Number(row.metrics.win_rate), 2)
+            : '-',
       },
       {
         id: 'error_message',
@@ -269,12 +274,25 @@ export function ExecutionHistoryTable({
             '-'
           ),
       },
-    ],
-    [formatDate, pnlCurrency, t]
-  );
+    ];
+
+    if (taskType === TaskType.BACKTEST) {
+      baseColumns.splice(2, 0, {
+        id: 'progress',
+        label: t('tables.executions.progress'),
+        width: 90,
+        minWidth: 70,
+        align: 'right' as const,
+        render: (row: TaskExecution) =>
+          formatAppPercent(Number(row.progress ?? 0), 0),
+      });
+    }
+
+    return baseColumns;
+  }, [formatDate, pnlCurrency, t, taskType]);
 
   const defaultColItems = useMemo(() => columnsToDefaults(columns), [columns]);
-  const storageKey = `exec_history_${taskType}`;
+  const storageKey = `exec_history_${taskType}_v2`;
   const {
     columns: colConfig,
     updateColumns,

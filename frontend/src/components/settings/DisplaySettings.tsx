@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react';
 import {
   Box,
+  Button,
+  CircularProgress,
   FormControl,
   InputLabel,
   Select,
@@ -11,6 +14,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAppSettings } from '../../hooks/useAppSettings';
+import { useToast } from '../common';
 import {
   useSupportedGranularities,
   useSupportedInstruments,
@@ -19,25 +23,64 @@ import type { Granularity } from '../../types/chart';
 
 const DisplaySettings = () => {
   const { t } = useTranslation(['settings', 'common']);
-  const { settings, updateSetting } = useAppSettings();
+  const { showError, showSuccess } = useToast();
+  const { settings, updateSettings, DEFAULT_APP_SETTINGS } = useAppSettings();
+  const [draft, setDraft] = useState(settings);
+  const [saving, setSaving] = useState(false);
   const { instruments, usingFallback: usingInstrumentFallback } =
     useSupportedInstruments();
   const { granularities, usingFallback: usingGranularityFallback } =
     useSupportedGranularities();
+
+  useEffect(() => {
+    setDraft(settings);
+  }, [settings]);
+
   const instrumentOptions = Array.from(
-    new Set([settings.defaultInstrument, ...instruments].filter(Boolean))
+    new Set([draft.defaultInstrument, ...instruments].filter(Boolean))
   );
   const granularityOptions = Array.from(
     new Map(
       [
         {
-          value: settings.defaultGranularity,
-          label: settings.defaultGranularity,
+          value: draft.defaultGranularity,
+          label: draft.defaultGranularity,
         },
         ...granularities,
       ].map((granularity) => [granularity.value, granularity])
     ).values()
   );
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      updateSettings(draft);
+      showSuccess(t('settings:messages.saveSuccess'));
+    } catch (error) {
+      showError(
+        error instanceof Error
+          ? error.message
+          : t('settings:messages.saveError')
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReset = () => {
+    const displayDefaults = {
+      dateFormat: DEFAULT_APP_SETTINGS.dateFormat,
+      decimalSeparator: DEFAULT_APP_SETTINGS.decimalSeparator,
+      thousandsSeparator: DEFAULT_APP_SETTINGS.thousandsSeparator,
+      defaultInstrument: DEFAULT_APP_SETTINGS.defaultInstrument,
+      defaultGranularity: DEFAULT_APP_SETTINGS.defaultGranularity,
+      candleUpColor: DEFAULT_APP_SETTINGS.candleUpColor,
+      candleDownColor: DEFAULT_APP_SETTINGS.candleDownColor,
+    };
+    updateSettings(displayDefaults);
+    setDraft((prev) => ({ ...prev, ...displayDefaults }));
+    showSuccess(t('common:reset'));
+  };
 
   return (
     <Box>
@@ -53,13 +96,16 @@ const DisplaySettings = () => {
           </InputLabel>
           <Select
             labelId="date-format-label"
-            value={settings.dateFormat}
+            value={draft.dateFormat}
             label={t('settings:display.dateFormat')}
             onChange={(e) =>
-              updateSetting(
-                'dateFormat',
-                e.target.value as 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'YYYY-MM-DD'
-              )
+              setDraft((prev) => ({
+                ...prev,
+                dateFormat: e.target.value as
+                  | 'MM/DD/YYYY'
+                  | 'DD/MM/YYYY'
+                  | 'YYYY-MM-DD',
+              }))
             }
           >
             <MenuItem value="YYYY-MM-DD">YYYY-MM-DD (2026-03-07)</MenuItem>
@@ -74,10 +120,13 @@ const DisplaySettings = () => {
           </InputLabel>
           <Select
             labelId="decimal-separator-label"
-            value={settings.decimalSeparator}
+            value={draft.decimalSeparator}
             label={t('settings:display.decimalSeparator')}
             onChange={(e) =>
-              updateSetting('decimalSeparator', e.target.value as '.' | ',')
+              setDraft((prev) => ({
+                ...prev,
+                decimalSeparator: e.target.value as '.' | ',',
+              }))
             }
           >
             <MenuItem value=".">. (1,234.56)</MenuItem>
@@ -91,13 +140,13 @@ const DisplaySettings = () => {
           </InputLabel>
           <Select
             labelId="thousands-separator-label"
-            value={settings.thousandsSeparator}
+            value={draft.thousandsSeparator}
             label={t('settings:display.thousandsSeparator')}
             onChange={(e) =>
-              updateSetting(
-                'thousandsSeparator',
-                e.target.value as ',' | '.' | ' ' | ''
-              )
+              setDraft((prev) => ({
+                ...prev,
+                thousandsSeparator: e.target.value as ',' | '.' | ' ' | '',
+              }))
             }
           >
             <MenuItem value=",">, (1,234)</MenuItem>
@@ -126,9 +175,14 @@ const DisplaySettings = () => {
           </InputLabel>
           <Select
             labelId="default-instrument-label"
-            value={settings.defaultInstrument}
+            value={draft.defaultInstrument}
             label={t('settings:display.currencyPair')}
-            onChange={(e) => updateSetting('defaultInstrument', e.target.value)}
+            onChange={(e) =>
+              setDraft((prev) => ({
+                ...prev,
+                defaultInstrument: e.target.value,
+              }))
+            }
           >
             {instrumentOptions.map((inst) => (
               <MenuItem key={inst} value={inst}>
@@ -149,10 +203,13 @@ const DisplaySettings = () => {
           </InputLabel>
           <Select
             labelId="default-granularity-label"
-            value={settings.defaultGranularity}
+            value={draft.defaultGranularity}
             label={t('settings:display.defaultGranularity')}
             onChange={(e) =>
-              updateSetting('defaultGranularity', e.target.value as Granularity)
+              setDraft((prev) => ({
+                ...prev,
+                defaultGranularity: e.target.value as Granularity,
+              }))
             }
           >
             {granularityOptions.map((g) => (
@@ -174,16 +231,20 @@ const DisplaySettings = () => {
         <TextField
           label={t('settings:display.candleUpColor')}
           type="color"
-          value={settings.candleUpColor}
-          onChange={(e) => updateSetting('candleUpColor', e.target.value)}
+          value={draft.candleUpColor}
+          onChange={(e) =>
+            setDraft((prev) => ({ ...prev, candleUpColor: e.target.value }))
+          }
           sx={{ width: { xs: '100%', sm: 200 } }}
           slotProps={{ inputLabel: { shrink: true } }}
         />
         <TextField
           label={t('settings:display.candleDownColor')}
           type="color"
-          value={settings.candleDownColor}
-          onChange={(e) => updateSetting('candleDownColor', e.target.value)}
+          value={draft.candleDownColor}
+          onChange={(e) =>
+            setDraft((prev) => ({ ...prev, candleDownColor: e.target.value }))
+          }
           sx={{ width: { xs: '100%', sm: 200 } }}
           slotProps={{ inputLabel: { shrink: true } }}
         />
@@ -192,6 +253,23 @@ const DisplaySettings = () => {
       <Alert severity="info" sx={{ mt: 3 }}>
         {t('settings:display.info')}
       </Alert>
+
+      <Box
+        sx={{
+          mt: 3,
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: 1.5,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Button variant="outlined" onClick={handleReset} disabled={saving}>
+          {t('common:reset')}
+        </Button>
+        <Button variant="contained" onClick={handleSave} disabled={saving}>
+          {saving ? <CircularProgress size={20} /> : t('common:save')}
+        </Button>
+      </Box>
     </Box>
   );
 };

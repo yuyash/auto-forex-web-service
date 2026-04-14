@@ -127,7 +127,7 @@
     "sessionTimeoutInfo": "The session will automatically expire after the specified period of inactivity. Set to 'Never' to stay logged in until you manually log out.",
     "dataRefresh": "Data Refresh",
     "healthCheckInterval": "OANDA Health Check Interval",
-    "healthCheckInfo": "Controls how often the application checks the OANDA API connection status shown in the footer. Lower values provide faster detection but increase network traffic."
+    "healthCheckInfo": "Controls how often live pages refresh OANDA health, task cards, and execution history. Lower values provide faster detection but increase network traffic."
   },
   "version": {
     "title": "Version Information",

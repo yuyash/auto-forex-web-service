@@ -35,6 +35,10 @@ import type {
 import { StrategyGroupChart } from './StrategyGroupChart';
 import { StrategyGridIndicator } from './StrategyGridIndicator';
 import { PositionLifecycleDialog } from '../PositionLifecycleDialog';
+import {
+  formatAppNumber,
+  formatAppPercent,
+} from '../../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../../utils/timezone';
 
 export interface TaskStrategyTabProps {
@@ -68,19 +72,23 @@ function formatSignedCurrency(
   const absoluteValue = Math.abs(value);
 
   if (!currencyCode) {
-    return `${sign}${absoluteValue.toFixed(fractionDigits)}`;
+    return formatAppNumber(value, {
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+      signed: true,
+    });
   }
 
   try {
-    return `${sign}${new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currencyCode,
-      currencyDisplay: 'narrowSymbol',
+    return `${sign}${currencyCode} ${formatAppNumber(absoluteValue, {
       minimumFractionDigits: fractionDigits,
       maximumFractionDigits: fractionDigits,
-    }).format(absoluteValue)}`;
+    })}`;
   } catch {
-    return `${sign}${currencyCode} ${absoluteValue.toFixed(fractionDigits)}`;
+    return `${sign}${currencyCode} ${formatAppNumber(absoluteValue, {
+      minimumFractionDigits: fractionDigits,
+      maximumFractionDigits: fractionDigits,
+    })}`;
   }
 }
 
@@ -823,9 +831,7 @@ export function TaskStrategyTab({
                 })}
                 <Typography component="span" variant="body2" sx={{ ml: 1.5 }}>
                   {t('common:strategyVisualization.cycleList.openUnitsTotal', {
-                    units: (
-                      selectedCycle.open_units_total ?? 0
-                    ).toLocaleString(),
+                    units: formatAppNumber(selectedCycle.open_units_total ?? 0),
                   })}
                 </Typography>
                 <Typography
@@ -1092,7 +1098,12 @@ function TradeRow({
           </Typography>
         ) : null}
         <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-          {trade.units} @ {Number(trade.price).toFixed(2)}
+          {formatAppNumber(Number(trade.units))} @{' '}
+          {formatAppNumber(Number(trade.price), {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+            useGrouping: false,
+          })}
         </Typography>
         {displayLayer != null ? (
           <Typography variant="caption" color="text.secondary">
@@ -1108,7 +1119,11 @@ function TradeRow({
           <Chip
             size="small"
             variant="outlined"
-            label={`ATR ${Number(trade.volatility).toFixed(5)}`}
+            label={`ATR ${formatAppNumber(Number(trade.volatility), {
+              minimumFractionDigits: 5,
+              maximumFractionDigits: 5,
+              useGrouping: false,
+            })}`}
             sx={{ fontSize: '0.7rem' }}
           />
         ) : null}
@@ -1116,7 +1131,10 @@ function TradeRow({
           <Chip
             size="small"
             variant="outlined"
-            label={`Margin ${(Number(trade.margin_ratio) * 100).toFixed(1)}%`}
+            label={`Margin ${formatAppPercent(
+              Number(trade.margin_ratio) * 100,
+              1
+            )}`}
             sx={{ fontSize: '0.7rem' }}
           />
         ) : null}

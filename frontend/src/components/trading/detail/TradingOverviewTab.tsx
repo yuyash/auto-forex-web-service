@@ -10,6 +10,7 @@ import type { Strategy } from '../../../services/api/strategies';
 import { TaskType, type TaskStatus } from '../../../types/common';
 import type { TradingTask } from '../../../types';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
+import { formatAppNumber, formatAppPercent } from '../../../utils/numberFormat';
 
 interface TradingOverviewTabProps {
   taskId: string;
@@ -208,7 +209,11 @@ export function TradingOverviewTab({
                 }
               >
                 {summary.pnl.realized >= 0 ? '+' : ''}
-                {summary.pnl.realized.toFixed(2)} {pnlCurrency}
+                {formatAppNumber(summary.pnl.realized, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}{' '}
+                {pnlCurrency}
               </Typography>
             </Box>
             <Box>
@@ -222,7 +227,11 @@ export function TradingOverviewTab({
                 }
               >
                 {summary.pnl.unrealized >= 0 ? '+' : ''}
-                {summary.pnl.unrealized.toFixed(2)} {pnlCurrency}
+                {formatAppNumber(summary.pnl.unrealized, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}{' '}
+                {pnlCurrency}
               </Typography>
             </Box>
             {summary.execution.currentBalance != null && (
@@ -236,7 +245,12 @@ export function TradingOverviewTab({
                   summary.execution.displayCurrency !==
                     summary.execution.accountCurrency ? (
                     <>
-                      {summary.execution.currentBalanceDisplay.toFixed(0)}{' '}
+                      {formatAppNumber(
+                        summary.execution.currentBalanceDisplay,
+                        {
+                          maximumFractionDigits: 0,
+                        }
+                      )}{' '}
                       {summary.execution.displayCurrency}
                       <Typography
                         component="span"
@@ -244,13 +258,20 @@ export function TradingOverviewTab({
                         color="text.secondary"
                         sx={{ ml: 1 }}
                       >
-                        ({summary.execution.currentBalance.toFixed(2)}{' '}
+                        (
+                        {formatAppNumber(summary.execution.currentBalance, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{' '}
                         {summary.execution.accountCurrency})
                       </Typography>
                     </>
                   ) : (
                     <>
-                      {summary.execution.currentBalance.toFixed(2)}{' '}
+                      {formatAppNumber(summary.execution.currentBalance, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{' '}
                       {summary.execution.accountCurrency || pnlCurrency}
                     </>
                   )}
@@ -262,7 +283,7 @@ export function TradingOverviewTab({
                 {t('trading:detail.totalTradesCount')}
               </Typography>
               <Typography variant="body1">
-                {summary.counts.totalTrades}
+                {formatAppNumber(summary.counts.totalTrades)}
               </Typography>
             </Box>
             <Box>
@@ -270,7 +291,7 @@ export function TradingOverviewTab({
                 {t('trading:detail.openPositions')}
               </Typography>
               <Typography variant="body1">
-                {summary.counts.openPositions}
+                {formatAppNumber(summary.counts.openPositions)}
               </Typography>
             </Box>
             <Box>
@@ -278,7 +299,7 @@ export function TradingOverviewTab({
                 {t('trading:detail.closedPositions')}
               </Typography>
               <Typography variant="body1">
-                {summary.counts.closedPositions}
+                {formatAppNumber(summary.counts.closedPositions)}
               </Typography>
             </Box>
             <Box>
@@ -286,7 +307,7 @@ export function TradingOverviewTab({
                 {t('trading:detail.openLongUnits')}
               </Typography>
               <Typography variant="body1">
-                {(summary.counts.openLongUnits ?? 0).toLocaleString()}
+                {formatAppNumber(summary.counts.openLongUnits ?? 0)}
               </Typography>
             </Box>
             <Box>
@@ -294,7 +315,7 @@ export function TradingOverviewTab({
                 {t('trading:detail.openShortUnits')}
               </Typography>
               <Typography variant="body1">
-                {(summary.counts.openShortUnits ?? 0).toLocaleString()}
+                {formatAppNumber(summary.counts.openShortUnits ?? 0)}
               </Typography>
             </Box>
             {summary.execution.ticksProcessed > 0 && (
@@ -303,7 +324,7 @@ export function TradingOverviewTab({
                   {t('trading:detail.ticksProcessed')}
                 </Typography>
                 <Typography variant="body1">
-                  {summary.execution.ticksProcessed.toLocaleString()}
+                  {formatAppNumber(summary.execution.ticksProcessed)}
                 </Typography>
               </Box>
             )}
@@ -313,7 +334,7 @@ export function TradingOverviewTab({
                   {t('common:labels.marginRatio')}
                 </Typography>
                 <Typography variant="body1">
-                  {(displayedMarginRatio * 100).toFixed(1)}%
+                  {formatAppPercent(displayedMarginRatio * 100, 1)}
                 </Typography>
               </Box>
             )}
@@ -323,7 +344,10 @@ export function TradingOverviewTab({
                   {t('common:labels.currentAtr')}
                 </Typography>
                 <Typography variant="body1">
-                  {summary.execution.currentAtr.toFixed(2)}
+                  {formatAppNumber(summary.execution.currentAtr, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </Typography>
               </Box>
             )}

@@ -49,7 +49,9 @@ import {
   useStartTradingTask,
   useStopTradingTask,
 } from '../../hooks/useTradingTaskMutations';
+import { useAppSettings } from '../../hooks/useAppSettings';
 import { logger } from '../../utils/logger';
+import { formatAppNumber, formatAppPercent } from '../../utils/numberFormat';
 import { formatTaskActionError } from '../../utils/taskActionError';
 import { formatDateTimeInTimezone } from '../../utils/timezone';
 
@@ -67,6 +69,7 @@ export default function TradingTaskCard({
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { settings: appSettings } = useAppSettings();
   const [optimisticStatus, setOptimisticStatus] = useState<TaskStatus | null>(
     null
   );
@@ -100,7 +103,7 @@ export default function TradingTaskCard({
   const { data: polledTask } = useTradingTask(task.id, {
     enabled: pollingEnabled,
     enablePolling: pollingEnabled,
-    pollingInterval: 3000,
+    pollingInterval: appSettings.healthCheckIntervalSeconds * 1000,
   });
 
   // Use polled status if available, otherwise use task status
@@ -122,7 +125,7 @@ export default function TradingTaskCard({
     undefined,
     {
       polling: shouldShowLiveSummary,
-      interval: 5000,
+      interval: appSettings.healthCheckIntervalSeconds * 1000,
     }
   );
 
@@ -358,13 +361,11 @@ export default function TradingTaskCard({
     liveSummary.execution.displayCurrency ||
     'JPY';
   const formatPnl = (value: number, currency: string): string => {
-    const absValue = Math.abs(value);
-    const sign = value >= 0 ? '+' : '-';
-    const formatted = new Intl.NumberFormat('en-US', {
+    return `${formatAppNumber(value, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(absValue);
-    return `${sign}${formatted} ${currency}`;
+      signed: true,
+    })} ${currency}`;
   };
 
   const currentPnL = currentTask.latest_execution?.total_pnl_quote
@@ -533,7 +534,7 @@ export default function TradingTaskCard({
               <Grid size={{ xs: 6, sm: 4 }}>
                 <StatCard
                   title={t('common:tables.summary.margin_ratio')}
-                  value={`${(marginRatio * 100).toFixed(2)}%`}
+                  value={formatAppPercent(marginRatio * 100, 2)}
                 />
               </Grid>
             )}

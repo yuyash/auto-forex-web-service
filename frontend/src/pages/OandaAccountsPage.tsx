@@ -45,6 +45,7 @@ import {
 import { useAccounts, useAccount } from '../hooks/useAccounts';
 import { useQueryClient } from '@tanstack/react-query';
 import { logger } from '../utils/logger';
+import { formatAppNumber } from '../utils/numberFormat';
 
 interface AccountFormData {
   account_id: string;
@@ -70,14 +71,15 @@ const formatBalance = (
   if (Number.isNaN(numericBalance)) return '—';
   const currencyCode = resolveCurrencyCode(currency);
   try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currencyCode,
+    return `${currencyCode} ${formatAppNumber(numericBalance, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(numericBalance);
+    })}`;
   } catch {
-    return `${currencyCode} ${numericBalance.toFixed(2)}`;
+    return `${currencyCode} ${formatAppNumber(numericBalance, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   }
 };
 

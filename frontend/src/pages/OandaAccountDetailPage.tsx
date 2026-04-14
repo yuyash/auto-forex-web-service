@@ -56,6 +56,8 @@ import {
 import { marketApi } from '../services/api/market';
 import { useSupportedInstruments } from '../hooks/useMarketConfig';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { formatAppNumber } from '../utils/numberFormat';
+import { formatDateTimeInTimezone } from '../utils/timezone';
 
 const DEFAULT_CURRENCY = 'USD';
 
@@ -78,14 +80,15 @@ const fmtBal = (v: string | number | null | undefined, cur?: string) => {
   if (Number.isNaN(n)) return '\u2014';
   const code = resolveCurrency(cur);
   try {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: code,
+    return `${code} ${formatAppNumber(n, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(n);
+    })}`;
   } catch {
-    return `${code} ${n.toFixed(2)}`;
+    return `${code} ${formatAppNumber(n, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
   }
 };
 
@@ -97,7 +100,11 @@ const fmtQuoteValue = (
   const n = typeof value === 'string' ? Number(value) : value;
   if (Number.isNaN(n)) return '\u2014';
   const currency = resolveQuoteCurrency(instrument);
-  return currency ? `${n.toFixed(2)} ${currency}` : n.toFixed(2);
+  const formatted = formatAppNumber(n, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return currency ? `${formatted} ${currency}` : formatted;
 };
 
 const fmtSignedQuoteValue = (
@@ -122,13 +129,9 @@ const fmtJson = (v: unknown) => {
 
 const fmtTs = (ts: string | null): string => {
   if (!ts) return '\u2014';
-  return new Date(ts).toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
+  return formatDateTimeInTimezone(ts, 'UTC', undefined, {
+    includeSeconds: true,
+    includeTimezone: true,
   });
 };
 
