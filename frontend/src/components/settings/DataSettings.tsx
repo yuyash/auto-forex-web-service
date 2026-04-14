@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react';
 import {
   Box,
+  Button,
+  CircularProgress,
   FormControl,
   InputLabel,
   Select,
@@ -10,10 +13,48 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAppSettings } from '../../hooks/useAppSettings';
+import { useToast } from '../common';
 
 const DataSettings = () => {
   const { t } = useTranslation(['settings', 'common']);
-  const { settings, updateSetting } = useAppSettings();
+  const { showError, showSuccess } = useToast();
+  const { settings, updateSettings, DEFAULT_APP_SETTINGS } = useAppSettings();
+  const [draft, setDraft] = useState(settings);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setDraft(settings);
+  }, [settings]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      updateSettings({
+        sessionTimeoutMinutes: draft.sessionTimeoutMinutes,
+        healthCheckIntervalSeconds: draft.healthCheckIntervalSeconds,
+      });
+      showSuccess(t('settings:messages.saveSuccess'));
+    } catch (error) {
+      showError(
+        error instanceof Error
+          ? error.message
+          : t('settings:messages.saveError')
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReset = () => {
+    const dataDefaults = {
+      sessionTimeoutMinutes: DEFAULT_APP_SETTINGS.sessionTimeoutMinutes,
+      healthCheckIntervalSeconds:
+        DEFAULT_APP_SETTINGS.healthCheckIntervalSeconds,
+    };
+    updateSettings(dataDefaults);
+    setDraft((prev) => ({ ...prev, ...dataDefaults }));
+    showSuccess(t('common:reset'));
+  };
 
   return (
     <Box>
@@ -28,10 +69,13 @@ const DataSettings = () => {
           </InputLabel>
           <Select
             labelId="session-timeout-label"
-            value={settings.sessionTimeoutMinutes}
+            value={draft.sessionTimeoutMinutes}
             label={t('settings:data.timeoutDuration')}
             onChange={(e) =>
-              updateSetting('sessionTimeoutMinutes', e.target.value as number)
+              setDraft((prev) => ({
+                ...prev,
+                sessionTimeoutMinutes: e.target.value as number,
+              }))
             }
           >
             <MenuItem value={15}>15 {t('settings:data.minutes')}</MenuItem>
@@ -59,13 +103,13 @@ const DataSettings = () => {
           </InputLabel>
           <Select
             labelId="health-check-interval-label"
-            value={settings.healthCheckIntervalSeconds}
+            value={draft.healthCheckIntervalSeconds}
             label={t('settings:data.healthCheckInterval')}
             onChange={(e) =>
-              updateSetting(
-                'healthCheckIntervalSeconds',
-                e.target.value as number
-              )
+              setDraft((prev) => ({
+                ...prev,
+                healthCheckIntervalSeconds: e.target.value as number,
+              }))
             }
           >
             <MenuItem value={10}>10 {t('settings:data.seconds')}</MenuItem>
@@ -78,6 +122,23 @@ const DataSettings = () => {
         <Alert severity="info" sx={{ mt: 1 }}>
           {t('settings:data.healthCheckInfo')}
         </Alert>
+      </Box>
+
+      <Box
+        sx={{
+          mt: 3,
+          display: 'flex',
+          justifyContent: 'flex-end',
+          gap: 1.5,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Button variant="outlined" onClick={handleReset} disabled={saving}>
+          {t('common:reset')}
+        </Button>
+        <Button variant="contained" onClick={handleSave} disabled={saving}>
+          {saving ? <CircularProgress size={20} /> : t('common:save')}
+        </Button>
       </Box>
     </Box>
   );

@@ -9,6 +9,7 @@ import type { Strategy } from '../../../services/api/strategies';
 import { TaskType, type TaskStatus } from '../../../types/common';
 import type { BacktestTask } from '../../../types';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
+import { formatAppNumber, formatAppPercent } from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
 
 interface BacktestOverviewTabProps {
@@ -205,7 +206,11 @@ export function BacktestOverviewTab({
                 {t('backtest:detail.initialBalance')}
               </Typography>
               <Typography variant="body1">
-                ${parseFloat(task.initial_balance).toFixed(2)}
+                $
+                {formatAppNumber(parseFloat(task.initial_balance), {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
               </Typography>
             </Box>
 
@@ -214,7 +219,11 @@ export function BacktestOverviewTab({
                 {t('backtest:detail.commissionPerTrade')}
               </Typography>
               <Typography variant="body1">
-                ${parseFloat(task.commission_per_trade).toFixed(2)}
+                $
+                {formatAppNumber(parseFloat(task.commission_per_trade), {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
               </Typography>
             </Box>
           </Box>
@@ -262,7 +271,11 @@ export function BacktestOverviewTab({
                 }
               >
                 {summary.pnl.realized >= 0 ? '+' : ''}
-                {summary.pnl.realized.toFixed(2)} {pnlCurrency}
+                {formatAppNumber(summary.pnl.realized, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}{' '}
+                {pnlCurrency}
               </Typography>
             </Box>
             <Box>
@@ -276,7 +289,11 @@ export function BacktestOverviewTab({
                 }
               >
                 {summary.pnl.unrealized >= 0 ? '+' : ''}
-                {summary.pnl.unrealized.toFixed(2)} {pnlCurrency}
+                {formatAppNumber(summary.pnl.unrealized, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}{' '}
+                {pnlCurrency}
               </Typography>
             </Box>
             {summary.execution.currentBalance != null && (
@@ -290,7 +307,12 @@ export function BacktestOverviewTab({
                   summary.execution.displayCurrency !==
                     summary.execution.accountCurrency ? (
                     <>
-                      {summary.execution.currentBalanceDisplay.toFixed(0)}{' '}
+                      {formatAppNumber(
+                        summary.execution.currentBalanceDisplay,
+                        {
+                          maximumFractionDigits: 0,
+                        }
+                      )}{' '}
                       {summary.execution.displayCurrency}
                       <Typography
                         component="span"
@@ -298,13 +320,20 @@ export function BacktestOverviewTab({
                         color="text.secondary"
                         sx={{ ml: 1 }}
                       >
-                        ({summary.execution.currentBalance.toFixed(2)}{' '}
+                        (
+                        {formatAppNumber(summary.execution.currentBalance, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{' '}
                         {summary.execution.accountCurrency})
                       </Typography>
                     </>
                   ) : (
                     <>
-                      {summary.execution.currentBalance.toFixed(2)}{' '}
+                      {formatAppNumber(summary.execution.currentBalance, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{' '}
                       {summary.execution.accountCurrency || pnlCurrency}
                     </>
                   )}
@@ -316,7 +345,7 @@ export function BacktestOverviewTab({
                 {t('backtest:detail.totalTradesCount')}
               </Typography>
               <Typography variant="body1">
-                {summary.counts.totalTrades}
+                {formatAppNumber(summary.counts.totalTrades)}
               </Typography>
             </Box>
             <Box>
@@ -324,7 +353,7 @@ export function BacktestOverviewTab({
                 {t('backtest:detail.openPositions')}
               </Typography>
               <Typography variant="body1">
-                {summary.counts.openPositions}
+                {formatAppNumber(summary.counts.openPositions)}
               </Typography>
             </Box>
             <Box>
@@ -332,7 +361,7 @@ export function BacktestOverviewTab({
                 {t('backtest:detail.closedPositions')}
               </Typography>
               <Typography variant="body1">
-                {summary.counts.closedPositions}
+                {formatAppNumber(summary.counts.closedPositions)}
               </Typography>
             </Box>
             <Box>
@@ -340,7 +369,7 @@ export function BacktestOverviewTab({
                 {t('backtest:detail.openLongUnits')}
               </Typography>
               <Typography variant="body1">
-                {(summary.counts.openLongUnits ?? 0).toLocaleString()}
+                {formatAppNumber(summary.counts.openLongUnits ?? 0)}
               </Typography>
             </Box>
             <Box>
@@ -348,7 +377,7 @@ export function BacktestOverviewTab({
                 {t('backtest:detail.openShortUnits')}
               </Typography>
               <Typography variant="body1">
-                {(summary.counts.openShortUnits ?? 0).toLocaleString()}
+                {formatAppNumber(summary.counts.openShortUnits ?? 0)}
               </Typography>
             </Box>
             {summary.execution.ticksProcessed > 0 && (
@@ -357,7 +386,7 @@ export function BacktestOverviewTab({
                   {t('backtest:detail.ticksProcessed')}
                 </Typography>
                 <Typography variant="body1">
-                  {summary.execution.ticksProcessed.toLocaleString()}
+                  {formatAppNumber(summary.execution.ticksProcessed)}
                 </Typography>
               </Box>
             )}
@@ -367,7 +396,7 @@ export function BacktestOverviewTab({
                   {t('common:labels.marginRatio')}
                 </Typography>
                 <Typography variant="body1">
-                  {(displayedMarginRatio * 100).toFixed(1)}%
+                  {formatAppPercent(displayedMarginRatio * 100, 1)}
                 </Typography>
               </Box>
             )}
@@ -377,7 +406,10 @@ export function BacktestOverviewTab({
                   {t('common:labels.currentAtr')}
                 </Typography>
                 <Typography variant="body1">
-                  {summary.execution.currentAtr.toFixed(2)}
+                  {formatAppNumber(summary.execution.currentAtr, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </Typography>
               </Box>
             )}

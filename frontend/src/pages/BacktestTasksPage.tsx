@@ -33,6 +33,7 @@ import { LoadingSpinner, Breadcrumbs } from '../components/common';
 import { useSequentialPolling } from '../hooks/useSequentialPolling';
 import { usePollingPolicy } from '../hooks/usePollingPolicy';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { useAppSettings } from '../hooks/useAppSettings';
 import { logger } from '../utils/logger';
 
 interface TabPanelProps {
@@ -66,6 +67,7 @@ function a11yProps(index: number) {
 
 export default function BacktestTasksPage() {
   const { t } = useTranslation(['backtest', 'common']);
+  const { settings: appSettings } = useAppSettings();
   const navigate = useNavigate();
   const location = useLocation();
   const [tabValue, setTabValue] = useState(0);
@@ -109,7 +111,7 @@ export default function BacktestTasksPage() {
   );
   const pollingPolicy = usePollingPolicy({
     enabled: hasRunningTasks,
-    baseIntervalMs: 10000,
+    baseIntervalMs: appSettings.healthCheckIntervalSeconds * 1000,
   });
 
   useSequentialPolling(

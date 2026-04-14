@@ -49,6 +49,7 @@ import {
   useStopBacktestTask,
 } from '../../hooks/useBacktestTaskMutations';
 import { useToast } from '../common';
+import { useAppSettings } from '../../hooks/useAppSettings';
 import { logger } from '../../utils/logger';
 import { formatTaskActionError } from '../../utils/taskActionError';
 import { getLocaleForLanguage } from '../../utils/timezone';
@@ -67,6 +68,7 @@ export default function BacktestTaskCard({
   const { showError, showSuccess } = useToast();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { settings: appSettings } = useAppSettings();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [optimisticStatus, setOptimisticStatus] = useState<TaskStatus | null>(
     null
@@ -96,7 +98,7 @@ export default function BacktestTaskCard({
   const { data: polledTask } = useBacktestTask(task.id, {
     enabled: pollingEnabled,
     enablePolling: pollingEnabled,
-    pollingInterval: 5000,
+    pollingInterval: appSettings.healthCheckIntervalSeconds * 1000,
   });
 
   // Use polled status if available, otherwise use task status
@@ -317,7 +319,7 @@ export default function BacktestTaskCard({
   // Get progress from summary endpoint
   const summaryData = useTaskSummary(task.id, TaskType.BACKTEST, undefined, {
     polling: pollingEnabled,
-    interval: 5000,
+    interval: appSettings.healthCheckIntervalSeconds * 1000,
   });
   const progress = summaryData.summary.task.progress;
 
