@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.8](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.7...frontend-v1.48.8) (2026-04-14)
+
+
+### Bug Fixes
+
+* **metrics:** stop live OHLC auto reloads ([#497](https://github.com/yuyash/auto-forex-web-service/issues/497)) ([3be568f](https://github.com/yuyash/auto-forex-web-service/commit/3be568f1e37c7af2f82c05f61e9181c871860a3f))
+
 ## [1.48.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.6...frontend-v1.48.7) (2026-04-14)
 
 
