@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.11](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.10...frontend-v1.48.11) (2026-04-14)
+
+
+### Bug Fixes
+
+* **frontend:** prevent app settings sync loops ([#503](https://github.com/yuyash/auto-forex-web-service/issues/503)) ([6a034ba](https://github.com/yuyash/auto-forex-web-service/commit/6a034baa6afad1cc79b203606d4ce8703e3876ab))
+
 ## [1.48.10](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.9...frontend-v1.48.10) (2026-04-14)
 
 
