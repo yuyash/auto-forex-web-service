@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.5...frontend-v1.48.6) (2026-04-14)
+
+
+### Bug Fixes
+
+* deploy resume and oanda link ([#492](https://github.com/yuyash/auto-forex-web-service/issues/492)) ([c85aaa4](https://github.com/yuyash/auto-forex-web-service/commit/c85aaa4b0262621e1a6de5ce409dba2eec920444))
+
 ## [1.48.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.4...frontend-v1.48.5) (2026-04-14)
 
 
