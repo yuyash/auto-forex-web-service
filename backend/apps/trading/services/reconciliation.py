@@ -314,10 +314,10 @@ class TradingResumeReconciler:
 
         if not resumed:
             if report.broker_open_positions > 0:
-                report.blockers.append(
-                    f"OANDA account already has {report.broker_open_positions} open trade(s) for "
-                    f"{self.task.instrument}. Refusing to start a fresh execution on top of "
-                    "existing broker exposure."
+                report.warnings.append(
+                    f"OANDA account has {report.broker_open_positions} existing open trade(s) for "
+                    f"{self.task.instrument}. Fresh start will adopt the broker exposure into the "
+                    "new execution instead of blocking the restart."
                 )
             return
 
