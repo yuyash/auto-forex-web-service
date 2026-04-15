@@ -48,11 +48,18 @@ export function useUpdateBacktestTask(options?: {
     (variables: { id: string; data: BacktestTaskUpdateData }) =>
       backtestTasksApi.partialUpdate(variables.id, variables.data),
     {
-      onSuccess: async (data) => {
-        upsertTaskCaches('backtest', data);
-        patchTaskDerivedCaches('backtest', data);
-        await invalidateTaskDerivedCaches('backtest', data.id);
-        options?.onSuccess?.(data);
+      onSuccess: async (data, variables) => {
+        let nextTask = data;
+        try {
+          nextTask = await backtestTasksApi.get(variables.id);
+        } catch {
+          nextTask = data;
+        }
+
+        upsertTaskCaches('backtest', nextTask);
+        patchTaskDerivedCaches('backtest', nextTask);
+        await invalidateTaskDerivedCaches('backtest', nextTask.id);
+        options?.onSuccess?.(nextTask);
       },
       onError: (error) => options?.onError?.(error),
     }

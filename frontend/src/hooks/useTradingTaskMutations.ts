@@ -69,11 +69,18 @@ export function useUpdateTradingTask(options?: {
         debug_options: variables.data.debug_options,
       }),
     {
-      onSuccess: async (data) => {
-        upsertTaskCaches('trading', data);
-        patchTaskDerivedCaches('trading', data);
-        await invalidateTaskDerivedCaches('trading', data.id);
-        options?.onSuccess?.(data);
+      onSuccess: async (data, variables) => {
+        let nextTask = data;
+        try {
+          nextTask = await tradingTasksApi.get(variables.id);
+        } catch {
+          nextTask = data;
+        }
+
+        upsertTaskCaches('trading', nextTask);
+        patchTaskDerivedCaches('trading', nextTask);
+        await invalidateTaskDerivedCaches('trading', nextTask.id);
+        options?.onSuccess?.(nextTask);
       },
       onError: (error) => options?.onError?.(error),
     }
