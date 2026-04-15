@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.13](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.12...frontend-v1.48.13) (2026-04-15)
+
+
+### Bug Fixes
+
+* **frontend:** refresh task cache after updates ([#507](https://github.com/yuyash/auto-forex-web-service/issues/507)) ([d9005b3](https://github.com/yuyash/auto-forex-web-service/commit/d9005b337bde247600ca9774d523ef46a45cf4c5))
+
 ## [1.48.12](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.11...frontend-v1.48.12) (2026-04-15)
 
 
