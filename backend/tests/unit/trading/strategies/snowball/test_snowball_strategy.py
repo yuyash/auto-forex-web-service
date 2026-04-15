@@ -529,6 +529,59 @@ class TestShrinkMode:
         assert cycle.initial_entry.entry_id == 2
         assert cycle.initial_entry.retracement_count == 1
 
+    def test_shrink_preserves_existing_counter_tp(self):
+        """Shrink must not rewrite surviving counter TPs."""
+        s = _strategy(shrink_enabled=True, m_th="70", lock_enabled=False)
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.SHORT)
+        layer = Layer.create(1, 7, 1000)
+        layer.slot_at(0).fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.SHORT,
+                entry_price=Decimal("142.000"),
+                close_price=Decimal("141.850"),
+                units=1000,
+                opened_at=T0,
+                role="initial",
+                layer_number=1,
+                retracement_count=0,
+            )
+        )
+        layer.slot_at(1).fill(
+            Entry(
+                entry_id=2,
+                step=2,
+                direction=Direction.SHORT,
+                entry_price=Decimal("142.300"),
+                close_price=Decimal("142.120"),
+                units=2000,
+                opened_at=T0,
+                role="counter",
+                layer_number=1,
+                retracement_count=1,
+            )
+        )
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+
+        state = DummyState(strategy_state=ss.to_dict(), current_balance=Decimal("100"))
+        s._margin_ratio = lambda _state, _ss: Decimal("75")  # type: ignore[method-assign]
+
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "145.00", "145.02"), state=state)
+
+        closes = _close_events(result)
+        assert len(closes) == 1
+        assert closes[0].close_reason == "shrink"
+        assert closes[0].entry_id == 1
+
+        persisted = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        remaining = persisted.cycles[0].grid.layers[0].slot_at(1).entry
+        assert remaining is not None
+        assert remaining.entry_id == 2
+        assert remaining.close_price == Decimal("142.120")
+
 
 # ==================================================================
 # 6. Lock mode

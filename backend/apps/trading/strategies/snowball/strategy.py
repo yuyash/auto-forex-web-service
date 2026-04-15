@@ -1217,10 +1217,6 @@ class SnowballStrategy(Strategy):
             cycle.remove_entry(entry.entry_id)
             closed_count += 1
 
-            # Recalculate counter TPs after shrink
-            if cfg.counter_tp_mode == "weighted_avg":
-                self._recalculate_counter_tps(cycle)
-
             # Approximate margin ratio after close
             conv = quote_to_account_rate(self.instrument, tick.mid, self.account_currency)
             margin_rate = Decimal("0.04")
@@ -1524,43 +1520,6 @@ class SnowballStrategy(Strategy):
             )
 
         return events
-
-    def _recalculate_counter_tps(self, cycle: SnowballCycle) -> None:
-        """Recalculate close_price for all counter entries in a cycle."""
-        for layer in cycle.grid.layers:
-            r0 = layer.slot_at(0)
-            ref = r0.entry if r0 is not None and r0.entry is not None else cycle.initial_entry
-            counter_slots = [s for s in layer.occupied_slots() if s.index >= 1]
-            if not counter_slots:
-                continue
-            for slot in counter_slots:
-                entry = slot.entry
-                if entry is None or entry.is_hedge:
-                    continue
-                total_cost = Decimal("0")
-                total_units = 0
-                for s in layer.slots:
-                    if s.entry is not None and not s.entry.is_hedge:
-                        total_cost += s.entry.entry_price * Decimal(str(s.entry.units))
-                        total_units += s.entry.units
-                if ref is not None and ref.entry_id not in {
-                    s.entry.entry_id for s in layer.slots if s.entry
-                }:
-                    ref_units = abs(ref.units)
-                    if ref_units > 0:
-                        total_cost += ref.entry_price * Decimal(str(ref_units))
-                        total_units += ref_units
-                if total_units > 0:
-                    new_tp = total_cost / Decimal(str(total_units))
-                    if new_tp != entry.close_price:
-                        logger.debug(
-                            "Shrink TP recalc: L%d/R%d %s → %s",
-                            entry.layer_number,
-                            entry.retracement_count,
-                            entry.close_price,
-                            new_tp,
-                        )
-                        entry.close_price = new_tp
 
     # ------------------------------------------------------------------
     # Core tick processing
