@@ -464,7 +464,7 @@ export const TradingTaskDetail: React.FC = () => {
               data={metricsResult.data}
               isLoading={metricsResult.isLoading}
               error={metricsResult.error}
-              currency={s.execution.accountCurrency || 'USD'}
+              currency={s.execution.accountCurrency || pnlCurrency || 'USD'}
               interval={metricsInterval}
               since={metricsSince}
               until={metricsUntil}

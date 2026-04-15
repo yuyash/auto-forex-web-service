@@ -464,7 +464,11 @@ class EventHandler:
         # DB fallback: look up cycle_id from existing TradingEvent records.
         # This handles the case where the EventHandler was re-created (e.g.
         # after a task resume) and the in-memory mapping was lost.
-        cycle_id = self._resolve_cycle_id_from_db(root_eid, parent_eid)
+        cycle_id = self._resolve_cycle_id_from_db(
+            root_eid,
+            parent_eid,
+            direction=getattr(event, "direction", None),
+        )
         if cycle_id is not None:
             # Cache for future lookups within this session.
             if root_eid is not None:
@@ -481,8 +485,19 @@ class EventHandler:
         )
         return None
 
-    def _resolve_cycle_id_from_db(self, root_eid: int | None, parent_eid: int | None) -> str | None:
-        """Look up cycle_id from Trade records by matching entry_id in TradingEvent."""
+    def _resolve_cycle_id_from_db(
+        self,
+        root_eid: int | None,
+        parent_eid: int | None,
+        *,
+        direction: str | None = None,
+    ) -> str | None:
+        """Look up cycle_id from Trade records by matching entry_id in TradingEvent.
+
+        Timestamp-only fallback is unsafe because long and short entries can share
+        the same tick timestamp. Use the originating TradingEvent metadata to
+        narrow the lookup.
+        """
         try:
             for eid in (root_eid, parent_eid):
                 if eid is None:
@@ -495,23 +510,43 @@ class EventHandler:
                         entry_id=eid,
                         event_type="open_position",
                     )
-                    .values_list("event_timestamp", flat=True)
+                    .values("event_timestamp", "sequence_number", "direction")
                     .first()
                 )
                 if te is None:
                     continue
-                trade = (
-                    Trade.objects.filter(
-                        task_type=self.order_service.task_type.value,
-                        task_id=self._task_pk,
-                        execution_id=self._execution_id,
-                        timestamp=te,
-                        execution_method="open_position",
-                        cycle_id__isnull=False,
-                    )
-                    .values_list("cycle_id", flat=True)
-                    .first()
+                event_timestamp = te.get("event_timestamp")
+                if event_timestamp is None:
+                    continue
+                event_direction = str(te.get("direction") or direction or "").strip().lower()
+                trade_qs = Trade.objects.filter(
+                    task_type=self.order_service.task_type.value,
+                    task_id=self._task_pk,
+                    execution_id=self._execution_id,
+                    timestamp=event_timestamp,
+                    execution_method="open_position",
+                    cycle_id__isnull=False,
+                    sequence_number=te.get("sequence_number", 0) or 0,
                 )
+                if event_direction:
+                    trade_qs = trade_qs.filter(direction__iexact=event_direction)
+                trade = trade_qs.values_list("cycle_id", flat=True).first()
+                if trade is None and event_direction:
+                    # Legacy compatibility: some older rows may not align on
+                    # sequence_number, but we still must not cross directions.
+                    trade = (
+                        Trade.objects.filter(
+                            task_type=self.order_service.task_type.value,
+                            task_id=self._task_pk,
+                            execution_id=self._execution_id,
+                            timestamp=event_timestamp,
+                            execution_method="open_position",
+                            cycle_id__isnull=False,
+                        )
+                        .filter(direction__iexact=event_direction)
+                        .values_list("cycle_id", flat=True)
+                        .first()
+                    )
                 if trade is not None:
                     return str(trade)
         except (TypeError, ValueError):
@@ -646,7 +681,11 @@ class EventHandler:
         # DB fallback: look up cycle_id from the open/rebuild trade that
         # created this position.  This covers edge cases where the
         # in-memory mapping was lost or overwritten.
-        cycle_id = self._resolve_cycle_id_from_db(root_eid, eid)
+        cycle_id = self._resolve_cycle_id_from_db(
+            root_eid,
+            eid,
+            direction=getattr(event, "direction", None),
+        )
         if cycle_id is not None:
             if eid is not None:
                 self._entry_id_to_cycle_id[eid] = cycle_id
@@ -835,7 +874,11 @@ class EventHandler:
                 return self._entry_id_to_cycle_id[eid]
 
         # 2. DB fallback via TradingEvent
-        cycle_id = self._resolve_cycle_id_from_db(root_eid, parent_eid)
+        cycle_id = self._resolve_cycle_id_from_db(
+            root_eid,
+            parent_eid,
+            direction=getattr(event, "direction", None),
+        )
         if cycle_id is not None:
             return cycle_id
 

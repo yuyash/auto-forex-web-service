@@ -7,6 +7,8 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+from django.utils import timezone
+
 from apps.trading.dataclasses import EventExecutionResult
 from apps.trading.enums import EventType, TaskType
 from apps.trading.events import (
@@ -27,6 +29,7 @@ def _make_order_service(task_type=TaskType.TRADING):
     svc = MagicMock()
     svc.task = SimpleNamespace(id=uuid4(), execution_id=uuid4())
     svc.task_type = task_type
+    svc.execution_id = svc.task.execution_id
     return svc
 
 
@@ -223,6 +226,73 @@ class TestHandleClosePosition:
         result = handler.handle_close_position(event)
         assert result[0] == Decimal("10.00")
         assert svc.close_position.call_count == 2
+
+
+class TestResolveCycleIdFromDb:
+    """Tests for DB-backed cycle resolution fallback."""
+
+    def test_filters_by_direction_and_sequence_number(self):
+        svc = _make_order_service()
+        handler = EventHandler(order_service=svc, instrument="EUR_USD")
+        event_timestamp = timezone.now()
+        expected_cycle_id = uuid4()
+
+        with (
+            patch("apps.trading.events.handler.TradingEvent.objects") as trading_event_objects,
+            patch("apps.trading.events.handler.Trade.objects") as trade_objects,
+        ):
+            trading_event_objects.filter.return_value.values.return_value.first.return_value = {
+                "event_timestamp": event_timestamp,
+                "sequence_number": 7,
+                "direction": "short",
+            }
+            exact_trade_qs = trade_objects.filter.return_value
+            exact_trade_qs.filter.return_value.values_list.return_value.first.return_value = (
+                expected_cycle_id
+            )
+
+            resolved = handler._resolve_cycle_id_from_db(101, None, direction="short")
+
+        assert resolved == str(expected_cycle_id)
+        trade_objects.filter.assert_called_once_with(
+            task_type=svc.task_type.value,
+            task_id=svc.task.id,
+            execution_id=svc.task.execution_id,
+            timestamp=event_timestamp,
+            execution_method="open_position",
+            cycle_id__isnull=False,
+            sequence_number=7,
+        )
+        exact_trade_qs.filter.assert_called_once_with(direction__iexact="short")
+
+    def test_legacy_fallback_keeps_direction_constraint(self):
+        svc = _make_order_service()
+        handler = EventHandler(order_service=svc, instrument="EUR_USD")
+        event_timestamp = timezone.now()
+        expected_cycle_id = uuid4()
+
+        with (
+            patch("apps.trading.events.handler.TradingEvent.objects") as trading_event_objects,
+            patch("apps.trading.events.handler.Trade.objects") as trade_objects,
+        ):
+            trading_event_objects.filter.return_value.values.return_value.first.return_value = {
+                "event_timestamp": event_timestamp,
+                "sequence_number": 11,
+                "direction": "",
+            }
+            exact_trade_qs = MagicMock()
+            exact_trade_qs.filter.return_value.values_list.return_value.first.return_value = None
+            legacy_trade_qs = MagicMock()
+            legacy_trade_qs.filter.return_value.values_list.return_value.first.return_value = (
+                expected_cycle_id
+            )
+            trade_objects.filter.side_effect = [exact_trade_qs, legacy_trade_qs]
+
+            resolved = handler._resolve_cycle_id_from_db(202, None, direction="short")
+
+        assert resolved == str(expected_cycle_id)
+        assert trade_objects.filter.call_count == 2
+        legacy_trade_qs.filter.assert_called_once_with(direction__iexact="short")
 
 
 class TestHandleVolatilityLock:

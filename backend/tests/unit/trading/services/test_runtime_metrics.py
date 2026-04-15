@@ -79,3 +79,30 @@ class TestRuntimeMetricsTracker:
         assert Decimal(metrics["current_atr"]) > Decimal("0")
         assert Decimal(metrics["baseline_atr"]) > Decimal("0")
         assert Decimal(metrics["volatility_threshold"]) > Decimal("0")
+
+    def test_build_metrics_uses_executable_prices_for_unrealized_pnl(self):
+        tracker = RuntimeMetricsTracker(
+            instrument="USD_JPY",
+            pip_size=Decimal("0.01"),
+            account_currency="JPY",
+            margin_rate=Decimal("0.04"),
+            atr_period=14,
+        )
+        tracker.sync_open_positions(
+            [
+                _position(direction="long", units=1000, entry_price="158.681"),
+                _position(direction="short", units=-1000, entry_price="158.682"),
+            ]
+        )
+
+        metrics = tracker.build_metrics(
+            timestamp=datetime(2026, 4, 14, 21, 22, tzinfo=UTC),
+            bid=Decimal("158.802"),
+            ask=Decimal("158.872"),
+            mid=Decimal("158.837"),
+            current_balance=Decimal("2999809.1963"),
+        )
+
+        assert Decimal(metrics["realized_pnl"]) == Decimal("0")
+        assert Decimal(metrics["unrealized_pnl"]) == Decimal("-69.000")
+        assert Decimal(metrics["total_pnl"]) == Decimal("-69.000")

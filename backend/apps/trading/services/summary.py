@@ -223,8 +223,14 @@ def compute_task_summary(
         error_message = task_obj.error_message
 
     # Currency conversion for display
+    if task_obj:
+        if task_type == "backtest":
+            account_currency = getattr(task_obj, "account_currency", None)
+        else:
+            account = getattr(task_obj, "oanda_account", None)
+            account_currency = getattr(account, "currency", None)
+
     if task_obj and task_type == "backtest":
-        account_currency = getattr(task_obj, "account_currency", None)
         instrument = getattr(task_obj, "instrument", "")
         quote_ccy = instrument.split("_")[-1].upper() if "_" in instrument else ""
         if (

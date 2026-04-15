@@ -406,3 +406,42 @@ class TestBacktestTaskSerializerProgress:
             execution_id=str(execution_id),
         )
         assert result.task.progress == 0
+
+
+@pytest.mark.django_db
+class TestTradingTaskSummary:
+    """Tests for trading-task summary fields."""
+
+    def test_uses_oanda_account_currency_for_trading_summary(self):
+        from uuid import uuid4
+
+        from apps.trading.services.summary import compute_task_summary
+
+        execution_id = uuid4()
+        account = OandaAccountFactory(currency="JPY")
+        task = TradingTaskFactory(
+            oanda_account=account,
+            instrument="USD_JPY",
+            status=TaskStatus.RUNNING,
+            execution_id=execution_id,
+        )
+        ExecutionState.objects.create(
+            task_type=TaskType.TRADING,
+            task_id=task.pk,
+            execution_id=execution_id,
+            strategy_state={},
+            current_balance=Decimal("3000000"),
+            ticks_processed=42,
+            last_tick_timestamp=datetime.now(timezone.utc),
+            last_tick_bid=Decimal("158.80"),
+            last_tick_ask=Decimal("158.84"),
+            last_tick_price=Decimal("158.82"),
+        )
+
+        result = compute_task_summary(
+            task_type="trading",
+            task_id=str(task.pk),
+            execution_id=str(execution_id),
+        )
+
+        assert result.execution.account_currency == "JPY"

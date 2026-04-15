@@ -122,7 +122,8 @@ class RuntimeMetricsTracker:
 
         conv = quote_to_account_rate(self.instrument, mid, self.account_currency)
 
-        # Unrealized PnL from cached open positions (quote currency)
+        # Unrealized PnL from cached open positions (quote currency),
+        # marked to executable close prices.
         unrealized_pnl_quote = Decimal("0")
         for position in self._open_positions.values():
             units = Decimal(str(abs(position.units)))
