@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.12](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.11...frontend-v1.48.12) (2026-04-15)
+
+
+### Bug Fixes
+
+* trading metrics summary align ([#505](https://github.com/yuyash/auto-forex-web-service/issues/505)) ([1b6c369](https://github.com/yuyash/auto-forex-web-service/commit/1b6c36949eec0df9df11300a43331dad35409629))
+
 ## [1.48.11](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.10...frontend-v1.48.11) (2026-04-14)
 
 
