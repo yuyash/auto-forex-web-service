@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.50.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.4...frontend-v1.50.5) (2026-04-16)
+
+
+### Bug Fixes
+
+* **comparison:** use unified xAxis data array for multi-series charts ([#525](https://github.com/yuyash/auto-forex-web-service/issues/525)) ([a4194d0](https://github.com/yuyash/auto-forex-web-service/commit/a4194d0ef82c9f1e98f66bc50c2c5730c23ea7a4))
+
 ## [1.50.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.3...frontend-v1.50.4) (2026-04-16)
 
 
