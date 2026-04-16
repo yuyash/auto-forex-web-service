@@ -8,7 +8,6 @@ from typing import Any
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.trading.models import TradingTask
-from apps.trading.models.celery import CeleryTaskStatus
 from apps.trading.enums import TaskStatus
 from apps.trading.tasks.service import TaskService
 
@@ -16,7 +15,7 @@ from apps.trading.tasks.service import TaskService
 class Command(BaseCommand):
     """Drain live trading tasks before replacing worker containers."""
 
-    help = "Pause or stop active trading tasks and wait for the workers to quiesce"
+    help = "Stop active trading tasks and wait for the workers to quiesce"
 
     active_statuses = (
         TaskStatus.STARTING,
@@ -29,9 +28,9 @@ class Command(BaseCommand):
         parser.add_argument(
             "--mode",
             type=str,
-            default="pause",
-            choices=["pause", "immediate", "graceful", "graceful_close"],
-            help="Lifecycle action to request for active trading tasks.",
+            default="graceful",
+            choices=["immediate", "graceful", "graceful_close"],
+            help="Stop mode to request for active trading tasks.",
         )
         parser.add_argument(
             "--timeout",
@@ -91,15 +90,7 @@ class Command(BaseCommand):
                 f"status={task.status})"
             )
             try:
-                if stop_mode == "pause":
-                    if task.status in (TaskStatus.STARTING, TaskStatus.RUNNING):
-                        service.pause_task(task.pk)
-                    else:
-                        self.stdout.write(
-                            f"  Skipping pause request for {task.pk}; current status is {task.status}."
-                        )
-                else:
-                    service.stop_task(task.pk, mode=stop_mode)
+                service.stop_task(task.pk, mode=stop_mode)
             except ValueError as exc:
                 raise CommandError(f"Failed to transition trading task {task.pk}: {exc}") from exc
 
@@ -139,58 +130,8 @@ class Command(BaseCommand):
         self, *, stop_mode: str, resumable_tasks: list[TradingTask]
     ) -> list[TradingTask]:
         """Return tasks that are not yet safe for deployment."""
-        resumable_task_ids = [task.pk for task in resumable_tasks]
-        current_tasks: list[TradingTask] = []
-        if resumable_task_ids:
-            current_tasks = list(
-                TradingTask.objects.select_related("config", "oanda_account", "user")
-                .filter(pk__in=resumable_task_ids)
-                .order_by("created_at")
-            )
-        current_by_id = {task.pk: task for task in current_tasks}
-
-        active_remaining = list(
+        return list(
             TradingTask.objects.select_related("config", "oanda_account", "user")
             .filter(status__in=self.active_statuses)
             .order_by("created_at")
         )
-        remaining_by_id = {task.pk: task for task in active_remaining}
-
-        if stop_mode != "pause":
-            return list(remaining_by_id.values())
-
-        for task in current_by_id.values():
-            if task.status != TaskStatus.PAUSED:
-                remaining_by_id[task.pk] = task
-                continue
-
-            if self._is_pause_settled(task):
-                remaining_by_id.pop(task.pk, None)
-            else:
-                remaining_by_id[task.pk] = task
-
-        return list(remaining_by_id.values())
-
-    @staticmethod
-    def _is_pause_settled(task: TradingTask) -> bool:
-        """Check whether the paused task has actually quiesced on the worker side."""
-        execution_id = getattr(task, "execution_id", None)
-        if not execution_id:
-            return True
-
-        instance_key = f"{task.pk}:{execution_id}"
-        celery_status = (
-            CeleryTaskStatus.objects.filter(
-                task_name="trading.tasks.run_trading_task",
-                instance_key=instance_key,
-            )
-            .values_list("status", flat=True)
-            .first()
-        )
-        return celery_status in {
-            None,
-            CeleryTaskStatus.Status.PAUSED,
-            CeleryTaskStatus.Status.STOPPED,
-            CeleryTaskStatus.Status.COMPLETED,
-            CeleryTaskStatus.Status.FAILED,
-        }

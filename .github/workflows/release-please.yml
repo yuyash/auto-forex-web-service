@@ -103,7 +103,7 @@ jobs:
           DRAINED_BACKTEST_TASK_IDS=""
           if docker compose ps --services --status running | grep -qx backend; then
             TRADING_DRAIN_OUTPUT=$(docker compose exec --interactive=false -T backend \
-              python manage.py drain_trading_for_deploy --mode pause --emit-task-ids </dev/null)
+              python manage.py drain_trading_for_deploy --mode graceful --emit-task-ids </dev/null)
             printf '%s\n' "$TRADING_DRAIN_OUTPUT"
             DRAINED_TRADING_TASK_IDS=$(printf '%s\n' "$TRADING_DRAIN_OUTPUT" | sed -n 's/^DRAINED_TASK_IDS=//p' | tail -n 1)
 
