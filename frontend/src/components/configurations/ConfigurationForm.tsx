@@ -246,17 +246,31 @@ const ConfigurationForm = ({
 
     const defaultsForCurrentTypeReady =
       lastDefaultsStrategyRef.current === currentType;
+
+    // Skip if nothing meaningful changed and user has already edited params.
+    if (
+      !initialDataChanged &&
+      currentType === previousType &&
+      hasUserEditedParamsRef.current
+    ) {
+      previousStrategyTypeRef.current = currentType;
+      previousInitialDataRef.current = initialData;
+      return;
+    }
+
+    // Also skip when defaults haven't loaded yet and nothing else changed.
     const shouldApplyDefaultsUpdate =
       !initialDataChanged &&
       currentType === previousType &&
-      defaultsForCurrentTypeReady &&
-      !hasUserEditedParamsRef.current;
+      defaultsForCurrentTypeReady;
 
     if (
       !initialDataChanged &&
       currentType === previousType &&
       !shouldApplyDefaultsUpdate
     ) {
+      previousStrategyTypeRef.current = currentType;
+      previousInitialDataRef.current = initialData;
       return;
     }
 
