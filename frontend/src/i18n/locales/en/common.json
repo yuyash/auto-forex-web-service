@@ -610,8 +610,11 @@
     "noData": "No metrics data available for this execution.",
     "current_balance": "Balance",
     "total_pnl": "Total PnL",
+    "total_pnl_quote": "Total PnL (Quote)",
     "realized_pnl": "Realized PnL",
+    "realized_pnl_quote": "Realized PnL (Quote)",
     "unrealized_pnl": "Unrealized PnL",
+    "unrealized_pnl_quote": "Unrealized PnL (Quote)",
     "total_return": "Total Return",
     "margin_ratio": "Margin Closeout Ratio",
     "open_positions": "Open Positions",
@@ -620,7 +623,14 @@
     "win_rate": "Win Rate",
     "winning_trades": "Winning Trades",
     "losing_trades": "Losing Trades",
-    "ticks_processed": "Ticks Processed"
+    "ticks_processed": "Ticks Processed",
+    "max_drawdown": "Max Drawdown",
+    "sharpe_ratio": "Sharpe Ratio",
+    "profit_factor": "Profit Factor",
+    "average_win": "Average Win",
+    "average_loss": "Average Loss",
+    "pnl_currency": "PnL Currency",
+    "quote_currency": "Quote Currency"
   },
   "comparison": {
     "title": "Execution Comparison",

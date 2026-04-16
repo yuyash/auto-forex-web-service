@@ -210,43 +210,43 @@ export function ExecutionComparisonDialog({
     [executions]
   );
 
-  // Compute the union time range across all executions
-  const timeRange = useMemo(() => {
-    let minT = Infinity;
-    let maxT = -Infinity;
+  // Compute per-execution intervals so each execution uses a granularity
+  // appropriate for its own duration, not the union range of all executions.
+  const perExecIntervals = useMemo(() => {
+    const map = new Map<string, number>();
     for (const exec of sorted) {
-      if (exec.started_at) {
-        const t = new Date(exec.started_at).getTime() / 1000;
-        if (t < minT) minT = t;
+      if (interval > 0) {
+        map.set(exec.id, interval);
+        continue;
       }
-      if (exec.completed_at) {
-        const t = new Date(exec.completed_at).getTime() / 1000;
-        if (t > maxT) maxT = t;
+      const start = exec.started_at
+        ? new Date(exec.started_at).getTime() / 1000
+        : 0;
+      const end = exec.completed_at
+        ? new Date(exec.completed_at).getTime() / 1000
+        : Date.now() / 1000;
+      if (start > 0 && end > start) {
+        map.set(exec.id, computeAutoInterval(end - start));
+      } else {
+        map.set(exec.id, 1);
       }
     }
-    if (!isFinite(minT) || !isFinite(maxT)) return null;
-    return { since: minT, until: maxT };
-  }, [sorted]);
-
-  const effectiveInterval = useMemo(() => {
-    if (interval > 0) return interval;
-    if (!timeRange) return 1;
-    return computeAutoInterval(timeRange.until - timeRange.since);
-  }, [interval, timeRange]);
+    return map;
+  }, [sorted, interval]);
 
   // Fetch metrics for all executions
   const fetchAllMetrics = useCallback(async () => {
-    if (!timeRange) return;
     setMetricsLoading(true);
     setMetricsError(null);
     try {
       const entries = await Promise.all(
         sorted.map(async (exec) => {
+          const execInterval = perExecIntervals.get(exec.id) ?? 1;
           const points = await fetchPaginatedMetrics({
             taskId,
             taskType,
             executionRunId: exec.id,
-            interval: effectiveInterval > 1 ? effectiveInterval : undefined,
+            interval: execInterval > 1 ? execInterval : undefined,
             pageSize: 500,
           });
           return [exec.id, points] as const;
@@ -264,7 +264,7 @@ export function ExecutionComparisonDialog({
         setMetricsLoading(false);
       }
     }
-  }, [sorted, taskId, taskType, effectiveInterval, timeRange, t]);
+  }, [sorted, taskId, taskType, perExecIntervals, t]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -517,7 +517,10 @@ function ConfigComparisonPanel({
                       fontWeight={isDiff ? 600 : 400}
                       sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
                     >
-                      {key}
+                      {key
+                        .replace(/^parameters\./, '')
+                        .replace(/_/g, ' ')
+                        .replace(/\b\w/g, (c) => c.toUpperCase())}
                     </Typography>
                   </td>
                   {configs.map((cfg, i) => (
@@ -650,6 +653,28 @@ function ResultsComparisonPanel({
                         ? 'success.main'
                         : 'error.main'
                       : undefined;
+                  // Format value with currency/percent suffix
+                  let display = v;
+                  if (v !== '-' && !isNaN(num)) {
+                    const exec = executions[i];
+                    const acctCcy = exec.metrics?.pnl_currency || '';
+                    const quoteCcy = exec.metrics?.quote_currency || '';
+                    if (
+                      key === 'total_return' ||
+                      key === 'win_rate' ||
+                      key === 'max_drawdown'
+                    ) {
+                      display = `${num >= 0 ? '+' : ''}${num.toFixed(2)}%`;
+                    } else if (key.endsWith('_quote')) {
+                      display = `${num >= 0 ? '+' : ''}${num.toFixed(2)}${quoteCcy ? ` ${quoteCcy}` : ''}`;
+                    } else if (
+                      key.includes('pnl') ||
+                      key === 'average_win' ||
+                      key === 'average_loss'
+                    ) {
+                      display = `${num >= 0 ? '+' : ''}${num.toFixed(2)}${acctCcy ? ` ${acctCcy}` : ''}`;
+                    }
+                  }
                   return (
                     <td
                       key={executions[i].id}
@@ -668,7 +693,7 @@ function ResultsComparisonPanel({
                           fontSize: '0.75rem',
                         }}
                       >
-                        {v}
+                        {display}
                       </Typography>
                     </td>
                   );
