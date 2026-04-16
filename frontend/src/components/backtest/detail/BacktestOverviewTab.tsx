@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Box,
   Chip,
@@ -24,6 +24,10 @@ import type { BacktestTask } from '../../../types';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
 import { formatAppNumber, formatAppPercent } from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
+import {
+  buildParameterLabelMap,
+  resolveParameterLabel,
+} from '../../../utils/strategySchemaLabels';
 
 interface BacktestOverviewTabProps {
   taskId: string;
@@ -65,8 +69,15 @@ export function BacktestOverviewTab({
   executionId,
   onOpenConfiguration,
 }: BacktestOverviewTabProps) {
-  const { t } = useTranslation(['backtest', 'common']);
+  const { t, i18n } = useTranslation(['backtest', 'common']);
   const [showSnapshotParams, setShowSnapshotParams] = useState(false);
+
+  // Build localized parameter label map from strategy JSON schema
+  const paramLabelMap = useMemo(() => {
+    const strategyType =
+      historicalStrategyConfig?.strategy_type || task.strategy_type;
+    return buildParameterLabelMap(strategies, strategyType, i18n.language);
+  }, [strategies, historicalStrategyConfig, task.strategy_type, i18n.language]);
 
   // When viewing a historical execution, prefer snapshot values for task settings
   const effectiveStartTime =
@@ -563,7 +574,7 @@ export function BacktestOverviewTab({
                   }}
                 >
                   <Typography variant="body2" color="text.secondary">
-                    {key}
+                    {resolveParameterLabel(paramLabelMap, key)}
                   </Typography>
                   <Typography
                     variant="body2"

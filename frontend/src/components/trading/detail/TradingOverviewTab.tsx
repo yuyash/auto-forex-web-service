@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Box,
   Chip,
@@ -24,6 +24,10 @@ import { TaskType, type TaskStatus } from '../../../types/common';
 import type { TradingTask } from '../../../types';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
 import { formatAppNumber, formatAppPercent } from '../../../utils/numberFormat';
+import {
+  buildParameterLabelMap,
+  resolveParameterLabel,
+} from '../../../utils/strategySchemaLabels';
 
 interface TradingOverviewTabProps {
   taskId: string;
@@ -61,8 +65,15 @@ export function TradingOverviewTab({
   executionId,
   onOpenConfiguration,
 }: TradingOverviewTabProps) {
-  const { t } = useTranslation(['trading', 'common']);
+  const { t, i18n } = useTranslation(['trading', 'common']);
   const [showSnapshotParams, setShowSnapshotParams] = useState(false);
+
+  // Build localized parameter label map from strategy JSON schema
+  const paramLabelMap = useMemo(() => {
+    const strategyType =
+      historicalStrategyConfig?.strategy_type || task.strategy_type;
+    return buildParameterLabelMap(strategies, strategyType, i18n.language);
+  }, [strategies, historicalStrategyConfig, task.strategy_type, i18n.language]);
 
   // When viewing a historical execution, prefer snapshot values
   const effectiveInstrument =
@@ -475,7 +486,7 @@ export function TradingOverviewTab({
                   }}
                 >
                   <Typography variant="body2" color="text.secondary">
-                    {key}
+                    {resolveParameterLabel(paramLabelMap, key)}
                   </Typography>
                   <Typography
                     variant="body2"
