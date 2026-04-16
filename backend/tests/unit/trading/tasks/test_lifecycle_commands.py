@@ -94,12 +94,27 @@ def test_stop_continues_when_signal_adapter_fails() -> None:
     adapters.dispatch_stop.assert_called_once()
 
 
-def test_pause_uses_injected_adapter() -> None:
+def test_pause_rejects_trading_tasks() -> None:
     task_id = uuid4()
     execution_id = uuid4()
     task = MagicMock(pk=task_id, status=TaskStatus.RUNNING, execution_id=execution_id)
     service = MagicMock()
     service._get_task_and_type.return_value = (task, "trading")
+
+    commands, adapters = _make_commands(service)
+
+    with pytest.raises(ValueError, match="Pause is not supported for trading tasks"):
+        commands.pause(task_id)
+
+    adapters.signal_pause.assert_not_called()
+
+
+def test_pause_uses_injected_adapter_for_backtest() -> None:
+    task_id = uuid4()
+    execution_id = uuid4()
+    task = MagicMock(pk=task_id, status=TaskStatus.RUNNING, execution_id=execution_id)
+    service = MagicMock()
+    service._get_task_and_type.return_value = (task, "backtest")
     service.writer.persist_state = MagicMock()
 
     commands, adapters = _make_commands(service)

@@ -399,7 +399,7 @@ class TestSaveEvents:
         task.pip_size = Decimal("0.0001")
         task.initial_balance = Decimal("10000")
         task.celery_task_id = "celery-123"
-        task.config.strategy_type = "floor"
+        task.config.strategy_type = "snowball"
 
         executor = TaskExecutor(
             task=task,
@@ -426,7 +426,7 @@ class TestSaveEvents:
                 event=mock_event,
                 context=executor.event_context,
                 execution_id=task.execution_id,
-                strategy_type="floor",
+                strategy_type="snowball",
             )
             mock_te.objects.bulk_create.assert_called_once_with([mock_record])
             mock_se.objects.bulk_create.assert_not_called()
@@ -442,7 +442,7 @@ class TestSaveEvents:
         task.pip_size = Decimal("0.0001")
         task.initial_balance = Decimal("10000")
         task.celery_task_id = "celery-123"
-        task.config.strategy_type = "floor"
+        task.config.strategy_type = "snowball"
 
         executor = TaskExecutor(
             task=task,
@@ -470,7 +470,7 @@ class TestSaveEvents:
                 event=strategy_event,
                 context=executor.event_context,
                 execution_id=task.execution_id,
-                strategy_type="floor",
+                strategy_type="snowball",
             )
             mock_se.objects.bulk_create.assert_called_once_with([strategy_record])
             assert result == []
@@ -487,7 +487,7 @@ class TestSaveEvents:
         task.pip_size = Decimal("0.0001")
         task.initial_balance = Decimal("10000")
         task.celery_task_id = "celery-123"
-        task.config.strategy_type = "floor"
+        task.config.strategy_type = "snowball"
 
         executor = TaskExecutor(
             task=task,
@@ -498,9 +498,9 @@ class TestSaveEvents:
             state_manager=MagicMock(),
         )
 
-        floor_event = MagicMock()
-        floor_event.event_type = "initial_entry"
-        floor_event.to_dict.return_value = {"event_type": "initial_entry", "entry_id": 10}
+        mock_event = MagicMock()
+        mock_event.event_type = "initial_entry"
+        mock_event.to_dict.return_value = {"event_type": "initial_entry", "entry_id": 10}
 
         trading_record = MagicMock()
         strategy_record = MagicMock()
@@ -511,25 +511,25 @@ class TestSaveEvents:
         ):
             mock_te.from_event.return_value = trading_record
             mock_se.from_event.return_value = strategy_record
-            result = executor.save_events([floor_event])
+            result = executor.save_events([mock_event])
 
             assert len(result) == 1
             assert result == [trading_record]
             mock_te.from_event.assert_called_once_with(
-                event=floor_event,
+                event=mock_event,
                 context=executor.event_context,
                 execution_id=task.execution_id,
-                strategy_type="floor",
+                strategy_type="snowball",
             )
             assert trading_record.event_type == "open_position"
             assert trading_record.details["event_type"] == "open_position"
             assert trading_record.details["strategy_event_type"] == "initial_entry"
             mock_te.objects.bulk_create.assert_called_once()
             mock_se.from_event.assert_called_once_with(
-                event=floor_event,
+                event=mock_event,
                 context=executor.event_context,
                 execution_id=task.execution_id,
-                strategy_type="floor",
+                strategy_type="snowball",
             )
             mock_se.objects.bulk_create.assert_called_once_with([strategy_record])
 
@@ -738,7 +738,7 @@ class TestTradingExecutorSafety:
         task.instrument = "EUR_USD"
         task.pip_size = Decimal("0.0001")
         task.dry_run = False
-        task.config.strategy_type = "floor"
+        task.config.strategy_type = "snowball"
         task.config.config_dict = {}
         task.oanda_account.balance = Decimal("10000")
         task.oanda_account.currency = "USD"
@@ -783,7 +783,7 @@ class TestTradingExecutorSafety:
         task.instrument = "EUR_USD"
         task.pip_size = Decimal("0.0001")
         task.dry_run = False
-        task.config.strategy_type = "floor"
+        task.config.strategy_type = "snowball"
         task.config.config_dict = {}
         task.oanda_account.balance = Decimal("10000")
         task.oanda_account.currency = "USD"
@@ -825,7 +825,7 @@ class TestTradingExecutorSafety:
         task.instrument = "EUR_USD"
         task.pip_size = Decimal("0.0001")
         task.dry_run = False
-        task.config.strategy_type = "floor"
+        task.config.strategy_type = "snowball"
         task.config.config_dict = {}
         task.oanda_account.balance = Decimal("10000")
         task.oanda_account.currency = "USD"
@@ -869,7 +869,7 @@ class TestTradingExecutorSafety:
         task.instrument = "EUR_USD"
         task.pip_size = Decimal("0.0001")
         task.dry_run = False
-        task.config.strategy_type = "floor"
+        task.config.strategy_type = "snowball"
         task.config.config_dict = {}
         task.oanda_account.balance = Decimal("10000")
         task.oanda_account.currency = "USD"
@@ -914,7 +914,7 @@ class TestTradingExecutorSafety:
         task.instrument = "EUR_USD"
         task.pip_size = Decimal("0.0001")
         task.dry_run = False
-        task.config.strategy_type = "floor"
+        task.config.strategy_type = "snowball"
         task.config.config_dict = {}
         task.oanda_account.balance = Decimal("10000")
         task.oanda_account.currency = "USD"

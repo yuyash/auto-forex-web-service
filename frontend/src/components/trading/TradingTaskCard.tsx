@@ -43,7 +43,6 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import {
   useDeleteTradingTask,
-  usePauseTradingTask,
   useRestartTradingTask,
   useResumeTradingTask,
   useStartTradingTask,
@@ -81,7 +80,6 @@ export default function TradingTaskCard({
   const startTask = useStartTradingTask();
   const stopTask = useStopTradingTask();
   const resumeTask = useResumeTradingTask();
-  const pauseTask = usePauseTradingTask();
   const restartTask = useRestartTradingTask();
   const deleteTask = useDeleteTradingTask();
 
@@ -270,29 +268,6 @@ export default function TradingTaskCard({
       showError(errorMessage, 8000, {
         label: 'Retry',
         onClick: () => handleResume(taskId),
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handlePause = async (taskId: string | number) => {
-    setIsLoading(true);
-    try {
-      await pauseTask.mutate(String(taskId));
-      setOptimisticStatus(TaskStatus.PAUSED);
-      showSuccess(t('trading:toast.pausedSuccessfully'));
-      onRefresh?.();
-    } catch (error) {
-      logger.error('Failed to pause trading task', {
-        taskId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      setOptimisticStatus(null);
-      const errorMessage = formatTaskActionError(error, 'Failed to pause task');
-      showError(errorMessage, 8000, {
-        label: 'Retry',
-        onClick: () => handlePause(taskId),
       });
     } finally {
       setIsLoading(false);
@@ -495,9 +470,9 @@ export default function TradingTaskCard({
           <TaskControlButtons
             taskId={task.id}
             status={displayStatus}
+            taskType="trading"
             onStart={(id) => requestConfirm('start', String(id))}
             onStop={handleStop}
-            onPause={(id) => requestConfirm('pause', String(id))}
             onResume={(id) => requestConfirm('resume', String(id))}
             onRestart={(id) => requestConfirm('restart', String(id))}
             onDelete={handleDelete}
@@ -661,7 +636,6 @@ export default function TradingTaskCard({
             const { type, taskId } = pendingAction;
             cancelAction();
             if (type === 'start') void handleStart(taskId);
-            else if (type === 'pause') void handlePause(taskId);
             else if (type === 'resume') void handleResume(taskId);
             else if (type === 'restart') void handleRestart(taskId);
           }}

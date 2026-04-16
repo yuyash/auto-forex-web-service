@@ -102,18 +102,18 @@ def oanda_account(test_user, db):
 
 @pytest.fixture
 def strategy_config(test_user, db):
-    """Create a floor strategy configuration for USD_JPY."""
+    """Create a snowball strategy configuration for USD_JPY."""
     return StrategyConfiguration.objects.create(
         user=test_user,
-        name="E2E Floor Strategy",
-        strategy_type="floor",
+        name="E2E Snowball Strategy",
+        strategy_type="snowball",
         parameters={
             "instrument": "USD_JPY",
-            "base_lot_size": 1.0,
-            "retracement_pips": 30.0,
-            "take_profit_pips": 25.0,
-            "max_layers": 3,
-            "max_retracements_per_layer": 10,
+            "base_units": 1000,
+            "m_pips": 50,
+            "n_pips": 30,
+            "r_max": 5,
+            "f_max": 3,
         },
     )
 

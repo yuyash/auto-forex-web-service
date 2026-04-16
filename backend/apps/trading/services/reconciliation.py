@@ -367,21 +367,25 @@ class TradingResumeReconciler:
                 )
             return
 
-        if strategy_type not in {"floor", "snowball"} and (
+        # Block unsupported strategy types that had broker-side changes.
+        if strategy_type not in {"snowball"} and (
             report.created_local_positions > 0
             or report.updated_local_positions > 0
             or report.closed_local_positions > 0
         ):
             report.blockers.append(
-                f"Automatic broker reconciliation is only state-aware for the floor and snowball "
-                "strategies. "
+                "Automatic broker reconciliation is only state-aware for the snowball strategy. "
                 f"Task strategy '{strategy_type or 'unknown'}' requires manual review before resume."
             )
 
+        # Positions disappeared from the broker while the task was stopped.
+        # The strategy cannot safely continue without them.
         if report.closed_local_positions > 0 or report.removed_open_entries > 0:
             report.blockers.append(
-                "Broker exposure changed while the worker was down. Automatic resume was stopped "
-                "to avoid continuing with drifted strategy state."
+                "Broker exposure changed while the task was stopped. "
+                f"{report.closed_local_positions} local position(s) were closed and "
+                f"{report.removed_open_entries} strategy entry/entries could not be matched. "
+                "Use restart to begin a fresh execution."
             )
 
         if report.broker_open_positions > 0 and not strategy_state:
@@ -424,130 +428,9 @@ class TradingResumeReconciler:
     ) -> None:
         strategy_type = str(getattr(self.task.config, "strategy_type", "") or "").strip().lower()
 
-        if strategy_type == "floor":
-            self._sync_floor_state_with_positions(open_positions, report)
-            return
-
         if strategy_type == "snowball":
             self._sync_snowball_state_with_positions(open_positions, report)
             return
-
-    def _sync_floor_state_with_positions(
-        self,
-        open_positions: list[Position],
-        report: ReconciliationReport,
-    ) -> None:
-        """Reconcile persisted floor strategy entries against open positions."""
-
-        from apps.trading.strategies.floor.models import FloorStrategyConfig, FloorStrategyState
-
-        floor_state = FloorStrategyState.from_strategy_state(self.state.strategy_state)
-        floor_config = FloorStrategyConfig.from_dict(self.task.config.config_dict)
-
-        by_id = {str(position.id): position for position in open_positions}
-        assigned_ids: set[str] = set()
-        next_entry_id = 1
-        normalized_entries: list[dict[str, Any]] = []
-
-        for raw_entry in floor_state.open_entries:
-            if not isinstance(raw_entry, dict):
-                continue
-
-            entry = dict(raw_entry)
-            entry_id = _safe_int(entry.get("entry_id"), 0)
-            if entry_id > 0:
-                next_entry_id = max(next_entry_id, entry_id + 1)
-
-            matched = self._match_position_for_entry(
-                entry=entry,
-                open_positions=open_positions,
-                by_id=by_id,
-                assigned_ids=assigned_ids,
-            )
-            if matched is None:
-                report.removed_open_entries += 1
-                continue
-
-            position_id = str(matched.id)
-            if entry.get("position_id") != position_id:
-                entry["position_id"] = position_id
-                report.relinked_open_entries += 1
-
-            entry["direction"] = str(matched.direction)
-            entry["units"] = abs(int(matched.units))
-            entry["entry_price"] = str(matched.entry_price)
-            entry["floor_index"] = int(
-                matched.layer_index or _safe_int(entry.get("floor_index"), 1)
-            )
-            entry["retracement_count"] = int(
-                matched.retracement_count or _safe_int(entry.get("retracement_count"), 1) or 1
-            )
-            entry["opened_at"] = (
-                matched.entry_time.isoformat()
-                if matched.entry_time
-                else str(entry.get("opened_at") or dj_timezone.now().isoformat())
-            )
-            entry["is_initial"] = bool(entry.get("is_initial", entry["retracement_count"] <= 1))
-            normalized_entries.append(entry)
-            assigned_ids.add(position_id)
-
-        for position in open_positions:
-            position_id = str(position.id)
-            if position_id in assigned_ids:
-                continue
-
-            floor_index = int(position.layer_index or floor_state.active_floor_index or 1)
-            retracement_count = int(position.retracement_count or 0)
-            take_profit_pips = floor_config.intra_layer_take_profit_pips(
-                floor_index,
-                retracement_count,
-            )
-            normalized_entries.append(
-                {
-                    "entry_id": next_entry_id,
-                    "floor_index": floor_index,
-                    "direction": str(position.direction),
-                    "entry_price": str(position.entry_price),
-                    "units": abs(int(position.units)),
-                    "take_profit_pips": str(take_profit_pips),
-                    "opened_at": position.entry_time.isoformat(),
-                    "is_initial": retracement_count == 0,
-                    "retracement_count": retracement_count,
-                    "position_id": position_id,
-                }
-            )
-            next_entry_id += 1
-            report.synthesized_open_entries += 1
-
-        floor_retracement_counts: dict[int, int] = {}
-        floor_directions: dict[int, str] = {}
-        max_floor = 1
-        for entry in normalized_entries:
-            floor_index = max(1, _safe_int(entry.get("floor_index"), 1))
-            direction = str(entry.get("direction", Direction.LONG)).lower()
-            if direction not in {Direction.LONG, Direction.SHORT}:
-                direction = Direction.LONG
-
-            # floor_retracement_counts tracks total entries per layer
-            floor_retracement_counts[floor_index] = floor_retracement_counts.get(floor_index, 0) + 1
-            floor_directions.setdefault(floor_index, direction)
-            max_floor = max(max_floor, floor_index)
-
-        floor_state.open_entries = normalized_entries
-        floor_state.floor_retracement_counts = floor_retracement_counts
-        floor_state.floor_directions = floor_directions
-        floor_state.active_floor_index = max_floor if normalized_entries else 1
-        floor_state.home_floor_index = min(
-            max(1, floor_state.home_floor_index),
-            floor_state.active_floor_index,
-        )
-        floor_state.next_entry_id = max(1, next_entry_id)
-        floor_state.account_balance = _safe_decimal(self.state.current_balance)
-        floor_state.account_nav = floor_state.account_balance + sum(
-            (_safe_decimal(position.unrealized_pnl) for position in open_positions),
-            Decimal("0"),
-        )
-        self.state.strategy_state = floor_state.to_dict()
 
     def _sync_snowball_state_with_positions(
         self,
@@ -578,8 +461,11 @@ class TradingResumeReconciler:
                     if matched is None:
                         report.removed_open_entries += 1
                         report.blockers.append(
-                            f"Snowball entry {entry.entry_id} could not be matched to an open "
-                            "position during automatic resume."
+                            f"Snowball entry {entry.entry_id} "
+                            f"(L{entry.layer_number}/R{entry.retracement_count}) "
+                            "has no matching broker position. "
+                            "The position may have been closed externally while "
+                            "the task was stopped. Use restart to begin a fresh execution."
                         )
                         continue
 
@@ -600,8 +486,10 @@ class TradingResumeReconciler:
                 if matched is None:
                     report.removed_open_entries += 1
                     report.blockers.append(
-                        f"Snowball hedge entry {entry.entry_id} could not be matched to an open "
-                        "position during automatic resume."
+                        f"Snowball hedge entry {entry.entry_id} "
+                        "has no matching broker position. "
+                        "The position may have been closed externally while "
+                        "the task was stopped. Use restart to begin a fresh execution."
                     )
                     continue
 
@@ -650,49 +538,6 @@ class TradingResumeReconciler:
         entry.retracement_count = int(position.retracement_count or entry.retracement_count or 0)
         if position.entry_time is not None:
             entry.opened_at = position.entry_time
-
-    @staticmethod
-    def _match_position_for_entry(
-        *,
-        entry: dict[str, Any],
-        open_positions: list[Position],
-        by_id: dict[str, Position],
-        assigned_ids: set[str],
-    ) -> Position | None:
-        position_id = str(entry.get("position_id") or "").strip()
-        if position_id:
-            candidate = by_id.get(position_id)
-            if candidate is not None:
-                return candidate
-
-        entry_floor = _safe_int(entry.get("floor_index"), 0)
-        entry_direction = str(entry.get("direction") or "").lower()
-        entry_units = _safe_int(entry.get("units"), 0)
-        entry_price = _safe_decimal(entry.get("entry_price"), "0")
-
-        best: Position | None = None
-        best_price_diff: Decimal | None = None
-
-        for candidate in open_positions:
-            candidate_id = str(candidate.id)
-            if candidate_id in assigned_ids:
-                continue
-            if entry_floor > 0 and int(candidate.layer_index or 0) != entry_floor:
-                continue
-            if (
-                entry_direction in {Direction.LONG, Direction.SHORT}
-                and str(candidate.direction) != entry_direction
-            ):
-                continue
-            if entry_units > 0 and abs(int(candidate.units)) != entry_units:
-                continue
-
-            price_diff = abs(_safe_decimal(candidate.entry_price) - entry_price)
-            if best is None or best_price_diff is None or price_diff < best_price_diff:
-                best = candidate
-                best_price_diff = price_diff
-
-        return best
 
     @staticmethod
     def _match_position_for_snowball_entry(

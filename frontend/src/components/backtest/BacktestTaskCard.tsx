@@ -397,6 +397,7 @@ export default function BacktestTaskCard({
           <TaskControlButtons
             taskId={task.id}
             status={displayStatus}
+            taskType="backtest"
             onStart={(id) => requestConfirm('start', id)}
             onStop={handleStopRequest}
             onPause={(id) => requestConfirm('pause', id)}

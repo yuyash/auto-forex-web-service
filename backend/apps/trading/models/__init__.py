@@ -10,8 +10,6 @@ This package organizes trading models into logical modules:
 - logs: TaskLog
 - trades: Trades
 - equities: Equities
-
-Note: FloorSide enum has been moved to apps.trading.enums
 """
 
 from apps.trading.models.backtest import (
@@ -25,7 +23,6 @@ from apps.trading.models.configs import (
 )
 from apps.trading.models.equities import Equity
 from apps.trading.models.events import StrategyEventRecord, TradingEvent
-from apps.trading.models.floor import Layer
 from apps.trading.models.logs import TaskLog
 from apps.trading.models.metrics import Metrics
 from apps.trading.models.orders import Order
@@ -63,6 +60,4 @@ __all__ = [
     "Equity",
     "Metrics",
     "TaskExecutionSnapshot",
-    # Floor Strategy
-    "Layer",
 ]

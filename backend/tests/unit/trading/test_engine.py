@@ -16,7 +16,7 @@ class TestTradingEngine:
     def test_init_strategy_via_registry(self, mock_registry, mock_register_all):
         """Engine should create strategy via registry."""
         config = MagicMock()
-        config.strategy_type = "floor"
+        config.strategy_type = "snowball"
         config.config_dict = {"key": "val"}
         mock_instance = MagicMock()
         mock_registry.create.return_value = mock_instance
@@ -57,7 +57,7 @@ class TestTradingEngine:
     @patch("apps.trading.engine.registry")
     def test_on_tick_delegates_to_strategy(self, mock_registry, _mock_register_all):
         config = MagicMock()
-        config.strategy_type = "floor"
+        config.strategy_type = "snowball"
         config.config_dict = {}
         mock_strategy = MagicMock()
         mock_registry.create.return_value = mock_strategy
@@ -73,7 +73,7 @@ class TestTradingEngine:
     @patch("apps.trading.engine.registry")
     def test_on_start_delegates(self, mock_registry, _mock_register_all):
         config = MagicMock()
-        config.strategy_type = "floor"
+        config.strategy_type = "snowball"
         config.config_dict = {}
         mock_strategy = MagicMock()
         mock_registry.create.return_value = mock_strategy
@@ -87,7 +87,7 @@ class TestTradingEngine:
     @patch("apps.trading.engine.registry")
     def test_on_stop_delegates(self, mock_registry, _mock_register_all):
         config = MagicMock()
-        config.strategy_type = "floor"
+        config.strategy_type = "snowball"
         config.config_dict = {}
         mock_strategy = MagicMock()
         mock_registry.create.return_value = mock_strategy
@@ -101,7 +101,7 @@ class TestTradingEngine:
     @patch("apps.trading.engine.registry")
     def test_on_resume_delegates(self, mock_registry, _mock_register_all):
         config = MagicMock()
-        config.strategy_type = "floor"
+        config.strategy_type = "snowball"
         config.config_dict = {}
         mock_strategy = MagicMock()
         mock_registry.create.return_value = mock_strategy
@@ -115,18 +115,18 @@ class TestTradingEngine:
     @patch("apps.trading.engine.registry")
     def test_strategy_type_property(self, mock_registry, _mock_register_all):
         config = MagicMock()
-        config.strategy_type = "floor"
+        config.strategy_type = "snowball"
         config.config_dict = {}
         mock_registry.create.return_value = MagicMock()
 
         engine = TradingEngine("USD_JPY", Decimal("0.01"), config)
-        assert engine.strategy_type.value == "floor"
+        assert engine.strategy_type.value == "snowball"
 
     @patch("apps.trading.engine.register_all_strategies")
     @patch("apps.trading.engine.registry")
     def test_account_currency_set_on_strategy(self, mock_registry, _mock_register_all):
         config = MagicMock()
-        config.strategy_type = "floor"
+        config.strategy_type = "snowball"
         config.config_dict = {}
         mock_strategy = MagicMock()
         mock_registry.create.return_value = mock_strategy

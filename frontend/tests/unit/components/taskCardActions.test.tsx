@@ -321,29 +321,12 @@ describe('Task card control actions', () => {
     );
   });
 
-  it('trading task card pauses running tasks', async () => {
+  it('trading task card resumes stopped tasks', async () => {
     const user = userEvent.setup();
 
     render(
       <TradingTaskCard
-        task={{ ...tradingTaskBase, status: TaskStatus.RUNNING }}
-      />
-    );
-
-    await user.click(screen.getByRole('button', { name: 'Pause' }));
-    const confirmButtons = screen.getAllByRole('button', { name: 'Pause' });
-    await user.click(confirmButtons[confirmButtons.length - 1]);
-
-    expect(mockTradingPause).toHaveBeenCalledWith('trading-1');
-    expect(mockShowSuccess).toHaveBeenCalledWith('Trading paused successfully');
-  });
-
-  it('trading task card resumes paused tasks', async () => {
-    const user = userEvent.setup();
-
-    render(
-      <TradingTaskCard
-        task={{ ...tradingTaskBase, status: TaskStatus.PAUSED }}
+        task={{ ...tradingTaskBase, status: TaskStatus.STOPPED }}
       />
     );
 

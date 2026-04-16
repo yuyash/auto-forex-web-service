@@ -4,7 +4,6 @@ from apps.trading.enums import (
     DataSource,
     Direction,
     EventType,
-    FloorSide,
     LogLevel,
     StopMode,
     StrategyType,
@@ -130,12 +129,11 @@ class TestStrategyType:
     """Test StrategyType enum."""
 
     def test_values(self):
-        assert StrategyType.FLOOR == "floor"
         assert StrategyType.SNOWBALL == "snowball"
         assert StrategyType.CUSTOM == "custom"
 
     def test_choices_count(self):
-        assert len(StrategyType.choices) == 3
+        assert len(StrategyType.choices) == 2
 
 
 class TestLogLevel:
@@ -161,10 +159,3 @@ class TestDirection:
 
     def test_choices_count(self):
         assert len(Direction.choices) == 2
-
-
-class TestFloorSideAlias:
-    """Test FloorSide backward compatibility alias."""
-
-    def test_floor_side_is_direction(self):
-        assert FloorSide is Direction

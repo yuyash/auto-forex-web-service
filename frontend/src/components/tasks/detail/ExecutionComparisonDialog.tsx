@@ -848,12 +848,15 @@ function MetricsOverlayPanel({
                     axisTickLabel: { style: { fontSize: 10 } },
                     legend: {
                       direction: 'row',
-                      position: { vertical: 'top', horizontal: 'left' },
+                      position: {
+                        vertical: 'top',
+                        horizontal: 'left',
+                      },
                       padding: 0,
                       itemMarkWidth: 8,
                       itemMarkHeight: 8,
                       labelStyle: { fontSize: 10 },
-                    },
+                    } as Record<string, unknown>,
                   }}
                 />
               </Paper>
