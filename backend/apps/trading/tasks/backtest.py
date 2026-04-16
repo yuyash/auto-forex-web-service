@@ -8,6 +8,8 @@ from uuid import UUID
 
 from celery import shared_task
 
+from django.utils import timezone as dj_timezone
+
 from apps.trading.engine import TradingEngine
 from apps.trading.enums import TaskStatus, TaskType
 from apps.trading.logging import TaskLoggingSession
@@ -148,12 +150,28 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
         )
         if rows_updated == 0:
             task.refresh_from_db()
-            logger.warning(
-                "COMPLETED transition failed - task_id=%s, current_status=%s",
-                task_id,
-                task.status,
-            )
-            return
+            if task.status == TaskStatus.FAILED:
+                # The data publisher may have marked the task FAILED due to
+                # insufficient tick data coverage while the executor was
+                # still processing.  The execution itself completed
+                # successfully, so override to COMPLETED and preserve the
+                # data-gap warning in error_message.
+                logger.info(
+                    "Overriding FAILED → COMPLETED (execution succeeded) - task_id=%s, "
+                    "prior_error=%s",
+                    task_id,
+                    task.error_message,
+                )
+                task.status = TaskStatus.COMPLETED
+                task.completed_at = dj_timezone.now()
+                task.save(update_fields=["status", "completed_at", "updated_at"])
+            else:
+                logger.warning(
+                    "COMPLETED transition failed - task_id=%s, current_status=%s",
+                    task_id,
+                    task.status,
+                )
+                return
 
         logger.info(
             "SUCCESS - task_id=%s, completed_at=%s",

@@ -116,6 +116,7 @@
     "yes": "Yes",
     "no": "No",
     "created": "Created",
+    "lastRun": "Last Run",
     "inUse": "In Use",
     "active": "Active",
     "inactive": "Inactive",

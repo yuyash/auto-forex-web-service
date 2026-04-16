@@ -287,7 +287,7 @@ export default function BacktestTaskForm({
       pip_size: 0.01,
       instrument: 'USD_JPY',
       tick_granularity: 'tick',
-      tick_window_value_mode: 'last',
+      tick_window_value_mode: 'first',
       sell_at_completion: false,
       hedging_enabled: true,
     };

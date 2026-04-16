@@ -116,6 +116,7 @@
     "yes": "はい",
     "no": "いいえ",
     "created": "作成日",
+    "lastRun": "最終実行",
     "inUse": "使用中",
     "active": "アクティブ",
     "inactive": "非アクティブ",
