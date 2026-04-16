@@ -111,6 +111,12 @@ def _make_reconciler(
     return reconciler
 
 
+@pytest.fixture(autouse=True)
+def _no_retry_sleep(monkeypatch):
+    """Eliminate retry sleep in OANDA call retry helper."""
+    monkeypatch.setattr("apps.trading.services.reconciliation.time.sleep", lambda _: None)
+
+
 # ── Tests for helper functions ──────────────────────────────────────
 
 
@@ -191,7 +197,7 @@ class TestSyncAccountSnapshot:
         reconciler.oanda_service.get_account_details.side_effect = OandaAPIError("fail")
 
         report = ReconciliationReport()
-        with pytest.raises(RuntimeError, match="Failed to fetch account snapshot"):
+        with pytest.raises(RuntimeError, match="Fetch account snapshot failed after"):
             reconciler._sync_account_snapshot(report)
 
 
@@ -263,7 +269,7 @@ class TestSyncPositionsWithBroker:
         reconciler.oanda_service.get_open_trades.side_effect = OandaAPIError("fail")
 
         report = ReconciliationReport()
-        with pytest.raises(RuntimeError, match="Failed to fetch open trades"):
+        with pytest.raises(RuntimeError, match="failed after .* retries"):
             reconciler._sync_positions_with_broker(report)
 
     @patch("apps.trading.services.reconciliation.Position")

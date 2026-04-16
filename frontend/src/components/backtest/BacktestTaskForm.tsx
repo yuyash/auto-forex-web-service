@@ -287,7 +287,7 @@ export default function BacktestTaskForm({
       pip_size: 0.01,
       instrument: 'USD_JPY',
       tick_granularity: 'tick',
-      tick_window_value_mode: 'last',
+      tick_window_value_mode: 'first',
       sell_at_completion: false,
       hedging_enabled: true,
     };
@@ -364,6 +364,34 @@ export default function BacktestTaskForm({
     error: dataRangeError,
     isLoading: dataRangeLoading,
   } = useTickDataRange(watchedInstrument);
+
+  // When tick data range is loaded for a new task (no initialData dates),
+  // set the default date range to [max - 1 month, max] with minutes/seconds
+  // truncated to the hour.
+  const dataRangeAppliedRef = useRef(false);
+  useEffect(() => {
+    if (
+      dataRange?.has_data &&
+      dataRange.max_timestamp &&
+      !initialData?.start_time &&
+      !initialData?.end_time &&
+      !dataRangeAppliedRef.current
+    ) {
+      dataRangeAppliedRef.current = true;
+      const maxDate = new Date(dataRange.max_timestamp);
+      // Truncate to the hour
+      maxDate.setMinutes(0, 0, 0);
+      const startDate = new Date(maxDate);
+      startDate.setMonth(startDate.getMonth() - 1);
+      setValue('end_time', maxDate.toISOString());
+      setValue('start_time', startDate.toISOString());
+    }
+  }, [dataRange, initialData?.start_time, initialData?.end_time, setValue]);
+
+  // Reset when instrument changes so the next dataRange load re-applies defaults
+  useEffect(() => {
+    dataRangeAppliedRef.current = false;
+  }, [watchedInstrument]);
 
   // Compute data coverage warning
   const dataCoverageWarning = useMemo<string | null>(() => {
@@ -652,7 +680,16 @@ export default function BacktestTaskForm({
                           endDate={endField.value}
                           onStartDateChange={startField.onChange}
                           onEndDateChange={endField.onChange}
-                          maxDate={new Date()}
+                          minDate={
+                            dataRange?.min_timestamp
+                              ? new Date(dataRange.min_timestamp)
+                              : undefined
+                          }
+                          maxDate={
+                            dataRange?.max_timestamp
+                              ? new Date(dataRange.max_timestamp)
+                              : new Date()
+                          }
                           required
                           helperText={t('backtest:form.dateRangeHelperText')}
                           timezone={timezone}

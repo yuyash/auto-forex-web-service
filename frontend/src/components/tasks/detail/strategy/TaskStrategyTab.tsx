@@ -1153,6 +1153,26 @@ function TradeRow({
             </IconButton>
           </Tooltip>
         ) : null}
+        {trade.pnl != null
+          ? (() => {
+              const pnlValue = parseFloat(trade.pnl!);
+              if (!Number.isFinite(pnlValue)) return null;
+              const sign = pnlValue >= 0 ? '+' : '';
+              return (
+                <Typography
+                  variant="caption"
+                  sx={{ fontWeight: 700, fontFamily: 'monospace' }}
+                  color={pnlValue >= 0 ? 'success.main' : 'error.main'}
+                >
+                  {sign}¥
+                  {Math.abs(pnlValue).toLocaleString('en-US', {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0,
+                  })}
+                </Typography>
+              );
+            })()
+          : null}
       </Stack>
       {trade.description ? (
         <Typography

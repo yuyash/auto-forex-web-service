@@ -6,10 +6,11 @@ orphaned live trading execution.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from decimal import Decimal
 from logging import Logger, getLogger
-from typing import Any
+from typing import Any, TypeVar
 
 from django.utils import timezone as dj_timezone
 
@@ -19,6 +20,46 @@ from apps.trading.models import Position, TradingTask
 from apps.trading.models.state import ExecutionState
 
 logger: Logger = getLogger(name=__name__)
+
+_T = TypeVar("_T")
+
+_OANDA_MAX_RETRIES = 3
+_OANDA_RETRY_DELAY = 2.0  # seconds
+
+
+def _oanda_call_with_retry(
+    fn: Any,
+    *args: Any,
+    label: str = "OANDA API call",
+    **kwargs: Any,
+) -> Any:
+    """Call an OANDA service method with retry on transient errors."""
+    last_exc: OandaAPIError | None = None
+    for attempt in range(1, _OANDA_MAX_RETRIES + 1):
+        try:
+            return fn(*args, **kwargs)
+        except OandaAPIError as exc:
+            last_exc = exc
+            if attempt < _OANDA_MAX_RETRIES:
+                logger.warning(
+                    "%s failed (attempt %d/%d): %s — retrying in %.1fs",
+                    label,
+                    attempt,
+                    _OANDA_MAX_RETRIES,
+                    exc,
+                    _OANDA_RETRY_DELAY,
+                )
+                time.sleep(_OANDA_RETRY_DELAY)
+            else:
+                logger.error(
+                    "%s failed after %d attempts: %s",
+                    label,
+                    _OANDA_MAX_RETRIES,
+                    exc,
+                )
+    raise RuntimeError(
+        f"{label} failed after {_OANDA_MAX_RETRIES} retries: {last_exc}"
+    ) from last_exc
 
 
 class TradingSafetyError(RuntimeError):
@@ -96,10 +137,11 @@ class TradingResumeReconciler:
         report = ReconciliationReport()
         self._check_pending_orders(report)
 
-        try:
-            broker_trades = self.oanda_service.get_open_trades(instrument=self.task.instrument)
-        except OandaAPIError as exc:
-            raise RuntimeError(f"Failed to fetch open trades from OANDA: {exc}") from exc
+        broker_trades = _oanda_call_with_retry(
+            self.oanda_service.get_open_trades,
+            instrument=self.task.instrument,
+            label="Fetch open trades (drift check)",
+        )
         report.broker_open_positions = len(broker_trades)
 
         local_open_positions = list(
@@ -163,10 +205,10 @@ class TradingResumeReconciler:
         return report
 
     def _sync_account_snapshot(self, report: ReconciliationReport) -> None:
-        try:
-            details = self.oanda_service.get_account_details()
-        except OandaAPIError as exc:
-            raise RuntimeError(f"Failed to fetch account snapshot from OANDA: {exc}") from exc
+        details = _oanda_call_with_retry(
+            self.oanda_service.get_account_details,
+            label="Fetch account snapshot",
+        )
 
         account = self.task.oanda_account
         account.currency = details.currency
@@ -189,10 +231,11 @@ class TradingResumeReconciler:
         report.updated_account_snapshot = True
 
     def _check_pending_orders(self, report: ReconciliationReport) -> None:
-        try:
-            pending_orders = self.oanda_service.get_pending_orders(instrument=self.task.instrument)
-        except OandaAPIError as exc:
-            raise RuntimeError(f"Failed to fetch pending orders from OANDA: {exc}") from exc
+        pending_orders = _oanda_call_with_retry(
+            self.oanda_service.get_pending_orders,
+            instrument=self.task.instrument,
+            label="Fetch pending orders",
+        )
 
         report.pending_broker_orders = len(pending_orders)
         if pending_orders:
@@ -203,10 +246,11 @@ class TradingResumeReconciler:
             )
 
     def _sync_positions_with_broker(self, report: ReconciliationReport) -> list[Position]:
-        try:
-            broker_trades = self.oanda_service.get_open_trades(instrument=self.task.instrument)
-        except OandaAPIError as exc:
-            raise RuntimeError(f"Failed to fetch open trades from OANDA: {exc}") from exc
+        broker_trades = _oanda_call_with_retry(
+            self.oanda_service.get_open_trades,
+            instrument=self.task.instrument,
+            label="Fetch open trades (position sync)",
+        )
         report.broker_open_positions = len(broker_trades)
 
         local_open_positions = list(

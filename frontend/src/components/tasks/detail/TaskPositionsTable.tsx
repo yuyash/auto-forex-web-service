@@ -57,6 +57,7 @@ import {
 } from '../../../utils/persistentState';
 import { formatAppNumber } from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
+import { DateRangeFilter } from '../../common/DateRangeFilter';
 
 type ViewMode = 'all' | 'byDirection' | 'byStatus';
 const UUID_PATTERN =
@@ -135,6 +136,12 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     !hasCycleIdFilter || UUID_PATTERN.test(cycleIdFilter.trim());
   const effectiveCycleId = isCycleIdFilterValid ? cycleIdFilter.trim() : '';
 
+  // --- Date range filter ---
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const rangeFrom = dateFrom ? new Date(dateFrom).toISOString() : undefined;
+  const rangeTo = dateTo ? new Date(dateTo).toISOString() : undefined;
+
   // --- Selection ---
   const closedLongSel = useTableRowSelection();
   const closedShortSel = useTableRowSelection();
@@ -161,6 +168,8 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     page: closedLongPage + 1,
     pageSize: closedLongRpp,
     cycleId: effectiveCycleId || undefined,
+    rangeFrom,
+    rangeTo,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
   });
   const {
@@ -178,6 +187,8 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     page: closedShortPage + 1,
     pageSize: closedShortRpp,
     cycleId: effectiveCycleId || undefined,
+    rangeFrom,
+    rangeTo,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
   });
   const {
@@ -195,6 +206,8 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     page: openLongPage + 1,
     pageSize: openLongRpp,
     cycleId: effectiveCycleId || undefined,
+    rangeFrom,
+    rangeTo,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
   });
   const {
@@ -212,6 +225,8 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     page: openShortPage + 1,
     pageSize: openShortRpp,
     cycleId: effectiveCycleId || undefined,
+    rangeFrom,
+    rangeTo,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
   });
 
@@ -230,6 +245,8 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     page: longPage + 1,
     pageSize: longRpp,
     cycleId: effectiveCycleId || undefined,
+    rangeFrom,
+    rangeTo,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byDirection',
   });
   const {
@@ -246,6 +263,8 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     page: shortPage + 1,
     pageSize: shortRpp,
     cycleId: effectiveCycleId || undefined,
+    rangeFrom,
+    rangeTo,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byDirection',
   });
 
@@ -263,6 +282,8 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     page: allPage + 1,
     pageSize: allRpp,
     cycleId: effectiveCycleId || undefined,
+    rangeFrom,
+    rangeTo,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'all',
   });
 
@@ -1354,7 +1375,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       <Box sx={{ mb: 4 }}>
         <Box
           sx={{
-            mb: 2,
+            mb: 1,
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -1362,44 +1383,9 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             flexWrap: 'wrap',
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Typography variant="h6">
-              {label} ({total})
-            </Typography>
-            <TextField
-              size="small"
-              placeholder={t('tables.positions.cycleIdFilter')}
-              value={cycleIdFilter}
-              onChange={(e) => setCycleIdFilter(e.target.value)}
-              error={hasCycleIdFilter && !isCycleIdFilterValid}
-              helperText={
-                hasCycleIdFilter && !isCycleIdFilterValid
-                  ? t('tables.positions.invalidCycleId')
-                  : ' '
-              }
-              sx={{ width: 280 }}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
-                  endAdornment: cycleIdFilter ? (
-                    <InputAdornment position="end">
-                      <IconButton
-                        size="small"
-                        onClick={() => setCycleIdFilter('')}
-                        edge="end"
-                      >
-                        <ClearIcon fontSize="small" />
-                      </IconButton>
-                    </InputAdornment>
-                  ) : null,
-                },
-              }}
-            />
-          </Box>
+          <Typography variant="h6">
+            {label} ({total})
+          </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             {pnlLabel != null && pnlValue != null && (
               <Typography
@@ -1428,6 +1414,61 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
               isReloading={!!reloading[key]}
             />
           </Box>
+        </Box>
+        <Box
+          sx={{
+            mb: 2,
+            display: 'flex',
+            gap: 1,
+            flexWrap: 'wrap',
+            alignItems: 'center',
+          }}
+        >
+          <TextField
+            size="small"
+            placeholder={t('tables.positions.cycleIdFilter')}
+            value={cycleIdFilter}
+            onChange={(e) => setCycleIdFilter(e.target.value)}
+            error={hasCycleIdFilter && !isCycleIdFilterValid}
+            helperText={
+              hasCycleIdFilter && !isCycleIdFilterValid
+                ? t('tables.positions.invalidCycleId')
+                : undefined
+            }
+            sx={{ width: 280 }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+                endAdornment: cycleIdFilter ? (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={() => setCycleIdFilter('')}
+                      edge="end"
+                    >
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ) : null,
+              },
+            }}
+          />
+          <DateRangeFilter
+            from={dateFrom}
+            to={dateTo}
+            onFromChange={(v) => {
+              setDateFrom(v);
+              setAllPage(0);
+            }}
+            onToChange={(v) => {
+              setDateTo(v);
+              setAllPage(0);
+            }}
+          />
         </Box>
         <DataTable
           columns={columns}

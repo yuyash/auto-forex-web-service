@@ -612,9 +612,22 @@ export default function TradingTaskCard({
             alignItems: 'center',
           }}
         >
-          <Typography variant="caption" color="text.secondary">
-            Created: {formatDateTime(currentTask.created_at)}
-          </Typography>
+          <Box>
+            <Typography variant="caption" color="text.secondary">
+              {t('common:labels.created')}:{' '}
+              {formatDateTime(currentTask.created_at)}
+            </Typography>
+            {currentTask.updated_at && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block' }}
+              >
+                {t('common:labels.lastRun')}:{' '}
+                {formatDateTime(currentTask.updated_at)}
+              </Typography>
+            )}
+          </Box>
           {displayStatus === TaskStatus.RUNNING && (
             <Chip label="LIVE" color="success" sx={{ fontWeight: 'bold' }} />
           )}

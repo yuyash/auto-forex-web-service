@@ -39,6 +39,7 @@ export interface CycleTrade {
   volatility?: string | null;
   margin_ratio?: string | null;
   is_rebuild?: boolean;
+  pnl?: string | null;
 }
 
 export interface StrategyCycle {

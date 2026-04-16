@@ -495,16 +495,22 @@ export default function BacktestTaskCard({
             alignItems: 'center',
           }}
         >
-          <Typography variant="caption" color="text.secondary">
-            {t('common:labels.created')}:{' '}
-            {formatDateTime(currentTask.created_at)}
-          </Typography>
-          {displayStatus === TaskStatus.COMPLETED && (
+          <Box>
             <Typography variant="caption" color="text.secondary">
-              {t('common:status.completed')}:{' '}
-              {formatDateTime(currentTask.updated_at)}
+              {t('common:labels.created')}:{' '}
+              {formatDateTime(currentTask.created_at)}
             </Typography>
-          )}
+            {currentTask.updated_at && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block' }}
+              >
+                {t('common:labels.lastRun')}:{' '}
+                {formatDateTime(currentTask.updated_at)}
+              </Typography>
+            )}
+          </Box>
         </Box>
       </CardContent>
 

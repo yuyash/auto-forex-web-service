@@ -20,7 +20,6 @@ import {
   Typography,
   Alert,
   TablePagination,
-  TextField,
   type SelectChangeEvent,
 } from '@mui/material';
 import { useMediaQuery, useTheme } from '@mui/material';
@@ -28,6 +27,7 @@ import FilterListOffIcon from '@mui/icons-material/FilterListOff';
 import { Settings as SettingsIcon } from '@mui/icons-material';
 import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
+import { DateRangeFilter } from '../../common/DateRangeFilter';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
 import { useTaskLogs, type TaskLog } from '../../../hooks/useTaskLogs';
 import { useTaskLogComponents } from '../../../hooks/useTaskLogComponents';
@@ -373,29 +373,19 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
             ))}
           </Select>
         </FormControl>
-        <TextField
-          label={t('tables.logs.timestampFrom')}
-          type="datetime-local"
-          size="small"
-          value={timestampFrom}
-          onChange={(e) => {
-            setTimestampFrom(e.target.value);
+        <DateRangeFilter
+          from={timestampFrom}
+          to={timestampTo}
+          onFromChange={(v) => {
+            setTimestampFrom(v);
             setPage(0);
           }}
-          slotProps={{ inputLabel: { shrink: true } }}
-          sx={{ minWidth: { xs: 160, sm: 200 } }}
-        />
-        <TextField
-          label={t('tables.logs.timestampTo')}
-          type="datetime-local"
-          size="small"
-          value={timestampTo}
-          onChange={(e) => {
-            setTimestampTo(e.target.value);
+          onToChange={(v) => {
+            setTimestampTo(v);
             setPage(0);
           }}
-          slotProps={{ inputLabel: { shrink: true } }}
-          sx={{ minWidth: { xs: 160, sm: 200 } }}
+          fromLabel={t('tables.logs.timestampFrom')}
+          toLabel={t('tables.logs.timestampTo')}
         />
       </Box>
 

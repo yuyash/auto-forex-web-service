@@ -116,6 +116,7 @@
     "yes": "Yes",
     "no": "No",
     "created": "Created",
+    "lastRun": "Last Run",
     "inUse": "In Use",
     "active": "Active",
     "inactive": "Inactive",
@@ -570,6 +571,10 @@
     "title": "Debug Options",
     "tracemalloc": "Memory Profiling (tracemalloc)",
     "tracemallocDescription": "Enable tracemalloc to profile memory usage during task execution. Adds CPU/memory overhead — disable after debugging."
+  },
+  "filters": {
+    "dateFrom": "From",
+    "dateTo": "To"
   },
   "columnConfig": {
     "title": "Configure Columns",

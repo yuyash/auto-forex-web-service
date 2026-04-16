@@ -240,7 +240,9 @@ export function BacktestOverviewTab({
                 {t('backtest:detail.startTime')}
               </Typography>
               <Typography variant="body1">
-                {formatDateTimeInTimezone(task.start_time, timezone, language)}
+                {formatDateTimeInTimezone(task.start_time, timezone, language, {
+                  includeTimezone: true,
+                })}
               </Typography>
             </Box>
             <Box>
@@ -248,7 +250,9 @@ export function BacktestOverviewTab({
                 {t('backtest:detail.endTime')}
               </Typography>
               <Typography variant="body1">
-                {formatDateTimeInTimezone(task.end_time, timezone, language)}
+                {formatDateTimeInTimezone(task.end_time, timezone, language, {
+                  includeTimezone: true,
+                })}
               </Typography>
             </Box>
           </Box>

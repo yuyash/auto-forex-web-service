@@ -262,14 +262,33 @@ export function ExecutionHistoryTable({
         minWidth: 120,
         render: (row: TaskExecution) =>
           row.error_message ? (
-            <Typography
-              variant="body2"
-              color="error"
-              noWrap
+            <Tooltip
               title={row.error_message}
+              placement="bottom-start"
+              slotProps={{
+                tooltip: {
+                  sx: {
+                    maxWidth: 500,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  },
+                },
+              }}
             >
-              {row.error_message}
-            </Typography>
+              <Typography
+                variant="body2"
+                color="error"
+                sx={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  cursor: 'help',
+                }}
+              >
+                {row.error_message}
+              </Typography>
+            </Tooltip>
           ) : (
             '-'
           ),

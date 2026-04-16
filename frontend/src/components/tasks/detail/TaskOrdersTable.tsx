@@ -31,6 +31,7 @@ import {
 import { buildCopyHandler } from '../../../utils/tableCopyUtils';
 import { formatAppNumber } from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
+import { DateRangeFilter } from '../../common/DateRangeFilter';
 
 interface TaskOrdersTableProps {
   taskId: string | number;
@@ -52,12 +53,18 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
   const [isReloading, setIsReloading] = useState(false);
   const selection = useTableRowSelection();
 
+  // --- Date range filter ---
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
   const { orders, totalCount, isLoading, error, refresh } = useTaskOrders({
     taskId,
     taskType,
     executionRunId,
     page: page + 1,
     pageSize: rowsPerPage,
+    timestampFrom: dateFrom ? new Date(dateFrom).toISOString() : undefined,
+    timestampTo: dateTo ? new Date(dateTo).toISOString() : undefined,
     enableRealTimeUpdates,
   });
 
@@ -398,6 +405,28 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
             isReloading={isReloading}
           />
         </Box>
+      </Box>
+      <Box
+        sx={{
+          mb: 2,
+          display: 'flex',
+          gap: 1,
+          flexWrap: 'wrap',
+          alignItems: 'center',
+        }}
+      >
+        <DateRangeFilter
+          from={dateFrom}
+          to={dateTo}
+          onFromChange={(v) => {
+            setDateFrom(v);
+            setPage(0);
+          }}
+          onToChange={(v) => {
+            setDateTo(v);
+            setPage(0);
+          }}
+        />
       </Box>
 
       <DataTable
