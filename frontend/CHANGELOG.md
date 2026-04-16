@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.50.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.0...frontend-v1.50.1) (2026-04-16)
+
+
+### Bug Fixes
+
+* **ui:** add timezone to backtest period dates on task card ([#517](https://github.com/yuyash/auto-forex-web-service/issues/517)) ([9eb8350](https://github.com/yuyash/auto-forex-web-service/commit/9eb83500d87759765962de0dd44350b2eb208118))
+
 ## [1.50.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.49.1...frontend-v1.50.0) (2026-04-16)
 
 
