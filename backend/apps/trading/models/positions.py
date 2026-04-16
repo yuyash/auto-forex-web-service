@@ -173,6 +173,8 @@ class Position(models.Model):
         """Override save to enforce planned_exit_price immutability.
 
         Once planned_exit_price is set and persisted, it cannot be changed.
+        Comparison is rounded to the field's decimal_places (10) to avoid
+        false positives from Decimal precision differences.
         """
         if self.pk:
             update_fields = kwargs.get("update_fields")
@@ -185,16 +187,20 @@ class Position(models.Model):
                     )
                 except Position.DoesNotExist:
                     existing = None
-                if existing is not None and self.planned_exit_price != existing:
-                    logger.warning(
-                        "Attempted to change immutable planned_exit_price on position %s "
-                        "(from %s to %s) — preserving original",
-                        self.pk,
-                        existing,
-                        self.planned_exit_price,
-                    )
-                    # Preserve the original value
-                    self.planned_exit_price = existing
+                if existing is not None and self.planned_exit_price is not None:
+                    # Round both to DB field precision (10 decimal places)
+                    # to avoid false positives from Decimal arithmetic precision.
+                    rounded_existing = round(Decimal(str(existing)), 10)
+                    rounded_new = round(Decimal(str(self.planned_exit_price)), 10)
+                    if rounded_new != rounded_existing:
+                        logger.warning(
+                            "Attempted to change immutable planned_exit_price on position %s "
+                            "(from %s to %s) — preserving original",
+                            self.pk,
+                            existing,
+                            self.planned_exit_price,
+                        )
+                        self.planned_exit_price = existing
         super().save(*args, **kwargs)
 
     def close(self, exit_price: Decimal, exit_time: models.DateTimeField) -> None:
