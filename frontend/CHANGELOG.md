@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.49.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.49.0...frontend-v1.49.1) (2026-04-16)
+
+
+### Bug Fixes
+
+* backtest card timezone display ([#513](https://github.com/yuyash/auto-forex-web-service/issues/513)) ([30c4873](https://github.com/yuyash/auto-forex-web-service/commit/30c487366a9c6a97951554378ad7fd2a21c90af4))
+
 ## [1.49.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.14...frontend-v1.49.0) (2026-04-16)
 
 
