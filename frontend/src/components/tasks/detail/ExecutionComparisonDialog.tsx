@@ -217,9 +217,10 @@ export function ExecutionComparisonDialog({
   }, [sorted, strategies, i18n.language]);
 
   // Fetch metrics for all executions.
-  // When interval=0 (Auto), compute a per-execution interval from its
-  // time range to keep the total data volume manageable (≤ ~1500 points).
-  // When the user picks a specific granularity, pass it to the backend.
+  // For Auto mode (interval=0), compute the interval from the execution's
+  // data period.  For backtests this comes from task_config.start_time /
+  // end_time (the simulated period, not wall-clock run time).  For trading
+  // tasks, use started_at / completed_at.
   const fetchAllMetrics = useCallback(async () => {
     setMetricsLoading(true);
     setMetricsError(null);
@@ -227,24 +228,28 @@ export function ExecutionComparisonDialog({
       const entries = await Promise.all(
         sorted.map(async (exec) => {
           let effectiveInterval = interval;
+
           if (effectiveInterval === 0) {
-            // Auto: compute from execution's own time range
-            const startMs = exec.started_at
-              ? new Date(exec.started_at).getTime()
-              : 0;
-            const endMs = exec.completed_at
-              ? new Date(exec.completed_at).getTime()
-              : Date.now();
+            // Determine the data time range for this execution
+            const cfg = exec.task_config as Record<string, unknown> | null;
+            const startIso =
+              (cfg?.start_time as string) || exec.started_at || null;
+            const endIso =
+              (cfg?.end_time as string) || exec.completed_at || null;
+            const startMs = startIso ? new Date(startIso).getTime() : 0;
+            const endMs = endIso ? new Date(endIso).getTime() : Date.now();
             if (startMs > 0 && endMs > startMs) {
               effectiveInterval = computeAutoInterval((endMs - startMs) / 1000);
             }
           }
+
           const points = await fetchPaginatedMetrics({
             taskId,
             taskType,
             executionRunId: exec.id,
             interval: effectiveInterval > 1 ? effectiveInterval : undefined,
             pageSize: 500,
+            maxPages: 10, // Safety cap: max 5000 points
           });
           return [exec.id, points] as const;
         })
