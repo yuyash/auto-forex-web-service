@@ -117,6 +117,7 @@
     "no": "No",
     "created": "Created",
     "lastRun": "Last Run",
+    "snapshot": "Snapshot",
     "inUse": "In Use",
     "active": "Active",
     "inactive": "Inactive",

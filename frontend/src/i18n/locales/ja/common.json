@@ -117,6 +117,7 @@
     "no": "いいえ",
     "created": "作成日時",
     "lastRun": "最終実行日時",
+    "snapshot": "スナップショット",
     "inUse": "使用中",
     "active": "アクティブ",
     "inactive": "非アクティブ",

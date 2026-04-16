@@ -64,6 +64,7 @@ import { useTaskMetrics } from '../../hooks/useTaskMetrics';
 import { computeAutoInterval } from '../../utils/autoGranularity';
 import { useToast } from '../common';
 import { formatTaskActionError } from '../../utils/taskActionError';
+import { useTaskExecution } from '../../hooks/useTaskExecutions';
 
 export const BacktestTaskDetail: React.FC = () => {
   const { t } = useTranslation(['backtest', 'common']);
@@ -145,6 +146,16 @@ export const BacktestTaskDetail: React.FC = () => {
     selectedExecutionId != null &&
     task?.execution_id != null &&
     selectedExecutionId !== task.execution_id;
+
+  // Fetch execution detail (includes config snapshot) for historical runs
+  const { data: executionDetail } = useTaskExecution(
+    taskId,
+    effectiveExecutionId ?? '',
+    TaskType.BACKTEST
+  );
+  const historicalStrategyConfig = isViewingHistorical
+    ? (executionDetail?.strategy_config ?? null)
+    : null;
 
   const overviewSummary = useTaskSummary(
     taskId,
@@ -394,6 +405,9 @@ export const BacktestTaskDetail: React.FC = () => {
               latestMetrics={metricsResult.latest}
               timezone={timezone}
               language={language}
+              isViewingHistorical={isViewingHistorical}
+              historicalStrategyConfig={historicalStrategyConfig}
+              executionId={effectiveExecutionId}
               onOpenConfiguration={() =>
                 navigate(`/configurations/${detailTask.config_id}`)
               }

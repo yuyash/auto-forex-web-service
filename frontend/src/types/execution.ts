@@ -23,6 +23,15 @@ export interface TaskExecution {
   created_at: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metrics?: Record<string, any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  task_config?: Record<string, any> | null;
+  strategy_config?: {
+    id: string;
+    name: string;
+    strategy_type: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    parameters: Record<string, any>;
+  } | null;
 }
 
 export interface ExecutionMetrics {

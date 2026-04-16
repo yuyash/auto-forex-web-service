@@ -62,6 +62,7 @@ import { useTaskMetrics } from '../../hooks/useTaskMetrics';
 import { computeAutoInterval } from '../../utils/autoGranularity';
 import { useToast } from '../common';
 import { formatTaskActionError } from '../../utils/taskActionError';
+import { useTaskExecution } from '../../hooks/useTaskExecutions';
 
 export const TradingTaskDetail: React.FC = () => {
   const { t } = useTranslation(['trading', 'common']);
@@ -137,6 +138,15 @@ export const TradingTaskDetail: React.FC = () => {
     selectedExecutionId != null &&
     task?.execution_id != null &&
     selectedExecutionId !== task.execution_id;
+
+  const { data: executionDetail } = useTaskExecution(
+    taskId,
+    effectiveExecutionId ?? '',
+    TaskType.TRADING
+  );
+  const historicalStrategyConfig = isViewingHistorical
+    ? (executionDetail?.strategy_config ?? null)
+    : null;
 
   const overviewSummary = useTaskSummary(
     taskId,
@@ -369,6 +379,9 @@ export const TradingTaskDetail: React.FC = () => {
               strategies={strategies}
               pnlCurrency={pnlCurrency}
               latestMetrics={metricsResult.latest}
+              isViewingHistorical={isViewingHistorical}
+              historicalStrategyConfig={historicalStrategyConfig}
+              executionId={effectiveExecutionId}
               onOpenConfiguration={() =>
                 navigate(`/configurations/${detailTask.config_id}`)
               }
