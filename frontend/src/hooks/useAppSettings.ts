@@ -24,6 +24,7 @@ export interface AppSettings {
 
   // Data refresh
   healthCheckIntervalSeconds: number;
+  taskPollingIntervalSeconds: number;
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -36,6 +37,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   candleDownColor: '#ef5350',
   sessionTimeoutMinutes: 30,
   healthCheckIntervalSeconds: 30,
+  taskPollingIntervalSeconds: 10,
 };
 
 export const APP_SETTINGS_STORAGE_KEY = 'app_settings';
@@ -51,6 +53,7 @@ export const appSettingsSchema = z.object({
   candleDownColor: z.string().min(1),
   sessionTimeoutMinutes: z.number(),
   healthCheckIntervalSeconds: z.number(),
+  taskPollingIntervalSeconds: z.number(),
 });
 
 export function readAppSettings(): AppSettings {

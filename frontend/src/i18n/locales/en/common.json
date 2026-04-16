@@ -286,6 +286,7 @@
   },
   "errors": {
     "fetchFailed": "Failed to load data",
+    "refreshFailed": "Auto-refresh failed",
     "deleteFailed": "Failed to delete",
     "mustBePositive": "Must be a positive number",
     "taskNotFound": "Task not found",

@@ -32,6 +32,7 @@ const DataSettings = () => {
       updateSettings({
         sessionTimeoutMinutes: draft.sessionTimeoutMinutes,
         healthCheckIntervalSeconds: draft.healthCheckIntervalSeconds,
+        taskPollingIntervalSeconds: draft.taskPollingIntervalSeconds,
       });
       showSuccess(t('settings:messages.saveSuccess'));
     } catch (error) {
@@ -50,6 +51,8 @@ const DataSettings = () => {
       sessionTimeoutMinutes: DEFAULT_APP_SETTINGS.sessionTimeoutMinutes,
       healthCheckIntervalSeconds:
         DEFAULT_APP_SETTINGS.healthCheckIntervalSeconds,
+      taskPollingIntervalSeconds:
+        DEFAULT_APP_SETTINGS.taskPollingIntervalSeconds,
     };
     updateSettings(dataDefaults);
     setDraft((prev) => ({ ...prev, ...dataDefaults }));
@@ -121,6 +124,40 @@ const DataSettings = () => {
         </FormControl>
         <Alert severity="info" sx={{ mt: 1 }}>
           {t('settings:data.healthCheckInfo')}
+        </Alert>
+      </Box>
+
+      <Divider sx={{ my: 3 }} />
+
+      {/* Task Polling Interval */}
+      <Typography variant="h6" gutterBottom>
+        {t('settings:data.taskPolling')}
+      </Typography>
+      <Box sx={{ mt: 2 }}>
+        <FormControl fullWidth margin="normal">
+          <InputLabel id="task-polling-interval-label">
+            {t('settings:data.taskPollingInterval')}
+          </InputLabel>
+          <Select
+            labelId="task-polling-interval-label"
+            value={draft.taskPollingIntervalSeconds}
+            label={t('settings:data.taskPollingInterval')}
+            onChange={(e) =>
+              setDraft((prev) => ({
+                ...prev,
+                taskPollingIntervalSeconds: e.target.value as number,
+              }))
+            }
+          >
+            <MenuItem value={5}>5 {t('settings:data.seconds')}</MenuItem>
+            <MenuItem value={10}>10 {t('settings:data.seconds')}</MenuItem>
+            <MenuItem value={15}>15 {t('settings:data.seconds')}</MenuItem>
+            <MenuItem value={30}>30 {t('settings:data.seconds')}</MenuItem>
+            <MenuItem value={60}>60 {t('settings:data.seconds')}</MenuItem>
+          </Select>
+        </FormControl>
+        <Alert severity="info" sx={{ mt: 1 }}>
+          {t('settings:data.taskPollingInfo')}
         </Alert>
       </Box>
 
