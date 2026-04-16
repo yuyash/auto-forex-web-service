@@ -54,8 +54,9 @@ def load_daily_tick_data(self) -> dict[str, str | int]:
     output_bucket = os.getenv("LOAD_DATA_OUTPUT_BUCKET", "").strip() or None
 
     yesterday = datetime.now(UTC).date() - timedelta(days=1)
+    today = datetime.now(UTC).date()
     start_str = yesterday.isoformat()
-    end_str = yesterday.isoformat()
+    end_str = today.isoformat()
 
     logger.info(
         "load_daily_tick_data: loading %s data for %s from %s.%s",

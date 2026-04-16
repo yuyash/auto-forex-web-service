@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 
+from celery.schedules import crontab
+
 
 def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
     """Return Celery settings derived from the Redis configuration."""
@@ -68,6 +70,11 @@ def build_celery_settings(redis_url: str, redis_db: int) -> dict[str, object]:
                 "task": "accounts.tasks.cleanup_expired_refresh_tokens",
                 "schedule": 3600,
                 "options": {"queue": "default"},
+            },
+            "load-daily-tick-data": {
+                "task": "market.tasks.load_daily_tick_data",
+                "schedule": crontab(hour=17, minute=0),  # 10:00 AM UTC-07:00
+                "options": {"queue": "system"},
             },
         },
     }

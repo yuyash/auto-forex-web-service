@@ -81,13 +81,14 @@ class TestTickSubscriberRunnerExtendedIntegration:
         # Buffer should be cleared
         assert len(runner.buffer) == 0
 
-        # Tick should be in database
+        # DB persistence is disabled — ticks are discarded after flush.
+        # Verify no tick was written to the database.
         saved_tick = TickData.objects.filter(
             instrument="EUR_USD",
             timestamp=now,
         ).first()
 
-        assert saved_tick is not None
+        assert saved_tick is None
 
     @patch("apps.market.tasks.subscriber.redis_client")
     @patch("apps.market.tasks.subscriber.CeleryTaskService")
