@@ -297,7 +297,9 @@ export default function BacktestTaskCard({
   };
 
   const formatPeriod = (dateString: string): string =>
-    formatDateTimeInTimezone(dateString, timezone, language);
+    formatDateTimeInTimezone(dateString, timezone, language, {
+      includeTimezone: true,
+    });
 
   const formatTs = (dateString: string): string =>
     formatDateTimeInTimezone(dateString, timezone, language, {
