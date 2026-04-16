@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.36.0...backend-v1.36.1) (2026-04-16)
+
+
+### Bug Fixes
+
+* historical execution display ([#519](https://github.com/yuyash/auto-forex-web-service/issues/519)) ([6862822](https://github.com/yuyash/auto-forex-web-service/commit/6862822160da0da8b20029824301b8c74bfd1ffa))
+
 ## [1.36.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.35.0...backend-v1.36.0) (2026-04-16)
 
 
