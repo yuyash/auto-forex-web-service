@@ -52,7 +52,8 @@ import { useToast } from '../common';
 import { useAppSettings } from '../../hooks/useAppSettings';
 import { logger } from '../../utils/logger';
 import { formatTaskActionError } from '../../utils/taskActionError';
-import { getLocaleForLanguage } from '../../utils/timezone';
+import { formatDateTimeInTimezone } from '../../utils/timezone';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface BacktestTaskCardProps {
   task: BacktestTask;
@@ -69,6 +70,9 @@ export default function BacktestTaskCard({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { settings: appSettings } = useAppSettings();
+  const { user } = useAuth();
+  const timezone = user?.timezone || 'UTC';
+  const language = i18n?.resolvedLanguage;
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [optimisticStatus, setOptimisticStatus] = useState<TaskStatus | null>(
     null
@@ -292,29 +296,13 @@ export default function BacktestTaskCard({
     }
   };
 
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString(
-      getLocaleForLanguage(i18n?.resolvedLanguage),
-      {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      }
-    );
-  };
+  const formatPeriod = (dateString: string): string =>
+    formatDateTimeInTimezone(dateString, timezone, language);
 
-  const formatDateTime = (dateString: string): string => {
-    return new Date(dateString).toLocaleString(
-      getLocaleForLanguage(i18n?.resolvedLanguage),
-      {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      }
-    );
-  };
+  const formatTs = (dateString: string): string =>
+    formatDateTimeInTimezone(dateString, timezone, language, {
+      includeTimezone: true,
+    });
 
   // Get progress from summary endpoint
   const summaryData = useTaskSummary(task.id, TaskType.BACKTEST, undefined, {
@@ -380,8 +368,8 @@ export default function BacktestTaskCard({
               )}
             </Box>
             <Typography variant="body2" color="text.secondary">
-              {formatDate(currentTask.start_time)} -{' '}
-              {formatDate(currentTask.end_time)}
+              {formatPeriod(currentTask.start_time)} -{' '}
+              {formatPeriod(currentTask.end_time)}
             </Typography>
           </Box>
 
@@ -497,8 +485,7 @@ export default function BacktestTaskCard({
         >
           <Box>
             <Typography variant="caption" color="text.secondary">
-              {t('common:labels.created')}:{' '}
-              {formatDateTime(currentTask.created_at)}
+              {t('common:labels.created')}: {formatTs(currentTask.created_at)}
             </Typography>
             {currentTask.updated_at && (
               <Typography
@@ -506,8 +493,7 @@ export default function BacktestTaskCard({
                 color="text.secondary"
                 sx={{ display: 'block' }}
               >
-                {t('common:labels.lastRun')}:{' '}
-                {formatDateTime(currentTask.updated_at)}
+                {t('common:labels.lastRun')}: {formatTs(currentTask.updated_at)}
               </Typography>
             )}
           </Box>

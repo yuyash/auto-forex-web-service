@@ -116,13 +116,26 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   const hasError = !!error || !!startError || !!endError;
   const displayError = error || startError || endError;
 
+  // Derive a short timezone label (e.g. "JST", "UTC") for display.
+  const tzLabel = React.useMemo(() => {
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        timeZoneName: 'short',
+      }).formatToParts(new Date());
+      return parts.find((p) => p.type === 'timeZoneName')?.value ?? timezone;
+    } catch {
+      return timezone;
+    }
+  }, [timezone]);
+
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
           <Box sx={{ flex: 1, minWidth: { xs: '100%', sm: 250 } }}>
             <DateTimePicker
-              label={startLabel}
+              label={`${startLabel} (${tzLabel})`}
               value={startDateValue}
               onChange={handleStartChange}
               disabled={disabled}
@@ -139,7 +152,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           </Box>
           <Box sx={{ flex: 1, minWidth: { xs: '100%', sm: 250 } }}>
             <DateTimePicker
-              label={endLabel}
+              label={`${endLabel} (${tzLabel})`}
               value={endDateValue}
               onChange={handleEndChange}
               disabled={disabled}
