@@ -127,7 +127,10 @@
     "sessionTimeoutInfo": "The session will automatically expire after the specified period of inactivity. Set to 'Never' to stay logged in until you manually log out.",
     "dataRefresh": "Data Refresh",
     "healthCheckInterval": "OANDA Health Check Interval",
-    "healthCheckInfo": "Controls how often live pages refresh OANDA health, task cards, and execution history. Lower values provide faster detection but increase network traffic."
+    "healthCheckInfo": "Controls how often OANDA health checks and dashboard data refresh.",
+    "taskPolling": "Task List Refresh",
+    "taskPollingInterval": "Task List Polling Interval",
+    "taskPollingInfo": "Controls how often the backtest and trading task lists auto-refresh their status. Lower values provide faster updates but increase network traffic."
   },
   "version": {
     "title": "Version Information",

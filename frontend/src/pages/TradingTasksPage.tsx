@@ -114,13 +114,17 @@ export default function TradingTasksPage() {
     }
   }, [location.pathname, location.state?.deleted, navigate, refresh]);
 
-  const hasRunningTasks = !!data?.results.some((task) =>
+  const hasActiveTasks = !!data?.results.some((task) =>
     shouldPollTaskStatus(task.status)
   );
   const pollingPolicy = usePollingPolicy({
-    enabled: hasRunningTasks,
-    baseIntervalMs: appSettings.healthCheckIntervalSeconds * 1000,
+    enabled: true,
+    baseIntervalMs: hasActiveTasks
+      ? appSettings.taskPollingIntervalSeconds * 1000
+      : appSettings.taskPollingIntervalSeconds * 1000 * 6,
   });
+
+  const [pollingError, setPollingError] = useState<string | null>(null);
 
   useSequentialPolling(
     async () => {
@@ -135,16 +139,18 @@ export default function TradingTasksPage() {
         pollingPolicy.registerFailure();
       } else {
         pollingPolicy.resetFailures();
+        setPollingError(null);
       }
       return result;
     },
     {
       enabled: pollingPolicy.isActive,
       intervalMs: pollingPolicy.intervalMs,
-      onError: (error) => {
-        logger.warn('Trading task auto-refresh failed', {
-          error: error instanceof Error ? error.message : String(error),
-        });
+      onError: (err) => {
+        pollingPolicy.registerFailure();
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.warn('Trading task auto-refresh failed', { error: msg });
+        setPollingError(msg);
       },
     }
   );
@@ -327,6 +333,16 @@ export default function TradingTasksPage() {
             </Grid>
           </Grid>
         </Paper>
+
+        {pollingError && (
+          <Alert
+            severity="warning"
+            sx={{ mb: 2 }}
+            onClose={() => setPollingError(null)}
+          >
+            {t('common:errors.refreshFailed')}: {pollingError}
+          </Alert>
+        )}
 
         {/* Tab Panels */}
         <TabPanel value={tabValue} index={0}>

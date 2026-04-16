@@ -286,6 +286,7 @@
   },
   "errors": {
     "fetchFailed": "データの読み込みに失敗しました",
+    "refreshFailed": "自動更新に失敗しました",
     "deleteFailed": "削除に失敗しました",
     "mustBePositive": "正の数である必要があります",
     "taskNotFound": "タスクが見つかりません",
