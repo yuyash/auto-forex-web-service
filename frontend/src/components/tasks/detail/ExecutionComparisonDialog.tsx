@@ -40,6 +40,11 @@ import {
   fetchPaginatedMetrics,
   type MetricPoint,
 } from '../../../utils/fetchMetrics';
+import { useStrategies } from '../../../hooks/useStrategies';
+import {
+  buildParameterLabelMap,
+  resolveParameterLabel,
+} from '../../../utils/strategySchemaLabels';
 
 /** Palette for up to 10 executions */
 const EXEC_COLORS = [
@@ -182,7 +187,7 @@ export function ExecutionComparisonDialog({
   taskId,
   taskType,
 }: ExecutionComparisonDialogProps) {
-  const { t } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
   const [tabIndex, setTabIndex] = useState(0);
   const [interval, setInterval_] = useState(0);
   const [metricsData, setMetricsData] = useState<Map<string, MetricPoint[]>>(
@@ -191,6 +196,7 @@ export function ExecutionComparisonDialog({
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [metricsError, setMetricsError] = useState<string | null>(null);
   const mountedRef = useRef(true);
+  const { strategies } = useStrategies();
 
   // Sort executions by execution_number for consistent ordering
   const sorted = useMemo(
@@ -198,6 +204,15 @@ export function ExecutionComparisonDialog({
       [...executions].sort((a, b) => a.execution_number - b.execution_number),
     [executions]
   );
+
+  // Build localized parameter label map from strategy schema.
+  // Derive strategy_type from the first execution's strategy_config snapshot.
+  const strategyParamLabelMap = useMemo(() => {
+    const strategyType = sorted.find((e) => e.strategy_config?.strategy_type)
+      ?.strategy_config?.strategy_type;
+    if (!strategyType) return new Map<string, string>();
+    return buildParameterLabelMap(strategies, strategyType, i18n.language);
+  }, [sorted, strategies, i18n.language]);
 
   // Fetch metrics for all executions.
   // When interval=0 (Auto), fetch raw data without server-side aggregation
@@ -338,7 +353,11 @@ export function ExecutionComparisonDialog({
           <ConfigComparisonPanel executions={sorted} type="task" />
         )}
         {tabIndex === 1 && (
-          <ConfigComparisonPanel executions={sorted} type="strategy" />
+          <ConfigComparisonPanel
+            executions={sorted}
+            type="strategy"
+            paramLabelMap={strategyParamLabelMap}
+          />
         )}
         {tabIndex === 2 && <ResultsComparisonPanel executions={sorted} />}
         {tabIndex === 3 && (
@@ -364,9 +383,11 @@ export function ExecutionComparisonDialog({
 function ConfigComparisonPanel({
   executions,
   type,
+  paramLabelMap,
 }: {
   executions: TaskExecution[];
   type: 'task' | 'strategy';
+  paramLabelMap?: Map<string, string>;
 }) {
   const { t } = useTranslation('common');
 
@@ -485,10 +506,15 @@ function ConfigComparisonPanel({
                       fontWeight={isDiff ? 600 : 400}
                       sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}
                     >
-                      {key
-                        .replace(/^parameters\./, '')
-                        .replace(/_/g, ' ')
-                        .replace(/\b\w/g, (c) => c.toUpperCase())}
+                      {type === 'strategy' && paramLabelMap
+                        ? resolveParameterLabel(
+                            paramLabelMap,
+                            key.replace(/^parameters\./, '')
+                          )
+                        : key
+                            .replace(/^parameters\./, '')
+                            .replace(/_/g, ' ')
+                            .replace(/\b\w/g, (c) => c.toUpperCase())}
                     </Typography>
                   </td>
                   {configs.map((cfg, i) => (
@@ -826,7 +852,6 @@ function MetricsOverlayPanel({
                   xAxis={[
                     {
                       scaleType: 'time' as const,
-                      data: allX.length > 0 ? [minX, maxX] : undefined,
                       min: minX,
                       max: maxX,
                       tickNumber: 8,
