@@ -171,7 +171,7 @@ class TestFlushBuffer:
         MockTickData.objects.bulk_create.assert_not_called()
 
     @patch("apps.market.tasks.subscriber.TickData")
-    def test_flush_buffer_calls_bulk_create(self, MockTickData):
+    def test_flush_buffer_clears_buffer_without_db_write(self, MockTickData):
         runner = TickSubscriberRunner()
         runner.task_service = MagicMock()
 
@@ -182,11 +182,11 @@ class TestFlushBuffer:
 
         runner._flush_buffer()
 
-        MockTickData.objects.bulk_create.assert_called_once()
+        MockTickData.objects.bulk_create.assert_not_called()
         assert runner.buffer == []
 
     @patch("apps.market.tasks.subscriber.TickData")
-    def test_flush_deduplicates_by_instrument_timestamp(self, MockTickData):
+    def test_flush_clears_duplicates_without_db_write(self, MockTickData):
         from datetime import datetime, timezone
 
         runner = TickSubscriberRunner()
@@ -203,21 +203,19 @@ class TestFlushBuffer:
         runner.buffer = [tick1, tick2]
         runner._flush_buffer()
 
-        call_args = MockTickData.objects.bulk_create.call_args
-        # Should deduplicate to 1 tick
-        assert len(call_args[0][0]) == 1
+        MockTickData.objects.bulk_create.assert_not_called()
+        assert runner.buffer == []
 
     @patch("apps.market.tasks.subscriber.TickData")
-    def test_flush_handles_db_error_gracefully(self, MockTickData):
+    def test_flush_handles_error_gracefully(self, MockTickData):
         runner = TickSubscriberRunner()
         runner.task_service = MagicMock()
+        runner.task_service.heartbeat.side_effect = Exception("heartbeat error")
 
         tick = MagicMock()
         tick.instrument = "EUR_USD"
         tick.timestamp = MagicMock()
         runner.buffer = [tick]
-
-        MockTickData.objects.bulk_create.side_effect = Exception("db error")
 
         # Should not raise
         runner._flush_buffer()

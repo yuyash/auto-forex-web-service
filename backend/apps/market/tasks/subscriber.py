@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime
 from decimal import Decimal
 from logging import Logger, getLogger
 from typing import Any
@@ -236,36 +235,28 @@ class TickSubscriberRunner:
             return None
 
     def _flush_buffer(self) -> None:
-        """Flush tick buffer to database."""
+        """Flush tick buffer (heartbeat only, no DB write).
+
+        Tick data persistence is handled by the scheduled Athena load
+        task instead of the live subscriber to avoid gaps when the
+        trading task is not running.
+        """
         assert self.task_service is not None
 
         try:
             if self.buffer:
-                unique_flush: dict[tuple[str, datetime], TickData] = {}
-                for obj in self.buffer:
-                    unique_flush[(str(obj.instrument), obj.timestamp)] = obj
-                buffer_to_flush = list(unique_flush.values())
-
-                TickData.objects.bulk_create(
-                    buffer_to_flush,
-                    batch_size=min(len(buffer_to_flush), self.buffer_max),
-                    update_conflicts=True,
-                    update_fields=["bid", "ask", "mid"],
-                    unique_fields=["instrument", "timestamp"],
-                )
-                flushed_count = len(buffer_to_flush)
+                flushed_count = len(self.buffer)
                 self.buffer.clear()
 
                 self.task_service.heartbeat(
                     status_message="flushed",
                     meta_update={"last_flush": time.monotonic()},
                 )
-                logger.info(
-                    "Subscriber: flushed %s ticks to DB",
+                logger.debug(
+                    "Subscriber: discarded %s ticks (DB persistence disabled)",
                     flushed_count,
                 )
         except Exception as exc:  # pylint: disable=broad-exception-caught  # nosec B110
-            # Log flush failure but don't raise
             logger.warning("Subscriber: failed to flush buffer: %s", exc)
 
     def _cleanup_and_stop(self, client: Any, lock_key: str, pubsub: Any, message: str) -> None:
