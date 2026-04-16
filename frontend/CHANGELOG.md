@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.50.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.5...frontend-v1.50.6) (2026-04-16)
+
+
+### Bug Fixes
+
+* **ui:** hide controls and show historical status when viewing past e… ([#527](https://github.com/yuyash/auto-forex-web-service/issues/527)) ([064c06d](https://github.com/yuyash/auto-forex-web-service/commit/064c06dde4043926b7a469b91d1dd02b446f2e8e))
+
 ## [1.50.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.4...frontend-v1.50.5) (2026-04-16)
 
 
