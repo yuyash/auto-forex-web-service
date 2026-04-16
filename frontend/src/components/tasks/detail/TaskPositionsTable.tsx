@@ -1375,7 +1375,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
               helperText={
                 hasCycleIdFilter && !isCycleIdFilterValid
                   ? t('tables.positions.invalidCycleId')
-                  : ' '
+                  : undefined
               }
               sx={{ width: 280 }}
               slotProps={{

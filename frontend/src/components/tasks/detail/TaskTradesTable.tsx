@@ -425,7 +425,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
             helperText={
               hasCycleIdFilter && !isCycleIdFilterValid
                 ? t('tables.trades.invalidCycleId')
-                : ' '
+                : undefined
             }
             sx={{ width: 280 }}
             slotProps={{
