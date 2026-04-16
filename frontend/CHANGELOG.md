@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.50.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.2...frontend-v1.50.3) (2026-04-16)
+
+
+### Bug Fixes
+
+* **comparison:** fix metrics overlay granularity control and auto int… ([#521](https://github.com/yuyash/auto-forex-web-service/issues/521)) ([4135bff](https://github.com/yuyash/auto-forex-web-service/commit/4135bff77172121e475e014f6774ad2b5f5eb935))
+* **comparison:** fix metrics overlay granularity control and auto interval ([4135bff](https://github.com/yuyash/auto-forex-web-service/commit/4135bff77172121e475e014f6774ad2b5f5eb935))
+
 ## [1.50.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.1...frontend-v1.50.2) (2026-04-16)
 
 
