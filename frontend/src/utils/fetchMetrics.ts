@@ -99,12 +99,15 @@ export async function fetchPaginatedMetrics(opts: {
   executionRunId?: string;
   interval?: number;
   pageSize?: number;
+  /** Maximum number of pages to fetch (default: unlimited). */
+  maxPages?: number;
 }): Promise<MetricPoint[]> {
   const pageSize = opts.pageSize ?? 250;
+  const maxPages = opts.maxPages ?? Infinity;
   const results: MetricPoint[] = [];
   let page = 1;
 
-  while (true) {
+  while (page <= maxPages) {
     const response = await fetchMetrics({
       ...opts,
       page,
@@ -116,4 +119,5 @@ export async function fetchPaginatedMetrics(opts: {
     }
     page += 1;
   }
+  return results;
 }

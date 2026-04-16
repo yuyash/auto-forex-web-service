@@ -217,34 +217,46 @@ export function ExecutionComparisonDialog({
   }, [sorted, strategies, i18n.language]);
 
   // Fetch metrics for all executions.
-  // When interval=0 (Auto), compute a per-execution interval from its
-  // time range to keep the total data volume manageable (≤ ~1500 points).
-  // When the user picks a specific granularity, pass it to the backend.
+  // For Auto mode (interval=0), compute a single interval from the union
+  // time range across ALL compared executions so charts share the same
+  // granularity.  For backtests, the data period comes from
+  // task_config.start_time / end_time; for trading tasks, from
+  // started_at / completed_at (or now if still running).
   const fetchAllMetrics = useCallback(async () => {
     setMetricsLoading(true);
     setMetricsError(null);
     try {
+      // Compute a shared auto interval from the union range of all executions
+      let sharedInterval = interval;
+      if (sharedInterval === 0) {
+        let unionMinMs = Infinity;
+        let unionMaxMs = -Infinity;
+        for (const exec of sorted) {
+          const cfg = exec.task_config as Record<string, unknown> | null;
+          const startIso =
+            (cfg?.start_time as string) || exec.started_at || null;
+          const endIso = (cfg?.end_time as string) || exec.completed_at || null;
+          const sMs = startIso ? new Date(startIso).getTime() : 0;
+          const eMs = endIso ? new Date(endIso).getTime() : Date.now();
+          if (sMs > 0 && sMs < unionMinMs) unionMinMs = sMs;
+          if (eMs > unionMaxMs) unionMaxMs = eMs;
+        }
+        if (isFinite(unionMinMs) && unionMaxMs > unionMinMs) {
+          sharedInterval = computeAutoInterval(
+            (unionMaxMs - unionMinMs) / 1000
+          );
+        }
+      }
+
       const entries = await Promise.all(
         sorted.map(async (exec) => {
-          let effectiveInterval = interval;
-          if (effectiveInterval === 0) {
-            // Auto: compute from execution's own time range
-            const startMs = exec.started_at
-              ? new Date(exec.started_at).getTime()
-              : 0;
-            const endMs = exec.completed_at
-              ? new Date(exec.completed_at).getTime()
-              : Date.now();
-            if (startMs > 0 && endMs > startMs) {
-              effectiveInterval = computeAutoInterval((endMs - startMs) / 1000);
-            }
-          }
           const points = await fetchPaginatedMetrics({
             taskId,
             taskType,
             executionRunId: exec.id,
-            interval: effectiveInterval > 1 ? effectiveInterval : undefined,
+            interval: sharedInterval > 1 ? sharedInterval : undefined,
             pageSize: 500,
+            maxPages: 10,
           });
           return [exec.id, points] as const;
         })
