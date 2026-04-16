@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.34.12...backend-v1.35.0) (2026-04-16)
+
+
+### Features
+
+* scheduled athena tick load ([#511](https://github.com/yuyash/auto-forex-web-service/issues/511)) ([37110a9](https://github.com/yuyash/auto-forex-web-service/commit/37110a9ecf35b9ea85ef3baa6ac6688f4b8710ea))
+
 ## [1.34.12](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.34.11...backend-v1.34.12) (2026-04-16)
 
 
