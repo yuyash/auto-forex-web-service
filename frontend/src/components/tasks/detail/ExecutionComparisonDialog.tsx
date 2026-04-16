@@ -102,17 +102,6 @@ const SlideUp = React.forwardRef(function Transition(
   return <Slide direction="up" ref={ref} {...props} />;
 });
 
-/** Compute auto interval based on the total time range in seconds. */
-function computeAutoInterval(rangeSec: number): number {
-  const DAY = 86_400;
-  if (rangeSec <= 14 * DAY) return 1;
-  if (rangeSec <= 31 * DAY) return 5;
-  if (rangeSec <= 93 * DAY) return 15;
-  if (rangeSec <= 183 * DAY) return 60;
-  if (rangeSec <= 366 * DAY) return 240;
-  return 1440;
-}
-
 function formatYLabel(v: number, format?: 'pct' | 'int' | 'currency'): string {
   if (format === 'pct') return `${v.toFixed(2)}%`;
   if (format === 'currency') return v.toFixed(2);
@@ -210,43 +199,21 @@ export function ExecutionComparisonDialog({
     [executions]
   );
 
-  // Compute per-execution intervals so each execution uses a granularity
-  // appropriate for its own duration, not the union range of all executions.
-  const perExecIntervals = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const exec of sorted) {
-      if (interval > 0) {
-        map.set(exec.id, interval);
-        continue;
-      }
-      const start = exec.started_at
-        ? new Date(exec.started_at).getTime() / 1000
-        : 0;
-      const end = exec.completed_at
-        ? new Date(exec.completed_at).getTime() / 1000
-        : Date.now() / 1000;
-      if (start > 0 && end > start) {
-        map.set(exec.id, computeAutoInterval(end - start));
-      } else {
-        map.set(exec.id, 1);
-      }
-    }
-    return map;
-  }, [sorted, interval]);
-
-  // Fetch metrics for all executions
+  // Fetch metrics for all executions.
+  // When interval=0 (Auto), fetch raw data without server-side aggregation
+  // so every recorded data point is available for charting.
+  // When the user picks a specific granularity, pass it to the backend.
   const fetchAllMetrics = useCallback(async () => {
     setMetricsLoading(true);
     setMetricsError(null);
     try {
       const entries = await Promise.all(
         sorted.map(async (exec) => {
-          const execInterval = perExecIntervals.get(exec.id) ?? 1;
           const points = await fetchPaginatedMetrics({
             taskId,
             taskType,
             executionRunId: exec.id,
-            interval: execInterval > 1 ? execInterval : undefined,
+            interval: interval > 1 ? interval : undefined,
             pageSize: 500,
           });
           return [exec.id, points] as const;
@@ -264,7 +231,7 @@ export function ExecutionComparisonDialog({
         setMetricsLoading(false);
       }
     }
-  }, [sorted, taskId, taskType, perExecIntervals, t]);
+  }, [sorted, taskId, taskType, interval, t]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -273,6 +240,7 @@ export function ExecutionComparisonDialog({
     };
   }, []);
 
+  // Re-fetch when switching to metrics tab or when interval/fetchAllMetrics changes
   useEffect(() => {
     if (open && tabIndex === 3) {
       fetchAllMetrics();
