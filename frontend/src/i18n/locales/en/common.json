@@ -566,7 +566,9 @@
       "error": "Error",
       "noExecutions": "No executions found",
       "refresh": "Refresh",
-      "configureColumns": "Configure columns"
+      "configureColumns": "Configure columns",
+      "compare": "Compare",
+      "compareSelected": "Compare ({{count}})"
     }
   },
   "debug": {
@@ -619,5 +621,18 @@
     "winning_trades": "Winning Trades",
     "losing_trades": "Losing Trades",
     "ticks_processed": "Ticks Processed"
+  },
+  "comparison": {
+    "title": "Execution Comparison",
+    "taskConfig": "Task Configuration",
+    "strategyConfig": "Strategy Configuration",
+    "results": "Results",
+    "metricsOverlay": "Metrics Overlay",
+    "noSnapshot": "No snapshot available",
+    "execution": "Execution #{{number}}",
+    "configDiff": "Configuration Differences",
+    "noDifferences": "No differences",
+    "loading": "Loading comparison data...",
+    "error": "Failed to load comparison data"
   }
 }

@@ -566,7 +566,9 @@
       "error": "エラー",
       "noExecutions": "実行履歴なし",
       "refresh": "更新",
-      "configureColumns": "列の設定"
+      "configureColumns": "列の設定",
+      "compare": "比較",
+      "compareSelected": "比較 ({{count}})"
     }
   },
   "debug": {
@@ -619,5 +621,18 @@
     "winning_trades": "勝ちトレード数",
     "losing_trades": "負けトレード数",
     "ticks_processed": "処理Tick数"
+  },
+  "comparison": {
+    "title": "実行比較",
+    "taskConfig": "タスク設定",
+    "strategyConfig": "ストラテジー設定",
+    "results": "実行結果",
+    "metricsOverlay": "メトリクスオーバーレイ",
+    "noSnapshot": "スナップショットなし",
+    "execution": "実行 #{{number}}",
+    "configDiff": "設定差分",
+    "noDifferences": "差分なし",
+    "loading": "比較データを読み込み中...",
+    "error": "比較データの読み込みに失敗しました"
   }
 }
