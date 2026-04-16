@@ -68,6 +68,7 @@ class PositionLifecycleService:
                     str(position.id), logs_by_position.get(str(position.id), [])
                 ),
                 rebuilt_position_ids=sorted(rebuild_links.get(str(position.id), [])),
+                all_positions=positions,
             )
             for position in ordered_positions
         ]
@@ -208,6 +209,7 @@ class PositionLifecycleService:
         logs: list[TaskLog],
         original_position_id: str | None,
         rebuilt_position_ids: list[str],
+        all_positions: dict[str, Position] | None = None,
     ) -> dict[str, Any]:
         close_trade = self._select_close_trade(trades)
         events = self._build_events(
@@ -217,6 +219,7 @@ class PositionLifecycleService:
             original_position_id=original_position_id,
             rebuilt_position_ids=rebuilt_position_ids,
             close_trade=close_trade,
+            all_positions=all_positions or {},
         )
         return {
             "position_id": str(position.id),
@@ -253,6 +256,7 @@ class PositionLifecycleService:
         original_position_id: str | None,
         rebuilt_position_ids: list[str],
         close_trade: Trade | None,
+        all_positions: dict[str, Position] | None = None,
     ) -> list[dict[str, Any]]:
         position_id = str(position.id)
         events: list[dict[str, Any]] = []
@@ -275,6 +279,7 @@ class PositionLifecycleService:
                         log=log,
                         kind="opened",
                         position_id=position_id,
+                        position=position,
                     )
                 )
                 continue
@@ -288,15 +293,22 @@ class PositionLifecycleService:
                             kind="rebuilt",
                             position_id=position_id,
                             related_position_id=log_original_position_id,
+                            position=position,
                         )
                     )
                 elif log_original_position_id == position_id:
+                    # Look up the rebuilt position to get its entry_time
+                    # for the timestamp (instead of the log's wall-clock time).
+                    rebuilt_pos = (
+                        (all_positions or {}).get(log_position_id) if log_position_id else None
+                    )
                     events.append(
                         self._event_from_log(
                             log=log,
                             kind="rebuilt_into",
                             position_id=position_id,
                             related_position_id=log_position_id,
+                            position=rebuilt_pos,
                         )
                     )
                 continue
@@ -306,7 +318,12 @@ class PositionLifecycleService:
 
             if lifecycle_event == "PARTIAL_CLOSE":
                 events.append(
-                    self._event_from_log(log=log, kind="partial_close", position_id=position_id)
+                    self._event_from_log(
+                        log=log,
+                        kind="partial_close",
+                        position_id=position_id,
+                        position=position,
+                    )
                 )
                 continue
 
@@ -319,6 +336,7 @@ class PositionLifecycleService:
                         log=log,
                         kind=kind,
                         position_id=position_id,
+                        position=position,
                     )
                 )
 
@@ -386,12 +404,34 @@ class PositionLifecycleService:
         kind: str,
         position_id: str,
         related_position_id: str | None = None,
+        position: Position | None = None,
     ) -> dict[str, Any]:
         context = self._log_context(log)
+
+        # Prefer the Position model's timestamps over log metadata.
+        # Log timestamps can be the *execution* wall-clock time (e.g. 2026)
+        # rather than the simulated data time (e.g. 2024) for backtests.
+        timestamp = self._log_event_timestamp(log)
+        if position is not None:
+            if kind in {"opened", "rebuilt"} and position.entry_time:
+                timestamp = position.entry_time.isoformat()
+            elif kind in {"closed", "stop_loss_closed", "partial_close"} and position.exit_time:
+                timestamp = position.exit_time.isoformat()
+            elif kind == "rebuilt_into" and position is not None and position.entry_time:
+                timestamp = position.entry_time.isoformat()
+
+        # Use quote-currency PnL from Position model instead of the
+        # account-currency value stored in the log context.
+        realized_pnl: str | None = None
+        if kind in {"closed", "stop_loss_closed", "partial_close"} and position is not None:
+            realized_pnl = self._realized_pnl(position)
+        else:
+            realized_pnl = None
+
         return {
             "id": str(log.id),
             "kind": kind,
-            "timestamp": self._log_event_timestamp(log),
+            "timestamp": timestamp,
             "position_id": position_id,
             "related_position_id": related_position_id,
             "direction": context.get("direction"),
@@ -402,7 +442,7 @@ class PositionLifecycleService:
             "planned_exit_price_formula": context.get("planned_exit_price_formula"),
             "description": context.get("description") or "",
             "close_reason": context.get("close_reason"),
-            "realized_pnl": self._as_str(context.get("realized_pnl")),
+            "realized_pnl": realized_pnl,
         }
 
     def _select_close_trade(self, trades: list[Trade]) -> Trade | None:

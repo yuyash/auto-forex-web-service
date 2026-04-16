@@ -114,6 +114,22 @@ const formatTimestamp = (
 const shortId = (value?: string | null): string =>
   value ? value.slice(0, 8) : '-';
 
+function quoteCurrencySymbol(instrument?: string): string {
+  if (!instrument) return '';
+  const quote = instrument.split('_')[1] ?? '';
+  if (quote === 'JPY') return '¥';
+  if (quote === 'USD') return '$';
+  if (quote === 'EUR') return '€';
+  if (quote === 'GBP') return '£';
+  return quote + ' ';
+}
+
+function quoteCurrencyDecimals(instrument?: string): number {
+  if (!instrument) return 3;
+  const quote = instrument.split('_')[1] ?? '';
+  return quote === 'JPY' ? 0 : 2;
+}
+
 const formatPrice = (value?: string | null): string => {
   if (!value) return '-';
   const parsed = Number(value);
@@ -125,13 +141,18 @@ const formatPrice = (value?: string | null): string => {
     : value;
 };
 
-const formatSignedPnl = (value?: string | null): string => {
+const formatSignedPnl = (
+  value?: string | null,
+  instrument?: string
+): string => {
   if (!value) return '-';
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return value;
-  const text = `¥${Math.abs(parsed).toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+  const sym = quoteCurrencySymbol(instrument);
+  const decimals = quoteCurrencyDecimals(instrument);
+  const text = `${sym}${Math.abs(parsed).toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
   })}`;
   if (parsed > 0) return `+${text}`;
   if (parsed < 0) return `-${text}`;
@@ -225,7 +246,8 @@ const LifecycleField: React.FC<{
 const LifecycleEventRow: React.FC<{
   event: PositionLifecycleEvent;
   timezone?: string;
-}> = ({ event, timezone = 'UTC' }) => {
+  instrument?: string;
+}> = ({ event, timezone = 'UTC', instrument }) => {
   const { t, i18n } = useTranslation('common');
   const relatedLabel =
     event.kind === 'rebuilt'
@@ -317,7 +339,7 @@ const LifecycleEventRow: React.FC<{
                 }
                 fontWeight={700}
               >
-                {formatSignedPnl(event.realized_pnl)}
+                {formatSignedPnl(event.realized_pnl, instrument)}
               </Typography>
             }
           />
@@ -441,7 +463,7 @@ const PositionCard: React.FC<{
                 variant="h6"
                 color={pnlValue >= 0 ? 'success.main' : 'error.main'}
               >
-                {formatSignedPnl(summary.realized_pnl)}
+                {formatSignedPnl(summary.realized_pnl, summary.instrument)}
               </Typography>
             ) : null}
           </Stack>
@@ -559,6 +581,7 @@ const PositionCard: React.FC<{
                 key={event.id}
                 event={event}
                 timezone={timezone}
+                instrument={summary.instrument}
               />
             ))}
           </Stack>
