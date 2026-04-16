@@ -637,7 +637,7 @@
     "taskConfig": "タスク設定",
     "strategyConfig": "ストラテジー設定",
     "results": "実行結果",
-    "metricsOverlay": "メトリクスオーバーレイ",
+    "metricsOverlay": "メトリクス",
     "noSnapshot": "スナップショットなし",
     "execution": "実行 #{{number}}",
     "configDiff": "設定差分",
