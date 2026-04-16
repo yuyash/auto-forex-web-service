@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.48.14](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.13...frontend-v1.48.14) (2026-04-16)
+
+
+### Bug Fixes
+
+* lifecycle pnl and timestamps ([#509](https://github.com/yuyash/auto-forex-web-service/issues/509)) ([1d0fa40](https://github.com/yuyash/auto-forex-web-service/commit/1d0fa4083e46e327abc1c5ddc2e74ac23c5dd176))
+
 ## [1.48.13](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.12...frontend-v1.48.13) (2026-04-15)
 
 
