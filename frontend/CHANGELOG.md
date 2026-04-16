@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.50.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.3...frontend-v1.50.4) (2026-04-16)
+
+
+### Bug Fixes
+
+* **ui:** localize snapshot parameter keys and fix comparison chart data ([#523](https://github.com/yuyash/auto-forex-web-service/issues/523)) ([3f30081](https://github.com/yuyash/auto-forex-web-service/commit/3f300815285359b00f504803e930e1746d0e2f5a))
+
 ## [1.50.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.2...frontend-v1.50.3) (2026-04-16)
 
 
