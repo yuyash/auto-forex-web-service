@@ -39,6 +39,8 @@ interface TaskDetailHeaderProps {
   completedLabel: string;
   editLabel: string;
   deleteLabel: string;
+  /** When true, hides action buttons (start/stop/edit/delete) */
+  isViewingHistorical?: boolean;
   onStart: (id: string) => Promise<void>;
   onStop: (id: string) => Promise<void>;
   onRestart: (id: string) => Promise<void>;
@@ -115,6 +117,7 @@ export function TaskDetailHeader({
   completedLabel,
   editLabel,
   deleteLabel,
+  isViewingHistorical = false,
   onStart,
   onStop,
   onRestart,
@@ -176,35 +179,39 @@ export function TaskDetailHeader({
                 flexWrap: 'wrap',
               }}
             >
-              <TaskControlButtons
-                taskId={taskId}
-                status={status}
-                taskType={taskType}
-                onStart={onStart}
-                onStop={onStop}
-                onRestart={onRestart}
-                onResume={onResume}
-                onPause={onPause}
-              />
-              <ActionButton
-                title={editLabel}
-                disabled={actionDisabled}
-                size={isMobile ? 'small' : 'medium'}
-                ariaLabel={editLabel}
-                onClick={onEdit}
-              >
-                <EditIcon />
-              </ActionButton>
-              <ActionButton
-                title={deleteLabel}
-                disabled={actionDisabled}
-                size={isMobile ? 'small' : 'medium'}
-                color="error"
-                ariaLabel={deleteLabel}
-                onClick={onDelete}
-              >
-                <DeleteIcon />
-              </ActionButton>
+              {!isViewingHistorical && (
+                <>
+                  <TaskControlButtons
+                    taskId={taskId}
+                    status={status}
+                    taskType={taskType}
+                    onStart={onStart}
+                    onStop={onStop}
+                    onRestart={onRestart}
+                    onResume={onResume}
+                    onPause={onPause}
+                  />
+                  <ActionButton
+                    title={editLabel}
+                    disabled={actionDisabled}
+                    size={isMobile ? 'small' : 'medium'}
+                    ariaLabel={editLabel}
+                    onClick={onEdit}
+                  >
+                    <EditIcon />
+                  </ActionButton>
+                  <ActionButton
+                    title={deleteLabel}
+                    disabled={actionDisabled}
+                    size={isMobile ? 'small' : 'medium'}
+                    color="error"
+                    ariaLabel={deleteLabel}
+                    onClick={onDelete}
+                  >
+                    <DeleteIcon />
+                  </ActionButton>
+                </>
+              )}
             </Box>
 
             <Typography
