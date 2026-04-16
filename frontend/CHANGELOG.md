@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.50.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.49.1...frontend-v1.50.0) (2026-04-16)
+
+
+### Features
+
+* execution config snapshot ([#515](https://github.com/yuyash/auto-forex-web-service/issues/515)) ([768c15f](https://github.com/yuyash/auto-forex-web-service/commit/768c15fc21bbfb65917ab5de2032d82c8040b5ea))
+
 ## [1.49.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.49.0...frontend-v1.49.1) (2026-04-16)
 
 
