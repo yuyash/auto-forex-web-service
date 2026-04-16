@@ -367,17 +367,18 @@ export function ExecutionHistoryTable({
         <Typography variant="subtitle1" sx={{ flex: 1 }}>
           {t('tables.executions.title')}
         </Typography>
-        {checkedCount >= 2 && (
-          <Button
-            size="small"
-            variant="contained"
-            startIcon={<CompareIcon />}
-            onClick={() => setCompareOpen(true)}
-            sx={{ mr: 1 }}
-          >
-            {t('tables.executions.compareSelected', { count: checkedCount })}
-          </Button>
-        )}
+        <Button
+          size="small"
+          variant="contained"
+          startIcon={<CompareIcon />}
+          disabled={checkedCount < 2}
+          onClick={() => setCompareOpen(true)}
+          sx={{ mr: 1 }}
+        >
+          {checkedCount >= 2
+            ? t('tables.executions.compareSelected', { count: checkedCount })
+            : t('tables.executions.compare')}
+        </Button>
         <Tooltip title={t('tables.executions.refresh')}>
           <IconButton
             size="small"
