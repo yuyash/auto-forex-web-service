@@ -304,7 +304,11 @@ export const TradingTaskDetail: React.FC = () => {
         taskName={detailTask.name}
         taskDescription={detailTask.description}
         taskStatus={detailTask.status}
-        currentStatus={currentStatus}
+        currentStatus={
+          isViewingHistorical
+            ? (executionDetail?.status as TaskStatus)
+            : currentStatus
+        }
         taskType="trading"
         strategyName={getStrategyDisplayName(
           strategies,
@@ -312,15 +316,24 @@ export const TradingTaskDetail: React.FC = () => {
         )}
         instrument={detailTask.instrument}
         pipSize={detailTask.pip_size}
-        tick={s.tick}
+        tick={
+          isViewingHistorical
+            ? { timestamp: null, bid: null, ask: null, mid: null }
+            : s.tick
+        }
         timezone={timezone}
         isMobile={isMobile}
-        progress={s.task.progress}
+        progress={
+          isViewingHistorical
+            ? (executionDetail?.progress ?? 0)
+            : s.task.progress
+        }
         showProgress={false}
-        currentAtr={s.execution.currentAtr}
+        currentAtr={isViewingHistorical ? null : s.execution.currentAtr}
         completedLabel={t('trading:detail.completed')}
         editLabel={t('common:actions.edit')}
         deleteLabel={t('common:actions.delete')}
+        isViewingHistorical={isViewingHistorical}
         onStart={async (id) => {
           requestConfirm('start', id);
         }}
@@ -371,7 +384,11 @@ export const TradingTaskDetail: React.FC = () => {
               taskId={taskId}
               task={detailTask}
               summary={s}
-              currentStatus={currentStatus}
+              currentStatus={
+                isViewingHistorical
+                  ? (executionDetail?.status as TaskStatus)
+                  : currentStatus
+              }
               strategies={strategies}
               pnlCurrency={pnlCurrency}
               latestMetrics={metricsResult.latest}
