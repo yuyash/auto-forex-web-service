@@ -739,37 +739,61 @@ function MetricsOverlayPanel({
     return CHART_METRICS.filter((m) => keysWithData.has(m.key));
   }, [metricsData]);
 
-  // Build chart data: for each metric, build series per execution
+  // Build chart data: for each metric, build a unified x-axis with all
+  // timestamps merged across executions, and per-execution y arrays with
+  // null for timestamps where that execution has no data.
   const chartDataMap = useMemo(() => {
-    const map: Record<string, { execIndex: number; x: Date[]; y: number[] }[]> =
-      {};
+    const map: Record<
+      string,
+      {
+        xAll: Date[];
+        series: { execIndex: number; y: (number | null)[] }[];
+      }
+    > = {};
 
     for (const m of availableMetrics) {
-      const series: { execIndex: number; x: Date[]; y: number[] }[] = [];
       const scale = RATIO_KEYS.has(m.key) ? 100 : 1;
+
+      // Collect per-execution data as timestamp→value maps
+      const execData: {
+        execIndex: number;
+        byTime: Map<number, number>;
+      }[] = [];
 
       executions.forEach((exec, idx) => {
         const points = metricsData.get(exec.id) ?? [];
-        const x: Date[] = [];
-        const y: number[] = [];
+        const byTime = new Map<number, number>();
         for (const point of points) {
           const val = point.metrics[m.key];
           if (val != null && val !== '') {
             const num = Number(val);
             if (!isNaN(num)) {
-              x.push(new Date(point.t * 1000));
-              y.push(num * scale);
+              byTime.set(point.t, num * scale);
             }
           }
         }
-        if (x.length >= 2) {
-          series.push({ execIndex: idx, x, y });
+        if (byTime.size >= 2) {
+          execData.push({ execIndex: idx, byTime });
         }
       });
 
-      if (series.length > 0) {
-        map[m.key] = series;
+      if (execData.length === 0) continue;
+
+      // Merge all timestamps into a sorted unique set
+      const allTimestamps = new Set<number>();
+      for (const ed of execData) {
+        for (const t of ed.byTime.keys()) allTimestamps.add(t);
       }
+      const sortedTs = [...allTimestamps].sort((a, b) => a - b);
+      const xAll = sortedTs.map((t) => new Date(t * 1000));
+
+      // Build y arrays with null for missing timestamps
+      const series = execData.map((ed) => ({
+        execIndex: ed.execIndex,
+        y: sortedTs.map((t) => ed.byTime.get(t) ?? null),
+      }));
+
+      map[m.key] = { xAll, series };
     }
     return map;
   }, [availableMetrics, executions, metricsData]);
@@ -828,14 +852,14 @@ function MetricsOverlayPanel({
 
       <Grid container spacing={2}>
         {availableMetrics.map((m) => {
-          const series = chartDataMap[m.key];
-          if (!series || series.length === 0) return null;
+          const chartData = chartDataMap[m.key];
+          if (!chartData || chartData.series.length === 0) return null;
 
-          // Merge all x values to compute a shared domain
-          const allX = series.flatMap((s) => s.x);
-          const minX = new Date(Math.min(...allX.map((d) => d.getTime())));
-          const maxX = new Date(Math.max(...allX.map((d) => d.getTime())));
-          const rangeMs = maxX.getTime() - minX.getTime();
+          const { xAll, series } = chartData;
+          const rangeMs =
+            xAll.length >= 2
+              ? xAll[xAll.length - 1].getTime() - xAll[0].getTime()
+              : 0;
 
           return (
             <Grid key={m.key} size={{ xs: 12, md: 6 }}>
@@ -852,8 +876,7 @@ function MetricsOverlayPanel({
                   xAxis={[
                     {
                       scaleType: 'time' as const,
-                      min: minX,
-                      max: maxX,
+                      data: xAll,
                       tickNumber: 8,
                       tickLabelStyle: { fontSize: 10 },
                       valueFormatter: (v: Date, ctx: { location: string }) => {
@@ -878,7 +901,7 @@ function MetricsOverlayPanel({
                     color: EXEC_COLORS[s.execIndex % EXEC_COLORS.length],
                     showMark: false,
                     label: `#${executions[s.execIndex].execution_number}`,
-                    xData: s.x,
+                    connectNulls: true,
                   }))}
                   axisHighlight={{ x: 'line', y: 'none' }}
                   grid={{ vertical: true, horizontal: true }}
