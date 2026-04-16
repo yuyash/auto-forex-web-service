@@ -1,7 +1,7 @@
 {
   "name": "auto-forex-trader",
   "private": true,
-  "version": "1.48.13",
+  "version": "1.48.14",
   "type": "module",
   "scripts": {
     "dev": "vite",
