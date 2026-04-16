@@ -214,6 +214,15 @@ class TaskLifecycleCommands:
 
     def pause(self, task_id: UUID) -> bool:
         task, task_type = self.service._get_task_and_type(task_id)
+
+        # Pause is only supported for backtest tasks.  Trading tasks should
+        # use stop (which preserves execution state) and then resume.
+        if task_type == "trading":
+            raise ValueError(
+                "Pause is not supported for trading tasks. "
+                "Use stop instead — stopped trading tasks can be resumed."
+            )
+
         self.service._ensure_task_status(
             task,
             allowed=(TaskStatus.STARTING, TaskStatus.RUNNING),
@@ -305,13 +314,22 @@ class TaskLifecycleCommands:
     def resume(self, task_id: UUID) -> BacktestTask | TradingTask:
         task, task_type = self.service._get_task_and_type(task_id)
         model_class = self.service._get_task_model(task_type)
+        is_trading = task_type == "trading"
+
+        # Trading tasks can resume from PAUSED, STOPPED, or FAILED.
+        # Backtest tasks can only resume from PAUSED (unchanged behaviour).
+        if is_trading:
+            allowed_statuses = (TaskStatus.PAUSED, TaskStatus.STOPPED, TaskStatus.FAILED)
+        else:
+            allowed_statuses = (TaskStatus.PAUSED,)
 
         with transaction.atomic():
             locked_task = model_class.objects.select_for_update().get(pk=task.pk)
-            if locked_task.status != TaskStatus.PAUSED:
+            if locked_task.status not in allowed_statuses:
+                allowed_labels = ", ".join(str(s.value).upper() for s in allowed_statuses)
                 raise ValueError(
                     f"Task cannot be resumed from {locked_task.status} state. "
-                    "Only PAUSED tasks can be resumed."
+                    f"Only {allowed_labels} tasks can be resumed."
                 )
             if not locked_task.execution_id:
                 raise ValueError("Cannot resume task without an execution_id")
@@ -323,17 +341,30 @@ class TaskLifecycleCommands:
                 db_status=locked_task.status,
                 execution_id=locked_task.execution_id,
             )
+
+            # Clear error fields when resuming from a terminal state so the
+            # execution starts cleanly while preserving the execution_id and
+            # all persisted state (strategy_state, events, positions, etc.).
+            update_fields = ["status", "updated_at"]
+            if locked_task.status in (TaskStatus.STOPPED, TaskStatus.FAILED):
+                locked_task.error_message = None
+                locked_task.error_traceback = None
+                locked_task.completed_at = None
+                update_fields += ["error_message", "error_traceback", "completed_at"]
+
             locked_task.status = TaskStatus.STARTING
-            locked_task.save(update_fields=["status", "updated_at"])
+            locked_task.save(update_fields=update_fields)
             task = locked_task
 
         self.events.publish(
             task=task,
             task_type=task_type,
             kind="task_resume_requested",
-            description="Task resume requested",
+            description=f"Task resume requested (from {locked_task.status})",
         )
         self.service._dispatch_task(task, task_type)
+        if is_trading:
+            self._kick_market_supervisor()
         return task
 
     def _prepare_start(
@@ -451,6 +482,9 @@ class TaskLifecycleCommands:
         if not result:
             return
         celery_state = result.state
+        # For STOPPED/FAILED tasks the Celery result is typically SUCCESS or
+        # FAILURE which is fine — the worker has already exited.  We only need
+        # to guard against the case where the worker is still actively running.
         if celery_state in ["PENDING", "STARTED", "RETRY"]:
             self.logger.warning(
                 "Task status mismatch detected",
@@ -462,7 +496,7 @@ class TaskLifecycleCommands:
                 },
             )
             raise ValueError(
-                "Task status mismatch: task is marked as PAUSED in database "
+                f"Task status mismatch: task is marked as {db_status} in database "
                 f"but Celery task is still {celery_state}. "
                 "Please wait for the task to fully stop before resuming."
             )

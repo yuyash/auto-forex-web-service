@@ -38,3 +38,5 @@ class TaskExecutionSerializer(serializers.Serializer):
     duration = serializers.FloatField(allow_null=True, required=False)
     created_at = serializers.DateTimeField()
     metrics = TaskExecutionMetricsSerializer(required=False)
+    task_config = serializers.DictField(required=False, allow_null=True)
+    strategy_config = serializers.DictField(required=False, allow_null=True)

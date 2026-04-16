@@ -20,6 +20,15 @@ interface TradingOverviewTabProps {
   strategies: Strategy[];
   pnlCurrency: string;
   latestMetrics?: MetricPoint | null;
+  isViewingHistorical?: boolean;
+  historicalStrategyConfig?: {
+    id: string;
+    name: string;
+    strategy_type: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    parameters: Record<string, any>;
+  } | null;
+  executionId?: string;
   onOpenConfiguration: () => void;
 }
 
@@ -31,6 +40,9 @@ export function TradingOverviewTab({
   strategies,
   pnlCurrency,
   latestMetrics,
+  isViewingHistorical = false,
+  historicalStrategyConfig,
+  executionId,
   onOpenConfiguration,
 }: TradingOverviewTabProps) {
   const { t } = useTranslation(['trading', 'common']);
@@ -103,7 +115,7 @@ export function TradingOverviewTab({
                 {taskId}
               </Typography>
             </Box>
-            {task.execution_id && (
+            {(executionId || task.execution_id) && (
               <Box>
                 <Typography variant="caption" color="text.secondary">
                   {t('trading:detail.executionId')}
@@ -112,7 +124,7 @@ export function TradingOverviewTab({
                   variant="body2"
                   sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}
                 >
-                  {task.execution_id}
+                  {executionId || task.execution_id}
                 </Typography>
               </Box>
             )}
@@ -141,22 +153,42 @@ export function TradingOverviewTab({
             <Box>
               <Typography variant="caption" color="text.secondary">
                 {t('common:labels.strategyConfiguration')}
+                {isViewingHistorical && historicalStrategyConfig && (
+                  <Chip
+                    size="small"
+                    label={t('common:labels.snapshot')}
+                    color="info"
+                    variant="outlined"
+                    sx={{ ml: 1, height: 18, fontSize: '0.65rem' }}
+                  />
+                )}
               </Typography>
-              <Link
-                component="button"
-                variant="body1"
-                onClick={onOpenConfiguration}
-                sx={{ textAlign: 'left', display: 'block' }}
-              >
-                {task.config_name}
-              </Link>
+              {isViewingHistorical && historicalStrategyConfig ? (
+                <Typography variant="body1">
+                  {historicalStrategyConfig.name}
+                </Typography>
+              ) : (
+                <Link
+                  component="button"
+                  variant="body1"
+                  onClick={onOpenConfiguration}
+                  sx={{ textAlign: 'left', display: 'block' }}
+                >
+                  {task.config_name}
+                </Link>
+              )}
             </Box>
             <Box>
               <Typography variant="caption" color="text.secondary">
                 {t('common:labels.strategyType')}
               </Typography>
               <Typography variant="body1" sx={{ textTransform: 'capitalize' }}>
-                {getStrategyDisplayName(strategies, task.strategy_type)}
+                {isViewingHistorical && historicalStrategyConfig
+                  ? getStrategyDisplayName(
+                      strategies,
+                      historicalStrategyConfig.strategy_type
+                    )
+                  : getStrategyDisplayName(strategies, task.strategy_type)}
               </Typography>
             </Box>
             <Box>

@@ -5,7 +5,6 @@ from apps.trading.admin import (
     CeleryTaskStatusAdmin,
     EquityAdmin,
     ExecutionStateAdmin,
-    LayerAdmin,
     OrderAdmin,
     PositionAdmin,
     StrategyConfigurationAdmin,
@@ -129,12 +128,3 @@ class TestEquityAdmin:
     def test_list_display(self):
         assert "balance" in EquityAdmin.list_display
         assert "ticks_processed" in EquityAdmin.list_display
-
-
-class TestLayerAdmin:
-    """Test LayerAdmin configuration."""
-
-    def test_list_display(self):
-        assert "index" in LayerAdmin.list_display
-        assert "direction" in LayerAdmin.list_display
-        assert "is_active" in LayerAdmin.list_display

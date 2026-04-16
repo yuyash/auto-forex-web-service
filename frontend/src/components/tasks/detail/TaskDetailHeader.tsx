@@ -26,6 +26,7 @@ interface TaskDetailHeaderProps {
   taskDescription?: string;
   taskStatus: TaskStatus;
   currentStatus?: TaskStatus;
+  taskType?: 'backtest' | 'trading';
   strategyName: string;
   instrument: string;
   pipSize?: string;
@@ -42,7 +43,7 @@ interface TaskDetailHeaderProps {
   onStop: (id: string) => Promise<void>;
   onRestart: (id: string) => Promise<void>;
   onResume: (id: string) => Promise<void>;
-  onPause: (id: string) => Promise<void>;
+  onPause?: (id: string) => Promise<void>;
   onEdit: () => void;
   onDelete: () => void;
 }
@@ -101,6 +102,7 @@ export function TaskDetailHeader({
   taskDescription,
   taskStatus,
   currentStatus,
+  taskType,
   strategyName,
   instrument,
   pipSize,
@@ -177,6 +179,7 @@ export function TaskDetailHeader({
               <TaskControlButtons
                 taskId={taskId}
                 status={status}
+                taskType={taskType}
                 onStart={onStart}
                 onStop={onStop}
                 onRestart={onRestart}

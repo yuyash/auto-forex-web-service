@@ -17,7 +17,6 @@ import {
 import {
   useStartTradingTask,
   useStopTradingTask,
-  usePauseTradingTask,
   useResumeTradingTask,
   useRestartTradingTask,
 } from './useTradingTaskMutations';
@@ -67,16 +66,11 @@ function useBacktestControls(): TaskControlActions {
 function useTradingControls(): TaskControlActions {
   const start = useStartTradingTask();
   const stop = useStopTradingTask();
-  const pause = usePauseTradingTask();
   const resume = useResumeTradingTask();
   const restart = useRestartTradingTask();
 
   const isLoading =
-    start.isLoading ||
-    stop.isLoading ||
-    pause.isLoading ||
-    resume.isLoading ||
-    restart.isLoading;
+    start.isLoading || stop.isLoading || resume.isLoading || restart.isLoading;
 
   return {
     onStart: useCallback((id: string) => start.mutate(id), [start]),
@@ -84,7 +78,7 @@ function useTradingControls(): TaskControlActions {
       (id: string) => stop.mutate({ id, mode: 'graceful' }),
       [stop]
     ),
-    onPause: useCallback((id: string) => pause.mutate(id), [pause]),
+    onPause: useCallback(() => {}, []),
     onResume: useCallback((id: string) => resume.mutate(id), [resume]),
     onRestart: useCallback((id: string) => restart.mutate(id), [restart]),
     isLoading,

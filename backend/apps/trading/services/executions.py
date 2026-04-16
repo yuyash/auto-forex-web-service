@@ -305,6 +305,12 @@ def _serialize_execution_row(
             fallback_mid_rate=fallback_mid_rate,
         )
 
+    # Attach config snapshots when available
+    snapshot = _get_config_snapshot(task_type=task_type, task_id=task_id, run_id=run_id)
+    if snapshot is not None:
+        row["task_config"] = snapshot.get("task_config")
+        row["strategy_config"] = snapshot.get("strategy_config")
+
     return row
 
 
@@ -434,3 +440,23 @@ def _map_celery_status(status: str) -> str:
         CeleryTaskStatus.Status.FAILED: TaskStatus.FAILED,
     }
     return str(mapping.get(status, TaskStatus.CREATED))
+
+
+def _get_config_snapshot(*, task_type: str, task_id: str, run_id: str) -> dict[str, Any] | None:
+    """Return task_config and strategy_config from the execution snapshot."""
+    from apps.trading.models import TaskExecutionSnapshot
+
+    row = (
+        TaskExecutionSnapshot.objects.filter(
+            task_type=task_type,
+            task_id=task_id,
+            execution_id=run_id,
+        )
+        .values("task_config", "strategy_config")
+        .first()
+    )
+    if row is None:
+        return None
+    if not row.get("task_config") and not row.get("strategy_config"):
+        return None
+    return row

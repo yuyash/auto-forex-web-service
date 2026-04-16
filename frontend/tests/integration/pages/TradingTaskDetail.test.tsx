@@ -276,26 +276,10 @@ describe('TradingTaskDetail', () => {
     });
   });
 
-  it('pauses running trading tasks from the detail header', async () => {
-    const user = userEvent.setup();
-
-    render(<TradingTaskDetail />, { wrapper: createWrapper() });
-
-    await user.click(screen.getByRole('button', { name: 'Pause' }));
-    const pauseConfirmButtons = screen.getAllByRole('button', {
-      name: 'Pause',
-    });
-    await user.click(pauseConfirmButtons[pauseConfirmButtons.length - 1]);
-
-    await waitFor(() => {
-      expect(mockTradingPause).toHaveBeenCalledWith('1');
-    });
-  });
-
-  it('resumes paused trading tasks from the detail header', async () => {
+  it('resumes stopped trading tasks from the detail header', async () => {
     const mod = await import('../../../src/hooks/useTradingTasks');
     vi.mocked(mod.useTradingTask).mockReturnValueOnce({
-      data: { ...mockTaskData, status: TaskStatus.PAUSED },
+      data: { ...mockTaskData, status: TaskStatus.STOPPED },
       isLoading: false,
       error: null,
       refresh: vi.fn(),

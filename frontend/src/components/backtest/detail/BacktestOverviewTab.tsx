@@ -22,6 +22,15 @@ interface BacktestOverviewTabProps {
   latestMetrics?: MetricPoint | null;
   timezone: string;
   language?: string;
+  isViewingHistorical?: boolean;
+  historicalStrategyConfig?: {
+    id: string;
+    name: string;
+    strategy_type: string;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    parameters: Record<string, any>;
+  } | null;
+  executionId?: string;
   onOpenConfiguration: () => void;
 }
 
@@ -35,6 +44,9 @@ export function BacktestOverviewTab({
   latestMetrics,
   timezone,
   language,
+  isViewingHistorical = false,
+  historicalStrategyConfig,
+  executionId,
   onOpenConfiguration,
 }: BacktestOverviewTabProps) {
   const { t } = useTranslation(['backtest', 'common']);
@@ -111,7 +123,7 @@ export function BacktestOverviewTab({
                 {taskId}
               </Typography>
             </Box>
-            {task.execution_id && (
+            {(executionId || task.execution_id) && (
               <Box>
                 <Typography variant="caption" color="text.secondary">
                   {t('backtest:detail.executionId')}
@@ -120,7 +132,7 @@ export function BacktestOverviewTab({
                   variant="body2"
                   sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}
                 >
-                  {task.execution_id}
+                  {executionId || task.execution_id}
                 </Typography>
               </Box>
             )}
@@ -172,15 +184,30 @@ export function BacktestOverviewTab({
             <Box>
               <Typography variant="caption" color="text.secondary">
                 {t('common:labels.strategyConfiguration')}
+                {isViewingHistorical && historicalStrategyConfig && (
+                  <Chip
+                    size="small"
+                    label={t('common:labels.snapshot')}
+                    color="info"
+                    variant="outlined"
+                    sx={{ ml: 1, height: 18, fontSize: '0.65rem' }}
+                  />
+                )}
               </Typography>
-              <Link
-                component="button"
-                variant="body1"
-                onClick={onOpenConfiguration}
-                sx={{ textAlign: 'left', display: 'block' }}
-              >
-                {task.config_name}
-              </Link>
+              {isViewingHistorical && historicalStrategyConfig ? (
+                <Typography variant="body1">
+                  {historicalStrategyConfig.name}
+                </Typography>
+              ) : (
+                <Link
+                  component="button"
+                  variant="body1"
+                  onClick={onOpenConfiguration}
+                  sx={{ textAlign: 'left', display: 'block' }}
+                >
+                  {task.config_name}
+                </Link>
+              )}
             </Box>
 
             <Box>
@@ -188,7 +215,12 @@ export function BacktestOverviewTab({
                 {t('common:labels.strategyType')}
               </Typography>
               <Typography variant="body1" sx={{ textTransform: 'capitalize' }}>
-                {getStrategyDisplayName(strategies, task.strategy_type)}
+                {isViewingHistorical && historicalStrategyConfig
+                  ? getStrategyDisplayName(
+                      strategies,
+                      historicalStrategyConfig.strategy_type
+                    )
+                  : getStrategyDisplayName(strategies, task.strategy_type)}
               </Typography>
             </Box>
 

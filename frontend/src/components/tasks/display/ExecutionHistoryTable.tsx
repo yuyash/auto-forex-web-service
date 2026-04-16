@@ -2,7 +2,8 @@
  * ExecutionHistoryTable Component
  *
  * Displays paginated execution history for a task using the shared DataTable,
- * with column visibility/ordering via ColumnConfigDialog.
+ * with column visibility/ordering via ColumnConfigDialog and multi-select
+ * comparison support via checkboxes.
  */
 
 import { useState, useCallback, useMemo } from 'react';
@@ -10,6 +11,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Box,
+  Button,
   Chip,
   Typography,
   TablePagination,
@@ -17,6 +19,7 @@ import {
   Tooltip,
 } from '@mui/material';
 import {
+  CompareArrows as CompareIcon,
   Settings as SettingsIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
@@ -28,7 +31,9 @@ import {
   applyColumnConfig,
 } from '../../../hooks/useColumnConfig';
 import { useTaskExecutions } from '../../../hooks/useTaskExecutions';
+import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
 import { StatusBadge } from './StatusBadge';
+import { ExecutionComparisonDialog } from '../detail/ExecutionComparisonDialog';
 import { TaskType } from '../../../types/common';
 import type { TaskExecution } from '../../../types/execution';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -54,6 +59,17 @@ export function ExecutionHistoryTable({
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [colConfigOpen, setColConfigOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
+
+  const {
+    selectedRowIds: checkedIds,
+    toggleRowSelection: toggleCheck,
+    selectAllOnPage: checkAllOnPage,
+    deselectAllOnPage: uncheckAllOnPage,
+    resetSelection: resetChecked,
+    isAllPageSelected: isAllPageChecked,
+    isIndeterminate: isCheckIndeterminate,
+  } = useTableRowSelection();
 
   const { data, isLoading, refresh } = useTaskExecutions(
     taskId,
@@ -65,10 +81,12 @@ export function ExecutionHistoryTable({
     }
   );
 
-  const executions = data?.results ?? [];
+  const executions = useMemo(() => data?.results ?? [], [data?.results]);
   const totalCount = data?.count ?? 0;
   const timezone = user?.timezone || 'UTC';
   const language = user?.language;
+
+  const pageRowIds = useMemo(() => executions.map((e) => e.id), [executions]);
 
   const formatDate = useCallback(
     (v: string | undefined | null): string => {
@@ -327,12 +345,40 @@ export function ExecutionHistoryTable({
     [searchParams, setSearchParams]
   );
 
+  const handleToggleAll = useCallback(() => {
+    if (isAllPageChecked(pageRowIds)) {
+      uncheckAllOnPage(pageRowIds);
+    } else {
+      checkAllOnPage(pageRowIds);
+    }
+  }, [pageRowIds, isAllPageChecked, uncheckAllOnPage, checkAllOnPage]);
+
+  const checkedCount = checkedIds.size;
+
+  // Build the list of checked executions for the comparison dialog
+  const checkedExecutions = useMemo(
+    () => executions.filter((e) => checkedIds.has(e.id)),
+    [executions, checkedIds]
+  );
+
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
         <Typography variant="subtitle1" sx={{ flex: 1 }}>
           {t('tables.executions.title')}
         </Typography>
+        <Button
+          size="small"
+          variant="contained"
+          startIcon={<CompareIcon />}
+          disabled={checkedCount < 2}
+          onClick={() => setCompareOpen(true)}
+          sx={{ mr: 1 }}
+        >
+          {checkedCount >= 2
+            ? t('tables.executions.compareSelected', { count: checkedCount })
+            : t('tables.executions.compare')}
+        </Button>
         <Tooltip title={t('tables.executions.refresh')}>
           <IconButton
             size="small"
@@ -366,6 +412,13 @@ export function ExecutionHistoryTable({
         onRowClick={handleRowClick}
         defaultOrderBy="started_at"
         defaultOrder="desc"
+        selectable
+        getRowId={(row) => row.id}
+        selectedRowIds={checkedIds}
+        onToggleRow={toggleCheck}
+        allPageSelected={isAllPageChecked(pageRowIds)}
+        indeterminate={isCheckIndeterminate(pageRowIds)}
+        onToggleAll={handleToggleAll}
       />
 
       <TablePagination
@@ -388,6 +441,19 @@ export function ExecutionHistoryTable({
         onSave={updateColumns}
         onReset={resetToDefaults}
       />
+
+      {compareOpen && checkedExecutions.length >= 2 && (
+        <ExecutionComparisonDialog
+          open={compareOpen}
+          onClose={() => {
+            setCompareOpen(false);
+            resetChecked();
+          }}
+          executions={checkedExecutions}
+          taskId={taskId}
+          taskType={taskType}
+        />
+      )}
     </Box>
   );
 }

@@ -43,7 +43,6 @@ import { TaskActionConfirmDialog } from '../tasks/actions/TaskActionConfirmDialo
 import { useTaskActionDialog } from '../../hooks/useTaskActionDialog';
 import {
   useDeleteTradingTask,
-  usePauseTradingTask,
   useRestartTradingTask,
   useResumeTradingTask,
   useStartTradingTask,
@@ -62,6 +61,7 @@ import { useTaskMetrics } from '../../hooks/useTaskMetrics';
 import { computeAutoInterval } from '../../utils/autoGranularity';
 import { useToast } from '../common';
 import { formatTaskActionError } from '../../utils/taskActionError';
+import { useTaskExecution } from '../../hooks/useTaskExecutions';
 
 export const TradingTaskDetail: React.FC = () => {
   const { t } = useTranslation(['trading', 'common']);
@@ -77,7 +77,6 @@ export const TradingTaskDetail: React.FC = () => {
   const stopTask = useStopTradingTask();
   const restartTask = useRestartTradingTask();
   const resumeTask = useResumeTradingTask();
-  const pauseTask = usePauseTradingTask();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { user } = useAuth();
@@ -137,6 +136,15 @@ export const TradingTaskDetail: React.FC = () => {
     selectedExecutionId != null &&
     task?.execution_id != null &&
     selectedExecutionId !== task.execution_id;
+
+  const { data: executionDetail } = useTaskExecution(
+    taskId,
+    effectiveExecutionId ?? '',
+    TaskType.TRADING
+  );
+  const historicalStrategyConfig = isViewingHistorical
+    ? (executionDetail?.strategy_config ?? null)
+    : null;
 
   const overviewSummary = useTaskSummary(
     taskId,
@@ -297,6 +305,7 @@ export const TradingTaskDetail: React.FC = () => {
         taskDescription={detailTask.description}
         taskStatus={detailTask.status}
         currentStatus={currentStatus}
+        taskType="trading"
         strategyName={getStrategyDisplayName(
           strategies,
           detailTask.strategy_type
@@ -330,9 +339,6 @@ export const TradingTaskDetail: React.FC = () => {
         }}
         onResume={async (id) => {
           requestConfirm('resume', id);
-        }}
-        onPause={async (id) => {
-          requestConfirm('pause', id);
         }}
         onEdit={() => navigate(`/trading-tasks/${taskId}/edit`)}
         onDelete={() => setDeleteDialogOpen(true)}
@@ -369,6 +375,9 @@ export const TradingTaskDetail: React.FC = () => {
               strategies={strategies}
               pnlCurrency={pnlCurrency}
               latestMetrics={metricsResult.latest}
+              isViewingHistorical={isViewingHistorical}
+              historicalStrategyConfig={historicalStrategyConfig}
+              executionId={effectiveExecutionId}
               onOpenConfiguration={() =>
                 navigate(`/configurations/${detailTask.config_id}`)
               }
@@ -514,10 +523,7 @@ export const TradingTaskDetail: React.FC = () => {
           taskName={task.name}
           onCancel={cancelAction}
           isLoading={
-            startTask.isLoading ||
-            pauseTask.isLoading ||
-            resumeTask.isLoading ||
-            restartTask.isLoading
+            startTask.isLoading || resumeTask.isLoading || restartTask.isLoading
           }
           onConfirm={async () => {
             const { type, taskId: actionTaskId } = pendingAction;
@@ -529,18 +535,11 @@ export const TradingTaskDetail: React.FC = () => {
                   TaskStatus.RUNNING,
                   TaskStatus.FAILED,
                 ]);
-              } else if (type === 'pause') {
-                const updatedTask = await pauseTask.mutate(actionTaskId);
-                applyOptimisticStatus(updatedTask.status, [
-                  TaskStatus.PAUSED,
-                  TaskStatus.RUNNING,
-                  TaskStatus.FAILED,
-                ]);
               } else if (type === 'resume') {
                 const updatedTask = await resumeTask.mutate(actionTaskId);
                 applyOptimisticStatus(updatedTask.status, [
                   TaskStatus.RUNNING,
-                  TaskStatus.PAUSED,
+                  TaskStatus.STARTING,
                   TaskStatus.FAILED,
                 ]);
               } else if (type === 'restart') {

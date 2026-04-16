@@ -29,7 +29,7 @@ class TestStrategyConfigs:
 
     def test_list_configs_search(self, authenticated_client, strategy_config):
         """Verify search filter finds configs by name."""
-        resp = authenticated_client.get("/api/trading/strategy-configs/", {"search": "Floor"})
+        resp = authenticated_client.get("/api/trading/strategy-configs/", {"search": "Snowball"})
         assert resp.status_code == 200
         assert resp.data["count"] >= 1
 
@@ -38,14 +38,14 @@ class TestStrategyConfigs:
             "/api/trading/strategy-configs/",
             {
                 "name": "E2E New Config",
-                "strategy_type": "floor",
+                "strategy_type": "snowball",
                 "parameters": {
                     "instrument": "USD_JPY",
-                    "base_lot_size": 1.0,
-                    "retracement_pips": 30.0,
-                    "take_profit_pips": 25.0,
-                    "max_layers": 3,
-                    "max_retracements_per_layer": 10,
+                    "base_units": 1000,
+                    "m_pips": 50,
+                    "n_pips": 30,
+                    "r_max": 5,
+                    "f_max": 3,
                 },
             },
             format="json",

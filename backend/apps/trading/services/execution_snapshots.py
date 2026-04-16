@@ -129,6 +129,8 @@ def persist_execution_snapshot(*, task, task_type: str) -> TaskExecutionSnapshot
             "completed_at": getattr(task, "completed_at", None),
             "summary": _make_json_safe(asdict(summary)),
             "metrics": _make_json_safe(metrics),
+            "task_config": _snapshot_task_config(task),
+            "strategy_config": _snapshot_strategy_config(task),
         },
     )
     return snapshot
@@ -225,3 +227,55 @@ class _DecimalEncoder(json.JSONEncoder):
 def _make_json_safe(obj: Any) -> Any:
     """Round-trip through JSON to convert Decimal values to strings."""
     return json.loads(json.dumps(obj, cls=_DecimalEncoder))
+
+
+def _snapshot_task_config(task: Any) -> dict[str, Any]:
+    """Capture task-level settings as a JSON-safe dict."""
+    from apps.trading.models import BacktestTask
+
+    data: dict[str, Any] = {
+        "instrument": getattr(task, "instrument", None),
+        "pip_size": str(getattr(task, "pip_size", "") or ""),
+        "hedging_enabled": getattr(task, "hedging_enabled", None),
+    }
+    if isinstance(task, BacktestTask):
+        data.update(
+            {
+                "start_time": _iso_or_none(getattr(task, "start_time", None)),
+                "end_time": _iso_or_none(getattr(task, "end_time", None)),
+                "initial_balance": str(getattr(task, "initial_balance", "") or ""),
+                "commission_per_trade": str(getattr(task, "commission_per_trade", "") or ""),
+                "data_source": getattr(task, "data_source", None),
+                "tick_granularity": getattr(task, "tick_granularity", None),
+                "tick_window_value_mode": getattr(task, "tick_window_value_mode", None),
+            }
+        )
+    else:
+        data.update(
+            {
+                "sell_on_stop": getattr(task, "sell_on_stop", None),
+                "dry_run": getattr(task, "dry_run", None),
+            }
+        )
+    return data
+
+
+def _snapshot_strategy_config(task: Any) -> dict[str, Any]:
+    """Capture the StrategyConfiguration as a JSON-safe dict."""
+    config = getattr(task, "config", None)
+    if config is None:
+        return {}
+    return {
+        "id": str(config.pk),
+        "name": config.name,
+        "strategy_type": config.strategy_type,
+        "parameters": _make_json_safe(config.parameters) if config.parameters else {},
+    }
+
+
+def _iso_or_none(value: Any) -> str | None:
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)

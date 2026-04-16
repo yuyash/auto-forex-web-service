@@ -22,7 +22,7 @@ class TestStrategies:
         assert "config_schema" in strategy
 
     def test_strategy_defaults(self, authenticated_client):
-        resp = authenticated_client.get("/api/trading/strategies/floor/defaults/")
+        resp = authenticated_client.get("/api/trading/strategies/snowball/defaults/")
         assert resp.status_code == 200
 
     def test_strategies_unauthenticated(self, api_client):

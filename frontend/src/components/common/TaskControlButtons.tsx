@@ -30,6 +30,7 @@ import { TaskStatus as TaskStatusEnum } from '../../types/common';
 export interface TaskControlButtonsProps {
   taskId: string;
   status: TaskStatus;
+  taskType?: 'backtest' | 'trading';
   onStart?: (taskId: string) => void | Promise<void>;
   onStop?: (taskId: string) => void | Promise<void>;
   onPause?: (taskId: string) => void | Promise<void>;
@@ -81,6 +82,7 @@ export interface TaskControlButtonsProps {
 export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   taskId,
   status,
+  taskType,
   onStart,
   onStop,
   onPause,
@@ -94,26 +96,41 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   showLabels = false,
   orientation = 'horizontal',
 }) => {
-  // Determine which buttons should be enabled based on status
-  // CREATED: Start only
-  // STARTING: Stop only
-  // RUNNING: Stop, Pause
-  // PAUSED: Stop, Resume
-  // STOPPING: (none)
-  // STOPPED: Restart, Delete
-  // COMPLETED: Restart, Delete
-  // FAILED: Restart, Delete
+  // Determine which buttons should be enabled based on status and task type.
+  //
+  // Trading tasks:
+  //   CREATED: Start only
+  //   STARTING: Stop only
+  //   RUNNING: Stop
+  //   STOPPING: (none)
+  //   STOPPED: Resume, Restart, Delete
+  //   COMPLETED: Restart, Delete
+  //   FAILED: Resume, Restart, Delete
+  //
+  // Backtest tasks (unchanged):
+  //   CREATED: Start only
+  //   STARTING: Stop only
+  //   RUNNING: Stop, Pause
+  //   PAUSED: Stop, Resume
+  //   STOPPING: (none)
+  //   STOPPED: Restart, Delete
+  //   COMPLETED: Restart, Delete
+  //   FAILED: Restart, Delete
   const { t } = useTranslation('common');
+
+  const isTrading = taskType === 'trading';
 
   const canStart = status === TaskStatusEnum.CREATED;
 
   const canStop = [
     TaskStatusEnum.STARTING,
     TaskStatusEnum.RUNNING,
-    TaskStatusEnum.PAUSED,
+    ...(isTrading ? [] : [TaskStatusEnum.PAUSED]),
   ].includes(status);
-  const canPause = status === TaskStatusEnum.RUNNING;
-  const canResume = status === TaskStatusEnum.PAUSED;
+  const canPause = !isTrading && status === TaskStatusEnum.RUNNING;
+  const canResume = isTrading
+    ? [TaskStatusEnum.STOPPED, TaskStatusEnum.FAILED].includes(status)
+    : status === TaskStatusEnum.PAUSED;
   const pauseEnabled = canPause;
   const resumeEnabled = canResume;
   const canRestart = [
@@ -214,8 +231,9 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
           'primary'
         )}
 
-      {/* Pause Button */}
+      {/* Pause Button (backtest only) */}
       {onPause &&
+        !isTrading &&
         renderButton(
           <PauseIcon />,
           t('actions.pause'),

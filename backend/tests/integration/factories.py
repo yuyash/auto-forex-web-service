@@ -124,15 +124,15 @@ class StrategyConfigurationFactory(DjangoModelFactory):
 
     user = factory.SubFactory(UserFactory)
     name = factory.Faker("catch_phrase")
-    strategy_type = "floor"
+    strategy_type = "snowball"
     parameters = factory.LazyFunction(
         lambda: {
             "instrument": "USD_JPY",
-            "base_lot_size": 1.0,
-            "retracement_pips": 30.0,
-            "take_profit_pips": 25.0,
-            "max_layers": 3,
-            "max_retracements_per_layer": 10,
+            "base_units": 1000,
+            "m_pips": 50,
+            "n_pips": 30,
+            "r_max": 5,
+            "f_max": 3,
         }
     )
 

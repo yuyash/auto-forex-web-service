@@ -4,7 +4,6 @@ from apps.trading.models import (
     BacktestTask,
     CeleryTaskStatus,
     Equity,
-    Layer,
     Order,
     Position,
     StrategyConfiguration,
@@ -221,19 +220,3 @@ class EquityAdmin(admin.ModelAdmin):
     list_filter = ("task_type", "timestamp")
     search_fields = ("task_id",)
     ordering = ("-timestamp",)
-
-
-@admin.register(Layer)
-class LayerAdmin(admin.ModelAdmin):
-    list_display = (
-        "id",
-        "task_id",
-        "index",
-        "direction",
-        "retracement_count",
-        "is_active",
-        "created_at",
-    )
-    list_filter = ("direction", "is_active", "created_at")
-    search_fields = ("task_id",)
-    ordering = ("task_id", "index")

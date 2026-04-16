@@ -244,7 +244,6 @@ class StrategyType(models.TextChoices):
     Identifies the strategy algorithm being used for trading decisions.
     """
 
-    FLOOR = "floor", "Floor Strategy"
     SNOWBALL = "snowball", "Snowball Strategy"
     CUSTOM = "custom", "Custom Strategy"
 
@@ -274,7 +273,3 @@ class Direction(models.TextChoices):
 
     LONG = "long", "Long"
     SHORT = "short", "Short"
-
-
-# Deprecated: Use Direction instead
-FloorSide = Direction  # Backward compatibility alias

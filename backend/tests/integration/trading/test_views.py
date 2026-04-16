@@ -35,14 +35,14 @@ class TestStrategyConfigAPI:
         client = self._auth_client(user)
         data = {
             "name": "New Config",
-            "strategy_type": "floor",
+            "strategy_type": "snowball",
             "parameters": {
                 "instrument": "USD_JPY",
-                "base_lot_size": 1.0,
-                "retracement_pips": 30.0,
-                "take_profit_pips": 25.0,
-                "max_layers": 3,
-                "max_retracements_per_layer": 10,
+                "base_units": 1000,
+                "m_pips": 50,
+                "n_pips": 30,
+                "r_max": 5,
+                "f_max": 3,
             },
         }
         response = client.post("/api/trading/strategy-configs/", data, format="json")
@@ -62,7 +62,11 @@ class TestStrategyConfigAPI:
         user = UserFactory()
         config = StrategyConfigurationFactory(user=user)
         client = self._auth_client(user)
-        data = {"name": "Updated Name", "strategy_type": "floor", "parameters": config.parameters}
+        data = {
+            "name": "Updated Name",
+            "strategy_type": "snowball",
+            "parameters": config.parameters,
+        }
         response = client.put(f"/api/trading/strategy-configs/{config.id}/", data, format="json")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["name"] == "Updated Name"
@@ -128,9 +132,9 @@ class TestStrategyConfigAPI:
 
     def test_list_filter_by_strategy_type(self):
         user = UserFactory()
-        StrategyConfigurationFactory(user=user, strategy_type="floor")
+        StrategyConfigurationFactory(user=user, strategy_type="snowball")
         client = self._auth_client(user)
-        response = client.get("/api/trading/strategy-configs/?strategy_type=floor")
+        response = client.get("/api/trading/strategy-configs/?strategy_type=snowball")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] >= 1
 
@@ -158,9 +162,9 @@ class TestStrategyAPI:
         user = UserFactory()
         client = APIClient()
         client.force_authenticate(user=user)
-        response = client.get("/api/trading/strategies/floor/defaults/")
+        response = client.get("/api/trading/strategies/snowball/defaults/")
         assert response.status_code == status.HTTP_200_OK
-        assert response.data["strategy_id"] == "floor"
+        assert response.data["strategy_id"] == "snowball"
 
     def test_strategy_defaults_not_found(self):
         user = UserFactory()

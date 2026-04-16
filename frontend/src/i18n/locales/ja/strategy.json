@@ -11,7 +11,6 @@
     "resume": "戦略を再開"
   },
   "types": {
-    "floor": "フロア戦略",
     "snowball": "スノーボール戦略",
     "trendFollowing": "トレンドフォロー",
     "maCrossover": "移動平均クロスオーバー",
@@ -26,7 +25,6 @@
     "newsSpike": "ニュース/スパイク"
   },
   "descriptions": {
-    "floor": "レイヤーベースのリトレースメント戦略。利益確定と証拠金保護を設定可能。",
     "snowball": "両建てヘッジ戦略：順行側の回転利確と、逆行側の段別決済によるナンピン平均化。"
   },
   "parameters": {
