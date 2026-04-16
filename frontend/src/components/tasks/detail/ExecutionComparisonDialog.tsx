@@ -45,6 +45,7 @@ import {
   buildParameterLabelMap,
   resolveParameterLabel,
 } from '../../../utils/strategySchemaLabels';
+import { computeAutoInterval } from '../../../utils/autoGranularity';
 
 /** Palette for up to 10 executions */
 const EXEC_COLORS = [
@@ -215,8 +216,8 @@ export function ExecutionComparisonDialog({
   }, [sorted, strategies, i18n.language]);
 
   // Fetch metrics for all executions.
-  // When interval=0 (Auto), fetch raw data without server-side aggregation
-  // so every recorded data point is available for charting.
+  // When interval=0 (Auto), compute a per-execution interval from its
+  // time range to keep the total data volume manageable (≤ ~1500 points).
   // When the user picks a specific granularity, pass it to the backend.
   const fetchAllMetrics = useCallback(async () => {
     setMetricsLoading(true);
@@ -224,11 +225,24 @@ export function ExecutionComparisonDialog({
     try {
       const entries = await Promise.all(
         sorted.map(async (exec) => {
+          let effectiveInterval = interval;
+          if (effectiveInterval === 0) {
+            // Auto: compute from execution's own time range
+            const startMs = exec.started_at
+              ? new Date(exec.started_at).getTime()
+              : 0;
+            const endMs = exec.completed_at
+              ? new Date(exec.completed_at).getTime()
+              : Date.now();
+            if (startMs > 0 && endMs > startMs) {
+              effectiveInterval = computeAutoInterval((endMs - startMs) / 1000);
+            }
+          }
           const points = await fetchPaginatedMetrics({
             taskId,
             taskType,
             executionRunId: exec.id,
-            interval: interval > 1 ? interval : undefined,
+            interval: effectiveInterval > 1 ? effectiveInterval : undefined,
             pageSize: 500,
           });
           return [exec.id, points] as const;
