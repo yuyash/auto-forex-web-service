@@ -51,7 +51,7 @@ export function useTaskMetrics({
 
   const fetchData = useCallback(async () => {
     if (!taskId || !enabled) return;
-    setIsLoading((prev) => (data.length === 0 ? true : prev));
+    setIsLoading(true);
     setError(null);
     try {
       const points = await fetchPaginatedMetrics({
@@ -75,16 +75,7 @@ export function useTaskMetrics({
         setIsLoading(false);
       }
     }
-  }, [
-    taskId,
-    taskType,
-    executionRunId,
-    interval,
-    since,
-    until,
-    enabled,
-    data.length,
-  ]);
+  }, [taskId, taskType, executionRunId, interval, since, until, enabled]);
 
   useEffect(() => {
     mountedRef.current = true;
