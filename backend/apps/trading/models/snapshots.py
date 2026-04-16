@@ -38,6 +38,16 @@ class TaskExecutionSnapshot(UUIDModel):
         blank=True,
         help_text="Serialized execution metrics snapshot",
     )
+    task_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Snapshot of task-level settings at execution start (instrument, balance, etc.)",
+    )
+    strategy_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Snapshot of StrategyConfiguration at execution start (name, type, parameters)",
+    )
 
     class Meta:
         db_table = "task_execution_snapshots"

@@ -538,6 +538,7 @@ class TaskExecutor:
             self._restore_metric_counters()
 
         logger.info("Engine started, events_count=%d", len(result.events))
+        self._persist_config_snapshot()
         return state, resumed
 
     def _run_tick_loop(self, loop: ExecutionLoopState) -> None:
@@ -1145,6 +1146,34 @@ class TaskExecutor:
         """Record failed execution outcome."""
         logger.error("Execution failed: %s", error, exc_info=True)
         self.state_manager.stop(status_message=f"Execution failed: {error}", failed=True)
+
+    def _persist_config_snapshot(self) -> None:
+        """Save task and strategy config into the execution snapshot early.
+
+        Called at execution start so the config is captured even if the
+        execution fails before reaching the finalization step.
+        """
+        from apps.trading.models import TaskExecutionSnapshot
+        from apps.trading.services.execution_snapshots import (
+            _snapshot_strategy_config,
+            _snapshot_task_config,
+        )
+
+        execution_id = getattr(self.task, "execution_id", None)
+        if execution_id is None:
+            return
+        try:
+            TaskExecutionSnapshot.objects.update_or_create(
+                task_type=self.task_type.value,
+                task_id=self.task.pk,
+                execution_id=execution_id,
+                defaults={
+                    "task_config": _snapshot_task_config(self.task),
+                    "strategy_config": _snapshot_strategy_config(self.task),
+                },
+            )
+        except Exception:
+            logger.warning("Failed to persist config snapshot", exc_info=True)
 
     def _cleanup_execution(self) -> None:
         """Release runtime resources."""
