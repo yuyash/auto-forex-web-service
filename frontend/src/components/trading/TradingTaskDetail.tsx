@@ -377,6 +377,9 @@ export const TradingTaskDetail: React.FC = () => {
               latestMetrics={metricsResult.latest}
               isViewingHistorical={isViewingHistorical}
               historicalStrategyConfig={historicalStrategyConfig}
+              historicalTaskConfig={
+                isViewingHistorical ? executionDetail?.task_config : null
+              }
               executionId={effectiveExecutionId}
               onOpenConfiguration={() =>
                 navigate(`/configurations/${detailTask.config_id}`)

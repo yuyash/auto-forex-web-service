@@ -1,4 +1,17 @@
-import { Box, Chip, Divider, Grid, Link, Typography } from '@mui/material';
+import { useState } from 'react';
+import {
+  Box,
+  Chip,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  Grid,
+  IconButton,
+  Link,
+  Typography,
+} from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { StatusBadge } from '../../tasks/display/StatusBadge';
@@ -29,6 +42,8 @@ interface TradingOverviewTabProps {
     parameters: Record<string, any>;
   } | null;
   executionId?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  historicalTaskConfig?: Record<string, any> | null;
   onOpenConfiguration: () => void;
 }
 
@@ -42,10 +57,19 @@ export function TradingOverviewTab({
   latestMetrics,
   isViewingHistorical = false,
   historicalStrategyConfig,
+  historicalTaskConfig,
   executionId,
   onOpenConfiguration,
 }: TradingOverviewTabProps) {
   const { t } = useTranslation(['trading', 'common']);
+  const [showSnapshotParams, setShowSnapshotParams] = useState(false);
+
+  // When viewing a historical execution, prefer snapshot values
+  const effectiveInstrument =
+    (isViewingHistorical && historicalTaskConfig?.instrument) ||
+    task.instrument;
+  const effectivePipSize =
+    (isViewingHistorical && historicalTaskConfig?.pip_size) || task.pip_size;
   const latestMarginRatioRaw = latestMetrics?.metrics.margin_ratio;
   const latestMarginRatio =
     latestMarginRatioRaw != null && latestMarginRatioRaw !== ''
@@ -83,14 +107,16 @@ export function TradingOverviewTab({
               <Typography variant="caption" color="text.secondary">
                 {t('common:labels.instrument')}
               </Typography>
-              <Typography variant="body1">{task.instrument}</Typography>
+              <Typography variant="body1">{effectiveInstrument}</Typography>
             </Box>
             <Box>
               <Typography variant="caption" color="text.secondary">
                 {t('common:labels.pipSize')}
               </Typography>
               <Typography variant="body1">
-                {task.pip_size ? parseFloat(task.pip_size) : task.pip_size}
+                {effectivePipSize
+                  ? parseFloat(String(effectivePipSize))
+                  : effectivePipSize}
               </Typography>
             </Box>
             <Box>
@@ -164,9 +190,14 @@ export function TradingOverviewTab({
                 )}
               </Typography>
               {isViewingHistorical && historicalStrategyConfig ? (
-                <Typography variant="body1">
+                <Link
+                  component="button"
+                  variant="body1"
+                  onClick={() => setShowSnapshotParams(true)}
+                  sx={{ textAlign: 'left', display: 'block' }}
+                >
                   {historicalStrategyConfig.name}
-                </Typography>
+                </Link>
               ) : (
                 <Link
                   component="button"
@@ -398,6 +429,71 @@ export function TradingOverviewTab({
           />
         </Grid>
       </Grid>
+
+      {/* Snapshot parameters dialog */}
+      {historicalStrategyConfig && (
+        <Dialog
+          open={showSnapshotParams}
+          onClose={() => setShowSnapshotParams(false)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            {historicalStrategyConfig.name}
+            <IconButton
+              size="small"
+              onClick={() => setShowSnapshotParams(false)}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent dividers>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ mb: 2, display: 'block' }}
+            >
+              {t('common:labels.strategyType')}:{' '}
+              {historicalStrategyConfig.strategy_type}
+            </Typography>
+            {Object.entries(historicalStrategyConfig.parameters || {}).map(
+              ([key, value]) => (
+                <Box
+                  key={key}
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    py: 0.5,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    {key}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    fontWeight={500}
+                    sx={{ fontFamily: 'monospace' }}
+                  >
+                    {typeof value === 'boolean'
+                      ? value
+                        ? 'true'
+                        : 'false'
+                      : String(value ?? '-')}
+                  </Typography>
+                </Box>
+              )
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </Box>
   );
 }

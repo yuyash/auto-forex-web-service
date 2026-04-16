@@ -38,10 +38,10 @@ def test_drain_trading_for_deploy_stops_and_waits(
     out = StringIO()
     call_command("drain_trading_for_deploy", stdout=out)
 
-    mock_service_cls.return_value.pause_task.assert_called_once_with(task.pk)
+    mock_service_cls.return_value.stop_task.assert_called_once_with(task.pk, mode="graceful")
     output = out.getvalue()
     assert "Draining 1 active trading task" in output
-    assert "mode=pause" in output
+    assert "mode=graceful" in output
     assert "All active trading tasks drained." in output
 
 
@@ -60,7 +60,7 @@ def test_drain_trading_for_deploy_emits_drained_task_ids(
     out = StringIO()
     call_command("drain_trading_for_deploy", emit_task_ids=True, stdout=out)
 
-    mock_service_cls.return_value.pause_task.assert_called_once_with(task.pk)
+    mock_service_cls.return_value.stop_task.assert_called_once_with(task.pk, mode="graceful")
     assert f"DRAINED_TASK_IDS={task.pk}" in out.getvalue()
 
 
@@ -77,10 +77,9 @@ def test_drain_trading_for_deploy_can_use_stop_mode(
     mock_qs.order_by.return_value = [task]
 
     out = StringIO()
-    call_command("drain_trading_for_deploy", mode="graceful", stdout=out)
+    call_command("drain_trading_for_deploy", mode="immediate", stdout=out)
 
-    mock_service_cls.return_value.stop_task.assert_called_once_with(task.pk, mode="graceful")
-    mock_service_cls.return_value.pause_task.assert_not_called()
+    mock_service_cls.return_value.stop_task.assert_called_once_with(task.pk, mode="immediate")
 
 
 @patch("apps.trading.management.commands.drain_trading_for_deploy.TaskService")
@@ -131,6 +130,6 @@ def test_drain_trading_for_deploy_only_resumes_starting_or_running_tasks(
     out = StringIO()
     call_command("drain_trading_for_deploy", emit_task_ids=True, stdout=out)
 
-    mock_service_cls.return_value.pause_task.assert_called_once_with(running_task.pk)
+    assert mock_service_cls.return_value.stop_task.call_count == 2
     assert f"DRAINED_TASK_IDS={running_task.pk}" in out.getvalue()
     assert str(stopping_task.pk) not in out.getvalue().split("DRAINED_TASK_IDS=")[-1]
