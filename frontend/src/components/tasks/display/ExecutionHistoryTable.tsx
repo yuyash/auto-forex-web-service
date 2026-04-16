@@ -61,6 +61,14 @@ export function ExecutionHistoryTable({
   const [colConfigOpen, setColConfigOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
 
+  // URL-driven comparison: ?compare=id1,id2,...
+  const compareParam = searchParams.get('compare');
+  const compareIdsFromUrl = useMemo(
+    () =>
+      compareParam ? compareParam.split(',').filter((id) => id.length > 0) : [],
+    [compareParam]
+  );
+
   const {
     selectedRowIds: checkedIds,
     toggleRowSelection: toggleCheck,
@@ -361,6 +369,39 @@ export function ExecutionHistoryTable({
     [executions, checkedIds]
   );
 
+  // URL-driven comparison: auto-open dialog when ?compare= is present
+  // and we have matching execution data loaded
+  const urlCompareExecutions = useMemo(() => {
+    if (compareIdsFromUrl.length < 2) return [];
+    const idSet = new Set(compareIdsFromUrl);
+    return executions.filter((e) => idSet.has(e.id));
+  }, [compareIdsFromUrl, executions]);
+
+  const isCompareFromUrl =
+    compareIdsFromUrl.length >= 2 && urlCompareExecutions.length >= 2;
+  const effectiveCompareOpen = compareOpen || isCompareFromUrl;
+  const effectiveCompareExecutions = isCompareFromUrl
+    ? urlCompareExecutions
+    : checkedExecutions;
+
+  const handleCompareOpen = useCallback(() => {
+    // Set URL param with selected execution IDs
+    const ids = [...checkedIds].join(',');
+    const next = new URLSearchParams(searchParams);
+    next.set('compare', ids);
+    setSearchParams(next);
+    setCompareOpen(true);
+  }, [checkedIds, searchParams, setSearchParams]);
+
+  const handleCompareClose = useCallback(() => {
+    setCompareOpen(false);
+    resetChecked();
+    // Remove compare param from URL
+    const next = new URLSearchParams(searchParams);
+    next.delete('compare');
+    setSearchParams(next);
+  }, [resetChecked, searchParams, setSearchParams]);
+
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -372,7 +413,7 @@ export function ExecutionHistoryTable({
           variant="contained"
           startIcon={<CompareIcon />}
           disabled={checkedCount < 2}
-          onClick={() => setCompareOpen(true)}
+          onClick={handleCompareOpen}
           sx={{ mr: 1 }}
         >
           {checkedCount >= 2
@@ -442,14 +483,11 @@ export function ExecutionHistoryTable({
         onReset={resetToDefaults}
       />
 
-      {compareOpen && checkedExecutions.length >= 2 && (
+      {effectiveCompareOpen && effectiveCompareExecutions.length >= 2 && (
         <ExecutionComparisonDialog
-          open={compareOpen}
-          onClose={() => {
-            setCompareOpen(false);
-            resetChecked();
-          }}
-          executions={checkedExecutions}
+          open={effectiveCompareOpen}
+          onClose={handleCompareClose}
+          executions={effectiveCompareExecutions}
           taskId={taskId}
           taskType={taskType}
         />

@@ -31,6 +31,7 @@ import {
   Close as CloseIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import { LineChart } from '@mui/x-charts/LineChart';
 import React from 'react';
@@ -349,6 +350,23 @@ export function ExecutionComparisonDialog({
               </Box>
             ))}
           </Box>
+          {/* Global refresh */}
+          <Tooltip title={t('comparison.refresh', { defaultValue: 'Refresh' })}>
+            <span>
+              <IconButton
+                size="small"
+                onClick={fetchAllMetrics}
+                disabled={metricsLoading}
+                sx={{ ml: 'auto' }}
+              >
+                {metricsLoading ? (
+                  <CircularProgress size={18} />
+                ) : (
+                  <RefreshIcon fontSize="small" />
+                )}
+              </IconButton>
+            </span>
+          </Tooltip>
         </Toolbar>
         <Tabs
           value={tabIndex}
