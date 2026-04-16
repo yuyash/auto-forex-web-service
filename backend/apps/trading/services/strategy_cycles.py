@@ -360,14 +360,19 @@ def _build_cycle(
         "realized_pnl": str(realized_pnl),
         "unrealized_pnl": str(unrealized_pnl),
         "grid_state": grid_state,
-        "trades": [_serialize_trade(t, metrics_by_minute) for t in trades]
+        "trades": [
+            _serialize_trade(t, metrics_by_minute, open_price_by_pos, direction) for t in trades
+        ]
         if include_trades
         else [],
     }
 
 
 def _serialize_trade(
-    t: dict[str, Any], metrics_by_minute: dict[str, dict[str, Any]]
+    t: dict[str, Any],
+    metrics_by_minute: dict[str, dict[str, Any]],
+    open_price_by_pos: dict[str, Decimal] | None = None,
+    cycle_direction: str = "",
 ) -> dict[str, Any]:
     direction = t.get("direction")
     if direction is not None:
@@ -398,6 +403,20 @@ def _serialize_trade(
     if trade_mr is not None:
         margin_ratio = f"{float(trade_mr):.3f}"
 
+    # Compute quote-currency PnL for close trades
+    pnl: str | None = None
+    _OPEN_METHODS_SET = {"open_position", "rebuild_position"}
+    if t["execution_method"] not in _OPEN_METHODS_SET and open_price_by_pos:
+        pid = str(t["position_id"]) if t.get("position_id") else None
+        if pid and pid in open_price_by_pos:
+            entry_px = open_price_by_pos[pid]
+            exit_px = Decimal(str(t["price"]))
+            units = abs(t["units"])
+            if cycle_direction.lower() in {"long", "buy"}:
+                pnl = str((exit_px - entry_px) * units)
+            elif cycle_direction.lower() in {"short", "sell"}:
+                pnl = str((entry_px - exit_px) * units)
+
     return {
         "id": str(t["id"]),
         "direction": direction,
@@ -412,6 +431,7 @@ def _serialize_trade(
         "volatility": volatility,
         "margin_ratio": margin_ratio,
         "is_rebuild": bool(t.get("is_rebuild", False)),
+        "pnl": pnl,
     }
 
 
