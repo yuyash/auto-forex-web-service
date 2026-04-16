@@ -52,6 +52,10 @@ interface UseTaskTradesOptions {
   ordering?: 'asc' | 'desc';
   /** ISO 8601 timestamp — only return records updated after this time. */
   since?: string;
+  /** Filter trades with timestamp >= this value. */
+  timestampFrom?: string;
+  /** Filter trades with timestamp <= this value. */
+  timestampTo?: string;
   enableRealTimeUpdates?: boolean;
   refreshInterval?: number;
 }
@@ -113,10 +117,12 @@ export const useTaskTrades = ({
   cycleId,
   ordering = 'asc',
   since,
+  timestampFrom,
+  timestampTo,
   enableRealTimeUpdates = false,
   refreshInterval = 5_000,
 }: UseTaskTradesOptions): UseTaskTradesResult => {
-  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${direction}-${page}-${pageSize}-${cycleId ?? ''}-${ordering}-${since ?? ''}-${enabled ? 'on' : 'off'}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${direction}-${page}-${pageSize}-${cycleId ?? ''}-${ordering}-${since ?? ''}-${timestampFrom ?? ''}-${timestampTo ?? ''}-${enabled ? 'on' : 'off'}`;
   const {
     items: trades,
     totalCount,
@@ -146,6 +152,8 @@ export const useTaskTrades = ({
       if (direction === 'long') params.direction = 'buy';
       if (direction === 'short') params.direction = 'sell';
       if (cycleId) params.cycle_id = cycleId;
+      if (timestampFrom) params.timestamp_from = timestampFrom;
+      if (timestampTo) params.timestamp_to = timestampTo;
       params.ordering = ordering;
       return params;
     },

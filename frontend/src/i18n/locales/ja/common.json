@@ -572,6 +572,10 @@
     "tracemalloc": "メモリプロファイリング (tracemalloc)",
     "tracemallocDescription": "タスク実行中のメモリ使用量をプロファイリングします。CPU・メモリのオーバーヘッドが発生するため、デバッグ後は無効にしてください。"
   },
+  "filters": {
+    "dateFrom": "開始日時",
+    "dateTo": "終了日時"
+  },
   "columnConfig": {
     "title": "列設定",
     "description": "列の表示/非表示を切り替え、ドラッグで順序を変更できます。",

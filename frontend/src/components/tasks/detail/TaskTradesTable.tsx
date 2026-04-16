@@ -39,6 +39,7 @@ import {
 import { buildCopyHandler } from '../../../utils/tableCopyUtils';
 import { formatAppNumber } from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
+import { DateRangeFilter } from '../../common/DateRangeFilter';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -68,6 +69,10 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     !hasCycleIdFilter || UUID_PATTERN.test(cycleIdFilter.trim());
   const effectiveCycleId = isCycleIdFilterValid ? cycleIdFilter.trim() : '';
 
+  // --- Date range filter ---
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
   const { trades, totalCount, isLoading, error, refresh } = useTaskTrades({
     taskId,
     taskType,
@@ -75,6 +80,8 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     page: page + 1,
     pageSize: rowsPerPage,
     cycleId: effectiveCycleId || undefined,
+    timestampFrom: dateFrom ? new Date(dateFrom).toISOString() : undefined,
+    timestampTo: dateTo ? new Date(dateTo).toISOString() : undefined,
     enableRealTimeUpdates,
   });
 
@@ -404,7 +411,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     <Box sx={{ p: 3 }}>
       <Box
         sx={{
-          mb: 2,
+          mb: 1,
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -412,44 +419,9 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
           flexWrap: 'wrap',
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="h6">
-            {t('tables.trades.title')} ({totalCount})
-          </Typography>
-          <TextField
-            size="small"
-            placeholder={t('tables.trades.cycleIdFilter')}
-            value={cycleIdFilter}
-            onChange={(e) => setCycleIdFilter(e.target.value)}
-            error={hasCycleIdFilter && !isCycleIdFilterValid}
-            helperText={
-              hasCycleIdFilter && !isCycleIdFilterValid
-                ? t('tables.trades.invalidCycleId')
-                : undefined
-            }
-            sx={{ width: 280 }}
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" />
-                  </InputAdornment>
-                ),
-                endAdornment: cycleIdFilter ? (
-                  <InputAdornment position="end">
-                    <IconButton
-                      size="small"
-                      onClick={() => setCycleIdFilter('')}
-                      edge="end"
-                    >
-                      <ClearIcon fontSize="small" />
-                    </IconButton>
-                  </InputAdornment>
-                ) : null,
-              },
-            }}
-          />
-        </Box>
+        <Typography variant="h6">
+          {t('tables.trades.title')} ({totalCount})
+        </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Tooltip title={t('common:columnConfig.configureColumns')}>
             <IconButton
@@ -469,6 +441,61 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
             isReloading={isReloading}
           />
         </Box>
+      </Box>
+      <Box
+        sx={{
+          mb: 2,
+          display: 'flex',
+          gap: 1,
+          flexWrap: 'wrap',
+          alignItems: 'center',
+        }}
+      >
+        <TextField
+          size="small"
+          placeholder={t('tables.trades.cycleIdFilter')}
+          value={cycleIdFilter}
+          onChange={(e) => setCycleIdFilter(e.target.value)}
+          error={hasCycleIdFilter && !isCycleIdFilterValid}
+          helperText={
+            hasCycleIdFilter && !isCycleIdFilterValid
+              ? t('tables.trades.invalidCycleId')
+              : undefined
+          }
+          sx={{ width: 280 }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+              endAdornment: cycleIdFilter ? (
+                <InputAdornment position="end">
+                  <IconButton
+                    size="small"
+                    onClick={() => setCycleIdFilter('')}
+                    edge="end"
+                  >
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null,
+            },
+          }}
+        />
+        <DateRangeFilter
+          from={dateFrom}
+          to={dateTo}
+          onFromChange={(v) => {
+            setDateFrom(v);
+            setPage(0);
+          }}
+          onToChange={(v) => {
+            setDateTo(v);
+            setPage(0);
+          }}
+        />
       </Box>
 
       <DataTable

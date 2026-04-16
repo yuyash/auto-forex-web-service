@@ -572,6 +572,10 @@
     "tracemalloc": "Memory Profiling (tracemalloc)",
     "tracemallocDescription": "Enable tracemalloc to profile memory usage during task execution. Adds CPU/memory overhead — disable after debugging."
   },
+  "filters": {
+    "dateFrom": "From",
+    "dateTo": "To"
+  },
   "columnConfig": {
     "title": "Configure Columns",
     "description": "Toggle column visibility and drag to reorder.",
