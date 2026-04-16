@@ -294,15 +294,37 @@ export function ExecutionComparisonDialog({
       TransitionComponent={SlideUp}
     >
       <AppBar sx={{ position: 'relative' }} color="default" elevation={1}>
-        <Toolbar>
-          <IconButton edge="start" onClick={onClose} aria-label="close">
-            <CloseIcon />
-          </IconButton>
-          <Typography sx={{ ml: 2, flex: 1 }} variant="h6">
-            {t('comparison.title')}
-          </Typography>
+        <Toolbar
+          sx={{
+            flexDirection: { xs: 'column', sm: 'row' },
+            alignItems: { xs: 'flex-start', sm: 'center' },
+            gap: 1,
+            py: { xs: 1, sm: 0 },
+          }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              width: { xs: '100%', sm: 'auto' },
+            }}
+          >
+            <IconButton edge="start" onClick={onClose} aria-label="close">
+              <CloseIcon />
+            </IconButton>
+            <Typography sx={{ ml: 1 }} variant="h6">
+              {t('comparison.title')}
+            </Typography>
+          </Box>
           {/* Legend chips */}
-          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 0.5,
+              flexWrap: 'wrap',
+              pl: { xs: 1, sm: 0 },
+            }}
+          >
             {sorted.map((exec, i) => (
               <Box
                 key={exec.id}

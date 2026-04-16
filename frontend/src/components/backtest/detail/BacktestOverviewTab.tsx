@@ -1,4 +1,17 @@
-import { Box, Chip, Divider, Grid, Link, Typography } from '@mui/material';
+import { useState } from 'react';
+import {
+  Box,
+  Chip,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  Grid,
+  IconButton,
+  Link,
+  Typography,
+} from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { useTranslation } from 'react-i18next';
 import { StatusBadge } from '../../tasks/display/StatusBadge';
 import { ExecutionHistoryTable } from '../../tasks/display/ExecutionHistoryTable';
@@ -31,6 +44,8 @@ interface BacktestOverviewTabProps {
     parameters: Record<string, any>;
   } | null;
   executionId?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  historicalTaskConfig?: Record<string, any> | null;
   onOpenConfiguration: () => void;
 }
 
@@ -46,10 +61,30 @@ export function BacktestOverviewTab({
   language,
   isViewingHistorical = false,
   historicalStrategyConfig,
+  historicalTaskConfig,
   executionId,
   onOpenConfiguration,
 }: BacktestOverviewTabProps) {
   const { t } = useTranslation(['backtest', 'common']);
+  const [showSnapshotParams, setShowSnapshotParams] = useState(false);
+
+  // When viewing a historical execution, prefer snapshot values for task settings
+  const effectiveStartTime =
+    (isViewingHistorical && historicalTaskConfig?.start_time) ||
+    task.start_time;
+  const effectiveEndTime =
+    (isViewingHistorical && historicalTaskConfig?.end_time) || task.end_time;
+  const effectiveInitialBalance =
+    (isViewingHistorical && historicalTaskConfig?.initial_balance) ||
+    task.initial_balance;
+  const effectiveCommission =
+    (isViewingHistorical && historicalTaskConfig?.commission_per_trade) ||
+    task.commission_per_trade;
+  const effectiveInstrument =
+    (isViewingHistorical && historicalTaskConfig?.instrument) ||
+    task.instrument;
+  const effectivePipSize =
+    (isViewingHistorical && historicalTaskConfig?.pip_size) || task.pip_size;
   const latestMarginRatioRaw = latestMetrics?.metrics.margin_ratio;
   const latestMarginRatio =
     latestMarginRatioRaw != null && latestMarginRatioRaw !== ''
@@ -89,7 +124,7 @@ export function BacktestOverviewTab({
               <Typography variant="caption" color="text.secondary">
                 {t('common:labels.instrument')}
               </Typography>
-              <Typography variant="body1">{task.instrument}</Typography>
+              <Typography variant="body1">{effectiveInstrument}</Typography>
             </Box>
 
             <Box>
@@ -97,7 +132,9 @@ export function BacktestOverviewTab({
                 {t('common:labels.pipSize')}
               </Typography>
               <Typography variant="body1">
-                {task.pip_size ? parseFloat(task.pip_size) : task.pip_size}
+                {effectivePipSize
+                  ? parseFloat(effectivePipSize)
+                  : effectivePipSize}
               </Typography>
             </Box>
 
@@ -195,9 +232,14 @@ export function BacktestOverviewTab({
                 )}
               </Typography>
               {isViewingHistorical && historicalStrategyConfig ? (
-                <Typography variant="body1">
+                <Link
+                  component="button"
+                  variant="body1"
+                  onClick={() => setShowSnapshotParams(true)}
+                  sx={{ textAlign: 'left', display: 'block' }}
+                >
                   {historicalStrategyConfig.name}
-                </Typography>
+                </Link>
               ) : (
                 <Link
                   component="button"
@@ -239,7 +281,7 @@ export function BacktestOverviewTab({
               </Typography>
               <Typography variant="body1">
                 $
-                {formatAppNumber(parseFloat(task.initial_balance), {
+                {formatAppNumber(parseFloat(String(effectiveInitialBalance)), {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })}
@@ -252,7 +294,7 @@ export function BacktestOverviewTab({
               </Typography>
               <Typography variant="body1">
                 $
-                {formatAppNumber(parseFloat(task.commission_per_trade), {
+                {formatAppNumber(parseFloat(String(effectiveCommission)), {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 })}
@@ -272,9 +314,14 @@ export function BacktestOverviewTab({
                 {t('backtest:detail.startTime')}
               </Typography>
               <Typography variant="body1">
-                {formatDateTimeInTimezone(task.start_time, timezone, language, {
-                  includeTimezone: true,
-                })}
+                {formatDateTimeInTimezone(
+                  effectiveStartTime,
+                  timezone,
+                  language,
+                  {
+                    includeTimezone: true,
+                  }
+                )}
               </Typography>
             </Box>
             <Box>
@@ -282,9 +329,14 @@ export function BacktestOverviewTab({
                 {t('backtest:detail.endTime')}
               </Typography>
               <Typography variant="body1">
-                {formatDateTimeInTimezone(task.end_time, timezone, language, {
-                  includeTimezone: true,
-                })}
+                {formatDateTimeInTimezone(
+                  effectiveEndTime,
+                  timezone,
+                  language,
+                  {
+                    includeTimezone: true,
+                  }
+                )}
               </Typography>
             </Box>
           </Box>
@@ -461,10 +513,75 @@ export function BacktestOverviewTab({
           <ExecutionHistoryTable
             taskId={taskId}
             taskType={TaskType.BACKTEST}
-            instrument={task.instrument}
+            instrument={effectiveInstrument}
           />
         </Grid>
       </Grid>
+
+      {/* Snapshot parameters dialog */}
+      {historicalStrategyConfig && (
+        <Dialog
+          open={showSnapshotParams}
+          onClose={() => setShowSnapshotParams(false)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            {historicalStrategyConfig.name}
+            <IconButton
+              size="small"
+              onClick={() => setShowSnapshotParams(false)}
+            >
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent dividers>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ mb: 2, display: 'block' }}
+            >
+              {t('common:labels.strategyType')}:{' '}
+              {historicalStrategyConfig.strategy_type}
+            </Typography>
+            {Object.entries(historicalStrategyConfig.parameters || {}).map(
+              ([key, value]) => (
+                <Box
+                  key={key}
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    py: 0.5,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    {key}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    fontWeight={500}
+                    sx={{ fontFamily: 'monospace' }}
+                  >
+                    {typeof value === 'boolean'
+                      ? value
+                        ? 'true'
+                        : 'false'
+                      : String(value ?? '-')}
+                  </Typography>
+                </Box>
+              )
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </Box>
   );
 }
