@@ -126,6 +126,15 @@ function getSlotBuildCountKey(layer: number, slot: number): string {
   return `${layer}:${slot}`;
 }
 
+/**
+ * Check if a grid state has any non-empty slots (i.e. positions exist).
+ */
+function gridHasPositions(gridState: StrategyGridState): boolean {
+  return gridState.layers.some((layer) =>
+    layer.slots.some((slot) => slot.state !== 'empty')
+  );
+}
+
 function buildSlotBuildCounts(
   cycle: StrategyCycle | null
 ): Record<string, number> {
@@ -749,7 +758,12 @@ export function TaskStrategyTab({
                       {formatCyclePnl(cycle, pnlCurrencyCode).total}
                     </Typography>
                   </Typography>
-                  {cycle.grid_state ? (
+                  {cycle.grid_state &&
+                  (cycle.status !== 'completed' ||
+                    gridHasPositions(
+                      sidebarExtendedGridStates.get(cycle.cycle_id) ??
+                        cycle.grid_state
+                    )) ? (
                     <Box sx={{ mt: 1 }}>
                       <StrategyGridIndicator
                         gridState={
@@ -759,8 +773,7 @@ export function TaskStrategyTab({
                         compact={true}
                         showLegend={false}
                         showSummary={false}
-                        showSlotBuildCounts={true}
-                        slotBuildCounts={buildSlotBuildCounts(cycle)}
+                        showSlotBuildCounts={false}
                       />
                     </Box>
                   ) : null}
