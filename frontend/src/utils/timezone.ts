@@ -52,10 +52,23 @@ export function formatDateTimeInTimezone(
   const timePart = timeSegments.filter(Boolean).join(':');
   const zonePart =
     options?.includeTimezone && values.timeZoneName
-      ? ` ${values.timeZoneName}`
+      ? ` ${normalizeTimezoneAbbr(values.timeZoneName)}`
       : '';
 
   return `${datePart} ${timePart}${zonePart}`;
+}
+
+/**
+ * Normalize timezone abbreviations from Intl output.
+ * Some locales render "GMT+9" instead of "JST" etc.
+ */
+const TIMEZONE_ABBR_MAP: Record<string, string> = {
+  'GMT+9': 'JST',
+  'GMT+9:00': 'JST',
+};
+
+function normalizeTimezoneAbbr(abbr: string): string {
+  return TIMEZONE_ABBR_MAP[abbr] ?? abbr;
 }
 
 export function formatDateInTimezone(

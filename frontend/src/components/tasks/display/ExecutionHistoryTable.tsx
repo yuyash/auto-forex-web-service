@@ -17,11 +17,19 @@ import {
   TablePagination,
   IconButton,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
 } from '@mui/material';
 import {
   CompareArrows as CompareIcon,
   Settings as SettingsIcon,
   Refresh as RefreshIcon,
+  Delete as DeleteIcon,
+  NoteAdd as NoteAddIcon,
+  StickyNote2 as NoteIcon,
 } from '@mui/icons-material';
 import DataTable, { type Column } from '../../common/DataTable';
 import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
@@ -38,8 +46,13 @@ import { TaskType } from '../../../types/common';
 import type { TaskExecution } from '../../../types/execution';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useAppSettings } from '../../../hooks/useAppSettings';
-import { formatAppNumber, formatAppPercent } from '../../../utils/numberFormat';
+import {
+  formatAppNumber,
+  formatAppPercent,
+  currencySymbol,
+} from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
+import { backtestTasksApi, tradingTasksApi } from '../../../services/api';
 
 interface ExecutionHistoryTableProps {
   taskId: string;
@@ -60,6 +73,11 @@ export function ExecutionHistoryTable({
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [colConfigOpen, setColConfigOpen] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [notesDialogOpen, setNotesDialogOpen] = useState(false);
+  const [notesTarget, setNotesTarget] = useState<TaskExecution | null>(null);
+  const [notesValue, setNotesValue] = useState('');
 
   // URL-driven comparison: ?compare=id1,id2,...
   const compareParam = searchParams.get('compare');
@@ -229,7 +247,7 @@ export function ExecutionHistoryTable({
           if (isNaN(v)) return '-';
           const acctCcy = row.metrics?.pnl_currency || '';
           const quoteCcy = row.metrics?.quote_currency || pnlCurrency || '';
-          const suffix = acctCcy ? ` ${acctCcy}` : '';
+          const suffix = acctCcy ? ` ${currencySymbol(acctCcy)}` : '';
           const hasQuote =
             row.metrics?.total_pnl_quote != null &&
             quoteCcy &&
@@ -255,7 +273,7 @@ export function ExecutionHistoryTable({
                   sx={{ whiteSpace: 'nowrap' }}
                 >
                   {qv >= 0 ? '+' : ''}
-                  {fmt(qv)} {quoteCcy}
+                  {fmt(qv)} {currencySymbol(quoteCcy)}
                 </Typography>
               )}
             </Box>
@@ -280,6 +298,43 @@ export function ExecutionHistoryTable({
           row.metrics?.win_rate != null
             ? formatAppPercent(Number(row.metrics.win_rate), 2)
             : '-',
+      },
+      {
+        id: 'notes',
+        label: t('tables.executions.notes'),
+        width: 160,
+        minWidth: 100,
+        render: (row: TaskExecution) =>
+          row.notes ? (
+            <Tooltip
+              title={row.notes}
+              placement="bottom-start"
+              slotProps={{
+                tooltip: {
+                  sx: {
+                    maxWidth: 400,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  },
+                },
+              }}
+            >
+              <Typography
+                variant="body2"
+                sx={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  cursor: 'help',
+                }}
+              >
+                {row.notes}
+              </Typography>
+            </Tooltip>
+          ) : (
+            '-'
+          ),
       },
       {
         id: 'error_message',
@@ -420,6 +475,34 @@ export function ExecutionHistoryTable({
             ? t('tables.executions.compareSelected', { count: checkedCount })
             : t('tables.executions.compare')}
         </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          color="error"
+          startIcon={<DeleteIcon />}
+          disabled={checkedCount < 1}
+          onClick={() => setDeleteConfirmOpen(true)}
+          sx={{ mr: 1 }}
+        >
+          {t('actions.delete')}
+        </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          startIcon={<NoteAddIcon />}
+          disabled={checkedCount !== 1}
+          onClick={() => {
+            const target = executions.find((e) => checkedIds.has(e.id));
+            if (target) {
+              setNotesTarget(target);
+              setNotesValue(target.notes ?? '');
+              setNotesDialogOpen(true);
+            }
+          }}
+          sx={{ mr: 1 }}
+        >
+          {t('tables.executions.notes')}
+        </Button>
         <Tooltip title={t('tables.executions.refresh')}>
           <IconButton
             size="small"
@@ -492,6 +575,112 @@ export function ExecutionHistoryTable({
           taskType={taskType}
         />
       )}
+
+      {/* Delete confirmation dialog */}
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={() => !isDeleting && setDeleteConfirmOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>{t('tables.executions.deleteTitle')}</DialogTitle>
+        <DialogContent>
+          <Typography>
+            {t('tables.executions.deleteMessage', { count: checkedCount })}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setDeleteConfirmOpen(false)}
+            disabled={isDeleting}
+          >
+            {t('actions.cancel')}
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={isDeleting}
+            onClick={async () => {
+              setIsDeleting(true);
+              const api =
+                taskType === TaskType.BACKTEST
+                  ? backtestTasksApi
+                  : tradingTasksApi;
+              try {
+                for (const id of checkedIds) {
+                  await api.deleteExecution(taskId, id);
+                }
+                resetChecked();
+                setDeleteConfirmOpen(false);
+                void refresh();
+              } catch {
+                // error handled by API layer
+              } finally {
+                setIsDeleting(false);
+              }
+            }}
+          >
+            {isDeleting ? t('actions.deleting') : t('actions.delete')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Notes dialog */}
+      <Dialog
+        open={notesDialogOpen}
+        onClose={() => setNotesDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <NoteIcon />
+            {t('tables.executions.notesDialogTitle')}
+          </Box>
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            multiline
+            minRows={3}
+            maxRows={8}
+            fullWidth
+            value={notesValue}
+            onChange={(e) => setNotesValue(e.target.value)}
+            placeholder={t('tables.executions.notesPlaceholder')}
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setNotesDialogOpen(false)}>
+            {t('actions.cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            onClick={async () => {
+              if (!notesTarget) return;
+              const api =
+                taskType === TaskType.BACKTEST
+                  ? backtestTasksApi
+                  : tradingTasksApi;
+              try {
+                await api.updateExecutionNotes(
+                  taskId,
+                  notesTarget.id,
+                  notesValue
+                );
+                setNotesDialogOpen(false);
+                setNotesTarget(null);
+                void refresh();
+              } catch {
+                // error handled by API layer
+              }
+            }}
+          >
+            {t('actions.ok')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

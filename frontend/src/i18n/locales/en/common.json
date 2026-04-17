@@ -76,6 +76,7 @@
     "copy": "Copy",
     "saving": "Saving...",
     "deleting": "Deleting...",
+    "ok": "OK",
     "newTask": "New Task",
     "createTask": "Create Task",
     "updateTask": "Update Task",
@@ -156,6 +157,12 @@
       "message": "Are you sure you want to start \"{{taskName}}\"?",
       "confirm": "Start",
       "loading": "Starting..."
+    },
+    "stop": {
+      "title": "Stop Task",
+      "message": "Are you sure you want to stop \"{{taskName}}\"?",
+      "confirm": "Stop",
+      "loading": "Stopping..."
     },
     "pause": {
       "title": "Pause Task",
@@ -563,12 +570,17 @@
       "pnl": "PnL",
       "trades": "Trades",
       "winRate": "Win Rate",
+      "notes": "Notes",
       "error": "Error",
       "noExecutions": "No executions found",
       "refresh": "Refresh",
       "configureColumns": "Configure columns",
       "compare": "Compare",
-      "compareSelected": "Compare ({{count}})"
+      "compareSelected": "Compare ({{count}})",
+      "deleteTitle": "Delete Executions",
+      "deleteMessage": "Are you sure you want to delete {{count}} execution(s)? This will permanently remove all associated data.",
+      "notesDialogTitle": "Execution Notes",
+      "notesPlaceholder": "Enter notes for this execution..."
     }
   },
   "debug": {

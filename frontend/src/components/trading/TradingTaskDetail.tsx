@@ -338,14 +338,7 @@ export const TradingTaskDetail: React.FC = () => {
           requestConfirm('start', id);
         }}
         onStop={async (id) => {
-          await stopTask.mutate({ id });
-          applyOptimisticStatus(TaskStatus.STOPPING, [
-            TaskStatus.STOPPING,
-            TaskStatus.STOPPED,
-            TaskStatus.COMPLETED,
-            TaskStatus.FAILED,
-          ]);
-          await refreshTask();
+          requestConfirm('stop', id);
         }}
         onRestart={async (id) => {
           requestConfirm('restart', id);
@@ -543,7 +536,10 @@ export const TradingTaskDetail: React.FC = () => {
           taskName={task.name}
           onCancel={cancelAction}
           isLoading={
-            startTask.isLoading || resumeTask.isLoading || restartTask.isLoading
+            startTask.isLoading ||
+            stopTask.isLoading ||
+            resumeTask.isLoading ||
+            restartTask.isLoading
           }
           onConfirm={async () => {
             const { type, taskId: actionTaskId } = pendingAction;
@@ -553,6 +549,14 @@ export const TradingTaskDetail: React.FC = () => {
                 applyOptimisticStatus(updatedTask.status, [
                   TaskStatus.STARTING,
                   TaskStatus.RUNNING,
+                  TaskStatus.FAILED,
+                ]);
+              } else if (type === 'stop') {
+                await stopTask.mutate({ id: actionTaskId });
+                applyOptimisticStatus(TaskStatus.STOPPING, [
+                  TaskStatus.STOPPING,
+                  TaskStatus.STOPPED,
+                  TaskStatus.COMPLETED,
                   TaskStatus.FAILED,
                 ]);
               } else if (type === 'resume') {

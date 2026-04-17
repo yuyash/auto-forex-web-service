@@ -130,6 +130,7 @@ export const StatCard: React.FC<StatCardProps> = React.memo(
                 variant="h4"
                 component="div"
                 sx={{ fontWeight: 600, mb: 0.5 }}
+                color={color !== 'default' ? getColorStyles.color : undefined}
               >
                 {value}
               </Typography>

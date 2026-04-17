@@ -44,6 +44,12 @@ export interface TaskApi<TFrontend, TListParams, TCreateData, TUpdateData> {
     executionId: string,
     params?: { include_metrics?: boolean }
   ) => Promise<TaskExecution>;
+  deleteExecution: (id: string, executionId: string) => Promise<void>;
+  updateExecutionNotes: (
+    id: string,
+    executionId: string,
+    notes: string
+  ) => Promise<TaskExecution>;
 }
 
 export function createTaskApi<
@@ -159,6 +165,23 @@ export function createTaskApi<
         api.get<TaskExecution>(`${BASE}/${id}/executions/${executionId}/`, {
           include_metrics: params?.include_metrics,
         })
+      ),
+
+    deleteExecution: async (id: string, executionId: string) =>
+      withRetry(() =>
+        api.delete(`${BASE}/${id}/executions/${executionId}/delete/`)
+      ),
+
+    updateExecutionNotes: async (
+      id: string,
+      executionId: string,
+      notes: string
+    ) =>
+      withRetry(() =>
+        api.patch<TaskExecution>(
+          `${BASE}/${id}/executions/${executionId}/notes/`,
+          { notes }
+        )
       ),
   };
 }

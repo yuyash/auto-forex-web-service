@@ -37,6 +37,7 @@ class TaskExecutionSerializer(serializers.Serializer):
     error_traceback = serializers.CharField(allow_null=True, required=False)
     duration = serializers.FloatField(allow_null=True, required=False)
     created_at = serializers.DateTimeField()
+    notes = serializers.CharField(allow_blank=True, required=False, default="")
     metrics = TaskExecutionMetricsSerializer(required=False)
     task_config = serializers.DictField(required=False, allow_null=True)
     strategy_config = serializers.DictField(required=False, allow_null=True)

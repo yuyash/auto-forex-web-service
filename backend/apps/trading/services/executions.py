@@ -305,11 +305,12 @@ def _serialize_execution_row(
             fallback_mid_rate=fallback_mid_rate,
         )
 
-    # Attach config snapshots when available
+    # Attach config snapshots and notes when available
     snapshot = _get_config_snapshot(task_type=task_type, task_id=task_id, run_id=run_id)
     if snapshot is not None:
         row["task_config"] = snapshot.get("task_config")
         row["strategy_config"] = snapshot.get("strategy_config")
+        row["notes"] = snapshot.get("notes", "")
 
     return row
 
@@ -443,7 +444,7 @@ def _map_celery_status(status: str) -> str:
 
 
 def _get_config_snapshot(*, task_type: str, task_id: str, run_id: str) -> dict[str, Any] | None:
-    """Return task_config and strategy_config from the execution snapshot."""
+    """Return task_config, strategy_config, and notes from the execution snapshot."""
     from apps.trading.models import TaskExecutionSnapshot
 
     row = (
@@ -452,11 +453,124 @@ def _get_config_snapshot(*, task_type: str, task_id: str, run_id: str) -> dict[s
             task_id=task_id,
             execution_id=run_id,
         )
-        .values("task_config", "strategy_config")
+        .values("task_config", "strategy_config", "notes")
         .first()
     )
     if row is None:
         return None
-    if not row.get("task_config") and not row.get("strategy_config"):
+    if not row.get("task_config") and not row.get("strategy_config") and not row.get("notes"):
         return None
     return row
+
+
+def delete_task_execution(
+    *,
+    task,
+    task_type: str,
+    execution_id: str,
+) -> bool:
+    """Delete a single execution and all its associated data.
+
+    Returns True if the execution was found and deleted, False otherwise.
+    """
+    from apps.trading.models import CeleryTaskStatus, TaskExecutionSnapshot
+    from apps.trading.models.metrics import Metrics
+    from apps.trading.models.positions import Position
+    from apps.trading.models.state import ExecutionState
+    from apps.trading.models.trades import Trade
+    from apps.trading.models.events import TradingEvent, StrategyEventRecord
+
+    task_id = str(task.pk)
+    task_name = (
+        "trading.tasks.run_backtest_task"
+        if task_type == "backtest"
+        else "trading.tasks.run_trading_task"
+    )
+
+    # Check if execution exists
+    instance_key = f"{task_id}:{execution_id}"
+    exists = CeleryTaskStatus.objects.filter(
+        task_name=task_name,
+        instance_key=instance_key,
+    ).exists()
+
+    current_run_id = str(getattr(task, "execution_id", None) or "")
+    if not exists and execution_id != current_run_id:
+        return False
+
+    # Delete associated data
+    TaskExecutionSnapshot.objects.filter(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=execution_id,
+    ).delete()
+
+    Metrics.objects.filter(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=execution_id,
+    ).delete()
+
+    Position.objects.filter(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=execution_id,
+    ).delete()
+
+    Trade.objects.filter(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=execution_id,
+    ).delete()
+
+    TradingEvent.objects.filter(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=execution_id,
+    ).delete()
+
+    StrategyEventRecord.objects.filter(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=execution_id,
+    ).delete()
+
+    ExecutionState.objects.filter(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=execution_id,
+    ).delete()
+
+    CeleryTaskStatus.objects.filter(
+        task_name=task_name,
+        instance_key=instance_key,
+    ).delete()
+
+    # Invalidate cache
+    cache_prefix = f"task-execution-metrics:{task_type}:{task_id}:{execution_id}"
+    cache_prefix_snapshot = f"task-execution-metrics-snapshot:{task_type}:{task_id}:{execution_id}"
+    for prefix in (cache_prefix, cache_prefix_snapshot):
+        try:
+            cache.delete(prefix)
+        except Exception:  # nosec B110
+            pass
+
+    return True
+
+
+def update_execution_notes(
+    *,
+    task_type: str,
+    task_id: str,
+    execution_id: str,
+    notes: str,
+) -> None:
+    """Update notes for an execution snapshot, creating the snapshot if needed."""
+    from apps.trading.models import TaskExecutionSnapshot
+
+    TaskExecutionSnapshot.objects.update_or_create(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=execution_id,
+        defaults={"notes": notes},
+    )

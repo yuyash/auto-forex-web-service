@@ -48,6 +48,11 @@ class TaskExecutionSnapshot(UUIDModel):
         blank=True,
         help_text="Snapshot of StrategyConfiguration at execution start (name, type, parameters)",
     )
+    notes = models.TextField(
+        blank=True,
+        default="",
+        help_text="User-provided notes for this execution",
+    )
 
     class Meta:
         db_table = "task_execution_snapshots"
