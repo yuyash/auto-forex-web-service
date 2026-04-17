@@ -459,17 +459,24 @@ export function ExecutionHistoryTable({
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-        <Typography variant="subtitle1" sx={{ flex: 1 }}>
-          {t('tables.executions.title')}
-        </Typography>
+      <Typography variant="subtitle1" sx={{ mb: 1 }}>
+        {t('tables.executions.title')}
+      </Typography>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          mb: 1,
+          flexWrap: 'wrap',
+          gap: 1,
+        }}
+      >
         <Button
           size="small"
           variant="contained"
           startIcon={<CompareIcon />}
           disabled={checkedCount < 2}
           onClick={handleCompareOpen}
-          sx={{ mr: 1 }}
         >
           {checkedCount >= 2
             ? t('tables.executions.compareSelected', { count: checkedCount })
@@ -482,7 +489,6 @@ export function ExecutionHistoryTable({
           startIcon={<DeleteIcon />}
           disabled={checkedCount < 1}
           onClick={() => setDeleteConfirmOpen(true)}
-          sx={{ mr: 1 }}
         >
           {t('actions.delete')}
         </Button>
@@ -499,10 +505,10 @@ export function ExecutionHistoryTable({
               setNotesDialogOpen(true);
             }
           }}
-          sx={{ mr: 1 }}
         >
           {t('tables.executions.notes')}
         </Button>
+        <Box sx={{ flex: 1 }} />
         <Tooltip title={t('tables.executions.refresh')}>
           <IconButton
             size="small"
