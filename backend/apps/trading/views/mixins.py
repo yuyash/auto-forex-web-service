@@ -879,7 +879,7 @@ class TaskSubResourceMixin:
     @action(
         detail=True,
         methods=["delete"],
-        url_path=r"executions/(?P<execution_id>[^/.]+)",
+        url_path=r"executions/(?P<execution_id>[^/.]+)/delete",
         throttle_classes=[TaskDataRateThrottle],
     )
     def delete_execution(

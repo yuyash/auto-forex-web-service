@@ -2408,9 +2408,11 @@
                         "description": ""
                     }
                 }
-            },
+            }
+        },
+        "/api/trading/tasks/backtest/{id}/executions/{execution_id}/delete/": {
             "delete": {
-                "operationId": "trading_tasks_backtest_executions_destroy",
+                "operationId": "trading_tasks_backtest_executions_delete_destroy",
                 "description": "Delete execution records for a task.",
                 "parameters": [
                     {
@@ -4174,9 +4176,11 @@
                         "description": ""
                     }
                 }
-            },
+            }
+        },
+        "/api/trading/tasks/trading/{id}/executions/{execution_id}/delete/": {
             "delete": {
-                "operationId": "trading_tasks_trading_executions_destroy",
+                "operationId": "trading_tasks_trading_executions_delete_destroy",
                 "description": "Delete execution records for a task.",
                 "parameters": [
                     {

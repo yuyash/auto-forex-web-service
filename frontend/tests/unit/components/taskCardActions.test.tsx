@@ -64,6 +64,9 @@ vi.mock('react-i18next', () => ({
         'common:taskActionDialog.start.title': 'Start Task',
         'common:taskActionDialog.start.confirm': 'Start',
         'common:taskActionDialog.start.loading': 'Starting...',
+        'common:taskActionDialog.stop.title': 'Stop Task',
+        'common:taskActionDialog.stop.confirm': 'Stop',
+        'common:taskActionDialog.stop.loading': 'Stopping...',
         'common:taskActionDialog.pause.title': 'Pause Task',
         'common:taskActionDialog.pause.confirm': 'Pause',
         'common:taskActionDialog.pause.loading': 'Pausing...',
@@ -76,6 +79,10 @@ vi.mock('react-i18next', () => ({
         'taskActionDialog.start.title': 'Start Task',
         'taskActionDialog.start.confirm': 'Start',
         'taskActionDialog.start.loading': 'Starting...',
+        'taskActionDialog.stop.title': 'Stop Task',
+        'taskActionDialog.stop.confirm': 'Stop',
+        'taskActionDialog.stop.loading': 'Stopping...',
+        'taskActionDialog.stop.message': 'Are you sure you want to stop?',
         'taskActionDialog.pause.title': 'Pause Task',
         'taskActionDialog.pause.confirm': 'Pause',
         'taskActionDialog.pause.loading': 'Pausing...',
@@ -314,6 +321,8 @@ describe('Task card control actions', () => {
     );
 
     await user.click(screen.getByRole('button', { name: 'Stop' }));
+    const confirmButtons = screen.getAllByRole('button', { name: 'Stop' });
+    await user.click(confirmButtons[confirmButtons.length - 1]);
 
     expect(mockTradingStop).toHaveBeenCalledWith({ id: 'trading-1' });
     expect(mockShowSuccess).toHaveBeenCalledWith(

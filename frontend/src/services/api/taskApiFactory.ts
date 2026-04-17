@@ -168,7 +168,9 @@ export function createTaskApi<
       ),
 
     deleteExecution: async (id: string, executionId: string) =>
-      withRetry(() => api.delete(`${BASE}/${id}/executions/${executionId}/`)),
+      withRetry(() =>
+        api.delete(`${BASE}/${id}/executions/${executionId}/delete/`)
+      ),
 
     updateExecutionNotes: async (
       id: string,

@@ -270,6 +270,10 @@ describe('TradingTaskDetail', () => {
     render(<TradingTaskDetail />, { wrapper: createWrapper() });
 
     await user.click(screen.getByRole('button', { name: 'Stop' }));
+    const stopConfirmButtons = screen.getAllByRole('button', {
+      name: 'Stop',
+    });
+    await user.click(stopConfirmButtons[stopConfirmButtons.length - 1]);
 
     await waitFor(() => {
       expect(mockTradingStop).toHaveBeenCalledWith({ id: '1' });
