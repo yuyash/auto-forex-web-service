@@ -668,10 +668,18 @@ class TaskExecutor:
         # Skip ticks already processed in a previous run (resume scenario).
         # last_tick_timestamp is persisted after each tick, so any tick at or
         # before that timestamp has already been fully handled.
+        # However, we still feed skipped ticks into the runtime metrics tracker
+        # so that rolling calculations (ATR, candle history) are warmed up
+        # before the first "real" tick after resume.
         resume_ts = loop.resume_last_tick_timestamp
         if resume_ts is not None:
             tick_ts = self._coerce_tick_timestamp(tick.timestamp)
             if tick_ts is not None and tick_ts <= resume_ts:
+                # Warm up metrics tracker with skipped ticks
+                self._runtime_metrics._record_tick(
+                    timestamp=tick_ts,
+                    mid=Decimal(str(tick.mid)),
+                )
                 return False
 
         result: StrategyResult = self.engine.on_tick(tick=tick, state=loop.state)

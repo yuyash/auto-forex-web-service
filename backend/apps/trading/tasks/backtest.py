@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as datetime_module
 import logging
 from typing import Any
 from uuid import UUID
@@ -230,10 +231,35 @@ def execute_backtest(task: BacktestTask) -> None:
     # finished yet its leftover ticks would corrupt the new execution.
     _stop_previous_publisher(request_id)
 
+    # Detect resume: check if an ExecutionState already exists for this execution.
+    # If so, use its last_tick_timestamp to start the publisher near the resume
+    # point instead of from the very beginning of the backtest range.
+    resume_from = None
+    execution_id = getattr(task, "execution_id", None)
+    if execution_id is not None:
+        from apps.trading.models.state import ExecutionState
+
+        try:
+            existing_state = ExecutionState.objects.get(
+                task_type="backtest",
+                task_id=task.pk,
+                execution_id=execution_id,
+            )
+            if existing_state.last_tick_timestamp and existing_state.ticks_processed > 0:
+                resume_from = existing_state.last_tick_timestamp
+                logger.info(
+                    "Resume detected - task_id=%s, last_tick_timestamp=%s, ticks_processed=%d",
+                    task.pk,
+                    resume_from,
+                    existing_state.ticks_processed,
+                )
+        except (ExecutionState.DoesNotExist, Exception):
+            pass
+
     data_source = RedisTickDataSource(
         channel=channel,
         batch_size=100,
-        trigger_publisher=lambda: trigger_backtest_publisher(task),
+        trigger_publisher=lambda: trigger_backtest_publisher(task, resume_from=resume_from),
     )
 
     executor = BacktestExecutor(
@@ -244,11 +270,43 @@ def execute_backtest(task: BacktestTask) -> None:
     executor.execute()
 
 
-def trigger_backtest_publisher(task: BacktestTask) -> None:
-    """Trigger the backtest data publisher."""
+def trigger_backtest_publisher(
+    task: BacktestTask,
+    *,
+    resume_from: "datetime_module.datetime | None" = None,
+) -> None:
+    """Trigger the backtest data publisher.
+
+    Args:
+        task: The backtest task.
+        resume_from: If resuming, the last processed tick timestamp.
+            The publisher will start from a point slightly before this
+            timestamp instead of from the task's start_time.
+    """
+    from datetime import timedelta
+
     from apps.market.tasks import publish_ticks_for_backtest
 
     request_id = str(task.pk)
+
+    # When resuming, start the publisher from a point before the resume
+    # timestamp to provide a small buffer for the subscriber's timestamp
+    # deduplication.  The buffer ensures the subscriber sees a few ticks
+    # it has already processed (which it will skip) rather than missing
+    # any ticks near the boundary.
+    effective_start = task.start_time
+    if resume_from is not None:
+        buffer = timedelta(hours=2)
+        effective_start = max(task.start_time, resume_from - buffer)
+        logger.info(
+            "Publisher resume optimisation - task_id=%s, original_start=%s, "
+            "resume_from=%s, effective_start=%s (buffer=%s)",
+            task.pk,
+            task.start_time,
+            resume_from,
+            effective_start,
+            buffer,
+        )
 
     logger.info(
         "Triggering backtest publisher - task_id=%s, request_id=%s, "
@@ -256,7 +314,7 @@ def trigger_backtest_publisher(task: BacktestTask) -> None:
         task.pk,
         request_id,
         task.instrument,
-        task.start_time,
+        effective_start,
         task.end_time,
         task.tick_granularity,
         task.tick_window_value_mode,
@@ -306,7 +364,7 @@ def trigger_backtest_publisher(task: BacktestTask) -> None:
     result = publish_ticks_for_backtest.apply_async(
         kwargs={
             "instrument": task.instrument,
-            "start": task.start_time.isoformat(),
+            "start": effective_start.isoformat(),
             "end": task.end_time.isoformat(),
             "request_id": request_id,
             "tick_granularity": task.tick_granularity,

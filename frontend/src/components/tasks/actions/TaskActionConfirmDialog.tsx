@@ -11,13 +11,14 @@ import {
 } from '@mui/material';
 import {
   PlayArrow as StartIcon,
+  Stop as StopIcon,
   Pause as PauseIcon,
   PlayCircleOutline as ResumeIcon,
   Replay as RestartIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 
-export type TaskActionType = 'start' | 'pause' | 'resume' | 'restart';
+export type TaskActionType = 'start' | 'stop' | 'pause' | 'resume' | 'restart';
 
 interface TaskActionConfirmDialogProps {
   open: boolean;
@@ -32,10 +33,11 @@ const actionConfig: Record<
   TaskActionType,
   {
     icon: React.ReactElement;
-    color: 'success' | 'warning' | 'primary' | 'info';
+    color: 'success' | 'warning' | 'error' | 'primary' | 'info';
   }
 > = {
   start: { icon: <StartIcon />, color: 'success' },
+  stop: { icon: <StopIcon />, color: 'error' },
   pause: { icon: <PauseIcon />, color: 'warning' },
   resume: { icon: <ResumeIcon />, color: 'primary' },
   restart: { icon: <RestartIcon />, color: 'info' },

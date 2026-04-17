@@ -31,6 +31,8 @@ import { TaskType } from '../../../../types/common';
 import type {
   StrategyCycle,
   CycleTrade,
+  StrategyGridState,
+  StrategyGridSlot,
 } from '../../../../types/strategyVisualization';
 import { StrategyGroupChart } from './StrategyGroupChart';
 import { StrategyGridIndicator } from './StrategyGridIndicator';
@@ -38,6 +40,7 @@ import { PositionLifecycleDialog } from '../PositionLifecycleDialog';
 import {
   formatAppNumber,
   formatAppPercent,
+  currencySymbol,
 } from '../../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../../utils/timezone';
 
@@ -70,8 +73,9 @@ function formatSignedCurrency(
 ): string {
   const sign = value >= 0 ? '+' : '-';
   const absoluteValue = Math.abs(value);
+  const symbol = currencySymbol(currencyCode);
 
-  if (!currencyCode) {
+  if (!symbol) {
     return formatAppNumber(value, {
       minimumFractionDigits: fractionDigits,
       maximumFractionDigits: fractionDigits,
@@ -80,12 +84,12 @@ function formatSignedCurrency(
   }
 
   try {
-    return `${sign}${currencyCode} ${formatAppNumber(absoluteValue, {
+    return `${sign}${symbol} ${formatAppNumber(absoluteValue, {
       minimumFractionDigits: fractionDigits,
       maximumFractionDigits: fractionDigits,
     })}`;
   } catch {
-    return `${sign}${currencyCode} ${formatAppNumber(absoluteValue, {
+    return `${sign}${symbol} ${formatAppNumber(absoluteValue, {
       minimumFractionDigits: fractionDigits,
       maximumFractionDigits: fractionDigits,
     })}`;
@@ -151,6 +155,60 @@ function buildSlotBuildCounts(
       positionIds.size,
     ])
   );
+}
+
+/**
+ * Extend a cycle's grid_state to include layers that were historically reached
+ * (based on trade data) but are no longer present in the current grid state.
+ * This is needed for completed cycles where the grid may have been trimmed
+ * to only L1 after all positions were closed.
+ */
+function extendGridStateFromTrades(
+  gridState: StrategyGridState | null | undefined,
+  slotBuildCounts: Record<string, number>
+): StrategyGridState | null | undefined {
+  if (!gridState) return gridState;
+
+  // Find the max layer from build counts
+  let maxLayerFromTrades = 0;
+  for (const key of Object.keys(slotBuildCounts)) {
+    const [layerStr] = key.split(':');
+    const layer = parseInt(layerStr, 10);
+    if (!isNaN(layer) && layer > maxLayerFromTrades) {
+      maxLayerFromTrades = layer;
+    }
+  }
+
+  const maxLayerInGrid =
+    gridState.layers.length > 0
+      ? Math.max(...gridState.layers.map((l) => l.layer))
+      : 0;
+
+  // If trades show higher layers than the grid, extend the grid
+  if (maxLayerFromTrades <= maxLayerInGrid) return gridState;
+
+  const slotsPerLayer = gridState.summary.slot_count_per_layer || 1;
+  const extendedLayers = [...gridState.layers];
+  let { empty, layer_count } = gridState.summary;
+
+  for (let layer = maxLayerInGrid + 1; layer <= maxLayerFromTrades; layer++) {
+    const slots: StrategyGridSlot[] = Array.from(
+      { length: slotsPerLayer },
+      (_, i) => ({ slot: i, state: 'empty' as const, position_id: null })
+    );
+    extendedLayers.push({ layer, slots });
+    empty += slotsPerLayer;
+    layer_count += 1;
+  }
+
+  return {
+    layers: extendedLayers,
+    summary: {
+      ...gridState.summary,
+      layer_count,
+      empty,
+    },
+  };
 }
 
 export function TaskStrategyTab({
@@ -281,6 +339,19 @@ export function TaskStrategyTab({
     return list;
   }, [cycles, sortOrder, statusFilter, positionIdFilter]);
 
+  /** Extended grid states for sidebar cycles (includes layers from trade history). */
+  const sidebarExtendedGridStates = useMemo(() => {
+    const map = new Map<string, StrategyGridState | null | undefined>();
+    for (const cycle of displayedCycles) {
+      const counts = buildSlotBuildCounts(cycle);
+      map.set(
+        cycle.cycle_id,
+        extendGridStateFromTrades(cycle.grid_state, counts)
+      );
+    }
+    return map;
+  }, [displayedCycles]);
+
   const handleSelectCycle = useCallback(
     (id: string) => {
       setSelectedCycleId(id);
@@ -313,6 +384,14 @@ export function TaskStrategyTab({
   const selectedCycleSlotBuildCounts = useMemo(
     () => buildSlotBuildCounts(selectedCycle),
     [selectedCycle]
+  );
+  const selectedCycleExtendedGridState = useMemo(
+    () =>
+      extendGridStateFromTrades(
+        selectedCycle?.grid_state,
+        selectedCycleSlotBuildCounts
+      ),
+    [selectedCycle?.grid_state, selectedCycleSlotBuildCounts]
   );
 
   const {
@@ -673,10 +752,15 @@ export function TaskStrategyTab({
                   {cycle.grid_state ? (
                     <Box sx={{ mt: 1 }}>
                       <StrategyGridIndicator
-                        gridState={cycle.grid_state}
+                        gridState={
+                          sidebarExtendedGridStates.get(cycle.cycle_id) ??
+                          cycle.grid_state
+                        }
                         compact={true}
                         showLegend={false}
                         showSummary={false}
+                        showSlotBuildCounts={true}
+                        slotBuildCounts={buildSlotBuildCounts(cycle)}
                       />
                     </Box>
                   ) : null}
@@ -846,7 +930,7 @@ export function TaskStrategyTab({
               {selectedCycle.grid_state ? (
                 <Box sx={{ mb: 2 }}>
                   <StrategyGridIndicator
-                    gridState={selectedCycle.grid_state}
+                    gridState={selectedCycleExtendedGridState}
                     showSlotBuildCounts={true}
                     slotBuildCounts={selectedCycleSlotBuildCounts}
                   />

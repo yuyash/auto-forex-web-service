@@ -47,6 +47,7 @@ import {
   resolveParameterLabel,
 } from '../../../utils/strategySchemaLabels';
 import { computeAutoInterval } from '../../../utils/autoGranularity';
+import { currencySymbol } from '../../../utils/numberFormat';
 
 /** Palette for up to 10 executions */
 const EXEC_COLORS = [
@@ -182,6 +183,12 @@ const RESULT_KEYS = [
   'quote_currency',
 ];
 
+/** Truncate execution number to first 8 characters for display. */
+function shortExecId(exec: TaskExecution): string {
+  const id = String(exec.execution_number);
+  return id.length > 8 ? id.slice(0, 8) : id;
+}
+
 export function ExecutionComparisonDialog({
   open,
   onClose,
@@ -203,9 +210,15 @@ export function ExecutionComparisonDialog({
   // Sort executions by execution_number for consistent ordering
   const sorted = useMemo(
     () =>
-      [...executions].sort((a, b) => a.execution_number - b.execution_number),
+      [...executions].sort((a, b) => {
+        const aStr = String(a.execution_number);
+        const bStr = String(b.execution_number);
+        return aStr.localeCompare(bStr);
+      }),
     [executions]
   );
+
+  // shortExecId is defined at module level
 
   // Build localized parameter label map from strategy schema.
   // Derive strategy_type from the first execution's strategy_config snapshot.
@@ -356,9 +369,7 @@ export function ExecutionComparisonDialog({
                     bgcolor: EXEC_COLORS[i % EXEC_COLORS.length],
                   }}
                 />
-                <Typography variant="caption">
-                  #{exec.execution_number}
-                </Typography>
+                <Typography variant="caption">#{shortExecId(exec)}</Typography>
               </Box>
             ))}
           </Box>
@@ -532,7 +543,7 @@ function ConfigComparisonPanel({
                       }}
                     />
                     {t('comparison.execution', {
-                      number: exec.execution_number,
+                      number: shortExecId(exec),
                     })}
                   </Box>
                 </th>
@@ -655,7 +666,7 @@ function ResultsComparisonPanel({
                     }}
                   />
                   {t('comparison.execution', {
-                    number: exec.execution_number,
+                    number: shortExecId(exec),
                   })}
                 </Box>
               </th>
@@ -704,13 +715,13 @@ function ResultsComparisonPanel({
                     ) {
                       display = `${num >= 0 ? '+' : ''}${num.toFixed(2)}%`;
                     } else if (key.endsWith('_quote')) {
-                      display = `${num >= 0 ? '+' : ''}${num.toFixed(2)}${quoteCcy ? ` ${quoteCcy}` : ''}`;
+                      display = `${num >= 0 ? '+' : ''}${num.toFixed(2)}${quoteCcy ? ` ${currencySymbol(quoteCcy)}` : ''}`;
                     } else if (
                       key.includes('pnl') ||
                       key === 'average_win' ||
                       key === 'average_loss'
                     ) {
-                      display = `${num >= 0 ? '+' : ''}${num.toFixed(2)}${acctCcy ? ` ${acctCcy}` : ''}`;
+                      display = `${num >= 0 ? '+' : ''}${num.toFixed(2)}${acctCcy ? ` ${currencySymbol(acctCcy)}` : ''}`;
                     }
                   }
                   return (
@@ -944,7 +955,7 @@ function MetricsOverlayPanel({
                     data: s.y,
                     color: EXEC_COLORS[s.execIndex % EXEC_COLORS.length],
                     showMark: false,
-                    label: `#${executions[s.execIndex].execution_number}`,
+                    label: `#${shortExecId(executions[s.execIndex])}`,
                     connectNulls: true,
                   }))}
                   axisHighlight={{ x: 'line', y: 'none' }}

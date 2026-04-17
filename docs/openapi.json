@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.36.0",
+        "version": "1.36.1",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -2408,6 +2408,102 @@
                         "description": ""
                     }
                 }
+            },
+            "delete": {
+                "operationId": "trading_tasks_backtest_executions_destroy",
+                "description": "Delete execution records for a task.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/backtest/{id}/executions/{execution_id}/notes/": {
+            "patch": {
+                "operationId": "trading_tasks_backtest_executions_notes_partial_update",
+                "description": "Update notes for an execution.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedExecutionNotesRequestRequest"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskExecution"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
             }
         },
         "/api/trading/tasks/backtest/{id}/log-components/": {
@@ -4061,6 +4157,102 @@
                 "tags": [
                     "Trading"
                 ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskExecution"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "delete": {
+                "operationId": "trading_tasks_trading_executions_destroy",
+                "description": "Delete execution records for a task.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/trading/{id}/executions/{execution_id}/notes/": {
+            "patch": {
+                "operationId": "trading_tasks_trading_executions_notes_partial_update",
+                "description": "Update notes for an execution.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PatchedExecutionNotesRequestRequest"
+                            }
+                        }
+                    }
+                },
                 "security": [
                     {
                         "JWTAuth": []
@@ -7506,6 +7698,14 @@
                     }
                 }
             },
+            "PatchedExecutionNotesRequestRequest": {
+                "type": "object",
+                "properties": {
+                    "notes": {
+                        "type": "string"
+                    }
+                }
+            },
             "PatchedPositionCloseRequestRequest": {
                 "type": "object",
                 "properties": {
@@ -8441,6 +8641,10 @@
                     "created_at": {
                         "type": "string",
                         "format": "date-time"
+                    },
+                    "notes": {
+                        "type": "string",
+                        "default": ""
                     },
                     "metrics": {
                         "$ref": "#/components/schemas/TaskExecutionMetrics"

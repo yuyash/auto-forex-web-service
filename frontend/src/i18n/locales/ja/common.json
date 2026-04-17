@@ -76,6 +76,7 @@
     "copy": "コピー",
     "saving": "保存中...",
     "deleting": "削除中...",
+    "ok": "OK",
     "newTask": "新規タスク",
     "createTask": "タスクを作成",
     "updateTask": "タスクを更新",
@@ -156,6 +157,12 @@
       "message": "「{{taskName}}」を開始してもよろしいですか？",
       "confirm": "開始",
       "loading": "開始中..."
+    },
+    "stop": {
+      "title": "タスクを停止",
+      "message": "「{{taskName}}」を停止してもよろしいですか？",
+      "confirm": "停止",
+      "loading": "停止中..."
     },
     "pause": {
       "title": "タスクを一時停止",
@@ -563,12 +570,17 @@
       "pnl": "損益",
       "trades": "取引数",
       "winRate": "勝率",
+      "notes": "ノート",
       "error": "エラー",
       "noExecutions": "実行履歴なし",
       "refresh": "更新",
       "configureColumns": "列の設定",
       "compare": "比較",
-      "compareSelected": "比較 ({{count}})"
+      "compareSelected": "比較 ({{count}})",
+      "deleteTitle": "実行履歴の削除",
+      "deleteMessage": "{{count}}件の実行履歴を削除してもよろしいですか？関連するすべてのデータが完全に削除されます。",
+      "notesDialogTitle": "実行ノート",
+      "notesPlaceholder": "この実行に関するノートを入力..."
     }
   },
   "debug": {

@@ -50,7 +50,11 @@ import {
 } from '../../hooks/useTradingTaskMutations';
 import { useAppSettings } from '../../hooks/useAppSettings';
 import { logger } from '../../utils/logger';
-import { formatAppNumber, formatAppPercent } from '../../utils/numberFormat';
+import {
+  formatAppNumber,
+  formatAppPercent,
+  currencySymbol,
+} from '../../utils/numberFormat';
 import { formatTaskActionError } from '../../utils/taskActionError';
 import { formatDateTimeInTimezone } from '../../utils/timezone';
 
@@ -327,14 +331,17 @@ export default function TradingTaskCard({
   };
 
   const formatDateTime = (dateString: string): string => {
-    return formatDateTimeInTimezone(dateString, timezone, language);
+    return formatDateTimeInTimezone(dateString, timezone, language, {
+      includeTimezone: true,
+    });
   };
 
-  const quoteCurrency =
+  const quoteCurrency = currencySymbol(
     currentTask.instrument.split('_').at(-1) ||
-    currentTask.latest_execution?.quote_currency ||
-    liveSummary.execution.displayCurrency ||
-    'JPY';
+      currentTask.latest_execution?.quote_currency ||
+      liveSummary.execution.displayCurrency ||
+      'JPY'
+  );
   const formatPnl = (value: number, currency: string): string => {
     return `${formatAppNumber(value, {
       minimumFractionDigits: 2,
@@ -472,7 +479,7 @@ export default function TradingTaskCard({
             status={displayStatus}
             taskType="trading"
             onStart={(id) => requestConfirm('start', String(id))}
-            onStop={handleStop}
+            onStop={(id) => requestConfirm('stop', String(id))}
             onResume={(id) => requestConfirm('resume', String(id))}
             onRestart={(id) => requestConfirm('restart', String(id))}
             onDelete={handleDelete}
@@ -636,6 +643,7 @@ export default function TradingTaskCard({
             const { type, taskId } = pendingAction;
             cancelAction();
             if (type === 'start') void handleStart(taskId);
+            else if (type === 'stop') void handleStop(taskId);
             else if (type === 'resume') void handleResume(taskId);
             else if (type === 'restart') void handleRestart(taskId);
           }}

@@ -54,3 +54,28 @@ export function formatAppPercent(
     signed,
   })}%`;
 }
+
+/**
+ * Map ISO 4217 currency codes to their display symbols.
+ * Falls through to the original code for unmapped currencies.
+ */
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  JPY: '¥',
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  AUD: 'A$',
+  CAD: 'C$',
+  CHF: 'CHF',
+  NZD: 'NZ$',
+};
+
+/**
+ * Return the display symbol for a currency code (e.g. "JPY" → "¥").
+ * Returns the original code when no symbol mapping exists.
+ */
+export function currencySymbol(code: string | null | undefined): string {
+  if (!code) return '';
+  const upper = code.trim().toUpperCase();
+  return CURRENCY_SYMBOLS[upper] ?? upper;
+}

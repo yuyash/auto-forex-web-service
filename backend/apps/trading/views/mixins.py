@@ -870,3 +870,75 @@ class TaskSubResourceMixin:
             return Response({"detail": "Execution not found."}, status=404)
         serializer = TaskExecutionSerializer(row)
         return Response(serializer.data)
+
+    @extend_schema(
+        tags=["Trading"],
+        responses={204: None},
+        description="Delete execution records for a task.",
+    )
+    @action(
+        detail=True,
+        methods=["delete"],
+        url_path=r"executions/(?P<execution_id>[^/.]+)",
+        throttle_classes=[TaskDataRateThrottle],
+    )
+    def delete_execution(
+        self, request: Request, pk: str | None = None, execution_id: str | None = None
+    ) -> Response:
+        """Delete a single execution and all its associated data."""
+        from apps.trading.services.executions import delete_task_execution
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        deleted = delete_task_execution(
+            task=task,
+            task_type=self.task_type_label,
+            execution_id=execution_id or "",
+        )
+        if not deleted:
+            return Response({"detail": "Execution not found."}, status=404)
+        return Response(status=204)
+
+    @extend_schema(
+        tags=["Trading"],
+        request=inline_serializer(
+            "ExecutionNotesRequest",
+            fields={
+                "notes": serializers.CharField(allow_blank=True),
+            },
+        ),
+        responses={200: TaskExecutionSerializer},
+        description="Update notes for an execution.",
+    )
+    @action(
+        detail=True,
+        methods=["patch"],
+        url_path=r"executions/(?P<execution_id>[^/.]+)/notes",
+        throttle_classes=[TaskDataRateThrottle],
+    )
+    def update_execution_notes(
+        self, request: Request, pk: str | None = None, execution_id: str | None = None
+    ) -> Response:
+        """Update notes for a specific execution."""
+        from apps.trading.services.executions import (
+            get_task_execution,
+            update_execution_notes,
+        )
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        notes = request.data.get("notes", "")
+        update_execution_notes(
+            task_type=self.task_type_label,
+            task_id=str(task.pk),
+            execution_id=execution_id or "",
+            notes=str(notes),
+        )
+        row = get_task_execution(
+            task=task,
+            task_type=self.task_type_label,
+            execution_id=execution_id or "",
+            include_metrics=False,
+        )
+        if row is None:
+            return Response({"detail": "Execution not found."}, status=404)
+        serializer = TaskExecutionSerializer(row)
+        return Response(serializer.data)
