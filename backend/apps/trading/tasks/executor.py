@@ -802,7 +802,9 @@ class TaskExecutor:
 
         self._runtime_metrics.restore_counters(
             realized_pnl=agg["realized_pnl"] or Decimal("0"),
-            total_trades=Trade.objects.filter(**base_filter).count(),
+            total_trades=Trade.objects.filter(
+                **base_filter, execution_method="open_position"
+            ).count(),
             closed_positions=closed_qs.count(),
             winning_trades=agg["winning"] or 0,
             losing_trades=agg["losing"] or 0,
