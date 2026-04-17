@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.50.9](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.8...frontend-v1.50.9) (2026-04-17)
+
+
+### Bug Fixes
+
+* **ui:** clean up strategy cycle list indicators and execution histor… ([#533](https://github.com/yuyash/auto-forex-web-service/issues/533)) ([6f02675](https://github.com/yuyash/auto-forex-web-service/commit/6f0267517276d912825ff75639f0c7cf922439a9))
+* **ui:** clean up strategy cycle list indicators and execution history layout ([6f02675](https://github.com/yuyash/auto-forex-web-service/commit/6f0267517276d912825ff75639f0c7cf922439a9))
+
 ## [1.50.8](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.7...frontend-v1.50.8) (2026-04-17)
 
 
