@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.50.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.6...frontend-v1.50.7) (2026-04-16)
+
+
+### Bug Fixes
+
+* comparison auto interval ([#529](https://github.com/yuyash/auto-forex-web-service/issues/529)) ([e9bfb62](https://github.com/yuyash/auto-forex-web-service/commit/e9bfb622cebc52721d702c6cc818222f6400d656))
+
 ## [1.50.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.5...frontend-v1.50.6) (2026-04-16)
 
 
