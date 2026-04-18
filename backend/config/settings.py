@@ -278,10 +278,22 @@ MARKET_BACKTEST_STREAM_BLOCK_MS = int(os.getenv("MARKET_BACKTEST_STREAM_BLOCK_MS
 # How many entries the subscriber requests per ``XREAD`` call.
 MARKET_BACKTEST_STREAM_READ_COUNT = int(os.getenv("MARKET_BACKTEST_STREAM_READ_COUNT", "500"))
 
-# Subscriber gives up after this many consecutive empty reads.  At
-# ``BLOCK_MS=1000`` this means 300 s of silence.
+# Subscriber gives up after this many consecutive empty reads *while* it is
+# caught up with the publisher (comparing its ``last_seen_id`` against the
+# stream's ``last-generated-id``).  Empty reads that happen while the
+# publisher is still producing or paused for backpressure do not count
+# toward this timeout — otherwise the backpressure pause would misfire as
+# "stream ended".
 MARKET_BACKTEST_STREAM_IDLE_TIMEOUT_READS = int(
     os.getenv("MARKET_BACKTEST_STREAM_IDLE_TIMEOUT_READS", "300")
+)
+
+# Consumer group name shared by the publisher (to measure lag via
+# ``XPENDING``) and the subscriber (to claim entries via ``XREADGROUP``).
+# A single group is sufficient because there is exactly one consumer per
+# backtest run.
+MARKET_BACKTEST_STREAM_CONSUMER_GROUP = os.getenv(
+    "MARKET_BACKTEST_STREAM_CONSUMER_GROUP", "backtest"
 )
 
 # Runtime gap detection: if the executor sees the delivered tick timestamp

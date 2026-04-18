@@ -20,7 +20,7 @@ import {
 } from './useTaskMutationFactory';
 import { useWrappedMutation } from './useWrappedMutation';
 
-export type StopMode = 'immediate' | 'graceful' | 'graceful_close';
+export type StopMode = 'immediate' | 'graceful' | 'graceful_close' | 'drain';
 
 // --- hooks that need custom create/update logic (not generic) -------------
 
@@ -39,6 +39,14 @@ export function useCreateTradingTask(options?: {
         sell_on_stop: variables.sell_on_stop,
         dry_run: variables.dry_run,
         hedging_enabled: variables.hedging_enabled,
+        api_retry_max_attempts: variables.api_retry_max_attempts,
+        api_retry_backoff_base_seconds:
+          variables.api_retry_backoff_base_seconds,
+        api_retry_backoff_max_seconds: variables.api_retry_backoff_max_seconds,
+        drain_duration_hours: variables.drain_duration_hours,
+        market_idle_pre_close_minutes: variables.market_idle_pre_close_minutes,
+        market_idle_resume_delay_minutes:
+          variables.market_idle_resume_delay_minutes,
       }),
     {
       onSuccess: async (data) => {
@@ -66,6 +74,16 @@ export function useUpdateTradingTask(options?: {
         sell_on_stop: variables.data.sell_on_stop,
         dry_run: variables.data.dry_run,
         hedging_enabled: variables.data.hedging_enabled,
+        api_retry_max_attempts: variables.data.api_retry_max_attempts,
+        api_retry_backoff_base_seconds:
+          variables.data.api_retry_backoff_base_seconds,
+        api_retry_backoff_max_seconds:
+          variables.data.api_retry_backoff_max_seconds,
+        drain_duration_hours: variables.data.drain_duration_hours,
+        market_idle_pre_close_minutes:
+          variables.data.market_idle_pre_close_minutes,
+        market_idle_resume_delay_minutes:
+          variables.data.market_idle_resume_delay_minutes,
         debug_options: variables.data.debug_options,
       }),
     {

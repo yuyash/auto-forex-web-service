@@ -237,16 +237,18 @@ function ReviewContent({
         </Typography>
       </Grid>
 
-      <Grid size={{ xs: 12, md: 6 }}>
-        <Typography variant="subtitle2" color="text.secondary">
-          {t('backtest:form.tickWindowValueMode')}
-        </Typography>
-        <Typography variant="body1">
-          {t(
-            `backtest:form.tickWindowValueModeOptions.${formValues.tick_window_value_mode}`
-          )}
-        </Typography>
-      </Grid>
+      {formValues.tick_granularity !== 'tick' && (
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Typography variant="subtitle2" color="text.secondary">
+            {t('backtest:form.tickWindowValueMode')}
+          </Typography>
+          <Typography variant="body1">
+            {t(
+              `backtest:form.tickWindowValueModeOptions.${formValues.tick_window_value_mode}`
+            )}
+          </Typography>
+        </Grid>
+      )}
     </Grid>
   );
 }
@@ -328,6 +330,9 @@ export default function BacktestTaskForm({
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const selectedConfigId = watch('config_id');
+
+  const watchedTickGranularity = watch('tick_granularity');
+  const showTickWindowValueMode = watchedTickGranularity !== 'tick';
 
   // Sync saved formData back into React Hook Form when changing steps
   // This ensures form values persist when navigating between steps
@@ -872,6 +877,10 @@ export default function BacktestTaskForm({
                     <FormControl
                       fullWidth
                       error={!!errors.tick_window_value_mode}
+                      disabled={!showTickWindowValueMode}
+                      sx={{
+                        display: showTickWindowValueMode ? 'flex' : 'none',
+                      }}
                     >
                       <InputLabel id="backtest-tick-window-value-mode-label">
                         {t('backtest:form.tickWindowValueMode')}

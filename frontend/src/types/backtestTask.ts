@@ -22,6 +22,7 @@ export interface BacktestTask {
   status: TaskStatus;
   sell_at_completion: boolean;
   hedging_enabled: boolean;
+  drain_duration_hours?: number;
   latest_execution?: ExecutionSummary;
   execution_id?: string;
   started_at?: string;

@@ -63,6 +63,8 @@ export function shouldPollTaskStatus(status: string | undefined): boolean {
     status === 'starting' ||
     status === 'running' ||
     status === 'paused' ||
+    status === 'idle' ||
+    status === 'draining' ||
     status === 'stopping'
   );
 }
@@ -74,6 +76,8 @@ export function shouldEnableRealtimeTaskUpdates(
     status === 'starting' ||
     status === 'running' ||
     status === 'paused' ||
+    status === 'idle' ||
+    status === 'draining' ||
     status === 'stopping'
   );
 }

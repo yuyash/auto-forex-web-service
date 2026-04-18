@@ -159,6 +159,61 @@ class TradingTask(UUIDModel):
         help_text="Strategy-specific state for persistence across restarts",
     )
 
+    # OANDA API retry/backoff settings.  The reconciliation service uses these
+    # to recover from transient network errors when fetching account/position
+    # state.  With exponential backoff a single transient outage typically
+    # resolves within the first few retries; higher caps protect the task
+    # from failing during longer broker-side incidents.
+    api_retry_max_attempts = models.PositiveIntegerField(
+        default=50,
+        help_text=(
+            "Maximum number of retry attempts for OANDA API calls before the task fails. "
+            "Uses exponential backoff between attempts."
+        ),
+    )
+    api_retry_backoff_base_seconds = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("1.0"),
+        help_text="Initial delay between OANDA API retries (seconds). Doubled on each attempt.",
+    )
+    api_retry_backoff_max_seconds = models.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+        default=Decimal("60.0"),
+        help_text="Cap on the backoff delay between retries (seconds).",
+    )
+
+    # Drain-on-stop settings.  DRAIN mode keeps the task running but refuses
+    # new entries while incrementally closing open positions that are at
+    # breakeven or better.  Once all positions are closed the task stops on
+    # its own.  Hours == 0 means drain forever (no timeout).
+    drain_duration_hours = models.PositiveIntegerField(
+        default=0,
+        help_text=(
+            "Maximum duration in hours for drain-on-stop before forcing a stop. "
+            "Set to 0 to wait indefinitely for positions to reach breakeven."
+        ),
+    )
+
+    # Market-aware idle mode.  When the forex market closes the task can
+    # switch to IDLE, skipping tick processing and trade decisions, and then
+    # resume automatically once the market reopens. Values in minutes.
+    market_idle_pre_close_minutes = models.PositiveIntegerField(
+        default=0,
+        help_text=(
+            "Switch to IDLE this many minutes before the market closes. "
+            "0 disables pre-close idling."
+        ),
+    )
+    market_idle_resume_delay_minutes = models.PositiveIntegerField(
+        default=0,
+        help_text=(
+            "Wait this many minutes after the market reopens before resuming trading. "
+            "0 disables the resume delay."
+        ),
+    )
+
     class Meta:
         db_table = "trading_tasks"
         verbose_name = "Trading Task"
@@ -175,6 +230,8 @@ class TradingTask(UUIDModel):
                         TaskStatus.STARTING,
                         TaskStatus.RUNNING,
                         TaskStatus.PAUSED,
+                        TaskStatus.IDLE,
+                        TaskStatus.DRAINING,
                         TaskStatus.STOPPING,
                     ]
                 ),
@@ -187,6 +244,8 @@ class TradingTask(UUIDModel):
                         TaskStatus.STARTING,
                         TaskStatus.RUNNING,
                         TaskStatus.PAUSED,
+                        TaskStatus.IDLE,
+                        TaskStatus.DRAINING,
                         TaskStatus.STOPPING,
                         TaskStatus.STOPPED,
                         TaskStatus.COMPLETED,

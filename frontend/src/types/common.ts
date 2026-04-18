@@ -5,6 +5,8 @@ export enum TaskStatus {
   STARTING = 'starting',
   RUNNING = 'running',
   PAUSED = 'paused',
+  IDLE = 'idle',
+  DRAINING = 'draining',
   STOPPING = 'stopping',
   STOPPED = 'stopped',
   COMPLETED = 'completed',

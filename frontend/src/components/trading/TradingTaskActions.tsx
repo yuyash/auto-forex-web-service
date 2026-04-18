@@ -148,11 +148,20 @@ export default function TradingTaskActions({
   };
 
   const canEdit =
-    task.status !== TaskStatus.RUNNING && task.status !== TaskStatus.PAUSED;
+    task.status !== TaskStatus.RUNNING &&
+    task.status !== TaskStatus.PAUSED &&
+    task.status !== TaskStatus.IDLE &&
+    task.status !== TaskStatus.DRAINING;
   const canDelete =
-    task.status !== TaskStatus.RUNNING && task.status !== TaskStatus.PAUSED;
+    task.status !== TaskStatus.RUNNING &&
+    task.status !== TaskStatus.PAUSED &&
+    task.status !== TaskStatus.IDLE &&
+    task.status !== TaskStatus.DRAINING;
   const canStop =
-    task.status === TaskStatus.RUNNING || task.status === TaskStatus.PAUSED;
+    task.status === TaskStatus.RUNNING ||
+    task.status === TaskStatus.PAUSED ||
+    task.status === TaskStatus.IDLE ||
+    task.status === TaskStatus.DRAINING;
 
   return (
     <>

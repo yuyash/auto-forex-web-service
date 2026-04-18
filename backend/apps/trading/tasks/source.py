@@ -363,16 +363,24 @@ class RedisTickDataSource(TickDataSource):
 class RedisStreamTickDataSource(TickDataSource):
     """Reliable backtest tick data source backed by a Redis Stream.
 
-    Unlike ``RedisTickDataSource`` which uses Redis Pub/Sub (fire-and-forget
-    with silent message drops on slow subscribers), this source uses
-    ``XREAD BLOCK`` against a bounded Redis Stream.  Because Streams are
-    persistent, slow-consumer backpressure is handled by the publisher
-    (XADD MAXLEN) and the subscriber's Redis client output buffer is
-    irrelevant — no messages are silently dropped mid-backtest.
+    Uses Redis **consumer groups** (``XREADGROUP`` + ``XACK``) rather than
+    plain ``XREAD``.  This gives two important guarantees that the earlier
+    pub/sub and naïve-stream versions could not provide:
 
-    Each invocation tracks the ``last_id`` it has consumed so that a
-    transient Redis disconnect results in resuming from the same point
-    rather than skipping ahead.
+    * The publisher can measure true consumer lag via ``XPENDING`` and
+      apply backpressure based on unacknowledged entries.  Without a
+      consumer group the publisher could only see ``XLEN``, which never
+      decreases as entries are read, leading to a deadlock.
+    * The subscriber distinguishes "no new entries available" from
+      "publisher paused while consumer is still catching up" by comparing
+      its last-read id with the stream's ``last-generated-id``.  Idle
+      timeout only fires when the consumer is truly caught up, so the
+      backpressure-pause-idle-timeout cascade can no longer kill a run.
+
+    On reconnect the subscriber re-reads any previously delivered but
+    not-yet-ACKed entries via ``XREADGROUP ... 0`` before switching back
+    to ``>`` for new entries — so transient Redis disconnects resume
+    from exactly the right point.
     """
 
     def __init__(
@@ -384,6 +392,8 @@ class RedisStreamTickDataSource(TickDataSource):
         block_ms: int | None = None,
         read_count: int | None = None,
         idle_timeout_reads: int | None = None,
+        consumer_group: str | None = None,
+        consumer_name: str | None = None,
     ) -> None:
         """Initialize the stream-backed tick data source.
 
@@ -391,11 +401,21 @@ class RedisStreamTickDataSource(TickDataSource):
             stream_key: Redis stream key to read from.
             batch_size: Number of ticks to batch before yielding.
             trigger_publisher: Optional callback to trigger the publisher.
-            block_ms: How long ``XREAD`` blocks per iteration (milliseconds).
-                Shorter values improve stop-signal responsiveness.
-            read_count: Maximum number of entries fetched per ``XREAD``.
+            block_ms: How long ``XREADGROUP`` blocks per iteration
+                (milliseconds).  Shorter values improve stop-signal
+                responsiveness.
+            read_count: Maximum number of entries fetched per
+                ``XREADGROUP`` call.
             idle_timeout_reads: Abort after this many consecutive empty
-                reads (i.e. ``block_ms * idle_timeout_reads`` ms of silence).
+                reads **once the consumer is caught up with the
+                publisher**.  Empty reads while the publisher is still
+                producing (or is paused for backpressure) do not count.
+            consumer_group: Name of the consumer group to read from.
+                Defaults to ``MARKET_BACKTEST_STREAM_CONSUMER_GROUP``.
+            consumer_name: Unique name for this consumer within the
+                group.  Multiple consumers are not currently used but
+                each run receives a distinct name so ``XPENDING`` can
+                attribute work correctly.
         """
         self.stream_key = stream_key
         self.batch_size = batch_size
@@ -415,27 +435,41 @@ class RedisStreamTickDataSource(TickDataSource):
             if idle_timeout_reads is not None
             else int(getattr(settings, "MARKET_BACKTEST_STREAM_IDLE_TIMEOUT_READS", 300))
         )
+        self.consumer_group = consumer_group or str(
+            getattr(settings, "MARKET_BACKTEST_STREAM_CONSUMER_GROUP", "backtest")
+        )
+        # A unique consumer name per run avoids XPENDING attribution
+        # colliding with an earlier aborted run that still has pending
+        # entries for the previous consumer.
+        import os
+        import uuid
+
+        self.consumer_name = consumer_name or f"worker-{os.getpid()}-{uuid.uuid4().hex[:8]}"
         self.client = None
-        # ``last_id`` tracks the last entry id we successfully consumed.  We
-        # start from ``0-0`` so we pick up any entries the publisher may have
-        # emitted before we connected, but this only matters during unit
-        # tests — in production the stream is explicitly cleared before each
-        # run by the publisher.
-        self._last_id: str = "0-0"
+        # Track the last entry id we have received via ``>`` so that
+        # XINFO STREAM's ``last-generated-id`` can be compared against
+        # it to tell whether the publisher has really stopped or is
+        # just between batches.
+        self._last_seen_id: str = "0-0"
 
     def __iter__(self) -> Iterator[list[Tick]]:
         # Connect before triggering the publisher so we never miss entries.
         self.client = redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
         logger.info(
-            "RedisStreamTickDataSource opened stream=%s block_ms=%s read_count=%s",
+            "RedisStreamTickDataSource opened stream=%s group=%s consumer=%s "
+            "block_ms=%s read_count=%s",
             self.stream_key,
+            self.consumer_group,
+            self.consumer_name,
             self.block_ms,
             self.read_count,
         )
 
-        # Trigger publisher after the client is ready.  In Celery eager mode
-        # (used by some tests) ``apply_async`` runs synchronously, so run
-        # the trigger in a background thread to avoid deadlocking.
+        # Trigger publisher after the client is ready.  The publisher is
+        # responsible for creating the consumer group via XGROUP CREATE
+        # MKSTREAM, so we don't need to do it ourselves.  In Celery eager
+        # mode (used by some tests) ``apply_async`` runs synchronously,
+        # so run the trigger in a background thread to avoid deadlocking.
         if self.trigger_publisher:
             logger.info(f"Triggering publisher for stream: {self.stream_key}")
             from celery import current_app
@@ -447,21 +481,70 @@ class RedisStreamTickDataSource(TickDataSource):
             else:
                 self.trigger_publisher()
 
+        # The publisher creates the consumer group; but if the subscriber
+        # is racing ahead (eager-mode tests) or running stand-alone (unit
+        # tests), ensure the group exists so the first XREADGROUP does
+        # not fail with NOGROUP.
+        self._ensure_consumer_group()
+
         batch: list[Tick] = []
-        consecutive_empty_reads = 0
+        empty_reads_while_caught_up = 0
         reconnect_count = 0
         max_reconnect_attempts = 5
         total_ticks = 0
+        # IDs that we have read from the group but not yet ACKed.  The
+        # executor can still reject/drop ticks (invalid payloads etc.)
+        # after we've consumed them from the stream; those entries must
+        # still be ACKed so ``XPENDING`` reflects accurate progress.
+        pending_ack: list = []
+
+        def _flush_acks() -> None:
+            """ACK all entries the subscriber has consumed so far."""
+            nonlocal pending_ack
+            if not pending_ack or self.client is None:
+                pending_ack = []
+                return
+            try:
+                self.client.xack(self.stream_key, self.consumer_group, *pending_ack)
+            except Exception as exc:  # nosec B110
+                logger.debug(
+                    "RedisStreamTickDataSource: XACK failed (non-fatal) stream=%s group=%s err=%s",
+                    self.stream_key,
+                    self.consumer_group,
+                    exc,
+                )
+            pending_ack = []
 
         try:
             while True:
                 try:
-                    entries = self.client.xread(
-                        {self.stream_key: self._last_id},
+                    entries = self.client.xreadgroup(
+                        self.consumer_group,
+                        self.consumer_name,
+                        {self.stream_key: ">"},
                         count=self.read_count,
                         block=self.block_ms,
                     )
                     reconnect_count = 0  # reset on successful call
+                except redis.ResponseError as exc:
+                    # NOGROUP means the publisher has not yet created
+                    # the consumer group, or a concurrent run destroyed
+                    # it (e.g., the publisher just called
+                    # ``XGROUP DESTROY`` to reset the group in the
+                    # eager-mode tests).  Recreate the group at ``0``
+                    # so we also pick up any entries the publisher has
+                    # already queued, then retry the read on the next
+                    # loop iteration.
+                    if "NOGROUP" in str(exc):
+                        logger.info(
+                            "RedisStreamTickDataSource: NOGROUP on %s, "
+                            "(re)creating group %s and retrying",
+                            self.stream_key,
+                            self.consumer_group,
+                        )
+                        self._ensure_consumer_group(from_start=True)
+                        continue
+                    raise
                 except (redis.ConnectionError, ConnectionError) as exc:
                     reconnect_count += 1
                     if reconnect_count > max_reconnect_attempts:
@@ -487,38 +570,57 @@ class RedisStreamTickDataSource(TickDataSource):
                     self.client = redis.Redis.from_url(
                         settings.MARKET_REDIS_URL, decode_responses=True
                     )
-                    # With ``_last_id`` we resume from exactly where we left
-                    # off.  Since Streams are persistent, nothing is lost
-                    # during reconnect.
+                    # Before switching back to "new entries only" (``>``),
+                    # drain any entries that were delivered to this
+                    # consumer but never ACKed.  ``0`` replays the
+                    # consumer's pending-entries list.
+                    self._drain_pending_history(batch, pending_ack)
                     continue
 
                 if not entries:
-                    consecutive_empty_reads += 1
-                    if consecutive_empty_reads >= self.idle_timeout_reads:
-                        total_idle_ms = consecutive_empty_reads * self.block_ms
-                        logger.warning(
-                            "RedisStreamTickDataSource: idle timeout on stream %s "
-                            "after %s ms. Total messages received: %s",
-                            self.stream_key,
-                            total_idle_ms,
-                            total_ticks,
-                        )
-                        if batch:
-                            yield batch
-                        break
-                    # Yield pending batch during idle gaps so the executor
-                    # can check stop signals.
+                    # No new entries.  Decide whether this is a genuine
+                    # idle (publisher done) or just a pause (publisher is
+                    # still producing or is in backpressure).
+                    if self._consumer_caught_up_with_publisher():
+                        empty_reads_while_caught_up += 1
+                        if empty_reads_while_caught_up >= self.idle_timeout_reads:
+                            total_idle_ms = empty_reads_while_caught_up * self.block_ms
+                            logger.warning(
+                                "RedisStreamTickDataSource: idle timeout on stream %s "
+                                "after %s ms (caught up with publisher). "
+                                "Total messages received: %s",
+                                self.stream_key,
+                                total_idle_ms,
+                                total_ticks,
+                            )
+                            _flush_acks()
+                            if batch:
+                                yield batch
+                            break
+                    else:
+                        # Publisher has more entries to come (or is
+                        # paused for backpressure).  Reset the idle
+                        # counter and keep waiting.
+                        empty_reads_while_caught_up = 0
+
+                    # Yield pending batch during idle gaps so the
+                    # executor can check stop signals.  ACK what we
+                    # already consumed now that the executor is about
+                    # to observe them.
                     if batch:
+                        _flush_acks()
                         yield batch
                         batch = []
                     continue
 
-                consecutive_empty_reads = 0
+                empty_reads_while_caught_up = 0
 
-                # ``xread`` returns [(stream_key, [(entry_id, {field: value, ...}), ...])].
+                # ``xreadgroup`` returns [(stream_key, [(entry_id, {field: value, ...}), ...])].
+                should_stop = False
                 for _stream, stream_entries in entries:
                     for entry_id, fields in stream_entries:
-                        self._last_id = entry_id
+                        self._last_seen_id = entry_id
+                        pending_ack.append(entry_id)
                         kind = str(fields.get("type") or "tick")
 
                         if kind == "eof":
@@ -527,9 +629,8 @@ class RedisStreamTickDataSource(TickDataSource):
                                 self.stream_key,
                                 total_ticks,
                             )
-                            if batch:
-                                yield batch
-                            return
+                            should_stop = True
+                            break
 
                         if kind in {"stopped", "error"}:
                             logger.info(
@@ -538,9 +639,8 @@ class RedisStreamTickDataSource(TickDataSource):
                                 self.stream_key,
                                 total_ticks,
                             )
-                            if batch:
-                                yield batch
-                            return
+                            should_stop = True
+                            break
 
                         if kind != "tick":
                             continue
@@ -556,11 +656,146 @@ class RedisStreamTickDataSource(TickDataSource):
                         total_ticks += 1
 
                         if len(batch) >= self.batch_size:
+                            _flush_acks()
                             yield batch
                             batch = []
+                    if should_stop:
+                        break
+
+                if should_stop:
+                    _flush_acks()
+                    if batch:
+                        yield batch
+                    break
 
         finally:
+            _flush_acks()
             self.close()
+
+    def _ensure_consumer_group(self, *, from_start: bool = False) -> None:
+        """Create the consumer group if it does not already exist.
+
+        In normal operation the publisher creates the group before its
+        first XADD; this defensive call is for tests and for the case
+        where the subscriber races the publisher.  If ``from_start``
+        is True the group is created at id ``0`` so any entries
+        already written by the publisher are delivered on the next
+        ``XREADGROUP``; otherwise the group starts at ``$`` (tip).
+
+        ``BUSYGROUP`` is ignored — the publisher or a previous
+        defensive call may have already created it.
+        """
+        if self.client is None:
+            return
+        start_id = "0" if from_start else "$"
+        try:
+            self.client.xgroup_create(
+                self.stream_key, self.consumer_group, id=start_id, mkstream=True
+            )
+        except Exception as exc:
+            if "BUSYGROUP" in str(exc):
+                return
+            logger.debug(
+                "RedisStreamTickDataSource: XGROUP CREATE failed stream=%s group=%s err=%s",
+                self.stream_key,
+                self.consumer_group,
+                exc,
+            )
+
+    def _consumer_caught_up_with_publisher(self) -> bool:
+        """Return True when this consumer has received every entry the
+        publisher has written so far.
+
+        We compare our ``_last_seen_id`` with the stream's
+        ``last-generated-id`` reported by ``XINFO STREAM``.  If they
+        match, there is nothing left to deliver — a genuine idle state.
+        If they differ there are still entries the publisher has added
+        that we have not yet read, so we must keep waiting even though
+        the last ``XREADGROUP`` returned empty (this happens briefly
+        around consumer-group setup and is harmless).
+        """
+        if self.client is None:
+            return True
+        try:
+            info = self.client.xinfo_stream(self.stream_key)
+        except Exception:
+            # If we cannot inspect the stream, assume we are caught up
+            # to avoid hanging forever.
+            return True
+
+        if not isinstance(info, dict):
+            return True
+
+        # ``last-generated-id`` is the canonical field on modern Redis
+        # servers.  fakeredis (used in tests) does not expose it but
+        # does expose ``last-entry`` with the entry id, so fall back.
+        last_generated = info.get("last-generated-id")
+        if not last_generated:
+            last_entry = info.get("last-entry")
+            if isinstance(last_entry, (list, tuple)) and last_entry:
+                last_generated = last_entry[0]
+        if not last_generated:
+            # Stream is empty — we are trivially caught up.
+            return True
+        return self._stream_id_ge(self._last_seen_id, str(last_generated))
+
+    @staticmethod
+    def _stream_id_ge(a: str, b: str) -> bool:
+        """Return True when stream id ``a`` >= ``b`` (lexicographic on
+        ``(ms, seq)`` integer tuple)."""
+
+        def parse(x: str) -> tuple[int, int]:
+            if "-" in x:
+                ms_str, seq_str = x.split("-", 1)
+            else:
+                ms_str, seq_str = x, "0"
+            try:
+                return (int(ms_str), int(seq_str))
+            except ValueError:
+                return (0, 0)
+
+        return parse(a) >= parse(b)
+
+    def _drain_pending_history(self, batch: list, pending_ack: list) -> None:
+        """Replay previously-delivered-but-unACKed entries after reconnect.
+
+        ``XREADGROUP`` with id ``0`` replays the consumer's pending
+        entries list so we never lose a delivered tick across a
+        connection blip.  Entries read here are already counted in
+        ``XPENDING`` from the publisher's viewpoint, so we do not need
+        to do anything special for backpressure accounting — ACKing is
+        sufficient.
+        """
+        if self.client is None:
+            return
+        try:
+            replay = self.client.xreadgroup(
+                self.consumer_group,
+                self.consumer_name,
+                {self.stream_key: "0"},
+                count=self.read_count,
+            )
+        except Exception as exc:  # nosec B110
+            logger.debug(
+                "RedisStreamTickDataSource: replay failed stream=%s err=%s",
+                self.stream_key,
+                exc,
+            )
+            return
+
+        if not replay:
+            return
+
+        for _stream, stream_entries in replay:
+            for entry_id, fields in stream_entries:
+                pending_ack.append(entry_id)
+                kind = str(fields.get("type") or "tick")
+                if kind != "tick":
+                    continue
+                tick = self._build_tick_from_entry(fields)
+                if tick is None or not self._is_valid_backtest_tick(tick):
+                    continue
+                batch.append(tick)
 
     def close(self) -> None:
         """Close Redis connection."""

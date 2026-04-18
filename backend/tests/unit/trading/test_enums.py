@@ -43,7 +43,7 @@ class TestTaskStatus:
         assert TaskStatus.FAILED == "failed"
 
     def test_choices_count(self):
-        assert len(TaskStatus.choices) == 8
+        assert len(TaskStatus.choices) == 10
 
 
 class TestTaskType:
@@ -66,7 +66,7 @@ class TestStopMode:
         assert StopMode.GRACEFUL_CLOSE == "graceful_close"
 
     def test_choices_count(self):
-        assert len(StopMode.choices) == 3
+        assert len(StopMode.choices) == 4
 
 
 class TestEventType:

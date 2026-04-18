@@ -188,7 +188,39 @@ class TaskLifecycleCommands:
             )
             return True
 
-        task.status = TaskStatus.STOPPING
+        # A stop issued while the task is DRAINING means the user wants to
+        # terminate now rather than waiting for positions to reach breakeven.
+        # Promote the stop mode to IMMEDIATE so the Celery worker is
+        # revoked and the task transitions straight to STOPPED.
+        if task.status == TaskStatus.DRAINING and stop_mode == StopMode.DRAIN:
+            stop_mode = StopMode.IMMEDIATE
+            self.logger.info(
+                "[SERVICE:STOP] DRAINING task received another drain stop, "
+                "escalating to IMMEDIATE - task_id=%s",
+                task_id,
+            )
+        elif task.status == TaskStatus.DRAINING and stop_mode == StopMode.GRACEFUL:
+            # Same idea: draining is already a "graceful wait" — a plain
+            # stop while draining means "stop now, don't keep waiting".
+            stop_mode = StopMode.IMMEDIATE
+            self.logger.info(
+                "[SERVICE:STOP] DRAINING task received graceful stop, "
+                "escalating to IMMEDIATE - task_id=%s",
+                task_id,
+            )
+
+        # DRAIN mode parks the task in DRAINING while it gradually closes
+        # positions at break-even.  Only live trading tasks support it; for
+        # backtests we treat it the same as GRACEFUL_CLOSE (the executor
+        # finishes on end-of-data anyway).
+        if stop_mode == StopMode.DRAIN and not is_backtest:
+            next_status: TaskStatus = TaskStatus.DRAINING
+        elif stop_mode == StopMode.DRAIN and is_backtest:
+            next_status = TaskStatus.DRAINING
+        else:
+            next_status = TaskStatus.STOPPING
+
+        task.status = next_status
         update_fields = ["status", "updated_at"]
         if not is_backtest and stop_mode == StopMode.GRACEFUL_CLOSE:
             trading_task = cast(TradingTask, task)
@@ -201,13 +233,19 @@ class TaskLifecycleCommands:
         )
         if stop_mode == StopMode.IMMEDIATE and task.execution_id:
             self._revoke_execution(task.execution_id)
-        self._trigger_stop_task(task_id=task_id, is_backtest=is_backtest, stop_mode=stop_mode)
+        # DRAIN mode keeps the worker running — don't dispatch the stop
+        # finalisation task; the executor will transition to STOPPED when
+        # it finishes draining.
+        if stop_mode != StopMode.DRAIN:
+            self._trigger_stop_task(task_id=task_id, is_backtest=is_backtest, stop_mode=stop_mode)
 
         self.events.publish(
             task=task,
             task_type=task_type,
-            kind="task_stop_requested",
-            description="Task stop requested",
+            kind="task_drain_requested" if stop_mode == StopMode.DRAIN else "task_stop_requested",
+            description=(
+                "Task drain requested" if stop_mode == StopMode.DRAIN else "Task stop requested"
+            ),
             extra_details={"mode": stop_mode.value},
         )
         return True

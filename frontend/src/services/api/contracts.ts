@@ -83,6 +83,12 @@ export interface BackendTradingTask {
   latest_execution?: BackendTaskExecutionSummary | null;
   has_strategy_state: boolean;
   can_resume: boolean;
+  api_retry_max_attempts?: number;
+  api_retry_backoff_base_seconds?: string;
+  api_retry_backoff_max_seconds?: string;
+  drain_duration_hours?: number;
+  market_idle_pre_close_minutes?: number;
+  market_idle_resume_delay_minutes?: number;
   created_at: string;
   updated_at: string;
   debug_options?: Record<string, unknown>;

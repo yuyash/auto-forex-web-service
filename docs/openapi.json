@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.36.2",
+        "version": "1.36.3",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -5513,6 +5513,12 @@
                         ],
                         "description": "Representative value to use when replay granularity is aggregated. Ignored when tick_granularity='tick'.\n\n* `first` - First Tick\n* `last` - Last Tick\n* `average` - Average\n* `median` - Median"
                     },
+                    "drain_duration_hours": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
+                    },
                     "status": {
                         "allOf": [
                             {
@@ -5520,7 +5526,7 @@
                             }
                         ],
                         "readOnly": true,
-                        "description": "Current task status\n\n* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
+                        "description": "Current task status\n\n* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `idle` - Idle\n* `draining` - Draining\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
                     },
                     "execution_id": {
                         "type": "string",
@@ -5671,6 +5677,12 @@
                         ],
                         "description": "Representative value to use when replay granularity is aggregated. Ignored when tick_granularity='tick'.\n\n* `first` - First Tick\n* `last` - Last Tick\n* `average` - Average\n* `median` - Median"
                     },
+                    "drain_duration_hours": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
+                    },
                     "debug_options": {
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"
                     }
@@ -5780,6 +5792,11 @@
                         "readOnly": true,
                         "description": "Representative value to use when replay granularity is aggregated. Ignored when tick_granularity='tick'.\n\n* `first` - First Tick\n* `last` - Last Tick\n* `average` - Average\n* `median` - Median"
                     },
+                    "drain_duration_hours": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
+                    },
                     "status": {
                         "allOf": [
                             {
@@ -5787,7 +5804,7 @@
                             }
                         ],
                         "readOnly": true,
-                        "description": "Current task status\n\n* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
+                        "description": "Current task status\n\n* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `idle` - Idle\n* `draining` - Draining\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
                     },
                     "started_at": {
                         "type": "string",
@@ -5834,6 +5851,7 @@
                     "data_source",
                     "debug_options",
                     "description",
+                    "drain_duration_hours",
                     "end_time",
                     "error_message",
                     "hedging_enabled",
@@ -5928,6 +5946,12 @@
                             }
                         ],
                         "description": "Representative value to use when replay granularity is aggregated. Ignored when tick_granularity='tick'.\n\n* `first` - First Tick\n* `last` - Last Tick\n* `average` - Average\n* `median` - Median"
+                    },
+                    "drain_duration_hours": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
                     },
                     "debug_options": {
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"
@@ -7697,6 +7721,12 @@
                         ],
                         "description": "Representative value to use when replay granularity is aggregated. Ignored when tick_granularity='tick'.\n\n* `first` - First Tick\n* `last` - Last Tick\n* `average` - Average\n* `median` - Median"
                     },
+                    "drain_duration_hours": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
+                    },
                     "debug_options": {
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"
                     }
@@ -7787,6 +7817,42 @@
                     "hedging_enabled": {
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account."
+                    },
+                    "api_retry_max_attempts": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 1,
+                        "description": "Maximum number of retry attempts for OANDA API calls before the task fails. Uses exponential backoff between attempts."
+                    },
+                    "api_retry_backoff_base_seconds": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,4}(?:\\.\\d{0,2})?$",
+                        "description": "Initial delay between OANDA API retries (seconds). Doubled on each attempt."
+                    },
+                    "api_retry_backoff_max_seconds": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,2})?$",
+                        "description": "Cap on the backoff delay between retries (seconds)."
+                    },
+                    "drain_duration_hours": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
+                    },
+                    "market_idle_pre_close_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Switch to IDLE this many minutes before the market closes. 0 disables pre-close idling."
+                    },
+                    "market_idle_resume_delay_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Wait this many minutes after the market reopens before resuming trading. 0 disables the resume delay."
                     },
                     "debug_options": {
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"
@@ -8237,13 +8303,15 @@
                     "starting",
                     "running",
                     "paused",
+                    "idle",
+                    "draining",
                     "stopping",
                     "stopped",
                     "completed",
                     "failed"
                 ],
                 "type": "string",
-                "description": "* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
+                "description": "* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `idle` - Idle\n* `draining` - Draining\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
             },
             "StrategyConfigCopyRequestRequest": {
                 "type": "object",
@@ -9602,7 +9670,7 @@
                             }
                         ],
                         "readOnly": true,
-                        "description": "Current task status\n\n* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
+                        "description": "Current task status\n\n* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `idle` - Idle\n* `draining` - Draining\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
                     },
                     "execution_id": {
                         "type": "string",
@@ -9630,6 +9698,42 @@
                         "readOnly": true,
                         "nullable": true,
                         "description": "Error message if task failed"
+                    },
+                    "api_retry_max_attempts": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Maximum number of retry attempts for OANDA API calls before the task fails. Uses exponential backoff between attempts."
+                    },
+                    "api_retry_backoff_base_seconds": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,4}(?:\\.\\d{0,2})?$",
+                        "description": "Initial delay between OANDA API retries (seconds). Doubled on each attempt."
+                    },
+                    "api_retry_backoff_max_seconds": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,2})?$",
+                        "description": "Cap on the backoff delay between retries (seconds)."
+                    },
+                    "drain_duration_hours": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
+                    },
+                    "market_idle_pre_close_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Switch to IDLE this many minutes before the market closes. 0 disables pre-close idling."
+                    },
+                    "market_idle_resume_delay_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Wait this many minutes after the market reopens before resuming trading. 0 disables the resume delay."
                     },
                     "has_strategy_state": {
                         "type": "boolean",
@@ -9720,6 +9824,42 @@
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account."
                     },
+                    "api_retry_max_attempts": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 1,
+                        "description": "Maximum number of retry attempts for OANDA API calls before the task fails. Uses exponential backoff between attempts."
+                    },
+                    "api_retry_backoff_base_seconds": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,4}(?:\\.\\d{0,2})?$",
+                        "description": "Initial delay between OANDA API retries (seconds). Doubled on each attempt."
+                    },
+                    "api_retry_backoff_max_seconds": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,2})?$",
+                        "description": "Cap on the backoff delay between retries (seconds)."
+                    },
+                    "drain_duration_hours": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
+                    },
+                    "market_idle_pre_close_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Switch to IDLE this many minutes before the market closes. 0 disables pre-close idling."
+                    },
+                    "market_idle_resume_delay_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Wait this many minutes after the market reopens before resuming trading. 0 disables the resume delay."
+                    },
                     "debug_options": {
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"
                     }
@@ -9808,7 +9948,7 @@
                             }
                         ],
                         "readOnly": true,
-                        "description": "Current task status\n\n* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
+                        "description": "Current task status\n\n* `created` - Created\n* `starting` - Starting\n* `running` - Running\n* `paused` - Paused\n* `idle` - Idle\n* `draining` - Draining\n* `stopping` - Stopping\n* `stopped` - Stopped\n* `completed` - Completed\n* `failed` - Failed"
                     },
                     "execution_id": {
                         "type": "string",
@@ -9837,6 +9977,40 @@
                         "nullable": true,
                         "description": "Error message if task failed"
                     },
+                    "api_retry_max_attempts": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Maximum number of retry attempts for OANDA API calls before the task fails. Uses exponential backoff between attempts."
+                    },
+                    "api_retry_backoff_base_seconds": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,4}(?:\\.\\d{0,2})?$",
+                        "readOnly": true,
+                        "description": "Initial delay between OANDA API retries (seconds). Doubled on each attempt."
+                    },
+                    "api_retry_backoff_max_seconds": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,2})?$",
+                        "readOnly": true,
+                        "description": "Cap on the backoff delay between retries (seconds)."
+                    },
+                    "drain_duration_hours": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
+                    },
+                    "market_idle_pre_close_minutes": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Switch to IDLE this many minutes before the market closes. 0 disables pre-close idling."
+                    },
+                    "market_idle_resume_delay_minutes": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Wait this many minutes after the market reopens before resuming trading. 0 disables the resume delay."
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -9854,17 +10028,23 @@
                     "account_id",
                     "account_name",
                     "account_type",
+                    "api_retry_backoff_base_seconds",
+                    "api_retry_backoff_max_seconds",
+                    "api_retry_max_attempts",
                     "completed_at",
                     "config_id",
                     "config_name",
                     "created_at",
                     "description",
+                    "drain_duration_hours",
                     "dry_run",
                     "error_message",
                     "execution_id",
                     "hedging_enabled",
                     "id",
                     "instrument",
+                    "market_idle_pre_close_minutes",
+                    "market_idle_resume_delay_minutes",
                     "name",
                     "pip_size",
                     "sell_on_stop",
@@ -9900,6 +10080,42 @@
                     "hedging_enabled": {
                         "type": "boolean",
                         "description": "Allow simultaneous long and short positions (hedging). Requires a hedging-enabled OANDA account."
+                    },
+                    "api_retry_max_attempts": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Maximum number of retry attempts for OANDA API calls before the task fails. Uses exponential backoff between attempts."
+                    },
+                    "api_retry_backoff_base_seconds": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,4}(?:\\.\\d{0,2})?$",
+                        "description": "Initial delay between OANDA API retries (seconds). Doubled on each attempt."
+                    },
+                    "api_retry_backoff_max_seconds": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,5}(?:\\.\\d{0,2})?$",
+                        "description": "Cap on the backoff delay between retries (seconds)."
+                    },
+                    "drain_duration_hours": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
+                    },
+                    "market_idle_pre_close_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Switch to IDLE this many minutes before the market closes. 0 disables pre-close idling."
+                    },
+                    "market_idle_resume_delay_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Wait this many minutes after the market reopens before resuming trading. 0 disables the resume delay."
                     },
                     "debug_options": {
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"

@@ -137,6 +137,7 @@ class BacktestTickPublisherRunner:
         backpressure_sleep = float(
             getattr(settings, "MARKET_BACKTEST_BACKPRESSURE_SLEEP_SECONDS", 0.5)
         )
+        consumer_group = str(getattr(settings, "MARKET_BACKTEST_STREAM_CONSUMER_GROUP", "backtest"))
 
         start_dt = parse_iso_datetime(start)
         end_dt = parse_iso_datetime(end)
@@ -146,6 +147,7 @@ class BacktestTickPublisherRunner:
             f"stream={channel}, batch_size={batch_size}, "
             f"stream_maxlen={stream_maxlen}, "
             f"backpressure_high={high_watermark}, backpressure_low={low_watermark}, "
+            f"consumer_group={consumer_group}, "
             f"start_dt={start_dt}, end_dt={end_dt}, "
             f"tick_granularity={tick_granularity}, "
             f"tick_window_value_mode={tick_window_value_mode}"
@@ -154,19 +156,37 @@ class BacktestTickPublisherRunner:
         client = redis_client()
         published = 0
 
-        # Ensure no stale entries from a previous run leak into the new stream.
+        # Ensure the consumer group starts fresh.  We cannot simply
+        # ``DELETE`` the stream key here because in Celery eager mode
+        # (used by some tests) the subscriber is started in the same
+        # process and may already be blocked on ``XREADGROUP`` against
+        # the current stream; deleting the key would trigger a NOGROUP
+        # error on that in-flight call.  Instead we destroy the old
+        # consumer group (if any) — ``XGROUP DESTROY`` leaves the
+        # stream itself alone — and rely on ``XADD MAXLEN ~`` trimming
+        # to bound the stream size.  The subsequent
+        # ``_ensure_consumer_group`` below then creates a new group at
+        # ``$`` so the new run only ever sees entries this publisher
+        # adds from now on.
         try:
-            deleted = client.delete(channel)
-            if deleted:
+            destroyed = client.xgroup_destroy(channel, consumer_group)
+            if destroyed:
                 logger.info(
-                    f"[PUBLISHER:RUN] Cleared stale stream - request_id={request_id}, "
-                    f"stream={channel}"
+                    f"[PUBLISHER:RUN] Destroyed stale consumer group - "
+                    f"request_id={request_id}, stream={channel}, group={consumer_group}"
                 )
         except Exception as exc:  # nosec B110
+            # Stream not found, group not found, etc. — all non-fatal.
             logger.debug(
-                f"[PUBLISHER:RUN] Failed to clear stale stream (non-fatal) - "
+                f"[PUBLISHER:RUN] xgroup_destroy failed (non-fatal) - "
                 f"request_id={request_id}, error={exc}"
             )
+
+        # Create the consumer group the subscriber will read from.  The
+        # group reads start at ``$`` so only entries added by the
+        # current run are delivered.  ``MKSTREAM`` creates the stream
+        # if it does not already exist.
+        self._ensure_consumer_group(client, channel, consumer_group, request_id)
 
         try:
             logger.info(f"[PUBLISHER:RUN] Starting tick publishing - request_id={request_id}")
@@ -184,6 +204,7 @@ class BacktestTickPublisherRunner:
                 high_watermark=high_watermark,
                 low_watermark=low_watermark,
                 backpressure_sleep=backpressure_sleep,
+                consumer_group=consumer_group,
             )
 
             if stopped_early:
@@ -279,15 +300,21 @@ class BacktestTickPublisherRunner:
         high_watermark: int = 100_000,
         low_watermark: int = 50_000,
         backpressure_sleep: float = 0.5,
+        consumer_group: str = "backtest",
     ) -> tuple[int, datetime | None, bool]:
         """Publish ticks to the per-request Redis Stream.
 
         Uses ``XADD`` with ``MAXLEN`` trimming for a bounded stream and
-        ``XLEN``-based backpressure: when the queue grows beyond
-        ``high_watermark`` the publisher pauses until the subscriber has
-        drained below ``low_watermark``.  This keeps the publisher in step
-        with the slower consumer without losing messages, which is exactly
-        what Redis Pub/Sub could not do.
+        consumer-group-aware backpressure via ``XPENDING``: when the number
+        of **unacknowledged** entries (i.e. delivered to the consumer but
+        not yet processed) exceeds ``high_watermark`` the publisher pauses
+        until the consumer has drained below ``low_watermark``.
+
+        This is essential because plain ``XLEN`` is a pure push-side
+        counter — it never decreases as the consumer reads, so an
+        ``XLEN``-based backpressure loop would deadlock the moment the
+        subscriber has read every entry but before the stream is trimmed.
+        ``XPENDING`` reflects real consumer lag.
 
         Returns:
             Tuple of (published_count, last_tick_timestamp, stopped_early).
@@ -344,10 +371,13 @@ class BacktestTickPublisherRunner:
             if not isinstance(ts, datetime):
                 continue
 
-            # Backpressure: pause when the subscriber is falling behind.
-            # ``XLEN`` reflects the number of entries currently buffered in
-            # the stream.  Combined with ``MAXLEN`` trimming below, this
-            # prevents both unbounded memory use and silent tick loss.
+            # Backpressure: pause when the consumer is falling behind.
+            # ``XPENDING`` returns the count of delivered-but-unacknowledged
+            # entries, which is the true consumer-group lag.  Plain
+            # ``XLEN`` would be wrong here — it never decreases as the
+            # consumer reads, so it would hold the publisher indefinitely
+            # after the first ``high_watermark`` entries have been
+            # delivered.
             if high_watermark > 0:
                 backpressure_waiting = self._apply_backpressure(
                     client=client,
@@ -357,6 +387,7 @@ class BacktestTickPublisherRunner:
                     low_watermark=low_watermark,
                     sleep_seconds=backpressure_sleep,
                     already_waiting=backpressure_waiting,
+                    consumer_group=consumer_group,
                 )
                 # If a stop signal arrived while we were waiting, bail out.
                 if self._should_stop_publishing(request_id):
@@ -413,7 +444,63 @@ class BacktestTickPublisherRunner:
         return published, last_ts, False
 
     @staticmethod
+    def _ensure_consumer_group(
+        client: Any, channel: str, consumer_group: str, request_id: str
+    ) -> None:
+        """Create the stream's consumer group, ignoring BUSYGROUP errors.
+
+        ``XGROUP CREATE ... MKSTREAM`` also creates an empty stream if it
+        does not already exist.  ``$`` starts the group from the tip of
+        the stream, which is the right default because the publisher
+        clears the stream before creating the group.
+        """
+        try:
+            client.xgroup_create(channel, consumer_group, id="$", mkstream=True)
+            logger.info(
+                f"[PUBLISHER:GROUP] Created consumer group - request_id={request_id}, "
+                f"stream={channel}, group={consumer_group}"
+            )
+        except Exception as exc:
+            if "BUSYGROUP" in str(exc):
+                logger.info(
+                    f"[PUBLISHER:GROUP] Reusing existing consumer group - "
+                    f"request_id={request_id}, stream={channel}, group={consumer_group}"
+                )
+                return
+            logger.exception(
+                f"[PUBLISHER:GROUP] Failed to create consumer group - "
+                f"request_id={request_id}, stream={channel}, group={consumer_group}"
+            )
+            raise
+
+    @staticmethod
+    def _xpending_count(client: Any, channel: str, consumer_group: str) -> int:
+        """Return the total number of pending (unACKed) entries.
+
+        ``XPENDING stream group`` returns a summary array whose first
+        element is the pending count.  Different ``redis-py`` versions
+        and fakeredis builds return this either as a raw list/tuple or
+        as a dict (``{"pending": n, ...}``).  We accept both shapes.
+        """
+        try:
+            info = client.xpending(channel, consumer_group)
+        except Exception:
+            return 0
+
+        if info is None:
+            return 0
+
+        if isinstance(info, dict):
+            return int(info.get("pending", 0) or 0)
+
+        # ``(pending_count, min_id, max_id, [[consumer, count], ...])``
+        try:
+            return int(info[0])
+        except (IndexError, TypeError, ValueError):
+            return 0
+
     def _apply_backpressure(
+        self,
         *,
         client: Any,
         channel: str,
@@ -422,26 +509,20 @@ class BacktestTickPublisherRunner:
         low_watermark: int,
         sleep_seconds: float,
         already_waiting: bool,
+        consumer_group: str,
     ) -> bool:
-        """Sleep while the stream contains more pending entries than allowed.
+        """Sleep while more entries are pending (unACKed) than allowed.
 
         Returns the updated ``waiting`` flag so the caller can avoid
         spamming the log.  We only log once at the start and end of each
         back-pressure episode.
         """
-        try:
-            pending = int(client.xlen(channel))
-        except Exception as exc:  # nosec B110
-            logger.debug(
-                f"[PUBLISHER:BACKPRESSURE] XLEN failed, skipping - "
-                f"request_id={request_id}, error={exc}"
-            )
-            return already_waiting
+        pending = self._xpending_count(client, channel, consumer_group)
 
         if pending < high_watermark:
             if already_waiting and pending <= low_watermark:
                 logger.info(
-                    f"[PUBLISHER:BACKPRESSURE] Subscriber caught up, resuming - "
+                    f"[PUBLISHER:BACKPRESSURE] Consumer caught up, resuming - "
                     f"request_id={request_id}, pending={pending}"
                 )
                 return False
@@ -449,24 +530,24 @@ class BacktestTickPublisherRunner:
 
         if not already_waiting:
             logger.info(
-                f"[PUBLISHER:BACKPRESSURE] Subscriber falling behind, pausing - "
+                f"[PUBLISHER:BACKPRESSURE] Consumer falling behind, pausing - "
                 f"request_id={request_id}, pending={pending}, "
                 f"high_watermark={high_watermark}, low_watermark={low_watermark}"
             )
 
-        # Block here until the stream drains below the low watermark or the
-        # subscriber disappears.  We re-check periodically so a stop signal
-        # isn't delayed for more than ``sleep_seconds``.
+        # Block here until pending entries drain below the low watermark
+        # or the consumer disappears.  We re-check periodically so a stop
+        # signal isn't delayed for more than ``sleep_seconds``.
         while True:
             time.sleep(max(sleep_seconds, 0.01))
-            try:
-                pending = int(client.xlen(channel))
-            except Exception as exc:  # nosec B110
-                logger.debug(
-                    f"[PUBLISHER:BACKPRESSURE] XLEN failed while waiting - "
-                    f"request_id={request_id}, error={exc}"
+            # Allow the publisher to bail out during long pauses.
+            if self._should_stop_publishing(request_id):
+                logger.info(
+                    f"[PUBLISHER:BACKPRESSURE] Stop signal received while paused - "
+                    f"request_id={request_id}, pending={pending}"
                 )
                 return True
+            pending = self._xpending_count(client, channel, consumer_group)
             if pending <= low_watermark:
                 logger.info(
                     f"[PUBLISHER:BACKPRESSURE] Drained below low watermark - "

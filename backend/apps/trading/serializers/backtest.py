@@ -39,6 +39,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "hedging_enabled",
             "tick_granularity",
             "tick_window_value_mode",
+            "drain_duration_hours",
             "status",
             "execution_id",
             "started_at",
@@ -101,6 +102,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "hedging_enabled",
             "tick_granularity",
             "tick_window_value_mode",
+            "drain_duration_hours",
             "debug_options",
         ]
         # Make fields optional for partial updates (PATCH)
@@ -117,6 +119,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "hedging_enabled": {"required": False},
             "tick_granularity": {"required": False},
             "tick_window_value_mode": {"required": False},
+            "drain_duration_hours": {"required": False, "min_value": 0},
             "debug_options": {"required": False},
         }
 

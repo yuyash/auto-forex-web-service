@@ -125,6 +125,8 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   const canStop = [
     TaskStatusEnum.STARTING,
     TaskStatusEnum.RUNNING,
+    TaskStatusEnum.IDLE,
+    TaskStatusEnum.DRAINING,
     ...(isTrading ? [] : [TaskStatusEnum.PAUSED]),
   ].includes(status);
   const canPause = !isTrading && status === TaskStatusEnum.RUNNING;

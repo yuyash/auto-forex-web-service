@@ -18,6 +18,12 @@ export interface TradingTask {
   sell_on_stop: boolean;
   dry_run: boolean;
   hedging_enabled: boolean;
+  api_retry_max_attempts?: number;
+  api_retry_backoff_base_seconds?: string;
+  api_retry_backoff_max_seconds?: string;
+  drain_duration_hours?: number;
+  market_idle_pre_close_minutes?: number;
+  market_idle_resume_delay_minutes?: number;
   latest_execution?: ExecutionSummary;
   has_strategy_state?: boolean;
   can_resume?: boolean;
@@ -40,6 +46,12 @@ export interface TradingTaskCreateData {
   sell_on_stop?: boolean;
   dry_run?: boolean;
   hedging_enabled?: boolean;
+  api_retry_max_attempts?: number;
+  api_retry_backoff_base_seconds?: number;
+  api_retry_backoff_max_seconds?: number;
+  drain_duration_hours?: number;
+  market_idle_pre_close_minutes?: number;
+  market_idle_resume_delay_minutes?: number;
 }
 
 export interface TradingTaskUpdateData {
@@ -50,6 +62,12 @@ export interface TradingTaskUpdateData {
   sell_on_stop?: boolean;
   dry_run?: boolean;
   hedging_enabled?: boolean;
+  api_retry_max_attempts?: number;
+  api_retry_backoff_base_seconds?: number;
+  api_retry_backoff_max_seconds?: number;
+  drain_duration_hours?: number;
+  market_idle_pre_close_minutes?: number;
+  market_idle_resume_delay_minutes?: number;
   debug_options?: Record<string, unknown>;
 }
 

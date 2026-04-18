@@ -70,6 +70,11 @@ export const backtestTaskSchema = z
     tick_window_value_mode: z.enum(['first', 'last', 'average', 'median']),
     sell_at_completion: z.boolean().optional().default(false),
     hedging_enabled: z.boolean().optional().default(true),
+    drain_duration_hours: z.coerce
+      .number({ message: 'Drain duration must be a number' })
+      .int('Drain duration must be an integer')
+      .min(0, 'Drain duration cannot be negative')
+      .optional(),
   })
   .refine((data) => data.start_time < data.end_time, {
     message: 'Start date must be before end date',
@@ -177,6 +182,7 @@ export type BacktestTaskSchemaOutput = {
   tick_window_value_mode: string;
   sell_at_completion?: boolean;
   hedging_enabled?: boolean;
+  drain_duration_hours?: number;
 };
 export type TradingTaskFormData = z.infer<typeof tradingTaskSchema>;
 export type CopyTaskFormData = z.infer<typeof copyTaskSchema>;

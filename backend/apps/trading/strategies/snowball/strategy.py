@@ -1024,24 +1024,30 @@ class SnowballStrategy(Strategy):
     ) -> tuple[list[StrategyEvent], str] | None:
         if not self.config.emergency_enabled:
             return None
-        if ratio < Decimal("95"):
+        threshold = self.config.emergency_threshold
+        if ratio < threshold:
             return None
         ss.protection_level = ProtectionLevel.EMERGENCY
         all_entries = ss.all_entries()
         logger.critical(
-            "EMERGENCY STOP: margin ratio %.1f%% >= 95%% | NAV=%s, entries=%d",
+            "EMERGENCY STOP: margin ratio %.1f%% >= %s%% | NAV=%s, entries=%d",
             ratio,
+            threshold,
             ss.account_nav,
             len(all_entries),
         )
         event = GenericStrategyEvent(
             event_type=EventType.STRATEGY_STOPPED,
             timestamp=tick.timestamp,
-            data={"kind": "emergency_stop", "ratio": str(ratio)},
+            data={
+                "kind": "emergency_stop",
+                "ratio": str(ratio),
+                "threshold": str(threshold),
+            },
         )
         event.strategy_type = "snowball"
         event.validation_status = "fail"
-        return [event], f"Emergency stop: margin ratio {ratio:.1f}% >= 95%"
+        return [event], (f"Emergency stop: margin ratio {ratio:.1f}% >= threshold {threshold}%")
 
     def _handle_lock(
         self,
