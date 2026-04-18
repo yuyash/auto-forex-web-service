@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.36.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.36.2...backend-v1.36.3) (2026-04-18)
+
+
+### Bug Fixes
+
+* **backtest:** deliver ticks over Redis Streams with backpressure and gap detection ([9eccfac](https://github.com/yuyash/auto-forex-web-service/commit/9eccfac00554294fbcdc5157cd5e2dbe82acb61d))
+* **backtest:** deliver ticks over Redis Streams with backpressure and… ([#536](https://github.com/yuyash/auto-forex-web-service/issues/536)) ([9eccfac](https://github.com/yuyash/auto-forex-web-service/commit/9eccfac00554294fbcdc5157cd5e2dbe82acb61d))
+
 ## [1.36.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.36.1...backend-v1.36.2) (2026-04-17)
 
 
