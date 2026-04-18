@@ -526,6 +526,25 @@ class RedisStreamTickDataSource(TickDataSource):
                         block=self.block_ms,
                     )
                     reconnect_count = 0  # reset on successful call
+                except redis.ResponseError as exc:
+                    # NOGROUP means the publisher has not yet created
+                    # the consumer group, or a concurrent run destroyed
+                    # it (e.g., the publisher just called
+                    # ``XGROUP DESTROY`` to reset the group in the
+                    # eager-mode tests).  Recreate the group at ``0``
+                    # so we also pick up any entries the publisher has
+                    # already queued, then retry the read on the next
+                    # loop iteration.
+                    if "NOGROUP" in str(exc):
+                        logger.info(
+                            "RedisStreamTickDataSource: NOGROUP on %s, "
+                            "(re)creating group %s and retrying",
+                            self.stream_key,
+                            self.consumer_group,
+                        )
+                        self._ensure_consumer_group(from_start=True)
+                        continue
+                    raise
                 except (redis.ConnectionError, ConnectionError) as exc:
                     reconnect_count += 1
                     if reconnect_count > max_reconnect_attempts:
@@ -653,18 +672,26 @@ class RedisStreamTickDataSource(TickDataSource):
             _flush_acks()
             self.close()
 
-    def _ensure_consumer_group(self) -> None:
+    def _ensure_consumer_group(self, *, from_start: bool = False) -> None:
         """Create the consumer group if it does not already exist.
 
-        Called defensively on the subscriber side so tests and
-        race-conditions where the subscriber outruns the publisher still
-        work.  ``BUSYGROUP`` is ignored — the publisher may have already
-        created it.
+        In normal operation the publisher creates the group before its
+        first XADD; this defensive call is for tests and for the case
+        where the subscriber races the publisher.  If ``from_start``
+        is True the group is created at id ``0`` so any entries
+        already written by the publisher are delivered on the next
+        ``XREADGROUP``; otherwise the group starts at ``$`` (tip).
+
+        ``BUSYGROUP`` is ignored — the publisher or a previous
+        defensive call may have already created it.
         """
         if self.client is None:
             return
+        start_id = "0" if from_start else "$"
         try:
-            self.client.xgroup_create(self.stream_key, self.consumer_group, id="$", mkstream=True)
+            self.client.xgroup_create(
+                self.stream_key, self.consumer_group, id=start_id, mkstream=True
+            )
         except Exception as exc:
             if "BUSYGROUP" in str(exc):
                 return

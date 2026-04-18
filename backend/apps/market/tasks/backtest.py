@@ -156,26 +156,36 @@ class BacktestTickPublisherRunner:
         client = redis_client()
         published = 0
 
-        # Ensure no stale entries from a previous run leak into the new stream.
+        # Ensure the consumer group starts fresh.  We cannot simply
+        # ``DELETE`` the stream key here because in Celery eager mode
+        # (used by some tests) the subscriber is started in the same
+        # process and may already be blocked on ``XREADGROUP`` against
+        # the current stream; deleting the key would trigger a NOGROUP
+        # error on that in-flight call.  Instead we destroy the old
+        # consumer group (if any) — ``XGROUP DESTROY`` leaves the
+        # stream itself alone — and rely on ``XADD MAXLEN ~`` trimming
+        # to bound the stream size.  The subsequent
+        # ``_ensure_consumer_group`` below then creates a new group at
+        # ``$`` so the new run only ever sees entries this publisher
+        # adds from now on.
         try:
-            deleted = client.delete(channel)
-            if deleted:
+            destroyed = client.xgroup_destroy(channel, consumer_group)
+            if destroyed:
                 logger.info(
-                    f"[PUBLISHER:RUN] Cleared stale stream - request_id={request_id}, "
-                    f"stream={channel}"
+                    f"[PUBLISHER:RUN] Destroyed stale consumer group - "
+                    f"request_id={request_id}, stream={channel}, group={consumer_group}"
                 )
         except Exception as exc:  # nosec B110
+            # Stream not found, group not found, etc. — all non-fatal.
             logger.debug(
-                f"[PUBLISHER:RUN] Failed to clear stale stream (non-fatal) - "
+                f"[PUBLISHER:RUN] xgroup_destroy failed (non-fatal) - "
                 f"request_id={request_id}, error={exc}"
             )
 
         # Create the consumer group the subscriber will read from.  The
-        # group reads start at ``$`` which is treated as "everything from
-        # now on" by Redis — this is exactly what we want because we just
-        # deleted the stream above, so there are no pre-existing entries
-        # to replay.  ``MKSTREAM`` creates the stream if it does not
-        # already exist.
+        # group reads start at ``$`` so only entries added by the
+        # current run are delivered.  ``MKSTREAM`` creates the stream
+        # if it does not already exist.
         self._ensure_consumer_group(client, channel, consumer_group, request_id)
 
         try:

@@ -381,3 +381,88 @@ class TestRedisStreamTickDataSourceIter:
 
         assert len(received) == 1
         assert received[0].bid == Decimal("150.0")
+
+
+@pytest.mark.django_db
+class TestNoGroupRecovery:
+    """Regression tests for the publisher/subscriber consumer-group race.
+
+    In Celery eager mode (used by the E2E tests), the publisher runs in
+    a daemon thread launched by the subscriber's ``trigger_publisher``
+    callback.  The publisher may destroy and recreate the consumer
+    group while the subscriber's ``XREADGROUP`` is mid-flight, causing
+    the blocking call to fail with ``NOGROUP``.  The subscriber must
+    recover transparently.
+    """
+
+    def test_xreadgroup_recovers_when_group_missing(self):
+        """Simulates the eager-mode race where the publisher destroys
+        and recreates the consumer group while the subscriber's
+        first ``XREADGROUP`` is still in flight.
+
+        The subscriber must translate the ``NOGROUP`` response into an
+        in-loop group recreation (at ``id=0`` so no queued entries are
+        lost) followed by a retry, instead of surfacing the error to
+        the executor.
+        """
+        import redis as redis_module
+
+        server = fakeredis.FakeServer()
+        stream_key = "test:backtest:stream:nogroup"
+
+        seed = fakeredis.FakeRedis(server=server, decode_responses=True)
+        seed.xgroup_create(stream_key, "backtest", id="$", mkstream=True)
+        seed.xadd(
+            stream_key,
+            {
+                "type": "tick",
+                "instrument": "USD_JPY",
+                "timestamp": "2024-01-01T00:00:00Z",
+                "bid": "150.0",
+                "ask": "150.02",
+                "mid": "150.01",
+            },
+        )
+        seed.xadd(stream_key, {"type": "eof"})
+        seed.close()
+
+        inner = fakeredis.FakeRedis(server=server, decode_responses=True)
+
+        class NoGroupOnceClient:
+            """Wraps a real FakeRedis client but raises NOGROUP on the
+            first ``XREADGROUP`` call to simulate the race."""
+
+            def __init__(self, inner_client):
+                self._inner = inner_client
+                self._raised = False
+
+            def __getattr__(self, name):
+                return getattr(self._inner, name)
+
+            def xreadgroup(self, *args, **kwargs):
+                if not self._raised:
+                    self._raised = True
+                    raise redis_module.ResponseError(
+                        f"NOGROUP No such key '{stream_key}' or consumer group "
+                        "'backtest' in XREADGROUP with GROUP option"
+                    )
+                return self._inner.xreadgroup(*args, **kwargs)
+
+        flaky_client = NoGroupOnceClient(inner)
+
+        source = RedisStreamTickDataSource(
+            stream_key=stream_key,
+            batch_size=10,
+            block_ms=50,
+            read_count=10,
+            idle_timeout_reads=20,
+        )
+
+        with patch("apps.trading.tasks.source.redis.Redis.from_url", return_value=flaky_client):
+            received: list = []
+            for batch in source:
+                received.extend(batch)
+
+        # The NOGROUP was recovered and the retry reads the entry.
+        assert len(received) == 1
+        assert received[0].bid == Decimal("150.0")
