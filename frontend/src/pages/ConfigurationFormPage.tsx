@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Container,
   Paper,
@@ -39,6 +39,37 @@ const ConfigurationFormPage = () => {
   const { createConfiguration, updateConfiguration, isCreating, isUpdating } =
     useConfigurationMutations();
   const isEditLocked = Boolean(isEditMode && configuration?.has_running_tasks);
+
+  // Build form initial data ONCE from the initial configuration response.
+  // React Query may refetch this configuration in the background (e.g. when
+  // the tab regains focus or after a polling interval). Recomputing the
+  // initialData object on every refetch would cause ConfigurationForm to
+  // discard whatever the user is currently typing.  We therefore capture a
+  // stable snapshot keyed on the primitive values we actually care about.
+  // parameters is a JSON object; stringify so referential changes from the
+  // cache don't trigger resets when the content is unchanged.
+  const parametersSignature = JSON.stringify(configuration?.parameters ?? {});
+  const editInitialData = useMemo(() => {
+    if (!isEditMode || !configuration) return undefined;
+    return {
+      name: configuration.name,
+      strategy_type: configuration.strategy_type,
+      description: configuration.description,
+      parameters: configuration.parameters,
+    };
+    // We deliberately exclude `configuration` reference changes to avoid
+    // resetting the form while the user is editing. The `configuration.id`
+    // will only change if the user navigates to a different configuration,
+    // which remounts this page anyway.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isEditMode,
+    configuration?.id,
+    configuration?.name,
+    configuration?.strategy_type,
+    configuration?.description,
+    parametersSignature,
+  ]);
 
   // Redirect if configuration not found in edit mode
   useEffect(() => {
@@ -181,12 +212,7 @@ const ConfigurationFormPage = () => {
         {isEditMode && configuration && !isEditLocked ? (
           <ConfigurationForm
             mode="edit"
-            initialData={{
-              name: configuration.name,
-              strategy_type: configuration.strategy_type,
-              description: configuration.description,
-              parameters: configuration.parameters,
-            }}
+            initialData={editInitialData}
             onSubmit={async (data) => {
               try {
                 await updateConfiguration({

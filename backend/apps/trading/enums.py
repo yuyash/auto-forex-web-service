@@ -34,6 +34,8 @@ class TaskStatus(models.TextChoices):
     STARTING = "starting", "Starting"
     RUNNING = "running", "Running"
     PAUSED = "paused", "Paused"
+    IDLE = "idle", "Idle"
+    DRAINING = "draining", "Draining"
     STOPPING = "stopping", "Stopping"
     STOPPED = "stopped", "Stopped"
     COMPLETED = "completed", "Completed"
@@ -55,12 +57,17 @@ class StopMode(models.TextChoices):
 
     - IMMEDIATE: Stop immediately without closing positions (fastest)
     - GRACEFUL: Stop gracefully, wait for pending operations to complete
-    - GRACEFUL_CLOSE: Stop gracefully and close all open positions
+    - GRACEFUL_CLOSE: Stop gracefully and close all open positions at market
+    - DRAIN: Enter DRAINING status and gradually close positions as they
+        reach breakeven; the task stops once all positions are closed.
+        Issuing a further stop while DRAINING terminates the task
+        immediately.
     """
 
     IMMEDIATE = "immediate", "Immediate Stop"
     GRACEFUL = "graceful", "Graceful Stop (Keep Positions)"
     GRACEFUL_CLOSE = "graceful_close", "Graceful Stop (Close Positions)"
+    DRAIN = "drain", "Drain (Close at breakeven or profit)"
 
 
 class TradingMode(models.TextChoices):

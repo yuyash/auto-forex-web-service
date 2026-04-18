@@ -162,6 +162,14 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
         task = TradingTask.objects.get(pk=task_id)
         logger.info("Task loaded - task_id=%s, status=%s", task_id, task.status)
 
+        # DRAIN mode does not transition the task to STOPPED here.  The
+        # lifecycle command has already set DRAINING status and the
+        # executor is responsible for closing positions progressively and
+        # finalising the task when drain completes.
+        if stop_mode == StopMode.DRAIN:
+            logger.info("DRAIN stop requested; executor will finalise - task_id=%s", task_id)
+            return
+
         if task.status == TaskStatus.STOPPING:
             if stop_mode == StopMode.IMMEDIATE and task.execution_id:
                 from celery import current_app

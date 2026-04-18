@@ -431,9 +431,23 @@
       "type": "boolean",
       "title": "Enable Emergency Stop",
       "title_ja": "緊急停止有効",
-      "description": "When enabled, the task is stopped with FAILED status if the margin closeout ratio reaches 95%. Disable to let other protection mechanisms handle extreme margin situations.",
-      "description_ja": "有効時、証拠金清算割合が95%に達するとタスクがFAILED状態で停止します。無効にすると、他の保護メカニズムに極端なマージン状況の処理を委ねます。",
+      "description": "When enabled, the task is stopped with FAILED status if the margin closeout ratio reaches the emergency threshold. Disable to let other protection mechanisms handle extreme margin situations.",
+      "description_ja": "有効時、証拠金清算割合が緊急停止しきい値に達するとタスクがFAILED状態で停止します。無効にすると、他の保護メカニズムに極端なマージン状況の処理を委ねます。",
       "default": true,
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
+    "emergency_threshold": {
+      "type": "number",
+      "title": "Emergency Stop Threshold (%)",
+      "title_ja": "緊急停止しきい値 (%)",
+      "description": "Margin closeout ratio (in percent) at which the emergency stop is triggered. Only applied when emergency stop is enabled.",
+      "description_ja": "緊急停止が発動する証拠金清算割合（％）。緊急停止が有効な場合にのみ適用されます。",
+      "default": "95",
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "dependsOn": { "field": "emergency_enabled", "values": [true] },
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
     }

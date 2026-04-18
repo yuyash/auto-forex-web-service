@@ -555,6 +555,8 @@ export const TradingTaskDetail: React.FC = () => {
                 await stopTask.mutate({ id: actionTaskId });
                 applyOptimisticStatus(TaskStatus.STOPPING, [
                   TaskStatus.STOPPING,
+                  TaskStatus.DRAINING,
+                  TaskStatus.IDLE,
                   TaskStatus.STOPPED,
                   TaskStatus.COMPLETED,
                   TaskStatus.FAILED,

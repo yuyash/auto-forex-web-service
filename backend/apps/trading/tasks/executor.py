@@ -52,15 +52,14 @@ def is_forex_market_closed() -> bool:
     """Check if the forex market is currently closed (weekend).
 
     Forex market closes Friday 21:00 UTC and reopens Sunday 21:00 UTC.
+
+    Delegates to :mod:`apps.trading.services.market_schedule` so the rule
+    lives in a single, testable module.  This function is kept for
+    backwards compatibility with existing callers and tests.
     """
-    now = datetime.now(UTC)
-    weekday = now.weekday()  # 0=Monday, 6=Sunday
-    hour = now.hour
-    return (
-        (weekday == 4 and hour >= 21)  # Friday after 21:00
-        or weekday == 5  # Saturday
-        or (weekday == 6 and hour < 21)  # Sunday before 21:00
-    )
+    from apps.trading.services.market_schedule import is_forex_market_closed as _impl
+
+    return _impl()
 
 
 @dataclass(slots=True)
@@ -602,10 +601,14 @@ class TaskExecutor:
             if loop.no_tick_batches == 0:
                 logger.info("Market is closed, tolerating empty batches")
             loop.no_tick_batches = 0
+            self._maybe_enter_market_idle(loop)
             return False
 
         loop.no_tick_batches += 1
         if self.task_type == TaskType.TRADING:
+            # Market is open — if we were idling, exit idle (possibly after
+            # the configured resume delay) back to RUNNING.
+            self._maybe_exit_market_idle(loop)
             if loop.no_tick_batches == loop.max_no_tick_batches:
                 logger.warning(
                     "No ticks received for %d consecutive batches on live trading task. "
@@ -633,11 +636,208 @@ class TaskExecutor:
 
     def _process_tick_batch(self, loop: ExecutionLoopState, tick_batch: list) -> None:
         """Process one non-empty batch."""
+        # Drain-on-stop integration: when the task is DRAINING, inspect open
+        # positions and close any at breakeven-or-better *before* feeding
+        # ticks into the strategy, so that closed positions are reflected in
+        # the same batch instead of the next one.  This also lets us exit
+        # the loop as soon as the drain is complete.
+        if self._handle_drain_pre_batch(loop):
+            return
         for tick_idx, tick in enumerate(tick_batch):
             if tick_idx % 100 == 0 and self._should_stop_during_batch(loop, tick_idx):
                 break
             if self._process_single_tick(loop, tick):
                 break
+
+    # ------------------------------------------------------------------
+    # Drain-on-stop
+    # ------------------------------------------------------------------
+
+    def _handle_drain_pre_batch(self, loop: ExecutionLoopState) -> bool:
+        """Advance the drain state machine. Returns True when execution should stop."""
+        if self.task_type != TaskType.TRADING:
+            return False
+        task = cast(TradingTask, self.task)
+        task.refresh_from_db(fields=["status"])
+        if task.status != TaskStatus.DRAINING:
+            return False
+
+        from apps.trading.services.drain import DrainCandidate, DrainPolicy
+
+        drain_marker = self._read_drain_marker(loop)
+        now = dj_timezone.now()
+        if drain_marker is None:
+            drain_marker = now
+            self._record_drain_marker(loop, drain_marker)
+
+        duration_hours = int(getattr(task, "drain_duration_hours", 0) or 0)
+        policy = DrainPolicy(
+            drain_started_at=drain_marker,
+            duration_hours=duration_hours,
+        )
+
+        open_positions = self.order_service.get_open_positions(instrument=self.instrument)
+        candidates: list[DrainCandidate] = []
+        for position in open_positions:
+            unrealized = getattr(position, "unrealized_pnl", None)
+            try:
+                unrealized_dec = (
+                    unrealized if isinstance(unrealized, Decimal) else Decimal(str(unrealized))
+                )
+            except (TypeError, ValueError, InvalidOperation):
+                unrealized_dec = Decimal("0")
+            candidates.append(
+                DrainCandidate(
+                    position_id=str(position.pk),
+                    current_unrealized_pnl=unrealized_dec,
+                )
+            )
+
+        decision = policy.evaluate(now=now, open_positions=candidates)
+
+        for position_id in decision.close_position_ids:
+            self._close_position_during_drain(position_id)
+
+        if decision.should_finalize:
+            logger.info(
+                "Drain complete - task_id=%s, reason=%s",
+                task.pk,
+                decision.finalize_reason,
+            )
+            loop.stopped_early = True
+            loop.stop_reason = decision.finalize_reason or "drain_complete"
+            self._record_drain_marker(loop, None)
+            return True
+
+        return False
+
+    def _close_position_during_drain(self, position_id: str) -> None:
+        """Close a single position; errors are logged and swallowed."""
+        from apps.trading.models import Position
+
+        try:
+            position = Position.objects.get(pk=position_id, is_open=True)
+        except Position.DoesNotExist:  # pragma: no cover - race with close
+            return
+        try:
+            self.order_service.close_position(position=position)
+        except OrderServiceError as exc:
+            logger.warning(
+                "Drain close failed - position_id=%s, error=%s",
+                position_id,
+                exc,
+            )
+
+    def _record_drain_marker(self, loop: ExecutionLoopState, started_at: datetime | None) -> None:
+        strategy_state = (
+            loop.state.strategy_state if isinstance(loop.state.strategy_state, dict) else {}
+        )
+        if started_at is None:
+            strategy_state.pop("_drain_started_at", None)
+        else:
+            strategy_state["_drain_started_at"] = started_at.isoformat()
+        loop.state.strategy_state = strategy_state
+        try:
+            loop.state.save(update_fields=["strategy_state", "updated_at"])
+        except Exception:  # pragma: no cover
+            logger.debug("Failed to persist drain marker", exc_info=True)
+
+    def _read_drain_marker(self, loop: ExecutionLoopState) -> datetime | None:
+        strategy_state = (
+            loop.state.strategy_state if isinstance(loop.state.strategy_state, dict) else {}
+        )
+        raw = strategy_state.get("_drain_started_at")
+        if not raw:
+            return None
+        try:
+            return datetime.fromisoformat(str(raw))
+        except ValueError:
+            return None
+
+    # ------------------------------------------------------------------
+    # Market-aware idle (trading tasks only)
+    # ------------------------------------------------------------------
+
+    def _maybe_enter_market_idle(self, loop: ExecutionLoopState) -> None:
+        """Transition a live trading task to IDLE when the market is closed.
+
+        Safe to call every loop iteration: the method is idempotent and
+        short-circuits for non-trading tasks or tasks already in IDLE.
+        """
+        if self.task_type != TaskType.TRADING:
+            return
+        task = cast(TradingTask, self.task)
+        task.refresh_from_db(fields=["status"])
+        if task.status != TaskStatus.RUNNING:
+            return
+        # Transition to IDLE and persist the idle-start marker.
+        type(task).objects.filter(pk=task.pk, status=TaskStatus.RUNNING).update(
+            status=TaskStatus.IDLE,
+            updated_at=dj_timezone.now(),
+        )
+        task.refresh_from_db(fields=["status"])
+        logger.info("Trading task switched to IDLE (market closed) - task_id=%s", task.pk)
+        self._record_idle_marker(loop, dj_timezone.now())
+
+    def _maybe_exit_market_idle(self, loop: ExecutionLoopState) -> None:
+        """Resume a live trading task from IDLE once the market reopens.
+
+        Honours the optional ``market_idle_resume_delay_minutes`` field so
+        callers don't start trading into the very first ticks of the
+        session.
+        """
+        if self.task_type != TaskType.TRADING:
+            return
+        task = cast(TradingTask, self.task)
+        task.refresh_from_db(fields=["status"])
+        if task.status != TaskStatus.IDLE:
+            return
+
+        from apps.trading.services.market_schedule import should_resume_from_idle
+
+        delay_minutes = int(getattr(task, "market_idle_resume_delay_minutes", 0) or 0)
+        idle_marker = self._read_idle_marker(loop)
+        if not should_resume_from_idle(
+            now=dj_timezone.now(),
+            idle_entered_at=idle_marker,
+            resume_delay_minutes=delay_minutes,
+        ):
+            return
+
+        type(task).objects.filter(pk=task.pk, status=TaskStatus.IDLE).update(
+            status=TaskStatus.RUNNING,
+            updated_at=dj_timezone.now(),
+        )
+        task.refresh_from_db(fields=["status"])
+        logger.info("Trading task resumed from IDLE (market open) - task_id=%s", task.pk)
+        self._record_idle_marker(loop, None)
+
+    def _record_idle_marker(self, loop: ExecutionLoopState, entered_at: datetime | None) -> None:
+        """Persist the idle-start timestamp into ExecutionState."""
+        strategy_state = (
+            loop.state.strategy_state if isinstance(loop.state.strategy_state, dict) else {}
+        )
+        if entered_at is None:
+            strategy_state.pop("_idle_entered_at", None)
+        else:
+            strategy_state["_idle_entered_at"] = entered_at.isoformat()
+        loop.state.strategy_state = strategy_state
+        try:
+            loop.state.save(update_fields=["strategy_state", "updated_at"])
+        except Exception:  # pragma: no cover - best effort persistence
+            logger.debug("Failed to persist idle marker", exc_info=True)
+
+    def _read_idle_marker(self, loop: ExecutionLoopState) -> datetime | None:
+        strategy_state = (
+            loop.state.strategy_state if isinstance(loop.state.strategy_state, dict) else {}
+        )
+        raw = strategy_state.get("_idle_entered_at")
+        if not raw:
+            return None
+        try:
+            return datetime.fromisoformat(str(raw))
+        except ValueError:
+            return None
 
     def _should_stop_during_batch(self, loop: ExecutionLoopState, tick_idx: int) -> bool:
         """Check stop signal during long batch processing."""

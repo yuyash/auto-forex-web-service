@@ -195,6 +195,17 @@ class BacktestTask(UUIDModel):
         help_text='Debug settings. Supported: {"tracemalloc": true}',
     )
 
+    # Drain-on-stop setting (shared with trading tasks).  For backtests the
+    # drain completes as soon as the tick stream reaches its end regardless
+    # of duration.
+    drain_duration_hours = models.PositiveIntegerField(
+        default=0,
+        help_text=(
+            "Maximum duration in hours for drain-on-stop before forcing a stop. "
+            "Set to 0 to wait indefinitely for positions to reach breakeven."
+        ),
+    )
+
     class Meta:
         db_table = "backtest_tasks"
         verbose_name = "Backtest Task"

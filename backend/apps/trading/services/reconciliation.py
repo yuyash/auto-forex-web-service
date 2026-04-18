@@ -6,7 +6,6 @@ orphaned live trading execution.
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass, field
 from decimal import Decimal
 from logging import Logger, getLogger
@@ -14,52 +13,15 @@ from typing import Any, TypeVar
 
 from django.utils import timezone as dj_timezone
 
-from apps.market.services.oanda import OandaAPIError, OandaService, OrderDirection
+from apps.market.services.oanda import OandaService, OrderDirection
 from apps.trading.enums import Direction, TaskType
 from apps.trading.models import Position, TradingTask
 from apps.trading.models.state import ExecutionState
+from apps.trading.services.oanda_retry import OandaRetryPolicy, call_with_retry
 
 logger: Logger = getLogger(name=__name__)
 
 _T = TypeVar("_T")
-
-_OANDA_MAX_RETRIES = 3
-_OANDA_RETRY_DELAY = 2.0  # seconds
-
-
-def _oanda_call_with_retry(
-    fn: Any,
-    *args: Any,
-    label: str = "OANDA API call",
-    **kwargs: Any,
-) -> Any:
-    """Call an OANDA service method with retry on transient errors."""
-    last_exc: OandaAPIError | None = None
-    for attempt in range(1, _OANDA_MAX_RETRIES + 1):
-        try:
-            return fn(*args, **kwargs)
-        except OandaAPIError as exc:
-            last_exc = exc
-            if attempt < _OANDA_MAX_RETRIES:
-                logger.warning(
-                    "%s failed (attempt %d/%d): %s — retrying in %.1fs",
-                    label,
-                    attempt,
-                    _OANDA_MAX_RETRIES,
-                    exc,
-                    _OANDA_RETRY_DELAY,
-                )
-                time.sleep(_OANDA_RETRY_DELAY)
-            else:
-                logger.error(
-                    "%s failed after %d attempts: %s",
-                    label,
-                    _OANDA_MAX_RETRIES,
-                    exc,
-                )
-    raise RuntimeError(
-        f"{label} failed after {_OANDA_MAX_RETRIES} retries: {last_exc}"
-    ) from last_exc
 
 
 class TradingSafetyError(RuntimeError):
@@ -109,11 +71,29 @@ class TradingResumeReconciler:
         *,
         task: TradingTask,
         state: ExecutionState,
+        retry_policy: OandaRetryPolicy | None = None,
     ) -> None:
         self.task = task
         self.state = state
         self.execution_id = task.execution_id
         self.oanda_service = OandaService(account=task.oanda_account, dry_run=False)
+        self.retry_policy = retry_policy or OandaRetryPolicy.from_task(task)
+
+    def _oanda_call(
+        self,
+        fn: Any,
+        *args: Any,
+        label: str,
+        **kwargs: Any,
+    ) -> Any:
+        """Call an OANDA service method with the task-scoped retry policy."""
+        return call_with_retry(
+            fn,
+            *args,
+            policy=self.retry_policy,
+            label=label,
+            **kwargs,
+        )
 
     def reconcile(self, *, resumed: bool) -> ReconciliationReport:
         """Run full reconciliation and return a summary report."""
@@ -137,7 +117,7 @@ class TradingResumeReconciler:
         report = ReconciliationReport()
         self._check_pending_orders(report)
 
-        broker_trades = _oanda_call_with_retry(
+        broker_trades = self._oanda_call(
             self.oanda_service.get_open_trades,
             instrument=self.task.instrument,
             label="Fetch open trades (drift check)",
@@ -205,7 +185,7 @@ class TradingResumeReconciler:
         return report
 
     def _sync_account_snapshot(self, report: ReconciliationReport) -> None:
-        details = _oanda_call_with_retry(
+        details = self._oanda_call(
             self.oanda_service.get_account_details,
             label="Fetch account snapshot",
         )
@@ -231,7 +211,7 @@ class TradingResumeReconciler:
         report.updated_account_snapshot = True
 
     def _check_pending_orders(self, report: ReconciliationReport) -> None:
-        pending_orders = _oanda_call_with_retry(
+        pending_orders = self._oanda_call(
             self.oanda_service.get_pending_orders,
             instrument=self.task.instrument,
             label="Fetch pending orders",
@@ -246,7 +226,7 @@ class TradingResumeReconciler:
             )
 
     def _sync_positions_with_broker(self, report: ReconciliationReport) -> list[Position]:
-        broker_trades = _oanda_call_with_retry(
+        broker_trades = self._oanda_call(
             self.oanda_service.get_open_trades,
             instrument=self.task.instrument,
             label="Fetch open trades (position sync)",

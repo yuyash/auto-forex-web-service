@@ -108,13 +108,17 @@ def _make_reconciler(
         reconciler.state = state
         reconciler.execution_id = getattr(task, "execution_id", None)
         reconciler.oanda_service = MagicMock()
+        from apps.trading.services.oanda_retry import OandaRetryPolicy
+
+        # Use the default policy; tests override sleep globally.
+        reconciler.retry_policy = OandaRetryPolicy.default()
     return reconciler
 
 
 @pytest.fixture(autouse=True)
 def _no_retry_sleep(monkeypatch):
     """Eliminate retry sleep in OANDA call retry helper."""
-    monkeypatch.setattr("apps.trading.services.reconciliation.time.sleep", lambda _: None)
+    monkeypatch.setattr("apps.trading.services.oanda_retry.time.sleep", lambda _: None)
 
 
 # ── Tests for helper functions ──────────────────────────────────────

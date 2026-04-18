@@ -18,6 +18,8 @@ export const getStatusAriaLabel = (status: string): string => {
     starting: 'Task is starting',
     running: 'Task is currently running',
     paused: 'Task is paused',
+    idle: 'Task is idle, waiting for the market to reopen',
+    draining: 'Task is draining open positions before stopping',
     stopping: 'Task is stopping',
     stopped: 'Task has been stopped',
     completed: 'Task completed successfully',

@@ -51,6 +51,14 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "started_at",
             "completed_at",
             "error_message",
+            # Broker API retry policy
+            "api_retry_max_attempts",
+            "api_retry_backoff_base_seconds",
+            "api_retry_backoff_max_seconds",
+            # Drain / market-aware idle
+            "drain_duration_hours",
+            "market_idle_pre_close_minutes",
+            "market_idle_resume_delay_minutes",
             # State management fields
             "has_strategy_state",
             "can_resume",
@@ -126,6 +134,12 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "started_at",
             "completed_at",
             "error_message",
+            "api_retry_max_attempts",
+            "api_retry_backoff_base_seconds",
+            "api_retry_backoff_max_seconds",
+            "drain_duration_hours",
+            "market_idle_pre_close_minutes",
+            "market_idle_resume_delay_minutes",
             "created_at",
             "updated_at",
         ]
@@ -162,6 +176,12 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             "sell_on_stop",
             "dry_run",
             "hedging_enabled",
+            "api_retry_max_attempts",
+            "api_retry_backoff_base_seconds",
+            "api_retry_backoff_max_seconds",
+            "drain_duration_hours",
+            "market_idle_pre_close_minutes",
+            "market_idle_resume_delay_minutes",
             "debug_options",
         ]
         extra_kwargs = {
@@ -171,6 +191,12 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             "sell_on_stop": {"required": False},
             "dry_run": {"required": False},
             "hedging_enabled": {"required": False},
+            "api_retry_max_attempts": {"required": False, "min_value": 1},
+            "api_retry_backoff_base_seconds": {"required": False, "min_value": 0},
+            "api_retry_backoff_max_seconds": {"required": False, "min_value": 0},
+            "drain_duration_hours": {"required": False, "min_value": 0},
+            "market_idle_pre_close_minutes": {"required": False, "min_value": 0},
+            "market_idle_resume_delay_minutes": {"required": False, "min_value": 0},
             "debug_options": {"required": False},
         }
 

@@ -16,10 +16,11 @@ import {
   Stop as StopIcon,
   ExitToApp as ClosePositionsIcon,
   TrendingFlat as KeepPositionsIcon,
+  WaterDrop as DrainIcon,
 } from '@mui/icons-material';
 import { useState } from 'react';
 
-export type StopOption = 'graceful' | 'graceful_close';
+export type StopOption = 'graceful' | 'graceful_close' | 'drain';
 
 interface StopOptionsDialogProps {
   open: boolean;
@@ -27,6 +28,10 @@ interface StopOptionsDialogProps {
   onCancel: () => void;
   onConfirm: (option: StopOption) => void;
   isLoading: boolean;
+  // When true, DRAIN is disabled because the caller has determined the task
+  // cannot drain (for example, backtests tied to a finite tick stream may
+  // still support it, but some task types must not offer the option).
+  drainAvailable?: boolean;
 }
 
 export function StopOptionsDialog({
@@ -35,6 +40,7 @@ export function StopOptionsDialog({
   onCancel,
   onConfirm,
   isLoading,
+  drainAvailable = true,
 }: StopOptionsDialogProps) {
   const [selectedOption, setSelectedOption] = useState<StopOption | null>(null);
 
@@ -91,6 +97,7 @@ export function StopOptionsDialog({
               borderColor:
                 selectedOption === 'graceful_close' ? 'error.main' : 'divider',
               borderRadius: 1,
+              mb: 1,
             }}
           >
             <ListItemIcon>
@@ -101,6 +108,27 @@ export function StopOptionsDialog({
               secondary="Stop trading and close all open positions at current market prices."
             />
           </ListItemButton>
+          {drainAvailable && (
+            <ListItemButton
+              selected={selectedOption === 'drain'}
+              onClick={() => setSelectedOption('drain')}
+              disabled={isLoading}
+              sx={{
+                border: 1,
+                borderColor:
+                  selectedOption === 'drain' ? 'warning.main' : 'divider',
+                borderRadius: 1,
+              }}
+            >
+              <ListItemIcon>
+                <DrainIcon color="warning" />
+              </ListItemIcon>
+              <ListItemText
+                primary="Drain (Close at breakeven or profit)"
+                secondary="Keep running but stop opening new positions. Existing positions are closed as soon as unrealised PnL is non-negative; the task stops once all positions are closed. Optionally bounded by the task's drain duration; issuing another stop while draining terminates the task immediately."
+              />
+            </ListItemButton>
+          )}
         </List>
         {selectedOption === 'graceful_close' && (
           <Box

@@ -8,6 +8,8 @@ import {
   Pause,
   Error,
   FiberManualRecord,
+  Bedtime,
+  WaterDrop,
 } from '@mui/icons-material';
 import { TaskStatus } from '../../../types/common';
 import { getStatusAriaLabel } from '../../../utils/ariaUtils';
@@ -47,6 +49,16 @@ const STATUS_CONFIG: Record<
     label: 'Paused',
     color: 'info',
     icon: Pause,
+  },
+  [TaskStatus.IDLE]: {
+    label: 'Idle',
+    color: 'default',
+    icon: Bedtime,
+  },
+  [TaskStatus.DRAINING]: {
+    label: 'Draining',
+    color: 'warning',
+    icon: WaterDrop,
   },
   [TaskStatus.STOPPING]: {
     label: 'Stopping',

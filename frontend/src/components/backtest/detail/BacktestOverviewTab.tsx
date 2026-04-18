@@ -184,28 +184,6 @@ export function BacktestOverviewTab({
                 </Typography>
               </Box>
             )}
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('backtest:detail.tickGranularity')}
-              </Typography>
-              <Typography variant="body1">
-                {t(
-                  `backtest:form.tickGranularityOptions.${task.tick_granularity}`,
-                  task.tick_granularity
-                )}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('backtest:detail.tickWindowValueMode')}
-              </Typography>
-              <Typography variant="body1">
-                {t(
-                  `backtest:form.tickWindowValueModeOptions.${task.tick_window_value_mode}`,
-                  task.tick_window_value_mode
-                )}
-              </Typography>
-            </Box>
             {tracemallocEnabled && (
               <Box>
                 <Typography variant="caption" color="text.secondary">
@@ -350,6 +328,30 @@ export function BacktestOverviewTab({
                 )}
               </Typography>
             </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                {t('backtest:detail.tickGranularity')}
+              </Typography>
+              <Typography variant="body1">
+                {t(
+                  `backtest:form.tickGranularityOptions.${task.tick_granularity}`,
+                  task.tick_granularity
+                )}
+              </Typography>
+            </Box>
+            {task.tick_granularity !== 'tick' && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  {t('backtest:detail.tickWindowValueMode')}
+                </Typography>
+                <Typography variant="body1">
+                  {t(
+                    `backtest:form.tickWindowValueModeOptions.${task.tick_window_value_mode}`,
+                    task.tick_window_value_mode
+                  )}
+                </Typography>
+              </Box>
+            )}
           </Box>
         </Grid>
 

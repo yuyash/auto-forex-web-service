@@ -128,7 +128,10 @@ export function TaskDetailHeader({
 }: TaskDetailHeaderProps) {
   const status = currentStatus || taskStatus;
   const actionDisabled =
-    status === TaskStatus.RUNNING || status === TaskStatus.PAUSED;
+    status === TaskStatus.RUNNING ||
+    status === TaskStatus.PAUSED ||
+    status === TaskStatus.IDLE ||
+    status === TaskStatus.DRAINING;
   const tickText = buildTickText(tick, pipSize);
   const [expanded, setExpanded] = useState(true);
 
@@ -232,7 +235,32 @@ export function TaskDetailHeader({
               </Typography>
             )}
 
-            {tick.mid != null && (
+            {/* Idle indicator: replaces the tick line while the task is
+                parked in IDLE waiting for the market to reopen. */}
+            {status === TaskStatus.IDLE && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: 1,
+                  pl: '4px',
+                  fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                }}
+              >
+                <Typography
+                  variant="body2"
+                  color="warning.main"
+                  component="span"
+                  sx={{ fontWeight: 600 }}
+                >
+                  Market closed — task idle, trading will resume when the market
+                  reopens.
+                </Typography>
+              </Box>
+            )}
+
+            {status !== TaskStatus.IDLE && tick.mid != null && (
               <Box
                 sx={{
                   display: 'flex',

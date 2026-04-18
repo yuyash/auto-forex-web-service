@@ -87,6 +87,7 @@ class SnowballStrategyConfig:
     disable_loss_cut_after_rebuild: bool
     preserve_highest_r_from: int
     emergency_enabled: bool
+    emergency_threshold: Decimal
 
     pip_size: Decimal
 
@@ -138,6 +139,7 @@ class SnowballStrategyConfig:
             disable_loss_cut_after_rebuild=bool(raw.get("disable_loss_cut_after_rebuild", False)),
             preserve_highest_r_from=_parse_int(raw.get("preserve_highest_r_from", 0), 0),
             emergency_enabled=bool(raw.get("emergency_enabled", True)),
+            emergency_threshold=_parse_decimal(raw.get("emergency_threshold", "95"), "95"),
             pip_size=_parse_decimal(raw.get("pip_size", "0.01"), "0.01"),
             reseed_on_all_pending=bool(raw.get("reseed_on_all_pending", False)),
             reseed_on_grid_exhausted=bool(raw.get("reseed_on_grid_exhausted", False)),
@@ -173,6 +175,7 @@ class SnowballStrategyConfig:
             "disable_loss_cut_after_rebuild": self.disable_loss_cut_after_rebuild,
             "preserve_highest_r_from": self.preserve_highest_r_from,
             "emergency_enabled": self.emergency_enabled,
+            "emergency_threshold": str(self.emergency_threshold),
             "pip_size": str(self.pip_size),
             "reseed_on_all_pending": self.reseed_on_all_pending,
             "reseed_on_grid_exhausted": self.reseed_on_grid_exhausted,
@@ -198,6 +201,8 @@ class SnowballStrategyConfig:
             raise ValueError("n_pips_flat_steps must be < r_max")
         if self.counter_tp_mode != "weighted_avg" and self.counter_tp_pips <= 0:
             raise ValueError("counter_tp_pips must be > 0")
+        if self.emergency_enabled and not Decimal("0") < self.emergency_threshold <= Decimal("100"):
+            raise ValueError("emergency_threshold must be between 0 (exclusive) and 100")
         if self.interval_mode == "manual":
             if len(self.manual_intervals) != self.r_max:
                 raise ValueError(
