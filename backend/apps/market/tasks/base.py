@@ -42,9 +42,14 @@ def parse_iso_datetime(value: str) -> datetime:
     return dt
 
 
-def backtest_channel_for_request(request_id: str) -> str:
-    """Get Redis channel name for backtest request."""
-    prefix = getattr(settings, "MARKET_BACKTEST_TICK_CHANNEL_PREFIX", "market:backtest:ticks:")
+def backtest_stream_key_for_request(request_id: str) -> str:
+    """Return the Redis Stream key used for delivering backtest ticks.
+
+    A separate stream key per request keeps concurrent backtests isolated.
+    The stream is bounded via ``XADD ... MAXLEN ~`` and cleaned up explicitly
+    by the publisher when done.
+    """
+    prefix = getattr(settings, "MARKET_BACKTEST_TICK_STREAM_PREFIX", "market:backtest:stream:")
     return f"{prefix}{request_id}"
 
 

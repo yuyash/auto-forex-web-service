@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 from apps.market.tasks.base import (
-    backtest_channel_for_request,
+    backtest_stream_key_for_request,
     isoformat,
     lock_value,
     parse_iso_datetime,
@@ -48,13 +48,14 @@ class TestBaseUtilities:
         assert isinstance(result, datetime)
         assert result.tzinfo is not None
 
-    def test_backtest_channel_for_request(self) -> None:
-        """Test backtest channel name generation."""
+    def test_backtest_stream_key_for_request(self) -> None:
+        """Test backtest stream key generation."""
         request_id = "test-request-123"
-        channel = backtest_channel_for_request(request_id)
+        key = backtest_stream_key_for_request(request_id)
 
-        assert "test-request-123" in channel
-        assert "backtest" in channel.lower()
+        assert "test-request-123" in key
+        assert "backtest" in key.lower()
+        assert "stream" in key.lower()
 
     def test_lock_value(self) -> None:
         """Test lock value generation."""

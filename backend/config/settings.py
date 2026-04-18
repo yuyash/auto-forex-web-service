@@ -233,19 +233,62 @@ MARKET_TICK_SUBSCRIBER_FLUSH_INTERVAL = int(os.getenv("MARKET_TICK_SUBSCRIBER_FL
 
 
 # =============================================================================
-# Market Backtest Tick Pub/Sub
+# Market Backtest Tick Stream (Redis Streams) — reliable delivery
 # =============================================================================
+#
+# Backtest ticks are delivered over Redis Streams instead of Pub/Sub.  Pub/Sub
+# messages are dropped silently when the subscriber's Redis output buffer
+# overflows (``client-output-buffer-limit pubsub``), which caused silent tick
+# loss during long backtests.  Streams are persistent and cap at ``MAXLEN``,
+# providing natural backpressure.
 
-# Per-request channel is: f"{MARKET_BACKTEST_TICK_CHANNEL_PREFIX}{request_id}"
-MARKET_BACKTEST_TICK_CHANNEL_PREFIX = os.getenv(
-    "MARKET_BACKTEST_TICK_CHANNEL_PREFIX",
-    "market:backtest:ticks:",
+# Per-request stream key: f"{MARKET_BACKTEST_TICK_STREAM_PREFIX}{request_id}"
+MARKET_BACKTEST_TICK_STREAM_PREFIX = os.getenv(
+    "MARKET_BACKTEST_TICK_STREAM_PREFIX",
+    "market:backtest:stream:",
 )
 
 # Controls how many rows Django fetches from DB per chunk during publishing.
-
-
 MARKET_BACKTEST_PUBLISH_BATCH_SIZE = int(os.getenv("MARKET_BACKTEST_PUBLISH_BATCH_SIZE", "1000"))
+
+# Stream capacity: the publisher trims with ``XADD ... MAXLEN ~ N`` so the
+# stream stays bounded even if the subscriber lags.  ``~`` allows approximate
+# trimming for performance.  Should be comfortably larger than
+# ``MARKET_BACKTEST_BACKPRESSURE_HIGH_WATERMARK``.
+MARKET_BACKTEST_STREAM_MAXLEN = int(os.getenv("MARKET_BACKTEST_STREAM_MAXLEN", "200000"))
+
+# Backpressure: when the pending entries in the stream exceed this high
+# watermark the publisher pauses until the subscriber drains below the low
+# watermark.  This keeps the publisher in lockstep with the consumer.
+MARKET_BACKTEST_BACKPRESSURE_HIGH_WATERMARK = int(
+    os.getenv("MARKET_BACKTEST_BACKPRESSURE_HIGH_WATERMARK", "100000")
+)
+MARKET_BACKTEST_BACKPRESSURE_LOW_WATERMARK = int(
+    os.getenv("MARKET_BACKTEST_BACKPRESSURE_LOW_WATERMARK", "50000")
+)
+# Sleep interval when waiting for the subscriber to drain.
+MARKET_BACKTEST_BACKPRESSURE_SLEEP_SECONDS = float(
+    os.getenv("MARKET_BACKTEST_BACKPRESSURE_SLEEP_SECONDS", "0.5")
+)
+
+# XREAD BLOCK timeout in milliseconds.  Controls how long the subscriber waits
+# for new entries before returning (and rechecking stop flags).
+MARKET_BACKTEST_STREAM_BLOCK_MS = int(os.getenv("MARKET_BACKTEST_STREAM_BLOCK_MS", "1000"))
+
+# How many entries the subscriber requests per ``XREAD`` call.
+MARKET_BACKTEST_STREAM_READ_COUNT = int(os.getenv("MARKET_BACKTEST_STREAM_READ_COUNT", "500"))
+
+# Subscriber gives up after this many consecutive empty reads.  At
+# ``BLOCK_MS=1000`` this means 300 s of silence.
+MARKET_BACKTEST_STREAM_IDLE_TIMEOUT_READS = int(
+    os.getenv("MARKET_BACKTEST_STREAM_IDLE_TIMEOUT_READS", "300")
+)
+
+# Runtime gap detection: if the executor sees the delivered tick timestamp
+# jump forward by more than this many hours (and the gap is not a regular
+# weekend closure), the run is aborted.  This prevents silent data loss from
+# being mistaken for a valid backtest result.
+MARKET_BACKTEST_MAX_TICK_GAP_HOURS = int(os.getenv("MARKET_BACKTEST_MAX_TICK_GAP_HOURS", "72"))
 
 
 # Django REST Framework Configuration

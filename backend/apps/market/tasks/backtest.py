@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+import time
 from datetime import datetime
 from logging import Logger, getLogger
 from typing import Any
@@ -14,7 +14,7 @@ from apps.market.models import CeleryTaskStatus, TickData
 from apps.market.services.backtest_ticks import iter_aggregated_backtest_ticks
 from apps.market.services.celery import CeleryTaskService
 from apps.market.tasks.base import (
-    backtest_channel_for_request,
+    backtest_stream_key_for_request,
     current_task_id,
     isoformat,
     lock_value,
@@ -127,15 +127,25 @@ class BacktestTickPublisherRunner:
             },
         )
 
-        channel = backtest_channel_for_request(str(request_id))
+        channel = backtest_stream_key_for_request(str(request_id))
         batch_size = int(getattr(settings, "MARKET_BACKTEST_PUBLISH_BATCH_SIZE", 1000))
+        stream_maxlen = int(getattr(settings, "MARKET_BACKTEST_STREAM_MAXLEN", 200_000))
+        high_watermark = int(
+            getattr(settings, "MARKET_BACKTEST_BACKPRESSURE_HIGH_WATERMARK", 100_000)
+        )
+        low_watermark = int(getattr(settings, "MARKET_BACKTEST_BACKPRESSURE_LOW_WATERMARK", 50_000))
+        backpressure_sleep = float(
+            getattr(settings, "MARKET_BACKTEST_BACKPRESSURE_SLEEP_SECONDS", 0.5)
+        )
 
         start_dt = parse_iso_datetime(start)
         end_dt = parse_iso_datetime(end)
 
         logger.info(
             f"[PUBLISHER:RUN] Configuration - request_id={request_id}, "
-            f"channel={channel}, batch_size={batch_size}, "
+            f"stream={channel}, batch_size={batch_size}, "
+            f"stream_maxlen={stream_maxlen}, "
+            f"backpressure_high={high_watermark}, backpressure_low={low_watermark}, "
             f"start_dt={start_dt}, end_dt={end_dt}, "
             f"tick_granularity={tick_granularity}, "
             f"tick_window_value_mode={tick_window_value_mode}"
@@ -143,6 +153,20 @@ class BacktestTickPublisherRunner:
 
         client = redis_client()
         published = 0
+
+        # Ensure no stale entries from a previous run leak into the new stream.
+        try:
+            deleted = client.delete(channel)
+            if deleted:
+                logger.info(
+                    f"[PUBLISHER:RUN] Cleared stale stream - request_id={request_id}, "
+                    f"stream={channel}"
+                )
+        except Exception as exc:  # nosec B110
+            logger.debug(
+                f"[PUBLISHER:RUN] Failed to clear stale stream (non-fatal) - "
+                f"request_id={request_id}, error={exc}"
+            )
 
         try:
             logger.info(f"[PUBLISHER:RUN] Starting tick publishing - request_id={request_id}")
@@ -156,6 +180,10 @@ class BacktestTickPublisherRunner:
                 request_id,
                 tick_granularity=tick_granularity,
                 tick_window_value_mode=tick_window_value_mode,
+                stream_maxlen=stream_maxlen,
+                high_watermark=high_watermark,
+                low_watermark=low_watermark,
+                backpressure_sleep=backpressure_sleep,
             )
 
             if stopped_early:
@@ -247,8 +275,19 @@ class BacktestTickPublisherRunner:
         *,
         tick_granularity: str = "tick",
         tick_window_value_mode: str = "last",
+        stream_maxlen: int = 200_000,
+        high_watermark: int = 100_000,
+        low_watermark: int = 50_000,
+        backpressure_sleep: float = 0.5,
     ) -> tuple[int, datetime | None, bool]:
-        """Publish ticks from database to Redis.
+        """Publish ticks to the per-request Redis Stream.
+
+        Uses ``XADD`` with ``MAXLEN`` trimming for a bounded stream and
+        ``XLEN``-based backpressure: when the queue grows beyond
+        ``high_watermark`` the publisher pauses until the subscriber has
+        drained below ``low_watermark``.  This keeps the publisher in step
+        with the slower consumer without losing messages, which is exactly
+        what Redis Pub/Sub could not do.
 
         Returns:
             Tuple of (published_count, last_tick_timestamp, stopped_early).
@@ -264,6 +303,7 @@ class BacktestTickPublisherRunner:
 
         published = 0
         last_ts: datetime | None = None
+        backpressure_waiting = False
 
         logger.info(
             f"[PUBLISHER:PUBLISH] Query created, starting iteration - request_id={request_id}"
@@ -287,7 +327,7 @@ class BacktestTickPublisherRunner:
             )
 
         for row in rows_iter:
-            # Check stop signal before every tick
+            # Check stop signal before every tick.
             if self._should_stop_publishing(request_id):
                 logger.info(
                     f"[PUBLISHER:PUBLISH] Stop signal received - request_id={request_id}, "
@@ -304,9 +344,36 @@ class BacktestTickPublisherRunner:
             if not isinstance(ts, datetime):
                 continue
 
-            client.publish(
-                channel,
-                json.dumps(
+            # Backpressure: pause when the subscriber is falling behind.
+            # ``XLEN`` reflects the number of entries currently buffered in
+            # the stream.  Combined with ``MAXLEN`` trimming below, this
+            # prevents both unbounded memory use and silent tick loss.
+            if high_watermark > 0:
+                backpressure_waiting = self._apply_backpressure(
+                    client=client,
+                    channel=channel,
+                    request_id=request_id,
+                    high_watermark=high_watermark,
+                    low_watermark=low_watermark,
+                    sleep_seconds=backpressure_sleep,
+                    already_waiting=backpressure_waiting,
+                )
+                # If a stop signal arrived while we were waiting, bail out.
+                if self._should_stop_publishing(request_id):
+                    logger.info(
+                        f"[PUBLISHER:PUBLISH] Stop signal received during backpressure - "
+                        f"request_id={request_id}, published={published}"
+                    )
+                    self._send_stopped(client, channel, request_id, instrument, published)
+                    self.task_service.mark_stopped(
+                        status=CeleryTaskStatus.Status.STOPPED,
+                        status_message=f"published={published}",
+                    )
+                    return published, last_ts, True
+
+            try:
+                client.xadd(
+                    channel,
                     {
                         "type": "tick",
                         "request_id": str(request_id),
@@ -315,9 +382,17 @@ class BacktestTickPublisherRunner:
                         "bid": str(row["bid"]),
                         "ask": str(row["ask"]),
                         "mid": str(row["mid"]),
-                    }
-                ),
-            )
+                    },
+                    maxlen=stream_maxlen,
+                    approximate=True,
+                )
+            except Exception as exc:
+                logger.exception(
+                    f"[PUBLISHER:PUBLISH] XADD failed - request_id={request_id}, "
+                    f"published={published}, error={exc}"
+                )
+                raise
+
             published += 1
             last_ts = ts
 
@@ -336,6 +411,68 @@ class BacktestTickPublisherRunner:
             f"total_published={published}, last_ts={last_ts}"
         )
         return published, last_ts, False
+
+    @staticmethod
+    def _apply_backpressure(
+        *,
+        client: Any,
+        channel: str,
+        request_id: str,
+        high_watermark: int,
+        low_watermark: int,
+        sleep_seconds: float,
+        already_waiting: bool,
+    ) -> bool:
+        """Sleep while the stream contains more pending entries than allowed.
+
+        Returns the updated ``waiting`` flag so the caller can avoid
+        spamming the log.  We only log once at the start and end of each
+        back-pressure episode.
+        """
+        try:
+            pending = int(client.xlen(channel))
+        except Exception as exc:  # nosec B110
+            logger.debug(
+                f"[PUBLISHER:BACKPRESSURE] XLEN failed, skipping - "
+                f"request_id={request_id}, error={exc}"
+            )
+            return already_waiting
+
+        if pending < high_watermark:
+            if already_waiting and pending <= low_watermark:
+                logger.info(
+                    f"[PUBLISHER:BACKPRESSURE] Subscriber caught up, resuming - "
+                    f"request_id={request_id}, pending={pending}"
+                )
+                return False
+            return already_waiting
+
+        if not already_waiting:
+            logger.info(
+                f"[PUBLISHER:BACKPRESSURE] Subscriber falling behind, pausing - "
+                f"request_id={request_id}, pending={pending}, "
+                f"high_watermark={high_watermark}, low_watermark={low_watermark}"
+            )
+
+        # Block here until the stream drains below the low watermark or the
+        # subscriber disappears.  We re-check periodically so a stop signal
+        # isn't delayed for more than ``sleep_seconds``.
+        while True:
+            time.sleep(max(sleep_seconds, 0.01))
+            try:
+                pending = int(client.xlen(channel))
+            except Exception as exc:  # nosec B110
+                logger.debug(
+                    f"[PUBLISHER:BACKPRESSURE] XLEN failed while waiting - "
+                    f"request_id={request_id}, error={exc}"
+                )
+                return True
+            if pending <= low_watermark:
+                logger.info(
+                    f"[PUBLISHER:BACKPRESSURE] Drained below low watermark - "
+                    f"request_id={request_id}, pending={pending}"
+                )
+                return False
 
     @staticmethod
     def _iter_raw_ticks(
@@ -520,80 +657,94 @@ class BacktestTickPublisherRunner:
         end: str,
         count: int,
     ) -> None:
-        """Send EOF marker to channel."""
+        """Append EOF marker to the stream.
+
+        EOF is written as a regular stream entry so it cannot be dropped
+        mid-flight like a pub/sub message.  ``maxlen`` is not applied here —
+        the marker is small and we want to guarantee it reaches the
+        subscriber even if the stream is near capacity.
+        """
         logger.info(
             f"[PUBLISHER:EOF] Sending EOF marker - request_id={request_id}, "
-            f"channel={channel}, count={count}"
+            f"stream={channel}, count={count}"
         )
 
-        eof_message = {
-            "type": "eof",
-            "request_id": str(request_id),
-            "instrument": str(instrument),
-            "start": str(start),
-            "end": str(end),
-            "count": count,
-        }
-
-        subscribers = client.publish(channel, json.dumps(eof_message))
+        try:
+            entry_id = client.xadd(
+                channel,
+                {
+                    "type": "eof",
+                    "request_id": str(request_id),
+                    "instrument": str(instrument),
+                    "start": str(start),
+                    "end": str(end),
+                    "count": str(count),
+                },
+            )
+        except Exception as exc:
+            logger.exception(
+                f"[PUBLISHER:EOF] XADD EOF failed - request_id={request_id}, error={exc}"
+            )
+            raise
 
         logger.info(
             f"[PUBLISHER:EOF] EOF sent - request_id={request_id}, "
-            f"channel={channel}, count={count}, subscribers={subscribers}"
+            f"stream={channel}, count={count}, entry_id={entry_id}"
         )
 
     def _send_stopped(
         self, client: Any, channel: str, request_id: str, instrument: str, count: int
     ) -> None:
-        """Send stopped marker to channel."""
+        """Append stopped marker to the stream."""
         logger.info(
             f"[PUBLISHER:STOPPED] Sending stopped marker - request_id={request_id}, "
-            f"channel={channel}, count={count}"
+            f"stream={channel}, count={count}"
         )
-        subscribers = client.publish(
-            channel,
-            json.dumps(
+        try:
+            entry_id = client.xadd(
+                channel,
                 {
                     "type": "stopped",
                     "request_id": str(request_id),
                     "instrument": str(instrument),
-                    "count": count,
-                }
-            ),
-        )
-        logger.info(
-            f"[PUBLISHER:STOPPED] Stopped marker sent - request_id={request_id}, "
-            f"channel={channel}, count={count}, subscribers={subscribers}"
-        )
+                    "count": str(count),
+                },
+            )
+            logger.info(
+                f"[PUBLISHER:STOPPED] Stopped marker sent - request_id={request_id}, "
+                f"stream={channel}, count={count}, entry_id={entry_id}"
+            )
+        except Exception as exc:  # nosec B110
+            logger.warning(
+                f"[PUBLISHER:STOPPED] Failed to append stopped marker - "
+                f"request_id={request_id}, error={exc}"
+            )
 
     def _send_error(
         self, client: Any, channel: str, request_id: str, instrument: str, message: str
     ) -> None:
-        """Send error marker to channel."""
+        """Append error marker to the stream."""
         logger.info(
             f"[PUBLISHER:ERROR] Sending error marker - request_id={request_id}, "
-            f"channel={channel}, message={message}"
+            f"stream={channel}, message={message}"
         )
         try:
-            subscribers = client.publish(
+            entry_id = client.xadd(
                 channel,
-                json.dumps(
-                    {
-                        "type": "error",
-                        "request_id": str(request_id),
-                        "instrument": str(instrument),
-                        "message": message,
-                    }
-                ),
+                {
+                    "type": "error",
+                    "request_id": str(request_id),
+                    "instrument": str(instrument),
+                    "message": message,
+                },
             )
             logger.info(
                 f"[PUBLISHER:ERROR] Error marker sent - request_id={request_id}, "
-                f"channel={channel}, subscribers={subscribers}"
+                f"stream={channel}, entry_id={entry_id}"
             )
         except Exception as exc:  # nosec B110
-            # Log publish failure but don't raise
             logger.warning(
-                f"[PUBLISHER:ERROR] Failed to publish error message - request_id={request_id}, "
+                f"[PUBLISHER:ERROR] Failed to append error marker - request_id={request_id}, "
                 f"error={exc}"
             )
 
