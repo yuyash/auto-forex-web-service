@@ -19,7 +19,9 @@
         "DEBUG": "true",
         "DJANGO_SETTINGS_MODULE": "config.settings",
         "DB_HOST": "localhost",
-        "REDIS_URL": "redis://localhost:6379/0"
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379",
+        "REDIS_DB": "0"
       }
     },
     {
@@ -46,7 +48,9 @@
       "env": {
         "DJANGO_SETTINGS_MODULE": "config.settings",
         "DB_HOST": "localhost",
-        "REDIS_URL": "redis://localhost:6379/0",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379",
+        "REDIS_DB": "0",
         "OBJC_DISABLE_INITIALIZE_FORK_SAFETY": "YES"
       }
     },
@@ -75,7 +79,9 @@
         "DJANGO_SETTINGS_MODULE": "config.settings",
         "CELERY_START_MARKET_TICK_SUPERVISOR": "1",
         "DB_HOST": "localhost",
-        "REDIS_URL": "redis://localhost:6379/0",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379",
+        "REDIS_DB": "0",
         "OBJC_DISABLE_INITIALIZE_FORK_SAFETY": "YES"
       }
     },
@@ -104,7 +110,40 @@
       "env": {
         "DJANGO_SETTINGS_MODULE": "config.settings",
         "DB_HOST": "localhost",
-        "REDIS_URL": "redis://localhost:6379/0",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379",
+        "REDIS_DB": "0",
+        "OBJC_DISABLE_INITIALIZE_FORK_SAFETY": "YES"
+      }
+    },
+    {
+      "name": "Celery: backtest publisher",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "celery",
+      "args": [
+        "-A",
+        "config",
+        "worker",
+        "-l",
+        "info",
+        "-Q",
+        "backtest_publisher",
+        "--pool=threads",
+        "--concurrency=4",
+        "-n",
+        "backtest_publisher@%h"
+      ],
+      "justMyCode": true,
+      "console": "internalConsole",
+      "cwd": "${workspaceFolder}/backend",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "config.settings",
+        "DB_HOST": "localhost",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379",
+        "REDIS_DB": "0",
         "OBJC_DISABLE_INITIALIZE_FORK_SAFETY": "YES"
       }
     },
@@ -133,7 +172,36 @@
         "DJANGO_SETTINGS_MODULE": "config.settings",
         "CELERY_START_MARKET_TICK_SUPERVISOR": "1",
         "DB_HOST": "localhost",
-        "REDIS_URL": "redis://localhost:6379/0",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379",
+        "REDIS_DB": "0",
+        "OBJC_DISABLE_INITIALIZE_FORK_SAFETY": "YES"
+      }
+    },
+    {
+      "name": "Celery: beat",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "celery",
+      "args": [
+        "-A",
+        "config",
+        "beat",
+        "-l",
+        "info",
+        "--scheduler",
+        "django_celery_beat.schedulers:DatabaseScheduler"
+      ],
+      "justMyCode": true,
+      "console": "internalConsole",
+      "cwd": "${workspaceFolder}/backend",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "config.settings",
+        "DB_HOST": "localhost",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379",
+        "REDIS_DB": "0",
         "OBJC_DISABLE_INITIALIZE_FORK_SAFETY": "YES"
       }
     },
@@ -159,9 +227,11 @@
       "name": "Run App",
       "configurations": [
         "Django: runserver",
+        "Celery: beat",
         "Celery: system worker",
         "Celery: trading worker",
         "Celery: backtest worker",
+        "Celery: backtest publisher",
         "Celery: market worker",
         "Frontend: npm run dev"
       ]
