@@ -11,6 +11,7 @@ from apps.trading.tasks.executor import BacktestExecutor, TaskExecutor, TradingE
 from apps.trading.tasks.recovery import recover_orphaned_tasks_beat, recover_orphaned_tasks_startup
 from apps.trading.tasks.source import (
     LiveTickDataSource,
+    RedisStreamTickDataSource,
     RedisTickDataSource,
     TickDataSource,
 )
@@ -28,5 +29,6 @@ __all__: List[str] = [
     "TradingExecutor",
     "TickDataSource",
     "RedisTickDataSource",
+    "RedisStreamTickDataSource",
     "LiveTickDataSource",
 ]

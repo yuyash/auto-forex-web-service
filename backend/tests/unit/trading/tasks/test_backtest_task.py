@@ -90,7 +90,7 @@ class TestExecuteBacktest:
     @patch("apps.trading.tasks.backtest._stop_previous_publisher")
     @patch("apps.trading.tasks.backtest.trigger_backtest_publisher")
     @patch("apps.trading.tasks.backtest.BacktestExecutor")
-    @patch("apps.trading.tasks.backtest.RedisTickDataSource")
+    @patch("apps.trading.tasks.backtest.RedisStreamTickDataSource")
     @patch("apps.trading.tasks.backtest.TradingEngine")
     @patch("apps.trading.tasks.backtest.pip_size_for_instrument")
     def test_normal_flow(
@@ -109,7 +109,7 @@ class TestExecuteBacktest:
     @patch("apps.trading.tasks.backtest._stop_previous_publisher")
     @patch("apps.trading.tasks.backtest.trigger_backtest_publisher")
     @patch("apps.trading.tasks.backtest.BacktestExecutor")
-    @patch("apps.trading.tasks.backtest.RedisTickDataSource")
+    @patch("apps.trading.tasks.backtest.RedisStreamTickDataSource")
     @patch("apps.trading.tasks.backtest.TradingEngine")
     @patch("apps.trading.tasks.backtest.pip_size_for_instrument")
     def test_executor_exception(

@@ -1108,3 +1108,46 @@ class TestHandleEmptyBatch:
         should_stop = executor._handle_empty_batch(loop)
 
         assert should_stop is True
+
+
+class TestSuspiciousTickGapDetection:
+    """Runtime gap detection used by backtest tick delivery."""
+
+    def test_accepts_small_gap(self) -> None:
+        from apps.trading.tasks.executor import TaskExecutor
+
+        previous = datetime(2024, 6, 12, 10, 0, 0, tzinfo=UTC)
+        current = datetime(2024, 6, 12, 10, 5, 0, tzinfo=UTC)  # 5 min
+        assert TaskExecutor._is_suspicious_tick_gap(previous, current) is False
+
+    def test_accepts_same_timestamp(self) -> None:
+        from apps.trading.tasks.executor import TaskExecutor
+
+        previous = datetime(2024, 6, 12, 10, 0, 0, tzinfo=UTC)
+        assert TaskExecutor._is_suspicious_tick_gap(previous, previous) is False
+
+    def test_accepts_weekend_close(self) -> None:
+        from apps.trading.tasks.executor import TaskExecutor
+
+        # Friday 2024-06-14 20:30 UTC → Sunday 2024-06-16 21:05 UTC ≈ 48.5h
+        previous = datetime(2024, 6, 14, 20, 30, 0, tzinfo=UTC)
+        current = datetime(2024, 6, 16, 21, 5, 0, tzinfo=UTC)
+        assert TaskExecutor._is_suspicious_tick_gap(previous, current) is False
+
+    def test_flags_multi_day_gap_midweek(self) -> None:
+        """A 5-day jump in the middle of the week is never legitimate."""
+        from apps.trading.tasks.executor import TaskExecutor
+
+        previous = datetime(2023, 7, 24, 6, 15, 0, tzinfo=UTC)  # Monday
+        current = datetime(2023, 9, 11, 10, 22, 0, tzinfo=UTC)  # weeks later
+        assert TaskExecutor._is_suspicious_tick_gap(previous, current) is True
+
+    def test_threshold_is_configurable(self, settings) -> None:
+        """Lowering the threshold makes previously-tolerated gaps fail."""
+        from apps.trading.tasks.executor import TaskExecutor
+
+        settings.MARKET_BACKTEST_MAX_TICK_GAP_HOURS = 2
+
+        previous = datetime(2024, 6, 12, 10, 0, 0, tzinfo=UTC)
+        current = datetime(2024, 6, 12, 14, 0, 0, tzinfo=UTC)  # 4h
+        assert TaskExecutor._is_suspicious_tick_gap(previous, current) is True

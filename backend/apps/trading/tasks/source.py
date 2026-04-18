@@ -53,11 +53,19 @@ class TickDataSource(ABC):
 
 
 class RedisTickDataSource(TickDataSource):
-    """Redis-based tick data source for backtests.
+    """Legacy Redis Pub/Sub backtest tick data source.
 
-    This data source subscribes to a Redis pub/sub channel and yields
-    batches of ticks published by the market service. It's used for
-    backtests where historical ticks are published to a dedicated channel.
+    .. deprecated:: 0.x
+        Pub/Sub is fire-and-forget and silently drops messages when the
+        subscriber's Redis output buffer overflows (configured by
+        ``client-output-buffer-limit pubsub``).  Historically this caused
+        entire weeks of ticks to be lost mid-backtest, producing silently
+        corrupted backtest results.  New code must use
+        :class:`RedisStreamTickDataSource` instead, which reads from a
+        persistent Redis Stream.
+
+    Kept around for reference and for legacy callers that still subscribe
+    to pub/sub channels (e.g. some test fixtures).
     """
 
     def __init__(
@@ -350,6 +358,266 @@ class RedisTickDataSource(TickDataSource):
             return False
 
         return True
+
+
+class RedisStreamTickDataSource(TickDataSource):
+    """Reliable backtest tick data source backed by a Redis Stream.
+
+    Unlike ``RedisTickDataSource`` which uses Redis Pub/Sub (fire-and-forget
+    with silent message drops on slow subscribers), this source uses
+    ``XREAD BLOCK`` against a bounded Redis Stream.  Because Streams are
+    persistent, slow-consumer backpressure is handled by the publisher
+    (XADD MAXLEN) and the subscriber's Redis client output buffer is
+    irrelevant — no messages are silently dropped mid-backtest.
+
+    Each invocation tracks the ``last_id`` it has consumed so that a
+    transient Redis disconnect results in resuming from the same point
+    rather than skipping ahead.
+    """
+
+    def __init__(
+        self,
+        stream_key: str,
+        batch_size: int = 100,
+        trigger_publisher: Callable[[], None] | None = None,
+        *,
+        block_ms: int | None = None,
+        read_count: int | None = None,
+        idle_timeout_reads: int | None = None,
+    ) -> None:
+        """Initialize the stream-backed tick data source.
+
+        Args:
+            stream_key: Redis stream key to read from.
+            batch_size: Number of ticks to batch before yielding.
+            trigger_publisher: Optional callback to trigger the publisher.
+            block_ms: How long ``XREAD`` blocks per iteration (milliseconds).
+                Shorter values improve stop-signal responsiveness.
+            read_count: Maximum number of entries fetched per ``XREAD``.
+            idle_timeout_reads: Abort after this many consecutive empty
+                reads (i.e. ``block_ms * idle_timeout_reads`` ms of silence).
+        """
+        self.stream_key = stream_key
+        self.batch_size = batch_size
+        self.trigger_publisher = trigger_publisher
+        self.block_ms = (
+            int(block_ms)
+            if block_ms is not None
+            else int(getattr(settings, "MARKET_BACKTEST_STREAM_BLOCK_MS", 1000))
+        )
+        self.read_count = (
+            int(read_count)
+            if read_count is not None
+            else int(getattr(settings, "MARKET_BACKTEST_STREAM_READ_COUNT", 500))
+        )
+        self.idle_timeout_reads = (
+            int(idle_timeout_reads)
+            if idle_timeout_reads is not None
+            else int(getattr(settings, "MARKET_BACKTEST_STREAM_IDLE_TIMEOUT_READS", 300))
+        )
+        self.client = None
+        # ``last_id`` tracks the last entry id we successfully consumed.  We
+        # start from ``0-0`` so we pick up any entries the publisher may have
+        # emitted before we connected, but this only matters during unit
+        # tests — in production the stream is explicitly cleared before each
+        # run by the publisher.
+        self._last_id: str = "0-0"
+
+    def __iter__(self) -> Iterator[list[Tick]]:
+        # Connect before triggering the publisher so we never miss entries.
+        self.client = redis.Redis.from_url(settings.MARKET_REDIS_URL, decode_responses=True)
+        logger.info(
+            "RedisStreamTickDataSource opened stream=%s block_ms=%s read_count=%s",
+            self.stream_key,
+            self.block_ms,
+            self.read_count,
+        )
+
+        # Trigger publisher after the client is ready.  In Celery eager mode
+        # (used by some tests) ``apply_async`` runs synchronously, so run
+        # the trigger in a background thread to avoid deadlocking.
+        if self.trigger_publisher:
+            logger.info(f"Triggering publisher for stream: {self.stream_key}")
+            from celery import current_app
+
+            if getattr(current_app.conf, "task_always_eager", False):
+                import threading
+
+                threading.Thread(target=self.trigger_publisher, daemon=True).start()
+            else:
+                self.trigger_publisher()
+
+        batch: list[Tick] = []
+        consecutive_empty_reads = 0
+        reconnect_count = 0
+        max_reconnect_attempts = 5
+        total_ticks = 0
+
+        try:
+            while True:
+                try:
+                    entries = self.client.xread(
+                        {self.stream_key: self._last_id},
+                        count=self.read_count,
+                        block=self.block_ms,
+                    )
+                    reconnect_count = 0  # reset on successful call
+                except (redis.ConnectionError, ConnectionError) as exc:
+                    reconnect_count += 1
+                    if reconnect_count > max_reconnect_attempts:
+                        raise RuntimeError(
+                            "RedisStreamTickDataSource failed to reconnect after "
+                            f"{max_reconnect_attempts} attempts"
+                        ) from exc
+                    import time
+
+                    backoff = min(2 ** (reconnect_count - 1), 5)
+                    logger.warning(
+                        "RedisStreamTickDataSource reconnecting (%s/%s) after error: %s",
+                        reconnect_count,
+                        max_reconnect_attempts,
+                        exc,
+                    )
+                    time.sleep(backoff)
+                    try:
+                        if self.client is not None:
+                            self.client.close()
+                    except Exception:  # nosec B110
+                        pass
+                    self.client = redis.Redis.from_url(
+                        settings.MARKET_REDIS_URL, decode_responses=True
+                    )
+                    # With ``_last_id`` we resume from exactly where we left
+                    # off.  Since Streams are persistent, nothing is lost
+                    # during reconnect.
+                    continue
+
+                if not entries:
+                    consecutive_empty_reads += 1
+                    if consecutive_empty_reads >= self.idle_timeout_reads:
+                        total_idle_ms = consecutive_empty_reads * self.block_ms
+                        logger.warning(
+                            "RedisStreamTickDataSource: idle timeout on stream %s "
+                            "after %s ms. Total messages received: %s",
+                            self.stream_key,
+                            total_idle_ms,
+                            total_ticks,
+                        )
+                        if batch:
+                            yield batch
+                        break
+                    # Yield pending batch during idle gaps so the executor
+                    # can check stop signals.
+                    if batch:
+                        yield batch
+                        batch = []
+                    continue
+
+                consecutive_empty_reads = 0
+
+                # ``xread`` returns [(stream_key, [(entry_id, {field: value, ...}), ...])].
+                for _stream, stream_entries in entries:
+                    for entry_id, fields in stream_entries:
+                        self._last_id = entry_id
+                        kind = str(fields.get("type") or "tick")
+
+                        if kind == "eof":
+                            logger.info(
+                                "RedisStreamTickDataSource: received EOF on %s, total=%s",
+                                self.stream_key,
+                                total_ticks,
+                            )
+                            if batch:
+                                yield batch
+                            return
+
+                        if kind in {"stopped", "error"}:
+                            logger.info(
+                                "RedisStreamTickDataSource: received %s on %s, total=%s",
+                                kind,
+                                self.stream_key,
+                                total_ticks,
+                            )
+                            if batch:
+                                yield batch
+                            return
+
+                        if kind != "tick":
+                            continue
+
+                        tick = self._build_tick_from_entry(fields)
+                        if tick is None:
+                            continue
+
+                        if not self._is_valid_backtest_tick(tick):
+                            continue
+
+                        batch.append(tick)
+                        total_ticks += 1
+
+                        if len(batch) >= self.batch_size:
+                            yield batch
+                            batch = []
+
+        finally:
+            self.close()
+
+    def close(self) -> None:
+        """Close Redis connection."""
+        if self.client is not None:
+            try:
+                self.client.close()
+            except Exception as exc:  # nosec B110
+                logger.debug("Failed to close Redis client: %s", exc)
+            self.client = None
+
+    @staticmethod
+    def _build_tick_from_entry(fields: dict) -> Tick | None:
+        """Parse a stream entry payload into a Tick instance."""
+        from datetime import UTC, datetime
+
+        instrument = str(fields.get("instrument") or "")
+        timestamp_raw = str(fields.get("timestamp") or "")
+        if not instrument or not timestamp_raw:
+            return None
+
+        try:
+            timestamp_str = timestamp_raw.strip()
+            if timestamp_str.endswith("Z"):
+                timestamp_str = timestamp_str[:-1] + "+00:00"
+            timestamp = datetime.fromisoformat(timestamp_str)
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=UTC)
+        except (ValueError, AttributeError):
+            return None
+
+        bid_raw = fields.get("bid")
+        ask_raw = fields.get("ask")
+        mid_raw = fields.get("mid")
+        if bid_raw is None or ask_raw is None:
+            return None
+
+        try:
+            bid = Decimal(str(bid_raw))
+            ask = Decimal(str(ask_raw))
+            if mid_raw is None or str(mid_raw).lower() in {"none", "null", "nan", ""}:
+                mid = (bid + ask) / Decimal("2")
+            else:
+                mid = Decimal(str(mid_raw))
+        except (ValueError, InvalidOperation):
+            return None
+
+        return Tick(
+            instrument=instrument,
+            timestamp=timestamp,
+            bid=bid,
+            ask=ask,
+            mid=mid,
+        )
+
+    # Reuse the same validation as the pub/sub source.  A class-level
+    # attribute lookup keeps the method accessible without duplicating code.
+    _is_valid_backtest_tick = staticmethod(RedisTickDataSource._is_valid_backtest_tick)
 
 
 class LiveTickDataSource(TickDataSource):

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from apps.market.tasks.base import (
-    backtest_channel_for_request,
+    backtest_stream_key_for_request,
     isoformat,
     parse_iso_datetime,
 )
@@ -35,11 +35,11 @@ class TestTaskBaseIntegration:
         assert parsed.day == original.day
         assert parsed.hour == original.hour
 
-    def test_backtest_channel_generation(self) -> None:
-        """Test backtest channel name generation."""
+    def test_backtest_stream_key_generation(self) -> None:
+        """Test backtest stream key generation."""
         request_id = "test-request-123"
-        channel = backtest_channel_for_request(request_id)
+        key = backtest_stream_key_for_request(request_id)
 
-        assert isinstance(channel, str)
-        assert "test-request-123" in channel
-        assert len(channel) > len(request_id)
+        assert isinstance(key, str)
+        assert "test-request-123" in key
+        assert len(key) > len(request_id)

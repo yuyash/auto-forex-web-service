@@ -76,6 +76,11 @@ class ExecutionLoopState:
     stop_reason: str = ""
     is_error: bool = False
     resume_last_tick_timestamp: datetime | None = None
+    # Last delivered tick timestamp used for runtime gap detection.  Unlike
+    # ``state.last_tick_timestamp`` (which only advances for ticks that were
+    # actually processed), this is written *before* we decide whether to
+    # process or skip, so it reflects the real cadence of the tick stream.
+    last_delivered_tick_timestamp: datetime | None = None
 
 
 class TaskExecutor:
@@ -671,6 +676,32 @@ class TaskExecutor:
         # However, we still feed skipped ticks into the runtime metrics tracker
         # so that rolling calculations (ATR, candle history) are warmed up
         # before the first "real" tick after resume.
+        # Runtime gap detection (backtest only): abort the run if the tick
+        # stream jumps forward by more than MARKET_BACKTEST_MAX_TICK_GAP_HOURS
+        # and the gap is not explained by a forex weekend close.  Historically
+        # this symptom was caused by Redis pub/sub silently dropping messages
+        # when the subscriber lagged; we now deliver ticks via Redis Streams
+        # (reliable), but this guard remains as defence-in-depth so silent
+        # data loss can never go unnoticed.
+        if self.task_type == TaskType.BACKTEST and loop.last_delivered_tick_timestamp is not None:
+            delivered_ts = self._coerce_tick_timestamp(tick.timestamp)
+            if delivered_ts is not None and self._is_suspicious_tick_gap(
+                loop.last_delivered_tick_timestamp, delivered_ts
+            ):
+                gap = delivered_ts - loop.last_delivered_tick_timestamp
+                msg = (
+                    "Suspicious tick gap detected in backtest stream - "
+                    f"previous_ts={loop.last_delivered_tick_timestamp}, "
+                    f"current_ts={delivered_ts}, gap={gap}. "
+                    "This usually indicates silent message loss; aborting to "
+                    "prevent a corrupted backtest result."
+                )
+                logger.error(msg)
+                loop.stopped_early = True
+                loop.stop_reason = f"tick_gap:{gap.total_seconds():.0f}s"
+                loop.is_error = True
+                return True
+
         resume_ts = loop.resume_last_tick_timestamp
         if resume_ts is not None:
             tick_ts = self._coerce_tick_timestamp(tick.timestamp)
@@ -680,6 +711,7 @@ class TaskExecutor:
                     timestamp=tick_ts,
                     mid=Decimal(str(tick.mid)),
                 )
+                loop.last_delivered_tick_timestamp = tick_ts
                 return False
 
         result: StrategyResult = self.engine.on_tick(tick=tick, state=loop.state)
@@ -710,6 +742,7 @@ class TaskExecutor:
         loop.state.last_tick_price = tick.mid
         loop.state.last_tick_bid = tick.bid
         loop.state.last_tick_ask = tick.ask
+        loop.last_delivered_tick_timestamp = tick_timestamp
         self._update_common_metrics(loop.state, tick)
         self._buffer_tick_metrics(loop.state, tick)
         return False
@@ -727,6 +760,38 @@ class TaskExecutor:
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=UTC)
         return parsed
+
+    @staticmethod
+    def _is_suspicious_tick_gap(previous: datetime, current: datetime) -> bool:
+        """Return True when ``current`` jumps forward from ``previous`` by an
+        amount that cannot be explained by forex market hours.
+
+        The threshold is configured by
+        ``settings.MARKET_BACKTEST_MAX_TICK_GAP_HOURS`` (default 72 hours).
+        The regular weekend close (Fri 21:00 → Sun 21:00 UTC) is always
+        considered acceptable.
+        """
+        from datetime import timedelta
+
+        from django.conf import settings as _settings
+
+        if current <= previous:
+            return False
+
+        max_gap_hours = int(getattr(_settings, "MARKET_BACKTEST_MAX_TICK_GAP_HOURS", 72))
+        gap = current - previous
+        if gap <= timedelta(hours=max_gap_hours):
+            return False
+
+        # Forex weekend close: last tick on Fri evening ≥20:00 UTC and
+        # current on Sunday evening or Monday morning UTC.  Allow up to
+        # ~3 days total to cover holidays that extend the closure.
+        lt_weekday = previous.weekday()
+        if lt_weekday == 4 and previous.hour >= 20:
+            if gap < timedelta(days=3, hours=12):
+                return False
+
+        return True
 
     def _refresh_open_positions_cache(self) -> None:
         """Refresh cached open positions used by common metric calculation."""

@@ -24,7 +24,7 @@ from apps.trading.tasks.lifecycle_events import (
     finalize_task_terminal_lifecycle,
     publish_task_lifecycle_event,
 )
-from apps.trading.tasks.source import RedisTickDataSource
+from apps.trading.tasks.source import RedisStreamTickDataSource
 from apps.trading.tasks.task_runner import handle_task_exception
 from apps.trading.utils import pip_size_for_instrument
 
@@ -223,7 +223,12 @@ def execute_backtest(task: BacktestTask) -> None:
         task.save(update_fields=["pip_size", "updated_at"])
 
     request_id = str(task.pk)
-    channel = f"market:backtest:ticks:{request_id}"
+    # Backtest ticks are delivered over a Redis Stream (not Pub/Sub) so that
+    # slow-consumer situations translate into backpressure on the publisher
+    # rather than silent message loss.
+    from apps.market.tasks.base import backtest_stream_key_for_request
+
+    stream_key = backtest_stream_key_for_request(request_id)
 
     # Stop any previous publisher that may still be running on this channel.
     # The channel name is task-ID based (not execution-ID based), so a
@@ -256,8 +261,8 @@ def execute_backtest(task: BacktestTask) -> None:
         except (ExecutionState.DoesNotExist, Exception):
             pass
 
-    data_source = RedisTickDataSource(
-        channel=channel,
+    data_source = RedisStreamTickDataSource(
+        stream_key=stream_key,
         batch_size=100,
         trigger_publisher=lambda: trigger_backtest_publisher(task, resume_from=resume_from),
     )
