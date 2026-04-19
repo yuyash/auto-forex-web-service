@@ -328,27 +328,29 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         try:
             resumed = self.task_service.resume_task(task.pk)
         except TaskConflictError as exc:
+            # Full exception text goes to the log so operators can see
+            # the exact conflict; the response body intentionally carries
+            # only a fixed, safe description to avoid any chance of
+            # leaking internal details (CodeQL py/stack-trace-exposure).
             logger.warning("Resume conflict: task_id=%s, detail=%s", task.pk, exc)
             return Response(
                 {
                     "error": "Task cannot be resumed due to a conflict",
-                    "detail": str(exc),
                 },
                 status=status.HTTP_409_CONFLICT,
             )
         except TaskValidationError as exc:
-            # ``TaskValidationError`` is raised deliberately by the task
-            # service with a safe, user-facing message (wrong status,
-            # missing execution_id, Celery still running, etc.) so we
-            # can surface ``str(exc)`` directly.  Unknown / wrapped
-            # exceptions are caught by the generic ``Exception`` branch
-            # below so their raw messages — which may include DB or
-            # third-party library details — never leave the backend.
+            # ``TaskValidationError`` is raised by the task service on
+            # domain-level validation failures (wrong status, missing
+            # execution_id, Celery still running, etc.).  We log the
+            # message verbatim but return a fixed description to the
+            # caller — CodeQL cannot prove the message is safe and
+            # future changes to the service layer could unintentionally
+            # leak internal text through this path.
             logger.warning("Resume validation failed: task_id=%s, detail=%s", task.pk, exc)
             return Response(
                 {
                     "error": "Invalid resume request for current task state",
-                    "detail": str(exc),
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
