@@ -40,6 +40,10 @@ import { TaskStatus, TaskType } from '../../types/common';
 import type { TradingTask } from '../../types';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
 import { TaskActionConfirmDialog } from '../tasks/actions/TaskActionConfirmDialog';
+import {
+  StopOptionsDialog,
+  type StopOption,
+} from '../tasks/actions/StopOptionsDialog';
 import { useTaskActionDialog } from '../../hooks/useTaskActionDialog';
 import {
   useDeleteTradingTask,
@@ -70,6 +74,10 @@ export const TradingTaskDetail: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const taskId = id || '';
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  // Stop has its own dialog (mode selection) separate from the generic
+  // start/resume/restart confirmation flow. Keeping them separate lets the
+  // user pick Stop / Stop+Close / Drain at the point of stopping.
+  const [stopDialogOpen, setStopDialogOpen] = useState(false);
   const [tabConfigOpen, setTabConfigOpen] = useState(false);
   const { pendingAction, requestConfirm, cancelAction } = useTaskActionDialog();
   const deleteTask = useDeleteTradingTask();
@@ -337,8 +345,8 @@ export const TradingTaskDetail: React.FC = () => {
         onStart={async (id) => {
           requestConfirm('start', id);
         }}
-        onStop={async (id) => {
-          requestConfirm('stop', id);
+        onStop={async () => {
+          setStopDialogOpen(true);
         }}
         onRestart={async (id) => {
           requestConfirm('restart', id);
@@ -536,10 +544,7 @@ export const TradingTaskDetail: React.FC = () => {
           taskName={task.name}
           onCancel={cancelAction}
           isLoading={
-            startTask.isLoading ||
-            stopTask.isLoading ||
-            resumeTask.isLoading ||
-            restartTask.isLoading
+            startTask.isLoading || resumeTask.isLoading || restartTask.isLoading
           }
           onConfirm={async () => {
             const { type, taskId: actionTaskId } = pendingAction;
@@ -549,16 +554,6 @@ export const TradingTaskDetail: React.FC = () => {
                 applyOptimisticStatus(updatedTask.status, [
                   TaskStatus.STARTING,
                   TaskStatus.RUNNING,
-                  TaskStatus.FAILED,
-                ]);
-              } else if (type === 'stop') {
-                await stopTask.mutate({ id: actionTaskId });
-                applyOptimisticStatus(TaskStatus.STOPPING, [
-                  TaskStatus.STOPPING,
-                  TaskStatus.DRAINING,
-                  TaskStatus.IDLE,
-                  TaskStatus.STOPPED,
-                  TaskStatus.COMPLETED,
                   TaskStatus.FAILED,
                 ]);
               } else if (type === 'resume') {
@@ -576,6 +571,9 @@ export const TradingTaskDetail: React.FC = () => {
                   TaskStatus.FAILED,
                 ]);
               }
+              // type === 'stop' is never routed here anymore — it goes
+              // through StopOptionsDialog below. Guard remains in case a
+              // stale request slips in.
               cancelAction();
               await refreshTask();
             } catch (error) {
@@ -585,6 +583,41 @@ export const TradingTaskDetail: React.FC = () => {
           }}
         />
       )}
+      <StopOptionsDialog
+        open={stopDialogOpen}
+        taskName={detailTask.name}
+        isLoading={stopTask.isLoading}
+        onCancel={() => setStopDialogOpen(false)}
+        onConfirm={async (option: StopOption) => {
+          try {
+            await stopTask.mutate({ id: taskId, mode: option });
+            // Optimistic status depends on the chosen mode. DRAIN keeps the
+            // task running in DRAINING state; other modes transition to
+            // STOPPING and then STOPPED.
+            if (option === 'drain') {
+              applyOptimisticStatus(TaskStatus.DRAINING, [
+                TaskStatus.DRAINING,
+                TaskStatus.STOPPING,
+                TaskStatus.STOPPED,
+                TaskStatus.COMPLETED,
+                TaskStatus.FAILED,
+              ]);
+            } else {
+              applyOptimisticStatus(TaskStatus.STOPPING, [
+                TaskStatus.STOPPING,
+                TaskStatus.STOPPED,
+                TaskStatus.COMPLETED,
+                TaskStatus.FAILED,
+              ]);
+            }
+            setStopDialogOpen(false);
+            await refreshTask();
+          } catch (error) {
+            showError(formatTaskActionError(error, 'Failed to stop task'));
+            setStopDialogOpen(false);
+          }
+        }}
+      />
     </Container>
   );
 };

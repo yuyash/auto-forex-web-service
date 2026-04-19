@@ -380,6 +380,20 @@ class TaskLifecycleCommands:
                 execution_id=locked_task.execution_id,
             )
 
+            # Revoke any lingering Celery task for this execution before
+            # dispatching a new one. This is a no-op for a clean exit but
+            # defensively handles cases where a previous worker crashed
+            # without cleaning up its result backend entry.
+            if locked_task.status in (TaskStatus.STOPPED, TaskStatus.FAILED):
+                try:
+                    self._revoke_execution(locked_task.execution_id)
+                except Exception as exc:  # pragma: no cover - best effort
+                    self.logger.debug(
+                        "Pre-resume revoke skipped - task_id=%s, error=%s",
+                        task_id,
+                        exc,
+                    )
+
             # Clear error fields when resuming from a terminal state so the
             # execution starts cleanly while preserving the execution_id and
             # all persisted state (strategy_state, events, positions, etc.).
@@ -520,9 +534,24 @@ class TaskLifecycleCommands:
         if not result:
             return
         celery_state = result.state
-        # For STOPPED/FAILED tasks the Celery result is typically SUCCESS or
-        # FAILURE which is fine — the worker has already exited.  We only need
-        # to guard against the case where the worker is still actively running.
+        # For STOPPED/FAILED tasks the worker has already exited — the
+        # Celery result backend may still report STARTED if the previous
+        # worker crashed before updating the backend.  Since the DB is
+        # the authoritative state for task lifecycle, skip the Celery
+        # guard for terminal DB statuses and allow the resume to proceed.
+        if db_status in (TaskStatus.STOPPED, TaskStatus.FAILED):
+            if celery_state in ["PENDING", "STARTED", "RETRY"]:
+                self.logger.info(
+                    "Stale Celery state detected for terminal task; "
+                    "proceeding with resume - task_id=%s, db_status=%s, "
+                    "celery_state=%s, execution_id=%s",
+                    task_id,
+                    db_status,
+                    celery_state,
+                    execution_id,
+                )
+            return
+
         if celery_state in ["PENDING", "STARTED", "RETRY"]:
             self.logger.warning(
                 "Task status mismatch detected",

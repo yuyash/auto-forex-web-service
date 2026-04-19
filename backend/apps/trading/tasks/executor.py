@@ -475,6 +475,12 @@ class TaskExecutor:
                 state=state,
                 resume_last_tick_timestamp=(state.last_tick_timestamp if resumed else None),
             )
+            # Market-aware idle gate: if the task is a live trading task and
+            # the forex market is currently closed, switch to IDLE before
+            # waiting for ticks. This gives the user an immediate visual
+            # signal that the task is parked rather than showing RUNNING
+            # while the tick source is quiet.
+            self._maybe_enter_market_idle_at_start(loop)
             self._run_tick_loop(loop)
             self._finalize_execution(loop)
         except Exception as e:
@@ -484,6 +490,22 @@ class TaskExecutor:
             if self._tracemalloc_started:
                 self._stop_tracemalloc()
             self._cleanup_execution()
+
+    def _maybe_enter_market_idle_at_start(self, loop: ExecutionLoopState) -> None:
+        """Switch to IDLE right after start if the market is already closed.
+
+        Only applies to live trading tasks. This is a cheap pre-flight check:
+        the tick loop will maintain the RUNNING ↔ IDLE transitions on its
+        own once batches start arriving.
+        """
+        if self.task_type != TaskType.TRADING:
+            return
+        if not is_forex_market_closed():
+            return
+        # Reuse the shared entry helper so the status change and the
+        # in-state ``_idle_entered_at`` marker stay consistent with what
+        # happens later in the tick loop.
+        self._maybe_enter_market_idle(loop)
 
     def prepare_state_for_execution(
         self,

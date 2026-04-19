@@ -330,13 +330,22 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         except TaskConflictError as exc:
             logger.warning("Resume conflict: task_id=%s, detail=%s", task.pk, exc)
             return Response(
-                {"error": "Task cannot be resumed due to a conflict"},
+                {
+                    "error": "Task cannot be resumed due to a conflict",
+                    "detail": str(exc),
+                },
                 status=status.HTTP_409_CONFLICT,
             )
         except ValueError as exc:
             logger.warning("Resume validation failed: task_id=%s, detail=%s", task.pk, exc)
+            # Surface the underlying reason so users can see exactly why the
+            # resume was rejected (wrong status, missing execution_id,
+            # Celery still running, etc.) rather than a generic message.
             return Response(
-                {"error": "Invalid resume request for current task state"},
+                {
+                    "error": "Invalid resume request for current task state",
+                    "detail": str(exc),
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception:
