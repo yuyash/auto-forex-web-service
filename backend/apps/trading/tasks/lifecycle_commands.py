@@ -62,10 +62,10 @@ def _default_signal_pause(task_id: UUID, task_name: str, execution_id: object) -
     redis_client.close()
 
 
-def _default_revoke_execution(execution_id: object) -> None:
+def _default_revoke_execution(celery_task_id: object) -> None:
     from celery import current_app
 
-    current_app.control.revoke(str(execution_id), terminate=True, signal="SIGKILL")
+    current_app.control.revoke(str(celery_task_id), terminate=True, signal="SIGKILL")
 
 
 def _default_dispatch_stop(task_id: UUID, is_backtest: bool, stop_mode: StopMode) -> None:
@@ -236,8 +236,11 @@ class TaskLifecycleCommands:
         self._signal_redis_stop(
             task_id=task_id, task_name=task_name, execution_id=task.execution_id
         )
-        if stop_mode == StopMode.IMMEDIATE and task.execution_id:
-            self._revoke_execution(task.execution_id)
+        # Fall back to execution_id for older rows that pre-date the
+        # celery_task_id field and may still have it set to NULL.
+        celery_id = getattr(task, "celery_task_id", None) or task.execution_id
+        if stop_mode == StopMode.IMMEDIATE and celery_id:
+            self._revoke_execution(celery_id)
         # DRAIN mode keeps the worker running — don't dispatch the stop
         # finalisation task; the executor will transition to STOPPED when
         # it finishes draining.
@@ -302,9 +305,10 @@ class TaskLifecycleCommands:
             )
             return False
 
-        result = self.service.get_celery_result(
-            str(task.execution_id) if task.execution_id else None
-        )
+        # Fall back to execution_id for older rows that pre-date the
+        # celery_task_id field.
+        celery_id = getattr(task, "celery_task_id", None) or task.execution_id
+        result = self.service.get_celery_result(str(celery_id) if celery_id else None)
         if result:
             result.revoke(terminate=True)
 
@@ -331,12 +335,16 @@ class TaskLifecycleCommands:
                     exc,
                 )
 
-        if task.execution_id:
-            self._revoke_execution(task.execution_id)
+        # Fall back to execution_id for older rows that pre-date the
+        # celery_task_id field.
+        celery_id = getattr(task, "celery_task_id", None) or task.execution_id
+        if celery_id:
+            self._revoke_execution(celery_id)
 
         self.service.writer.clear_execution_history(task=task, task_type=task_type)
         type(task).objects.filter(pk=task.pk).update(
             execution_id=None,
+            celery_task_id=None,
             status=TaskStatus.CREATED,
             started_at=None,
             completed_at=None,
@@ -381,12 +389,15 @@ class TaskLifecycleCommands:
 
                 raise TaskValidationError("Cannot resume task without an execution_id")
 
-            result = self.service.get_celery_result(str(locked_task.execution_id))
+            previous_celery_task_id = locked_task.celery_task_id
+            result = self.service.get_celery_result(
+                str(previous_celery_task_id) if previous_celery_task_id else None
+            )
             self._ensure_resumeable_celery_state(
                 result=result,
                 task_id=task_id,
                 db_status=locked_task.status,
-                execution_id=locked_task.execution_id,
+                celery_task_id=previous_celery_task_id,
             )
 
             # Revoke any lingering Celery task for this execution before
@@ -394,39 +405,44 @@ class TaskLifecycleCommands:
             # defensively handles cases where a previous worker crashed
             # without cleaning up its result backend entry.
             #
-            # After revoking, we MUST allocate a fresh ``execution_id``
+            # After revoking, we MUST allocate a fresh ``celery_task_id``
             # for the next run: Celery's revoke list persists by task_id,
             # so re-submitting ``apply_async(task_id=<same>)`` causes the
             # worker to drop the message immediately (the symptom is a
-            # task stuck in STARTING indefinitely).  Allocating a new
-            # execution_id sidesteps the revoke list cleanly.
+            # task stuck in STARTING indefinitely).  Rotating just the
+            # ``celery_task_id`` — not ``execution_id`` — sidesteps the
+            # revoke list while keeping the execution-scoped state
+            # (ExecutionState, positions, events, trades, ...) continuous
+            # across the resume.
             if locked_task.status in (TaskStatus.STOPPED, TaskStatus.FAILED):
-                try:
-                    self._revoke_execution(locked_task.execution_id)
-                except Exception as exc:  # pragma: no cover - best effort
-                    self.logger.debug(
-                        "Pre-resume revoke skipped - task_id=%s, error=%s",
-                        task_id,
-                        exc,
-                    )
+                if previous_celery_task_id:
+                    try:
+                        self._revoke_execution(previous_celery_task_id)
+                    except Exception as exc:  # pragma: no cover - best effort
+                        self.logger.debug(
+                            "Pre-resume revoke skipped - task_id=%s, error=%s",
+                            task_id,
+                            exc,
+                        )
 
             # Clear error fields when resuming from a terminal state so the
-            # execution starts cleanly while preserving the execution_id and
+            # execution starts cleanly while preserving execution_id and
             # all persisted state (strategy_state, events, positions, etc.).
             update_fields = ["status", "updated_at"]
             if locked_task.status in (TaskStatus.STOPPED, TaskStatus.FAILED):
                 locked_task.error_message = None
                 locked_task.error_traceback = None
                 locked_task.completed_at = None
-                # Rotate execution_id so the new Celery task is not
-                # suppressed by the revoke list of the previous run.
-                locked_task.execution_id = uuid4()
                 update_fields += [
                     "error_message",
                     "error_traceback",
                     "completed_at",
-                    "execution_id",
                 ]
+
+            # Always rotate the Celery task id on resume so the next
+            # worker invocation is guaranteed to be accepted.
+            locked_task.celery_task_id = uuid4()
+            update_fields.append("celery_task_id")
 
             locked_task.status = TaskStatus.STARTING
             locked_task.save(update_fields=update_fields)
@@ -463,14 +479,16 @@ class TaskLifecycleCommands:
             model_class.objects.filter(pk=task.pk).update(
                 status=TaskStatus.CREATED,
                 execution_id=None,
+                celery_task_id=None,
             )
             task.refresh_from_db()
             return
 
         task.status = TaskStatus.CREATED
         task.execution_id = None
+        task.celery_task_id = None
         try:
-            task.save(update_fields=["status", "execution_id"])
+            task.save(update_fields=["status", "execution_id", "celery_task_id"])
         except TypeError:
             task.save()
 
@@ -521,13 +539,13 @@ class TaskLifecycleCommands:
                 exc,
             )
 
-    def _revoke_execution(self, execution_id: object) -> None:
+    def _revoke_execution(self, celery_task_id: object) -> None:
         try:
-            self.adapters.revoke_execution(execution_id)
+            self.adapters.revoke_execution(celery_task_id)
         except Exception as exc:  # pragma: no cover - defensive logging path
             self.logger.warning(
-                "[SERVICE:LIFECYCLE] Celery revoke failed (non-fatal) - execution_id=%s, error=%s",
-                execution_id,
+                "[SERVICE:LIFECYCLE] Celery revoke failed (non-fatal) - celery_task_id=%s, error=%s",
+                celery_task_id,
                 exc,
             )
 
@@ -553,7 +571,7 @@ class TaskLifecycleCommands:
         result: AsyncResult | None,
         task_id: UUID,
         db_status: TaskStatus,
-        execution_id: object,
+        celery_task_id: object,
     ) -> None:
         if not result:
             return
@@ -568,11 +586,11 @@ class TaskLifecycleCommands:
                 self.logger.info(
                     "Stale Celery state detected for terminal task; "
                     "proceeding with resume - task_id=%s, db_status=%s, "
-                    "celery_state=%s, execution_id=%s",
+                    "celery_state=%s, celery_task_id=%s",
                     task_id,
                     db_status,
                     celery_state,
-                    execution_id,
+                    celery_task_id,
                 )
             return
 
@@ -583,7 +601,7 @@ class TaskLifecycleCommands:
                     "task_id": str(task_id),
                     "db_status": db_status,
                     "celery_state": celery_state,
-                    "execution_id": str(execution_id),
+                    "celery_task_id": str(celery_task_id),
                 },
             )
             from apps.trading.tasks.service import TaskValidationError

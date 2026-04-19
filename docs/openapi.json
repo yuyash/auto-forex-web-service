@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.38.1",
+        "version": "1.39.0",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -2365,7 +2365,7 @@
                         "schema": {
                             "type": "string",
                             "format": "uuid",
-                            "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                            "description": "UUID identifying the current execution run"
                         },
                         "required": true
                     },
@@ -2421,7 +2421,7 @@
                         "schema": {
                             "type": "string",
                             "format": "uuid",
-                            "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                            "description": "UUID identifying the current execution run"
                         },
                         "required": true
                     },
@@ -2462,7 +2462,7 @@
                         "schema": {
                             "type": "string",
                             "format": "uuid",
-                            "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                            "description": "UUID identifying the current execution run"
                         },
                         "required": true
                     },
@@ -4133,7 +4133,7 @@
                         "schema": {
                             "type": "string",
                             "format": "uuid",
-                            "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                            "description": "UUID identifying the current execution run"
                         },
                         "required": true
                     },
@@ -4189,7 +4189,7 @@
                         "schema": {
                             "type": "string",
                             "format": "uuid",
-                            "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                            "description": "UUID identifying the current execution run"
                         },
                         "required": true
                     },
@@ -4230,7 +4230,7 @@
                         "schema": {
                             "type": "string",
                             "format": "uuid",
-                            "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                            "description": "UUID identifying the current execution run"
                         },
                         "required": true
                     },
@@ -5537,7 +5537,7 @@
                         "format": "uuid",
                         "readOnly": true,
                         "nullable": true,
-                        "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                        "description": "UUID identifying the current execution run"
                     },
                     "started_at": {
                         "type": "string",
@@ -9717,7 +9717,7 @@
                         "format": "uuid",
                         "readOnly": true,
                         "nullable": true,
-                        "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                        "description": "UUID identifying the current execution run"
                     },
                     "started_at": {
                         "type": "string",
@@ -9995,7 +9995,7 @@
                         "format": "uuid",
                         "readOnly": true,
                         "nullable": true,
-                        "description": "UUID identifying the current execution run (also used as Celery task_id)"
+                        "description": "UUID identifying the current execution run"
                     },
                     "started_at": {
                         "type": "string",

@@ -168,7 +168,7 @@ class TestRecoverOrphanedTasks:
 
         with patch(
             "apps.trading.tasks.recovery._active_celery_task_ids",
-            return_value={str(task.execution_id)},
+            return_value={str(task.celery_task_id)},
         ):
             from apps.trading.tasks.recovery import recover_orphaned_tasks
 

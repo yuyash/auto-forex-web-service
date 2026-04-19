@@ -305,7 +305,13 @@ class TestStopTradingTask:
 
         task_id = uuid4()
         execution_id = uuid4()
-        task = MagicMock(pk=task_id, status=TaskStatus.STOPPING, execution_id=execution_id)
+        celery_task_id = uuid4()
+        task = MagicMock(
+            pk=task_id,
+            status=TaskStatus.STOPPING,
+            execution_id=execution_id,
+            celery_task_id=celery_task_id,
+        )
         mock_model.objects.get.return_value = task
         mock_model.DoesNotExist = _DoesNotExist
         mock_finalize_terminal.return_value = 1
@@ -316,6 +322,6 @@ class TestStopTradingTask:
         stop_trading_task.__wrapped__(task_id, "immediate")
 
         mock_app.control.revoke.assert_called_once_with(
-            str(execution_id), terminate=True, signal="SIGKILL"
+            str(celery_task_id), terminate=True, signal="SIGKILL"
         )
         mock_finalize_terminal.assert_called_once()
