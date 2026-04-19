@@ -200,6 +200,9 @@
       "primary": "Drain (Close at breakeven or profit)",
       "secondary": "Keep running but stop opening new positions. Existing positions are closed as soon as unrealised PnL is non-negative; the task stops once all positions are closed. Optionally bounded by the task's drain duration; issuing another stop while draining terminates the task immediately."
     },
+    "drainDurationMinutesLabel": "Drain duration (minutes)",
+    "drainDurationMinutesHelp": "How long to keep draining before giving up. Defaults to 60 minutes.",
+    "drainDurationMinutesError": "Enter a positive integer (minutes).",
     "closeWarning": "Warning: This will close all positions at current market prices. This action cannot be undone.",
     "cancel": "Cancel",
     "confirm": "Stop Task",

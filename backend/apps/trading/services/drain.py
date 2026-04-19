@@ -49,15 +49,27 @@ class DrainPolicy:
 
     drain_started_at: datetime
     duration_hours: int
+    # Optional finer-grained override. When set and > 0 it takes precedence
+    # over ``duration_hours``. Used when the user specifies a per-stop
+    # drain duration in minutes from the Stop dialog.
+    duration_minutes: int | None = None
+
+    @property
+    def effective_timeout_seconds(self) -> int:
+        if self.duration_minutes is not None and self.duration_minutes > 0:
+            return self.duration_minutes * 60
+        if self.duration_hours > 0:
+            return self.duration_hours * 3600
+        return 0
 
     @property
     def has_timeout(self) -> bool:
-        return self.duration_hours > 0
+        return self.effective_timeout_seconds > 0
 
     def timeout_deadline(self) -> datetime | None:
         if not self.has_timeout:
             return None
-        return self.drain_started_at + timedelta(hours=self.duration_hours)
+        return self.drain_started_at + timedelta(seconds=self.effective_timeout_seconds)
 
     def evaluate(
         self,

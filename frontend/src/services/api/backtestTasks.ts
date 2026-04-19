@@ -64,14 +64,20 @@ export const backtestTasksApi = {
 
   // Override: backtest stop accepts the same mode parameter as trading
   // tasks. Default remains ``graceful`` to preserve the previous
-  // behaviour when callers omit the mode.
+  // behaviour when callers omit the mode.  For drain mode, an optional
+  // ``drain_duration_minutes`` override may be supplied.
   stop: async (
     id: string,
-    mode: 'immediate' | 'graceful' | 'graceful_close' | 'drain' = 'graceful'
+    mode: 'immediate' | 'graceful' | 'graceful_close' | 'drain' = 'graceful',
+    drainDurationMinutes?: number
   ): Promise<Record<string, unknown>> => {
+    const payload: Record<string, unknown> = { mode };
+    if (mode === 'drain' && typeof drainDurationMinutes === 'number') {
+      payload.drain_duration_minutes = drainDurationMinutes;
+    }
     return api.post<Record<string, unknown>>(
       `/api/trading/tasks/backtest/${id}/stop/`,
-      { mode }
+      payload
     );
   },
 };

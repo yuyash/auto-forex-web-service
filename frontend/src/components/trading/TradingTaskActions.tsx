@@ -129,9 +129,19 @@ export default function TradingTaskActions({
     setStopDialogOpen(true);
   };
 
-  const handleStopConfirm = async (option: StopOption) => {
+  const handleStopConfirm = async ({
+    option,
+    drainDurationMinutes,
+  }: {
+    option: StopOption;
+    drainDurationMinutes?: number;
+  }) => {
     try {
-      await stopTask.mutate({ id: task.id, mode: option });
+      await stopTask.mutate({
+        id: task.id,
+        mode: option,
+        ...(drainDurationMinutes !== undefined ? { drainDurationMinutes } : {}),
+      });
       setStopDialogOpen(false);
       // Trigger refresh after successful stop
       onRefresh?.();

@@ -131,6 +131,21 @@ class BacktestTaskViewSet(TaskViewSetBase):
         """
         return request.data.get("mode", "graceful")
 
+    def get_drain_duration_minutes(self, request: Request) -> int | None:
+        """Optional per-stop drain duration override (minutes).
+
+        Ignored unless the effective stop mode is ``drain``; a non-positive
+        or non-integer value is treated as "no override".
+        """
+        raw = request.data.get("drain_duration_minutes")
+        if raw is None:
+            return None
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            return None
+        return value if value > 0 else None
+
     def get_stop_response_extras(self, request: Request) -> dict[str, Any]:
         """Echo the resolved stop mode in the stop response."""
         return {"mode": self.get_stop_mode(request)}

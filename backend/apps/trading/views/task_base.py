@@ -128,6 +128,15 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         """Return the stop mode from the request.  Override in subclasses."""
         return "graceful"
 
+    def get_drain_duration_minutes(self, request: Request) -> int | None:
+        """Return the optional per-stop drain duration override in minutes.
+
+        Subclasses may override to read the value from the request body.
+        Returning ``None`` (the default) leaves the task's configured
+        ``drain_duration_hours`` in place.
+        """
+        return None
+
     def get_stop_response_extras(self, request: Request) -> dict[str, Any]:
         """Extra fields to include in the stop response body."""
         return {}
@@ -255,8 +264,11 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         """Stop running task asynchronously."""
         task = self.get_object()
         mode = self.get_stop_mode(request)
+        drain_minutes = self.get_drain_duration_minutes(request)
         try:
-            success = self.task_service.stop_task(task.pk, mode=mode)
+            success = self.task_service.stop_task(
+                task.pk, mode=mode, drain_duration_minutes=drain_minutes
+            )
         except ValueError as exc:
             logger.warning("Stop validation failed: task_id=%s, detail=%s", task.pk, exc)
             return Response(

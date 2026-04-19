@@ -172,11 +172,19 @@ export default function BacktestTaskCard({
     }
   };
 
-  const handleStop = async (taskId: string, mode: StopOption = 'graceful') => {
+  const handleStop = async (
+    taskId: string,
+    mode: StopOption = 'graceful',
+    drainDurationMinutes?: number
+  ) => {
     setStopDialogOpen(false);
     setIsLoading(true);
     try {
-      await stopTask.mutate({ id: taskId, mode });
+      await stopTask.mutate({
+        id: taskId,
+        mode,
+        ...(drainDurationMinutes !== undefined ? { drainDurationMinutes } : {}),
+      });
       if (mode === 'drain') {
         setOptimisticStatus(TaskStatus.DRAINING);
       } else {
@@ -533,7 +541,9 @@ export default function BacktestTaskCard({
         taskType="backtest"
         isLoading={isLoading}
         onCancel={() => setStopDialogOpen(false)}
-        onConfirm={(mode) => void handleStop(task.id, mode)}
+        onConfirm={({ option, drainDurationMinutes }) =>
+          void handleStop(task.id, option, drainDurationMinutes)
+        }
       />
       {pendingAction && (
         <TaskActionConfirmDialog

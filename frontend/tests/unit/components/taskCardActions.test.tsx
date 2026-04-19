@@ -216,10 +216,13 @@ vi.mock('../../../src/components/tasks/actions/StopOptionsDialog', () => ({
     onConfirm,
   }: {
     open: boolean;
-    onConfirm: (option: 'graceful' | 'graceful_close' | 'drain') => void;
+    onConfirm: (payload: {
+      option: 'graceful' | 'graceful_close' | 'drain';
+      drainDurationMinutes?: number;
+    }) => void;
   }) =>
     open ? (
-      <button type="button" onClick={() => onConfirm('graceful')}>
+      <button type="button" onClick={() => onConfirm({ option: 'graceful' })}>
         Confirm Stop
       </button>
     ) : null,

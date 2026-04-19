@@ -229,10 +229,20 @@ export const BacktestTaskDetail: React.FC = () => {
     navigate('/backtest-tasks');
   };
 
-  const handleStopConfirm = async (option: StopOption) => {
+  const handleStopConfirm = async ({
+    option,
+    drainDurationMinutes,
+  }: {
+    option: StopOption;
+    drainDurationMinutes?: number;
+  }) => {
     setIsStopping(true);
     try {
-      await stopTask.mutate({ id: taskId, mode: option });
+      await stopTask.mutate({
+        id: taskId,
+        mode: option,
+        ...(drainDurationMinutes !== undefined ? { drainDurationMinutes } : {}),
+      });
       // Optimistic status depends on the chosen mode. DRAIN keeps the
       // executor running in DRAINING; other modes transition to STOPPING
       // and then STOPPED / COMPLETED.

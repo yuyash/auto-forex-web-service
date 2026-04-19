@@ -112,8 +112,16 @@ export function useStopTradingTask(options?: {
   onError?: (error: Error) => void;
 }) {
   return useWrappedMutation(
-    (variables: { id: string; mode?: StopMode }) =>
-      tradingTasksApi.stop(variables.id, variables.mode ?? 'graceful'),
+    (variables: {
+      id: string;
+      mode?: StopMode;
+      drainDurationMinutes?: number;
+    }) =>
+      tradingTasksApi.stop(
+        variables.id,
+        variables.mode ?? 'graceful',
+        variables.drainDurationMinutes
+      ),
     {
       onSuccess: async (data, variables) => {
         patchTaskStatusCache('trading', variables.id, 'stopping');
