@@ -327,27 +327,30 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         task = self.get_object()
         try:
             resumed = self.task_service.resume_task(task.pk)
-        except TaskConflictError as exc:
-            # Full exception text goes to the log so operators can see
-            # the exact conflict; the response body intentionally carries
-            # only a fixed, safe description to avoid any chance of
-            # leaking internal details (CodeQL py/stack-trace-exposure).
-            logger.warning("Resume conflict: task_id=%s, detail=%s", task.pk, exc)
+        except TaskConflictError:
+            # Log via ``logger.exception`` so the full traceback and
+            # exception message land in the log stream (for operators)
+            # without having to pass the caught exception through a
+            # format string that CodeQL treats as a sink — the taint
+            # flow from the exception to the response body is what
+            # trips ``py/stack-trace-exposure``.  The response body
+            # itself carries a fixed, safe description so no
+            # exception-derived text ever reaches the client.
+            logger.exception(
+                "Resume conflict",
+                extra={"task_id": str(task.pk)},
+            )
             return Response(
                 {
                     "error": "Task cannot be resumed due to a conflict",
                 },
                 status=status.HTTP_409_CONFLICT,
             )
-        except TaskValidationError as exc:
-            # ``TaskValidationError`` is raised by the task service on
-            # domain-level validation failures (wrong status, missing
-            # execution_id, Celery still running, etc.).  We log the
-            # message verbatim but return a fixed description to the
-            # caller — CodeQL cannot prove the message is safe and
-            # future changes to the service layer could unintentionally
-            # leak internal text through this path.
-            logger.warning("Resume validation failed: task_id=%s, detail=%s", task.pk, exc)
+        except TaskValidationError:
+            logger.exception(
+                "Resume validation failed",
+                extra={"task_id": str(task.pk)},
+            )
             return Response(
                 {
                     "error": "Invalid resume request for current task state",
