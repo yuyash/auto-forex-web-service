@@ -421,6 +421,7 @@ export default function TradingTaskCard({
                 <Chip
                   label={t('common:labels.liveAccount')}
                   color="error"
+                  size="small"
                   sx={{ fontWeight: 'bold' }}
                 />
               )}
@@ -430,20 +431,21 @@ export default function TradingTaskCard({
                   currentTask.strategy_type
                 )}
                 variant="outlined"
-                size={isMobile ? 'small' : 'medium'}
+                size="small"
               />
               {!isMobile && (
                 <Chip
                   label={currentTask.config_name}
                   variant="outlined"
                   color="primary"
+                  size="small"
                 />
               )}
               <Chip
                 label={currentTask.account_name}
                 variant="outlined"
                 color="secondary"
-                size={isMobile ? 'small' : 'medium'}
+                size="small"
               />
             </Box>
             {currentTask.description && (

@@ -586,7 +586,7 @@ export const TradingTaskDetail: React.FC = () => {
       <StopOptionsDialog
         open={stopDialogOpen}
         taskName={detailTask.name}
-        title="Stop Trading Task"
+        taskType="trading"
         isLoading={stopTask.isLoading}
         onCancel={() => setStopDialogOpen(false)}
         onConfirm={async (option: StopOption) => {

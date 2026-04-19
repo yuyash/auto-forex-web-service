@@ -19,6 +19,7 @@ import {
   WaterDrop as DrainIcon,
 } from '@mui/icons-material';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export type StopOption = 'graceful' | 'graceful_close' | 'drain';
 
@@ -28,10 +29,18 @@ interface StopOptionsDialogProps {
   onCancel: () => void;
   onConfirm: (option: StopOption) => void;
   isLoading: boolean;
-  /** Dialog heading. Defaults to ``Stop Task`` so both trading and
-   * backtest task flows can reuse the same dialog without customisation.
+  /**
+   * Dialog heading.  Explicit override takes precedence over the
+   * ``taskType``-derived localised title so callers can still force a
+   * specific label if needed.
    */
   title?: string;
+  /**
+   * Task type used to pick the localised title
+   * ("Stop Trading Task" / "Stop Backtest Task").  When omitted the
+   * generic "Stop Task" heading is used.
+   */
+  taskType?: 'trading' | 'backtest';
   // When true, DRAIN is disabled because the caller has determined the task
   // cannot drain (for example, backtests tied to a finite tick stream may
   // still support it, but some task types must not offer the option).
@@ -44,10 +53,20 @@ export function StopOptionsDialog({
   onCancel,
   onConfirm,
   isLoading,
-  title = 'Stop Task',
+  title,
+  taskType,
   drainAvailable = true,
 }: StopOptionsDialogProps) {
+  const { t } = useTranslation(['common']);
   const [selectedOption, setSelectedOption] = useState<StopOption | null>(null);
+
+  const resolvedTitle =
+    title ??
+    (taskType === 'trading'
+      ? t('common:stopOptions.tradingTitle')
+      : taskType === 'backtest'
+        ? t('common:stopOptions.backtestTitle')
+        : t('common:stopOptions.title'));
 
   const handleConfirm = () => {
     if (selectedOption) {
@@ -66,11 +85,11 @@ export function StopOptionsDialog({
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <StopIcon color="error" />
-        {title}
+        {resolvedTitle}
       </DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Choose how to stop "{taskName}":
+          {t('common:stopOptions.chooseHowToStop', { taskName })}
         </Typography>
         <List sx={{ bgcolor: 'background.paper' }}>
           <ListItemButton
@@ -89,8 +108,8 @@ export function StopOptionsDialog({
               <KeepPositionsIcon color="primary" />
             </ListItemIcon>
             <ListItemText
-              primary="Stop (Keep Positions)"
-              secondary="Stop trading but keep all open positions. You can manage them manually later."
+              primary={t('common:stopOptions.graceful.primary')}
+              secondary={t('common:stopOptions.graceful.secondary')}
             />
           </ListItemButton>
           <ListItemButton
@@ -109,8 +128,8 @@ export function StopOptionsDialog({
               <ClosePositionsIcon color="error" />
             </ListItemIcon>
             <ListItemText
-              primary="Stop (Close All Positions)"
-              secondary="Stop trading and close all open positions at current market prices."
+              primary={t('common:stopOptions.gracefulClose.primary')}
+              secondary={t('common:stopOptions.gracefulClose.secondary')}
             />
           </ListItemButton>
           {drainAvailable && (
@@ -129,8 +148,8 @@ export function StopOptionsDialog({
                 <DrainIcon color="warning" />
               </ListItemIcon>
               <ListItemText
-                primary="Drain (Close at breakeven or profit)"
-                secondary="Keep running but stop opening new positions. Existing positions are closed as soon as unrealised PnL is non-negative; the task stops once all positions are closed. Optionally bounded by the task's drain duration; issuing another stop while draining terminates the task immediately."
+                primary={t('common:stopOptions.drain.primary')}
+                secondary={t('common:stopOptions.drain.secondary')}
               />
             </ListItemButton>
           )}
@@ -146,15 +165,14 @@ export function StopOptionsDialog({
             }}
           >
             <Typography variant="body2" color="warning.contrastText">
-              Warning: This will close all positions at current market prices.
-              This action cannot be undone.
+              {t('common:stopOptions.closeWarning')}
             </Typography>
           </Box>
         )}
       </DialogContent>
       <DialogActions>
         <Button onClick={handleClose} disabled={isLoading}>
-          Cancel
+          {t('common:stopOptions.cancel')}
         </Button>
         <Button
           onClick={handleConfirm}
@@ -163,7 +181,9 @@ export function StopOptionsDialog({
           disabled={!selectedOption || isLoading}
           startIcon={isLoading ? <CircularProgress size={16} /> : <StopIcon />}
         >
-          {isLoading ? 'Stopping...' : 'Stop Task'}
+          {isLoading
+            ? t('common:stopOptions.loading')
+            : t('common:stopOptions.confirm')}
         </Button>
       </DialogActions>
     </Dialog>
