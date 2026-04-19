@@ -627,6 +627,7 @@ class TaskSubResourceMixin:
                     "matched_position_id": serializers.UUIDField(),
                     "position_ids": serializers.ListField(child=serializers.UUIDField()),
                     "positions": serializers.ListField(child=serializers.DictField()),
+                    "chain_realized_pnl": serializers.CharField(allow_null=True),
                 },
             )
         },

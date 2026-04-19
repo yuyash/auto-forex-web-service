@@ -603,3 +603,195 @@ class TestSnowballTPOrdering:
                     f"TP ordering violated: L{entry.layer_number}/R{entry.retracement_count} "
                     f"TP={entry.close_price} > head TP={head.close_price}"
                 )
+
+
+class TestCounterAddLoopWithinTick:
+    """Ensure a single tick can produce multiple counter adds when the
+    price moves far enough in one step to cross several retracement
+    thresholds.
+
+    Motivating scenario: the 2nd-slot stop-loss fires on a tick that has
+    already moved far enough to place the 3rd counter.  Previously the
+    3rd counter was deferred to a later tick and could be missed if the
+    price retraced before the next sample.
+    """
+
+    @pytest.fixture
+    def runner(self) -> TickRunner:
+        # Use a tight f_max and drop shrink/lock so stop-loss stays on.
+        overrides = {
+            "f_max": 2,
+            "r_max": 5,
+            "manual_intervals": ["20", "20", "20", "20", "20"],
+            "stop_loss_enabled": True,
+            "shrink_enabled": False,
+            "lock_enabled": False,
+            "reseed_on_all_pending": False,
+            "preserve_highest_r_from": 0,
+        }
+        runner = TickRunner(stop_loss=True, overrides=overrides)
+        runner.tick(START_PRICE)  # L1/R0 LONG opens
+        return runner
+
+    def test_multiple_counter_adds_in_same_tick(self, runner: TickRunner) -> None:
+        """A single 90-pip adverse move should open R1, R2, R3 together."""
+        # 20-pip intervals means -60 pips covers R1, R2, R3.  Jump well
+        # past that in one tick so the loop is forced to fire three times.
+        runner.tick(START_PRICE - Decimal("0.90"))
+
+        long_cycle = next(c for c in runner.long_cycles() if c.is_active)
+        layer = long_cycle.grid.layers[0]
+        occupied_counters = [s for s in layer.slots if s.index >= 1 and s.is_occupied]
+        assert len(occupied_counters) >= 2, (
+            f"Expected at least R1 and R2 to open in one tick, got "
+            f"{[s.index for s in occupied_counters]}"
+        )
+
+    def test_counter_add_after_stop_loss_in_same_tick(self, runner: TickRunner) -> None:
+        """A tick that both SLs a slot and crosses the next threshold
+        should still place the next counter on that very tick."""
+        # Step the price down gradually to fill R1 first.
+        runner.tick(START_PRICE - Decimal("0.25"))  # open R1
+
+        long_cycle = next(c for c in runner.long_cycles() if c.is_active)
+        layer = long_cycle.grid.layers[0]
+        r1 = layer.slot_at(1)
+        assert r1 is not None and r1.is_occupied, "R1 should be open after -25 pips"
+
+        # One big tick that (a) triggers R1's stop-loss and (b) moves far
+        # past R2's planned entry price.  Under the old implementation
+        # R1 would SL and the next counter would be deferred to the next
+        # tick; the new loop places R2 on this same tick.
+        runner.tick(START_PRICE - Decimal("1.30"))
+
+        # Refresh state.
+        long_cycle = next(c for c in runner.long_cycles() if c.is_active)
+        layer = long_cycle.grid.layers[0]
+        r1 = layer.slot_at(1)
+        r2 = layer.slot_at(2)
+        assert r1 is not None and r1.is_pending_rebuild, (
+            "R1 should have transitioned to pending_rebuild"
+        )
+        assert r2 is not None and r2.is_occupied, (
+            "R2 should have been opened on the same tick as R1's SL"
+        )
+
+
+class TestCycleAndLifecyclePnLWarnings:
+    """Structural warnings for unexpected P/L outcomes."""
+
+    @pytest.fixture
+    def runner(self) -> TickRunner:
+        return TickRunner(stop_loss=False)
+
+    def test_cycle_realized_pnl_is_tracked(self, runner: TickRunner) -> None:
+        """Cycle realised P/L accumulates over every close event."""
+        runner.tick(START_PRICE)
+
+        # Force a TP close so realized_pnl becomes > 0.
+        runner.tick_range(START_PRICE, START_PRICE + Decimal("0.60"), step_pips=2)
+
+        ss = runner.ss
+        # The first cycle should be COMPLETED with realized_pnl > 0.
+        completed_long = [
+            c for c in ss.cycles if c.direction.value == "long" and c.status.value == "completed"
+        ]
+        assert completed_long, "expected at least one completed LONG cycle"
+        assert completed_long[0].realized_pnl > 0, (
+            f"expected positive realized_pnl, got {completed_long[0].realized_pnl}"
+        )
+
+
+class TestLifecycleNegativePnlWarnings:
+    """Ensure warnings are emitted when a non-stop-loss close or a full
+    slot lifecycle ends with negative P/L."""
+
+    def test_non_stop_loss_close_with_negative_pnl_warns(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Directly invoke ``_close_entry`` with a losing TP close and
+        assert the warning fires.  Bypasses the tick-pattern helpers so
+        the test is deterministic."""
+        import logging
+
+        runner = TickRunner(stop_loss=False)
+        runner.tick(START_PRICE)
+        long_cycle = next(c for c in runner.long_cycles() if c.is_active)
+        entry = long_cycle.initial_entry
+        assert entry is not None
+
+        # Synthesise a TP close at an unfavourable price to force pnl<0.
+        bad_tick = _make_tick(
+            runner.ts + timedelta(seconds=1),
+            START_PRICE - Decimal("0.50"),
+        )
+        with caplog.at_level(logging.WARNING, logger="apps.trading.strategies.snowball.strategy"):
+            runner.strategy._close_entry(
+                bad_tick,
+                entry,
+                description="forced losing TP",
+                close_reason="tp",
+                cycle=long_cycle,
+            )
+
+        messages = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        assert any("negative P/L" in m for m in messages), (
+            f"expected 'negative P/L' warning, got: {messages}"
+        )
+
+    def test_stop_loss_close_does_not_warn(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Stop-loss closes are expected to be losing and must not warn."""
+        import logging
+
+        runner = TickRunner(stop_loss=True)
+        runner.tick(START_PRICE)
+        long_cycle = next(c for c in runner.long_cycles() if c.is_active)
+        entry = long_cycle.initial_entry
+        assert entry is not None
+
+        bad_tick = _make_tick(
+            runner.ts + timedelta(seconds=1),
+            START_PRICE - Decimal("0.50"),
+        )
+        with caplog.at_level(logging.WARNING, logger="apps.trading.strategies.snowball.strategy"):
+            runner.strategy._close_entry(
+                bad_tick,
+                entry,
+                description="forced SL",
+                close_reason="stop_loss",
+                cycle=long_cycle,
+            )
+
+        messages = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        assert not any("negative P/L" in m for m in messages), (
+            f"stop_loss close should not emit a negative-P/L warning: {messages}"
+        )
+
+    def test_cycle_completed_with_negative_pnl_warns(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A cycle whose accumulated realized_pnl is negative at close
+        should log a warning."""
+        import logging
+
+        runner = TickRunner(stop_loss=False)
+        runner.tick(START_PRICE)
+        # Pre-seed the cycle's realized P/L to a loss in the serialized
+        # state so the next tick rehydrates with that value and the
+        # completion transition triggers the warning.
+        ss_dict = dict(runner.state.strategy_state)
+        cycles = list(ss_dict.get("cycles", []))
+        for cycle_dict in cycles:
+            if cycle_dict.get("direction") == "long":
+                cycle_dict["realized_pnl"] = "-123.45"
+        ss_dict["cycles"] = cycles
+        runner.state.strategy_state = ss_dict
+
+        # Drive the cycle to completion via a normal TP close.
+        with caplog.at_level(logging.WARNING, logger="apps.trading.strategies.snowball.strategy"):
+            runner.tick_range(START_PRICE, START_PRICE + Decimal("0.60"), step_pips=2)
+
+        messages = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        assert any("negative realised P/L" in m for m in messages), (
+            f"expected cycle-completion warning, got: {messages}"
+        )

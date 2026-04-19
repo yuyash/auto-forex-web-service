@@ -9082,9 +9082,14 @@
                             "type": "object",
                             "additionalProperties": {}
                         }
+                    },
+                    "chain_realized_pnl": {
+                        "type": "string",
+                        "nullable": true
                     }
                 },
                 "required": [
+                    "chain_realized_pnl",
                     "matched_position_id",
                     "position_ids",
                     "positions",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID
 
@@ -73,11 +73,14 @@ class PositionLifecycleService:
             for position in ordered_positions
         ]
 
+        chain_realized_pnl = self._chain_realized_pnl(payload_positions)
+
         return {
             "requested_position_id": query.position_id_query,
             "matched_position_id": matched_position_id,
             "position_ids": [str(position.id) for position in ordered_positions],
             "positions": payload_positions,
+            "chain_realized_pnl": chain_realized_pnl,
         }
 
     def _base_logs_queryset(self, query: PositionLifecycleQuery) -> QuerySet[TaskLog]:
@@ -483,6 +486,27 @@ class PositionLifecycleService:
         if position.direction == "short":
             pnl = -pnl
         return str(pnl * units)
+
+    def _chain_realized_pnl(self, payload_positions: list[dict[str, Any]]) -> str | None:
+        """Sum the per-position realised P/L across the rebuild chain.
+
+        Returns the net P/L across the entire open → (stop-loss → rebuild)*
+        → close lifecycle as a decimal string, or ``None`` when no
+        position in the chain has a realised value yet (all still open).
+        """
+        total = Decimal("0")
+        has_any = False
+        for entry in payload_positions:
+            summary = entry.get("summary") or {}
+            raw = summary.get("realized_pnl")
+            if raw in (None, ""):
+                continue
+            try:
+                total += Decimal(str(raw))
+                has_any = True
+            except (InvalidOperation, ValueError):
+                continue
+        return str(total) if has_any else None
 
     def _log_position_ids(self, log: TaskLog) -> tuple[str | None, str | None]:
         context = self._log_context(log)

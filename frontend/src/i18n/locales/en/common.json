@@ -519,7 +519,8 @@
           "rebuiltFrom": "Rebuilt From",
           "rebuiltTo": "Rebuilt To",
           "closeReason": "Close Reason",
-          "plannedExitFormula": "Exit Formula"
+          "plannedExitFormula": "Exit Formula",
+          "chainRealizedPnl": "Lifecycle Net P/L"
         },
         "closeReasons": {
           "normal": "Normal Close",
