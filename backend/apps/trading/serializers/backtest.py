@@ -40,6 +40,8 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "tick_granularity",
             "tick_window_value_mode",
             "drain_duration_hours",
+            "market_idle_pre_close_minutes",
+            "market_idle_resume_delay_minutes",
             "sell_on_stop",
             "status",
             "execution_id",
@@ -104,6 +106,8 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "tick_granularity",
             "tick_window_value_mode",
             "drain_duration_hours",
+            "market_idle_pre_close_minutes",
+            "market_idle_resume_delay_minutes",
             "sell_on_stop",
             "debug_options",
         ]
@@ -122,6 +126,8 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "tick_granularity": {"required": False},
             "tick_window_value_mode": {"required": False},
             "drain_duration_hours": {"required": False, "min_value": 0},
+            "market_idle_pre_close_minutes": {"required": False, "min_value": 0},
+            "market_idle_resume_delay_minutes": {"required": False, "min_value": 0},
             "sell_on_stop": {"required": False},
             "debug_options": {"required": False},
         }

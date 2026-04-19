@@ -228,6 +228,26 @@ class BacktestTask(UUIDModel):
         ),
     )
 
+    # Market-aware idle mode (shared with trading tasks).  For backtests the
+    # executor uses the replayed tick timestamp — not wall-clock time — when
+    # evaluating these thresholds, so a backtest that runs in a few minutes
+    # of real time still switches to IDLE as the replayed clock crosses the
+    # configured windows around forex market open/close.  Values in minutes.
+    market_idle_pre_close_minutes = models.PositiveIntegerField(
+        default=0,
+        help_text=(
+            "Switch to IDLE this many minutes before the market closes. "
+            "0 disables pre-close idling."
+        ),
+    )
+    market_idle_resume_delay_minutes = models.PositiveIntegerField(
+        default=0,
+        help_text=(
+            "Wait this many minutes after the market reopens before resuming trading. "
+            "0 disables the resume delay."
+        ),
+    )
+
     class Meta:
         db_table = "backtest_tasks"
         verbose_name = "Backtest Task"

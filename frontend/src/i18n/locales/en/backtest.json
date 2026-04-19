@@ -232,7 +232,15 @@
       "configuration": "Configuration",
       "parameters": "Parameters",
       "review": "Review"
-    }
+    },
+    "advancedSettings": "Advanced settings",
+    "advancedSettingsDescription": "Drain-on-stop and market-close idling behaviour. Market-idle thresholds are evaluated against the replayed tick timestamps, not wall-clock time.",
+    "drainDurationHours": "Drain duration (hours)",
+    "drainDurationHoursHelp": "Maximum hours to keep draining before giving up. 0 = wait forever for breakeven.",
+    "marketIdlePreCloseMinutes": "Idle before market close (min)",
+    "marketIdlePreCloseMinutesHelp": "Switch to IDLE this many minutes before the weekly forex close. Evaluated against the replayed tick timestamp. 0 disables.",
+    "marketIdleResumeDelayMinutes": "Resume delay after open (min)",
+    "marketIdleResumeDelayMinutesHelp": "Wait this many minutes (replayed clock) after the market reopens before resuming trading."
   },
   "toast": {
     "startedSuccessfully": "Backtest task started successfully",

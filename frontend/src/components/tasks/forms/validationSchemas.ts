@@ -75,6 +75,18 @@ export const backtestTaskSchema = z
       .int('Drain duration must be an integer')
       .min(0, 'Drain duration cannot be negative')
       .optional(),
+    market_idle_pre_close_minutes: z.coerce
+      .number({ message: 'Must be a non-negative integer' })
+      .int('Must be an integer')
+      .min(0, 'Must be non-negative')
+      .max(720, 'Must not exceed 720 minutes (12 hours)')
+      .optional(),
+    market_idle_resume_delay_minutes: z.coerce
+      .number({ message: 'Must be a non-negative integer' })
+      .int('Must be an integer')
+      .min(0, 'Must be non-negative')
+      .max(720, 'Must not exceed 720 minutes (12 hours)')
+      .optional(),
   })
   .refine((data) => data.start_time < data.end_time, {
     message: 'Start date must be before end date',
@@ -183,6 +195,8 @@ export type BacktestTaskSchemaOutput = {
   sell_at_completion?: boolean;
   hedging_enabled?: boolean;
   drain_duration_hours?: number;
+  market_idle_pre_close_minutes?: number;
+  market_idle_resume_delay_minutes?: number;
 };
 export type TradingTaskFormData = z.infer<typeof tradingTaskSchema>;
 export type CopyTaskFormData = z.infer<typeof copyTaskSchema>;

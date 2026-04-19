@@ -54,6 +54,9 @@ export interface BackendBacktestTask {
   completed_at?: string | null;
   error_message?: string | null;
   latest_execution?: BackendTaskExecutionSummary | null;
+  drain_duration_hours?: number;
+  market_idle_pre_close_minutes?: number;
+  market_idle_resume_delay_minutes?: number;
   created_at: string;
   updated_at: string;
   debug_options?: Record<string, unknown>;

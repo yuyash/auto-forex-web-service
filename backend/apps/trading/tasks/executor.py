@@ -7,7 +7,7 @@ strategies, manages state, and handles lifecycle events.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import InvalidOperation
 from decimal import Decimal
 from logging import Logger, getLogger
@@ -49,7 +49,7 @@ class StrategyError(Exception):
     """
 
 
-def is_forex_market_closed() -> bool:
+def is_forex_market_closed(now: datetime | None = None) -> bool:
     """Check if the forex market is currently closed (weekend).
 
     Forex market closes Friday 21:00 UTC and reopens Sunday 21:00 UTC.
@@ -60,7 +60,7 @@ def is_forex_market_closed() -> bool:
     """
     from apps.trading.services.market_schedule import is_forex_market_closed as _impl
 
-    return _impl()
+    return _impl(now)
 
 
 @dataclass(slots=True)
@@ -81,6 +81,10 @@ class ExecutionLoopState:
     # actually processed), this is written *before* we decide whether to
     # process or skip, so it reflects the real cadence of the tick stream.
     last_delivered_tick_timestamp: datetime | None = None
+    # Last timestamp at which the market-idle state was evaluated.  For
+    # backtests we re-evaluate only when the replayed clock advances by a
+    # threshold so we don't pay the DB-refresh cost on every tick.
+    last_market_idle_eval_at: datetime | None = None
 
 
 class TaskExecutor:
@@ -631,14 +635,15 @@ class TaskExecutor:
             if loop.no_tick_batches == 0:
                 logger.info("Market is closed, tolerating empty batches")
             loop.no_tick_batches = 0
-            self._maybe_enter_market_idle(loop)
+            self._evaluate_market_idle(loop)
             return False
 
         loop.no_tick_batches += 1
         if self.task_type == TaskType.TRADING:
-            # Market is open — if we were idling, exit idle (possibly after
-            # the configured resume delay) back to RUNNING.
-            self._maybe_exit_market_idle(loop)
+            # Market is open — re-evaluate whether we should be idling
+            # (e.g. within the pre-close window) or transitioning back
+            # to RUNNING after the configured resume delay.
+            self._evaluate_market_idle(loop)
             if loop.no_tick_batches == loop.max_no_tick_batches:
                 logger.warning(
                     "No ticks received for %d consecutive batches on live trading task. "
@@ -823,62 +828,124 @@ class TaskExecutor:
             return None
 
     # ------------------------------------------------------------------
-    # Market-aware idle (trading tasks only)
+    # Market-aware idle (trading + backtest)
     # ------------------------------------------------------------------
 
-    def _maybe_enter_market_idle(self, loop: ExecutionLoopState) -> None:
-        """Transition a live trading task to IDLE when the market is closed.
+    def _market_idle_clock(self, loop: ExecutionLoopState) -> datetime | None:
+        """Return the reference time for market-idle decisions.
 
-        Safe to call every loop iteration: the method is idempotent and
-        short-circuits for non-trading tasks or tasks already in IDLE.
+        Live trading uses wall-clock time. Backtests use the most recent
+        tick timestamp so that a fast replay still crosses the market
+        open/close thresholds at the right point in the replayed clock.
+        Returns ``None`` for backtests that have not yet delivered a
+        tick — callers should treat that as "skip the evaluation".
         """
-        if self.task_type != TaskType.TRADING:
+        if self.task_type == TaskType.TRADING:
+            return dj_timezone.now()
+        return loop.last_delivered_tick_timestamp or loop.state.last_tick_timestamp
+
+    def _evaluate_market_idle(self, loop: ExecutionLoopState) -> None:
+        """Flip the task between RUNNING and IDLE based on the market clock.
+
+        Triggers on three conditions:
+
+        * Market currently closed (weekend).
+        * Within ``market_idle_pre_close_minutes`` of the upcoming close.
+        * Inside the post-open resume delay window.
+
+        Safe to call repeatedly: the helper is idempotent and short-circuits
+        when the task is in any state other than RUNNING/IDLE (so draining
+        or stopping tasks are left alone).
+        """
+        now = self._market_idle_clock(loop)
+        if now is None:
             return
-        task = cast(TradingTask, self.task)
+
+        task = self.task
+        pre_close_minutes = int(getattr(task, "market_idle_pre_close_minutes", 0) or 0)
+        resume_delay_minutes = int(getattr(task, "market_idle_resume_delay_minutes", 0) or 0)
+
+        # For backtests, if neither threshold is configured and the
+        # replayed clock falls on a normal trading window, there's nothing
+        # to do — skip the DB refresh entirely to keep the per-tick cost
+        # negligible on un-configured tasks.
+        if (
+            self.task_type == TaskType.BACKTEST
+            and pre_close_minutes == 0
+            and resume_delay_minutes == 0
+            and not is_forex_market_closed(now)
+        ):
+            return
+
+        from apps.trading.services.market_schedule import (
+            should_enter_pre_close_idle,
+            should_resume_from_idle,
+        )
+
         task.refresh_from_db(fields=["status"])
-        if task.status != TaskStatus.RUNNING:
+        if task.status not in (TaskStatus.RUNNING, TaskStatus.IDLE):
             return
-        # Transition to IDLE and persist the idle-start marker.
+
+        market_closed = is_forex_market_closed(now)
+        should_idle = market_closed or should_enter_pre_close_idle(
+            now=now, pre_close_minutes=pre_close_minutes
+        )
+
+        if task.status == TaskStatus.RUNNING and should_idle:
+            self._enter_market_idle(loop, now=now, reason="market_closed_or_pre_close")
+            return
+
+        if task.status == TaskStatus.IDLE and not should_idle:
+            idle_marker = self._read_idle_marker(loop)
+            if should_resume_from_idle(
+                now=now,
+                idle_entered_at=idle_marker,
+                resume_delay_minutes=resume_delay_minutes,
+            ):
+                self._exit_market_idle(loop)
+
+    def _enter_market_idle(
+        self,
+        loop: ExecutionLoopState,
+        *,
+        now: datetime,
+        reason: str,
+    ) -> None:
+        task = self.task
         type(task).objects.filter(pk=task.pk, status=TaskStatus.RUNNING).update(
             status=TaskStatus.IDLE,
             updated_at=dj_timezone.now(),
         )
         task.refresh_from_db(fields=["status"])
-        logger.info("Trading task switched to IDLE (market closed) - task_id=%s", task.pk)
-        self._record_idle_marker(loop, dj_timezone.now())
+        logger.info(
+            "Task switched to IDLE - task_id=%s, task_type=%s, reason=%s, clock=%s",
+            task.pk,
+            self.task_type.value,
+            reason,
+            now.isoformat(),
+        )
+        self._record_idle_marker(loop, now)
 
-    def _maybe_exit_market_idle(self, loop: ExecutionLoopState) -> None:
-        """Resume a live trading task from IDLE once the market reopens.
-
-        Honours the optional ``market_idle_resume_delay_minutes`` field so
-        callers don't start trading into the very first ticks of the
-        session.
-        """
-        if self.task_type != TaskType.TRADING:
-            return
-        task = cast(TradingTask, self.task)
-        task.refresh_from_db(fields=["status"])
-        if task.status != TaskStatus.IDLE:
-            return
-
-        from apps.trading.services.market_schedule import should_resume_from_idle
-
-        delay_minutes = int(getattr(task, "market_idle_resume_delay_minutes", 0) or 0)
-        idle_marker = self._read_idle_marker(loop)
-        if not should_resume_from_idle(
-            now=dj_timezone.now(),
-            idle_entered_at=idle_marker,
-            resume_delay_minutes=delay_minutes,
-        ):
-            return
-
+    def _exit_market_idle(self, loop: ExecutionLoopState) -> None:
+        task = self.task
         type(task).objects.filter(pk=task.pk, status=TaskStatus.IDLE).update(
             status=TaskStatus.RUNNING,
             updated_at=dj_timezone.now(),
         )
         task.refresh_from_db(fields=["status"])
-        logger.info("Trading task resumed from IDLE (market open) - task_id=%s", task.pk)
+        logger.info(
+            "Task resumed from IDLE - task_id=%s, task_type=%s",
+            task.pk,
+            self.task_type.value,
+        )
         self._record_idle_marker(loop, None)
+
+    # Backwards-compatible wrappers so existing call sites keep working.
+    def _maybe_enter_market_idle(self, loop: ExecutionLoopState) -> None:
+        self._evaluate_market_idle(loop)
+
+    def _maybe_exit_market_idle(self, loop: ExecutionLoopState) -> None:
+        self._evaluate_market_idle(loop)
 
     def _record_idle_marker(self, loop: ExecutionLoopState, entered_at: datetime | None) -> None:
         """Persist the idle-start timestamp into ExecutionState."""
@@ -980,6 +1047,35 @@ class TaskExecutor:
                     mid=Decimal(str(tick.mid)),
                 )
                 loop.last_delivered_tick_timestamp = tick_ts
+                return False
+
+        # Market-aware idle for backtests: use the replayed tick clock to
+        # decide whether we are inside the pre-close window or still inside
+        # the post-open resume-delay window. When IDLE, we keep advancing
+        # metrics and tick counters so the replay clock marches forward,
+        # but skip the strategy ``on_tick`` call so no new entries are
+        # opened and existing positions are unaffected by strategy logic.
+        if self.task_type == TaskType.BACKTEST:
+            tick_ts = self._coerce_tick_timestamp(tick.timestamp)
+            loop.last_delivered_tick_timestamp = tick_ts
+            # Throttle the market-idle re-evaluation to once per minute of
+            # replayed time to avoid a DB refresh on every tick.
+            last_eval = loop.last_market_idle_eval_at
+            if (
+                last_eval is None
+                or (tick_ts - last_eval) >= timedelta(seconds=60)
+                or self.task.status == TaskStatus.IDLE
+            ):
+                self._evaluate_market_idle(loop)
+                loop.last_market_idle_eval_at = tick_ts
+            if self.task.status == TaskStatus.IDLE:
+                loop.state.ticks_processed += 1
+                loop.state.last_tick_timestamp = tick_ts
+                loop.state.last_tick_price = tick.mid
+                loop.state.last_tick_bid = tick.bid
+                loop.state.last_tick_ask = tick.ask
+                self._update_common_metrics(loop.state, tick)
+                self._buffer_tick_metrics(loop.state, tick)
                 return False
 
         result: StrategyResult = self.engine.on_tick(tick=tick, state=loop.state)

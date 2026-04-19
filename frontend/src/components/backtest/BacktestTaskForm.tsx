@@ -292,6 +292,9 @@ export default function BacktestTaskForm({
       tick_window_value_mode: 'first',
       sell_at_completion: false,
       hedging_enabled: true,
+      drain_duration_hours: 0,
+      market_idle_pre_close_minutes: 0,
+      market_idle_resume_delay_minutes: 0,
     };
 
     return {
@@ -521,6 +524,10 @@ export default function BacktestTaskForm({
       tick_window_value_mode: completeData.tick_window_value_mode,
       sell_at_completion: completeData.sell_at_completion,
       hedging_enabled: completeData.hedging_enabled,
+      drain_duration_hours: completeData.drain_duration_hours,
+      market_idle_pre_close_minutes: completeData.market_idle_pre_close_minutes,
+      market_idle_resume_delay_minutes:
+        completeData.market_idle_resume_delay_minutes,
     };
 
     try {
@@ -960,6 +967,118 @@ export default function BacktestTaskForm({
                           </Typography>
                         </Box>
                       }
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12 }} sx={{ mt: 2 }}>
+                <Typography variant="subtitle1" fontWeight={600}>
+                  {t('backtest:form.advancedSettings', 'Advanced settings')}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: 'block', mb: 2 }}
+                >
+                  {t(
+                    'backtest:form.advancedSettingsDescription',
+                    'Drain-on-stop and market-close idling behaviour. Market-idle thresholds are evaluated against the replayed tick timestamps, not wall-clock time.'
+                  )}
+                </Typography>
+              </Grid>
+
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <Controller
+                  name="drain_duration_hours"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        field.onChange(val === '' ? undefined : Number(val));
+                      }}
+                      fullWidth
+                      type="number"
+                      label={t(
+                        'backtest:form.drainDurationHours',
+                        'Drain duration (hours)'
+                      )}
+                      helperText={
+                        errors.drain_duration_hours?.message ||
+                        t(
+                          'backtest:form.drainDurationHoursHelp',
+                          'Maximum hours to keep draining before giving up. 0 = wait forever for breakeven.'
+                        )
+                      }
+                      error={!!errors.drain_duration_hours}
+                      inputProps={{ min: 0, step: 1 }}
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <Controller
+                  name="market_idle_pre_close_minutes"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        field.onChange(val === '' ? undefined : Number(val));
+                      }}
+                      fullWidth
+                      type="number"
+                      label={t(
+                        'backtest:form.marketIdlePreCloseMinutes',
+                        'Idle before market close (min)'
+                      )}
+                      helperText={
+                        errors.market_idle_pre_close_minutes?.message ||
+                        t(
+                          'backtest:form.marketIdlePreCloseMinutesHelp',
+                          'Switch to IDLE this many minutes before the weekly forex close. Evaluated against the replayed tick timestamp. 0 disables.'
+                        )
+                      }
+                      error={!!errors.market_idle_pre_close_minutes}
+                      inputProps={{ min: 0, max: 720, step: 1 }}
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <Controller
+                  name="market_idle_resume_delay_minutes"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        field.onChange(val === '' ? undefined : Number(val));
+                      }}
+                      fullWidth
+                      type="number"
+                      label={t(
+                        'backtest:form.marketIdleResumeDelayMinutes',
+                        'Resume delay after open (min)'
+                      )}
+                      helperText={
+                        errors.market_idle_resume_delay_minutes?.message ||
+                        t(
+                          'backtest:form.marketIdleResumeDelayMinutesHelp',
+                          'Wait this many minutes (replayed clock) after the market reopens before resuming trading.'
+                        )
+                      }
+                      error={!!errors.market_idle_resume_delay_minutes}
+                      inputProps={{ min: 0, max: 720, step: 1 }}
                     />
                   )}
                 />
