@@ -68,18 +68,28 @@ export function useUpdateBacktestTask(options?: {
 
 // --- stop needs a custom status-patch pattern -----------------------------
 
+export type StopMode = 'immediate' | 'graceful' | 'graceful_close' | 'drain';
+
 export function useStopBacktestTask(options?: {
   onSuccess?: (data: Record<string, unknown>) => void;
   onError?: (error: Error) => void;
 }) {
-  return useWrappedMutation((id: string) => backtestTasksApi.stop(id), {
-    onSuccess: async (data, id) => {
-      patchTaskStatusCache('backtest', id, 'stopping');
-      await invalidateTaskDerivedCaches('backtest', id);
-      options?.onSuccess?.(data);
-    },
-    onError: (error) => options?.onError?.(error),
-  });
+  return useWrappedMutation(
+    (variables: { id: string; mode?: StopMode }) =>
+      backtestTasksApi.stop(variables.id, variables.mode ?? 'graceful'),
+    {
+      onSuccess: async (data, variables) => {
+        // The optimistic status depends on the stop mode: DRAIN keeps
+        // the task running in DRAINING state; everything else
+        // transitions to STOPPING → STOPPED.
+        const nextStatus = variables.mode === 'drain' ? 'draining' : 'stopping';
+        patchTaskStatusCache('backtest', variables.id, nextStatus);
+        await invalidateTaskDerivedCaches('backtest', variables.id);
+        options?.onSuccess?.(data);
+      },
+      onError: (error) => options?.onError?.(error),
+    }
+  );
 }
 
 // --- lifecycle hooks via factory ------------------------------------------

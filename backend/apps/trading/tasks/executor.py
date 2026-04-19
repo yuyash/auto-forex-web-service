@@ -750,6 +750,44 @@ class TaskExecutor:
                 exc,
             )
 
+    def _close_all_positions_on_stop_if_requested(self, loop: ExecutionLoopState) -> None:
+        """Close every open position when ``sell_on_stop`` was requested.
+
+        Called once, at the start of ``_finalize_execution``, right before the
+        strategy's on_stop hook runs.  Applies to both live trading and
+        backtest tasks.  Each close goes through ``OrderService`` so the
+        correct broker-vs-simulated behaviour applies (OANDA market close
+        for trading, tick-priced close for backtest).
+        """
+        self.task.refresh_from_db(fields=["sell_on_stop"])
+        if not getattr(self.task, "sell_on_stop", False):
+            return
+
+        open_positions = self.order_service.get_open_positions(instrument=self.instrument)
+        if not open_positions:
+            logger.info(
+                "sell_on_stop requested but no open positions - task_id=%s",
+                self.task.pk,
+            )
+            return
+
+        logger.info(
+            "Closing %d open position(s) on stop - task_id=%s",
+            len(open_positions),
+            self.task.pk,
+        )
+        for position in open_positions:
+            try:
+                self.order_service.close_position(position=position)
+            except OrderServiceError as exc:
+                logger.warning(
+                    "sell_on_stop close failed - task_id=%s, position_id=%s, error=%s",
+                    self.task.pk,
+                    getattr(position, "pk", None),
+                    exc,
+                )
+        self._refresh_open_positions_cache()
+
     def _record_drain_marker(self, loop: ExecutionLoopState, started_at: datetime | None) -> None:
         strategy_state = (
             loop.state.strategy_state if isinstance(loop.state.strategy_state, dict) else {}
@@ -1385,6 +1423,11 @@ class TaskExecutor:
 
     def _finalize_execution(self, loop: ExecutionLoopState) -> None:
         """Run stop hook and persist final stop state."""
+        # If the user asked for "Close All Positions" at stop time, close
+        # them here before the strategy's on_stop hook runs so that the
+        # final balance and metrics reflect the closed positions.  Applies
+        # to both live trading and backtest tasks.
+        self._close_all_positions_on_stop_if_requested(loop)
         logger.info("Calling engine.on_stop")
         result = self.engine.on_stop(state=loop.state)
         loop.state = result.state

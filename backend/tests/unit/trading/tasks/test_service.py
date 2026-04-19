@@ -356,7 +356,7 @@ class TestStopTask:
         assert task.status == TaskStatus.STOPPING
         task.save.assert_called()
         mock_stop.apply_async.assert_called_once_with(
-            args=[task_id],
+            args=[task_id, "graceful"],
             queue="system",
         )
 

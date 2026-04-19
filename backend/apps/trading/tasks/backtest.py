@@ -387,12 +387,42 @@ def trigger_backtest_publisher(
 
 
 @shared_task(bind=True, name="trading.tasks.stop_backtest_task")
-def stop_backtest_task(self: Any, task_id: UUID) -> None:
-    """Stop a running backtest task."""
-    from apps.trading.enums import TaskStatus
+def stop_backtest_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
+    """Stop a running backtest task.
+
+    Supports the same stop modes as trading tasks:
+
+    * ``graceful`` / ``graceful_close`` / ``immediate`` — transition the task
+      to STOPPED by cancelling the tick publisher and, if needed, the
+      executor.  ``graceful_close`` closes every open position at the last
+      tick price before finalising (handled by the executor when it sees
+      ``sell_on_stop=True``).
+    * ``drain`` — do *not* cancel the publisher or revoke the executor.
+      The executor is already in DRAINING state (set by the service layer)
+      and will close positions at break-even until they are all closed,
+      or until the tick stream ends, whichever happens first.  This task
+      becomes a no-op because draining is driven entirely by the executor.
+    """
+    from apps.trading.enums import StopMode, TaskStatus
 
     try:
-        logger.info("[STOP:BACKTEST] Stop task started - task_id=%s", task_id)
+        logger.info("[STOP:BACKTEST] Stop task started - task_id=%s, mode=%s", task_id, mode)
+        try:
+            stop_mode = StopMode(mode)
+        except ValueError:
+            # Fall back to graceful for unknown modes so a bad request can't
+            # leave a task orphaned.
+            logger.warning("[STOP:BACKTEST] Unknown mode %s, defaulting to graceful", mode)
+            stop_mode = StopMode.GRACEFUL
+
+        # DRAIN is handled in the executor; nothing to do here.
+        if stop_mode == StopMode.DRAIN:
+            logger.info(
+                "[STOP:BACKTEST] DRAIN requested; executor will finalise - task_id=%s",
+                task_id,
+            )
+            return
+
         task = BacktestTask.objects.get(pk=task_id)
         logger.info("[STOP:BACKTEST] Task loaded - task_id=%s, status=%s", task_id, task.status)
 
@@ -409,7 +439,9 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
 
             import time
 
-            max_wait_seconds = 5
+            # IMMEDIATE mode skips the graceful-shutdown wait; just revoke
+            # the worker right away.
+            max_wait_seconds = 0 if stop_mode == StopMode.IMMEDIATE else 5
             wait_interval = 0.5
             elapsed = 0.0
 
@@ -419,14 +451,17 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
                 task.refresh_from_db()
                 if task.status == TaskStatus.STOPPED:
                     logger.info(
-                        "[STOP:BACKTEST] Task stopped gracefully - task_id=%s, elapsed=%.1fs",
+                        "[STOP:BACKTEST] Task stopped gracefully - task_id=%s, elapsed=%.1fs, mode=%s",
                         task_id,
                         elapsed,
+                        stop_mode.value,
                     )
                     return
 
             logger.warning(
-                "[STOP:BACKTEST] Graceful shutdown timeout, forcing - task_id=%s", task_id
+                "[STOP:BACKTEST] Graceful shutdown timeout, forcing - task_id=%s, mode=%s",
+                task_id,
+                stop_mode.value,
             )
 
             from celery import current_app
@@ -457,7 +492,7 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
                     description="Backtest task stopped",
                 ),
                 expected_current_status=TaskStatus.STOPPING,
-                extra_details={"mode": "worker_stop"},
+                extra_details={"mode": stop_mode.value},
             )
 
         elif task.status == TaskStatus.COMPLETED:
@@ -473,7 +508,7 @@ def stop_backtest_task(self: Any, task_id: UUID) -> None:
                     description="Backtest task stopped after completion race",
                 ),
                 expected_current_status=TaskStatus.COMPLETED,
-                extra_details={"mode": "worker_stop"},
+                extra_details={"mode": stop_mode.value},
             )
 
         else:

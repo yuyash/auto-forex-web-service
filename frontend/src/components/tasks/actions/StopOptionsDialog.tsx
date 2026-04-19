@@ -28,6 +28,10 @@ interface StopOptionsDialogProps {
   onCancel: () => void;
   onConfirm: (option: StopOption) => void;
   isLoading: boolean;
+  /** Dialog heading. Defaults to ``Stop Task`` so both trading and
+   * backtest task flows can reuse the same dialog without customisation.
+   */
+  title?: string;
   // When true, DRAIN is disabled because the caller has determined the task
   // cannot drain (for example, backtests tied to a finite tick stream may
   // still support it, but some task types must not offer the option).
@@ -40,6 +44,7 @@ export function StopOptionsDialog({
   onCancel,
   onConfirm,
   isLoading,
+  title = 'Stop Task',
   drainAvailable = true,
 }: StopOptionsDialogProps) {
   const [selectedOption, setSelectedOption] = useState<StopOption | null>(null);
@@ -61,7 +66,7 @@ export function StopOptionsDialog({
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <StopIcon color="error" />
-        Stop Trading Task
+        {title}
       </DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>

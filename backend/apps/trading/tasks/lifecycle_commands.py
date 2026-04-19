@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from logging import Logger
-from typing import TYPE_CHECKING, Callable, cast
+from typing import TYPE_CHECKING, Callable
 from uuid import UUID
 
 from celery.result import AsyncResult
@@ -72,7 +72,10 @@ def _default_dispatch_stop(task_id: UUID, is_backtest: bool, stop_mode: StopMode
     from apps.trading.tasks import service as service_module
 
     if is_backtest:
-        service_module.stop_backtest_task.apply_async(args=[task_id], queue="system")
+        service_module.stop_backtest_task.apply_async(
+            args=[task_id, stop_mode.value],
+            queue="system",
+        )
     else:
         service_module.stop_trading_task.apply_async(
             args=[task_id, stop_mode.value],
@@ -222,9 +225,11 @@ class TaskLifecycleCommands:
 
         task.status = next_status
         update_fields = ["status", "updated_at"]
-        if not is_backtest and stop_mode == StopMode.GRACEFUL_CLOSE:
-            trading_task = cast(TradingTask, task)
-            trading_task.sell_on_stop = True
+        # Both trading and backtest tasks persist the ``sell_on_stop`` flag
+        # so the worker that runs the shutdown logic can close open
+        # positions at current market / tick prices.
+        if stop_mode == StopMode.GRACEFUL_CLOSE:
+            task.sell_on_stop = True
             update_fields.append("sell_on_stop")
         task.save(update_fields=update_fields)
 

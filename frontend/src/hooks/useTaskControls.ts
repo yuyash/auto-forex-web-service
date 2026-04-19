@@ -55,7 +55,10 @@ function useBacktestControls(): TaskControlActions {
 
   return {
     onStart: useCallback((id: string) => start.mutate(id), [start]),
-    onStop: useCallback((id: string) => stop.mutate(id), [stop]),
+    onStop: useCallback(
+      (id: string) => stop.mutate({ id, mode: 'graceful' }),
+      [stop]
+    ),
     onPause: useCallback((id: string) => pause.mutate(id), [pause]),
     onResume: useCallback((id: string) => resume.mutate(id), [resume]),
     onRestart: useCallback((id: string) => restart.mutate(id), [restart]),

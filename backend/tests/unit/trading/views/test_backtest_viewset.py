@@ -43,8 +43,9 @@ def _build_viewset(action="start"):
 def _drf_post(data=None, query=""):
     django_req = factory.post(f"/{query}", data=data or {}, format="json")
     django_req.user = MagicMock(pk=1, id=1)
-    drf_req = Request(django_req)
+    drf_req = Request(django_req, parsers=[])
     drf_req._user = django_req.user
+    drf_req._full_data = data or {}
     return drf_req
 
 

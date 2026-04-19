@@ -11,6 +11,7 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   FileCopy as CopyIcon,
+  Stop as StopIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import type { BacktestTask } from '../../types/backtestTask';
@@ -18,8 +19,13 @@ import { TaskStatus } from '../../types/common';
 import { CopyTaskDialog } from '../tasks/actions/CopyTaskDialog';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
 import {
+  StopOptionsDialog,
+  type StopOption,
+} from '../tasks/actions/StopOptionsDialog';
+import {
   useCopyBacktestTask,
   useDeleteBacktestTask,
+  useStopBacktestTask,
 } from '../../hooks/useBacktestTaskMutations';
 import { useToast } from '../common';
 import { logger } from '../../utils/logger';
@@ -42,9 +48,11 @@ export default function BacktestTaskActions({
   const { showError } = useToast();
   const [copyDialogOpen, setCopyDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [stopDialogOpen, setStopDialogOpen] = useState(false);
 
   const copyTask = useCopyBacktestTask();
   const deleteTask = useDeleteBacktestTask();
+  const stopTask = useStopBacktestTask();
 
   const handleEdit = () => {
     onClose();
@@ -83,6 +91,28 @@ export default function BacktestTaskActions({
     setDeleteDialogOpen(true);
   };
 
+  const handleStopClick = () => {
+    onClose();
+    setStopDialogOpen(true);
+  };
+
+  const handleStopConfirm = async (option: StopOption) => {
+    try {
+      await stopTask.mutate({ id: task.id, mode: option });
+      setStopDialogOpen(false);
+      onRefresh?.();
+    } catch (error) {
+      logger.error('Failed to stop backtest task', {
+        taskId: task.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      const errorMessage =
+        error instanceof Error ? error.message : 'Failed to stop task';
+      showError(errorMessage);
+      setStopDialogOpen(false);
+    }
+  };
+
   const handleDeleteConfirm = async () => {
     try {
       await deleteTask.mutate(task.id);
@@ -107,8 +137,18 @@ export default function BacktestTaskActions({
     }
   };
 
-  const canEdit = task.status !== TaskStatus.RUNNING;
-  const canDelete = task.status !== TaskStatus.RUNNING;
+  const canEdit =
+    task.status !== TaskStatus.RUNNING &&
+    task.status !== TaskStatus.PAUSED &&
+    task.status !== TaskStatus.DRAINING;
+  const canDelete =
+    task.status !== TaskStatus.RUNNING &&
+    task.status !== TaskStatus.PAUSED &&
+    task.status !== TaskStatus.DRAINING;
+  const canStop =
+    task.status === TaskStatus.RUNNING ||
+    task.status === TaskStatus.PAUSED ||
+    task.status === TaskStatus.DRAINING;
 
   return (
     <>
@@ -126,6 +166,17 @@ export default function BacktestTaskActions({
           horizontal: 'right',
         }}
       >
+        {canStop && (
+          <MenuItem onClick={handleStopClick}>
+            <ListItemIcon>
+              <StopIcon fontSize="small" color="error" />
+            </ListItemIcon>
+            <ListItemText>{t('common:actions.stop')}</ListItemText>
+          </MenuItem>
+        )}
+
+        {canStop && <Divider />}
+
         <MenuItem onClick={handleCopyClick}>
           <ListItemIcon>
             <CopyIcon fontSize="small" />
@@ -169,6 +220,14 @@ export default function BacktestTaskActions({
         onConfirm={handleDeleteConfirm}
         isLoading={deleteTask.isLoading}
         hasExecutionHistory={true}
+      />
+
+      <StopOptionsDialog
+        open={stopDialogOpen}
+        taskName={task.name}
+        onCancel={() => setStopDialogOpen(false)}
+        onConfirm={handleStopConfirm}
+        isLoading={stopTask.isLoading}
       />
     </>
   );

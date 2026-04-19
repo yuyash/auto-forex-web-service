@@ -346,10 +346,17 @@ describe('BacktestTaskDetail', () => {
       screen.getByRole('heading', { name: 'Stop Backtest Task' })
     ).toBeInTheDocument();
 
+    // Pick the default "keep positions" option, then confirm.
+    await user.click(
+      screen.getByRole('button', { name: /Stop \(Keep Positions\)/i })
+    );
     await user.click(screen.getByRole('button', { name: 'Stop Task' }));
 
     await waitFor(() => {
-      expect(mockBacktestStop).toHaveBeenCalledWith('1');
+      expect(mockBacktestStop).toHaveBeenCalledWith({
+        id: '1',
+        mode: 'graceful',
+      });
     });
   });
 

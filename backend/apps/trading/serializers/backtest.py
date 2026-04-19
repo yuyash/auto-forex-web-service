@@ -40,6 +40,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "tick_granularity",
             "tick_window_value_mode",
             "drain_duration_hours",
+            "sell_on_stop",
             "status",
             "execution_id",
             "started_at",
@@ -103,6 +104,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "tick_granularity",
             "tick_window_value_mode",
             "drain_duration_hours",
+            "sell_on_stop",
             "debug_options",
         ]
         # Make fields optional for partial updates (PATCH)
@@ -120,6 +122,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "tick_granularity": {"required": False},
             "tick_window_value_mode": {"required": False},
             "drain_duration_hours": {"required": False, "min_value": 0},
+            "sell_on_stop": {"required": False},
             "debug_options": {"required": False},
         }
 

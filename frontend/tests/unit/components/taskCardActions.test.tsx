@@ -210,16 +210,16 @@ vi.mock('../../../src/components/tasks/actions/DeleteTaskDialog', () => ({
   DeleteTaskDialog: () => null,
 }));
 
-vi.mock('../../../src/components/tasks/actions/BacktestStopDialog', () => ({
-  BacktestStopDialog: ({
+vi.mock('../../../src/components/tasks/actions/StopOptionsDialog', () => ({
+  StopOptionsDialog: ({
     open,
     onConfirm,
   }: {
     open: boolean;
-    onConfirm: () => void;
+    onConfirm: (option: 'graceful' | 'graceful_close' | 'drain') => void;
   }) =>
     open ? (
-      <button type="button" onClick={onConfirm}>
+      <button type="button" onClick={() => onConfirm('graceful')}>
         Confirm Stop
       </button>
     ) : null,
@@ -399,7 +399,10 @@ describe('Task card control actions', () => {
     await user.click(screen.getByRole('button', { name: 'Stop' }));
     await user.click(screen.getByRole('button', { name: 'Confirm Stop' }));
 
-    expect(mockBacktestStop).toHaveBeenCalledWith('backtest-1');
+    expect(mockBacktestStop).toHaveBeenCalledWith({
+      id: 'backtest-1',
+      mode: 'graceful',
+    });
     expect(mockShowSuccess).toHaveBeenCalledWith(
       'Backtest stopped successfully'
     );
