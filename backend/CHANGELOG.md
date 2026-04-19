@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.38.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.38.0...backend-v1.38.1) (2026-04-19)
+
+
+### Bug Fixes
+
+* **backtest:** isolate stream per execution and purge stale state ([#544](https://github.com/yuyash/auto-forex-web-service/issues/544)) ([df126f6](https://github.com/yuyash/auto-forex-web-service/commit/df126f67f5307aa342ab8be5484b1dbb3b8b30da))
+
 ## [1.38.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.37.1...backend-v1.38.0) (2026-04-19)
 
 
