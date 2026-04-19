@@ -248,6 +248,38 @@ class BacktestTask(UUIDModel):
         ),
     )
 
+    # Market close schedule applied to backtests when evaluating market-idle
+    # thresholds.  When ``market_close_enabled`` is False the replay ignores
+    # market-closed windows (pre_close / resume_delay become no-ops) and the
+    # strategy receives every tick regardless of day of week.  The weekly
+    # close and open are specified as (weekday, UTC hour) pairs using
+    # ``datetime.weekday()`` semantics: 0 = Monday … 6 = Sunday.  Defaults
+    # reproduce the historical hard-coded forex schedule (Fri 21:00 UTC
+    # close, Sun 21:00 UTC open).
+    market_close_enabled = models.BooleanField(
+        default=True,
+        help_text=(
+            "Apply a weekly market-close window during the backtest. "
+            "When disabled, market-idle thresholds are ignored."
+        ),
+    )
+    market_close_weekday = models.PositiveSmallIntegerField(
+        default=4,  # Friday
+        help_text=("Weekday the market closes (0 = Monday, 6 = Sunday). Default: 4 (Friday)."),
+    )
+    market_close_hour_utc = models.PositiveSmallIntegerField(
+        default=21,
+        help_text="Hour (UTC) at which the market closes on close weekday. 0–23.",
+    )
+    market_open_weekday = models.PositiveSmallIntegerField(
+        default=6,  # Sunday
+        help_text=("Weekday the market reopens (0 = Monday, 6 = Sunday). Default: 6 (Sunday)."),
+    )
+    market_open_hour_utc = models.PositiveSmallIntegerField(
+        default=21,
+        help_text="Hour (UTC) at which the market reopens on open weekday. 0–23.",
+    )
+
     class Meta:
         db_table = "backtest_tasks"
         verbose_name = "Backtest Task"

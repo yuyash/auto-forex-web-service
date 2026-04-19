@@ -54,6 +54,27 @@ import {
 
 const DEFAULT_DATE_RANGE_DAYS = 30;
 
+const weekdayOptions: ReadonlyArray<{
+  value: number;
+  key:
+    | 'monday'
+    | 'tuesday'
+    | 'wednesday'
+    | 'thursday'
+    | 'friday'
+    | 'saturday'
+    | 'sunday';
+  label: string;
+}> = [
+  { value: 0, key: 'monday', label: 'Monday' },
+  { value: 1, key: 'tuesday', label: 'Tuesday' },
+  { value: 2, key: 'wednesday', label: 'Wednesday' },
+  { value: 3, key: 'thursday', label: 'Thursday' },
+  { value: 4, key: 'friday', label: 'Friday' },
+  { value: 5, key: 'saturday', label: 'Saturday' },
+  { value: 6, key: 'sunday', label: 'Sunday' },
+];
+
 const createDefaultDateRange = () => {
   const end = new Date();
   const start = new Date(
@@ -295,6 +316,11 @@ export default function BacktestTaskForm({
       drain_duration_hours: 0,
       market_idle_pre_close_minutes: 0,
       market_idle_resume_delay_minutes: 0,
+      market_close_enabled: true,
+      market_close_weekday: 4,
+      market_close_hour_utc: 21,
+      market_open_weekday: 6,
+      market_open_hour_utc: 21,
     };
 
     return {
@@ -336,6 +362,8 @@ export default function BacktestTaskForm({
 
   const watchedTickGranularity = watch('tick_granularity');
   const showTickWindowValueMode = watchedTickGranularity !== 'tick';
+
+  const watchedMarketCloseEnabled = watch('market_close_enabled');
 
   // Sync saved formData back into React Hook Form when changing steps
   // This ensures form values persist when navigating between steps
@@ -528,6 +556,11 @@ export default function BacktestTaskForm({
       market_idle_pre_close_minutes: completeData.market_idle_pre_close_minutes,
       market_idle_resume_delay_minutes:
         completeData.market_idle_resume_delay_minutes,
+      market_close_enabled: completeData.market_close_enabled,
+      market_close_weekday: completeData.market_close_weekday,
+      market_close_hour_utc: completeData.market_close_hour_utc,
+      market_open_weekday: completeData.market_open_weekday,
+      market_open_hour_utc: completeData.market_open_hour_utc,
     };
 
     try {
@@ -1083,6 +1116,195 @@ export default function BacktestTaskForm({
                   )}
                 />
               </Grid>
+
+              <Grid size={{ xs: 12 }} sx={{ mt: 1 }}>
+                <Controller
+                  name="market_close_enabled"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={field.value ?? true}
+                          onChange={(e) => field.onChange(e.target.checked)}
+                        />
+                      }
+                      label={
+                        <Box>
+                          <Typography variant="body1">
+                            {t(
+                              'backtest:form.marketCloseEnabled',
+                              'Apply weekly market close'
+                            )}
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            sx={{ mt: 0.5 }}
+                          >
+                            {t(
+                              'backtest:form.marketCloseEnabledDescription',
+                              'When disabled, the backtest never treats any replayed time as market-closed and the idle thresholds above have no effect.'
+                            )}
+                          </Typography>
+                        </Box>
+                      }
+                    />
+                  )}
+                />
+              </Grid>
+
+              {watchedMarketCloseEnabled && (
+                <>
+                  <Grid size={{ xs: 12, sm: 3 }}>
+                    <Controller
+                      name="market_close_weekday"
+                      control={control}
+                      render={({ field }) => (
+                        <FormControl
+                          fullWidth
+                          error={!!errors.market_close_weekday}
+                        >
+                          <InputLabel id="backtest-market-close-weekday-label">
+                            {t(
+                              'backtest:form.marketCloseWeekday',
+                              'Close weekday (UTC)'
+                            )}
+                          </InputLabel>
+                          <Select
+                            labelId="backtest-market-close-weekday-label"
+                            label={t(
+                              'backtest:form.marketCloseWeekday',
+                              'Close weekday (UTC)'
+                            )}
+                            value={field.value ?? 4}
+                            onChange={(e) =>
+                              field.onChange(Number(e.target.value))
+                            }
+                          >
+                            {weekdayOptions.map((opt) => (
+                              <MenuItem key={opt.value} value={opt.value}>
+                                {t(
+                                  `backtest:form.weekdays.${opt.key}`,
+                                  opt.label
+                                )}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      )}
+                    />
+                  </Grid>
+
+                  <Grid size={{ xs: 12, sm: 3 }}>
+                    <Controller
+                      name="market_close_hour_utc"
+                      control={control}
+                      render={({ field }) => (
+                        <TextField
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            field.onChange(
+                              val === '' ? undefined : Number(val)
+                            );
+                          }}
+                          fullWidth
+                          type="number"
+                          label={t(
+                            'backtest:form.marketCloseHourUtc',
+                            'Close hour (UTC)'
+                          )}
+                          helperText={
+                            errors.market_close_hour_utc?.message ||
+                            t(
+                              'backtest:form.marketCloseHourUtcHelp',
+                              'Hour of day at which the market closes (0–23 UTC).'
+                            )
+                          }
+                          error={!!errors.market_close_hour_utc}
+                          inputProps={{ min: 0, max: 23, step: 1 }}
+                        />
+                      )}
+                    />
+                  </Grid>
+
+                  <Grid size={{ xs: 12, sm: 3 }}>
+                    <Controller
+                      name="market_open_weekday"
+                      control={control}
+                      render={({ field }) => (
+                        <FormControl
+                          fullWidth
+                          error={!!errors.market_open_weekday}
+                        >
+                          <InputLabel id="backtest-market-open-weekday-label">
+                            {t(
+                              'backtest:form.marketOpenWeekday',
+                              'Open weekday (UTC)'
+                            )}
+                          </InputLabel>
+                          <Select
+                            labelId="backtest-market-open-weekday-label"
+                            label={t(
+                              'backtest:form.marketOpenWeekday',
+                              'Open weekday (UTC)'
+                            )}
+                            value={field.value ?? 6}
+                            onChange={(e) =>
+                              field.onChange(Number(e.target.value))
+                            }
+                          >
+                            {weekdayOptions.map((opt) => (
+                              <MenuItem key={opt.value} value={opt.value}>
+                                {t(
+                                  `backtest:form.weekdays.${opt.key}`,
+                                  opt.label
+                                )}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      )}
+                    />
+                  </Grid>
+
+                  <Grid size={{ xs: 12, sm: 3 }}>
+                    <Controller
+                      name="market_open_hour_utc"
+                      control={control}
+                      render={({ field }) => (
+                        <TextField
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            field.onChange(
+                              val === '' ? undefined : Number(val)
+                            );
+                          }}
+                          fullWidth
+                          type="number"
+                          label={t(
+                            'backtest:form.marketOpenHourUtc',
+                            'Open hour (UTC)'
+                          )}
+                          helperText={
+                            errors.market_open_hour_utc?.message ||
+                            t(
+                              'backtest:form.marketOpenHourUtcHelp',
+                              'Hour of day at which the market reopens (0–23 UTC).'
+                            )
+                          }
+                          error={!!errors.market_open_hour_utc}
+                          inputProps={{ min: 0, max: 23, step: 1 }}
+                        />
+                      )}
+                    />
+                  </Grid>
+                </>
+              )}
             </Grid>
           </Box>
         );

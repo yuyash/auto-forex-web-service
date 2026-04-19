@@ -57,6 +57,11 @@ export interface BackendBacktestTask {
   drain_duration_hours?: number;
   market_idle_pre_close_minutes?: number;
   market_idle_resume_delay_minutes?: number;
+  market_close_enabled?: boolean;
+  market_close_weekday?: number;
+  market_close_hour_utc?: number;
+  market_open_weekday?: number;
+  market_open_hour_utc?: number;
   created_at: string;
   updated_at: string;
   debug_options?: Record<string, unknown>;

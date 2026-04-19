@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import InvalidOperation
 from decimal import Decimal
 from logging import Logger, getLogger
-from typing import List, cast
+from typing import TYPE_CHECKING, List, cast
 
 from django.utils import timezone as dj_timezone
 
@@ -34,6 +34,9 @@ from apps.trading.tasks.source import TickDataSource
 from apps.trading.tasks.state import StateManager
 from apps.trading.utils import format_money
 
+if TYPE_CHECKING:
+    from apps.trading.services.market_schedule import MarketSessionConfig
+
 logger: Logger = getLogger(name=__name__)
 
 # Backward-compatible export for tests patching this symbol.
@@ -49,18 +52,24 @@ class StrategyError(Exception):
     """
 
 
-def is_forex_market_closed(now: datetime | None = None) -> bool:
+def is_forex_market_closed(
+    now: datetime | None = None,
+    *,
+    config: "MarketSessionConfig | None" = None,
+) -> bool:
     """Check if the forex market is currently closed (weekend).
 
     Forex market closes Friday 21:00 UTC and reopens Sunday 21:00 UTC.
 
     Delegates to :mod:`apps.trading.services.market_schedule` so the rule
     lives in a single, testable module.  This function is kept for
-    backwards compatibility with existing callers and tests.
+    backwards compatibility with existing callers and tests.  ``config``
+    may be supplied to override the default schedule (e.g. for backtests
+    that customise the close/open weekday-hour pair).
     """
     from apps.trading.services.market_schedule import is_forex_market_closed as _impl
 
-    return _impl(now)
+    return _impl(now, config=config)
 
 
 @dataclass(slots=True)
@@ -844,6 +853,31 @@ class TaskExecutor:
             return dj_timezone.now()
         return loop.last_delivered_tick_timestamp or loop.state.last_tick_timestamp
 
+    def _market_session_config(self):
+        """Build a MarketSessionConfig from the task's fields.
+
+        Trading tasks always use the default forex schedule (the model
+        doesn't expose overrides for them). Backtest tasks honour the
+        per-task ``market_close_*`` fields so users can disable the
+        weekly close or point it at a different weekday/hour pair.
+        """
+        from apps.trading.services.market_schedule import (
+            DEFAULT_SESSION_CONFIG,
+            MarketSessionConfig,
+        )
+
+        if self.task_type != TaskType.BACKTEST:
+            return DEFAULT_SESSION_CONFIG
+
+        task = self.task
+        return MarketSessionConfig(
+            enabled=bool(getattr(task, "market_close_enabled", True)),
+            close_weekday=int(getattr(task, "market_close_weekday", 4) or 0),
+            close_hour_utc=int(getattr(task, "market_close_hour_utc", 21) or 0),
+            open_weekday=int(getattr(task, "market_open_weekday", 6) or 0),
+            open_hour_utc=int(getattr(task, "market_open_hour_utc", 21) or 0),
+        )
+
     def _evaluate_market_idle(self, loop: ExecutionLoopState) -> None:
         """Flip the task between RUNNING and IDLE based on the market clock.
 
@@ -864,18 +898,22 @@ class TaskExecutor:
         task = self.task
         pre_close_minutes = int(getattr(task, "market_idle_pre_close_minutes", 0) or 0)
         resume_delay_minutes = int(getattr(task, "market_idle_resume_delay_minutes", 0) or 0)
+        session_config = self._market_session_config()
 
-        # For backtests, if neither threshold is configured and the
-        # replayed clock falls on a normal trading window, there's nothing
-        # to do — skip the DB refresh entirely to keep the per-tick cost
-        # negligible on un-configured tasks.
-        if (
-            self.task_type == TaskType.BACKTEST
-            and pre_close_minutes == 0
-            and resume_delay_minutes == 0
-            and not is_forex_market_closed(now)
-        ):
-            return
+        # Backtests that have opted out of the whole feature — either by
+        # disabling the weekly close entirely, or by leaving both idle
+        # thresholds at zero while the replayed clock is in a normal
+        # trading window — can skip the DB refresh to keep the per-tick
+        # cost negligible.
+        if self.task_type == TaskType.BACKTEST:
+            if not session_config.enabled:
+                return
+            if (
+                pre_close_minutes == 0
+                and resume_delay_minutes == 0
+                and not is_forex_market_closed(now, config=session_config)
+            ):
+                return
 
         from apps.trading.services.market_schedule import (
             should_enter_pre_close_idle,
@@ -886,9 +924,11 @@ class TaskExecutor:
         if task.status not in (TaskStatus.RUNNING, TaskStatus.IDLE):
             return
 
-        market_closed = is_forex_market_closed(now)
+        market_closed = is_forex_market_closed(now, config=session_config)
         should_idle = market_closed or should_enter_pre_close_idle(
-            now=now, pre_close_minutes=pre_close_minutes
+            now=now,
+            pre_close_minutes=pre_close_minutes,
+            config=session_config,
         )
 
         if task.status == TaskStatus.RUNNING and should_idle:
@@ -901,6 +941,7 @@ class TaskExecutor:
                 now=now,
                 idle_entered_at=idle_marker,
                 resume_delay_minutes=resume_delay_minutes,
+                config=session_config,
             ):
                 self._exit_market_idle(loop)
 

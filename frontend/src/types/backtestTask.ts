@@ -25,6 +25,11 @@ export interface BacktestTask {
   drain_duration_hours?: number;
   market_idle_pre_close_minutes?: number;
   market_idle_resume_delay_minutes?: number;
+  market_close_enabled?: boolean;
+  market_close_weekday?: number;
+  market_close_hour_utc?: number;
+  market_open_weekday?: number;
+  market_open_hour_utc?: number;
   latest_execution?: ExecutionSummary;
   execution_id?: string;
   started_at?: string;
@@ -53,6 +58,11 @@ export interface BacktestTaskCreateData {
   drain_duration_hours?: number;
   market_idle_pre_close_minutes?: number;
   market_idle_resume_delay_minutes?: number;
+  market_close_enabled?: boolean;
+  market_close_weekday?: number;
+  market_close_hour_utc?: number;
+  market_open_weekday?: number;
+  market_open_hour_utc?: number;
 }
 
 // Form data type - matches the validation schema (after transformation)
@@ -74,6 +84,11 @@ export interface BacktestTaskFormData {
   drain_duration_hours?: number;
   market_idle_pre_close_minutes?: number;
   market_idle_resume_delay_minutes?: number;
+  market_close_enabled?: boolean;
+  market_close_weekday?: number;
+  market_close_hour_utc?: number;
+  market_open_weekday?: number;
+  market_open_hour_utc?: number;
 }
 
 export interface BacktestTaskUpdateData {
@@ -94,6 +109,11 @@ export interface BacktestTaskUpdateData {
   drain_duration_hours?: number;
   market_idle_pre_close_minutes?: number;
   market_idle_resume_delay_minutes?: number;
+  market_close_enabled?: boolean;
+  market_close_weekday?: number;
+  market_close_hour_utc?: number;
+  market_open_weekday?: number;
+  market_open_hour_utc?: number;
   debug_options?: Record<string, unknown>;
 }
 
