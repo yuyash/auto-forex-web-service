@@ -150,6 +150,12 @@
   },
   "detail": {
     "taskInformation": "Task Information",
+    "stopReason": "Stop Reason",
+    "stopReasonNormal": "Stopped normally",
+    "stopReasonCompleted": "Execution completed successfully",
+    "stopReasonPaused": "Execution paused",
+    "stopReasonFailedFallback": "Execution failed",
+    "stopReasonNotAvailable": "—",
     "backtestPeriod": "Backtest Period",
     "startTime": "Start Time",
     "endTime": "End Time",

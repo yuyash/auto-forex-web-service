@@ -334,6 +334,67 @@ class TestResumeTask:
         with pytest.raises(ValueError, match="execution_id"):
             TaskService().resume_task(task_id)
 
+    @patch("apps.trading.tasks.lifecycle_commands.uuid4")
+    @patch("apps.trading.tasks.service.transaction.atomic")
+    @patch("apps.trading.tasks.service.run_trading_task")
+    @patch("apps.trading.tasks.service.TradingTask")
+    @patch("apps.trading.tasks.service.BacktestTask")
+    def test_resume_from_failed_rotates_execution_id(
+        self,
+        mock_bt,
+        mock_tt,
+        mock_run_trading_task,
+        mock_atomic,
+        mock_uuid4,
+    ):
+        """Resuming a FAILED trading task must allocate a fresh execution_id
+        so the new Celery task is not dropped by the revoke list of the
+        previous (revoked) run."""
+        from apps.trading.tasks.service import TaskService
+
+        mock_atomic.return_value.__enter__.return_value = None
+        mock_atomic.return_value.__exit__.return_value = None
+
+        task_id = uuid4()
+        old_execution_id = uuid4()
+        new_execution_id = uuid4()
+        mock_uuid4.return_value = new_execution_id
+
+        # Only TradingTask exists
+        mock_bt.objects.get.side_effect = _DoesNotExist
+        mock_bt.DoesNotExist = _DoesNotExist
+
+        locked = MagicMock(spec=TradingTask)
+        locked.pk = task_id
+        locked.status = TaskStatus.FAILED
+        locked.execution_id = old_execution_id
+        task = MagicMock(spec=TradingTask)
+        task.pk = task_id
+        task.status = TaskStatus.FAILED
+        task.execution_id = old_execution_id
+        mock_tt.objects.select_for_update.return_value.get.return_value = locked
+        mock_tt.objects.get.return_value = task
+        mock_tt.DoesNotExist = _DoesNotExist
+
+        with (
+            patch.object(TaskService, "get_celery_result", return_value=None),
+            patch("apps.trading.tasks.lifecycle_commands._default_revoke_execution"),
+            patch(
+                "apps.trading.tasks.lifecycle_commands."
+                "TaskLifecycleCommands._kick_market_supervisor"
+            ),
+            patch("apps.trading.tasks.lifecycle_events.TaskLifecycleEventPublisher.publish"),
+        ):
+            TaskService().resume_task(task_id)
+
+        assert locked.execution_id == new_execution_id
+        # Dispatched with the rotated id, not the old one
+        mock_run_trading_task.apply_async.assert_called_once_with(
+            args=[task_id],
+            task_id=str(new_execution_id),
+            queue="trading",
+        )
+
 
 class TestStopTask:
     @patch("apps.trading.tasks.service.stop_backtest_task")

@@ -32,6 +32,7 @@ from apps.trading.services.runtime_metrics import (
 from apps.trading.services.unrealized_pnl import update_unrealized_pnl
 from apps.trading.tasks.source import TickDataSource
 from apps.trading.tasks.state import StateManager
+from apps.trading.utils import format_money
 
 logger: Logger = getLogger(name=__name__)
 
@@ -1445,7 +1446,7 @@ class TaskExecutor:
                 "Execution failed: %s — ticks_processed=%d, final_balance=%s",
                 loop.stop_reason,
                 loop.state.ticks_processed,
-                loop.state.current_balance,
+                format_money(loop.state.current_balance),
             )
             self.state_manager.stop(
                 status_message=f"Execution failed: {loop.stop_reason}",

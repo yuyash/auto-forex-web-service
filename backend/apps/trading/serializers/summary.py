@@ -50,6 +50,7 @@ class TaskInfoSerializer(serializers.Serializer):
     started_at = serializers.CharField(allow_null=True)
     completed_at = serializers.CharField(allow_null=True)
     error_message = serializers.CharField(allow_null=True)
+    stop_reason = serializers.CharField(allow_null=True)
     progress = serializers.IntegerField()
 
 

@@ -150,6 +150,12 @@
   },
   "detail": {
     "taskInformation": "タスク情報",
+    "stopReason": "停止理由",
+    "stopReasonNormal": "正常停止",
+    "stopReasonCompleted": "正常完了",
+    "stopReasonPaused": "一時停止中",
+    "stopReasonFailedFallback": "実行に失敗しました",
+    "stopReasonNotAvailable": "—",
     "backtestPeriod": "バックテスト期間",
     "startTime": "開始時間",
     "endTime": "終了時間",

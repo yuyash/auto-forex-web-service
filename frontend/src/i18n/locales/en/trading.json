@@ -45,6 +45,12 @@
   },
   "detail": {
     "taskInformation": "Task Information",
+    "stopReason": "Stop Reason",
+    "stopReasonNormal": "Stopped normally",
+    "stopReasonCompleted": "Execution completed successfully",
+    "stopReasonPaused": "Execution paused",
+    "stopReasonFailedFallback": "Execution failed",
+    "stopReasonNotAvailable": "—",
     "results": "Results",
     "executionTimeline": "Execution Timeline",
     "executionId": "Execution ID",
