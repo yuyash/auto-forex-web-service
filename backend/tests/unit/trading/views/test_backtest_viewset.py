@@ -43,8 +43,9 @@ def _build_viewset(action="start"):
 def _drf_post(data=None, query=""):
     django_req = factory.post(f"/{query}", data=data or {}, format="json")
     django_req.user = MagicMock(pk=1, id=1)
-    drf_req = Request(django_req)
+    drf_req = Request(django_req, parsers=[])
     drf_req._user = django_req.user
+    drf_req._full_data = data or {}
     return drf_req
 
 
@@ -452,7 +453,7 @@ class TestResume:
         task = _make_task(task_status=TaskStatus.RUNNING)
         vs = _build_viewset(action="resume")
         vs.get_object = MagicMock(return_value=task)
-        vs.task_service.resume_task.side_effect = ValueError("invalid state")
+        vs.task_service.resume_task.side_effect = TaskValidationError("invalid state")
 
         request = _drf_post()
         vs.request = request
@@ -464,7 +465,7 @@ class TestResume:
         task = _make_task(task_status=TaskStatus.PAUSED)
         vs = _build_viewset(action="resume")
         vs.get_object = MagicMock(return_value=task)
-        vs.task_service.resume_task.side_effect = ValueError("does not exist")
+        vs.task_service.resume_task.side_effect = TaskValidationError("does not exist")
 
         request = _drf_post()
         vs.request = request
@@ -476,13 +477,28 @@ class TestResume:
         task = _make_task(task_status=TaskStatus.PAUSED)
         vs = _build_viewset(action="resume")
         vs.get_object = MagicMock(return_value=task)
-        vs.task_service.resume_task.side_effect = ValueError("invalid state")
+        vs.task_service.resume_task.side_effect = TaskValidationError("invalid state")
 
         request = _drf_post()
         vs.request = request
 
         response = vs.resume(request, pk=1)
         assert response.status_code == http_status.HTTP_400_BAD_REQUEST
+
+    def test_resume_bare_value_error_returns_500(self):
+        """A bare ``ValueError`` escaping from the service is treated as an
+        unexpected internal error and must not surface its raw message."""
+        task = _make_task(task_status=TaskStatus.PAUSED)
+        vs = _build_viewset(action="resume")
+        vs.get_object = MagicMock(return_value=task)
+        vs.task_service.resume_task.side_effect = ValueError("leaky internal detail")
+
+        request = _drf_post()
+        vs.request = request
+
+        response = vs.resume(request, pk=1)
+        assert response.status_code == http_status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert "leaky internal detail" not in str(response.data)
 
     def test_resume_runtime_error_returns_500(self):
         task = _make_task(task_status=TaskStatus.PAUSED)

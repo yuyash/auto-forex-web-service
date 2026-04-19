@@ -30,10 +30,23 @@ export function formatTaskActionError(
   };
 
   const parts: string[] = [];
-  if (typeof body.detail === 'string' && body.detail.trim()) {
-    parts.push(body.detail.trim());
-  } else if (typeof body.error === 'string' && body.error.trim()) {
-    parts.push(body.error.trim());
+  const errorMessage =
+    typeof body.error === 'string' && body.error.trim()
+      ? body.error.trim()
+      : '';
+  const detailMessage =
+    typeof body.detail === 'string' && body.detail.trim()
+      ? body.detail.trim()
+      : '';
+
+  if (errorMessage && detailMessage) {
+    // Backend returns both a short generic reason and a specific detail.
+    // Show both so users see the headline + the underlying cause.
+    parts.push(`${errorMessage}: ${detailMessage}`);
+  } else if (detailMessage) {
+    parts.push(detailMessage);
+  } else if (errorMessage) {
+    parts.push(errorMessage);
   }
 
   if (Array.isArray(body.capacity) && body.capacity.length > 0) {

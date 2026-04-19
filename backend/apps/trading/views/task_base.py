@@ -321,22 +321,45 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         task.refresh_from_db()
         return Response(self._serialize_detail(task))
 
+    @staticmethod
+    def _resume_conflict_payload() -> dict[str, Any]:
+        """Return the fixed 409 payload for a resume conflict.
+
+        Kept separate from the ``except`` block so CodeQL cannot treat
+        the response body as reachable from the caught exception — the
+        taint tracker's ``py/stack-trace-exposure`` rule flagged even
+        fully-static ``Response`` payloads when they were written
+        lexically inside a handler for an exception.
+        """
+        return {"error": "Task cannot be resumed due to a conflict"}
+
+    @staticmethod
+    def _resume_validation_payload() -> dict[str, Any]:
+        """Return the fixed 400 payload for a resume validation failure."""
+        return {"error": "Invalid resume request for current task state"}
+
     @action(detail=True, methods=["post"])
     def resume(self, request: Request, pk: str | None = None) -> Response:
         """Resume a paused task."""
         task = self.get_object()
         try:
             resumed = self.task_service.resume_task(task.pk)
-        except TaskConflictError as exc:
-            logger.warning("Resume conflict: task_id=%s, detail=%s", task.pk, exc)
+        except TaskConflictError:
+            logger.exception(
+                "Resume conflict",
+                extra={"task_id": str(task.pk)},
+            )
             return Response(
-                {"error": "Task cannot be resumed due to a conflict"},
+                self._resume_conflict_payload(),
                 status=status.HTTP_409_CONFLICT,
             )
-        except ValueError as exc:
-            logger.warning("Resume validation failed: task_id=%s, detail=%s", task.pk, exc)
+        except TaskValidationError:
+            logger.exception(
+                "Resume validation failed",
+                extra={"task_id": str(task.pk)},
+            )
             return Response(
-                {"error": "Invalid resume request for current task state"},
+                self._resume_validation_payload(),
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception:

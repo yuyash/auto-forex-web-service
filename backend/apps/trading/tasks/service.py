@@ -495,7 +495,8 @@ class TaskService:
             BacktestTask | TradingTask: The resumed task instance
 
         Raises:
-            ValueError: If task cannot be resumed (e.g., not paused)
+            TaskValidationError: If the task is not in a resumable state.
+            TaskServiceError: If an unexpected internal failure occurred.
         """
 
         logger.info("Resuming task", extra={"task_id": str(task_id)})
@@ -506,18 +507,18 @@ class TaskService:
             return task
 
         except TaskValidationError:
+            # Domain-level validation failure — message is a safe,
+            # human-readable string constructed inside the service.
             raise
-        except ValueError as e:
-            logger.error(
+        except Exception as exc:
+            # Anything else is an unexpected internal error.  We log the
+            # full traceback but deliberately do NOT propagate the raw
+            # message to callers because it may include DB driver /
+            # Celery / third-party text that discloses implementation
+            # details.  Callers should render a generic "try again"
+            # message.
+            logger.exception(
                 "Unexpected error resuming task",
                 extra={"task_id": str(task_id)},
-                exc_info=True,
             )
-            raise ValueError(f"Failed to resume task: {str(e)}") from e
-        except Exception as e:
-            logger.error(
-                "Unexpected error resuming task",
-                extra={"task_id": str(task_id)},
-                exc_info=True,
-            )
-            raise ValueError(f"Failed to resume task: {str(e)}") from e
+            raise TaskServiceError("Failed to resume task due to an internal error") from exc

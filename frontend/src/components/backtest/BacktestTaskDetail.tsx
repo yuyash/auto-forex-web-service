@@ -40,7 +40,10 @@ import { useTaskSummary } from '../../hooks/useTaskSummary';
 import { TaskStatus, TaskType } from '../../types/common';
 import type { BacktestTask } from '../../types';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
-import { BacktestStopDialog } from '../tasks/actions/BacktestStopDialog';
+import {
+  StopOptionsDialog,
+  type StopOption,
+} from '../tasks/actions/StopOptionsDialog';
 import { TaskActionConfirmDialog } from '../tasks/actions/TaskActionConfirmDialog';
 import { useTaskActionDialog } from '../../hooks/useTaskActionDialog';
 import {
@@ -226,17 +229,33 @@ export const BacktestTaskDetail: React.FC = () => {
     navigate('/backtest-tasks');
   };
 
-  const handleStopConfirm = async () => {
+  const handleStopConfirm = async (option: StopOption) => {
     setIsStopping(true);
     try {
-      await stopTask.mutate(taskId);
-      applyOptimisticStatus(TaskStatus.STOPPING, [
-        TaskStatus.STOPPING,
-        TaskStatus.STOPPED,
-        TaskStatus.COMPLETED,
-        TaskStatus.FAILED,
-      ]);
+      await stopTask.mutate({ id: taskId, mode: option });
+      // Optimistic status depends on the chosen mode. DRAIN keeps the
+      // executor running in DRAINING; other modes transition to STOPPING
+      // and then STOPPED / COMPLETED.
+      if (option === 'drain') {
+        applyOptimisticStatus(TaskStatus.DRAINING, [
+          TaskStatus.DRAINING,
+          TaskStatus.STOPPING,
+          TaskStatus.STOPPED,
+          TaskStatus.COMPLETED,
+          TaskStatus.FAILED,
+        ]);
+      } else {
+        applyOptimisticStatus(TaskStatus.STOPPING, [
+          TaskStatus.STOPPING,
+          TaskStatus.STOPPED,
+          TaskStatus.COMPLETED,
+          TaskStatus.FAILED,
+        ]);
+      }
       await refreshTask();
+      setStopDialogOpen(false);
+    } catch (error) {
+      showError(formatTaskActionError(error, 'Failed to stop task'));
       setStopDialogOpen(false);
     } finally {
       setIsStopping(false);
@@ -576,9 +595,10 @@ export const BacktestTaskDetail: React.FC = () => {
         isLoading={deleteTask.isLoading}
         hasExecutionHistory={true}
       />
-      <BacktestStopDialog
+      <StopOptionsDialog
         open={stopDialogOpen}
         taskName={task.name}
+        title="Stop Backtest Task"
         isLoading={isStopping}
         onCancel={() => setStopDialogOpen(false)}
         onConfirm={handleStopConfirm}

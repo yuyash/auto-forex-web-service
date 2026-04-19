@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 from logging import Logger
-from typing import TYPE_CHECKING, Callable, cast
+from typing import TYPE_CHECKING, Callable
 from uuid import UUID
 
 from celery.result import AsyncResult
@@ -72,7 +72,10 @@ def _default_dispatch_stop(task_id: UUID, is_backtest: bool, stop_mode: StopMode
     from apps.trading.tasks import service as service_module
 
     if is_backtest:
-        service_module.stop_backtest_task.apply_async(args=[task_id], queue="system")
+        service_module.stop_backtest_task.apply_async(
+            args=[task_id, stop_mode.value],
+            queue="system",
+        )
     else:
         service_module.stop_trading_task.apply_async(
             args=[task_id, stop_mode.value],
@@ -222,9 +225,11 @@ class TaskLifecycleCommands:
 
         task.status = next_status
         update_fields = ["status", "updated_at"]
-        if not is_backtest and stop_mode == StopMode.GRACEFUL_CLOSE:
-            trading_task = cast(TradingTask, task)
-            trading_task.sell_on_stop = True
+        # Both trading and backtest tasks persist the ``sell_on_stop`` flag
+        # so the worker that runs the shutdown logic can close open
+        # positions at current market / tick prices.
+        if stop_mode == StopMode.GRACEFUL_CLOSE:
+            task.sell_on_stop = True
             update_fields.append("sell_on_stop")
         task.save(update_fields=update_fields)
 
@@ -364,13 +369,17 @@ class TaskLifecycleCommands:
         with transaction.atomic():
             locked_task = model_class.objects.select_for_update().get(pk=task.pk)
             if locked_task.status not in allowed_statuses:
+                from apps.trading.tasks.service import TaskValidationError
+
                 allowed_labels = ", ".join(str(s.value).upper() for s in allowed_statuses)
-                raise ValueError(
+                raise TaskValidationError(
                     f"Task cannot be resumed from {locked_task.status} state. "
                     f"Only {allowed_labels} tasks can be resumed."
                 )
             if not locked_task.execution_id:
-                raise ValueError("Cannot resume task without an execution_id")
+                from apps.trading.tasks.service import TaskValidationError
+
+                raise TaskValidationError("Cannot resume task without an execution_id")
 
             result = self.service.get_celery_result(str(locked_task.execution_id))
             self._ensure_resumeable_celery_state(
@@ -379,6 +388,20 @@ class TaskLifecycleCommands:
                 db_status=locked_task.status,
                 execution_id=locked_task.execution_id,
             )
+
+            # Revoke any lingering Celery task for this execution before
+            # dispatching a new one. This is a no-op for a clean exit but
+            # defensively handles cases where a previous worker crashed
+            # without cleaning up its result backend entry.
+            if locked_task.status in (TaskStatus.STOPPED, TaskStatus.FAILED):
+                try:
+                    self._revoke_execution(locked_task.execution_id)
+                except Exception as exc:  # pragma: no cover - best effort
+                    self.logger.debug(
+                        "Pre-resume revoke skipped - task_id=%s, error=%s",
+                        task_id,
+                        exc,
+                    )
 
             # Clear error fields when resuming from a terminal state so the
             # execution starts cleanly while preserving the execution_id and
@@ -520,9 +543,24 @@ class TaskLifecycleCommands:
         if not result:
             return
         celery_state = result.state
-        # For STOPPED/FAILED tasks the Celery result is typically SUCCESS or
-        # FAILURE which is fine — the worker has already exited.  We only need
-        # to guard against the case where the worker is still actively running.
+        # For STOPPED/FAILED tasks the worker has already exited — the
+        # Celery result backend may still report STARTED if the previous
+        # worker crashed before updating the backend.  Since the DB is
+        # the authoritative state for task lifecycle, skip the Celery
+        # guard for terminal DB statuses and allow the resume to proceed.
+        if db_status in (TaskStatus.STOPPED, TaskStatus.FAILED):
+            if celery_state in ["PENDING", "STARTED", "RETRY"]:
+                self.logger.info(
+                    "Stale Celery state detected for terminal task; "
+                    "proceeding with resume - task_id=%s, db_status=%s, "
+                    "celery_state=%s, execution_id=%s",
+                    task_id,
+                    db_status,
+                    celery_state,
+                    execution_id,
+                )
+            return
+
         if celery_state in ["PENDING", "STARTED", "RETRY"]:
             self.logger.warning(
                 "Task status mismatch detected",
@@ -533,7 +571,9 @@ class TaskLifecycleCommands:
                     "execution_id": str(execution_id),
                 },
             )
-            raise ValueError(
+            from apps.trading.tasks.service import TaskValidationError
+
+            raise TaskValidationError(
                 f"Task status mismatch: task is marked as {db_status} in database "
                 f"but Celery task is still {celery_state}. "
                 "Please wait for the task to fully stop before resuming."

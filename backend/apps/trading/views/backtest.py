@@ -2,11 +2,13 @@
 
 import logging
 from logging import Logger
+from typing import Any
 
 from django.db import IntegrityError
 from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
+from rest_framework.request import Request
 
 from apps.trading.models import BacktestTask
 from apps.trading.serializers.backtest import (
@@ -119,3 +121,16 @@ class BacktestTaskViewSet(TaskViewSetBase):
                     {"name": ["A backtest task with this name already exists."]}
                 ) from exc
             raise
+
+    def get_stop_mode(self, request: Request) -> str:
+        """Backtest tasks accept the same stop modes as trading tasks.
+
+        Supported values: ``graceful``, ``graceful_close``, ``immediate``,
+        ``drain``. Defaults to ``graceful`` to preserve the previous
+        behaviour when the client does not send a mode.
+        """
+        return request.data.get("mode", "graceful")
+
+    def get_stop_response_extras(self, request: Request) -> dict[str, Any]:
+        """Echo the resolved stop mode in the stop response."""
+        return {"mode": self.get_stop_mode(request)}

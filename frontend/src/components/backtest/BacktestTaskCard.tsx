@@ -31,7 +31,10 @@ import { StatCard } from '../tasks/display/StatCard';
 import { TaskControlButtons } from '../common/TaskControlButtons';
 import BacktestTaskActions from './BacktestTaskActions';
 import { DeleteTaskDialog } from '../tasks/actions/DeleteTaskDialog';
-import { BacktestStopDialog } from '../tasks/actions/BacktestStopDialog';
+import {
+  StopOptionsDialog,
+  type StopOption,
+} from '../tasks/actions/StopOptionsDialog';
 import { TaskActionConfirmDialog } from '../tasks/actions/TaskActionConfirmDialog';
 import { useTaskActionDialog } from '../../hooks/useTaskActionDialog';
 import { useBacktestTask } from '../../hooks/useBacktestTasks';
@@ -169,12 +172,16 @@ export default function BacktestTaskCard({
     }
   };
 
-  const handleStop = async (taskId: string) => {
+  const handleStop = async (taskId: string, mode: StopOption = 'graceful') => {
     setStopDialogOpen(false);
     setIsLoading(true);
     try {
-      await stopTask.mutate(taskId);
-      setOptimisticStatus(TaskStatus.STOPPED);
+      await stopTask.mutate({ id: taskId, mode });
+      if (mode === 'drain') {
+        setOptimisticStatus(TaskStatus.DRAINING);
+      } else {
+        setOptimisticStatus(TaskStatus.STOPPED);
+      }
       showSuccess(t('backtest:toast.stoppedSuccessfully'));
       onRefresh?.();
     } catch (error) {
@@ -519,12 +526,12 @@ export default function BacktestTaskCard({
         isLoading={isDeleting}
         hasExecutionHistory={true}
       />
-      <BacktestStopDialog
+      <StopOptionsDialog
         open={stopDialogOpen}
         taskName={task.name}
         isLoading={isLoading}
         onCancel={() => setStopDialogOpen(false)}
-        onConfirm={() => void handleStop(task.id)}
+        onConfirm={(mode) => void handleStop(task.id, mode)}
       />
       {pendingAction && (
         <TaskActionConfirmDialog

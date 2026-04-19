@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.36.3",
+        "version": "1.37.0",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -5519,6 +5519,10 @@
                         "minimum": 0,
                         "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
                     },
+                    "sell_on_stop": {
+                        "type": "boolean",
+                        "description": "Close all positions at current tick price when the task is stopped"
+                    },
                     "status": {
                         "allOf": [
                             {
@@ -5683,6 +5687,10 @@
                         "minimum": 0,
                         "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
                     },
+                    "sell_on_stop": {
+                        "type": "boolean",
+                        "description": "Close all positions at current tick price when the task is stopped"
+                    },
                     "debug_options": {
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"
                     }
@@ -5797,6 +5805,11 @@
                         "readOnly": true,
                         "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
                     },
+                    "sell_on_stop": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Close all positions at current tick price when the task is stopped"
+                    },
                     "status": {
                         "allOf": [
                             {
@@ -5860,6 +5873,7 @@
                     "instrument",
                     "name",
                     "pip_size",
+                    "sell_on_stop",
                     "start_time",
                     "started_at",
                     "status",
@@ -5952,6 +5966,10 @@
                         "maximum": 2147483647,
                         "minimum": 0,
                         "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
+                    },
+                    "sell_on_stop": {
+                        "type": "boolean",
+                        "description": "Close all positions at current tick price when the task is stopped"
                     },
                     "debug_options": {
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"
@@ -7726,6 +7744,10 @@
                         "maximum": 2147483647,
                         "minimum": 0,
                         "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
+                    },
+                    "sell_on_stop": {
+                        "type": "boolean",
+                        "description": "Close all positions at current tick price when the task is stopped"
                     },
                     "debug_options": {
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"

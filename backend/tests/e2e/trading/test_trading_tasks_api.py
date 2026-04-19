@@ -148,7 +148,11 @@ class TestTradingTasks:
         # Verify task completed/stopped
         detail = authenticated_client.get(f"/api/trading/tasks/trading/{task_id}/")
         assert detail.status_code == 200
-        assert detail.data["status"] in ("completed", "stopped", "failed")
+        # ``idle`` is a valid terminal-ish state in the new market-aware
+        # lifecycle: after processing the dry-run CSV ticks the executor
+        # can transition straight into IDLE while waiting for the next
+        # market open window, without going through STOPPED.
+        assert detail.data["status"] in ("completed", "stopped", "failed", "idle")
 
         # ── Logs ──────────────────────────────────────────────────────────
         logs = authenticated_client.get(f"/api/trading/tasks/trading/{task_id}/logs/")

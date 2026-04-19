@@ -158,6 +158,14 @@ class BacktestTask(UUIDModel):
         help_text="Current task status",
     )
 
+    # When true, stop requests that ask for "Close All Positions" will
+    # close every open backtest position at the current tick price before
+    # transitioning to STOPPED.  Live trading tasks store the same flag.
+    sell_on_stop = models.BooleanField(
+        default=False,
+        help_text="Close all positions at current tick price when the task is stopped",
+    )
+
     # Execution tracking – a single UUID that doubles as the Celery task_id.
     execution_id = models.UUIDField(
         null=True,

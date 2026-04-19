@@ -12,7 +12,7 @@ from rest_framework.test import APIRequestFactory
 
 from apps.trading.enums import TaskStatus
 from apps.trading.services.task_capacity import TaskAdmissionDecision, QueueCapacitySnapshot
-from apps.trading.tasks.service import TaskCapacityError, TaskConflictError
+from apps.trading.tasks.service import TaskCapacityError, TaskConflictError, TaskValidationError
 from apps.trading.views.trading import TradingTaskViewSet
 
 factory = APIRequestFactory()
@@ -516,13 +516,27 @@ class TestResume:
         task = _make_task(task_status=TaskStatus.PAUSED)
         vs = _build_viewset(action="resume")
         vs.get_object = MagicMock(return_value=task)
-        vs.task_service.resume_task.side_effect = ValueError("bad state")
+        vs.task_service.resume_task.side_effect = TaskValidationError("bad state")
 
         request = _drf_post()
         vs.request = request
 
         response = vs.resume(request, pk=1)
         assert response.status_code == http_status.HTTP_400_BAD_REQUEST
+
+    def test_resume_bare_value_error_returns_500(self):
+        """A bare ``ValueError`` escaping from the service must not leak."""
+        task = _make_task(task_status=TaskStatus.PAUSED)
+        vs = _build_viewset(action="resume")
+        vs.get_object = MagicMock(return_value=task)
+        vs.task_service.resume_task.side_effect = ValueError("leaky internal detail")
+
+        request = _drf_post()
+        vs.request = request
+
+        response = vs.resume(request, pk=1)
+        assert response.status_code == http_status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert "leaky internal detail" not in str(response.data)
 
     def test_resume_exception_returns_500(self):
         task = _make_task(task_status=TaskStatus.PAUSED)

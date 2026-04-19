@@ -270,13 +270,19 @@ describe('TradingTaskDetail', () => {
     render(<TradingTaskDetail />, { wrapper: createWrapper() });
 
     await user.click(screen.getByRole('button', { name: 'Stop' }));
-    const stopConfirmButtons = screen.getAllByRole('button', {
-      name: 'Stop',
-    });
-    await user.click(stopConfirmButtons[stopConfirmButtons.length - 1]);
+    // The new StopOptionsDialog lets the user pick a stop mode. Choose
+    // the default "keep positions" option, then confirm with the
+    // primary "Stop Task" button.
+    await user.click(
+      screen.getByRole('button', { name: /Stop \(Keep Positions\)/i })
+    );
+    await user.click(screen.getByRole('button', { name: 'Stop Task' }));
 
     await waitFor(() => {
-      expect(mockTradingStop).toHaveBeenCalledWith({ id: '1' });
+      expect(mockTradingStop).toHaveBeenCalledWith({
+        id: '1',
+        mode: 'graceful',
+      });
     });
   });
 

@@ -1,3 +1,4 @@
+import { api } from '../../api/apiClient';
 import type {
   BacktestTask,
   BacktestTaskCreateData,
@@ -39,7 +40,7 @@ function toBacktestTask(task: BackendBacktestTask): BacktestTask {
   };
 }
 
-export const backtestTasksApi = createTaskApi<
+const baseApi = createTaskApi<
   BackendBacktestTask,
   BacktestTask,
   BacktestTaskListParams,
@@ -57,3 +58,20 @@ export const backtestTasksApi = createTaskApi<
     status: params?.status,
   }),
 });
+
+export const backtestTasksApi = {
+  ...baseApi,
+
+  // Override: backtest stop accepts the same mode parameter as trading
+  // tasks. Default remains ``graceful`` to preserve the previous
+  // behaviour when callers omit the mode.
+  stop: async (
+    id: string,
+    mode: 'immediate' | 'graceful' | 'graceful_close' | 'drain' = 'graceful'
+  ): Promise<Record<string, unknown>> => {
+    return api.post<Record<string, unknown>>(
+      `/api/trading/tasks/backtest/${id}/stop/`,
+      { mode }
+    );
+  },
+};
