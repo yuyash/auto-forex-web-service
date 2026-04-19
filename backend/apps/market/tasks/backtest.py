@@ -34,6 +34,7 @@ def publish_ticks_for_backtest(
     request_id: str,
     tick_granularity: str = "tick",
     tick_window_value_mode: str = "last",
+    execution_id: str | None = None,
 ) -> None:
     """Publish historical ticks from DB to Redis for a backtest run.
 
@@ -46,10 +47,14 @@ def publish_ticks_for_backtest(
         start: Start time (ISO format)
         end: End time (ISO format)
         request_id: Unique request identifier
+        execution_id: Optional execution UUID.  When provided, the stream
+            key is scoped to this execution run so a restarted task never
+            reuses leftover entries from a previous execution.
     """
     logger.info(
         f"[CELERY:PUBLISHER] Task started - request_id={request_id}, "
-        f"instrument={instrument}, start={start}, end={end}, "
+        f"execution_id={execution_id}, instrument={instrument}, "
+        f"start={start}, end={end}, "
         f"tick_granularity={tick_granularity}, "
         f"tick_window_value_mode={tick_window_value_mode}, "
         f"celery_task_id={self.request.id}, worker={self.request.hostname}"
@@ -62,6 +67,7 @@ def publish_ticks_for_backtest(
         request_id,
         tick_granularity=tick_granularity,
         tick_window_value_mode=tick_window_value_mode,
+        execution_id=execution_id,
     )
     logger.info(
         f"[CELERY:PUBLISHER] Task completed - request_id={request_id}, "
@@ -85,6 +91,7 @@ class BacktestTickPublisherRunner:
         *,
         tick_granularity: str = "tick",
         tick_window_value_mode: str = "last",
+        execution_id: str | None = None,
     ) -> None:
         """Execute the backtest tick publishing task.
 
@@ -127,7 +134,7 @@ class BacktestTickPublisherRunner:
             },
         )
 
-        channel = backtest_stream_key_for_request(str(request_id))
+        channel = backtest_stream_key_for_request(str(request_id), execution_id)
         batch_size = int(getattr(settings, "MARKET_BACKTEST_PUBLISH_BATCH_SIZE", 1000))
         stream_maxlen = int(getattr(settings, "MARKET_BACKTEST_STREAM_MAXLEN", 200_000))
         high_watermark = int(
@@ -155,6 +162,28 @@ class BacktestTickPublisherRunner:
 
         client = redis_client()
         published = 0
+
+        # Reset the stream so a restarted run never inherits entries from
+        # a previous execution.  Because the stream key now includes the
+        # ``execution_id`` (when the caller supplies one), this DEL is
+        # guaranteed to only affect the current execution's stream and
+        # cannot disturb a concurrent run of the same task under a
+        # different execution id.  Legacy callers that pass only the
+        # task id still get the old behaviour, and in that case we fall
+        # back to destroying the stale consumer group only (below).
+        if execution_id:
+            try:
+                client.delete(channel)
+                logger.info(
+                    f"[PUBLISHER:RUN] Cleared stream for fresh execution - "
+                    f"request_id={request_id}, execution_id={execution_id}, "
+                    f"stream={channel}"
+                )
+            except Exception as exc:  # nosec B110
+                logger.debug(
+                    f"[PUBLISHER:RUN] DEL stream failed (non-fatal) - "
+                    f"request_id={request_id}, stream={channel}, error={exc}"
+                )
 
         # Ensure the consumer group starts fresh.  We cannot simply
         # ``DELETE`` the stream key here because in Celery eager mode

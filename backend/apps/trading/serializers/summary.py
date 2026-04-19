@@ -27,6 +27,8 @@ class CountsInfoSerializer(serializers.Serializer):
     closed_positions = serializers.IntegerField()
     open_long_units = serializers.IntegerField()
     open_short_units = serializers.IntegerField()
+    winning_trades = serializers.IntegerField()
+    losing_trades = serializers.IntegerField()
 
 
 class ExecutionInfoSerializer(serializers.Serializer):

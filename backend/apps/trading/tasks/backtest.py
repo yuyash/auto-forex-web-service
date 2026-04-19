@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import datetime as datetime_module
 import logging
 from typing import Any
 from uuid import UUID
@@ -63,6 +62,71 @@ def _stop_previous_publisher(request_id: str) -> None:
         if not still_running:
             break
         time.sleep(0.5)
+
+
+def _purge_stale_task_streams(request_id: str, *, keep_execution_id: str | None = None) -> None:
+    """Delete leftover backtest stream keys for this task.
+
+    The stream key format is ``market:backtest:stream:<task_id>[:<execution_id>]``.
+    Old runs — including legacy runs that used the task-id-only key before
+    execution-id scoping was introduced — can leave Redis Stream entries
+    behind that would otherwise be delivered to a new subscriber and make
+    simulated time appear to jump.  This sweeps any key matching the
+    task-id prefix except the one we are about to use.
+    """
+    from apps.market.tasks.base import backtest_stream_key_for_request
+    from apps.market.tasks.base import redis_client
+
+    prefix_only = backtest_stream_key_for_request(request_id)
+    keep_key = (
+        backtest_stream_key_for_request(request_id, keep_execution_id)
+        if keep_execution_id
+        else prefix_only
+    )
+    pattern = f"{prefix_only}*"
+
+    try:
+        client = redis_client()
+    except Exception as exc:  # nosec B110
+        logger.debug(
+            "Could not open Redis client for stream purge - request_id=%s, error=%s",
+            request_id,
+            exc,
+        )
+        return
+
+    deleted: list[str] = []
+    try:
+        for key in client.scan_iter(match=pattern, count=100):
+            key_str = key.decode() if isinstance(key, bytes) else str(key)
+            if key_str == keep_key:
+                continue
+            try:
+                client.delete(key)
+                deleted.append(key_str)
+            except Exception as exc:  # nosec B110
+                logger.debug(
+                    "Stream DEL failed (non-fatal) - request_id=%s, key=%s, error=%s",
+                    request_id,
+                    key_str,
+                    exc,
+                )
+    except Exception as exc:  # nosec B110
+        logger.debug(
+            "Stream SCAN failed (non-fatal) - request_id=%s, pattern=%s, error=%s",
+            request_id,
+            pattern,
+            exc,
+        )
+        return
+
+    if deleted:
+        logger.info(
+            "Purged %d stale backtest stream key(s) - request_id=%s, keys=%s",
+            len(deleted),
+            request_id,
+            deleted,
+        )
 
 
 @shared_task(
@@ -225,46 +289,30 @@ def execute_backtest(task: BacktestTask) -> None:
     request_id = str(task.pk)
     # Backtest ticks are delivered over a Redis Stream (not Pub/Sub) so that
     # slow-consumer situations translate into backpressure on the publisher
-    # rather than silent message loss.
+    # rather than silent message loss.  The stream key is scoped to the
+    # current execution id so a restarted task never inherits leftover
+    # entries from an older execution — one of the failure modes we've seen
+    # in production is a new run reading stale ticks from the previous run
+    # and jumping forward in simulated time.
     from apps.market.tasks.base import backtest_stream_key_for_request
 
-    stream_key = backtest_stream_key_for_request(request_id)
+    execution_id_for_stream = (
+        str(task.execution_id) if getattr(task, "execution_id", None) else None
+    )
+    stream_key = backtest_stream_key_for_request(request_id, execution_id_for_stream)
 
-    # Stop any previous publisher that may still be running on this channel.
-    # The channel name is task-ID based (not execution-ID based), so a
-    # restarted task reuses the same channel.  If the old publisher hasn't
-    # finished yet its leftover ticks would corrupt the new execution.
+    # Stop any previous publisher and wipe any leftover Redis state from a
+    # prior execution of this task.  Backtest restarts always begin from
+    # ``task.start_time`` so there is nothing to preserve; carrying
+    # leftover entries over is how we previously saw simulated time jump
+    # across a 237-day gap in production.
     _stop_previous_publisher(request_id)
-
-    # Detect resume: check if an ExecutionState already exists for this execution.
-    # If so, use its last_tick_timestamp to start the publisher near the resume
-    # point instead of from the very beginning of the backtest range.
-    resume_from = None
-    execution_id = getattr(task, "execution_id", None)
-    if execution_id is not None:
-        from apps.trading.models.state import ExecutionState
-
-        try:
-            existing_state = ExecutionState.objects.get(
-                task_type="backtest",
-                task_id=task.pk,
-                execution_id=execution_id,
-            )
-            if existing_state.last_tick_timestamp and existing_state.ticks_processed > 0:
-                resume_from = existing_state.last_tick_timestamp
-                logger.info(
-                    "Resume detected - task_id=%s, last_tick_timestamp=%s, ticks_processed=%d",
-                    task.pk,
-                    resume_from,
-                    existing_state.ticks_processed,
-                )
-        except (ExecutionState.DoesNotExist, Exception):
-            pass
+    _purge_stale_task_streams(request_id, keep_execution_id=execution_id_for_stream)
 
     data_source = RedisStreamTickDataSource(
         stream_key=stream_key,
         batch_size=100,
-        trigger_publisher=lambda: trigger_backtest_publisher(task, resume_from=resume_from),
+        trigger_publisher=lambda: trigger_backtest_publisher(task),
     )
 
     executor = BacktestExecutor(
@@ -277,41 +325,26 @@ def execute_backtest(task: BacktestTask) -> None:
 
 def trigger_backtest_publisher(
     task: BacktestTask,
-    *,
-    resume_from: "datetime_module.datetime | None" = None,
 ) -> None:
     """Trigger the backtest data publisher.
 
+    Backtests always replay from ``task.start_time``.  Earlier revisions
+    supported a ``resume_from`` optimisation that rewound the publisher to
+    the last processed tick timestamp when resuming, but in practice a
+    backtest restart always allocates a fresh ``execution_id`` (see
+    ``TaskService.start_task``) so there is nothing to resume.  The
+    optimisation also interacted badly with the per-task Redis Stream
+    (pre-fix) because a subscriber could see stale entries from a prior
+    execution and jump forward in simulated time.
+
     Args:
         task: The backtest task.
-        resume_from: If resuming, the last processed tick timestamp.
-            The publisher will start from a point slightly before this
-            timestamp instead of from the task's start_time.
     """
-    from datetime import timedelta
-
     from apps.market.tasks import publish_ticks_for_backtest
 
     request_id = str(task.pk)
 
-    # When resuming, start the publisher from a point before the resume
-    # timestamp to provide a small buffer for the subscriber's timestamp
-    # deduplication.  The buffer ensures the subscriber sees a few ticks
-    # it has already processed (which it will skip) rather than missing
-    # any ticks near the boundary.
     effective_start = task.start_time
-    if resume_from is not None:
-        buffer = timedelta(hours=2)
-        effective_start = max(task.start_time, resume_from - buffer)
-        logger.info(
-            "Publisher resume optimisation - task_id=%s, original_start=%s, "
-            "resume_from=%s, effective_start=%s (buffer=%s)",
-            task.pk,
-            task.start_time,
-            resume_from,
-            effective_start,
-            buffer,
-        )
 
     logger.info(
         "Triggering backtest publisher - task_id=%s, request_id=%s, "
@@ -366,6 +399,7 @@ def trigger_backtest_publisher(
             task.pk,
         )
 
+    execution_id = getattr(task, "execution_id", None)
     result = publish_ticks_for_backtest.apply_async(
         kwargs={
             "instrument": task.instrument,
@@ -374,15 +408,19 @@ def trigger_backtest_publisher(
             "request_id": request_id,
             "tick_granularity": task.tick_granularity,
             "tick_window_value_mode": task.tick_window_value_mode,
+            "execution_id": str(execution_id) if execution_id else None,
         },
         queue="backtest_publisher",
     )
     logger.info(
-        "Publisher task submitted - task_id=%s, publisher_celery_task_id=%s, "
-        "channel=market:backtest:ticks:%s",
+        "Publisher task submitted - task_id=%s, execution_id=%s, "
+        "publisher_celery_task_id=%s, channel=%s",
         task.pk,
+        execution_id,
         result.id,
-        request_id,
+        f"market:backtest:stream:{request_id}:{execution_id}"
+        if execution_id
+        else f"market:backtest:stream:{request_id}",
     )
 
 

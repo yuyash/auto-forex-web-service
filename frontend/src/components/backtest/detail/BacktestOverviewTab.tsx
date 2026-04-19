@@ -517,6 +517,7 @@ export function BacktestOverviewTab({
             <LatestMetricsSummary
               latest={latestMetrics ?? null}
               pnlCurrency={pnlCurrency}
+              summary={summary}
             />
           </Box>
         </Grid>

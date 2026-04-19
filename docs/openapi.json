@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.36.3",
+        "version": "1.37.0",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -6057,14 +6057,22 @@
                     },
                     "open_short_units": {
                         "type": "integer"
+                    },
+                    "winning_trades": {
+                        "type": "integer"
+                    },
+                    "losing_trades": {
+                        "type": "integer"
                     }
                 },
                 "required": [
                     "closed_positions",
+                    "losing_trades",
                     "open_long_units",
                     "open_positions",
                     "open_short_units",
-                    "total_trades"
+                    "total_trades",
+                    "winning_trades"
                 ]
             },
             "DataSourceEnum": {

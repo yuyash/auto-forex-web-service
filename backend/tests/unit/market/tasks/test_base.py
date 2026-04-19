@@ -57,6 +57,25 @@ class TestBaseUtilities:
         assert "backtest" in key.lower()
         assert "stream" in key.lower()
 
+    def test_backtest_stream_key_scoped_by_execution_id(self) -> None:
+        """Stream key includes the execution id when supplied."""
+        task_id = "task-abc"
+        exec_id = "exec-xyz"
+        base_key = backtest_stream_key_for_request(task_id)
+        scoped_key = backtest_stream_key_for_request(task_id, exec_id)
+
+        assert scoped_key != base_key
+        assert scoped_key.endswith(f"{task_id}:{exec_id}")
+        assert scoped_key.startswith(base_key)
+
+    def test_backtest_stream_key_execution_id_none_matches_legacy(self) -> None:
+        """Passing ``None`` keeps the legacy task-id-only key."""
+        task_id = "task-abc"
+
+        assert backtest_stream_key_for_request(task_id) == backtest_stream_key_for_request(
+            task_id, None
+        )
+
     def test_lock_value(self) -> None:
         """Test lock value generation."""
         value = lock_value()

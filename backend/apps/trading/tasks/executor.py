@@ -537,7 +537,10 @@ class TaskExecutor:
         self.save_state(state)
         self._refresh_open_positions_cache()
 
-        # Restore cumulative metric counters from DB when resuming
+        # Restore cumulative metric counters from DB when resuming a live
+        # trading task.  Backtest restarts always start fresh — the caller
+        # allocates a new execution_id and the task is expected to replay
+        # from ``task.start_time``, so there is nothing to restore.
         if resumed:
             self._restore_metric_counters()
 
