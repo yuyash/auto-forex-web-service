@@ -102,6 +102,24 @@ class SnowballStrategyConfig:
     reseed_on_all_pending: bool
     reseed_on_grid_exhausted: bool
 
+    # Rebuild price adjustment: when a stop-loss fires and the position
+    # is later rebuilt, the realised SL loss is the deterministic gap
+    # between the original entry price and the SL exit price (including
+    # the bid/ask spread).  When ``rebuild_price_adjustment_enabled`` is
+    # true, the rebuild's take-profit is tightened by that deterministic
+    # gap so the rebuild's profit offsets the prior SL loss instead of
+    # leaving the slot's lifecycle P/L negative.  Two optional buffers
+    # (in pips) add extra margin against unavoidable slippage:
+    # - ``rebuild_entry_price_buffer_pips``: shifts the rebuild trigger
+    #   price in the favourable direction (requires a slightly better
+    #   entry than the original).
+    # - ``rebuild_exit_price_buffer_pips``: shifts the rebuild TP in the
+    #   favourable direction on top of the loss offset, closing slightly
+    #   earlier than strictly break-even.
+    rebuild_price_adjustment_enabled: bool
+    rebuild_entry_price_buffer_pips: Decimal
+    rebuild_exit_price_buffer_pips: Decimal
+
     @staticmethod
     def from_dict(raw: dict[str, Any]) -> SnowballStrategyConfig:
         manual_raw = raw.get("manual_intervals", [])
@@ -143,6 +161,15 @@ class SnowballStrategyConfig:
             pip_size=_parse_decimal(raw.get("pip_size", "0.01"), "0.01"),
             reseed_on_all_pending=bool(raw.get("reseed_on_all_pending", False)),
             reseed_on_grid_exhausted=bool(raw.get("reseed_on_grid_exhausted", False)),
+            rebuild_price_adjustment_enabled=bool(
+                raw.get("rebuild_price_adjustment_enabled", True)
+            ),
+            rebuild_entry_price_buffer_pips=_parse_decimal(
+                raw.get("rebuild_entry_price_buffer_pips", "0"), "0"
+            ),
+            rebuild_exit_price_buffer_pips=_parse_decimal(
+                raw.get("rebuild_exit_price_buffer_pips", "0"), "0"
+            ),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -179,6 +206,9 @@ class SnowballStrategyConfig:
             "pip_size": str(self.pip_size),
             "reseed_on_all_pending": self.reseed_on_all_pending,
             "reseed_on_grid_exhausted": self.reseed_on_grid_exhausted,
+            "rebuild_price_adjustment_enabled": self.rebuild_price_adjustment_enabled,
+            "rebuild_entry_price_buffer_pips": str(self.rebuild_entry_price_buffer_pips),
+            "rebuild_exit_price_buffer_pips": str(self.rebuild_exit_price_buffer_pips),
         }
 
     def validate(self) -> None:
@@ -216,6 +246,10 @@ class SnowballStrategyConfig:
             raise ValueError(
                 "reseed_on_all_pending and reseed_on_grid_exhausted cannot both be true"
             )
+        if self.rebuild_entry_price_buffer_pips < 0:
+            raise ValueError("rebuild_entry_price_buffer_pips must be >= 0")
+        if self.rebuild_exit_price_buffer_pips < 0:
+            raise ValueError("rebuild_exit_price_buffer_pips must be >= 0")
 
 
 # ---------------------------------------------------------------------------
@@ -259,6 +293,11 @@ class Entry:
     # via ``StopLossClosedEntry``.  Denominated in account currency.
     lifecycle_realized_pnl: Decimal = field(default_factory=lambda: Decimal("0"))
     lifecycle_stop_loss_count: int = 0
+
+    # Deterministic price-unit offset carried across rebuilds so the next
+    # stop-loss → rebuild chain can continue tightening the TP.  See
+    # ``StopLossClosedEntry.rebuild_price_offset``.
+    rebuild_price_offset: Decimal = field(default_factory=lambda: Decimal("0"))
 
     @classmethod
     def open(
@@ -502,6 +541,7 @@ class Entry:
             "is_rebuild": self.is_rebuild,
             "lifecycle_realized_pnl": str(self.lifecycle_realized_pnl),
             "lifecycle_stop_loss_count": self.lifecycle_stop_loss_count,
+            "rebuild_price_offset": str(self.rebuild_price_offset),
         }
 
     @staticmethod
@@ -570,6 +610,7 @@ class Entry:
             is_rebuild=bool(d.get("is_rebuild", False)),
             lifecycle_realized_pnl=_parse_decimal(d.get("lifecycle_realized_pnl", "0"), "0"),
             lifecycle_stop_loss_count=_parse_int(d.get("lifecycle_stop_loss_count", 0), 0),
+            rebuild_price_offset=_parse_decimal(d.get("rebuild_price_offset", "0"), "0"),
         )
 
 
@@ -610,6 +651,15 @@ class StopLossClosedEntry:
     lifecycle_realized_pnl: Decimal = field(default_factory=lambda: Decimal("0"))
     lifecycle_stop_loss_count: int = 0
 
+    # Deterministic (non-slippage) price drift accumulated by stop-loss
+    # closes on this slot, expressed in quote-currency price units and
+    # always positive.  This is the sum of ``|sl_exit_price -
+    # original_entry_price|`` over every SL in the slot's lifecycle and
+    # is used to tighten the rebuild's take-profit so the rebuild close
+    # offsets the prior SL loss.  Zero when the rebuild adjustment
+    # feature is disabled or no SL has fired yet.
+    rebuild_price_offset: Decimal = field(default_factory=lambda: Decimal("0"))
+
     def to_dict(self) -> dict[str, Any]:
         result = {
             "entry_price": str(self.entry_price),
@@ -625,6 +675,7 @@ class StopLossClosedEntry:
             "cycle_id": self.cycle_id,
             "lifecycle_realized_pnl": str(self.lifecycle_realized_pnl),
             "lifecycle_stop_loss_count": self.lifecycle_stop_loss_count,
+            "rebuild_price_offset": str(self.rebuild_price_offset),
         }
         if self.position_id is not None:
             result["position_id"] = self.position_id
@@ -657,6 +708,7 @@ class StopLossClosedEntry:
             position_id=d.get("position_id"),
             lifecycle_realized_pnl=_parse_decimal(d.get("lifecycle_realized_pnl", "0"), "0"),
             lifecycle_stop_loss_count=_parse_int(d.get("lifecycle_stop_loss_count", 0), 0),
+            rebuild_price_offset=_parse_decimal(d.get("rebuild_price_offset", "0"), "0"),
         )
 
 

@@ -589,9 +589,21 @@ export const TradingTaskDetail: React.FC = () => {
         taskType="trading"
         isLoading={stopTask.isLoading}
         onCancel={() => setStopDialogOpen(false)}
-        onConfirm={async (option: StopOption) => {
+        onConfirm={async ({
+          option,
+          drainDurationMinutes,
+        }: {
+          option: StopOption;
+          drainDurationMinutes?: number;
+        }) => {
           try {
-            await stopTask.mutate({ id: taskId, mode: option });
+            await stopTask.mutate({
+              id: taskId,
+              mode: option,
+              ...(drainDurationMinutes !== undefined
+                ? { drainDurationMinutes }
+                : {}),
+            });
             // Optimistic status depends on the chosen mode. DRAIN keeps the
             // task running in DRAINING state; other modes transition to
             // STOPPING and then STOPPED.

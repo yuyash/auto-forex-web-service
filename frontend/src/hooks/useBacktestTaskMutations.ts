@@ -75,8 +75,16 @@ export function useStopBacktestTask(options?: {
   onError?: (error: Error) => void;
 }) {
   return useWrappedMutation(
-    (variables: { id: string; mode?: StopMode }) =>
-      backtestTasksApi.stop(variables.id, variables.mode ?? 'graceful'),
+    (variables: {
+      id: string;
+      mode?: StopMode;
+      drainDurationMinutes?: number;
+    }) =>
+      backtestTasksApi.stop(
+        variables.id,
+        variables.mode ?? 'graceful',
+        variables.drainDurationMinutes
+      ),
     {
       onSuccess: async (data, variables) => {
         // The optimistic status depends on the stop mode: DRAIN keeps

@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.39.0",
+        "version": "1.39.1",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -2809,6 +2809,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "order_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional order ID prefix filter."
+                    },
+                    {
+                        "in": "query",
                         "name": "order_type",
                         "schema": {
                             "type": "string"
@@ -3048,6 +3056,14 @@
                             "minimum": 1
                         },
                         "description": "Results per page. Default 100, maximum 1000."
+                    },
+                    {
+                        "in": "query",
+                        "name": "position_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional position ID prefix filter."
                     },
                     {
                         "in": "query",
@@ -3516,6 +3532,14 @@
                             "nullable": true
                         },
                         "description": "Filter trades executed at or before this RFC3339 timestamp."
+                    },
+                    {
+                        "in": "query",
+                        "name": "trade_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional trade ID prefix filter."
                     }
                 ],
                 "tags": [
@@ -4577,6 +4601,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "order_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional order ID prefix filter."
+                    },
+                    {
+                        "in": "query",
                         "name": "order_type",
                         "schema": {
                             "type": "string"
@@ -4816,6 +4848,14 @@
                             "minimum": 1
                         },
                         "description": "Results per page. Default 100, maximum 1000."
+                    },
+                    {
+                        "in": "query",
+                        "name": "position_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional position ID prefix filter."
                     },
                     {
                         "in": "query",
@@ -5283,6 +5323,14 @@
                             "nullable": true
                         },
                         "description": "Filter trades executed at or before this RFC3339 timestamp."
+                    },
+                    {
+                        "in": "query",
+                        "name": "trade_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional trade ID prefix filter."
                     }
                 ],
                 "tags": [

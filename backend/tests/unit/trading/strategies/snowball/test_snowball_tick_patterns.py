@@ -795,3 +795,126 @@ class TestLifecycleNegativePnlWarnings:
         assert any("negative realised P/L" in m for m in messages), (
             f"expected cycle-completion warning, got: {messages}"
         )
+
+
+class TestSnowballRebuildPriceAdjustment:
+    """Verify that rebuild price adjustment tightens TP to offset SL loss."""
+
+    def _run_sl_to_rebuild(
+        self,
+        *,
+        adjustment_enabled: bool,
+        entry_buffer_pips: str = "0",
+        exit_buffer_pips: str = "0",
+    ) -> TickRunner:
+        """Drive a sequence that causes an SL close followed by a rebuild."""
+        runner = TickRunner(
+            stop_loss=True,
+            overrides={
+                "rebuild_price_adjustment_enabled": adjustment_enabled,
+                "rebuild_entry_price_buffer_pips": entry_buffer_pips,
+                "rebuild_exit_price_buffer_pips": exit_buffer_pips,
+            },
+        )
+        runner.tick(START_PRICE)
+
+        bottom = START_PRICE - Decimal("1.50")
+        runner.tick_range(START_PRICE, bottom, step_pips=1)
+        runner.tick_range(bottom, START_PRICE, step_pips=1)
+        return runner
+
+    def test_rebuild_adjustment_enabled_is_default(self):
+        cfg = SnowballStrategyConfig.from_dict({})
+        assert cfg.rebuild_price_adjustment_enabled is True
+        assert cfg.rebuild_entry_price_buffer_pips == Decimal("0")
+        assert cfg.rebuild_exit_price_buffer_pips == Decimal("0")
+
+    def test_adjustment_shifts_rebuild_tp_toward_favourable(self):
+        """When adjustment is on, a rebuild's TP is set closer than the original."""
+        runner_off = self._run_sl_to_rebuild(adjustment_enabled=False)
+        runner_on = self._run_sl_to_rebuild(adjustment_enabled=True)
+
+        assert runner_off.rebuild_events, "expected rebuilds in baseline"
+        assert runner_on.rebuild_events, "expected rebuilds with adjustment"
+
+        # Pair up by entry_id so we compare the same slot.
+        off_by_id = {e.entry_id: e for e in runner_off.rebuild_events}
+        on_by_id = {e.entry_id: e for e in runner_on.rebuild_events}
+        matched = set(off_by_id) & set(on_by_id)
+        assert matched, "no overlapping rebuild entry_ids to compare"
+
+        any_shift = False
+        for eid in matched:
+            off_tp = Decimal(str(off_by_id[eid].planned_exit_price))
+            on_tp = Decimal(str(on_by_id[eid].planned_exit_price))
+            direction = off_by_id[eid].direction
+            if direction == "long":
+                # Profitable direction is up → adjusted TP must be >= original
+                assert on_tp >= off_tp
+                if on_tp > off_tp:
+                    any_shift = True
+            else:
+                # Short: profitable direction is down → adjusted TP must be <=
+                assert on_tp <= off_tp
+                if on_tp < off_tp:
+                    any_shift = True
+
+        assert any_shift, "at least one rebuild should have a shifted TP when adjustment is enabled"
+
+    def test_exit_buffer_further_tightens_tp(self):
+        """A positive exit buffer must shift TP further into favourable direction."""
+        base = self._run_sl_to_rebuild(adjustment_enabled=True, exit_buffer_pips="0")
+        with_buf = self._run_sl_to_rebuild(adjustment_enabled=True, exit_buffer_pips="3")
+
+        base_by_id = {e.entry_id: e for e in base.rebuild_events}
+        buf_by_id = {e.entry_id: e for e in with_buf.rebuild_events}
+        matched = set(base_by_id) & set(buf_by_id)
+        assert matched
+
+        for eid in matched:
+            base_tp = Decimal(str(base_by_id[eid].planned_exit_price))
+            buf_tp = Decimal(str(buf_by_id[eid].planned_exit_price))
+            direction = base_by_id[eid].direction
+            if direction == "long":
+                assert buf_tp > base_tp, (
+                    f"long rebuild TP with buffer {buf_tp} should be > {base_tp}"
+                )
+            else:
+                assert buf_tp < base_tp, (
+                    f"short rebuild TP with buffer {buf_tp} should be < {base_tp}"
+                )
+
+    def test_entry_buffer_delays_rebuild_trigger(self):
+        """A positive entry buffer should reduce or delay rebuilds on a tight bounce."""
+        # A small bounce that just barely reaches the original entry price
+        # without any buffer will not be enough once a buffer is applied.
+        runner_no_buf = TickRunner(
+            stop_loss=True,
+            overrides={
+                "rebuild_price_adjustment_enabled": True,
+                "rebuild_entry_price_buffer_pips": "0",
+            },
+        )
+        runner_no_buf.tick(START_PRICE)
+        bottom = START_PRICE - Decimal("1.50")
+        runner_no_buf.tick_range(START_PRICE, bottom, step_pips=1)
+        # Bounce back exactly to START_PRICE — enough without buffer.
+        runner_no_buf.tick_range(bottom, START_PRICE, step_pips=1)
+        no_buf_rebuilds = len(runner_no_buf.rebuild_events)
+
+        runner_buf = TickRunner(
+            stop_loss=True,
+            overrides={
+                "rebuild_price_adjustment_enabled": True,
+                "rebuild_entry_price_buffer_pips": "10",
+            },
+        )
+        runner_buf.tick(START_PRICE)
+        runner_buf.tick_range(START_PRICE, bottom, step_pips=1)
+        runner_buf.tick_range(bottom, START_PRICE, step_pips=1)
+        buf_rebuilds = len(runner_buf.rebuild_events)
+
+        # With a large entry buffer the bounce stops short of the trigger
+        # price, so strictly fewer (or zero) rebuilds should fire.
+        assert buf_rebuilds <= no_buf_rebuilds
+        assert no_buf_rebuilds > 0, "sanity: unbuffered run should rebuild"

@@ -164,8 +164,19 @@ class TaskLifecycleCommands:
 
         ensure_tick_pubsub_running.apply_async(countdown=0, queue="system")
 
-    def stop(self, task_id: UUID, mode: str = "graceful") -> bool:
-        self.logger.info("[SERVICE:STOP] Stopping task - task_id=%s, mode=%s", task_id, mode)
+    def stop(
+        self,
+        task_id: UUID,
+        mode: str = "graceful",
+        *,
+        drain_duration_minutes: int | None = None,
+    ) -> bool:
+        self.logger.info(
+            "[SERVICE:STOP] Stopping task - task_id=%s, mode=%s, drain_duration_minutes=%s",
+            task_id,
+            mode,
+            drain_duration_minutes,
+        )
         try:
             stop_mode = StopMode(mode)
         except ValueError as exc:
@@ -232,6 +243,17 @@ class TaskLifecycleCommands:
             task.sell_on_stop = True
             update_fields.append("sell_on_stop")
         task.save(update_fields=update_fields)
+
+        # Persist per-stop drain duration override so the executor picks
+        # it up on the next drain evaluation. Written only when drain is
+        # the effective mode and a positive value was supplied.
+        if stop_mode == StopMode.DRAIN and drain_duration_minutes and drain_duration_minutes > 0:
+            self._record_drain_duration_minutes_override(
+                task_id=task_id,
+                task_type=task_type,
+                execution_id=task.execution_id,
+                minutes=int(drain_duration_minutes),
+            )
 
         self._signal_redis_stop(
             task_id=task_id, task_name=task_name, execution_id=task.execution_id
@@ -561,6 +583,47 @@ class TaskLifecycleCommands:
         except Exception as exc:  # pragma: no cover - defensive logging path
             self.logger.warning(
                 "[SERVICE:STOP] Stop task trigger failed (non-fatal) - task_id=%s, error=%s",
+                task_id,
+                exc,
+            )
+
+    def _record_drain_duration_minutes_override(
+        self,
+        *,
+        task_id: UUID,
+        task_type: str,
+        execution_id: object,
+        minutes: int,
+    ) -> None:
+        """Store a per-stop drain duration override on the execution state.
+
+        The executor reads this value on the next drain evaluation and
+        prefers it over the task-level ``drain_duration_hours``.  A
+        missing or zero value means "fall back to the task field".
+        """
+        from apps.trading.models import ExecutionState
+
+        try:
+            state = ExecutionState.objects.filter(
+                task_type=task_type,
+                task_id=task_id,
+                execution_id=execution_id,
+            ).first()
+            if state is None:
+                self.logger.debug(
+                    "[SERVICE:STOP] No ExecutionState to record drain override - "
+                    "task_id=%s execution_id=%s",
+                    task_id,
+                    execution_id,
+                )
+                return
+            strategy_state = state.strategy_state if isinstance(state.strategy_state, dict) else {}
+            strategy_state["_drain_duration_minutes_override"] = int(minutes)
+            state.strategy_state = strategy_state
+            state.save(update_fields=["strategy_state", "updated_at"])
+        except Exception as exc:  # pragma: no cover - best effort
+            self.logger.warning(
+                "[SERVICE:STOP] Failed to record drain duration override - task_id=%s error=%s",
                 task_id,
                 exc,
             )

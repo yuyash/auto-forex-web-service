@@ -10,6 +10,7 @@ import json
 
 from django.db import models
 from django.db.models import Q
+from django.db.models.functions import Cast
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
 from rest_framework.decorators import action
@@ -507,6 +508,12 @@ class TaskSubResourceMixin:
         if query.cycle_id:
             queryset = queryset.filter(cycle_id=query.cycle_id)
 
+        # Optional trade_id prefix filter (e.g. first 8 chars of UUID).
+        if query.trade_id:
+            queryset = queryset.annotate(
+                _id_str=Cast("id", output_field=models.CharField())
+            ).filter(_id_str__istartswith=query.trade_id)
+
         ordering = ("-timestamp", "-sequence_number")
         if query.ordering == "asc":
             ordering = ("timestamp", "sequence_number")
@@ -606,6 +613,12 @@ class TaskSubResourceMixin:
         # Optional cycle_id filter — positions linked via trades
         if query.cycle_id:
             queryset = queryset.filter(trades__cycle_id=query.cycle_id).distinct()
+
+        # Optional position_id prefix filter (e.g. first 8 chars of UUID).
+        if query.position_id:
+            queryset = queryset.annotate(
+                _id_str=Cast("id", output_field=models.CharField())
+            ).filter(_id_str__istartswith=query.position_id)
 
         paginator = TradePositionPagination()
         page = paginator.paginate_queryset(queryset, request)
@@ -756,6 +769,12 @@ class TaskSubResourceMixin:
 
         if query.direction:
             queryset = queryset.filter(direction=query.direction)
+
+        # Optional order_id prefix filter (e.g. first 8 chars of UUID).
+        if query.order_id:
+            queryset = queryset.annotate(
+                _id_str=Cast("id", output_field=models.CharField())
+            ).filter(_id_str__istartswith=query.order_id)
 
         if query.execution.since:
             queryset = queryset.filter(updated_at__gt=query.execution.since)

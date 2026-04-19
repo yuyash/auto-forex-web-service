@@ -95,14 +95,20 @@ const baseApi = createTaskApi<
 export const tradingTasksApi = {
   ...baseApi,
 
-  // Override: trading stop accepts a mode parameter
+  // Override: trading stop accepts a mode parameter and, for drain mode,
+  // an optional ``drain_duration_minutes`` override.
   stop: async (
     id: string,
-    mode: 'immediate' | 'graceful' | 'graceful_close' | 'drain' = 'graceful'
+    mode: 'immediate' | 'graceful' | 'graceful_close' | 'drain' = 'graceful',
+    drainDurationMinutes?: number
   ): Promise<Record<string, unknown>> => {
+    const payload: Record<string, unknown> = { mode };
+    if (mode === 'drain' && typeof drainDurationMinutes === 'number') {
+      payload.drain_duration_minutes = drainDurationMinutes;
+    }
     return api.post<Record<string, unknown>>(
       `/api/trading/tasks/trading/${id}/stop/`,
-      { mode }
+      payload
     );
   },
 

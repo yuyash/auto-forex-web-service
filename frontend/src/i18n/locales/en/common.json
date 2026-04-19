@@ -200,6 +200,9 @@
       "primary": "Drain (Close at breakeven or profit)",
       "secondary": "Keep running but stop opening new positions. Existing positions are closed as soon as unrealised PnL is non-negative; the task stops once all positions are closed. Optionally bounded by the task's drain duration; issuing another stop while draining terminates the task immediately."
     },
+    "drainDurationMinutesLabel": "Drain duration (minutes)",
+    "drainDurationMinutesHelp": "How long to keep draining before giving up. Defaults to 60 minutes.",
+    "drainDurationMinutesError": "Enter a positive integer (minutes).",
     "closeWarning": "Warning: This will close all positions at current market prices. This action cannot be undone.",
     "cancel": "Cancel",
     "confirm": "Stop Task",
@@ -433,6 +436,8 @@
       "description": "Description",
       "cycleIdFilter": "Filter by Cycle ID",
       "invalidCycleId": "Enter a valid cycle ID UUID",
+      "tradeIdFilter": "Filter by Trade ID",
+      "invalidTradeId": "Enter a valid trade ID or prefix (hex characters)",
       "stopLossPrice": "Stop Loss",
       "isRebuild": "Rebuild",
       "rebuild": "Rebuild"
@@ -451,7 +456,9 @@
       "filledAt": "Filled At",
       "stopLoss": "Stop Loss",
       "error": "Error",
-      "noOrders": "No orders"
+      "noOrders": "No orders",
+      "orderIdFilter": "Filter by Order ID",
+      "invalidOrderId": "Enter a valid order ID or prefix (hex characters)"
     },
     "positions": {
       "closedPositions": "Closed Positions",
@@ -513,6 +520,8 @@
       "totalPnl": "Total PnL",
       "cycleIdFilter": "Filter by Cycle ID",
       "invalidCycleId": "Enter a valid cycle ID UUID",
+      "positionIdFilter": "Filter by Position ID",
+      "invalidPositionId": "Enter a valid position ID or prefix (hex characters)",
       "lifecycle": {
         "title": "Position Lifecycle",
         "viewLifecycle": "View position lifecycle",

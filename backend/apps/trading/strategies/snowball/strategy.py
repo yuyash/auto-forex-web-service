@@ -1551,6 +1551,17 @@ class SnowballStrategy(Strategy):
             # lifecycle P/L (including this SL loss) so a future rebuild
             # can continue the chain.
             entry.lifecycle_stop_loss_count += 1
+
+            # Accumulate the deterministic price-unit drift between the
+            # original entry price and this SL exit price so the rebuild
+            # can tighten its TP by the same amount.  We always record
+            # this drift; whether the rebuild actually uses it to shift
+            # the TP is controlled by ``rebuild_price_adjustment_enabled``
+            # at rebuild time.
+            sl_price_drift = abs(exit_price - entry.entry_price)
+            rebuild_price_offset = entry.rebuild_price_offset + sl_price_drift
+            entry.rebuild_price_offset = rebuild_price_offset
+
             sl_snapshot = StopLossClosedEntry(
                 entry_price=entry.entry_price,
                 close_price=entry.close_price,
@@ -1566,6 +1577,7 @@ class SnowballStrategy(Strategy):
                 position_id=entry.position_id,
                 lifecycle_realized_pnl=entry.lifecycle_realized_pnl,
                 lifecycle_stop_loss_count=entry.lifecycle_stop_loss_count,
+                rebuild_price_offset=rebuild_price_offset,
             )
             slot.close_for_stop_loss(sl_snapshot)
 
@@ -1591,46 +1603,95 @@ class SnowballStrategy(Strategy):
         events: list[StrategyEvent] = []
         any_rebuilt = False
 
+        # Convert buffer pips to price-unit offsets once.
+        cfg = self.config
+        apply_adjustment = cfg.rebuild_price_adjustment_enabled
+        entry_buffer_price = cfg.rebuild_entry_price_buffer_pips * self.pip_size
+        exit_buffer_price = cfg.rebuild_exit_price_buffer_pips * self.pip_size
+
         for layer in cycle.grid.layers:
             for slot in layer.slots:
                 pending = slot.pending_rebuild
                 if pending is None:
                     continue
 
-                # Check if price has returned to the original entry price
+                # Determine the rebuild trigger price: original entry
+                # optionally tightened in the favourable direction by
+                # ``rebuild_entry_price_buffer_pips`` when the adjustment
+                # feature is enabled.
+                if apply_adjustment and entry_buffer_price > 0:
+                    if pending.direction == Direction.LONG:
+                        trigger_price = pending.entry_price + entry_buffer_price
+                    else:
+                        trigger_price = pending.entry_price - entry_buffer_price
+                else:
+                    trigger_price = pending.entry_price
+
+                # Check if price has returned to the trigger price
                 hit = False
-                if pending.direction == Direction.LONG and tick.bid >= pending.entry_price:
+                if pending.direction == Direction.LONG and tick.bid >= trigger_price:
                     hit = True
-                elif pending.direction == Direction.SHORT and tick.ask <= pending.entry_price:
+                elif pending.direction == Direction.SHORT and tick.ask <= trigger_price:
                     hit = True
 
                 if not hit:
                     continue
 
-                # Rebuild the position with the same parameters
+                # Compute the rebuild's take-profit so the slot's
+                # lifecycle P/L can be fully recovered on TP.  Conceptually:
+                #
+                # The rebuild's profit on close (per unit) equals
+                # ``|entry - new_close_price|`` (in quote-currency price
+                # units).  The realised SL loss per unit accumulated on
+                # this slot equals ``rebuild_price_offset`` (sum of
+                # ``|sl_exit - entry|`` across all prior stop-losses).
+                #
+                # To keep the original TP whenever it already covers the
+                # loss, and to extend it only when it doesn't, we use the
+                # larger of the two distances.  The exit buffer is then
+                # added on top in the favourable direction.  If the
+                # feature is disabled, we fall back to the original TP.
+                if apply_adjustment:
+                    original_profit_distance = abs(pending.close_price - pending.entry_price)
+                    required_profit_distance = (
+                        max(original_profit_distance, pending.rebuild_price_offset)
+                        + exit_buffer_price
+                    )
+                    if pending.direction == Direction.LONG:
+                        adjusted_close_price = pending.entry_price + required_profit_distance
+                    else:
+                        adjusted_close_price = pending.entry_price - required_profit_distance
+                else:
+                    adjusted_close_price = pending.close_price
+
+                # Rebuild the position with the adjusted parameters
                 entry = Entry.open(
                     state=ss,
                     tick=tick,
                     direction=pending.direction,
                     units=pending.units,
                     step=pending.step,
-                    close_price=pending.close_price,
+                    close_price=adjusted_close_price,
                     role=pending.role,
                     layer_number=pending.layer_number,
                     retracement_count=pending.retracement_count,
                     root_entry_id=pending.root_entry_id,
                     parent_entry_id=pending.parent_entry_id,
                 )
-                # Override entry_price to the original price (rebuild at same level)
-                entry.entry_price = pending.entry_price
+                # Override entry_price to the (optionally adjusted)
+                # trigger price so downstream accounting uses the same
+                # reference as the rebuild trigger.
+                entry.entry_price = trigger_price
                 entry.validation_status = "pass"
                 entry.is_rebuild = True
 
-                # Carry forward the slot's running lifecycle P/L and SL
-                # count so the eventual close can compare net P/L against
-                # zero.
+                # Carry forward the slot's running lifecycle P/L, SL
+                # count and accumulated price offset so any future
+                # stop-loss → rebuild chain on this slot can keep
+                # compounding the TP tightening.
                 entry.lifecycle_realized_pnl = pending.lifecycle_realized_pnl
                 entry.lifecycle_stop_loss_count = pending.lifecycle_stop_loss_count
+                entry.rebuild_price_offset = pending.rebuild_price_offset
 
                 # Optionally keep rebuilt positions exempt from further stop-loss closes.
                 if self.config.stop_loss_enabled and not self.config.disable_loss_cut_after_rebuild:
@@ -1642,14 +1703,24 @@ class SnowballStrategy(Strategy):
 
                 slot.complete_rebuild(entry)
 
+                adjustment_note = ""
+                if apply_adjustment and (
+                    adjusted_close_price != pending.close_price or entry_buffer_price > 0
+                ):
+                    adjustment_note = (
+                        f", adj: entry {pending.entry_price:.5f}→{trigger_price:.5f}"
+                        f", TP {pending.close_price:.5f}→{adjusted_close_price:.5f}"
+                    )
+
                 logger.info(
-                    "Stop-loss rebuild (%s): L%d/R%d, entry=%.5f, TP=%.5f, units=%d",
+                    "Stop-loss rebuild (%s): L%d/R%d, entry=%.5f, TP=%.5f, units=%d%s",
                     pending.direction.value.upper(),
                     pending.layer_number,
                     pending.retracement_count,
-                    pending.entry_price,
-                    pending.close_price,
+                    trigger_price,
+                    adjusted_close_price,
                     pending.units,
+                    adjustment_note,
                 )
 
                 evt = entry.to_rebuild_event(
@@ -1658,12 +1729,13 @@ class SnowballStrategy(Strategy):
                     description=(
                         f"Stop-loss rebuild ({pending.direction.value.upper()}) | "
                         f"L{pending.layer_number}/R{pending.retracement_count}, "
-                        f"units={pending.units}, TP={pending.close_price:.5f}"
+                        f"units={pending.units}, TP={adjusted_close_price:.5f}"
                         + (
                             f", SL={entry.stop_loss_price:.3f}"
                             if entry.stop_loss_price is not None
                             else ""
                         )
+                        + adjustment_note
                     ),
                 )
                 events.append(evt)

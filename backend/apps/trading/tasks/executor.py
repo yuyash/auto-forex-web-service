@@ -701,9 +701,11 @@ class TaskExecutor:
             self._record_drain_marker(loop, drain_marker)
 
         duration_hours = int(getattr(task, "drain_duration_hours", 0) or 0)
+        duration_minutes_override = self._read_drain_duration_minutes_override(loop)
         policy = DrainPolicy(
             drain_started_at=drain_marker,
             duration_hours=duration_hours,
+            duration_minutes=duration_minutes_override,
         )
 
         open_positions = self.order_service.get_open_positions(instrument=self.instrument)
@@ -737,6 +739,7 @@ class TaskExecutor:
             loop.stopped_early = True
             loop.stop_reason = decision.finalize_reason or "drain_complete"
             self._record_drain_marker(loop, None)
+            self._clear_drain_duration_minutes_override(loop)
             return True
 
         return False
@@ -821,6 +824,38 @@ class TaskExecutor:
             return datetime.fromisoformat(str(raw))
         except ValueError:
             return None
+
+    def _read_drain_duration_minutes_override(self, loop: ExecutionLoopState) -> int | None:
+        """Return the per-stop drain duration override in minutes, if any.
+
+        The value is written by the lifecycle command when the user passes
+        ``drain_duration_minutes`` on the stop request. ``None`` means
+        "fall back to the task's configured drain_duration_hours".
+        """
+        strategy_state = (
+            loop.state.strategy_state if isinstance(loop.state.strategy_state, dict) else {}
+        )
+        raw = strategy_state.get("_drain_duration_minutes_override")
+        if raw is None:
+            return None
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            return None
+        return value if value > 0 else None
+
+    def _clear_drain_duration_minutes_override(self, loop: ExecutionLoopState) -> None:
+        strategy_state = (
+            loop.state.strategy_state if isinstance(loop.state.strategy_state, dict) else {}
+        )
+        if "_drain_duration_minutes_override" not in strategy_state:
+            return
+        strategy_state.pop("_drain_duration_minutes_override", None)
+        loop.state.strategy_state = strategy_state
+        try:
+            loop.state.save(update_fields=["strategy_state", "updated_at"])
+        except Exception:  # pragma: no cover
+            logger.debug("Failed to clear drain duration minutes override", exc_info=True)
 
     # ------------------------------------------------------------------
     # Market-aware idle (trading tasks only)

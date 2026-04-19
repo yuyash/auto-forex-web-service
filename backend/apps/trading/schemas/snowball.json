@@ -354,6 +354,44 @@
       "group_ja": "証拠金保護"
     },
 
+    "rebuild_price_adjustment_enabled": {
+      "type": "boolean",
+      "title": "Adjust Rebuild Prices",
+      "title_ja": "再建時の注文・決済価格を調整",
+      "description": "When enabled, on stop-loss rebuild the rebuild's take-profit is tightened by the deterministic price gap between the original entry price and the stop-loss exit price (including the bid/ask spread). This makes the rebuild close earlier to offset the prior stop-loss loss instead of leaving the slot's lifecycle P/L negative. Requires stop-loss to be enabled.",
+      "description_ja": "有効時、ロスカット後の再建では、元の建玉価格とロスカット決済価格の差（Bid/Askスプレッドを含む想定可能なずれ）の分だけ再建ポジションの利確価格を手前に調整します。これにより再建ポジションが早めに決済され、直前のロスカット損失をなるべく相殺します。ロスカットが有効である必要があります。",
+      "default": true,
+      "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
+    "rebuild_entry_price_buffer_pips": {
+      "type": "number",
+      "title": "Rebuild Entry Buffer (pips)",
+      "title_ja": "再建時 注文価格バッファ（pips）",
+      "description": "Additional safety buffer (in pips) applied to the rebuild trigger price in the favourable direction. The rebuild is triggered only when the market price is at least this many pips better than the original entry price, giving a slightly more conservative re-entry against unavoidable slippage. 0 means no buffer.",
+      "description_ja": "再建の発動価格に対して、利益方向へ追加する安全バッファ（pips）。元の建玉価格より少なくともこの pips 分だけ有利な市場価格になるまで再建を待つことで、スリッページに対する余裕を作ります。0 はバッファなし。",
+      "default": 0,
+      "minimum": 0,
+      "dependsOn": { "field": "rebuild_price_adjustment_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
+    "rebuild_exit_price_buffer_pips": {
+      "type": "number",
+      "title": "Rebuild Exit Buffer (pips)",
+      "title_ja": "再建時 決済価格バッファ（pips）",
+      "description": "Additional safety buffer (in pips) applied to the rebuild take-profit in the favourable direction on top of the stop-loss offset. The rebuild will close this many pips earlier than strictly break-even to absorb unavoidable slippage. 0 means no buffer.",
+      "description_ja": "再建ポジションの利確価格に対して、ロスカット損失の相殺分に加えて利益方向へ追加する安全バッファ（pips）。完全な損益分岐点よりこの pips 分だけ早く決済することで、スリッページによるズレを吸収します。0 はバッファなし。",
+      "default": 0,
+      "minimum": 0,
+      "dependsOn": { "field": "rebuild_price_adjustment_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
     "shrink_enabled": {
       "type": "boolean",
       "title": "Enable Shrink",

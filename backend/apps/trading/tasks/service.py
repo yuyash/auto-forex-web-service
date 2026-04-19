@@ -354,7 +354,13 @@ class TaskService:
                 f"(prev_status={previous_status}, prev_execution_id={previous_execution_id})"
             ) from exc
 
-    def stop_task(self, task_id: UUID, mode: str = "graceful") -> bool:
+    def stop_task(
+        self,
+        task_id: UUID,
+        mode: str = "graceful",
+        *,
+        drain_duration_minutes: int | None = None,
+    ) -> bool:
         """Stop a running task.
 
         Sets task status to STOPPING and signals Redis coordinator to stop.
@@ -362,7 +368,10 @@ class TaskService:
 
         Args:
             task_id: UUID of the task to stop
-            mode: Stop mode ('immediate', 'graceful', 'graceful_close')
+            mode: Stop mode ('immediate', 'graceful', 'graceful_close', 'drain')
+            drain_duration_minutes: Optional override (minutes) for drain
+                timeout when ``mode == 'drain'``. When omitted the task's
+                configured ``drain_duration_hours`` is used.
 
         Returns:
             bool: True if stop was successfully initiated, False otherwise
@@ -372,7 +381,7 @@ class TaskService:
         """
 
         try:
-            return self.commands.stop(task_id, mode)
+            return self.commands.stop(task_id, mode, drain_duration_minutes=drain_duration_minutes)
         except TaskValidationError:
             # Re-raise ValueError as-is (already logged)
             raise

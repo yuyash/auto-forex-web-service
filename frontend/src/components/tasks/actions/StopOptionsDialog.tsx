@@ -11,6 +11,7 @@ import {
   CircularProgress,
   Typography,
   Box,
+  TextField,
 } from '@mui/material';
 import {
   Stop as StopIcon,
@@ -23,11 +24,20 @@ import { useTranslation } from 'react-i18next';
 
 export type StopOption = 'graceful' | 'graceful_close' | 'drain';
 
+/** Default drain duration (minutes) shown in the dialog. */
+export const DEFAULT_DRAIN_DURATION_MINUTES = 60;
+
+export interface StopOptionsConfirm {
+  option: StopOption;
+  /** Only populated when ``option === 'drain'``. */
+  drainDurationMinutes?: number;
+}
+
 interface StopOptionsDialogProps {
   open: boolean;
   taskName: string;
   onCancel: () => void;
-  onConfirm: (option: StopOption) => void;
+  onConfirm: (payload: StopOptionsConfirm) => void;
   isLoading: boolean;
   /**
    * Dialog heading.  Explicit override takes precedence over the
@@ -59,6 +69,15 @@ export function StopOptionsDialog({
 }: StopOptionsDialogProps) {
   const { t } = useTranslation(['common']);
   const [selectedOption, setSelectedOption] = useState<StopOption | null>(null);
+  const [drainDurationMinutes, setDrainDurationMinutes] = useState<number>(
+    DEFAULT_DRAIN_DURATION_MINUTES
+  );
+  const [drainDurationInput, setDrainDurationInput] = useState<string>(
+    String(DEFAULT_DRAIN_DURATION_MINUTES)
+  );
+  const drainDurationInvalid =
+    selectedOption === 'drain' &&
+    (!Number.isFinite(drainDurationMinutes) || drainDurationMinutes < 1);
 
   const resolvedTitle =
     title ??
@@ -69,14 +88,20 @@ export function StopOptionsDialog({
         : t('common:stopOptions.title'));
 
   const handleConfirm = () => {
-    if (selectedOption) {
-      onConfirm(selectedOption);
+    if (!selectedOption) return;
+    if (selectedOption === 'drain') {
+      if (drainDurationInvalid) return;
+      onConfirm({ option: selectedOption, drainDurationMinutes });
+    } else {
+      onConfirm({ option: selectedOption });
     }
   };
 
   const handleClose = () => {
     if (!isLoading) {
       setSelectedOption(null);
+      setDrainDurationMinutes(DEFAULT_DRAIN_DURATION_MINUTES);
+      setDrainDurationInput(String(DEFAULT_DRAIN_DURATION_MINUTES));
       onCancel();
     }
   };
@@ -154,6 +179,40 @@ export function StopOptionsDialog({
             </ListItemButton>
           )}
         </List>
+        {selectedOption === 'drain' && (
+          <Box sx={{ mt: 2 }}>
+            <TextField
+              fullWidth
+              type="number"
+              label={t(
+                'common:stopOptions.drainDurationMinutesLabel',
+                'Drain duration (minutes)'
+              )}
+              helperText={
+                drainDurationInvalid
+                  ? t(
+                      'common:stopOptions.drainDurationMinutesError',
+                      'Enter a positive integer (minutes).'
+                    )
+                  : t(
+                      'common:stopOptions.drainDurationMinutesHelp',
+                      'How long to keep draining before giving up. Defaults to 60 minutes.'
+                    )
+              }
+              value={drainDurationInput}
+              onChange={(event) => {
+                const raw = event.target.value;
+                setDrainDurationInput(raw);
+                const parsed = Number.parseInt(raw, 10);
+                setDrainDurationMinutes(Number.isFinite(parsed) ? parsed : NaN);
+              }}
+              disabled={isLoading}
+              inputProps={{ min: 1, step: 1 }}
+              error={drainDurationInvalid}
+              size="small"
+            />
+          </Box>
+        )}
         {selectedOption === 'graceful_close' && (
           <Box
             sx={{
@@ -178,7 +237,7 @@ export function StopOptionsDialog({
           onClick={handleConfirm}
           variant="contained"
           color="error"
-          disabled={!selectedOption || isLoading}
+          disabled={!selectedOption || isLoading || drainDurationInvalid}
           startIcon={isLoading ? <CircularProgress size={16} /> : <StopIcon />}
         >
           {isLoading
