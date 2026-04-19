@@ -28,6 +28,8 @@ import {
   buildParameterLabelMap,
   resolveParameterLabel,
 } from '../../../utils/strategySchemaLabels';
+import { isParameterVisible } from '../../../utils/strategySchemaDependsOn';
+import type { ConfigProperty } from '../../../types/strategy';
 
 interface BacktestOverviewTabProps {
   taskId: string;
@@ -78,6 +80,20 @@ export function BacktestOverviewTab({
       historicalStrategyConfig?.strategy_type || task.strategy_type;
     return buildParameterLabelMap(strategies, strategyType, i18n.language);
   }, [strategies, historicalStrategyConfig, task.strategy_type, i18n.language]);
+
+  // Resolve the JSON schema's `properties` map for the historical
+  // strategy so we can filter snapshot parameters by `dependsOn`.
+  const snapshotSchemaProperties = useMemo<
+    Record<string, ConfigProperty> | undefined
+  >(() => {
+    const strategyType =
+      historicalStrategyConfig?.strategy_type || task.strategy_type;
+    const strategy = strategies.find((s) => s.id === strategyType);
+    const schema = strategy?.config_schema as
+      | { properties?: Record<string, ConfigProperty> }
+      | undefined;
+    return schema?.properties;
+  }, [strategies, historicalStrategyConfig, task.strategy_type]);
 
   // When viewing a historical execution, prefer snapshot values for task settings
   const effectiveStartTime =
@@ -601,8 +617,15 @@ export function BacktestOverviewTab({
               {t('common:labels.strategyType')}:{' '}
               {historicalStrategyConfig.strategy_type}
             </Typography>
-            {Object.entries(historicalStrategyConfig.parameters || {}).map(
-              ([key, value]) => (
+            {Object.entries(historicalStrategyConfig.parameters || {})
+              .filter(([key]) =>
+                isParameterVisible(
+                  key,
+                  historicalStrategyConfig.parameters || {},
+                  snapshotSchemaProperties
+                )
+              )
+              .map(([key, value]) => (
                 <Box
                   key={key}
                   sx={{
@@ -628,8 +651,7 @@ export function BacktestOverviewTab({
                       : String(value ?? '-')}
                   </Typography>
                 </Box>
-              )
-            )}
+              ))}
           </DialogContent>
         </Dialog>
       )}
