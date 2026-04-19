@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.39.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.39.0...backend-v1.39.1) (2026-04-19)
+
+
+### Bug Fixes
+
+* **trading:** separate celery_task_id from execution_id ([#550](https://github.com/yuyash/auto-forex-web-service/issues/550)) ([5251042](https://github.com/yuyash/auto-forex-web-service/commit/5251042b1e07ceac83d3eaf764af12926470b77d))
+
 ## [1.39.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.38.1...backend-v1.39.0) (2026-04-19)
 
 
