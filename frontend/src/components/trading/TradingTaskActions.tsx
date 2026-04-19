@@ -238,6 +238,7 @@ export default function TradingTaskActions({
       <StopOptionsDialog
         open={stopDialogOpen}
         taskName={task.name}
+        taskType="trading"
         onCancel={() => setStopDialogOpen(false)}
         onConfirm={handleStopConfirm}
         isLoading={stopTask.isLoading}

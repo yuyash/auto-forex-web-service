@@ -225,6 +225,7 @@ export default function BacktestTaskActions({
       <StopOptionsDialog
         open={stopDialogOpen}
         taskName={task.name}
+        taskType="backtest"
         onCancel={() => setStopDialogOpen(false)}
         onConfirm={handleStopConfirm}
         isLoading={stopTask.isLoading}

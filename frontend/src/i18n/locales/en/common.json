@@ -183,6 +183,28 @@
       "loading": "Restarting..."
     }
   },
+  "stopOptions": {
+    "title": "Stop Task",
+    "tradingTitle": "Stop Trading Task",
+    "backtestTitle": "Stop Backtest Task",
+    "chooseHowToStop": "Choose how to stop \"{{taskName}}\":",
+    "graceful": {
+      "primary": "Stop (Keep Positions)",
+      "secondary": "Stop trading but keep all open positions. You can manage them manually later."
+    },
+    "gracefulClose": {
+      "primary": "Stop (Close All Positions)",
+      "secondary": "Stop trading and close all open positions at current market prices."
+    },
+    "drain": {
+      "primary": "Drain (Close at breakeven or profit)",
+      "secondary": "Keep running but stop opening new positions. Existing positions are closed as soon as unrealised PnL is non-negative; the task stops once all positions are closed. Optionally bounded by the task's drain duration; issuing another stop while draining terminates the task immediately."
+    },
+    "closeWarning": "Warning: This will close all positions at current market prices. This action cannot be undone.",
+    "cancel": "Cancel",
+    "confirm": "Stop Task",
+    "loading": "Stopping..."
+  },
   "strategyVisualization": {
     "noData": "No strategy visualization data.",
     "unavailable": "Strategy visualization is unavailable.",

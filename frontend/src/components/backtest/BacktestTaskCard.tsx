@@ -365,7 +365,7 @@ export default function BacktestTaskCard({
                     currentTask.strategy_type
                   )}
                   variant="outlined"
-                  size={isMobile ? 'small' : 'medium'}
+                  size="small"
                 />
               )}
               {!isMobile && currentTask.config_name && (
@@ -373,6 +373,7 @@ export default function BacktestTaskCard({
                   label={currentTask.config_name}
                   variant="outlined"
                   color="primary"
+                  size="small"
                 />
               )}
             </Box>
@@ -529,6 +530,7 @@ export default function BacktestTaskCard({
       <StopOptionsDialog
         open={stopDialogOpen}
         taskName={task.name}
+        taskType="backtest"
         isLoading={isLoading}
         onCancel={() => setStopDialogOpen(false)}
         onConfirm={(mode) => void handleStop(task.id, mode)}

@@ -598,7 +598,7 @@ export const BacktestTaskDetail: React.FC = () => {
       <StopOptionsDialog
         open={stopDialogOpen}
         taskName={task.name}
-        title="Stop Backtest Task"
+        taskType="backtest"
         isLoading={isStopping}
         onCancel={() => setStopDialogOpen(false)}
         onConfirm={handleStopConfirm}
