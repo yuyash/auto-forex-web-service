@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 from django.core.cache import cache
-from django.db.models import Case, F, IntegerField, Sum, Value, When
+from django.db.models import Case, DecimalField, F, IntegerField, Sum, Value, When
 
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
@@ -47,6 +47,8 @@ class CountsInfo:
     closed_positions: int
     open_long_units: int
     open_short_units: int
+    winning_trades: int
+    losing_trades: int
 
 
 @dataclass(frozen=True)
@@ -111,27 +113,49 @@ def compute_task_summary(
     if execution_id is not None:
         base_filter["execution_id"] = execution_id
 
-    # Realized PnL: aggregate over closed positions
+    # Realized PnL + win/loss breakdown: aggregate over closed positions in
+    # a single DB roundtrip.  The win/loss counts are what drives the
+    # overview tab so they must come from the authoritative DB record,
+    # not from the runtime counters (which we've seen drift to zero
+    # after restarts that reuse the same execution_id).
     realized_agg = (
         Position.objects.filter(**base_filter, is_open=False)
         .exclude(exit_price__isnull=True)
-        .aggregate(
-            realized_pnl=Sum(
-                Case(
-                    When(
-                        direction="long",
-                        then=(F("exit_price") - F("entry_price")) * _abs_units(),
-                    ),
-                    When(
-                        direction="short",
-                        then=(F("entry_price") - F("exit_price")) * _abs_units(),
-                    ),
-                    default=Value(Decimal("0")),
-                )
+        .annotate(
+            _pnl_value=Case(
+                When(
+                    direction="long",
+                    then=(F("exit_price") - F("entry_price")) * _abs_units(),
+                ),
+                When(
+                    direction="short",
+                    then=(F("entry_price") - F("exit_price")) * _abs_units(),
+                ),
+                default=Value(Decimal("0")),
+                output_field=DecimalField(max_digits=24, decimal_places=10),
             )
+        )
+        .aggregate(
+            realized_pnl=Sum("_pnl_value"),
+            winning_trades=Sum(
+                Case(
+                    When(_pnl_value__gt=0, then=Value(1)),
+                    default=Value(0),
+                    output_field=IntegerField(),
+                )
+            ),
+            losing_trades=Sum(
+                Case(
+                    When(_pnl_value__lt=0, then=Value(1)),
+                    default=Value(0),
+                    output_field=IntegerField(),
+                )
+            ),
         )
     )
     realized_pnl = realized_agg["realized_pnl"] or Decimal("0")
+    winning_trades = int(realized_agg["winning_trades"] or 0)
+    losing_trades = int(realized_agg["losing_trades"] or 0)
 
     # Unrealized PnL: sum of open positions' unrealized_pnl
     open_qs = Position.objects.filter(**base_filter, is_open=True)
@@ -257,6 +281,8 @@ def compute_task_summary(
             closed_positions=closed_position_count,
             open_long_units=int(open_size_agg["open_long_units"] or 0),
             open_short_units=int(open_size_agg["open_short_units"] or 0),
+            winning_trades=winning_trades,
+            losing_trades=losing_trades,
         ),
         execution=ExecutionInfo(
             current_balance=current_balance,

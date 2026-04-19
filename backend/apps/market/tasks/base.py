@@ -42,14 +42,21 @@ def parse_iso_datetime(value: str) -> datetime:
     return dt
 
 
-def backtest_stream_key_for_request(request_id: str) -> str:
+def backtest_stream_key_for_request(request_id: str, execution_id: str | None = None) -> str:
     """Return the Redis Stream key used for delivering backtest ticks.
 
     A separate stream key per request keeps concurrent backtests isolated.
-    The stream is bounded via ``XADD ... MAXLEN ~`` and cleaned up explicitly
-    by the publisher when done.
+    When ``execution_id`` is provided, the key is further scoped to that
+    execution run so a restarted task never reuses the stream of an older
+    (potentially still-draining) execution.  Legacy callers that do not
+    pass ``execution_id`` fall back to the task-scoped key.
+
+    The stream is bounded via ``XADD ... MAXLEN ~`` and cleaned up
+    explicitly by the publisher when done.
     """
     prefix = getattr(settings, "MARKET_BACKTEST_TICK_STREAM_PREFIX", "market:backtest:stream:")
+    if execution_id:
+        return f"{prefix}{request_id}:{execution_id}"
     return f"{prefix}{request_id}"
 
 

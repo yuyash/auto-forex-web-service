@@ -428,6 +428,7 @@ export function TradingOverviewTab({
             <LatestMetricsSummary
               latest={latestMetrics ?? null}
               pnlCurrency={pnlCurrency}
+              summary={summary}
             />
           </Box>
         </Grid>

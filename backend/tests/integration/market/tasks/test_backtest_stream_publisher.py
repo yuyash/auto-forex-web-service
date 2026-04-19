@@ -218,3 +218,87 @@ class TestBacktestStreamPublisher:
         for call in tick_xadd:
             assert call.kwargs.get("maxlen") == 123
             assert call.kwargs.get("approximate") is True
+
+
+@pytest.mark.django_db
+class TestBacktestStreamPublisherExecutionIsolation:
+    """Execution-scoped stream keys plus DEL-before-XADD prevent a new
+    run from inheriting leftover entries from a previous execution."""
+
+    def test_execution_scoped_stream_receives_all_ticks(self, settings) -> None:
+        """Writing with an ``execution_id`` produces an isolated stream."""
+        settings.MARKET_BACKTEST_STREAM_MAXLEN = 1_000
+        settings.MARKET_BACKTEST_BACKPRESSURE_HIGH_WATERMARK = 0
+
+        task = _make_task(suffix="exec")
+        _seed_ticks(3, start=task.start_time)
+
+        fake_server = fakeredis.FakeServer()
+        fake_client = fakeredis.FakeRedis(server=fake_server, decode_responses=True)
+        execution_id = "execution-aaa"
+
+        runner = BacktestTickPublisherRunner()
+        with patch("apps.market.tasks.backtest.redis_client", return_value=fake_client):
+            runner.run(
+                instrument="USD_JPY",
+                start=task.start_time.isoformat(),
+                end=task.end_time.isoformat(),
+                request_id=str(task.pk),
+                execution_id=execution_id,
+            )
+
+        scoped_key = backtest_stream_key_for_request(str(task.pk), execution_id)
+        legacy_key = backtest_stream_key_for_request(str(task.pk))
+
+        entries = fake_client.xrange(scoped_key)
+        assert entries, "Execution-scoped stream should contain entries"
+        assert not fake_client.exists(legacy_key), (
+            "Legacy task-id-only stream should remain empty when execution_id is provided"
+        )
+
+    def test_publisher_deletes_prior_entries_for_same_execution(self, settings) -> None:
+        """A crashed prior attempt left leftover entries — the next run
+        must wipe them before publishing."""
+        settings.MARKET_BACKTEST_STREAM_MAXLEN = 1_000
+        settings.MARKET_BACKTEST_BACKPRESSURE_HIGH_WATERMARK = 0
+
+        task = _make_task(suffix="wipe")
+        _seed_ticks(2, start=task.start_time)
+
+        fake_server = fakeredis.FakeServer()
+        fake_client = fakeredis.FakeRedis(server=fake_server, decode_responses=True)
+        execution_id = "execution-bbb"
+        stream_key = backtest_stream_key_for_request(str(task.pk), execution_id)
+
+        # Simulate a stale entry from a previous crashed attempt.
+        fake_client.xadd(
+            stream_key,
+            {
+                "type": "tick",
+                "instrument": "USD_JPY",
+                "timestamp": "2099-01-01T00:00:00Z",
+                "bid": "99.99",
+                "ask": "99.99",
+                "mid": "99.99",
+            },
+        )
+        assert fake_client.xlen(stream_key) == 1
+
+        runner = BacktestTickPublisherRunner()
+        with patch("apps.market.tasks.backtest.redis_client", return_value=fake_client):
+            runner.run(
+                instrument="USD_JPY",
+                start=task.start_time.isoformat(),
+                end=task.end_time.isoformat(),
+                request_id=str(task.pk),
+                execution_id=execution_id,
+            )
+
+        entries = fake_client.xrange(stream_key)
+        # Only the 2 DB ticks + 1 EOF — the stale tick is gone.
+        assert len(entries) == 3
+        for _id, fields in entries:
+            ts = fields.get("timestamp", "")
+            assert not ts.startswith("2099"), (
+                f"Stale entry from a prior run still present: {fields}"
+            )

@@ -87,6 +87,7 @@ class TestRunBacktestTask:
 
 
 class TestExecuteBacktest:
+    @patch("apps.trading.tasks.backtest._purge_stale_task_streams")
     @patch("apps.trading.tasks.backtest._stop_previous_publisher")
     @patch("apps.trading.tasks.backtest.trigger_backtest_publisher")
     @patch("apps.trading.tasks.backtest.BacktestExecutor")
@@ -94,18 +95,32 @@ class TestExecuteBacktest:
     @patch("apps.trading.tasks.backtest.TradingEngine")
     @patch("apps.trading.tasks.backtest.pip_size_for_instrument")
     def test_normal_flow(
-        self, mock_pip, mock_engine, mock_source, mock_executor, mock_trigger, mock_stop_pub
+        self,
+        mock_pip,
+        mock_engine,
+        mock_source,
+        mock_executor,
+        mock_trigger,
+        mock_stop_pub,
+        mock_purge,
     ):
         from apps.trading.tasks.backtest import execute_backtest
 
         task = MagicMock(
-            pk=uuid4(), instrument="EUR_USD", pip_size=None, config={}, account_currency="USD"
+            pk=uuid4(),
+            instrument="EUR_USD",
+            pip_size=None,
+            config={},
+            account_currency="USD",
+            execution_id=uuid4(),
         )
         mock_pip.return_value = 0.0001
         execute_backtest(task)
         mock_stop_pub.assert_called_once_with(str(task.pk))
+        mock_purge.assert_called_once()
         mock_executor.return_value.execute.assert_called_once()
 
+    @patch("apps.trading.tasks.backtest._purge_stale_task_streams")
     @patch("apps.trading.tasks.backtest._stop_previous_publisher")
     @patch("apps.trading.tasks.backtest.trigger_backtest_publisher")
     @patch("apps.trading.tasks.backtest.BacktestExecutor")
@@ -113,12 +128,24 @@ class TestExecuteBacktest:
     @patch("apps.trading.tasks.backtest.TradingEngine")
     @patch("apps.trading.tasks.backtest.pip_size_for_instrument")
     def test_executor_exception(
-        self, mock_pip, mock_engine, mock_source, mock_executor, mock_trigger, mock_stop_pub
+        self,
+        mock_pip,
+        mock_engine,
+        mock_source,
+        mock_executor,
+        mock_trigger,
+        mock_stop_pub,
+        mock_purge,
     ):
         from apps.trading.tasks.backtest import execute_backtest
 
         task = MagicMock(
-            pk=uuid4(), instrument="EUR_USD", pip_size=0.0001, config={}, account_currency="USD"
+            pk=uuid4(),
+            instrument="EUR_USD",
+            pip_size=0.0001,
+            config={},
+            account_currency="USD",
+            execution_id=uuid4(),
         )
         mock_executor.return_value.execute.side_effect = RuntimeError("exec fail")
         with pytest.raises(RuntimeError, match="exec fail"):
@@ -187,6 +214,27 @@ class TestTriggerBacktestPublisher:
         trigger_backtest_publisher(task)
         mock_publish.apply_async.assert_called_once()
 
+    @patch("apps.market.tasks.publish_ticks_for_backtest")
+    @patch("celery.current_app")
+    def test_passes_execution_id_and_start_time(self, mock_app, mock_publish):
+        """Publisher is always invoked with the task's configured start_time
+        and the current execution_id, so a restarted backtest replays from
+        the beginning rather than resuming from a stale ``ExecutionState``.
+        """
+        from apps.trading.tasks.backtest import trigger_backtest_publisher
+
+        execution_id = uuid4()
+        task = MagicMock(pk=uuid4(), instrument="EUR_USD", execution_id=execution_id)
+        task.start_time.isoformat.return_value = "2024-01-01T00:00:00"
+        task.end_time.isoformat.return_value = "2024-01-02T00:00:00"
+        mock_app.control.inspect.return_value.active_queues.return_value = {
+            "worker1": [{"name": "backtest"}],
+        }
+        trigger_backtest_publisher(task)
+        kwargs = mock_publish.apply_async.call_args.kwargs["kwargs"]
+        assert kwargs["start"] == "2024-01-01T00:00:00"
+        assert kwargs["execution_id"] == str(execution_id)
+
 
 class TestStopBacktestTask:
     @patch("apps.trading.tasks.backtest.BacktestTask")
@@ -251,3 +299,44 @@ class TestStopBacktestTask:
         stop_backtest_task.__wrapped__(task_id)
         assert task.status == TaskStatus.STOPPED
         mock_finalize_terminal.assert_called_once()
+
+
+class TestPurgeStaleTaskStreams:
+    """``_purge_stale_task_streams`` must remove any stream key belonging
+    to the task except the current execution's key."""
+
+    def test_deletes_legacy_and_other_execution_keys(self):
+        import fakeredis
+
+        from apps.trading.tasks.backtest import _purge_stale_task_streams
+
+        task_id = "task-123"
+        keep_execution_id = "execution-new"
+
+        fake_client = fakeredis.FakeRedis(decode_responses=True)
+        fake_client.xadd(f"market:backtest:stream:{task_id}", {"x": "legacy"})
+        fake_client.xadd(f"market:backtest:stream:{task_id}:execution-old", {"x": "old"})
+        fake_client.xadd(f"market:backtest:stream:{task_id}:{keep_execution_id}", {"x": "keep"})
+        # Unrelated key under a different task id — must be untouched.
+        fake_client.xadd("market:backtest:stream:other-task", {"x": "unrelated"})
+
+        with patch("apps.market.tasks.base.redis_client", return_value=fake_client):
+            _purge_stale_task_streams(task_id, keep_execution_id=keep_execution_id)
+
+        assert not fake_client.exists(f"market:backtest:stream:{task_id}")
+        assert not fake_client.exists(f"market:backtest:stream:{task_id}:execution-old")
+        assert fake_client.exists(f"market:backtest:stream:{task_id}:{keep_execution_id}")
+        assert fake_client.exists("market:backtest:stream:other-task")
+
+    def test_no_op_when_nothing_matches(self):
+        import fakeredis
+
+        from apps.trading.tasks.backtest import _purge_stale_task_streams
+
+        fake_client = fakeredis.FakeRedis(decode_responses=True)
+        fake_client.xadd("market:backtest:stream:other-task", {"x": "1"})
+
+        with patch("apps.market.tasks.base.redis_client", return_value=fake_client):
+            _purge_stale_task_streams("unknown-task", keep_execution_id="execution-none")
+
+        assert fake_client.exists("market:backtest:stream:other-task")

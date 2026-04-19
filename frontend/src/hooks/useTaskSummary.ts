@@ -35,6 +35,8 @@ export interface CountsInfo {
   closedPositions: number;
   openLongUnits: number;
   openShortUnits: number;
+  winningTrades: number;
+  losingTrades: number;
 }
 
 export interface ExecutionInfo {
@@ -86,6 +88,8 @@ const INITIAL_SUMMARY: TaskSummary = {
     closedPositions: 0,
     openLongUnits: 0,
     openShortUnits: 0,
+    winningTrades: 0,
+    losingTrades: 0,
   },
   execution: {
     currentBalance: null,

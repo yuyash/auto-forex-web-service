@@ -467,9 +467,12 @@ class RedisStreamTickDataSource(TickDataSource):
 
         # Trigger publisher after the client is ready.  The publisher is
         # responsible for creating the consumer group via XGROUP CREATE
-        # MKSTREAM, so we don't need to do it ourselves.  In Celery eager
-        # mode (used by some tests) ``apply_async`` runs synchronously,
-        # so run the trigger in a background thread to avoid deadlocking.
+        # MKSTREAM, and for clearing any stale stream entries before its
+        # first ``XADD`` (see ``BacktestTickPublisherRunner.run``), so the
+        # subscriber does not need to do any cleanup of its own.  In
+        # Celery eager mode (used by some tests) ``apply_async`` runs
+        # synchronously, so run the trigger in a background thread to
+        # avoid deadlocking.
         if self.trigger_publisher:
             logger.info(f"Triggering publisher for stream: {self.stream_key}")
             from celery import current_app
@@ -531,10 +534,15 @@ class RedisStreamTickDataSource(TickDataSource):
                     # the consumer group, or a concurrent run destroyed
                     # it (e.g., the publisher just called
                     # ``XGROUP DESTROY`` to reset the group in the
-                    # eager-mode tests).  Recreate the group at ``0``
-                    # so we also pick up any entries the publisher has
-                    # already queued, then retry the read on the next
-                    # loop iteration.
+                    # eager-mode tests).  Recreate the group at the
+                    # stream tip (``$``) instead of ``0`` — we never
+                    # want to pull in entries that existed before the
+                    # current run, since the publisher is the only
+                    # source of ticks for this execution and it begins
+                    # writing from a clean state.  Using ``0`` here
+                    # was how simulated time previously jumped across
+                    # stale entries left over from an earlier
+                    # execution on the same task id.
                     if "NOGROUP" in str(exc):
                         logger.info(
                             "RedisStreamTickDataSource: NOGROUP on %s, "
@@ -542,7 +550,7 @@ class RedisStreamTickDataSource(TickDataSource):
                             self.stream_key,
                             self.consumer_group,
                         )
-                        self._ensure_consumer_group(from_start=True)
+                        self._ensure_consumer_group(from_start=False)
                         continue
                     raise
                 except (redis.ConnectionError, ConnectionError) as exc:

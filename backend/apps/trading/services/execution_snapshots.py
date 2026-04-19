@@ -173,6 +173,8 @@ def _deserialize_summary(raw: dict[str, Any]) -> TaskSummary:
             closed_positions=int(counts.get("closed_positions") or 0),
             open_long_units=int(counts.get("open_long_units") or 0),
             open_short_units=int(counts.get("open_short_units") or 0),
+            winning_trades=int(counts.get("winning_trades") or 0),
+            losing_trades=int(counts.get("losing_trades") or 0),
         ),
         execution=ExecutionInfo(
             current_balance=_to_optional_decimal(execution.get("current_balance")),
