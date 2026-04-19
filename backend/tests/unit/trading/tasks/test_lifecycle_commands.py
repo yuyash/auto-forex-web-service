@@ -39,7 +39,13 @@ def _make_commands(service: MagicMock) -> tuple[TaskLifecycleCommands, MagicMock
 def test_stop_uses_injected_adapters() -> None:
     task_id = uuid4()
     execution_id = uuid4()
-    task = MagicMock(pk=task_id, status=TaskStatus.RUNNING, execution_id=execution_id)
+    celery_task_id = uuid4()
+    task = MagicMock(
+        pk=task_id,
+        status=TaskStatus.RUNNING,
+        execution_id=execution_id,
+        celery_task_id=celery_task_id,
+    )
     service = MagicMock()
     service._get_task_and_type.return_value = (task, "trading")
 
@@ -49,18 +55,20 @@ def test_stop_uses_injected_adapters() -> None:
 
     assert result is True
     adapters.signal_stop.assert_called_once()
-    adapters.revoke_execution.assert_called_once_with(execution_id)
+    adapters.revoke_execution.assert_called_once_with(celery_task_id)
     adapters.dispatch_stop.assert_called_once_with(task_id, False, StopMode.IMMEDIATE)
 
 
 def test_restart_uses_injected_sleep() -> None:
     task_id = uuid4()
     execution_id = uuid4()
+    celery_task_id = uuid4()
     task_model = type("DummyTaskModel", (), {"objects": MagicMock()})
     task = task_model()
     task.pk = task_id
     task.status = TaskStatus.RUNNING
     task.execution_id = execution_id
+    task.celery_task_id = celery_task_id
     task.refresh_from_db = MagicMock(
         side_effect=lambda: setattr(task, "status", TaskStatus.CREATED)
     )
@@ -81,7 +89,12 @@ def test_restart_uses_injected_sleep() -> None:
 
 def test_stop_continues_when_signal_adapter_fails() -> None:
     task_id = uuid4()
-    task = MagicMock(pk=task_id, status=TaskStatus.RUNNING, execution_id=uuid4())
+    task = MagicMock(
+        pk=task_id,
+        status=TaskStatus.RUNNING,
+        execution_id=uuid4(),
+        celery_task_id=uuid4(),
+    )
     service = MagicMock()
     service._get_task_and_type.return_value = (task, "backtest")
 

@@ -536,9 +536,13 @@ class TaskExecutor:
             execution is continuing from a previous run.
         """
         logger.info("Starting task execution")
+        celery_task_id = getattr(self.task, "celery_task_id", None)
         self.state_manager.start(
-            celery_task_id=str(self.task.execution_id) if self.task.execution_id else None,
-            meta={"execution_id": str(self.task.execution_id) if self.task.execution_id else None},
+            celery_task_id=str(celery_task_id) if celery_task_id else None,
+            meta={
+                "execution_id": str(self.task.execution_id) if self.task.execution_id else None,
+                "celery_task_id": str(celery_task_id) if celery_task_id else None,
+            },
         )
 
         state, resumed = self._load_state_with_metadata()

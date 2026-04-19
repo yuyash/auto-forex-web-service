@@ -50,8 +50,14 @@ class TestStartTask:
         task.status = TaskStatus.CREATED
         task.instrument = "EUR_USD"
         task.validate_configuration.return_value = (True, None)
-        mock_uuid.return_value = "generated-uuid"
-        mock_celery_task.apply_async.return_value = MagicMock(id="generated-uuid")
+        execution_uuid = uuid4()
+        celery_uuid = uuid4()
+        # _prepare_detached_start_task calls uuid4() twice: first for
+        # execution_id, then for celery_task_id.  _dispatch_task pulls
+        # celery_task_id from the task attribute, so we return both in
+        # call order.
+        mock_uuid.side_effect = [execution_uuid, celery_uuid]
+        mock_celery_task.apply_async.return_value = MagicMock(id=str(celery_uuid))
         mock_app.control.inspect.return_value.active.return_value = {"worker1": []}
 
         service = TaskService()
@@ -62,8 +68,13 @@ class TestStartTask:
 
         assert result is task
         assert task.status == TaskStatus.STARTING
-        assert task.execution_id == "generated-uuid"
-        mock_celery_task.apply_async.assert_called_once()
+        assert task.execution_id == execution_uuid
+        assert task.celery_task_id == celery_uuid
+        mock_celery_task.apply_async.assert_called_once_with(
+            args=[task.pk],
+            task_id=str(celery_uuid),
+            queue="backtest",
+        )
 
     @patch("celery.current_app")
     @patch("apps.trading.tasks.service.uuid4")
@@ -83,8 +94,10 @@ class TestStartTask:
         task.oanda_account = MagicMock()
         task.oanda_account.pk = uuid4()
         task.validate_configuration.return_value = (True, None)
-        mock_uuid.return_value = "generated-uuid"
-        mock_celery_task.apply_async.return_value = MagicMock(id="generated-uuid")
+        execution_uuid = uuid4()
+        celery_uuid = uuid4()
+        mock_uuid.side_effect = [execution_uuid, celery_uuid]
+        mock_celery_task.apply_async.return_value = MagicMock(id=str(celery_uuid))
         mock_app.control.inspect.return_value.active.return_value = {"worker1": []}
 
         service = TaskService()
@@ -169,6 +182,7 @@ class TestStartTask:
 
         assert task.status == TaskStatus.CREATED
         assert task.execution_id is None
+        assert task.celery_task_id is None
 
     @patch("apps.trading.tasks.service.run_trading_task")
     def test_rejects_already_running_account(self, mock_celery_task):
@@ -189,6 +203,7 @@ class TestStartTask:
 
 
 class TestRecoverTradingTask:
+    @patch("apps.trading.tasks.service.uuid4")
     @patch("apps.trading.tasks.service.transaction.atomic")
     @patch("apps.trading.tasks.service.run_trading_task")
     @patch("apps.trading.tasks.service.TradingTask")
@@ -197,6 +212,7 @@ class TestRecoverTradingTask:
         mock_tt,
         mock_run_trading_task,
         mock_atomic,
+        mock_uuid,
     ):
         from apps.trading.tasks.service import TaskService
 
@@ -207,11 +223,16 @@ class TestRecoverTradingTask:
         task.pk = uuid4()
         task.status = TaskStatus.RUNNING
         task.execution_id = uuid4()
+        task.celery_task_id = uuid4()
 
         locked = MagicMock(spec=TradingTask)
         locked.pk = task.pk
         locked.status = TaskStatus.RUNNING
         locked.execution_id = task.execution_id
+        locked.celery_task_id = task.celery_task_id
+
+        new_celery_task_id = uuid4()
+        mock_uuid.return_value = new_celery_task_id
 
         mock_tt.objects.select_for_update.return_value.get.return_value = locked
 
@@ -219,10 +240,13 @@ class TestRecoverTradingTask:
 
         assert result is locked
         assert locked.status == TaskStatus.STARTING
+        # execution_id must be preserved so execution-scoped state is continuous.
         assert locked.execution_id == task.execution_id
+        # celery_task_id is rotated to avoid the revoke-list of the previous worker.
+        assert locked.celery_task_id == new_celery_task_id
         mock_run_trading_task.apply_async.assert_called_once_with(
             args=[locked.pk],
-            task_id=str(task.execution_id),
+            task_id=str(new_celery_task_id),
             queue="trading",
         )
 
@@ -271,11 +295,12 @@ class TestRecoverTradingTask:
 
 
 class TestResumeTask:
+    @patch("apps.trading.tasks.lifecycle_commands.uuid4")
     @patch("apps.trading.tasks.service.transaction.atomic")
     @patch("apps.trading.tasks.service.run_backtest_task")
     @patch("apps.trading.tasks.service.BacktestTask")
     def test_resumes_paused_backtest_in_same_run(
-        self, mock_bt, mock_run_backtest_task, mock_atomic
+        self, mock_bt, mock_run_backtest_task, mock_atomic, mock_uuid4
     ):
         from apps.trading.tasks.service import TaskService
 
@@ -284,15 +309,21 @@ class TestResumeTask:
 
         task_id = uuid4()
         execution_id = uuid4()
+        old_celery_task_id = uuid4()
+        new_celery_task_id = uuid4()
+        mock_uuid4.return_value = new_celery_task_id
+
         task = MagicMock(spec=BacktestTask)
         task.pk = task_id
         task.status = TaskStatus.PAUSED
         task.execution_id = execution_id
+        task.celery_task_id = old_celery_task_id
 
         locked = MagicMock(spec=BacktestTask)
         locked.pk = task_id
         locked.status = TaskStatus.PAUSED
         locked.execution_id = execution_id
+        locked.celery_task_id = old_celery_task_id
         mock_bt.objects.select_for_update.return_value.get.return_value = locked
         mock_bt.objects.get.return_value = task
         mock_bt.DoesNotExist = _DoesNotExist
@@ -302,10 +333,14 @@ class TestResumeTask:
 
         assert result is locked
         assert locked.status == TaskStatus.STARTING
+        # execution_id is preserved across resume
         assert locked.execution_id == execution_id
+        # celery_task_id is rotated so the new Celery job is not
+        # suppressed by the revoke list.
+        assert locked.celery_task_id == new_celery_task_id
         mock_run_backtest_task.apply_async.assert_called_once_with(
             args=[task_id],
-            task_id=str(execution_id),
+            task_id=str(new_celery_task_id),
             queue="backtest",
         )
 
@@ -339,7 +374,7 @@ class TestResumeTask:
     @patch("apps.trading.tasks.service.run_trading_task")
     @patch("apps.trading.tasks.service.TradingTask")
     @patch("apps.trading.tasks.service.BacktestTask")
-    def test_resume_from_failed_rotates_execution_id(
+    def test_resume_from_failed_rotates_celery_task_id_only(
         self,
         mock_bt,
         mock_tt,
@@ -347,18 +382,21 @@ class TestResumeTask:
         mock_atomic,
         mock_uuid4,
     ):
-        """Resuming a FAILED trading task must allocate a fresh execution_id
-        so the new Celery task is not dropped by the revoke list of the
-        previous (revoked) run."""
+        """Resuming a FAILED trading task must rotate celery_task_id (so the
+        new Celery job is not dropped by the revoke list) while preserving
+        execution_id (so the previous execution's persisted strategy state,
+        positions, events, and trades continue to apply to the resumed run).
+        """
         from apps.trading.tasks.service import TaskService
 
         mock_atomic.return_value.__enter__.return_value = None
         mock_atomic.return_value.__exit__.return_value = None
 
         task_id = uuid4()
-        old_execution_id = uuid4()
-        new_execution_id = uuid4()
-        mock_uuid4.return_value = new_execution_id
+        execution_id = uuid4()
+        old_celery_task_id = uuid4()
+        new_celery_task_id = uuid4()
+        mock_uuid4.return_value = new_celery_task_id
 
         # Only TradingTask exists
         mock_bt.objects.get.side_effect = _DoesNotExist
@@ -367,11 +405,13 @@ class TestResumeTask:
         locked = MagicMock(spec=TradingTask)
         locked.pk = task_id
         locked.status = TaskStatus.FAILED
-        locked.execution_id = old_execution_id
+        locked.execution_id = execution_id
+        locked.celery_task_id = old_celery_task_id
         task = MagicMock(spec=TradingTask)
         task.pk = task_id
         task.status = TaskStatus.FAILED
-        task.execution_id = old_execution_id
+        task.execution_id = execution_id
+        task.celery_task_id = old_celery_task_id
         mock_tt.objects.select_for_update.return_value.get.return_value = locked
         mock_tt.objects.get.return_value = task
         mock_tt.DoesNotExist = _DoesNotExist
@@ -387,11 +427,13 @@ class TestResumeTask:
         ):
             TaskService().resume_task(task_id)
 
-        assert locked.execution_id == new_execution_id
-        # Dispatched with the rotated id, not the old one
+        # execution_id is preserved — this is the whole point of the fix.
+        assert locked.execution_id == execution_id
+        # celery_task_id is rotated to avoid the revoke-list collision.
+        assert locked.celery_task_id == new_celery_task_id
         mock_run_trading_task.apply_async.assert_called_once_with(
             args=[task_id],
-            task_id=str(new_execution_id),
+            task_id=str(new_celery_task_id),
             queue="trading",
         )
 
@@ -469,7 +511,13 @@ class TestStopTask:
 
         task_id = uuid4()
         execution_id = uuid4()
-        task = MagicMock(pk=task_id, status=TaskStatus.RUNNING, execution_id=execution_id)
+        celery_task_id = uuid4()
+        task = MagicMock(
+            pk=task_id,
+            status=TaskStatus.RUNNING,
+            execution_id=execution_id,
+            celery_task_id=celery_task_id,
+        )
         mock_bt.DoesNotExist = _DoesNotExist
         mock_bt.objects.get.side_effect = _DoesNotExist
         mock_tt.objects.get.return_value = task
@@ -477,7 +525,7 @@ class TestStopTask:
 
         assert TaskService().stop_task(task_id, mode="immediate") is True
         mock_app.control.revoke.assert_called_once_with(
-            str(execution_id), terminate=True, signal="SIGKILL"
+            str(celery_task_id), terminate=True, signal="SIGKILL"
         )
         mock_stop.apply_async.assert_called_once_with(
             args=[task_id, "immediate"],
@@ -555,7 +603,13 @@ class TestCancelTask:
     def test_cancel_running_task(self, mock_bt, mock_tz, mock_sync_publish):
         from apps.trading.tasks.service import TaskService
 
-        task = MagicMock(pk=uuid4(), status=TaskStatus.RUNNING, execution_id=uuid4())
+        celery_task_id = uuid4()
+        task = MagicMock(
+            pk=uuid4(),
+            status=TaskStatus.RUNNING,
+            execution_id=uuid4(),
+            celery_task_id=celery_task_id,
+        )
         mock_bt.objects.get.return_value = task
         mock_bt.DoesNotExist = _DoesNotExist
 
@@ -567,6 +621,7 @@ class TestCancelTask:
 
         assert result is True
         assert task.status == TaskStatus.STOPPED
+        mock_get.assert_called_once_with(str(celery_task_id))
         mock_result.revoke.assert_called_once_with(terminate=True)
         mock_sync_publish.assert_called_once()
 

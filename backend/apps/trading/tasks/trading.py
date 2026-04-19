@@ -171,10 +171,13 @@ def stop_trading_task(self: Any, task_id: UUID, mode: str = "graceful") -> None:
             return
 
         if task.status == TaskStatus.STOPPING:
-            if stop_mode == StopMode.IMMEDIATE and task.execution_id:
+            # Fall back to execution_id for older rows that pre-date the
+            # celery_task_id field and may still have it set to NULL.
+            celery_id = task.celery_task_id or task.execution_id
+            if stop_mode == StopMode.IMMEDIATE and celery_id:
                 from celery import current_app
 
-                current_app.control.revoke(str(task.execution_id), terminate=True, signal="SIGKILL")
+                current_app.control.revoke(str(celery_id), terminate=True, signal="SIGKILL")
 
             if stop_mode == StopMode.GRACEFUL_CLOSE or getattr(task, "sell_on_stop", False) is True:
                 _close_open_positions_for_task(task)

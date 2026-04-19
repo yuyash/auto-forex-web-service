@@ -156,16 +156,18 @@ def _is_orphaned_prefetched(
     active_task_ids: set[str],
 ) -> bool:
     """Return True if the task has no recent heartbeat (using prefetched data)."""
-    execution_id = str(task.execution_id or "")
-    if execution_id and execution_id in active_task_ids:
+    # Fall back to execution_id for older rows that pre-date the
+    # celery_task_id field and may still have it set to NULL.
+    celery_task_id = str(task.celery_task_id or task.execution_id or "")
+    if celery_task_id and celery_task_id in active_task_ids:
         return False
 
     if source == "worker_ready":
         logger.info(
             "[RECOVERY] No active Celery execution found during startup for task_id=%s "
-            "(execution_id=%s) — treating as orphaned immediately",
+            "(celery_task_id=%s) — treating as orphaned immediately",
             task.pk,
-            task.execution_id,
+            task.celery_task_id,
         )
         return True
 

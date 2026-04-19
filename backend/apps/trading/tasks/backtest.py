@@ -516,8 +516,11 @@ def stop_backtest_task(self: Any, task_id: UUID, mode: str = "graceful") -> None
                     publisher_celery_status.celery_task_id, terminate=True, signal="SIGKILL"
                 )
 
-            if task.execution_id:
-                current_app.control.revoke(str(task.execution_id), terminate=True, signal="SIGKILL")
+            # Fall back to execution_id for older rows that pre-date
+            # the celery_task_id field and may still have it set to NULL.
+            celery_id = task.celery_task_id or task.execution_id
+            if celery_id:
+                current_app.control.revoke(str(celery_id), terminate=True, signal="SIGKILL")
 
             finalize_task_terminal_lifecycle(
                 logger=logger,

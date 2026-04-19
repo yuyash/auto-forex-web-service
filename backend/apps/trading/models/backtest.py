@@ -166,12 +166,26 @@ class BacktestTask(UUIDModel):
         help_text="Close all positions at current tick price when the task is stopped",
     )
 
-    # Execution tracking – a single UUID that doubles as the Celery task_id.
+    # Execution tracking.  ``execution_id`` identifies the logical execution
+    # run and is used as the scope key for all execution-scoped data
+    # (ExecutionState, positions, events, trades, etc.).  It is preserved
+    # across resume so the new run can load the previous run's state.
     execution_id = models.UUIDField(
         null=True,
         blank=True,
         db_index=True,
-        help_text="UUID identifying the current execution run (also used as Celery task_id)",
+        help_text="UUID identifying the current execution run",
+    )
+    # ``celery_task_id`` is the physical Celery job identifier passed to
+    # ``apply_async(task_id=...)``.  It is rotated on every resume so the
+    # new Celery task is not suppressed by the revoke list of the previous
+    # run.  Rotating this instead of ``execution_id`` keeps the execution
+    # state continuous across resumes.
+    celery_task_id = models.UUIDField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Celery task_id for the current worker invocation",
     )
 
     # Execution State
@@ -298,9 +312,15 @@ class BacktestTask(UUIDModel):
             )
 
         # If task is stuck in STOPPING, revoke Celery task and clean up
-        if self.status == TaskStatus.STOPPING and self.execution_id:
+        # Use celery_task_id (the physical Celery job id) rather than
+        # execution_id (the logical run id).  They are separate since we
+        # rotate celery_task_id on resume while keeping execution_id stable.
+        # Fall back to execution_id for older rows that pre-date the
+        # celery_task_id field and may still have it set to NULL.
+        celery_id = self.celery_task_id or self.execution_id
+        if self.status == TaskStatus.STOPPING and celery_id:
             from celery import current_app
 
-            current_app.control.revoke(str(self.execution_id), terminate=True, signal="SIGKILL")
+            current_app.control.revoke(str(celery_id), terminate=True, signal="SIGKILL")
 
         return super().delete(*args, **kwargs)

@@ -124,9 +124,17 @@ class TaskService:
     def _dispatch_task(task: BacktestTask | TradingTask, task_type: str) -> None:
         celery_task = run_backtest_task if task_type == "backtest" else run_trading_task
         queue = "backtest" if task_type == "backtest" else "trading"
+        celery_task_id = getattr(task, "celery_task_id", None)
+        if not celery_task_id:
+            # Defensive: should have been set by start/resume/restart, but
+            # if it is missing we still need a unique Celery id so the
+            # worker can accept the message.
+            celery_task_id = uuid4()
+            type(task).objects.filter(pk=task.pk).update(celery_task_id=celery_task_id)
+            task.celery_task_id = celery_task_id
         celery_task.apply_async(
             args=[task.pk],
-            task_id=str(task.execution_id),
+            task_id=str(celery_task_id),
             queue=queue,
         )
 
@@ -202,8 +210,11 @@ class TaskService:
                 raise TaskValidationError(f"Task configuration is invalid: {error_message}")
 
             locked_task.execution_id = uuid4()
+            locked_task.celery_task_id = uuid4()
             locked_task.status = TaskStatus.STARTING
-            locked_task.save(update_fields=["execution_id", "status", "updated_at"])
+            locked_task.save(
+                update_fields=["execution_id", "celery_task_id", "status", "updated_at"]
+            )
             return locked_task
 
     def _prepare_detached_start_task(
@@ -223,9 +234,10 @@ class TaskService:
             raise TaskValidationError(f"Task configuration is invalid: {error_message}")
 
         task.execution_id = uuid4()
+        task.celery_task_id = uuid4()
         task.status = TaskStatus.STARTING
         try:
-            task.save(update_fields=["execution_id", "status", "updated_at"])
+            task.save(update_fields=["execution_id", "celery_task_id", "status", "updated_at"])
         except TypeError:
             task.save()
         return task
@@ -311,12 +323,18 @@ class TaskService:
             locked_task.completed_at = None
             locked_task.error_message = None
             locked_task.error_traceback = None
+            # Rotate celery_task_id so the new Celery job is not suppressed
+            # by the revoke list left over from the previous (orphaned)
+            # worker.  execution_id is preserved so execution-scoped state
+            # (ExecutionState, positions, events, ...) stays continuous.
+            locked_task.celery_task_id = uuid4()
             locked_task.save(
                 update_fields=[
                     "status",
                     "completed_at",
                     "error_message",
                     "error_traceback",
+                    "celery_task_id",
                     "updated_at",
                 ]
             )
