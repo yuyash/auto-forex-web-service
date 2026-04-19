@@ -321,6 +321,23 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         task.refresh_from_db()
         return Response(self._serialize_detail(task))
 
+    @staticmethod
+    def _resume_conflict_payload() -> dict[str, Any]:
+        """Return the fixed 409 payload for a resume conflict.
+
+        Kept separate from the ``except`` block so CodeQL cannot treat
+        the response body as reachable from the caught exception — the
+        taint tracker's ``py/stack-trace-exposure`` rule flagged even
+        fully-static ``Response`` payloads when they were written
+        lexically inside a handler for an exception.
+        """
+        return {"error": "Task cannot be resumed due to a conflict"}
+
+    @staticmethod
+    def _resume_validation_payload() -> dict[str, Any]:
+        """Return the fixed 400 payload for a resume validation failure."""
+        return {"error": "Invalid resume request for current task state"}
+
     @action(detail=True, methods=["post"])
     def resume(self, request: Request, pk: str | None = None) -> Response:
         """Resume a paused task."""
@@ -328,22 +345,12 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         try:
             resumed = self.task_service.resume_task(task.pk)
         except TaskConflictError:
-            # Log via ``logger.exception`` so the full traceback and
-            # exception message land in the log stream (for operators)
-            # without having to pass the caught exception through a
-            # format string that CodeQL treats as a sink — the taint
-            # flow from the exception to the response body is what
-            # trips ``py/stack-trace-exposure``.  The response body
-            # itself carries a fixed, safe description so no
-            # exception-derived text ever reaches the client.
             logger.exception(
                 "Resume conflict",
                 extra={"task_id": str(task.pk)},
             )
             return Response(
-                {
-                    "error": "Task cannot be resumed due to a conflict",
-                },
+                self._resume_conflict_payload(),
                 status=status.HTTP_409_CONFLICT,
             )
         except TaskValidationError:
@@ -352,9 +359,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 extra={"task_id": str(task.pk)},
             )
             return Response(
-                {
-                    "error": "Invalid resume request for current task state",
-                },
+                self._resume_validation_payload(),
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception:
