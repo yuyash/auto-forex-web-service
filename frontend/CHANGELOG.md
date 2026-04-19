@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.51.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.51.0...frontend-v1.51.1) (2026-04-19)
+
+
+### Bug Fixes
+
+* task lifecycle followups ([#541](https://github.com/yuyash/auto-forex-web-service/issues/541)) ([c4c3737](https://github.com/yuyash/auto-forex-web-service/commit/c4c373791fb9427d54d5bd3c7f9071a0954b4234))
+
 ## [1.51.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.9...frontend-v1.51.0) (2026-04-18)
 
 
