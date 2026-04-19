@@ -160,6 +160,43 @@ export function BacktestOverviewTab({
                 />
               </Box>
             </Box>
+            {(() => {
+              const effectiveStatus = String(
+                currentStatus || task.status || ''
+              ).toLowerCase();
+              const terminalStatuses = [
+                'stopped',
+                'completed',
+                'failed',
+                'paused',
+              ];
+              if (!terminalStatuses.includes(effectiveStatus)) return null;
+              const stopReason =
+                summary.task.stopReason ||
+                summary.task.errorMessage ||
+                (effectiveStatus === 'completed'
+                  ? t('backtest:detail.stopReasonCompleted')
+                  : effectiveStatus === 'stopped'
+                    ? t('backtest:detail.stopReasonNormal')
+                    : effectiveStatus === 'paused'
+                      ? t('backtest:detail.stopReasonPaused')
+                      : t('backtest:detail.stopReasonFailedFallback'));
+              const isError = effectiveStatus === 'failed';
+              return (
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    {t('backtest:detail.stopReason')}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color={isError ? 'error.main' : 'text.primary'}
+                    sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                  >
+                    {stopReason}
+                  </Typography>
+                </Box>
+              );
+            })()}
             <Box>
               <Typography variant="caption" color="text.secondary">
                 {t('common:labels.taskId')}

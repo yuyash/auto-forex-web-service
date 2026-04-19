@@ -51,7 +51,7 @@ from apps.trading.strategies.snowball.models import (
     SnowballStrategyState,
     StopLossClosedEntry,
 )
-from apps.trading.utils import quote_to_account_rate
+from apps.trading.utils import format_money, quote_to_account_rate
 
 logger: Logger = getLogger(__name__)
 
@@ -192,17 +192,18 @@ class SnowballStrategy(Strategy):
         # warrant a warning on their own.
         if close_reason != "stop_loss" and delta_pnl < 0:
             logger.warning(
-                "Close with negative P/L (reason=%s): entry_id=%s L%d/R%d %s "
-                "entry=%s exit=%s units=%s pnl=%s",
+                "Close with negative P/L (reason=%s): entry_id=%s position_id=%s "
+                "L%d/R%d %s entry=%s exit=%s units=%s pnl=%s",
                 close_reason or "unknown",
                 entry.entry_id,
+                entry.position_id or "-",
                 entry.layer_number,
                 entry.retracement_count,
                 entry.direction.value.upper(),
                 entry.entry_price,
                 event.exit_price,
                 entry.units,
-                delta_pnl,
+                format_money(delta_pnl),
             )
 
         # Warning 2: slot lifecycle (open → *SL → rebuild → close)
@@ -216,13 +217,15 @@ class SnowballStrategy(Strategy):
         ):
             logger.warning(
                 "Slot lifecycle closed with negative net P/L: entry_id=%s "
-                "L%d/R%d %s stop_losses=%d net_pnl=%s (final_close_reason=%s)",
+                "position_id=%s L%d/R%d %s stop_losses=%d net_pnl=%s "
+                "(final_close_reason=%s)",
                 entry.entry_id,
+                entry.position_id or "-",
                 entry.layer_number,
                 entry.retracement_count,
                 entry.direction.value.upper(),
                 entry.lifecycle_stop_loss_count,
-                entry.lifecycle_realized_pnl,
+                format_money(entry.lifecycle_realized_pnl),
                 close_reason or "unknown",
             )
 
@@ -1159,7 +1162,7 @@ class SnowballStrategy(Strategy):
             "EMERGENCY STOP: margin ratio %.1f%% >= %s%% | NAV=%s, entries=%d",
             ratio,
             threshold,
-            ss.account_nav,
+            format_money(ss.account_nav),
             len(all_entries),
         )
         event = GenericStrategyEvent(

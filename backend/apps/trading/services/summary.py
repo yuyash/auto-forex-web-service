@@ -72,6 +72,7 @@ class TaskInfo:
     started_at: str | None
     completed_at: str | None
     error_message: str | None
+    stop_reason: str | None
     progress: int
 
 
@@ -246,6 +247,13 @@ def compute_task_summary(
         completed_at = task_obj.completed_at.isoformat() if task_obj.completed_at else None
         error_message = task_obj.error_message
 
+    stop_reason = _compute_stop_reason(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=execution_id,
+        task=task_obj,
+    )
+
     # Currency conversion for display
     if task_obj:
         if task_type == "backtest":
@@ -304,6 +312,7 @@ def compute_task_summary(
             started_at=started_at,
             completed_at=completed_at,
             error_message=error_message,
+            stop_reason=stop_reason,
             progress=_compute_progress(task_type, task_obj, state),
         ),
     )
@@ -469,3 +478,92 @@ TASK_SUMMARY_SNAPSHOT_CACHE_TTL_SECONDS = 60 * 60 * 24
 
 def _is_terminal_status(status: str | None) -> bool:
     return status in {"completed", "stopped", "failed"}
+
+
+def _compute_stop_reason(
+    *,
+    task_type: str,
+    task_id: str,
+    execution_id,
+    task,
+) -> str | None:
+    """Derive a human-readable stop reason for the overview tab.
+
+    Priority:
+    1. For FAILED tasks, surface ``task.error_message`` (populated by the
+       executor). Fall back to the ``CeleryTaskStatus.status_message`` if
+       the DB field is empty.
+    2. For terminal states (STOPPED/COMPLETED/PAUSED), return the
+       ``CeleryTaskStatus.status_message`` from the matching execution
+       when available (e.g. "Execution completed successfully",
+       "Execution stopped by external signal").
+    3. Otherwise return ``None`` so the UI can render its own neutral
+       placeholder.
+    """
+    if task is None:
+        return None
+
+    status = str(getattr(task, "status", "") or "")
+    terminal_states = {"failed", "stopped", "completed", "paused"}
+    if status not in terminal_states:
+        return None
+
+    status_message = _fetch_celery_status_message(
+        task_type=task_type,
+        task_id=task_id,
+        execution_id=execution_id or getattr(task, "execution_id", None),
+    )
+
+    if status == "failed":
+        err = (getattr(task, "error_message", None) or "").strip()
+        if err:
+            return err
+        if status_message:
+            return status_message
+        return None
+
+    if status_message:
+        return status_message
+
+    # Last-resort default for normal terminal states without a stored
+    # status message (e.g. older executions finalized before the executor
+    # started recording status_message consistently).
+    if status == "completed":
+        return "Execution completed successfully"
+    if status == "stopped":
+        return "Execution stopped"
+    if status == "paused":
+        return "Execution paused"
+    return None
+
+
+def _fetch_celery_status_message(
+    *,
+    task_type: str,
+    task_id: str,
+    execution_id,
+) -> str | None:
+    """Return the ``status_message`` from the CeleryTaskStatus row."""
+    if not execution_id:
+        return None
+
+    from apps.trading.models.celery import CeleryTaskStatus
+
+    task_name = (
+        "trading.tasks.run_backtest_task"
+        if task_type == "backtest"
+        else "trading.tasks.run_trading_task"
+    )
+    instance_key = f"{task_id}:{execution_id}"
+    row = (
+        CeleryTaskStatus.objects.filter(task_name=task_name, instance_key=instance_key)
+        .order_by("-created_at")
+        .values("status_message")
+        .first()
+    )
+    if not row:
+        return None
+    message = row.get("status_message")
+    if not message:
+        return None
+    return str(message).strip() or None

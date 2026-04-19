@@ -69,3 +69,22 @@ def quote_to_account_rate(
             return Decimal("1")
         return Decimal("1") / mid_price
     return Decimal("1")
+
+
+def format_money(value: Decimal | float | int | None, *, places: int = 2) -> str:
+    """Format a monetary amount for human-readable logging.
+
+    Rounds ``value`` to ``places`` decimal places using ``Decimal.quantize``
+    to avoid long fractional tails that result from internal Decimal
+    arithmetic. ``None`` is rendered as the literal string ``"None"`` so
+    log output remains stable for callers that pass optional balances.
+    """
+    if value is None:
+        return "None"
+    if not isinstance(value, Decimal):
+        value = Decimal(str(value))
+    quant = Decimal(1).scaleb(-places)  # e.g. Decimal("0.01") when places=2
+    try:
+        return str(value.quantize(quant))
+    except Exception:  # pragma: no cover - defensive fallback
+        return str(value)

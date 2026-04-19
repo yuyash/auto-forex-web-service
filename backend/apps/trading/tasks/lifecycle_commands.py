@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass
 from logging import Logger
 from typing import TYPE_CHECKING, Callable
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from celery.result import AsyncResult
 from django.conf import settings
@@ -393,6 +393,13 @@ class TaskLifecycleCommands:
             # dispatching a new one. This is a no-op for a clean exit but
             # defensively handles cases where a previous worker crashed
             # without cleaning up its result backend entry.
+            #
+            # After revoking, we MUST allocate a fresh ``execution_id``
+            # for the next run: Celery's revoke list persists by task_id,
+            # so re-submitting ``apply_async(task_id=<same>)`` causes the
+            # worker to drop the message immediately (the symptom is a
+            # task stuck in STARTING indefinitely).  Allocating a new
+            # execution_id sidesteps the revoke list cleanly.
             if locked_task.status in (TaskStatus.STOPPED, TaskStatus.FAILED):
                 try:
                     self._revoke_execution(locked_task.execution_id)
@@ -411,7 +418,15 @@ class TaskLifecycleCommands:
                 locked_task.error_message = None
                 locked_task.error_traceback = None
                 locked_task.completed_at = None
-                update_fields += ["error_message", "error_traceback", "completed_at"]
+                # Rotate execution_id so the new Celery task is not
+                # suppressed by the revoke list of the previous run.
+                locked_task.execution_id = uuid4()
+                update_fields += [
+                    "error_message",
+                    "error_traceback",
+                    "completed_at",
+                    "execution_id",
+                ]
 
             locked_task.status = TaskStatus.STARTING
             locked_task.save(update_fields=update_fields)
