@@ -99,6 +99,7 @@ interface PositionLifecycleResponse {
   matched_position_id: string;
   position_ids: string[];
   positions: PositionLifecycleItem[];
+  chain_realized_pnl?: string | null;
 }
 
 const formatTimestamp = (
@@ -768,6 +769,34 @@ export const PositionLifecycleDialog: React.FC<
                       >
                         {data.matched_position_id}
                       </Typography>
+                      {data.chain_realized_pnl != null ? (
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          alignItems="baseline"
+                          sx={{ mt: 1 }}
+                        >
+                          <Typography variant="caption" color="text.secondary">
+                            {t(
+                              'tables.positions.lifecycle.fields.chainRealizedPnl'
+                            )}
+                          </Typography>
+                          <Typography
+                            variant="subtitle1"
+                            color={
+                              Number(data.chain_realized_pnl) >= 0
+                                ? 'success.main'
+                                : 'error.main'
+                            }
+                            fontWeight={700}
+                          >
+                            {formatSignedPnl(
+                              data.chain_realized_pnl,
+                              positions[0]?.summary.instrument
+                            )}
+                          </Typography>
+                        </Stack>
+                      ) : null}
                     </Box>
                     <Stack
                       direction="row"

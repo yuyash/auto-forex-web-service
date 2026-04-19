@@ -254,6 +254,12 @@ class Entry:
     expected_tp_pips: Decimal | None = None
     validation_status: str = ""
 
+    # Lifecycle P/L tracked across the full open → (optional stop-loss →
+    # rebuild)+ → close chain of this grid slot.  Carried through rebuilds
+    # via ``StopLossClosedEntry``.  Denominated in account currency.
+    lifecycle_realized_pnl: Decimal = field(default_factory=lambda: Decimal("0"))
+    lifecycle_stop_loss_count: int = 0
+
     @classmethod
     def open(
         cls,
@@ -494,6 +500,8 @@ class Entry:
                 str(self.stop_loss_price) if self.stop_loss_price is not None else None
             ),
             "is_rebuild": self.is_rebuild,
+            "lifecycle_realized_pnl": str(self.lifecycle_realized_pnl),
+            "lifecycle_stop_loss_count": self.lifecycle_stop_loss_count,
         }
 
     @staticmethod
@@ -560,6 +568,8 @@ class Entry:
                 else None
             ),
             is_rebuild=bool(d.get("is_rebuild", False)),
+            lifecycle_realized_pnl=_parse_decimal(d.get("lifecycle_realized_pnl", "0"), "0"),
+            lifecycle_stop_loss_count=_parse_int(d.get("lifecycle_stop_loss_count", 0), 0),
         )
 
 
@@ -593,6 +603,13 @@ class StopLossClosedEntry:
     cycle_id: int = 0
     position_id: str | None = None
 
+    # Running lifecycle P/L for the slot: accumulates every stop-loss
+    # loss so the rebuilt entry can continue the chain and the final
+    # close can compare net P/L against zero.  Denominated in account
+    # currency.
+    lifecycle_realized_pnl: Decimal = field(default_factory=lambda: Decimal("0"))
+    lifecycle_stop_loss_count: int = 0
+
     def to_dict(self) -> dict[str, Any]:
         result = {
             "entry_price": str(self.entry_price),
@@ -606,6 +623,8 @@ class StopLossClosedEntry:
             "root_entry_id": self.root_entry_id,
             "parent_entry_id": self.parent_entry_id,
             "cycle_id": self.cycle_id,
+            "lifecycle_realized_pnl": str(self.lifecycle_realized_pnl),
+            "lifecycle_stop_loss_count": self.lifecycle_stop_loss_count,
         }
         if self.position_id is not None:
             result["position_id"] = self.position_id
@@ -636,6 +655,8 @@ class StopLossClosedEntry:
             ),
             cycle_id=_parse_int(d.get("cycle_id", 0), 0),
             position_id=d.get("position_id"),
+            lifecycle_realized_pnl=_parse_decimal(d.get("lifecycle_realized_pnl", "0"), "0"),
+            lifecycle_stop_loss_count=_parse_int(d.get("lifecycle_stop_loss_count", 0), 0),
         )
 
 
@@ -1197,6 +1218,11 @@ class SnowballCycle:
     status: CycleStatus = CycleStatus.ACTIVE
     trade_cycle_id: str | None = None
 
+    # Realised P/L accumulated over every close that happened within this
+    # cycle.  Used for end-of-cycle sanity logging (a completed cycle is
+    # expected to finish non-negative).  Denominated in account currency.
+    realized_pnl: Decimal = field(default_factory=lambda: Decimal("0"))
+
     # -- Backward-compatible property --
 
     @property
@@ -1345,6 +1371,7 @@ class SnowballCycle:
             "completed": self.completed,
             "status": self.status.value,
             "trade_cycle_id": self.trade_cycle_id,
+            "realized_pnl": str(self.realized_pnl),
         }
 
     @staticmethod
@@ -1387,6 +1414,7 @@ class SnowballCycle:
             counter_close_count=_parse_int(data.get("counter_close_count", 0), 0),
             status=status,
             trade_cycle_id=data.get("trade_cycle_id"),
+            realized_pnl=_parse_decimal(data.get("realized_pnl", "0"), "0"),
         )
 
 

@@ -151,8 +151,23 @@ class SnowballStrategy(Strategy):
         actual_tp_pips: Decimal | None = None,
         validation_status: str = "",
         margin_ratio: Decimal | None = None,
+        cycle: SnowballCycle | None = None,
     ) -> ClosePositionEvent:
-        """Create a ClosePositionEvent from an Entry."""
+        """Create a ClosePositionEvent from an Entry and emit sanity warnings.
+
+        Updates ``entry.lifecycle_realized_pnl`` with this close's P/L and,
+        when ``cycle`` is provided, adds the same delta to
+        ``cycle.realized_pnl``.  Emits a ``logger.warning`` in two cases:
+
+        1. A non-stop-loss close ends with negative P/L for this slot's full
+           open → (optional stop-loss → rebuild)+ → close chain.  Open →
+           close without any stop-loss is the degenerate case of the same
+           check and is covered automatically.
+        2. A stop-loss is not expected to be profitable, so it never trips
+           the warning on its own, but it still accumulates into the
+           lifecycle total so the eventual rebuild-close comparison is
+           apples-to-apples.
+        """
         event = entry.to_close_event(
             tick,
             instrument=self.instrument,
@@ -165,6 +180,52 @@ class SnowballStrategy(Strategy):
         )
         if margin_ratio is not None:
             event.margin_ratio = margin_ratio
+
+        # Accumulate P/L at the slot-lifecycle and cycle level.
+        delta_pnl = event.pnl
+        entry.lifecycle_realized_pnl += delta_pnl
+        if cycle is not None:
+            cycle.realized_pnl += delta_pnl
+
+        # Warning 1: single close is negative and is not a stop-loss.
+        # Stop-losses are, by definition, losing closes so they do not
+        # warrant a warning on their own.
+        if close_reason != "stop_loss" and delta_pnl < 0:
+            logger.warning(
+                "Close with negative P/L (reason=%s): entry_id=%s L%d/R%d %s "
+                "entry=%s exit=%s units=%s pnl=%s",
+                close_reason or "unknown",
+                entry.entry_id,
+                entry.layer_number,
+                entry.retracement_count,
+                entry.direction.value.upper(),
+                entry.entry_price,
+                event.exit_price,
+                entry.units,
+                delta_pnl,
+            )
+
+        # Warning 2: slot lifecycle (open → *SL → rebuild → close)
+        # finishes negative.  Only emitted on non-stop-loss closes —
+        # intermediate stop-losses are expected to push the running
+        # total negative.
+        if (
+            close_reason != "stop_loss"
+            and entry.lifecycle_stop_loss_count > 0
+            and entry.lifecycle_realized_pnl < 0
+        ):
+            logger.warning(
+                "Slot lifecycle closed with negative net P/L: entry_id=%s "
+                "L%d/R%d %s stop_losses=%d net_pnl=%s (final_close_reason=%s)",
+                entry.entry_id,
+                entry.layer_number,
+                entry.retracement_count,
+                entry.direction.value.upper(),
+                entry.lifecycle_stop_loss_count,
+                entry.lifecycle_realized_pnl,
+                close_reason or "unknown",
+            )
+
         return event
 
     # ------------------------------------------------------------------
@@ -272,6 +333,7 @@ class SnowballStrategy(Strategy):
                 close_reason="tp",
                 actual_tp_pips=pips_gained,
                 validation_status="pass",
+                cycle=cycle,
             )
         )
 
@@ -539,6 +601,7 @@ class SnowballStrategy(Strategy):
                         close_reason=reason,
                         actual_tp_pips=pips_gained,
                         validation_status=status,
+                        cycle=cycle,
                     )
                 )
             # Remove empty non-L1 layers
@@ -624,6 +687,7 @@ class SnowballStrategy(Strategy):
                     close_reason="counter_tp",
                     actual_tp_pips=pips_gained,
                     validation_status="pass",
+                    cycle=cycle,
                 )
             ]
 
@@ -663,6 +727,7 @@ class SnowballStrategy(Strategy):
                                     close_reason="layer_initial_tp",
                                     actual_tp_pips=r0_pips,
                                     validation_status="pass",
+                                    cycle=cycle,
                                 )
                             )
 
@@ -733,11 +798,14 @@ class SnowballStrategy(Strategy):
                 return []
 
             # Gate: price must have moved adversely from the highest
-            # present slot (occupied or pending rebuild) in the current layer.
+            # present slot (occupied or pending rebuild) in the current
+            # layer.  When the reference slot was filled on *this* tick
+            # (by an earlier same-tick counter-add iteration), compare
+            # against the design cumulative-from-R0 position instead,
+            # otherwise ``adverse`` collapses to zero.
             direction = cycle.direction
             highest = layer.highest_present_slot()
             if highest is not None:
-                # Use the entry price from the live entry or the SL snapshot
                 ref_price = (
                     highest.entry.entry_price
                     if highest.entry is not None
@@ -745,7 +813,29 @@ class SnowballStrategy(Strategy):
                     if highest.pending_rebuild is not None
                     else None
                 )
-                if ref_price is not None:
+                fresh_same_tick = (
+                    highest.entry is not None and highest.entry.opened_at == tick.timestamp
+                )
+                if fresh_same_tick:
+                    r0_slot = layer.slot_at(0)
+                    r0_ref_price: Decimal | None = None
+                    if r0_slot is not None:
+                        if r0_slot.entry is not None:
+                            r0_ref_price = r0_slot.entry.entry_price
+                        elif r0_slot.pending_rebuild is not None:
+                            r0_ref_price = r0_slot.pending_rebuild.entry_price
+                    if r0_ref_price is not None:
+                        cumulative_interval = Decimal("0")
+                        for k in range(1, highest.index + 2):
+                            cumulative_interval += counter_interval_pips(k, cfg)
+                        current_entry_price = self._entry_side_price(direction, tick)
+                        if direction == Direction.LONG:
+                            adverse = (r0_ref_price - current_entry_price) / self.pip_size
+                        else:
+                            adverse = (current_entry_price - r0_ref_price) / self.pip_size
+                        if adverse < cumulative_interval:
+                            return []
+                elif ref_price is not None:
                     current_entry_price = self._entry_side_price(direction, tick)
                     if direction == Direction.LONG:
                         adverse = (ref_price - current_entry_price) / self.pip_size
@@ -770,37 +860,73 @@ class SnowballStrategy(Strategy):
         # (occupied or pending rebuild).  SL-closed positions still
         # count for R-number progression — the next counter must be
         # placed at the correct interval from the last known position.
+        #
+        # Same-tick counter-add loop special case: when the most recent
+        # previous slot was opened on *this* tick, its market fill price
+        # equals the current tick price, which would collapse ``adverse``
+        # to zero and stall the loop.  In that case, compare against the
+        # layer's R0 + cumulative design interval instead.
         direction = cycle.direction
         previous_slot = layer.previous_present_slot(slot.index)
-        if previous_slot is not None:
-            ref_price: Decimal | None = (
-                previous_slot.entry.entry_price
-                if previous_slot.entry is not None
-                else previous_slot.pending_rebuild.entry_price
-                if previous_slot.pending_rebuild is not None
-                else None
-            )
-        else:
-            # First counter in this layer — measure from R0
-            r0 = layer.slot_at(0)
-            if r0 is not None and r0.entry is not None:
-                ref_price = r0.entry.entry_price
-            elif r0 is not None and r0.pending_rebuild is not None:
-                ref_price = r0.pending_rebuild.entry_price
+        fresh_same_tick = (
+            previous_slot is not None
+            and previous_slot.entry is not None
+            and previous_slot.entry.opened_at == tick.timestamp
+        )
+
+        if fresh_same_tick:
+            r0_slot = layer.slot_at(0)
+            r0_ref_price: Decimal | None = None
+            if r0_slot is not None:
+                if r0_slot.entry is not None:
+                    r0_ref_price = r0_slot.entry.entry_price
+                elif r0_slot.pending_rebuild is not None:
+                    r0_ref_price = r0_slot.pending_rebuild.entry_price
+            if r0_ref_price is None:
+                r0_ref_price = head_entry_price
+            if r0_ref_price is None:
+                return []
+            cumulative_interval = Decimal("0")
+            for k in range(1, slot.index + 1):
+                cumulative_interval += counter_interval_pips(k, cfg)
+            current_entry_price = self._entry_side_price(direction, tick)
+            if direction == Direction.LONG:
+                adverse = (r0_ref_price - current_entry_price) / self.pip_size
             else:
-                ref_price = head_entry_price
-
-        if ref_price is None:
-            return []
-        current_entry_price = self._entry_side_price(direction, tick)
-        if direction == Direction.LONG:
-            adverse = (ref_price - current_entry_price) / self.pip_size
+                adverse = (current_entry_price - r0_ref_price) / self.pip_size
+            interval = counter_interval_pips(slot.index, cfg)
+            if adverse < cumulative_interval:
+                return []
         else:
-            adverse = (current_entry_price - ref_price) / self.pip_size
+            if previous_slot is not None:
+                ref_price: Decimal | None = (
+                    previous_slot.entry.entry_price
+                    if previous_slot.entry is not None
+                    else previous_slot.pending_rebuild.entry_price
+                    if previous_slot.pending_rebuild is not None
+                    else None
+                )
+            else:
+                # First counter in this layer — measure from R0
+                r0 = layer.slot_at(0)
+                if r0 is not None and r0.entry is not None:
+                    ref_price = r0.entry.entry_price
+                elif r0 is not None and r0.pending_rebuild is not None:
+                    ref_price = r0.pending_rebuild.entry_price
+                else:
+                    ref_price = head_entry_price
 
-        interval = counter_interval_pips(slot.index, cfg)
-        if adverse < interval:
-            return []
+            if ref_price is None:
+                return []
+            current_entry_price = self._entry_side_price(direction, tick)
+            if direction == Direction.LONG:
+                adverse = (ref_price - current_entry_price) / self.pip_size
+            else:
+                adverse = (current_entry_price - ref_price) / self.pip_size
+
+            interval = counter_interval_pips(slot.index, cfg)
+            if adverse < interval:
+                return []
 
         # Build the entry
         units = (slot.index + 1) * layer.base_units
@@ -1149,6 +1275,7 @@ class SnowballStrategy(Strategy):
                                 description=f"[PROTECTION] Lock hedge unwound | ratio={ratio:.1f}%",
                                 close_reason="lock_hedge_neutralize",
                                 validation_status="not_applicable",
+                                cycle=cycle,
                             )
                         )
                         cycle.hedge_entries.remove(e)
@@ -1218,6 +1345,7 @@ class SnowballStrategy(Strategy):
                     close_reason="shrink",
                     validation_status="warn",
                     margin_ratio=ratio / Decimal("100"),
+                    cycle=cycle,
                 )
             )
             cycle.remove_entry(entry.entry_id)
@@ -1248,6 +1376,13 @@ class SnowballStrategy(Strategy):
                         for slot in layer.slots:
                             slot.pending_rebuild = None
                     cycle.status = CycleStatus.COMPLETED
+                    if cycle.realized_pnl < 0:
+                        logger.warning(
+                            "Cycle %d (%s) closed by shrink with negative realised P/L: %s",
+                            cycle.cycle_id,
+                            cycle.direction.value.upper(),
+                            cycle.realized_pnl,
+                        )
 
         if ratio < cfg.m1_th:
             ss.protection_level = ProtectionLevel.NORMAL
@@ -1392,7 +1527,27 @@ class SnowballStrategy(Strategy):
                 pips_lost,
             )
 
-            # Build the SL snapshot and transition the slot to pending_rebuild.
+            # Close through the helper so lifecycle P/L is accumulated
+            # consistently (the SL delta needs to flow into the slot's
+            # running total and into the cycle total).
+            close_event = self._close_entry(
+                tick,
+                entry,
+                description=(
+                    f"[PROTECTION] Stop-loss ({entry.direction.value.upper()}) | "
+                    f"L{entry.layer_number}/R{entry.retracement_count}, "
+                    f"entry={entry.entry_price:.5f}, SL={entry.stop_loss_price:.5f}, "
+                    f"exit={exit_price:.5f}, -{pips_lost:.1f} pips"
+                ),
+                close_reason="stop_loss",
+                validation_status="warn",
+                cycle=cycle,
+            )
+
+            # Build the SL snapshot, carrying forward the slot's running
+            # lifecycle P/L (including this SL loss) so a future rebuild
+            # can continue the chain.
+            entry.lifecycle_stop_loss_count += 1
             sl_snapshot = StopLossClosedEntry(
                 entry_price=entry.entry_price,
                 close_price=entry.close_price,
@@ -1406,23 +1561,12 @@ class SnowballStrategy(Strategy):
                 parent_entry_id=entry.parent_entry_id,
                 cycle_id=cycle.cycle_id,
                 position_id=entry.position_id,
+                lifecycle_realized_pnl=entry.lifecycle_realized_pnl,
+                lifecycle_stop_loss_count=entry.lifecycle_stop_loss_count,
             )
             slot.close_for_stop_loss(sl_snapshot)
 
-            events.append(
-                self._close_entry(
-                    tick,
-                    entry,
-                    description=(
-                        f"[PROTECTION] Stop-loss ({entry.direction.value.upper()}) | "
-                        f"L{entry.layer_number}/R{entry.retracement_count}, "
-                        f"entry={entry.entry_price:.5f}, SL={entry.stop_loss_price:.5f}, "
-                        f"exit={exit_price:.5f}, -{pips_lost:.1f} pips"
-                    ),
-                    close_reason="stop_loss",
-                    validation_status="warn",
-                )
-            )
+            events.append(close_event)
 
         return events
 
@@ -1478,6 +1622,12 @@ class SnowballStrategy(Strategy):
                 entry.entry_price = pending.entry_price
                 entry.validation_status = "pass"
                 entry.is_rebuild = True
+
+                # Carry forward the slot's running lifecycle P/L and SL
+                # count so the eventual close can compare net P/L against
+                # zero.
+                entry.lifecycle_realized_pnl = pending.lifecycle_realized_pnl
+                entry.lifecycle_stop_loss_count = pending.lifecycle_stop_loss_count
 
                 # Optionally keep rebuilt positions exempt from further stop-loss closes.
                 if self.config.stop_loss_enabled and not self.config.disable_loss_cut_after_rebuild:
@@ -1629,7 +1779,22 @@ class SnowballStrategy(Strategy):
             events.extend(sl_rebuild_events)
 
             if not counter_close_events:
-                events.extend(self._process_cycle_counter_adds(ss, tick, cycle))
+                # Apply counter adds repeatedly within the same tick.
+                # A single adverse move can cross multiple retracement
+                # thresholds or even layer boundaries (for example when a
+                # stop-loss hit sets the reference past the next counter
+                # target).  Looping here closes that gap instead of waiting
+                # for later ticks — during fast moves those follow-up ticks
+                # often print retraces that would cancel the trigger.
+                #
+                # The loop is bounded by (f_max * (r_max + 1)) as a hard
+                # safety rail against unexpected fixed points.
+                max_iterations = max(1, self.config.f_max * (self.config.r_max + 1))
+                for _ in range(max_iterations):
+                    add_events = self._process_cycle_counter_adds(ss, tick, cycle)
+                    if not add_events:
+                        break
+                    events.extend(add_events)
 
             self._validate_grid_ordering(cycle)
             if self._grid_order_violation:
@@ -1657,6 +1822,13 @@ class SnowballStrategy(Strategy):
                         cycle.status = CycleStatus.PENDING
                 else:
                     cycle.status = CycleStatus.COMPLETED
+                    if cycle.realized_pnl < 0:
+                        logger.warning(
+                            "Cycle %d (%s) completed with negative realised P/L: %s",
+                            cycle.cycle_id,
+                            cycle.direction.value.upper(),
+                            cycle.realized_pnl,
+                        )
 
         # --- Re-seed directions that have no tradable cycle ---
         # A direction needs a new cycle when:

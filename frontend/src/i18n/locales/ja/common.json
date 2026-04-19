@@ -519,7 +519,8 @@
           "rebuiltFrom": "再建元",
           "rebuiltTo": "再建先",
           "closeReason": "決済理由",
-          "plannedExitFormula": "決済価格計算式"
+          "plannedExitFormula": "決済価格計算式",
+          "chainRealizedPnl": "ライフサイクル通算損益"
         },
         "closeReasons": {
           "normal": "通常決済",

@@ -1051,6 +1051,11 @@ class TestPositionLifecycle:
         assert response.data["matched_position_id"] == str(rebuilt_position_id)
         assert response.data["position_ids"] == [str(old_position_id), str(rebuilt_position_id)]
 
+        # chain_realized_pnl is the sum of every per-position realized
+        # value in the chain.  The rebuilt position is still open so it
+        # contributes nothing; only the SL-closed original counts.
+        assert response.data["chain_realized_pnl"] == "-1722.0000000000"
+
         old_position = response.data["positions"][0]
         rebuilt_position = response.data["positions"][1]
 
