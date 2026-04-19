@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.54.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.53.1...frontend-v1.54.0) (2026-04-19)
+
+
+### Features
+
+* filter by id in task detail tables ([#553](https://github.com/yuyash/auto-forex-web-service/issues/553)) ([e6bb0bf](https://github.com/yuyash/auto-forex-web-service/commit/e6bb0bfc03168303136ec6b8cd6031df9bbd9a94))
+
 ## [1.53.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.53.0...frontend-v1.53.1) (2026-04-19)
 
 
