@@ -852,6 +852,44 @@ class TestTrades:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "Invalid cycle_id" in str(response.data)
 
+    def test_trades_filter_by_trade_id_prefix(self):
+        """Trade ID prefix filter narrows results to matching UUIDs."""
+        task = _make_task()
+        client = _auth_client(task.user)
+        now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        target = Trade.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=now,
+            direction=Direction.LONG,
+            units=1000,
+            instrument="USD_JPY",
+            price=Decimal("150.500"),
+            execution_method="initial_entry",
+        )
+        Trade.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=now + timedelta(minutes=1),
+            direction=Direction.SHORT,
+            units=1000,
+            instrument="USD_JPY",
+            price=Decimal("150.700"),
+            execution_method="take_profit",
+        )
+
+        prefix = str(target.pk)[:8]
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/trades/",
+            {"trade_id": prefix},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 1
+        assert response.data["results"][0]["id"] == str(target.pk)
+
 
 @pytest.mark.django_db
 class TestPositions:
@@ -900,6 +938,68 @@ class TestPositions:
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "Invalid cycle_id" in str(response.data)
+
+    def test_positions_filter_by_position_id_prefix(self):
+        """Position ID prefix filter narrows results to matching UUIDs."""
+        task = _make_task()
+        client = _auth_client(task.user)
+        now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        target = Position.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction=Direction.LONG,
+            units=1000,
+            entry_price=Decimal("150.500"),
+            entry_time=now,
+            is_open=True,
+        )
+        Position.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction=Direction.SHORT,
+            units=-1000,
+            entry_price=Decimal("150.800"),
+            entry_time=now,
+            is_open=True,
+        )
+
+        prefix = str(target.pk)[:8]
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/positions/",
+            {"position_id": prefix},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 1
+        assert response.data["results"][0]["id"] == str(target.pk)
+
+    def test_positions_filter_by_position_id_no_match(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        Position.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction=Direction.LONG,
+            units=1000,
+            entry_price=Decimal("150.500"),
+            entry_time=now,
+            is_open=True,
+        )
+
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/positions/",
+            {"position_id": "ffffffff"},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 0
 
 
 @pytest.mark.django_db
@@ -1141,6 +1241,45 @@ class TestOrders:
         response = client.get(f"/api/trading/tasks/backtest/{task.pk}/orders/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 0
+
+    def test_orders_filter_by_order_id_prefix(self):
+        """Order ID prefix filter narrows results to matching UUIDs."""
+        task = _make_task()
+        client = _auth_client(task.user)
+
+        target = Order.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            order_type=OrderType.MARKET,
+            direction=Direction.LONG,
+            units=1000,
+            fill_price=Decimal("150.500"),
+            status=OrderStatus.FILLED,
+            is_dry_run=True,
+        )
+        Order.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            order_type=OrderType.MARKET,
+            direction=Direction.SHORT,
+            units=500,
+            fill_price=Decimal("150.700"),
+            status=OrderStatus.FILLED,
+            is_dry_run=True,
+        )
+
+        prefix = str(target.pk)[:8]
+        response = client.get(
+            f"/api/trading/tasks/backtest/{task.pk}/orders/",
+            {"order_id": prefix},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 1
+        assert response.data["results"][0]["id"] == str(target.pk)
 
 
 @pytest.mark.django_db

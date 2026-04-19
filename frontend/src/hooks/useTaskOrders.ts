@@ -39,6 +39,8 @@ interface UseTaskOrdersOptions {
   status?: string;
   orderType?: string;
   direction?: string;
+  /** Filter orders by order ID prefix (e.g. first 8 chars of UUID). */
+  orderId?: string;
   page?: number;
   pageSize?: number;
   /** ISO 8601 timestamp — only return records updated after this time. */
@@ -78,6 +80,7 @@ export const useTaskOrders = ({
   status,
   orderType,
   direction,
+  orderId,
   page = 1,
   pageSize = 100,
   since,
@@ -86,7 +89,7 @@ export const useTaskOrders = ({
   enableRealTimeUpdates = false,
   refreshInterval = 5_000,
 }: UseTaskOrdersOptions): UseTaskOrdersResult => {
-  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${status}-${orderType}-${direction}-${page}-${pageSize}-${since ?? ''}-${timestampFrom ?? ''}-${timestampTo ?? ''}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${status}-${orderType}-${direction}-${orderId ?? ''}-${page}-${pageSize}-${since ?? ''}-${timestampFrom ?? ''}-${timestampTo ?? ''}`;
   const {
     items: orders,
     totalCount,
@@ -112,6 +115,7 @@ export const useTaskOrders = ({
       if (status) params.status = status;
       if (orderType) params.order_type = orderType;
       if (direction) params.direction = direction;
+      if (orderId) params.order_id = orderId;
       if (executionRunId != null) {
         params.execution_id = String(executionRunId);
       }

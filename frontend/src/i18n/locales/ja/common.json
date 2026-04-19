@@ -433,6 +433,8 @@
       "description": "説明",
       "cycleIdFilter": "サイクルIDでフィルタ",
       "invalidCycleId": "有効なサイクルID UUID を入力してください",
+      "tradeIdFilter": "取引IDでフィルタ",
+      "invalidTradeId": "有効な取引IDまたはプレフィックス（16進数）を入力してください",
       "stopLossPrice": "ロスカット価格",
       "isRebuild": "再建玉",
       "rebuild": "再建玉"
@@ -451,7 +453,9 @@
       "filledAt": "約定日時",
       "stopLoss": "ストップロス",
       "error": "エラー",
-      "noOrders": "注文なし"
+      "noOrders": "注文なし",
+      "orderIdFilter": "注文IDでフィルタ",
+      "invalidOrderId": "有効な注文IDまたはプレフィックス（16進数）を入力してください"
     },
     "positions": {
       "closedPositions": "決済済",
@@ -513,6 +517,8 @@
       "totalPnl": "合計損益",
       "cycleIdFilter": "サイクルIDでフィルタ",
       "invalidCycleId": "有効なサイクルID UUID を入力してください",
+      "positionIdFilter": "建玉IDでフィルタ",
+      "invalidPositionId": "有効な建玉IDまたはプレフィックス（16進数）を入力してください",
       "lifecycle": {
         "title": "ポジションライフサイクル",
         "viewLifecycle": "ライフサイクルを表示",

@@ -236,6 +236,18 @@ POSITION_ID_SPEC = QueryFieldSpec(
     allow_blank=True,
     help_text="Optional position ID prefix filter.",
 )
+TRADE_ID_SPEC = QueryFieldSpec(
+    name="trade_id",
+    kind="string",
+    allow_blank=True,
+    help_text="Optional trade ID prefix filter.",
+)
+ORDER_ID_SPEC = QueryFieldSpec(
+    name="order_id",
+    kind="string",
+    allow_blank=True,
+    help_text="Optional order ID prefix filter.",
+)
 TIMESTAMP_FROM_SPEC = QueryFieldSpec(
     name="timestamp_from",
     kind="datetime",
@@ -566,6 +578,7 @@ QUERY_GROUP_SPECS = {
             TRADES_ORDERING_SPEC,
             TRADE_TIMESTAMP_FROM_SPEC,
             TRADE_TIMESTAMP_TO_SPEC,
+            TRADE_ID_SPEC,
         ),
         description="OpenAPI serializer for trades query parameters.",
     ),
@@ -579,6 +592,7 @@ QUERY_GROUP_SPECS = {
             INCLUDE_TRADE_IDS_SPEC,
             POSITIONS_RANGE_FROM_SPEC,
             POSITIONS_RANGE_TO_SPEC,
+            POSITION_ID_SPEC,
         ),
         description="OpenAPI serializer for positions query parameters.",
     ),
@@ -600,6 +614,7 @@ QUERY_GROUP_SPECS = {
             ORDER_STATUS_SPEC,
             ORDER_TYPE_SPEC,
             DIRECTION_SPEC,
+            ORDER_ID_SPEC,
         ),
         description="OpenAPI serializer for orders query parameters.",
     ),
@@ -871,6 +886,7 @@ class PositionQuery:
     direction: str
     include_trade_ids: bool
     range: DateRangeQuery
+    position_id: str
 
     @classmethod
     def from_request(
@@ -899,6 +915,7 @@ class PositionQuery:
                 end_key="range_to",
                 group_name="positions_range",
             ),
+            position_id=cast(str, parsed["position_id"]).strip(),
         )
 
 
@@ -1036,6 +1053,7 @@ class TradesQueryParams:
     direction: str
     ordering: str
     timestamp_range: DateRangeQuery
+    trade_id: str
 
     @classmethod
     def from_request(
@@ -1063,6 +1081,7 @@ class TradesQueryParams:
                 end_key="timestamp_to",
                 group_name="timestamp",
             ),
+            trade_id=cast(str, parsed["trade_id"]).strip(),
         )
 
 
@@ -1072,6 +1091,7 @@ class OrdersQueryParams:
     status: str
     order_type: str
     direction: str
+    order_id: str
 
     @classmethod
     def from_request(
@@ -1093,6 +1113,7 @@ class OrdersQueryParams:
             status=cast(str, parsed["status"]),
             order_type=cast(str, parsed["order_type"]),
             direction=cast(str, parsed["direction"]),
+            order_id=cast(str, parsed["order_id"]).strip(),
         )
 
 

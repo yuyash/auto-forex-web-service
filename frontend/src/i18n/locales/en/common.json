@@ -433,6 +433,8 @@
       "description": "Description",
       "cycleIdFilter": "Filter by Cycle ID",
       "invalidCycleId": "Enter a valid cycle ID UUID",
+      "tradeIdFilter": "Filter by Trade ID",
+      "invalidTradeId": "Enter a valid trade ID or prefix (hex characters)",
       "stopLossPrice": "Stop Loss",
       "isRebuild": "Rebuild",
       "rebuild": "Rebuild"
@@ -451,7 +453,9 @@
       "filledAt": "Filled At",
       "stopLoss": "Stop Loss",
       "error": "Error",
-      "noOrders": "No orders"
+      "noOrders": "No orders",
+      "orderIdFilter": "Filter by Order ID",
+      "invalidOrderId": "Enter a valid order ID or prefix (hex characters)"
     },
     "positions": {
       "closedPositions": "Closed Positions",
@@ -513,6 +517,8 @@
       "totalPnl": "Total PnL",
       "cycleIdFilter": "Filter by Cycle ID",
       "invalidCycleId": "Enter a valid cycle ID UUID",
+      "positionIdFilter": "Filter by Position ID",
+      "invalidPositionId": "Enter a valid position ID or prefix (hex characters)",
       "lifecycle": {
         "title": "Position Lifecycle",
         "viewLifecycle": "View position lifecycle",

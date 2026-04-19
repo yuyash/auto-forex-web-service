@@ -13,9 +13,15 @@ import {
   Alert,
   TablePagination,
   IconButton,
+  InputAdornment,
+  TextField,
   Tooltip,
 } from '@mui/material';
-import { Settings as SettingsIcon } from '@mui/icons-material';
+import {
+  Settings as SettingsIcon,
+  Search as SearchIcon,
+  Clear as ClearIcon,
+} from '@mui/icons-material';
 import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
@@ -57,12 +63,22 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
+  // --- Order ID filter (prefix match on UUID — accept 4+ hex chars/dashes) ---
+  const [orderIdFilter, setOrderIdFilter] = useState('');
+  const hasOrderIdFilter = orderIdFilter.trim().length > 0;
+  const ORDER_ID_PREFIX_PATTERN = /^[0-9a-f-]{4,}$/i;
+  const isOrderIdFilterValid =
+    !hasOrderIdFilter || ORDER_ID_PREFIX_PATTERN.test(orderIdFilter.trim());
+  const effectiveOrderId =
+    hasOrderIdFilter && isOrderIdFilterValid ? orderIdFilter.trim() : '';
+
   const { orders, totalCount, isLoading, error, refresh } = useTaskOrders({
     taskId,
     taskType,
     executionRunId,
     page: page + 1,
     pageSize: rowsPerPage,
+    orderId: effectiveOrderId || undefined,
     timestampFrom: dateFrom ? new Date(dateFrom).toISOString() : undefined,
     timestampTo: dateTo ? new Date(dateTo).toISOString() : undefined,
     enableRealTimeUpdates,
@@ -415,6 +431,42 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
           alignItems: 'center',
         }}
       >
+        <TextField
+          size="small"
+          placeholder={t('tables.orders.orderIdFilter')}
+          value={orderIdFilter}
+          onChange={(e) => {
+            setOrderIdFilter(e.target.value);
+            setPage(0);
+          }}
+          error={hasOrderIdFilter && !isOrderIdFilterValid}
+          helperText={
+            hasOrderIdFilter && !isOrderIdFilterValid
+              ? t('tables.orders.invalidOrderId')
+              : undefined
+          }
+          sx={{ width: 280 }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+              endAdornment: orderIdFilter ? (
+                <InputAdornment position="end">
+                  <IconButton
+                    size="small"
+                    onClick={() => setOrderIdFilter('')}
+                    edge="end"
+                  >
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null,
+            },
+          }}
+        />
         <DateRangeFilter
           from={dateFrom}
           to={dateTo}

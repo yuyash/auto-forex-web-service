@@ -69,6 +69,15 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     !hasCycleIdFilter || UUID_PATTERN.test(cycleIdFilter.trim());
   const effectiveCycleId = isCycleIdFilterValid ? cycleIdFilter.trim() : '';
 
+  // Trade ID filter (prefix match on UUID — accept 4+ hex characters/dashes).
+  const [tradeIdFilter, setTradeIdFilter] = useState('');
+  const hasTradeIdFilter = tradeIdFilter.trim().length > 0;
+  const TRADE_ID_PREFIX_PATTERN = /^[0-9a-f-]{4,}$/i;
+  const isTradeIdFilterValid =
+    !hasTradeIdFilter || TRADE_ID_PREFIX_PATTERN.test(tradeIdFilter.trim());
+  const effectiveTradeId =
+    hasTradeIdFilter && isTradeIdFilterValid ? tradeIdFilter.trim() : '';
+
   // --- Date range filter ---
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -80,6 +89,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     page: page + 1,
     pageSize: rowsPerPage,
     cycleId: effectiveCycleId || undefined,
+    tradeId: effectiveTradeId || undefined,
     timestampFrom: dateFrom ? new Date(dateFrom).toISOString() : undefined,
     timestampTo: dateTo ? new Date(dateTo).toISOString() : undefined,
     enableRealTimeUpdates,
@@ -475,6 +485,42 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
                   <IconButton
                     size="small"
                     onClick={() => setCycleIdFilter('')}
+                    edge="end"
+                  >
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) : null,
+            },
+          }}
+        />
+        <TextField
+          size="small"
+          placeholder={t('tables.trades.tradeIdFilter')}
+          value={tradeIdFilter}
+          onChange={(e) => {
+            setTradeIdFilter(e.target.value);
+            setPage(0);
+          }}
+          error={hasTradeIdFilter && !isTradeIdFilterValid}
+          helperText={
+            hasTradeIdFilter && !isTradeIdFilterValid
+              ? t('tables.trades.invalidTradeId')
+              : undefined
+          }
+          sx={{ width: 280 }}
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+              endAdornment: tradeIdFilter ? (
+                <InputAdornment position="end">
+                  <IconButton
+                    size="small"
+                    onClick={() => setTradeIdFilter('')}
                     edge="end"
                   >
                     <ClearIcon fontSize="small" />

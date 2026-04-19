@@ -136,6 +136,19 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     !hasCycleIdFilter || UUID_PATTERN.test(cycleIdFilter.trim());
   const effectiveCycleId = isCycleIdFilterValid ? cycleIdFilter.trim() : '';
 
+  // --- Position ID filter (prefix match) ---
+  const [positionIdFilter, setPositionIdFilter] = useState('');
+  const hasPositionIdFilter = positionIdFilter.trim().length > 0;
+  // Prefix search: allow 4+ hex characters (including dashes for full UUID).
+  const POSITION_ID_PREFIX_PATTERN = /^[0-9a-f-]{4,}$/i;
+  const isPositionIdFilterValid =
+    !hasPositionIdFilter ||
+    POSITION_ID_PREFIX_PATTERN.test(positionIdFilter.trim());
+  const effectivePositionId =
+    hasPositionIdFilter && isPositionIdFilterValid
+      ? positionIdFilter.trim()
+      : '';
+
   // --- Date range filter ---
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -168,6 +181,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     page: closedLongPage + 1,
     pageSize: closedLongRpp,
     cycleId: effectiveCycleId || undefined,
+    positionId: effectivePositionId || undefined,
     rangeFrom,
     rangeTo,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
@@ -187,6 +201,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     page: closedShortPage + 1,
     pageSize: closedShortRpp,
     cycleId: effectiveCycleId || undefined,
+    positionId: effectivePositionId || undefined,
     rangeFrom,
     rangeTo,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
@@ -206,6 +221,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     page: openLongPage + 1,
     pageSize: openLongRpp,
     cycleId: effectiveCycleId || undefined,
+    positionId: effectivePositionId || undefined,
     rangeFrom,
     rangeTo,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
@@ -225,6 +241,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     page: openShortPage + 1,
     pageSize: openShortRpp,
     cycleId: effectiveCycleId || undefined,
+    positionId: effectivePositionId || undefined,
     rangeFrom,
     rangeTo,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
@@ -245,6 +262,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     page: longPage + 1,
     pageSize: longRpp,
     cycleId: effectiveCycleId || undefined,
+    positionId: effectivePositionId || undefined,
     rangeFrom,
     rangeTo,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byDirection',
@@ -263,6 +281,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     page: shortPage + 1,
     pageSize: shortRpp,
     cycleId: effectiveCycleId || undefined,
+    positionId: effectivePositionId || undefined,
     rangeFrom,
     rangeTo,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byDirection',
@@ -282,6 +301,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     page: allPage + 1,
     pageSize: allRpp,
     cycleId: effectiveCycleId || undefined,
+    positionId: effectivePositionId || undefined,
     rangeFrom,
     rangeTo,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'all',
@@ -1457,6 +1477,42 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
               },
             }}
           />
+          <TextField
+            size="small"
+            placeholder={t('tables.positions.positionIdFilter')}
+            value={positionIdFilter}
+            onChange={(e) => {
+              setPositionIdFilter(e.target.value);
+              setAllPage(0);
+            }}
+            error={hasPositionIdFilter && !isPositionIdFilterValid}
+            helperText={
+              hasPositionIdFilter && !isPositionIdFilterValid
+                ? t('tables.positions.invalidPositionId')
+                : undefined
+            }
+            sx={{ width: 280 }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+                endAdornment: positionIdFilter ? (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={() => setPositionIdFilter('')}
+                      edge="end"
+                    >
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ) : null,
+              },
+            }}
+          />
           <DateRangeFilter
             from={dateFrom}
             to={dateTo}
@@ -1613,6 +1669,82 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       {/* === By Status mode (legacy 4-table layout) === */}
       {viewMode === 'byStatus' && (
         <>
+          <Box
+            sx={{
+              mb: 2,
+              display: 'flex',
+              gap: 1,
+              flexWrap: 'wrap',
+              alignItems: 'center',
+            }}
+          >
+            <TextField
+              size="small"
+              placeholder={t('tables.positions.cycleIdFilter')}
+              value={cycleIdFilter}
+              onChange={(e) => setCycleIdFilter(e.target.value)}
+              error={hasCycleIdFilter && !isCycleIdFilterValid}
+              helperText={
+                hasCycleIdFilter && !isCycleIdFilterValid
+                  ? t('tables.positions.invalidCycleId')
+                  : undefined
+              }
+              sx={{ width: 280 }}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: cycleIdFilter ? (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        onClick={() => setCycleIdFilter('')}
+                        edge="end"
+                      >
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : null,
+                },
+              }}
+            />
+            <TextField
+              size="small"
+              placeholder={t('tables.positions.positionIdFilter')}
+              value={positionIdFilter}
+              onChange={(e) => setPositionIdFilter(e.target.value)}
+              error={hasPositionIdFilter && !isPositionIdFilterValid}
+              helperText={
+                hasPositionIdFilter && !isPositionIdFilterValid
+                  ? t('tables.positions.invalidPositionId')
+                  : undefined
+              }
+              sx={{ width: 280 }}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: positionIdFilter ? (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        onClick={() => setPositionIdFilter('')}
+                        edge="end"
+                      >
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : null,
+                },
+              }}
+            />
+          </Box>
           {renderPair(
             t('tables.positions.closedPositions'),
             closedLongPos,
