@@ -369,13 +369,17 @@ class TaskLifecycleCommands:
         with transaction.atomic():
             locked_task = model_class.objects.select_for_update().get(pk=task.pk)
             if locked_task.status not in allowed_statuses:
+                from apps.trading.tasks.service import TaskValidationError
+
                 allowed_labels = ", ".join(str(s.value).upper() for s in allowed_statuses)
-                raise ValueError(
+                raise TaskValidationError(
                     f"Task cannot be resumed from {locked_task.status} state. "
                     f"Only {allowed_labels} tasks can be resumed."
                 )
             if not locked_task.execution_id:
-                raise ValueError("Cannot resume task without an execution_id")
+                from apps.trading.tasks.service import TaskValidationError
+
+                raise TaskValidationError("Cannot resume task without an execution_id")
 
             result = self.service.get_celery_result(str(locked_task.execution_id))
             self._ensure_resumeable_celery_state(
@@ -567,7 +571,9 @@ class TaskLifecycleCommands:
                     "execution_id": str(execution_id),
                 },
             )
-            raise ValueError(
+            from apps.trading.tasks.service import TaskValidationError
+
+            raise TaskValidationError(
                 f"Task status mismatch: task is marked as {db_status} in database "
                 f"but Celery task is still {celery_state}. "
                 "Please wait for the task to fully stop before resuming."

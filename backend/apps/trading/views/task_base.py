@@ -336,11 +336,15 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 },
                 status=status.HTTP_409_CONFLICT,
             )
-        except ValueError as exc:
+        except TaskValidationError as exc:
+            # ``TaskValidationError`` is raised deliberately by the task
+            # service with a safe, user-facing message (wrong status,
+            # missing execution_id, Celery still running, etc.) so we
+            # can surface ``str(exc)`` directly.  Unknown / wrapped
+            # exceptions are caught by the generic ``Exception`` branch
+            # below so their raw messages — which may include DB or
+            # third-party library details — never leave the backend.
             logger.warning("Resume validation failed: task_id=%s, detail=%s", task.pk, exc)
-            # Surface the underlying reason so users can see exactly why the
-            # resume was rejected (wrong status, missing execution_id,
-            # Celery still running, etc.) rather than a generic message.
             return Response(
                 {
                     "error": "Invalid resume request for current task state",
