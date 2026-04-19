@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.39.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.38.1...backend-v1.39.0) (2026-04-19)
+
+
+### Features
+
+* **ui,backend:** add stop reason, tidy log precision, fix resume ([#547](https://github.com/yuyash/auto-forex-web-service/issues/547)) ([2857315](https://github.com/yuyash/auto-forex-web-service/commit/285731593956213edf107f4e7554e18236f71b30))
+
 ## [1.38.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.38.0...backend-v1.38.1) (2026-04-19)
 
 
