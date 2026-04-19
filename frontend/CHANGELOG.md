@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.52.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.51.1...frontend-v1.52.0) (2026-04-19)
+
+
+### Features
+
+* **snowball:** cycle/lifecycle P/L warnings and same-tick counter adds ([#543](https://github.com/yuyash/auto-forex-web-service/issues/543)) ([65293c6](https://github.com/yuyash/auto-forex-web-service/commit/65293c639793f18f6c2c8ca592ab81cada4c41cf))
+
 ## [1.51.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.51.0...frontend-v1.51.1) (2026-04-19)
 
 
