@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.53.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.53.0...frontend-v1.53.1) (2026-04-19)
+
+
+### Bug Fixes
+
+* **ui:** localise stop dialog and align strategy chip size ([#549](https://github.com/yuyash/auto-forex-web-service/issues/549)) ([534c3d5](https://github.com/yuyash/auto-forex-web-service/commit/534c3d5b2623cc2e6e9db5ec09f3a553dadab029))
+* **ui:** localise stop-options dialog and shrink strategy chip ([534c3d5](https://github.com/yuyash/auto-forex-web-service/commit/534c3d5b2623cc2e6e9db5ec09f3a553dadab029))
+
 ## [1.53.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.52.1...frontend-v1.53.0) (2026-04-19)
 
 
