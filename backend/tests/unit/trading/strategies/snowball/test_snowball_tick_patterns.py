@@ -918,3 +918,159 @@ class TestSnowballRebuildPriceAdjustment:
         # price, so strictly fewer (or zero) rebuilds should fire.
         assert buf_rebuilds <= no_buf_rebuilds
         assert no_buf_rebuilds > 0, "sanity: unbuffered run should rebuild"
+
+
+class TestSnowballRebuildTpGridClamp:
+    """Rebuild TP must not cross the TP of an upper grid slot.
+
+    Without the clamp, a large SL overshoot made the rebuild's
+    ``rebuild_price_offset`` exceed the slot's original profit distance
+    and pushed the adjusted TP past the neighbour above it, tripping
+    :meth:`SnowballStrategy._validate_grid_ordering` and failing the
+    backtest run.
+    """
+
+    def _build_layer_with_grid(self, strategy: SnowballStrategy):
+        """Create a layer with R0 (open), R2 (pending_rebuild), and an
+        empty R3 slot, then return (layer, R3 slot).
+
+        The R3 slot is returned so callers can attach a
+        ``pending_rebuild`` snapshot with crafted ``rebuild_price_offset``
+        and close_price to exercise the rebuild adjustment path.
+        """
+        from apps.trading.strategies.snowball.models import (
+            Direction,
+            Entry,
+            Layer,
+            Slot,
+            StopLossClosedEntry,
+        )
+
+        layer = Layer(layer_number=1, slots=[], base_units=1000, refill_up_to=3)
+        for idx in range(8):
+            layer.slots.append(Slot(index=idx))
+
+        # R0: live long entry at 131.000 with TP 131.200.
+        r0 = layer.slots[0]
+        r0.entry = Entry(
+            entry_id=1,
+            step=1,
+            direction=Direction.LONG,
+            entry_price=Decimal("131.000"),
+            close_price=Decimal("131.200"),
+            units=1000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="initial",
+            layer_number=1,
+            retracement_count=0,
+        )
+
+        # R2: pending rebuild after SL.  Its original TP was 130.87550
+        # — the value we want R3's adjusted TP to stay below.
+        r2 = layer.slots[2]
+        r2.pending_rebuild = StopLossClosedEntry(
+            entry_price=Decimal("130.675"),
+            close_price=Decimal("130.87550"),
+            units=3000,
+            direction=Direction.LONG,
+            role="counter",
+            layer_number=1,
+            retracement_count=2,
+            step=3,
+            cycle_id=1,
+            rebuild_price_offset=Decimal("0.0056"),
+        )
+        return layer
+
+    def test_upper_neighbor_tp_bound_finds_pending_above(self):
+        s = _strategy(stop_loss=True)
+        layer = self._build_layer_with_grid(s)
+
+        # R3 looks up to R2 (pending) which has the nearest TP above.
+        assert s._upper_neighbor_tp_bound(layer, slot_index=3) == Decimal("130.87550")
+        # R1 (no neighbour between it and R0) falls back to R0's TP.
+        assert s._upper_neighbor_tp_bound(layer, slot_index=1) == Decimal("131.200")
+        # R0 has no upper neighbour.
+        assert s._upper_neighbor_tp_bound(layer, slot_index=0) is None
+
+    def test_rebuild_adjusted_tp_is_clamped_below_upper_neighbor(self):
+        """Reproduce the production failure: a large SL overshoot on R3
+        would otherwise push the rebuilt TP above R2's pending TP.
+        """
+        from apps.trading.strategies.snowball.models import (
+            Direction,
+            SnowballCycle,
+            StopLossClosedEntry,
+        )
+
+        s = _strategy(stop_loss=True)
+        layer = self._build_layer_with_grid(s)
+
+        # Attach an R3 pending rebuild with a huge rebuild_price_offset
+        # that — unclamped — produces TP = 130.893 (above R2's 130.87550).
+        r3 = layer.slots[3]
+        r3.pending_rebuild = StopLossClosedEntry(
+            entry_price=Decimal("130.415"),
+            close_price=Decimal("130.691"),  # original profit distance 0.276
+            units=4000,
+            direction=Direction.LONG,
+            role="counter",
+            layer_number=1,
+            retracement_count=3,
+            step=4,
+            cycle_id=1,
+            rebuild_price_offset=Decimal("0.478"),  # > original → triggers clamp
+        )
+
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        cycle.grid.layers.append(layer)
+
+        # Tick at exactly the rebuild trigger (R3's original entry price).
+        tick = _make_tick(datetime(2026, 1, 1, 9, tzinfo=UTC), Decimal("130.430"))
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("1000000"))
+
+        events = s._process_stop_loss_rebuilds(ss, tick, cycle)
+        assert r3.entry is not None, "R3 must have rebuilt to a live entry"
+
+        # Clamped to R2's TP — the upper neighbour — preserving grid ordering.
+        assert r3.entry.close_price == Decimal("130.87550")
+        # Event message reflects the clamped TP too.
+        assert events, "expected a rebuild event"
+        assert "130.87550" in events[-1].description or "130.876" in events[-1].description
+
+    def test_rebuild_adjusted_tp_retains_adjustment_when_within_bound(self):
+        """If the adjusted TP is still below the upper neighbour, leave it alone."""
+        from apps.trading.strategies.snowball.models import (
+            Direction,
+            SnowballCycle,
+            StopLossClosedEntry,
+        )
+
+        s = _strategy(stop_loss=True)
+        layer = self._build_layer_with_grid(s)
+
+        # A modest offset that only nudges the TP a few pips — well below R2.
+        r3 = layer.slots[3]
+        r3.pending_rebuild = StopLossClosedEntry(
+            entry_price=Decimal("130.415"),
+            close_price=Decimal("130.691"),
+            units=4000,
+            direction=Direction.LONG,
+            role="counter",
+            layer_number=1,
+            retracement_count=3,
+            step=4,
+            cycle_id=1,
+            rebuild_price_offset=Decimal("0.010"),
+        )
+
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        cycle.grid.layers.append(layer)
+
+        tick = _make_tick(datetime(2026, 1, 1, 9, tzinfo=UTC), Decimal("130.430"))
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("1000000"))
+
+        s._process_stop_loss_rebuilds(ss, tick, cycle)
+        assert r3.entry is not None
+        # Original profit distance wins (0.276 > 0.010) and stays below 130.87550.
+        assert r3.entry.close_price == Decimal("130.691")

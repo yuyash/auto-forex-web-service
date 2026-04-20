@@ -454,6 +454,26 @@ class SnowballStrategy(Strategy):
             logger.error("Grid ordering violation detail: %s", self._grid_order_violation)
             return
 
+    def _upper_neighbor_tp_bound(self, layer: "Layer", slot_index: int) -> Decimal | None:
+        """Return the TP of the nearest present slot above ``slot_index``.
+
+        "Present" means occupied (``slot.entry`` set) or pending rebuild.
+        Returns ``None`` when no such neighbor exists, in which case the
+        rebuilt slot has no in-layer upper bound to respect.  This is
+        used by the SL-rebuild path to clamp ``adjusted_close_price`` so
+        the grid stays monotonic and ``_validate_grid_ordering`` keeps
+        passing after the rebuild completes.
+        """
+        upper_tp: Decimal | None = None
+        for s in layer.slots:
+            if s.index >= slot_index:
+                continue
+            if s.entry is not None:
+                upper_tp = s.entry.close_price
+            elif s.pending_rebuild is not None:
+                upper_tp = s.pending_rebuild.close_price
+        return upper_tp
+
     # ------------------------------------------------------------------
     # Per-cycle tick processing
     # ------------------------------------------------------------------
@@ -1661,6 +1681,41 @@ class SnowballStrategy(Strategy):
                         adjusted_close_price = pending.entry_price + required_profit_distance
                     else:
                         adjusted_close_price = pending.entry_price - required_profit_distance
+
+                    # Preserve the monotonic grid ordering that
+                    # ``_validate_grid_ordering`` enforces: the rebuilt
+                    # slot's TP must not cross the TP of the nearest
+                    # present slot immediately above it in this layer.
+                    # When the rebuild offset would push the TP past
+                    # that bound, clamp it back so the grid stays
+                    # ordered.  Loss recovery beyond the bound is
+                    # sacrificed; stability of the overall grid wins.
+                    upper_tp_bound = self._upper_neighbor_tp_bound(layer, slot.index)
+                    if upper_tp_bound is not None:
+                        if pending.direction == Direction.LONG:
+                            if adjusted_close_price > upper_tp_bound:
+                                logger.info(
+                                    "Rebuild TP clamped to upper neighbor: "
+                                    "L%d/R%d, pending_tp=%.5f, computed_adj=%.5f, clamped_to=%.5f",
+                                    pending.layer_number,
+                                    pending.retracement_count,
+                                    pending.close_price,
+                                    adjusted_close_price,
+                                    upper_tp_bound,
+                                )
+                                adjusted_close_price = upper_tp_bound
+                        else:
+                            if adjusted_close_price < upper_tp_bound:
+                                logger.info(
+                                    "Rebuild TP clamped to upper neighbor: "
+                                    "L%d/R%d, pending_tp=%.5f, computed_adj=%.5f, clamped_to=%.5f",
+                                    pending.layer_number,
+                                    pending.retracement_count,
+                                    pending.close_price,
+                                    adjusted_close_price,
+                                    upper_tp_bound,
+                                )
+                                adjusted_close_price = upper_tp_bound
                 else:
                     adjusted_close_price = pending.close_price
 
