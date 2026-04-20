@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.41.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.41.0...backend-v1.41.1) (2026-04-20)
+
+
+### Bug Fixes
+
+* **snowball:** clamp rebuild TP to upper grid neighbour ([#557](https://github.com/yuyash/auto-forex-web-service/issues/557)) ([827793e](https://github.com/yuyash/auto-forex-web-service/commit/827793e82cff31394173c9aa54fa1e12f972ca1b))
+
 ## [1.41.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.40.0...backend-v1.41.0) (2026-04-20)
 
 
