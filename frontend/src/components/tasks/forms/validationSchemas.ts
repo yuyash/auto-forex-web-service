@@ -87,7 +87,7 @@ export const backtestTaskSchema = z
       .min(0, 'Must be non-negative')
       .max(720, 'Must not exceed 720 minutes (12 hours)')
       .optional(),
-    market_close_enabled: z.boolean().optional().default(true),
+    market_close_enabled: z.boolean().optional().default(false),
     market_close_weekday: z.coerce
       .number({ message: 'Weekday must be a number' })
       .int('Weekday must be an integer')

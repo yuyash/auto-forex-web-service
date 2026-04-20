@@ -316,7 +316,7 @@ export default function BacktestTaskForm({
       drain_duration_hours: 0,
       market_idle_pre_close_minutes: 0,
       market_idle_resume_delay_minutes: 0,
-      market_close_enabled: true,
+      market_close_enabled: false,
       market_close_weekday: 4,
       market_close_hour_utc: 21,
       market_open_weekday: 6,
@@ -1125,7 +1125,7 @@ export default function BacktestTaskForm({
                     <FormControlLabel
                       control={
                         <Checkbox
-                          checked={field.value ?? true}
+                          checked={field.value ?? false}
                           onChange={(e) => field.onChange(e.target.checked)}
                         />
                       }

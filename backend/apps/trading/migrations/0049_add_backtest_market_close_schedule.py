@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='backtesttask',
             name='market_close_enabled',
-            field=models.BooleanField(default=True, help_text='Apply a weekly market-close window during the backtest. When disabled, market-idle thresholds are ignored.'),
+            field=models.BooleanField(default=False, help_text='Apply a weekly market-close window during the backtest. When disabled, market-idle thresholds are ignored.'),
         ),
         migrations.AddField(
             model_name='backtesttask',

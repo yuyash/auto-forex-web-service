@@ -257,7 +257,7 @@ class BacktestTask(UUIDModel):
     # reproduce the historical hard-coded forex schedule (Fri 21:00 UTC
     # close, Sun 21:00 UTC open).
     market_close_enabled = models.BooleanField(
-        default=True,
+        default=False,
         help_text=(
             "Apply a weekly market-close window during the backtest. "
             "When disabled, market-idle thresholds are ignored."
