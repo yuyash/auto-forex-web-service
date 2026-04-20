@@ -26,6 +26,7 @@ interface UseWindowedCandlesOptions {
   accountId?: string;
   startTime?: string;
   endTime?: string;
+  initialLoadMode?: 'recent-window' | 'full-range';
   initialFocusTime?: string;
   initialCount?: number;
   edgeCount?: number;
@@ -203,6 +204,7 @@ export function useWindowedCandles({
   accountId,
   startTime,
   endTime,
+  initialLoadMode = 'recent-window',
   initialFocusTime,
   initialCount = 500,
   edgeCount = 500,
@@ -635,23 +637,31 @@ export function useWindowedCandles({
       const from = isoToSec(startTime);
       const to = isoToSec(endTime);
       if (from != null && to != null) {
-        const requestBounds = buildRequestBounds(bounds, granularity);
-        const granSec = GRANULARITY_SECONDS[String(granularity)] ?? 60;
-        // Load the most recent portion of the task range so the chart
-        // opens showing the latest data.  The user can scroll left to
-        // fetch older candles on demand.
-        const clampedTo = Math.min(to, requestBounds.to);
-        const windowSize = Math.max(1, edgeCount - 1) * granSec;
-        const initialFrom = Math.max(from, clampedTo - windowSize);
         setIsInitialLoading(true);
         void (async () => {
           try {
-            const initialRange = alignRangeToGranularity(
-              {
-                from: initialFrom,
-                to: clampedTo,
-              },
-              granularity
+            const requestBounds = buildRequestBounds(bounds, granularity);
+            const granSec = GRANULARITY_SECONDS[String(granularity)] ?? 60;
+            const requestedRange =
+              initialLoadMode === 'full-range'
+                ? {
+                    from,
+                    to,
+                  }
+                : {
+                    // Load the most recent portion of the task range so the
+                    // chart opens showing the latest data. The user can scroll
+                    // left to fetch older candles on demand.
+                    from: Math.max(
+                      from,
+                      Math.min(to, requestBounds.to) -
+                        Math.max(1, edgeCount - 1) * granSec
+                    ),
+                    to: Math.min(to, requestBounds.to),
+                  };
+            const initialRange = clampRange(
+              alignRangeToGranularity(requestedRange, granularity),
+              requestBounds
             );
             const result = await requestRangeOrBridgeGap(initialRange);
             setCandles(result.candles);
@@ -673,6 +683,7 @@ export function useWindowedCandles({
     edgeCount,
     endTime,
     initialCount,
+    initialLoadMode,
     instrument,
     granularity,
     replaceWithCountWindow,

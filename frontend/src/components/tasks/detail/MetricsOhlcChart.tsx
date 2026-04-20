@@ -38,6 +38,7 @@ import {
   createTooltipTimeFormatter,
 } from '../../../utils/adaptiveTimeScalePlugin';
 import { SequencePositionLine } from '../../../utils/SequencePositionLine';
+import { buildMetricsOhlcVisibleRange } from './metricsOhlcViewport';
 
 interface MetricsOhlcChartProps {
   instrument: string;
@@ -144,22 +145,28 @@ export function MetricsOhlcChart({
       granularity: effectiveGranularity,
       startTime,
       endTime: fallbackEnd,
+      initialLoadMode: endTime ? 'full-range' : 'recent-window',
       initialCount: fullRangeEdgeCount,
       edgeCount: fullRangeEdgeCount,
     });
 
-  const paddedRange = useMemo(() => {
-    if (candles.length === 0) return null;
-    const startSec = Math.floor(new Date(startTime).getTime() / 1000);
-    const endSec = Math.floor(new Date(fallbackEnd).getTime() / 1000);
-    const span = Math.max(60, endSec - startSec);
-    const leftPad = Math.max(60, Math.floor(span * 0.05));
-    const rightPad = Math.max(60, Math.floor((span + leftPad) / 3));
-    return {
-      from: (startSec - leftPad) as Time,
-      to: (endSec + rightPad) as Time,
-    };
-  }, [startTime, fallbackEnd, candles]);
+  const paddedRange = useMemo(
+    () =>
+      buildMetricsOhlcVisibleRange({
+        startTime,
+        endTime: fallbackEnd,
+        currentTickTimestamp,
+        latestCandleTimestamp: candles[candles.length - 1]?.time ?? null,
+        granularity: effectiveGranularity,
+      }),
+    [
+      startTime,
+      fallbackEnd,
+      currentTickTimestamp,
+      candles,
+      effectiveGranularity,
+    ]
+  );
 
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
