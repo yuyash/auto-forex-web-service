@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.55.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.55.0...frontend-v1.55.1) (2026-04-20)
+
+
+### Bug Fixes
+
+* **metrics:** align ohlc viewport with task progress ([#561](https://github.com/yuyash/auto-forex-web-service/issues/561)) ([796410a](https://github.com/yuyash/auto-forex-web-service/commit/796410ad7c55297ebbdb718c0f7d903818273d0c))
+
 ## [1.55.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.54.0...frontend-v1.55.0) (2026-04-20)
 
 

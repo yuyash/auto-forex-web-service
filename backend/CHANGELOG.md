@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.41.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.41.1...backend-v1.41.2) (2026-04-20)
+
+
+### Bug Fixes
+
+* **snowball:** prevent lower-slot refills below active counters ([#559](https://github.com/yuyash/auto-forex-web-service/issues/559)) ([51b467f](https://github.com/yuyash/auto-forex-web-service/commit/51b467feae3ebbff1017f9a7d7d8ef73f5106069))
+
 ## [1.41.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.41.0...backend-v1.41.1) (2026-04-20)
 
 
