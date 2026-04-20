@@ -2031,6 +2031,11 @@ class SnowballStrategy(Strategy):
                 for slot in layer.slots:
                     if slot.entry is not None and slot.entry.entry_id == eid:
                         slot.entry.position_id = str(position_id)
+                        self._sync_entry_fill_price(
+                            entry=slot.entry,
+                            layer=layer,
+                            fill_price=binding.fill_price,
+                        )
                         # Back-fill trade_cycle_id on the cycle when the
                         # initial entry (cycle_id == entry_id) is executed.
                         if (
@@ -2042,5 +2047,43 @@ class SnowballStrategy(Strategy):
             for entry in cycle.hedge_entries:
                 if entry.entry_id == eid:
                     entry.position_id = str(position_id)
+                    self._sync_entry_fill_price(
+                        entry=entry,
+                        layer=None,
+                        fill_price=binding.fill_price,
+                    )
 
         state.strategy_state = ss.to_dict()
+
+    def _sync_entry_fill_price(
+        self,
+        *,
+        entry: Entry,
+        layer: Layer | None,
+        fill_price: Decimal | None,
+    ) -> None:
+        """Align in-memory entry pricing with the broker fill price."""
+        if fill_price is None:
+            return
+
+        fill_price = Decimal(str(fill_price))
+        delta = fill_price - entry.entry_price
+        if delta == 0:
+            return
+
+        entry.entry_price = fill_price
+
+        if entry.stop_loss_price is not None:
+            entry.stop_loss_price += delta
+
+        if (
+            layer is not None
+            and entry.role == "counter"
+            and self.config.counter_tp_mode == "weighted_avg"
+        ):
+            weighted = layer.current_weighted_avg_close_price()
+            if weighted is not None:
+                entry.close_price = weighted[0]
+            return
+
+        entry.close_price += delta

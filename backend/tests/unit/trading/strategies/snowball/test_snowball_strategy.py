@@ -14,6 +14,7 @@ from decimal import Decimal
 from typing import Any
 
 from apps.trading.dataclasses.tick import Tick
+from apps.trading.dataclasses.execution import EntryExecutionBinding, EventExecutionResult
 from apps.trading.enums import Direction
 from apps.trading.events import (
     ClosePositionEvent,
@@ -505,6 +506,74 @@ class TestTrendTP:
         close_events = _close_events(result)
         open_events = _open_events(result)
         assert len(close_events) >= 1 or len(open_events) >= 1
+
+
+class TestExecutionFillSync:
+    def test_weighted_avg_counter_uses_actual_fill_before_tp_close(self):
+        s = _strategy(counter_tp_mode="weighted_avg", n_pips_head="30")
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        layer = Layer.create(1, 7, 1000)
+        layer.slot_at(0).fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("158.876"),
+                close_price=Decimal("159.176"),
+                units=1000,
+                opened_at=T0,
+                role="initial",
+                layer_number=1,
+                retracement_count=0,
+                root_entry_id=1,
+            )
+        )
+        layer.slot_at(1).fill(
+            Entry(
+                entry_id=3,
+                step=2,
+                direction=Direction.LONG,
+                entry_price=Decimal("158.576"),
+                close_price=Decimal("158.676"),
+                units=2000,
+                opened_at=T0 + timedelta(minutes=1),
+                role="counter",
+                layer_number=1,
+                retracement_count=1,
+                root_entry_id=1,
+                parent_entry_id=1,
+            )
+        )
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+        state = DummyState(strategy_state=ss.to_dict())
+
+        s.apply_event_execution_result(
+            state=state,
+            execution_result=EventExecutionResult(
+                entry_binding=EntryExecutionBinding(
+                    entry_id=3,
+                    position_id="6adf8955-1836-4db1-aac9-ea3fbd8a67cb",
+                    fill_price=Decimal("158.681"),
+                )
+            ),
+        )
+
+        updated = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        counter = updated.cycles[0].grid.layers[0].slot_at(1).entry
+        assert counter is not None
+        assert counter.position_id == "6adf8955-1836-4db1-aac9-ea3fbd8a67cb"
+        assert counter.entry_price == Decimal("158.681")
+        assert counter.close_price == Decimal("158.746")
+
+        result = s.on_tick(
+            tick=_tick(T0 + timedelta(minutes=2), "158.681", "158.701"),
+            state=state,
+        )
+
+        closes = _close_events(result)
+        assert not any(e.entry_id == 3 for e in closes)
 
 
 # ==================================================================
