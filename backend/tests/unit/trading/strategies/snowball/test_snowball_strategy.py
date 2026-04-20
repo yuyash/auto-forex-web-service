@@ -102,6 +102,76 @@ def _signal_events(result, kind: str) -> list[GenericStrategyEvent]:
     ]
 
 
+def test_next_available_counter_slot_blocks_refill_below_higher_present_slot():
+    layer = Layer.create(3, 7, 1000, 5)
+    layer.slot_at(0).fill(
+        Entry(
+            entry_id=1,
+            step=1,
+            direction=Direction.LONG,
+            entry_price=Decimal("157.727"),
+            close_price=Decimal("158.193"),
+            units=1000,
+            opened_at=T0,
+            role="layer_initial",
+            layer_number=3,
+            retracement_count=0,
+            root_entry_id=1,
+        )
+    )
+    layer.slot_at(1).fill(
+        Entry(
+            entry_id=2,
+            step=2,
+            direction=Direction.LONG,
+            entry_price=Decimal("157.427"),
+            close_price=Decimal("157.738"),
+            units=2000,
+            opened_at=T0,
+            role="counter",
+            layer_number=3,
+            retracement_count=1,
+            root_entry_id=1,
+            parent_entry_id=1,
+        )
+    )
+    layer.slot_at(2).fill(
+        Entry(
+            entry_id=3,
+            step=3,
+            direction=Direction.LONG,
+            entry_price=Decimal("157.118"),
+            close_price=Decimal("157.377"),
+            units=3000,
+            opened_at=T0,
+            role="counter",
+            layer_number=3,
+            retracement_count=2,
+            root_entry_id=1,
+            parent_entry_id=1,
+        )
+    )
+    layer.slot_at(4).fill(
+        Entry(
+            entry_id=4,
+            step=5,
+            direction=Direction.LONG,
+            entry_price=Decimal("155.380"),
+            close_price=Decimal("156.157"),
+            units=5000,
+            opened_at=T0,
+            role="counter",
+            layer_number=3,
+            retracement_count=4,
+            root_entry_id=1,
+            parent_entry_id=1,
+        )
+    )
+
+    assert layer.next_available_counter_slot() is None
+    assert layer.needs_new_layer is True
+
+
 # ==================================================================
 # 1. Initialisation
 # ==================================================================
@@ -219,7 +289,7 @@ class TestCounterAdds:
         assert initial_open.retracement_count == 0
         assert initial_open.stop_loss_price == Decimal("99.70")
 
-    def test_refill_counter_uses_previous_slot_order_not_highest_present_slot(self):
+    def test_refill_counter_is_blocked_when_higher_slot_is_still_present(self):
         s = _strategy(counter_tp_mode="fixed", counter_tp_pips="25", n_pips_head="30")
         ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
         cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
@@ -267,10 +337,7 @@ class TestCounterAdds:
         tick = _tick(T0 + timedelta(minutes=1), "156.90", "156.92")
         events = s._process_cycle_counter_adds(ss, tick, cycle)
 
-        assert len(events) == 1
-        event = events[0]
-        assert event.retracement_count == 1
-        assert event.price == Decimal("156.92")
+        assert events == []
 
     def test_counter_add_uses_entry_side_price_not_mid(self):
         s = _strategy(counter_tp_mode="weighted_avg", interval_mode="constant", n_pips_head="30")
