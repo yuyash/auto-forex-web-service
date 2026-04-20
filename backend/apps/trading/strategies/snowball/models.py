@@ -886,10 +886,17 @@ class Layer:
         pending-rebuild slot is encountered before an available one,
         or all are occupied.
         """
+        highest_present = self.highest_present_slot()
         for s in self.slots:
             if s.index == 0:
                 continue  # skip R0 (layer-initial)
             if s.is_available:
+                # Do not refill a lower slot while any higher-numbered slot
+                # is still logically present; that would invert the in-layer
+                # entry/TP ordering (for example reopening R3 while R4 remains
+                # open or pending rebuild).
+                if highest_present is not None and highest_present.index > s.index:
+                    return None
                 return s
             if s.is_pending_rebuild:
                 # Slot is reserved for SL rebuild — skip but keep looking
