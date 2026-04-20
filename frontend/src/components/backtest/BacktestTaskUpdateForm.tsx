@@ -35,6 +35,27 @@ import { useAuth } from '../../contexts/AuthContext';
 import { logger } from '../../utils/logger';
 
 // Update schema - only editable fields
+const weekdayOptions: ReadonlyArray<{
+  value: number;
+  key:
+    | 'monday'
+    | 'tuesday'
+    | 'wednesday'
+    | 'thursday'
+    | 'friday'
+    | 'saturday'
+    | 'sunday';
+  label: string;
+}> = [
+  { value: 0, key: 'monday', label: 'Monday' },
+  { value: 1, key: 'tuesday', label: 'Tuesday' },
+  { value: 2, key: 'wednesday', label: 'Wednesday' },
+  { value: 3, key: 'thursday', label: 'Thursday' },
+  { value: 4, key: 'friday', label: 'Friday' },
+  { value: 5, key: 'saturday', label: 'Saturday' },
+  { value: 6, key: 'sunday', label: 'Sunday' },
+];
+
 const backtestTaskUpdateSchema = z
   .object({
     config_id: z
@@ -77,6 +98,48 @@ const backtestTaskUpdateSchema = z
     tick_window_value_mode: z.enum(['first', 'last', 'average', 'median']),
     sell_at_completion: z.boolean().optional().default(false),
     hedging_enabled: z.boolean().optional().default(true),
+    drain_duration_hours: z.coerce
+      .number({ message: 'Drain duration must be a number' })
+      .int('Drain duration must be an integer')
+      .min(0, 'Drain duration cannot be negative')
+      .optional(),
+    market_idle_pre_close_minutes: z.coerce
+      .number({ message: 'Must be a non-negative integer' })
+      .int('Must be an integer')
+      .min(0, 'Must be non-negative')
+      .max(720, 'Must not exceed 720 minutes (12 hours)')
+      .optional(),
+    market_idle_resume_delay_minutes: z.coerce
+      .number({ message: 'Must be a non-negative integer' })
+      .int('Must be an integer')
+      .min(0, 'Must be non-negative')
+      .max(720, 'Must not exceed 720 minutes (12 hours)')
+      .optional(),
+    market_close_enabled: z.boolean().optional().default(false),
+    market_close_weekday: z.coerce
+      .number({ message: 'Weekday must be a number' })
+      .int('Weekday must be an integer')
+      .min(0, 'Weekday must be between 0 (Monday) and 6 (Sunday)')
+      .max(6, 'Weekday must be between 0 (Monday) and 6 (Sunday)')
+      .optional(),
+    market_close_hour_utc: z.coerce
+      .number({ message: 'Hour must be a number' })
+      .int('Hour must be an integer')
+      .min(0, 'Hour must be between 0 and 23')
+      .max(23, 'Hour must be between 0 and 23')
+      .optional(),
+    market_open_weekday: z.coerce
+      .number({ message: 'Weekday must be a number' })
+      .int('Weekday must be an integer')
+      .min(0, 'Weekday must be between 0 (Monday) and 6 (Sunday)')
+      .max(6, 'Weekday must be between 0 (Monday) and 6 (Sunday)')
+      .optional(),
+    market_open_hour_utc: z.coerce
+      .number({ message: 'Hour must be a number' })
+      .int('Hour must be an integer')
+      .min(0, 'Hour must be between 0 and 23')
+      .max(23, 'Hour must be between 0 and 23')
+      .optional(),
   })
   .refine((data) => data.start_time < data.end_time, {
     message: 'Start date must be before end date',
@@ -137,6 +200,7 @@ export default function BacktestTaskUpdateForm({
   const replaySettingsChanged =
     selectedTickGranularity !== initialTickGranularity ||
     selectedTickWindowValueMode !== initialTickWindowValueMode;
+  const watchedMarketCloseEnabled = watch('market_close_enabled');
 
   const onSubmit = async (data: BacktestTaskUpdateData) => {
     setSubmitError(null);
@@ -157,6 +221,15 @@ export default function BacktestTaskUpdateForm({
           tick_window_value_mode: data.tick_window_value_mode,
           sell_at_completion: data.sell_at_completion,
           hedging_enabled: data.hedging_enabled,
+          drain_duration_hours: data.drain_duration_hours,
+          market_idle_pre_close_minutes: data.market_idle_pre_close_minutes,
+          market_idle_resume_delay_minutes:
+            data.market_idle_resume_delay_minutes,
+          market_close_enabled: data.market_close_enabled,
+          market_close_weekday: data.market_close_weekday,
+          market_close_hour_utc: data.market_close_hour_utc,
+          market_open_weekday: data.market_open_weekday,
+          market_open_hour_utc: data.market_open_hour_utc,
           debug_options: { tracemalloc },
         },
       });
@@ -515,6 +588,290 @@ export default function BacktestTaskUpdateForm({
               )}
             />
           </Grid>
+
+          <Grid size={{ xs: 12 }} sx={{ mt: 2 }}>
+            <Typography variant="subtitle1" fontWeight={600}>
+              {t('backtest:form.advancedSettings', 'Advanced settings')}
+            </Typography>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: 'block', mb: 2 }}
+            >
+              {t(
+                'backtest:form.advancedSettingsDescription',
+                'Drain-on-stop and market-close idling behaviour. Market-idle thresholds are evaluated against the replayed tick timestamps, not wall-clock time.'
+              )}
+            </Typography>
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Controller
+              name="drain_duration_hours"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  value={field.value ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    field.onChange(val === '' ? undefined : Number(val));
+                  }}
+                  fullWidth
+                  type="number"
+                  label={t(
+                    'backtest:form.drainDurationHours',
+                    'Drain duration (hours)'
+                  )}
+                  helperText={
+                    errors.drain_duration_hours?.message ||
+                    t(
+                      'backtest:form.drainDurationHoursHelp',
+                      'Maximum hours to keep draining before giving up. 0 = wait forever for breakeven.'
+                    )
+                  }
+                  error={!!errors.drain_duration_hours}
+                  inputProps={{ min: 0, step: 1 }}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Controller
+              name="market_idle_pre_close_minutes"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  value={field.value ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    field.onChange(val === '' ? undefined : Number(val));
+                  }}
+                  fullWidth
+                  type="number"
+                  label={t(
+                    'backtest:form.marketIdlePreCloseMinutes',
+                    'Idle before market close (min)'
+                  )}
+                  helperText={
+                    errors.market_idle_pre_close_minutes?.message ||
+                    t(
+                      'backtest:form.marketIdlePreCloseMinutesHelp',
+                      'Switch to IDLE this many minutes before the weekly forex close. Evaluated against the replayed tick timestamp. 0 disables.'
+                    )
+                  }
+                  error={!!errors.market_idle_pre_close_minutes}
+                  inputProps={{ min: 0, max: 720, step: 1 }}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Controller
+              name="market_idle_resume_delay_minutes"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  value={field.value ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    field.onChange(val === '' ? undefined : Number(val));
+                  }}
+                  fullWidth
+                  type="number"
+                  label={t(
+                    'backtest:form.marketIdleResumeDelayMinutes',
+                    'Resume delay after open (min)'
+                  )}
+                  helperText={
+                    errors.market_idle_resume_delay_minutes?.message ||
+                    t(
+                      'backtest:form.marketIdleResumeDelayMinutesHelp',
+                      'Wait this many minutes (replayed clock) after the market reopens before resuming trading.'
+                    )
+                  }
+                  error={!!errors.market_idle_resume_delay_minutes}
+                  inputProps={{ min: 0, max: 720, step: 1 }}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12 }} sx={{ mt: 1 }}>
+            <Controller
+              name="market_close_enabled"
+              control={control}
+              render={({ field }) => (
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={field.value ?? false}
+                      onChange={(e) => field.onChange(e.target.checked)}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body1">
+                        {t(
+                          'backtest:form.marketCloseEnabled',
+                          'Apply weekly market close'
+                        )}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mt: 0.5 }}
+                      >
+                        {t(
+                          'backtest:form.marketCloseEnabledDescription',
+                          'When disabled, the backtest never treats any replayed time as market-closed and the idle thresholds above have no effect.'
+                        )}
+                      </Typography>
+                    </Box>
+                  }
+                />
+              )}
+            />
+          </Grid>
+
+          {watchedMarketCloseEnabled && (
+            <>
+              <Grid size={{ xs: 12, sm: 3 }}>
+                <Controller
+                  name="market_close_weekday"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl
+                      fullWidth
+                      error={!!errors.market_close_weekday}
+                    >
+                      <InputLabel id="backtest-update-market-close-weekday-label">
+                        {t(
+                          'backtest:form.marketCloseWeekday',
+                          'Close weekday (UTC)'
+                        )}
+                      </InputLabel>
+                      <Select
+                        labelId="backtest-update-market-close-weekday-label"
+                        label={t(
+                          'backtest:form.marketCloseWeekday',
+                          'Close weekday (UTC)'
+                        )}
+                        value={field.value ?? 4}
+                        onChange={(e) => field.onChange(Number(e.target.value))}
+                      >
+                        {weekdayOptions.map((opt) => (
+                          <MenuItem key={opt.value} value={opt.value}>
+                            {t(`backtest:form.weekdays.${opt.key}`, opt.label)}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, sm: 3 }}>
+                <Controller
+                  name="market_close_hour_utc"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        field.onChange(val === '' ? undefined : Number(val));
+                      }}
+                      fullWidth
+                      type="number"
+                      label={t(
+                        'backtest:form.marketCloseHourUtc',
+                        'Close hour (UTC)'
+                      )}
+                      helperText={
+                        errors.market_close_hour_utc?.message ||
+                        t(
+                          'backtest:form.marketCloseHourUtcHelp',
+                          'Hour of day at which the market closes (0–23 UTC).'
+                        )
+                      }
+                      error={!!errors.market_close_hour_utc}
+                      inputProps={{ min: 0, max: 23, step: 1 }}
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, sm: 3 }}>
+                <Controller
+                  name="market_open_weekday"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControl fullWidth error={!!errors.market_open_weekday}>
+                      <InputLabel id="backtest-update-market-open-weekday-label">
+                        {t(
+                          'backtest:form.marketOpenWeekday',
+                          'Open weekday (UTC)'
+                        )}
+                      </InputLabel>
+                      <Select
+                        labelId="backtest-update-market-open-weekday-label"
+                        label={t(
+                          'backtest:form.marketOpenWeekday',
+                          'Open weekday (UTC)'
+                        )}
+                        value={field.value ?? 6}
+                        onChange={(e) => field.onChange(Number(e.target.value))}
+                      >
+                        {weekdayOptions.map((opt) => (
+                          <MenuItem key={opt.value} value={opt.value}>
+                            {t(`backtest:form.weekdays.${opt.key}`, opt.label)}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, sm: 3 }}>
+                <Controller
+                  name="market_open_hour_utc"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        field.onChange(val === '' ? undefined : Number(val));
+                      }}
+                      fullWidth
+                      type="number"
+                      label={t(
+                        'backtest:form.marketOpenHourUtc',
+                        'Open hour (UTC)'
+                      )}
+                      helperText={
+                        errors.market_open_hour_utc?.message ||
+                        t(
+                          'backtest:form.marketOpenHourUtcHelp',
+                          'Hour of day at which the market reopens (0–23 UTC).'
+                        )
+                      }
+                      error={!!errors.market_open_hour_utc}
+                      inputProps={{ min: 0, max: 23, step: 1 }}
+                    />
+                  )}
+                />
+              </Grid>
+            </>
+          )}
 
           <Grid size={{ xs: 12 }}>
             <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>

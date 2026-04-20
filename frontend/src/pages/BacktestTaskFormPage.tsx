@@ -33,6 +33,14 @@ export default function BacktestTaskFormPage() {
           task.tick_window_value_mode as BacktestTaskUpdateInitialData['tick_window_value_mode'],
         sell_at_completion: task.sell_at_completion ?? false,
         hedging_enabled: task.hedging_enabled ?? true,
+        drain_duration_hours: task.drain_duration_hours,
+        market_idle_pre_close_minutes: task.market_idle_pre_close_minutes,
+        market_idle_resume_delay_minutes: task.market_idle_resume_delay_minutes,
+        market_close_enabled: task.market_close_enabled ?? false,
+        market_close_weekday: task.market_close_weekday,
+        market_close_hour_utc: task.market_close_hour_utc,
+        market_open_weekday: task.market_open_weekday,
+        market_open_hour_utc: task.market_open_hour_utc,
       }
     : null;
 

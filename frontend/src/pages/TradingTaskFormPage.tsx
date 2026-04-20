@@ -58,6 +58,20 @@ export default function TradingTaskFormPage() {
               initialData={{
                 config_id: task.config_id,
                 hedging_enabled: task.hedging_enabled,
+                api_retry_max_attempts: task.api_retry_max_attempts,
+                api_retry_backoff_base_seconds:
+                  task.api_retry_backoff_base_seconds
+                    ? Number(task.api_retry_backoff_base_seconds)
+                    : undefined,
+                api_retry_backoff_max_seconds:
+                  task.api_retry_backoff_max_seconds
+                    ? Number(task.api_retry_backoff_max_seconds)
+                    : undefined,
+                drain_duration_hours: task.drain_duration_hours,
+                market_idle_pre_close_minutes:
+                  task.market_idle_pre_close_minutes,
+                market_idle_resume_delay_minutes:
+                  task.market_idle_resume_delay_minutes,
               }}
             />
           ) : (

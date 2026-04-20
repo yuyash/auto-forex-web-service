@@ -360,7 +360,7 @@
       "title_ja": "縮小有効",
       "description": "When enabled, the largest-loss counter entry is closed when margin closeout ratio reaches the shrink threshold.",
       "description_ja": "有効時、証拠金清算割合が縮小閾値に達すると、最大損失の逆行エントリーを決済します。",
-      "default": true,
+      "default": false,
       "exclusiveWith": "stop_loss_enabled",
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
@@ -397,7 +397,7 @@
       "title_ja": "ロック有効",
       "description": "When enabled, a net-zero hedge is added when margin closeout ratio reaches the lock threshold.",
       "description_ja": "有効時、証拠金清算割合がロック閾値に達すると、ネットゼロヘッジを追加します。",
-      "default": true,
+      "default": false,
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
     },

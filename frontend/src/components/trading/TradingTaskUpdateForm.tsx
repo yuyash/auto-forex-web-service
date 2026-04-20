@@ -9,10 +9,11 @@ import {
   Alert,
   FormControlLabel,
   Checkbox,
+  TextField,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useNavigate } from 'react-router-dom';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
@@ -24,10 +25,41 @@ import {
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
 
-// Update schema - only editable fields
+// Update schema - editable fields for trading tasks
 const tradingTaskUpdateSchema = z.object({
   config_id: z.string().min(1, 'Configuration is required'),
   hedging_enabled: z.boolean().optional(),
+  api_retry_max_attempts: z.coerce
+    .number({ message: 'Must be a positive integer' })
+    .int('Must be an integer')
+    .min(1, 'Must be at least 1')
+    .max(1000, 'Must not exceed 1000')
+    .optional(),
+  api_retry_backoff_base_seconds: z.coerce
+    .number({ message: 'Must be a non-negative number' })
+    .nonnegative('Must be non-negative')
+    .optional(),
+  api_retry_backoff_max_seconds: z.coerce
+    .number({ message: 'Must be a non-negative number' })
+    .nonnegative('Must be non-negative')
+    .optional(),
+  drain_duration_hours: z.coerce
+    .number({ message: 'Must be a non-negative integer' })
+    .int('Must be an integer')
+    .min(0, 'Must be non-negative')
+    .optional(),
+  market_idle_pre_close_minutes: z.coerce
+    .number({ message: 'Must be a non-negative integer' })
+    .int('Must be an integer')
+    .min(0, 'Must be non-negative')
+    .max(720, 'Must not exceed 720 minutes (12 hours)')
+    .optional(),
+  market_idle_resume_delay_minutes: z.coerce
+    .number({ message: 'Must be a non-negative integer' })
+    .int('Must be an integer')
+    .min(0, 'Must be non-negative')
+    .max(720, 'Must not exceed 720 minutes (12 hours)')
+    .optional(),
 });
 
 type TradingTaskUpdateData = z.infer<typeof tradingTaskUpdateSchema>;
@@ -65,7 +97,9 @@ export default function TradingTaskUpdateForm({
     watch,
     formState: { errors },
   } = useForm<TradingTaskUpdateData>({
-    resolver: zodResolver(tradingTaskUpdateSchema),
+    resolver: zodResolver(
+      tradingTaskUpdateSchema
+    ) as Resolver<TradingTaskUpdateData>,
     defaultValues: initialData,
   });
 
@@ -94,6 +128,13 @@ export default function TradingTaskUpdateForm({
           config: data.config_id,
           hedging_enabled:
             accountHedgingEnabled === false ? false : data.hedging_enabled,
+          api_retry_max_attempts: data.api_retry_max_attempts,
+          api_retry_backoff_base_seconds: data.api_retry_backoff_base_seconds,
+          api_retry_backoff_max_seconds: data.api_retry_backoff_max_seconds,
+          drain_duration_hours: data.drain_duration_hours,
+          market_idle_pre_close_minutes: data.market_idle_pre_close_minutes,
+          market_idle_resume_delay_minutes:
+            data.market_idle_resume_delay_minutes,
           debug_options: { tracemalloc },
         },
       });
@@ -113,6 +154,12 @@ export default function TradingTaskUpdateForm({
         const fieldMapping: Record<string, string> = {
           config: 'Configuration',
           hedging_enabled: 'Hedging',
+          api_retry_max_attempts: 'OANDA retry attempts',
+          api_retry_backoff_base_seconds: 'Retry backoff base',
+          api_retry_backoff_max_seconds: 'Retry backoff max',
+          drain_duration_hours: 'Drain duration',
+          market_idle_pre_close_minutes: 'Pre-close idle',
+          market_idle_resume_delay_minutes: 'Resume delay',
         };
 
         Object.entries(backendErrors).forEach(([field, messages]) => {
@@ -259,6 +306,209 @@ export default function TradingTaskUpdateForm({
                 )}
               </Alert>
             )}
+          </Grid>
+        </Grid>
+
+        <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
+          {t('trading:form.advancedSettings', 'Advanced settings')}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          {t(
+            'trading:form.advancedSettingsDescription',
+            'Fine-tune broker retry behaviour, drain-on-stop, and market-close idling. Defaults work well for most tasks.'
+          )}
+        </Typography>
+        <Grid container spacing={3}>
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Controller
+              name="api_retry_max_attempts"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  value={field.value ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    field.onChange(val === '' ? undefined : Number(val));
+                  }}
+                  fullWidth
+                  type="number"
+                  label={t(
+                    'trading:form.apiRetryMaxAttempts',
+                    'OANDA retry attempts'
+                  )}
+                  helperText={
+                    errors.api_retry_max_attempts?.message ||
+                    t(
+                      'trading:form.apiRetryMaxAttemptsHelp',
+                      'Max retries for broker API calls before failing the task. Default: 50.'
+                    )
+                  }
+                  error={!!errors.api_retry_max_attempts}
+                  inputProps={{ min: 1, max: 1000, step: 1 }}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Controller
+              name="api_retry_backoff_base_seconds"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  value={field.value ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    field.onChange(val === '' ? undefined : Number(val));
+                  }}
+                  fullWidth
+                  type="number"
+                  label={t(
+                    'trading:form.apiRetryBaseSeconds',
+                    'Retry backoff base (s)'
+                  )}
+                  helperText={
+                    errors.api_retry_backoff_base_seconds?.message ||
+                    t(
+                      'trading:form.apiRetryBaseSecondsHelp',
+                      'Initial wait between retries. Doubled on each attempt.'
+                    )
+                  }
+                  error={!!errors.api_retry_backoff_base_seconds}
+                  inputProps={{ min: 0, step: 0.5 }}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Controller
+              name="api_retry_backoff_max_seconds"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  value={field.value ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    field.onChange(val === '' ? undefined : Number(val));
+                  }}
+                  fullWidth
+                  type="number"
+                  label={t(
+                    'trading:form.apiRetryMaxSeconds',
+                    'Retry backoff max (s)'
+                  )}
+                  helperText={
+                    errors.api_retry_backoff_max_seconds?.message ||
+                    t(
+                      'trading:form.apiRetryMaxSecondsHelp',
+                      'Upper bound on the wait between retries.'
+                    )
+                  }
+                  error={!!errors.api_retry_backoff_max_seconds}
+                  inputProps={{ min: 0, step: 1 }}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Controller
+              name="drain_duration_hours"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  value={field.value ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    field.onChange(val === '' ? undefined : Number(val));
+                  }}
+                  fullWidth
+                  type="number"
+                  label={t(
+                    'trading:form.drainDurationHours',
+                    'Drain duration (hours)'
+                  )}
+                  helperText={
+                    errors.drain_duration_hours?.message ||
+                    t(
+                      'trading:form.drainDurationHoursHelp',
+                      'Maximum hours to keep draining before giving up. 0 = wait forever for breakeven.'
+                    )
+                  }
+                  error={!!errors.drain_duration_hours}
+                  inputProps={{ min: 0, step: 1 }}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Controller
+              name="market_idle_pre_close_minutes"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  value={field.value ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    field.onChange(val === '' ? undefined : Number(val));
+                  }}
+                  fullWidth
+                  type="number"
+                  label={t(
+                    'trading:form.marketIdlePreCloseMinutes',
+                    'Idle before market close (min)'
+                  )}
+                  helperText={
+                    errors.market_idle_pre_close_minutes?.message ||
+                    t(
+                      'trading:form.marketIdlePreCloseMinutesHelp',
+                      'Switch to IDLE this many minutes before the weekly forex close. 0 disables.'
+                    )
+                  }
+                  error={!!errors.market_idle_pre_close_minutes}
+                  inputProps={{ min: 0, max: 720, step: 1 }}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Controller
+              name="market_idle_resume_delay_minutes"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  value={field.value ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    field.onChange(val === '' ? undefined : Number(val));
+                  }}
+                  fullWidth
+                  type="number"
+                  label={t(
+                    'trading:form.marketIdleResumeDelayMinutes',
+                    'Resume delay after open (min)'
+                  )}
+                  helperText={
+                    errors.market_idle_resume_delay_minutes?.message ||
+                    t(
+                      'trading:form.marketIdleResumeDelayMinutesHelp',
+                      'Wait this many minutes after the market reopens before resuming trading.'
+                    )
+                  }
+                  error={!!errors.market_idle_resume_delay_minutes}
+                  inputProps={{ min: 0, max: 720, step: 1 }}
+                />
+              )}
+            />
           </Grid>
         </Grid>
 

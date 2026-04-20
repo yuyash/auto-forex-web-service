@@ -315,7 +315,7 @@ class TestRedisStreamTickDataSourceIter:
             trigger_publisher=_trigger,
             block_ms=50,
             read_count=5,
-            idle_timeout_reads=20,
+            idle_timeout_reads=200,
         )
 
         with patch("apps.trading.tasks.source.redis.Redis.from_url") as mock_from_url:
@@ -324,14 +324,18 @@ class TestRedisStreamTickDataSourceIter:
 
             # Also force the celery-always-eager branch to False so the
             # trigger runs synchronously (more deterministic under
-            # fakeredis).
+            # fakeredis).  Restore in ``finally`` so we never leak the
+            # override to other tests in the session.
             from celery import current_app
 
+            previous_task_always_eager = current_app.conf.task_always_eager
             current_app.conf.task_always_eager = False
-
-            received: list = []
-            for batch in source:
-                received.extend(batch)
+            try:
+                received: list = []
+                for batch in source:
+                    received.extend(batch)
+            finally:
+                current_app.conf.task_always_eager = previous_task_always_eager
 
         assert trigger_called["count"] == 1
         assert len(received) == 1
