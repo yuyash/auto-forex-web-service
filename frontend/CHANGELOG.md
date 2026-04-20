@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.55.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.55.1...frontend-v1.55.2) (2026-04-20)
+
+
+### Bug Fixes
+
+* **snowball:** sync actual fill prices into strategy state ([#562](https://github.com/yuyash/auto-forex-web-service/issues/562)) ([e7c5130](https://github.com/yuyash/auto-forex-web-service/commit/e7c51304652cebd9474d1e435c491067ec820e7c))
+
 ## [1.55.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.55.0...frontend-v1.55.1) (2026-04-20)
 
 ### Bug Fixes
