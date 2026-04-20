@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.41.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.40.0...backend-v1.41.0) (2026-04-20)
+
+
+### Features
+
+* backtest market idle ([#554](https://github.com/yuyash/auto-forex-web-service/issues/554)) ([0747848](https://github.com/yuyash/auto-forex-web-service/commit/074784846b3ba40beba601a4e299ed838e880fde))
+
 ## [1.40.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.39.1...backend-v1.40.0) (2026-04-19)
 
 
