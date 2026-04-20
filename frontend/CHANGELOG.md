@@ -2,237 +2,204 @@
 
 ## [1.55.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.55.0...frontend-v1.55.1) (2026-04-20)
 
-
 ### Bug Fixes
 
-* **metrics:** align ohlc viewport with task progress ([#561](https://github.com/yuyash/auto-forex-web-service/issues/561)) ([796410a](https://github.com/yuyash/auto-forex-web-service/commit/796410ad7c55297ebbdb718c0f7d903818273d0c))
+- **metrics:** align ohlc viewport with task progress ([#561](https://github.com/yuyash/auto-forex-web-service/issues/561)) ([796410a](https://github.com/yuyash/auto-forex-web-service/commit/796410ad7c55297ebbdb718c0f7d903818273d0c))
 
 ## [1.55.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.54.0...frontend-v1.55.0) (2026-04-20)
 
-
 ### Features
 
-* backtest market idle ([#554](https://github.com/yuyash/auto-forex-web-service/issues/554)) ([0747848](https://github.com/yuyash/auto-forex-web-service/commit/074784846b3ba40beba601a4e299ed838e880fde))
+- backtest market idle ([#554](https://github.com/yuyash/auto-forex-web-service/issues/554)) ([0747848](https://github.com/yuyash/auto-forex-web-service/commit/074784846b3ba40beba601a4e299ed838e880fde))
 
 ## [1.54.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.53.1...frontend-v1.54.0) (2026-04-19)
 
-
 ### Features
 
-* filter by id in task detail tables ([#553](https://github.com/yuyash/auto-forex-web-service/issues/553)) ([e6bb0bf](https://github.com/yuyash/auto-forex-web-service/commit/e6bb0bfc03168303136ec6b8cd6031df9bbd9a94))
+- filter by id in task detail tables ([#553](https://github.com/yuyash/auto-forex-web-service/issues/553)) ([e6bb0bf](https://github.com/yuyash/auto-forex-web-service/commit/e6bb0bfc03168303136ec6b8cd6031df9bbd9a94))
 
 ## [1.53.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.53.0...frontend-v1.53.1) (2026-04-19)
 
-
 ### Bug Fixes
 
-* **ui:** localise stop dialog and align strategy chip size ([#549](https://github.com/yuyash/auto-forex-web-service/issues/549)) ([534c3d5](https://github.com/yuyash/auto-forex-web-service/commit/534c3d5b2623cc2e6e9db5ec09f3a553dadab029))
-* **ui:** localise stop-options dialog and shrink strategy chip ([534c3d5](https://github.com/yuyash/auto-forex-web-service/commit/534c3d5b2623cc2e6e9db5ec09f3a553dadab029))
+- **ui:** localise stop dialog and align strategy chip size ([#549](https://github.com/yuyash/auto-forex-web-service/issues/549)) ([534c3d5](https://github.com/yuyash/auto-forex-web-service/commit/534c3d5b2623cc2e6e9db5ec09f3a553dadab029))
+- **ui:** localise stop-options dialog and shrink strategy chip ([534c3d5](https://github.com/yuyash/auto-forex-web-service/commit/534c3d5b2623cc2e6e9db5ec09f3a553dadab029))
 
 ## [1.53.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.52.1...frontend-v1.53.0) (2026-04-19)
 
-
 ### Features
 
-* **ui,backend:** add stop reason, tidy log precision, fix resume ([#547](https://github.com/yuyash/auto-forex-web-service/issues/547)) ([2857315](https://github.com/yuyash/auto-forex-web-service/commit/285731593956213edf107f4e7554e18236f71b30))
+- **ui,backend:** add stop reason, tidy log precision, fix resume ([#547](https://github.com/yuyash/auto-forex-web-service/issues/547)) ([2857315](https://github.com/yuyash/auto-forex-web-service/commit/285731593956213edf107f4e7554e18236f71b30))
 
 ## [1.52.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.52.0...frontend-v1.52.1) (2026-04-19)
 
-
 ### Bug Fixes
 
-* **backtest:** isolate stream per execution and purge stale state ([#544](https://github.com/yuyash/auto-forex-web-service/issues/544)) ([df126f6](https://github.com/yuyash/auto-forex-web-service/commit/df126f67f5307aa342ab8be5484b1dbb3b8b30da))
+- **backtest:** isolate stream per execution and purge stale state ([#544](https://github.com/yuyash/auto-forex-web-service/issues/544)) ([df126f6](https://github.com/yuyash/auto-forex-web-service/commit/df126f67f5307aa342ab8be5484b1dbb3b8b30da))
 
 ## [1.52.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.51.1...frontend-v1.52.0) (2026-04-19)
 
-
 ### Features
 
-* **snowball:** cycle/lifecycle P/L warnings and same-tick counter adds ([#543](https://github.com/yuyash/auto-forex-web-service/issues/543)) ([65293c6](https://github.com/yuyash/auto-forex-web-service/commit/65293c639793f18f6c2c8ca592ab81cada4c41cf))
+- **snowball:** cycle/lifecycle P/L warnings and same-tick counter adds ([#543](https://github.com/yuyash/auto-forex-web-service/issues/543)) ([65293c6](https://github.com/yuyash/auto-forex-web-service/commit/65293c639793f18f6c2c8ca592ab81cada4c41cf))
 
 ## [1.51.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.51.0...frontend-v1.51.1) (2026-04-19)
 
-
 ### Bug Fixes
 
-* task lifecycle followups ([#541](https://github.com/yuyash/auto-forex-web-service/issues/541)) ([c4c3737](https://github.com/yuyash/auto-forex-web-service/commit/c4c373791fb9427d54d5bd3c7f9071a0954b4234))
+- task lifecycle followups ([#541](https://github.com/yuyash/auto-forex-web-service/issues/541)) ([c4c3737](https://github.com/yuyash/auto-forex-web-service/commit/c4c373791fb9427d54d5bd3c7f9071a0954b4234))
 
 ## [1.51.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.9...frontend-v1.51.0) (2026-04-18)
 
-
 ### Features
 
-* task lifecycle enhancements ([#538](https://github.com/yuyash/auto-forex-web-service/issues/538)) ([5622195](https://github.com/yuyash/auto-forex-web-service/commit/5622195a832019477c670b9c72b3eb1f324693ab))
+- task lifecycle enhancements ([#538](https://github.com/yuyash/auto-forex-web-service/issues/538)) ([5622195](https://github.com/yuyash/auto-forex-web-service/commit/5622195a832019477c670b9c72b3eb1f324693ab))
 
 ## [1.50.9](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.8...frontend-v1.50.9) (2026-04-17)
 
-
 ### Bug Fixes
 
-* **ui:** clean up strategy cycle list indicators and execution histor… ([#533](https://github.com/yuyash/auto-forex-web-service/issues/533)) ([6f02675](https://github.com/yuyash/auto-forex-web-service/commit/6f0267517276d912825ff75639f0c7cf922439a9))
-* **ui:** clean up strategy cycle list indicators and execution history layout ([6f02675](https://github.com/yuyash/auto-forex-web-service/commit/6f0267517276d912825ff75639f0c7cf922439a9))
+- **ui:** clean up strategy cycle list indicators and execution histor… ([#533](https://github.com/yuyash/auto-forex-web-service/issues/533)) ([6f02675](https://github.com/yuyash/auto-forex-web-service/commit/6f0267517276d912825ff75639f0c7cf922439a9))
+- **ui:** clean up strategy cycle list indicators and execution history layout ([6f02675](https://github.com/yuyash/auto-forex-web-service/commit/6f0267517276d912825ff75639f0c7cf922439a9))
 
 ## [1.50.8](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.7...frontend-v1.50.8) (2026-04-17)
 
-
 ### Bug Fixes
 
-* multi issue UI backend improvements ([#531](https://github.com/yuyash/auto-forex-web-service/issues/531)) ([2a6b9b1](https://github.com/yuyash/auto-forex-web-service/commit/2a6b9b1df5615197815280f3c6322a681deb2ede))
+- multi issue UI backend improvements ([#531](https://github.com/yuyash/auto-forex-web-service/issues/531)) ([2a6b9b1](https://github.com/yuyash/auto-forex-web-service/commit/2a6b9b1df5615197815280f3c6322a681deb2ede))
 
 ## [1.50.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.6...frontend-v1.50.7) (2026-04-16)
 
-
 ### Bug Fixes
 
-* comparison auto interval ([#529](https://github.com/yuyash/auto-forex-web-service/issues/529)) ([e9bfb62](https://github.com/yuyash/auto-forex-web-service/commit/e9bfb622cebc52721d702c6cc818222f6400d656))
+- comparison auto interval ([#529](https://github.com/yuyash/auto-forex-web-service/issues/529)) ([e9bfb62](https://github.com/yuyash/auto-forex-web-service/commit/e9bfb622cebc52721d702c6cc818222f6400d656))
 
 ## [1.50.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.5...frontend-v1.50.6) (2026-04-16)
 
-
 ### Bug Fixes
 
-* **ui:** hide controls and show historical status when viewing past e… ([#527](https://github.com/yuyash/auto-forex-web-service/issues/527)) ([064c06d](https://github.com/yuyash/auto-forex-web-service/commit/064c06dde4043926b7a469b91d1dd02b446f2e8e))
+- **ui:** hide controls and show historical status when viewing past e… ([#527](https://github.com/yuyash/auto-forex-web-service/issues/527)) ([064c06d](https://github.com/yuyash/auto-forex-web-service/commit/064c06dde4043926b7a469b91d1dd02b446f2e8e))
 
 ## [1.50.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.4...frontend-v1.50.5) (2026-04-16)
 
-
 ### Bug Fixes
 
-* **comparison:** use unified xAxis data array for multi-series charts ([#525](https://github.com/yuyash/auto-forex-web-service/issues/525)) ([a4194d0](https://github.com/yuyash/auto-forex-web-service/commit/a4194d0ef82c9f1e98f66bc50c2c5730c23ea7a4))
+- **comparison:** use unified xAxis data array for multi-series charts ([#525](https://github.com/yuyash/auto-forex-web-service/issues/525)) ([a4194d0](https://github.com/yuyash/auto-forex-web-service/commit/a4194d0ef82c9f1e98f66bc50c2c5730c23ea7a4))
 
 ## [1.50.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.3...frontend-v1.50.4) (2026-04-16)
 
-
 ### Bug Fixes
 
-* **ui:** localize snapshot parameter keys and fix comparison chart data ([#523](https://github.com/yuyash/auto-forex-web-service/issues/523)) ([3f30081](https://github.com/yuyash/auto-forex-web-service/commit/3f300815285359b00f504803e930e1746d0e2f5a))
+- **ui:** localize snapshot parameter keys and fix comparison chart data ([#523](https://github.com/yuyash/auto-forex-web-service/issues/523)) ([3f30081](https://github.com/yuyash/auto-forex-web-service/commit/3f300815285359b00f504803e930e1746d0e2f5a))
 
 ## [1.50.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.2...frontend-v1.50.3) (2026-04-16)
 
-
 ### Bug Fixes
 
-* **comparison:** fix metrics overlay granularity control and auto int… ([#521](https://github.com/yuyash/auto-forex-web-service/issues/521)) ([4135bff](https://github.com/yuyash/auto-forex-web-service/commit/4135bff77172121e475e014f6774ad2b5f5eb935))
-* **comparison:** fix metrics overlay granularity control and auto interval ([4135bff](https://github.com/yuyash/auto-forex-web-service/commit/4135bff77172121e475e014f6774ad2b5f5eb935))
+- **comparison:** fix metrics overlay granularity control and auto int… ([#521](https://github.com/yuyash/auto-forex-web-service/issues/521)) ([4135bff](https://github.com/yuyash/auto-forex-web-service/commit/4135bff77172121e475e014f6774ad2b5f5eb935))
+- **comparison:** fix metrics overlay granularity control and auto interval ([4135bff](https://github.com/yuyash/auto-forex-web-service/commit/4135bff77172121e475e014f6774ad2b5f5eb935))
 
 ## [1.50.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.1...frontend-v1.50.2) (2026-04-16)
 
-
 ### Bug Fixes
 
-* historical execution display ([#519](https://github.com/yuyash/auto-forex-web-service/issues/519)) ([6862822](https://github.com/yuyash/auto-forex-web-service/commit/6862822160da0da8b20029824301b8c74bfd1ffa))
+- historical execution display ([#519](https://github.com/yuyash/auto-forex-web-service/issues/519)) ([6862822](https://github.com/yuyash/auto-forex-web-service/commit/6862822160da0da8b20029824301b8c74bfd1ffa))
 
 ## [1.50.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.50.0...frontend-v1.50.1) (2026-04-16)
 
-
 ### Bug Fixes
 
-* **ui:** add timezone to backtest period dates on task card ([#517](https://github.com/yuyash/auto-forex-web-service/issues/517)) ([9eb8350](https://github.com/yuyash/auto-forex-web-service/commit/9eb83500d87759765962de0dd44350b2eb208118))
+- **ui:** add timezone to backtest period dates on task card ([#517](https://github.com/yuyash/auto-forex-web-service/issues/517)) ([9eb8350](https://github.com/yuyash/auto-forex-web-service/commit/9eb83500d87759765962de0dd44350b2eb208118))
 
 ## [1.50.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.49.1...frontend-v1.50.0) (2026-04-16)
 
-
 ### Features
 
-* execution config snapshot ([#515](https://github.com/yuyash/auto-forex-web-service/issues/515)) ([768c15f](https://github.com/yuyash/auto-forex-web-service/commit/768c15fc21bbfb65917ab5de2032d82c8040b5ea))
+- execution config snapshot ([#515](https://github.com/yuyash/auto-forex-web-service/issues/515)) ([768c15f](https://github.com/yuyash/auto-forex-web-service/commit/768c15fc21bbfb65917ab5de2032d82c8040b5ea))
 
 ## [1.49.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.49.0...frontend-v1.49.1) (2026-04-16)
 
-
 ### Bug Fixes
 
-* backtest card timezone display ([#513](https://github.com/yuyash/auto-forex-web-service/issues/513)) ([30c4873](https://github.com/yuyash/auto-forex-web-service/commit/30c487366a9c6a97951554378ad7fd2a21c90af4))
+- backtest card timezone display ([#513](https://github.com/yuyash/auto-forex-web-service/issues/513)) ([30c4873](https://github.com/yuyash/auto-forex-web-service/commit/30c487366a9c6a97951554378ad7fd2a21c90af4))
 
 ## [1.49.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.14...frontend-v1.49.0) (2026-04-16)
 
-
 ### Features
 
-* scheduled athena tick load ([#511](https://github.com/yuyash/auto-forex-web-service/issues/511)) ([37110a9](https://github.com/yuyash/auto-forex-web-service/commit/37110a9ecf35b9ea85ef3baa6ac6688f4b8710ea))
+- scheduled athena tick load ([#511](https://github.com/yuyash/auto-forex-web-service/issues/511)) ([37110a9](https://github.com/yuyash/auto-forex-web-service/commit/37110a9ecf35b9ea85ef3baa6ac6688f4b8710ea))
 
 ## [1.48.14](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.13...frontend-v1.48.14) (2026-04-16)
 
-
 ### Bug Fixes
 
-* lifecycle pnl and timestamps ([#509](https://github.com/yuyash/auto-forex-web-service/issues/509)) ([1d0fa40](https://github.com/yuyash/auto-forex-web-service/commit/1d0fa4083e46e327abc1c5ddc2e74ac23c5dd176))
+- lifecycle pnl and timestamps ([#509](https://github.com/yuyash/auto-forex-web-service/issues/509)) ([1d0fa40](https://github.com/yuyash/auto-forex-web-service/commit/1d0fa4083e46e327abc1c5ddc2e74ac23c5dd176))
 
 ## [1.48.13](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.12...frontend-v1.48.13) (2026-04-15)
 
-
 ### Bug Fixes
 
-* **frontend:** refresh task cache after updates ([#507](https://github.com/yuyash/auto-forex-web-service/issues/507)) ([d9005b3](https://github.com/yuyash/auto-forex-web-service/commit/d9005b337bde247600ca9774d523ef46a45cf4c5))
+- **frontend:** refresh task cache after updates ([#507](https://github.com/yuyash/auto-forex-web-service/issues/507)) ([d9005b3](https://github.com/yuyash/auto-forex-web-service/commit/d9005b337bde247600ca9774d523ef46a45cf4c5))
 
 ## [1.48.12](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.11...frontend-v1.48.12) (2026-04-15)
 
-
 ### Bug Fixes
 
-* trading metrics summary align ([#505](https://github.com/yuyash/auto-forex-web-service/issues/505)) ([1b6c369](https://github.com/yuyash/auto-forex-web-service/commit/1b6c36949eec0df9df11300a43331dad35409629))
+- trading metrics summary align ([#505](https://github.com/yuyash/auto-forex-web-service/issues/505)) ([1b6c369](https://github.com/yuyash/auto-forex-web-service/commit/1b6c36949eec0df9df11300a43331dad35409629))
 
 ## [1.48.11](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.10...frontend-v1.48.11) (2026-04-14)
 
-
 ### Bug Fixes
 
-* **frontend:** prevent app settings sync loops ([#503](https://github.com/yuyash/auto-forex-web-service/issues/503)) ([6a034ba](https://github.com/yuyash/auto-forex-web-service/commit/6a034baa6afad1cc79b203606d4ce8703e3876ab))
+- **frontend:** prevent app settings sync loops ([#503](https://github.com/yuyash/auto-forex-web-service/issues/503)) ([6a034ba](https://github.com/yuyash/auto-forex-web-service/commit/6a034baa6afad1cc79b203606d4ce8703e3876ab))
 
 ## [1.48.10](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.9...frontend-v1.48.10) (2026-04-14)
 
-
 ### Bug Fixes
 
-* **frontend:** extend display formatting usage ([#501](https://github.com/yuyash/auto-forex-web-service/issues/501)) ([be2586c](https://github.com/yuyash/auto-forex-web-service/commit/be2586c85f497bf90db4f62f26a8c090bc7b4b1d))
+- **frontend:** extend display formatting usage ([#501](https://github.com/yuyash/auto-forex-web-service/issues/501)) ([be2586c](https://github.com/yuyash/auto-forex-web-service/commit/be2586c85f497bf90db4f62f26a8c090bc7b4b1d))
 
 ## [1.48.9](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.8...frontend-v1.48.9) (2026-04-14)
 
-
 ### Bug Fixes
 
-* **trading:** refresh live task card summaries ([#499](https://github.com/yuyash/auto-forex-web-service/issues/499)) ([29b4aff](https://github.com/yuyash/auto-forex-web-service/commit/29b4aff5244657ee585a35d3b9343f00932c023b))
+- **trading:** refresh live task card summaries ([#499](https://github.com/yuyash/auto-forex-web-service/issues/499)) ([29b4aff](https://github.com/yuyash/auto-forex-web-service/commit/29b4aff5244657ee585a35d3b9343f00932c023b))
 
 ## [1.48.8](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.7...frontend-v1.48.8) (2026-04-14)
 
-
 ### Bug Fixes
 
-* **metrics:** stop live OHLC auto reloads ([#497](https://github.com/yuyash/auto-forex-web-service/issues/497)) ([3be568f](https://github.com/yuyash/auto-forex-web-service/commit/3be568f1e37c7af2f82c05f61e9181c871860a3f))
+- **metrics:** stop live OHLC auto reloads ([#497](https://github.com/yuyash/auto-forex-web-service/issues/497)) ([3be568f](https://github.com/yuyash/auto-forex-web-service/commit/3be568f1e37c7af2f82c05f61e9181c871860a3f))
 
 ## [1.48.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.6...frontend-v1.48.7) (2026-04-14)
 
-
 ### Bug Fixes
 
-* replay event markers ([#495](https://github.com/yuyash/auto-forex-web-service/issues/495)) ([e4636b3](https://github.com/yuyash/auto-forex-web-service/commit/e4636b371675385b809cf44fc5d110c655257617))
+- replay event markers ([#495](https://github.com/yuyash/auto-forex-web-service/issues/495)) ([e4636b3](https://github.com/yuyash/auto-forex-web-service/commit/e4636b371675385b809cf44fc5d110c655257617))
 
 ## [1.48.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.5...frontend-v1.48.6) (2026-04-14)
 
-
 ### Bug Fixes
 
-* deploy resume and oanda link ([#492](https://github.com/yuyash/auto-forex-web-service/issues/492)) ([c85aaa4](https://github.com/yuyash/auto-forex-web-service/commit/c85aaa4b0262621e1a6de5ce409dba2eec920444))
+- deploy resume and oanda link ([#492](https://github.com/yuyash/auto-forex-web-service/issues/492)) ([c85aaa4](https://github.com/yuyash/auto-forex-web-service/commit/c85aaa4b0262621e1a6de5ce409dba2eec920444))
 
 ## [1.48.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.4...frontend-v1.48.5) (2026-04-14)
 
-
 ### Bug Fixes
 
-* trigger production release ([#490](https://github.com/yuyash/auto-forex-web-service/issues/490)) ([0d9d0cf](https://github.com/yuyash/auto-forex-web-service/commit/0d9d0cf7448acaab761171f39476ee91bc21ff4b))
+- trigger production release ([#490](https://github.com/yuyash/auto-forex-web-service/issues/490)) ([0d9d0cf](https://github.com/yuyash/auto-forex-web-service/commit/0d9d0cf7448acaab761171f39476ee91bc21ff4b))
 
 ## [1.48.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.3...frontend-v1.48.4) (2026-04-14)
 
-
 ### Bug Fixes
 
-* trading restart recovery UI ([#484](https://github.com/yuyash/auto-forex-web-service/issues/484)) ([1e6573c](https://github.com/yuyash/auto-forex-web-service/commit/1e6573cdc42e7bca630b25ed5c08940454d725e5))
+- trading restart recovery UI ([#484](https://github.com/yuyash/auto-forex-web-service/issues/484)) ([1e6573c](https://github.com/yuyash/auto-forex-web-service/commit/1e6573cdc42e7bca630b25ed5c08940454d725e5))
 
 ## [1.48.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.2...frontend-v1.48.3) (2026-04-13)
 
-
 ### Bug Fixes
 
-* stop live broker drift and repair deploy drain ([#479](https://github.com/yuyash/auto-forex-web-service/issues/479)) ([85395bb](https://github.com/yuyash/auto-forex-web-service/commit/85395bb377bc4a1e628fd53932b39cde4c7f233b))
+- stop live broker drift and repair deploy drain ([#479](https://github.com/yuyash/auto-forex-web-service/issues/479)) ([85395bb](https://github.com/yuyash/auto-forex-web-service/commit/85395bb377bc4a1e628fd53932b39cde4c7f233b))
 
 ## [1.48.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.48.1...frontend-v1.48.2) (2026-04-13)
 

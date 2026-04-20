@@ -1003,6 +1003,30 @@ class Layer:
         formula = f"({' + '.join(parts)}) / {total_units}"
         return close_price, formula
 
+    def current_weighted_avg_close_price(self) -> tuple[Decimal, str] | None:
+        """Compute the weighted-average close price from the layer's current state."""
+        total_cost = Decimal("0")
+        total_units = 0
+        parts: list[str] = []
+
+        for s in self.slots:
+            if s.entry is not None and not s.entry.is_hedge:
+                total_cost += s.entry.entry_price * Decimal(str(s.entry.units))
+                total_units += s.entry.units
+                parts.append(f"{s.entry.entry_price} * {s.entry.units}")
+            elif s.pending_rebuild is not None:
+                pr = s.pending_rebuild
+                total_cost += pr.entry_price * Decimal(str(pr.units))
+                total_units += pr.units
+                parts.append(f"{pr.entry_price} * {pr.units}")
+
+        if total_units <= 0:
+            return None
+
+        close_price = total_cost / Decimal(str(total_units))
+        formula = f"({' + '.join(parts)}) / {total_units}"
+        return close_price, formula
+
     def layer_initial_close_price(
         self,
         new_price: Decimal,

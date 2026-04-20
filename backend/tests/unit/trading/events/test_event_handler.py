@@ -121,6 +121,31 @@ class TestHandleOpenPosition:
             handler.handle_open_position(event)
             mock_record.assert_called_once()
 
+    def test_dispatch_open_position_returns_fill_price_in_binding(self):
+        svc = _make_order_service()
+        position = _make_position()
+        order = MagicMock()
+        svc.open_position.return_value = (position, order)
+
+        handler = EventHandler(order_service=svc, instrument="EUR_USD")
+        handler._record_trade = MagicMock()
+
+        event = OpenPositionEvent(
+            event_type=EventType.OPEN_POSITION,
+            layer_number=1,
+            direction="long",
+            units=1000,
+            entry_id=7,
+        )
+
+        result = handler._dispatch_open_position(event)
+
+        assert isinstance(result, EventExecutionResult)
+        assert result.entry_binding is not None
+        assert result.entry_binding.entry_id == 7
+        assert result.entry_binding.position_id == str(position.id)
+        assert result.entry_binding.fill_price == position.entry_price
+
     def test_passes_retracement_count(self):
         svc = _make_order_service()
         position = _make_position()

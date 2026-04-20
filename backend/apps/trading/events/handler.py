@@ -346,6 +346,7 @@ class EventHandler:
             entry_id=strategy_event.entry_id,
             position_id=str(position.id),
             cycle_id=getattr(self, "_last_open_cycle_id", None),
+            fill_price=position.entry_price,
         )
         return EventExecutionResult(
             realized_pnl_delta=Decimal("0"),
@@ -369,6 +370,7 @@ class EventHandler:
             entry_id=strategy_event.entry_id,
             position_id=str(position.id),
             cycle_id=getattr(self, "_last_open_cycle_id", None),
+            fill_price=position.entry_price,
         )
         return EventExecutionResult(
             realized_pnl_delta=Decimal("0"),
