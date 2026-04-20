@@ -232,6 +232,31 @@
       "configuration": "Configuration",
       "parameters": "Parameters",
       "review": "Review"
+    },
+    "advancedSettings": "Advanced settings",
+    "advancedSettingsDescription": "Drain-on-stop and market-close idling behaviour. Market-idle thresholds are evaluated against the replayed tick timestamps, not wall-clock time.",
+    "drainDurationHours": "Drain duration (hours)",
+    "drainDurationHoursHelp": "Maximum hours to keep draining before giving up. 0 = wait forever for breakeven.",
+    "marketIdlePreCloseMinutes": "Idle before market close (min)",
+    "marketIdlePreCloseMinutesHelp": "Switch to IDLE this many minutes before the weekly forex close. Evaluated against the replayed tick timestamp. 0 disables.",
+    "marketIdleResumeDelayMinutes": "Resume delay after open (min)",
+    "marketIdleResumeDelayMinutesHelp": "Wait this many minutes (replayed clock) after the market reopens before resuming trading.",
+    "marketCloseEnabled": "Apply weekly market close",
+    "marketCloseEnabledDescription": "When disabled, the backtest never treats any replayed time as market-closed and the idle thresholds above have no effect.",
+    "marketCloseWeekday": "Close weekday (UTC)",
+    "marketCloseHourUtc": "Close hour (UTC)",
+    "marketCloseHourUtcHelp": "Hour of day at which the market closes (0–23 UTC).",
+    "marketOpenWeekday": "Open weekday (UTC)",
+    "marketOpenHourUtc": "Open hour (UTC)",
+    "marketOpenHourUtcHelp": "Hour of day at which the market reopens (0–23 UTC).",
+    "weekdays": {
+      "monday": "Monday",
+      "tuesday": "Tuesday",
+      "wednesday": "Wednesday",
+      "thursday": "Thursday",
+      "friday": "Friday",
+      "saturday": "Saturday",
+      "sunday": "Sunday"
     }
   },
   "toast": {

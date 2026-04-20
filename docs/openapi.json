@@ -5567,6 +5567,46 @@
                         "minimum": 0,
                         "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
                     },
+                    "market_idle_pre_close_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Switch to IDLE this many minutes before the market closes. 0 disables pre-close idling."
+                    },
+                    "market_idle_resume_delay_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Wait this many minutes after the market reopens before resuming trading. 0 disables the resume delay."
+                    },
+                    "market_close_enabled": {
+                        "type": "boolean",
+                        "description": "Apply a weekly market-close window during the backtest. When disabled, market-idle thresholds are ignored."
+                    },
+                    "market_close_weekday": {
+                        "type": "integer",
+                        "maximum": 32767,
+                        "minimum": 0,
+                        "description": "Weekday the market closes (0 = Monday, 6 = Sunday). Default: 4 (Friday)."
+                    },
+                    "market_close_hour_utc": {
+                        "type": "integer",
+                        "maximum": 32767,
+                        "minimum": 0,
+                        "description": "Hour (UTC) at which the market closes on close weekday. 0–23."
+                    },
+                    "market_open_weekday": {
+                        "type": "integer",
+                        "maximum": 32767,
+                        "minimum": 0,
+                        "description": "Weekday the market reopens (0 = Monday, 6 = Sunday). Default: 6 (Sunday)."
+                    },
+                    "market_open_hour_utc": {
+                        "type": "integer",
+                        "maximum": 32767,
+                        "minimum": 0,
+                        "description": "Hour (UTC) at which the market reopens on open weekday. 0–23."
+                    },
                     "sell_on_stop": {
                         "type": "boolean",
                         "description": "Close all positions at current tick price when the task is stopped"
@@ -5735,6 +5775,46 @@
                         "minimum": 0,
                         "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
                     },
+                    "market_idle_pre_close_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Switch to IDLE this many minutes before the market closes. 0 disables pre-close idling."
+                    },
+                    "market_idle_resume_delay_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Wait this many minutes after the market reopens before resuming trading. 0 disables the resume delay."
+                    },
+                    "market_close_enabled": {
+                        "type": "boolean",
+                        "description": "Apply a weekly market-close window during the backtest. When disabled, market-idle thresholds are ignored."
+                    },
+                    "market_close_weekday": {
+                        "type": "integer",
+                        "maximum": 6,
+                        "minimum": 0,
+                        "description": "Weekday the market closes (0 = Monday, 6 = Sunday). Default: 4 (Friday)."
+                    },
+                    "market_close_hour_utc": {
+                        "type": "integer",
+                        "maximum": 23,
+                        "minimum": 0,
+                        "description": "Hour (UTC) at which the market closes on close weekday. 0–23."
+                    },
+                    "market_open_weekday": {
+                        "type": "integer",
+                        "maximum": 6,
+                        "minimum": 0,
+                        "description": "Weekday the market reopens (0 = Monday, 6 = Sunday). Default: 6 (Sunday)."
+                    },
+                    "market_open_hour_utc": {
+                        "type": "integer",
+                        "maximum": 23,
+                        "minimum": 0,
+                        "description": "Hour (UTC) at which the market reopens on open weekday. 0–23."
+                    },
                     "sell_on_stop": {
                         "type": "boolean",
                         "description": "Close all positions at current tick price when the task is stopped"
@@ -5853,6 +5933,41 @@
                         "readOnly": true,
                         "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
                     },
+                    "market_idle_pre_close_minutes": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Switch to IDLE this many minutes before the market closes. 0 disables pre-close idling."
+                    },
+                    "market_idle_resume_delay_minutes": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Wait this many minutes after the market reopens before resuming trading. 0 disables the resume delay."
+                    },
+                    "market_close_enabled": {
+                        "type": "boolean",
+                        "readOnly": true,
+                        "description": "Apply a weekly market-close window during the backtest. When disabled, market-idle thresholds are ignored."
+                    },
+                    "market_close_weekday": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Weekday the market closes (0 = Monday, 6 = Sunday). Default: 4 (Friday)."
+                    },
+                    "market_close_hour_utc": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Hour (UTC) at which the market closes on close weekday. 0–23."
+                    },
+                    "market_open_weekday": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Weekday the market reopens (0 = Monday, 6 = Sunday). Default: 6 (Sunday)."
+                    },
+                    "market_open_hour_utc": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Hour (UTC) at which the market reopens on open weekday. 0–23."
+                    },
                     "sell_on_stop": {
                         "type": "boolean",
                         "readOnly": true,
@@ -5919,6 +6034,13 @@
                     "id",
                     "initial_balance",
                     "instrument",
+                    "market_close_enabled",
+                    "market_close_hour_utc",
+                    "market_close_weekday",
+                    "market_idle_pre_close_minutes",
+                    "market_idle_resume_delay_minutes",
+                    "market_open_hour_utc",
+                    "market_open_weekday",
                     "name",
                     "pip_size",
                     "sell_on_stop",
@@ -6014,6 +6136,46 @@
                         "maximum": 2147483647,
                         "minimum": 0,
                         "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
+                    },
+                    "market_idle_pre_close_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Switch to IDLE this many minutes before the market closes. 0 disables pre-close idling."
+                    },
+                    "market_idle_resume_delay_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Wait this many minutes after the market reopens before resuming trading. 0 disables the resume delay."
+                    },
+                    "market_close_enabled": {
+                        "type": "boolean",
+                        "description": "Apply a weekly market-close window during the backtest. When disabled, market-idle thresholds are ignored."
+                    },
+                    "market_close_weekday": {
+                        "type": "integer",
+                        "maximum": 32767,
+                        "minimum": 0,
+                        "description": "Weekday the market closes (0 = Monday, 6 = Sunday). Default: 4 (Friday)."
+                    },
+                    "market_close_hour_utc": {
+                        "type": "integer",
+                        "maximum": 32767,
+                        "minimum": 0,
+                        "description": "Hour (UTC) at which the market closes on close weekday. 0–23."
+                    },
+                    "market_open_weekday": {
+                        "type": "integer",
+                        "maximum": 32767,
+                        "minimum": 0,
+                        "description": "Weekday the market reopens (0 = Monday, 6 = Sunday). Default: 6 (Sunday)."
+                    },
+                    "market_open_hour_utc": {
+                        "type": "integer",
+                        "maximum": 32767,
+                        "minimum": 0,
+                        "description": "Hour (UTC) at which the market reopens on open weekday. 0–23."
                     },
                     "sell_on_stop": {
                         "type": "boolean",
@@ -7800,6 +7962,46 @@
                         "maximum": 2147483647,
                         "minimum": 0,
                         "description": "Maximum duration in hours for drain-on-stop before forcing a stop. Set to 0 to wait indefinitely for positions to reach breakeven."
+                    },
+                    "market_idle_pre_close_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Switch to IDLE this many minutes before the market closes. 0 disables pre-close idling."
+                    },
+                    "market_idle_resume_delay_minutes": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Wait this many minutes after the market reopens before resuming trading. 0 disables the resume delay."
+                    },
+                    "market_close_enabled": {
+                        "type": "boolean",
+                        "description": "Apply a weekly market-close window during the backtest. When disabled, market-idle thresholds are ignored."
+                    },
+                    "market_close_weekday": {
+                        "type": "integer",
+                        "maximum": 6,
+                        "minimum": 0,
+                        "description": "Weekday the market closes (0 = Monday, 6 = Sunday). Default: 4 (Friday)."
+                    },
+                    "market_close_hour_utc": {
+                        "type": "integer",
+                        "maximum": 23,
+                        "minimum": 0,
+                        "description": "Hour (UTC) at which the market closes on close weekday. 0–23."
+                    },
+                    "market_open_weekday": {
+                        "type": "integer",
+                        "maximum": 6,
+                        "minimum": 0,
+                        "description": "Weekday the market reopens (0 = Monday, 6 = Sunday). Default: 6 (Sunday)."
+                    },
+                    "market_open_hour_utc": {
+                        "type": "integer",
+                        "maximum": 23,
+                        "minimum": 0,
+                        "description": "Hour (UTC) at which the market reopens on open weekday. 0–23."
                     },
                     "sell_on_stop": {
                         "type": "boolean",

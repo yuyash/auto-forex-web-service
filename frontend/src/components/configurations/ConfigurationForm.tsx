@@ -111,7 +111,7 @@ const ConfigurationForm = ({
   onCancel,
   isLoading = false,
 }: ConfigurationFormProps) => {
-  const { t } = useTranslation(['configuration', 'common', 'strategy']);
+  const { t, i18n } = useTranslation(['configuration', 'common', 'strategy']);
   const {
     strategies,
     isLoading: isStrategiesLoading,
@@ -379,10 +379,17 @@ const ConfigurationForm = ({
       ];
 
   const formatParameterLabel = (key: string): string => {
-    const schemaLabel = strategySchema?.properties?.[key]?.title;
-
-    if (schemaLabel) {
-      return schemaLabel;
+    const prop = strategySchema?.properties?.[key];
+    if (prop) {
+      const language = i18n.language;
+      const localizedKey = `title_${language}` as const;
+      const localizedTitle = prop[localizedKey] as string | undefined;
+      if (localizedTitle) {
+        return localizedTitle;
+      }
+      if (prop.title) {
+        return prop.title;
+      }
     }
 
     return key
@@ -390,7 +397,7 @@ const ConfigurationForm = ({
       .replace(/\b\w/g, (char) => char.toUpperCase());
   };
 
-  const formatParameterValue = (value: unknown): string => {
+  const formatParameterValue = (value: unknown, key?: string): string => {
     if (Array.isArray(value)) {
       return value.join(', ');
     }
@@ -401,6 +408,22 @@ const ConfigurationForm = ({
 
     if (value === null || value === undefined || value === '') {
       return '-';
+    }
+
+    // Localise enum values when the schema provides enum_labels.
+    if (key && typeof value === 'string') {
+      const prop = strategySchema?.properties?.[key];
+      if (prop?.enum && Array.isArray(prop.enum) && prop.enum.includes(value)) {
+        const language = i18n.language;
+        const localizedLabels = prop[`enum_labels_${language}` as const] as
+          | Record<string, string>
+          | undefined;
+        const baseLabels = prop.enum_labels;
+        const label = localizedLabels?.[value] ?? baseLabels?.[value];
+        if (label) {
+          return label;
+        }
+      }
     }
 
     return String(value);
@@ -683,7 +706,7 @@ const ConfigurationForm = ({
                       color="text.secondary"
                       gutterBottom
                     >
-                      Name
+                      {t('common:labels.name')}
                     </Typography>
                     <Typography variant="body1" sx={{ mb: 2 }}>
                       {watch('name')}
@@ -696,7 +719,7 @@ const ConfigurationForm = ({
                           color="text.secondary"
                           gutterBottom
                         >
-                          Description
+                          {t('common:labels.description')}
                         </Typography>
                         <Typography variant="body1" sx={{ mb: 2 }}>
                           {watch('description')}
@@ -709,7 +732,7 @@ const ConfigurationForm = ({
                       color="text.secondary"
                       gutterBottom
                     >
-                      Strategy Type
+                      {t('common:labels.strategyType')}
                     </Typography>
                     <Typography variant="body1" sx={{ mb: 2 }}>
                       {selectedStrategy?.name}
@@ -726,7 +749,7 @@ const ConfigurationForm = ({
                       color="text.secondary"
                       gutterBottom
                     >
-                      Configuration
+                      {t('common:labels.configuration')}
                     </Typography>
                     <Typography variant="body1" sx={{ mb: 1 }}>
                       {watch('name')}
@@ -748,7 +771,7 @@ const ConfigurationForm = ({
                   color="text.secondary"
                   gutterBottom
                 >
-                  Parameters
+                  {t('common:labels.parameters')}
                 </Typography>
                 <Box sx={{ pl: 2 }}>
                   {reviewParameters.length === 0 ? (
@@ -769,7 +792,7 @@ const ConfigurationForm = ({
                           {formatParameterLabel(key)}:
                         </Typography>
                         <Typography variant="body2" fontWeight={500}>
-                          {formatParameterValue(value)}
+                          {formatParameterValue(value, key)}
                         </Typography>
                       </Box>
                     ))

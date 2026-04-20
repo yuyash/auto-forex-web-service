@@ -75,6 +75,43 @@ export const backtestTaskSchema = z
       .int('Drain duration must be an integer')
       .min(0, 'Drain duration cannot be negative')
       .optional(),
+    market_idle_pre_close_minutes: z.coerce
+      .number({ message: 'Must be a non-negative integer' })
+      .int('Must be an integer')
+      .min(0, 'Must be non-negative')
+      .max(720, 'Must not exceed 720 minutes (12 hours)')
+      .optional(),
+    market_idle_resume_delay_minutes: z.coerce
+      .number({ message: 'Must be a non-negative integer' })
+      .int('Must be an integer')
+      .min(0, 'Must be non-negative')
+      .max(720, 'Must not exceed 720 minutes (12 hours)')
+      .optional(),
+    market_close_enabled: z.boolean().optional().default(false),
+    market_close_weekday: z.coerce
+      .number({ message: 'Weekday must be a number' })
+      .int('Weekday must be an integer')
+      .min(0, 'Weekday must be between 0 (Monday) and 6 (Sunday)')
+      .max(6, 'Weekday must be between 0 (Monday) and 6 (Sunday)')
+      .optional(),
+    market_close_hour_utc: z.coerce
+      .number({ message: 'Hour must be a number' })
+      .int('Hour must be an integer')
+      .min(0, 'Hour must be between 0 and 23')
+      .max(23, 'Hour must be between 0 and 23')
+      .optional(),
+    market_open_weekday: z.coerce
+      .number({ message: 'Weekday must be a number' })
+      .int('Weekday must be an integer')
+      .min(0, 'Weekday must be between 0 (Monday) and 6 (Sunday)')
+      .max(6, 'Weekday must be between 0 (Monday) and 6 (Sunday)')
+      .optional(),
+    market_open_hour_utc: z.coerce
+      .number({ message: 'Hour must be a number' })
+      .int('Hour must be an integer')
+      .min(0, 'Hour must be between 0 and 23')
+      .max(23, 'Hour must be between 0 and 23')
+      .optional(),
   })
   .refine((data) => data.start_time < data.end_time, {
     message: 'Start date must be before end date',
@@ -183,6 +220,13 @@ export type BacktestTaskSchemaOutput = {
   sell_at_completion?: boolean;
   hedging_enabled?: boolean;
   drain_duration_hours?: number;
+  market_idle_pre_close_minutes?: number;
+  market_idle_resume_delay_minutes?: number;
+  market_close_enabled?: boolean;
+  market_close_weekday?: number;
+  market_close_hour_utc?: number;
+  market_open_weekday?: number;
+  market_open_hour_utc?: number;
 };
 export type TradingTaskFormData = z.infer<typeof tradingTaskSchema>;
 export type CopyTaskFormData = z.infer<typeof copyTaskSchema>;

@@ -232,6 +232,31 @@
       "configuration": "設定構成",
       "parameters": "パラメータ",
       "review": "確認"
+    },
+    "advancedSettings": "詳細設定",
+    "advancedSettingsDescription": "ドレインおよびマーケットクローズに合わせたアイドル動作を設定します。マーケットアイドルの閾値は現実時間ではなく再生中のティックタイムスタンプに対して評価されます。",
+    "drainDurationHours": "ドレイン期間（時間）",
+    "drainDurationHoursHelp": "ドレインを諦めるまでの最大時間。0 は損益分岐に達するまで無制限に待機します。",
+    "marketIdlePreCloseMinutes": "マーケットクローズ前アイドル（分）",
+    "marketIdlePreCloseMinutesHelp": "フォレックス週末クローズのこの分数前にアイドル状態に遷移します。再生中のティックタイムスタンプで評価します。0 で無効。",
+    "marketIdleResumeDelayMinutes": "オープン後の復帰ディレイ（分）",
+    "marketIdleResumeDelayMinutesHelp": "マーケット再開後、再生中の時刻でこの分数だけ待機してからトレーディングを再開します。",
+    "marketCloseEnabled": "週次マーケットクローズを適用",
+    "marketCloseEnabledDescription": "無効にすると、再生中の時刻をマーケットクローズとして扱わず、上記のアイドル閾値も効きません。",
+    "marketCloseWeekday": "クローズ曜日（UTC）",
+    "marketCloseHourUtc": "クローズ時刻（UTC）",
+    "marketCloseHourUtcHelp": "マーケットがクローズする時刻（0〜23, UTC）。",
+    "marketOpenWeekday": "オープン曜日（UTC）",
+    "marketOpenHourUtc": "オープン時刻（UTC）",
+    "marketOpenHourUtcHelp": "マーケットが再開する時刻（0〜23, UTC）。",
+    "weekdays": {
+      "monday": "月曜日",
+      "tuesday": "火曜日",
+      "wednesday": "水曜日",
+      "thursday": "木曜日",
+      "friday": "金曜日",
+      "saturday": "土曜日",
+      "sunday": "日曜日"
     }
   },
   "toast": {

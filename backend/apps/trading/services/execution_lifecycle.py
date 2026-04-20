@@ -33,10 +33,20 @@ def transition_task_to_terminal(
     error_message: str | None = None,
     error_traceback: str | None = None,
 ) -> int:
-    """Persist a terminal task transition and sync snapshots."""
+    """Persist a terminal task transition and sync snapshots.
+
+    ``expected_current_status`` may be a single status or ``None`` to skip
+    the guard entirely.  It is also expanded internally to accept IDLE
+    wherever RUNNING is expected: an IDLE task has the same semantics as
+    a RUNNING task for terminal transitions (the strategy loop pauses
+    entries during an idle window but the run itself is still active).
+    """
     queryset = type(task).objects.filter(pk=task.pk)
     if expected_current_status is not None:
-        queryset = queryset.filter(status=expected_current_status)
+        allowed = {expected_current_status}
+        if expected_current_status == TaskStatus.RUNNING:
+            allowed.add(TaskStatus.IDLE)
+        queryset = queryset.filter(status__in=allowed)
 
     update_fields: dict[str, object] = {
         "status": status,
@@ -60,10 +70,18 @@ def transition_task_to_stopped(
     task_type: str,
     expected_current_status: TaskStatus | None = None,
 ) -> int:
-    """Persist a STOPPED transition without a completion timestamp."""
+    """Persist a STOPPED transition without a completion timestamp.
+
+    As with :func:`transition_task_to_terminal`, IDLE is accepted wherever
+    the caller expects RUNNING so a task that drained through a market
+    close still finalises cleanly.
+    """
     queryset = type(task).objects.filter(pk=task.pk)
     if expected_current_status is not None:
-        queryset = queryset.filter(status=expected_current_status)
+        allowed = {expected_current_status}
+        if expected_current_status == TaskStatus.RUNNING:
+            allowed.add(TaskStatus.IDLE)
+        queryset = queryset.filter(status__in=allowed)
 
     rows_updated = queryset.update(
         status=TaskStatus.STOPPED,
