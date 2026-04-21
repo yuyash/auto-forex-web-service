@@ -95,6 +95,7 @@ class TestSnowballStrategyClassMethods:
         assert result["disable_loss_cut_after_rebuild"] is False
         assert result["grid_order_validation_enabled"] is True
         assert result["preserve_highest_retracement_enabled"] is False
+        assert result["stop_loss_mode"] == "auto"
         assert "preserve_highest_r_from" not in result
 
     def test_default_parameters(self):
@@ -105,6 +106,7 @@ class TestSnowballStrategyClassMethods:
         assert "disable_loss_cut_after_rebuild" in defaults
         assert "grid_order_validation_enabled" in defaults
         assert "preserve_highest_retracement_enabled" in defaults
+        assert defaults["stop_loss_mode"] == "auto"
         assert "preserve_highest_r_from" not in defaults
 
     def test_validate_parameters_valid(self):
@@ -281,6 +283,58 @@ class TestSnowballStopLossProtectionThreshold:
         events = s._process_stop_loss_closes(ss, tick, cycle)
 
         assert [event.entry_id for event in events] == [r0.entry_id]
+
+
+class TestSnowballStopLossModes:
+    def test_auto_mode_preserves_legacy_counter_stop_loss_formula(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "stop_loss_mode": "auto",
+                "n_pips_head": "30",
+            }
+        )
+        entry = Entry(
+            entry_id=1,
+            step=2,
+            direction=Direction.LONG,
+            entry_price=Decimal("155.00"),
+            close_price=Decimal("155.50"),
+            units=2000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="counter",
+            layer_number=1,
+            retracement_count=1,
+        )
+
+        s._assign_configured_stop_loss(entry, 2)
+
+        assert entry.stop_loss_price == Decimal("154.40")
+
+    def test_constant_mode_uses_flat_pip_distance_from_slot_entry(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "stop_loss_mode": "constant",
+                "stop_loss_pips_head": "30",
+            }
+        )
+        entry = Entry(
+            entry_id=1,
+            step=2,
+            direction=Direction.LONG,
+            entry_price=Decimal("155.00"),
+            close_price=Decimal("155.50"),
+            units=2000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="counter",
+            layer_number=1,
+            retracement_count=1,
+        )
+
+        s._assign_configured_stop_loss(entry, 2)
+
+        assert entry.stop_loss_price == Decimal("154.70")
 
 
 # ===================================================================

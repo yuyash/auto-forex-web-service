@@ -109,11 +109,8 @@ class TestCounterTpPips:
 
 
 class TestStopLossPips:
-    def test_defaults_match_interval_head(self):
-        """Without explicit ``stop_loss_*`` values, SL pips inherit the
-        counter-trend interval head and mode, preserving the intent of
-        the older SL formula at k=1 (R0)."""
-        cfg = _cfg(interval_mode="constant", n_pips_head="30")
+    def test_constant_mode_uses_same_distance_for_every_slot(self):
+        cfg = _cfg(stop_loss_mode="constant", stop_loss_pips_head="30")
         assert stop_loss_pips(1, cfg) == Decimal("30.0")
         assert stop_loss_pips(5, cfg) == Decimal("30.0")
 

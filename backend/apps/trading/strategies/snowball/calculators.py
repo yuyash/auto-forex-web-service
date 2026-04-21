@@ -120,8 +120,9 @@ def stop_loss_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
     The progression shape mirrors :func:`counter_interval_pips` but reads
     its parameters from dedicated ``stop_loss_*`` config fields, so the
     SL distance can be tuned independently of the counter-trend
-    averaging interval (e.g. a tighter SL on a wider grid).  Defaults
-    reproduce the historical behaviour of "SL distance == next interval".
+    averaging interval (e.g. a tighter SL on a wider grid).  ``auto``
+    is handled by the strategy layer because legacy Snowball stop-loss
+    placement depended on both the next interval and the slot TP.
     """
     return _progression_pips(
         k=k,

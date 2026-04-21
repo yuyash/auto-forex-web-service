@@ -53,6 +53,7 @@ class TestSnowballStrategyConfig:
         assert cfg.r_max == 7
         assert cfg.f_max == 3
         assert cfg.interval_mode == "constant"
+        assert cfg.stop_loss_mode == "auto"
         assert cfg.counter_tp_mode == "weighted_avg"
         assert cfg.disable_loss_cut_after_rebuild is False
         assert cfg.grid_order_validation_enabled is True

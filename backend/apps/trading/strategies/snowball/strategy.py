@@ -277,9 +277,7 @@ class SnowballStrategy(Strategy):
 
         # Compute stop-loss for this entry at creation time
         if cfg.stop_loss_enabled:
-            sl_pips = stop_loss_pips(1, cfg)
-            if sl_pips > 0:
-                self._assign_stop_loss(entry, sl_pips)
+            self._assign_configured_stop_loss(entry, 1)
 
         evt = entry.to_open_event(
             timestamp=tick.timestamp,
@@ -1133,9 +1131,7 @@ class SnowballStrategy(Strategy):
 
         # Compute stop-loss for this entry at creation time
         if cfg.stop_loss_enabled:
-            sl_pips = stop_loss_pips(slot.index + 1, cfg)
-            if sl_pips > 0:
-                self._assign_stop_loss(entry, sl_pips)
+            self._assign_configured_stop_loss(entry, slot.index + 1)
 
         logger.info(
             "Counter add (%s) in cycle %d: L%d/R%d, units=%d, adverse=%.1f pips",
@@ -1263,9 +1259,7 @@ class SnowballStrategy(Strategy):
 
         # Compute stop-loss for this entry at creation time
         if cfg.stop_loss_enabled:
-            sl_pips = stop_loss_pips(1, cfg)
-            if sl_pips > 0:
-                self._assign_stop_loss(layer_entry, sl_pips)
+            self._assign_configured_stop_loss(layer_entry, 1)
 
         logger.info(
             "Layer initial L%d/R0 in cycle %d, TP=%.3f",
@@ -1601,6 +1595,62 @@ class SnowballStrategy(Strategy):
             sl_pips,
         )
 
+    def _assign_auto_stop_loss(
+        self,
+        entry: Entry,
+        next_interval_pips: Decimal,
+    ) -> None:
+        """Apply the legacy Snowball stop-loss formula.
+
+        This preserves the pre-``stop_loss_mode`` behaviour, where the
+        SL was derived from the hypothetical next entry price and the
+        current slot TP rather than a dedicated fixed pip distance.
+        """
+        tp_pips = abs(entry.close_price - entry.entry_price) / self.pip_size
+        if entry.is_long:
+            next_entry_price = entry.entry_price - next_interval_pips * self.pip_size
+            if entry.retracement_count == 0:
+                sl = next_entry_price
+            elif tp_pips < next_interval_pips:
+                sl = next_entry_price
+            else:
+                sl = next_entry_price - next_interval_pips * self.pip_size
+        else:
+            next_entry_price = entry.entry_price + next_interval_pips * self.pip_size
+            if entry.retracement_count == 0 or tp_pips < next_interval_pips:
+                sl = next_entry_price
+            else:
+                sl = next_entry_price + next_interval_pips * self.pip_size
+        entry.stop_loss_price = sl
+        logger.debug(
+            "Auto SL assigned: entry_id=%d L%d/R%d, SL=%.5f (tp_pips=%.1f, next_interval=%.1f)",
+            entry.entry_id,
+            entry.layer_number,
+            entry.retracement_count,
+            sl,
+            tp_pips,
+            next_interval_pips,
+        )
+
+    def _assign_configured_stop_loss(
+        self,
+        entry: Entry,
+        slot_number: int,
+    ) -> None:
+        """Assign stop-loss using the configured mode for a slot number.
+
+        ``slot_number`` is 1-based: R0 => 1, R1 => 2, ...
+        """
+        if self.config.stop_loss_mode == "auto":
+            next_interval = counter_interval_pips(slot_number, self.config)
+            if next_interval > 0:
+                self._assign_auto_stop_loss(entry, next_interval)
+            return
+
+        sl_pips = stop_loss_pips(slot_number, self.config)
+        if sl_pips > 0:
+            self._assign_stop_loss(entry, sl_pips)
+
     def _is_stop_loss_temporarily_protected(self, layer: Layer, entry: Entry) -> bool:
         """Return True when the layer's highest live R should ignore stop-loss.
 
@@ -1919,9 +1969,7 @@ class SnowballStrategy(Strategy):
 
                 # Optionally keep rebuilt positions exempt from further stop-loss closes.
                 if self.config.stop_loss_enabled and not self.config.disable_loss_cut_after_rebuild:
-                    sl_pips_val = stop_loss_pips(pending.retracement_count + 1, self.config)
-                    if sl_pips_val > 0:
-                        self._assign_stop_loss(entry, sl_pips_val)
+                    self._assign_configured_stop_loss(entry, pending.retracement_count + 1)
 
                 slot.complete_rebuild(entry)
 
