@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.41.7](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.41.6...backend-v1.41.7) (2026-04-21)
+
+
+### Bug Fixes
+
+* **backtest:** make tick gap threshold configurable ([#572](https://github.com/yuyash/auto-forex-web-service/issues/572)) ([e055e9f](https://github.com/yuyash/auto-forex-web-service/commit/e055e9f3eea2e4894e1e02244144bdbce8b12709))
+
 ## [1.41.6](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.41.5...backend-v1.41.6) (2026-04-21)
 
 
