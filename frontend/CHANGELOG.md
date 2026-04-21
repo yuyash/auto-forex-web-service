@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.55.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.55.3...frontend-v1.55.4) (2026-04-21)
+
+
+### Bug Fixes
+
+* **strategy:** guard snowball grid ordering validation ([#567](https://github.com/yuyash/auto-forex-web-service/issues/567)) ([771005b](https://github.com/yuyash/auto-forex-web-service/commit/771005b38606e9083757faa6bb9985f6578b95ed))
+
 ## [1.55.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.55.2...frontend-v1.55.3) (2026-04-21)
 
 
