@@ -55,6 +55,8 @@ class TestSnowballStrategyConfig:
         assert cfg.interval_mode == "constant"
         assert cfg.counter_tp_mode == "weighted_avg"
         assert cfg.disable_loss_cut_after_rebuild is False
+        assert cfg.grid_order_validation_enabled is True
+        assert cfg.preserve_highest_retracement_enabled is False
         assert cfg.preserve_highest_r_from == 0
 
     def test_from_dict_custom(self):
@@ -77,6 +79,8 @@ class TestSnowballStrategyConfig:
             {
                 "m_pips": "30",
                 "disable_loss_cut_after_rebuild": True,
+                "grid_order_validation_enabled": False,
+                "preserve_highest_retracement_enabled": True,
                 "preserve_highest_r_from": 3,
             }
         )
@@ -85,6 +89,8 @@ class TestSnowballStrategyConfig:
         assert cfg2.m_pips == Decimal("30")
         assert cfg2.base_units == cfg.base_units
         assert cfg2.disable_loss_cut_after_rebuild is True
+        assert cfg2.grid_order_validation_enabled is False
+        assert cfg2.preserve_highest_retracement_enabled is True
         assert cfg2.preserve_highest_r_from == 3
 
     def test_validate_m_th_n_th_order(self):
@@ -122,9 +128,22 @@ class TestSnowballStrategyConfig:
                 {
                     "m_pips": "30",
                     "r_max": 4,
+                    "preserve_highest_retracement_enabled": True,
                     "preserve_highest_r_from": 5,
                 }
             ).validate()
+
+    def test_from_dict_ignores_preserve_highest_r_from_when_flag_disabled(self):
+        cfg = SnowballStrategyConfig.from_dict(
+            {
+                "m_pips": "30",
+                "preserve_highest_retracement_enabled": False,
+                "preserve_highest_r_from": 2,
+            }
+        )
+
+        assert cfg.preserve_highest_retracement_enabled is False
+        assert cfg.preserve_highest_r_from == 0
 
 
 class TestBasketEntry:

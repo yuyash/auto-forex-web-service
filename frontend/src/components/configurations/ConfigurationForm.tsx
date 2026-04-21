@@ -92,12 +92,21 @@ const getDefaultParameters = (
     const defaults: StrategyConfig = {};
 
     Object.entries(effectiveSchema.properties).forEach(([key, property]) => {
+      if (property.deferDefaultUntilConfigured) {
+        return;
+      }
       if (property.default !== undefined) {
         defaults[key] = property.default;
       }
     });
 
     const merged = apiDefaults ? { ...defaults, ...apiDefaults } : defaults;
+    Object.entries(effectiveSchema.properties).forEach(([key, property]) => {
+      if (!property.deferDefaultUntilConfigured) {
+        return;
+      }
+      delete merged[key];
+    });
     return merged;
   }
 

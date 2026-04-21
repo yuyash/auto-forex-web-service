@@ -53,6 +53,11 @@ export interface ConfigProperty {
   /** Localized enum labels: enum_labels, enum_labels_ja, etc. */
   enum_labels?: Record<string, string>;
   [localizedKey4: `enum_labels_${string}`]: Record<string, string> | undefined;
+  /**
+   * When true, the form should not pre-populate this field from schema/API
+   * defaults until the user explicitly selects a value.
+   */
+  deferDefaultUntilConfigured?: boolean;
   // Conditional visibility: show this field only when another field has specific values
   dependsOn?: DependsOnCondition;
   /**

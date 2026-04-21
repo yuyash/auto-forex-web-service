@@ -392,12 +392,22 @@ const StrategyConfigForm = ({
 
     // Enum field (dropdown)
     if (fieldSchema.enum) {
+      const hasExplicitValue = Object.prototype.hasOwnProperty.call(
+        config,
+        fieldName
+      );
       const isProgressionField =
         fieldName.includes('progression') || fieldName.includes('mode');
       const isDirectionMethodField = fieldName === 'direction_method';
       const isNumericEnum = fieldSchema.enum.every(
         (opt) => typeof opt === 'number'
       );
+      const selectValue =
+        fieldSchema.deferDefaultUntilConfigured && !hasExplicitValue
+          ? ''
+          : isNumericEnum
+            ? Number(value)
+            : String(value);
 
       // Get description for enum option based on field type
       const getOptionDescription = (option: string | number): string => {
@@ -445,15 +455,34 @@ const StrategyConfigForm = ({
         >
           <InputLabel required={isRequired}>{labelNode}</InputLabel>
           <Select
-            value={isNumericEnum ? Number(value) : String(value)}
+            value={selectValue}
             label={label}
+            displayEmpty={fieldSchema.deferDefaultUntilConfigured}
             onChange={(e) => {
+              if (
+                fieldSchema.deferDefaultUntilConfigured &&
+                e.target.value === ''
+              ) {
+                const updatedConfig = { ...config };
+                delete updatedConfig[fieldName];
+                onChange(updatedConfig);
+                return;
+              }
               const newValue = isNumericEnum
                 ? Number(e.target.value)
                 : e.target.value;
               handleFieldChange(fieldName, newValue);
             }}
           >
+            {fieldSchema.deferDefaultUntilConfigured && (
+              <MenuItem value="">
+                <em>
+                  {t('common:selectOption', {
+                    defaultValue: 'Select an option',
+                  })}
+                </em>
+              </MenuItem>
+            )}
             {enumOptions.map((option) => (
               <MenuItem key={String(option)} value={option}>
                 <Box>

@@ -94,13 +94,22 @@ class SnowballStrategy(Strategy):
     def parse_config(strategy_config: Any) -> SnowballStrategyConfig:
         return SnowballStrategyConfig.from_dict(strategy_config.config_dict)
 
+    @staticmethod
+    def _config_to_parameters(config: SnowballStrategyConfig) -> dict[str, Any]:
+        parameters = config.to_dict()
+        if not config.preserve_highest_retracement_enabled:
+            parameters.pop("preserve_highest_r_from", None)
+        return parameters
+
     @classmethod
     def normalize_parameters(cls, parameters: dict[str, Any]) -> dict[str, Any]:
-        return SnowballStrategyConfig.from_dict(dict(parameters)).to_dict()
+        config = SnowballStrategyConfig.from_dict(dict(parameters))
+        return cls._config_to_parameters(config)
 
     @classmethod
     def default_parameters(cls) -> dict[str, Any]:
-        return SnowballStrategyConfig.from_dict({}).to_dict()
+        config = SnowballStrategyConfig.from_dict({})
+        return cls._config_to_parameters(config)
 
     @classmethod
     def validate_parameters(
@@ -1009,10 +1018,19 @@ class SnowballStrategy(Strategy):
         # layer's R0 + cumulative design interval instead.
         direction = cycle.direction
         previous_slot = layer.previous_present_slot(slot.index)
+        current_entry_price = self._entry_side_price(direction, tick)
         fresh_same_tick = (
             previous_slot is not None
             and previous_slot.entry is not None
             and previous_slot.entry.opened_at == tick.timestamp
+            # Only use the same-tick multi-add shortcut when the
+            # previous slot really filled at the current market price.
+            # Rebuilds are stamped with the current tick timestamp too,
+            # but their entry_price is the rebuild trigger price, which
+            # may differ from the current market. Treating those as
+            # "fresh same-tick" lets a later slot open at a worse price
+            # than the rebuilt slot and flips grid ordering.
+            and previous_slot.entry.entry_price == current_entry_price
         )
 
         if fresh_same_tick:
@@ -1030,7 +1048,6 @@ class SnowballStrategy(Strategy):
             cumulative_interval = Decimal("0")
             for k in range(1, slot.index + 1):
                 cumulative_interval += counter_interval_pips(k, cfg)
-            current_entry_price = self._entry_side_price(direction, tick)
             if direction == Direction.LONG:
                 adverse = (r0_ref_price - current_entry_price) / self.pip_size
             else:
@@ -1059,7 +1076,6 @@ class SnowballStrategy(Strategy):
 
             if ref_price is None:
                 return []
-            current_entry_price = self._entry_side_price(direction, tick)
             if direction == Direction.LONG:
                 adverse = (ref_price - current_entry_price) / self.pip_size
             else:
@@ -1592,10 +1608,9 @@ class SnowballStrategy(Strategy):
         highest occupied slot is eligible, and only when its R-number is at
         or above the configured threshold. R0 is never protected.
         """
-        threshold = self.config.preserve_highest_r_from
-        if threshold <= 0:
+        if not self.config.preserve_highest_retracement_enabled:
             return False
-
+        threshold = self.config.preserve_highest_r_from
         highest = layer.highest_occupied_slot()
         if highest is None or highest.entry is None:
             return False
@@ -2079,7 +2094,7 @@ class SnowballStrategy(Strategy):
                     events.extend(add_events)
 
             self._validate_grid_ordering(cycle)
-            if self._grid_order_violation:
+            if self._grid_order_violation and self.config.grid_order_validation_enabled:
                 state.strategy_state = ss.to_dict()
                 return StrategyResult(
                     state=state,
@@ -2088,6 +2103,12 @@ class SnowballStrategy(Strategy):
                     stop_reason=f"Grid ordering violation: {self._grid_order_violation}",
                     is_error=True,
                 )
+            if self._grid_order_violation:
+                logger.error(
+                    "Grid ordering violation ignored because grid_order_validation_enabled=false: %s",
+                    self._grid_order_violation,
+                )
+                self._grid_order_violation = None
 
             # --- Cycle status update ---
             # ACTIVE:    at least one open (live) entry exists.
