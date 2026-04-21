@@ -34,6 +34,7 @@ export interface TaskTrade {
   oanda_trade_id?: string | null;
   is_rebuild?: boolean;
   stop_loss_price?: string | null;
+  pnl?: string | null;
   replayed_at?: string | null;
   updated_at?: string | null;
 }

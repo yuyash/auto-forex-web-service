@@ -7,6 +7,7 @@ used by both BacktestTaskViewSet and TradingTaskViewSet.
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 
 from django.db import models
 from django.db.models import Q
@@ -538,6 +539,7 @@ class TaskSubResourceMixin:
             "updated_at",
             "is_rebuild",
             stop_loss_price=models.F("position__stop_loss_price"),
+            entry_price=models.F("position__entry_price"),
         )
         normalized: list[dict] = []
         for trade in trades_qs:
@@ -549,6 +551,21 @@ class TaskSubResourceMixin:
                 trade["direction"] = (
                     "buy" if side == "long" else "sell" if side == "short" else side
                 )
+            trade["pnl"] = None
+            if trade["execution_method"] not in {"open_position", "rebuild_position"}:
+                entry_price = trade.pop("entry_price", None)
+                if entry_price is not None and trade["price"] is not None:
+                    entry = Decimal(str(entry_price))
+                    exit_price = Decimal(str(trade["price"]))
+                    units = abs(int(trade["units"]))
+                    if trade["direction"] == "buy":
+                        trade["pnl"] = exit_price - entry
+                    elif trade["direction"] == "sell":
+                        trade["pnl"] = entry - exit_price
+                    if trade["pnl"] is not None:
+                        trade["pnl"] *= units
+            else:
+                trade.pop("entry_price", None)
             normalized.append(trade)
         paginator = TradePositionPagination()
         page = paginator.paginate_queryset(normalized, request)

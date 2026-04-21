@@ -58,6 +58,7 @@ class TestTradeSerializer:
         assert "price" in serializer.fields
         assert "oanda_trade_id" in serializer.fields
         assert "replayed_at" in serializer.fields
+        assert "pnl" in serializer.fields
 
     def test_get_execution_method_display_valid(self):
         serializer = TradeSerializer()

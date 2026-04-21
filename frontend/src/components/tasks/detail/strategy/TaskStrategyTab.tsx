@@ -439,6 +439,7 @@ export function TaskStrategyTab({
         timestamp: trade.timestamp,
         position_id: trade.position_id ?? null,
         is_rebuild: trade.is_rebuild,
+        pnl: trade.pnl ?? null,
       })),
     [pagedTradesRaw]
   );
@@ -1185,7 +1186,7 @@ function TradeRow({
         ) : null}
         <Chip
           size="small"
-          label={trade.direction === 'buy' ? 'BUY' : 'SELL'}
+          label={trade.direction === 'buy' ? 'LONG' : 'SHORT'}
           color={trade.direction === 'buy' ? 'success' : 'error'}
           variant="outlined"
         />
