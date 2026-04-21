@@ -1097,7 +1097,9 @@ class TaskExecutor:
         if self.task_type == TaskType.BACKTEST and loop.last_delivered_tick_timestamp is not None:
             delivered_ts = self._coerce_tick_timestamp(tick.timestamp)
             if delivered_ts is not None and self._is_suspicious_tick_gap(
-                loop.last_delivered_tick_timestamp, delivered_ts
+                loop.last_delivered_tick_timestamp,
+                delivered_ts,
+                max_gap_hours=self._max_backtest_tick_gap_hours(),
             ):
                 gap = delivered_ts - loop.last_delivered_tick_timestamp
                 msg = (
@@ -1201,13 +1203,28 @@ class TaskExecutor:
             parsed = parsed.replace(tzinfo=UTC)
         return parsed
 
+    def _max_backtest_tick_gap_hours(self) -> int:
+        """Return the configured backtest tick-gap threshold in hours."""
+        from django.conf import settings as _settings
+
+        task_value = getattr(self.task, "max_tick_gap_hours", None)
+        if task_value is not None:
+            return int(task_value)
+
+        return int(getattr(_settings, "MARKET_BACKTEST_MAX_TICK_GAP_HOURS", 120))
+
     @staticmethod
-    def _is_suspicious_tick_gap(previous: datetime, current: datetime) -> bool:
+    def _is_suspicious_tick_gap(
+        previous: datetime,
+        current: datetime,
+        *,
+        max_gap_hours: int | None = None,
+    ) -> bool:
         """Return True when ``current`` jumps forward from ``previous`` by an
         amount that cannot be explained by forex market hours.
 
-        The threshold is configured by
-        ``settings.MARKET_BACKTEST_MAX_TICK_GAP_HOURS`` (default 72 hours).
+        The threshold is configured by task ``max_tick_gap_hours`` and falls
+        back to ``settings.MARKET_BACKTEST_MAX_TICK_GAP_HOURS`` (default 120 hours).
         The regular weekend close (Fri 21:00 → Sun 21:00 UTC) is always
         considered acceptable.
         """
@@ -1218,7 +1235,8 @@ class TaskExecutor:
         if current <= previous:
             return False
 
-        max_gap_hours = int(getattr(_settings, "MARKET_BACKTEST_MAX_TICK_GAP_HOURS", 72))
+        if max_gap_hours is None:
+            max_gap_hours = int(getattr(_settings, "MARKET_BACKTEST_MAX_TICK_GAP_HOURS", 120))
         gap = current - previous
         if gap <= timedelta(hours=max_gap_hours):
             return False

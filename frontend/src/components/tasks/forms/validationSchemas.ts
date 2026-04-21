@@ -112,6 +112,11 @@ export const backtestTaskSchema = z
       .min(0, 'Hour must be between 0 and 23')
       .max(23, 'Hour must be between 0 and 23')
       .optional(),
+    max_tick_gap_hours: z.coerce
+      .number({ message: 'Tick gap threshold must be a number' })
+      .int('Tick gap threshold must be an integer')
+      .min(1, 'Tick gap threshold must be at least 1 hour')
+      .optional(),
   })
   .refine((data) => data.start_time < data.end_time, {
     message: 'Start date must be before end date',
@@ -227,6 +232,7 @@ export type BacktestTaskSchemaOutput = {
   market_close_hour_utc?: number;
   market_open_weekday?: number;
   market_open_hour_utc?: number;
+  max_tick_gap_hours?: number;
 };
 export type TradingTaskFormData = z.infer<typeof tradingTaskSchema>;
 export type CopyTaskFormData = z.infer<typeof copyTaskSchema>;

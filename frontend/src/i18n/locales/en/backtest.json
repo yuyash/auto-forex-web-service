@@ -241,6 +241,8 @@
     "marketIdlePreCloseMinutesHelp": "Switch to IDLE this many minutes before the weekly forex close. Evaluated against the replayed tick timestamp. 0 disables.",
     "marketIdleResumeDelayMinutes": "Resume delay after open (min)",
     "marketIdleResumeDelayMinutesHelp": "Wait this many minutes (replayed clock) after the market reopens before resuming trading.",
+    "maxTickGapHours": "Max tick gap before fail (hours)",
+    "maxTickGapHoursHelp": "Fail the backtest if replayed ticks jump forward by more than this many hours. Default: 120 (5 days).",
     "marketCloseEnabled": "Apply weekly market close",
     "marketCloseEnabledDescription": "When disabled, the backtest never treats any replayed time as market-closed and the idle thresholds above have no effect.",
     "marketCloseWeekday": "Close weekday (UTC)",

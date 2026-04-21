@@ -405,6 +405,17 @@ export function BacktestOverviewTab({
                 </Typography>
               </Box>
             )}
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                {t(
+                  'backtest:form.maxTickGapHours',
+                  'Max tick gap before fail (hours)'
+                )}
+              </Typography>
+              <Typography variant="body1">
+                {task.max_tick_gap_hours ?? 120}
+              </Typography>
+            </Box>
           </Box>
         </Grid>
 

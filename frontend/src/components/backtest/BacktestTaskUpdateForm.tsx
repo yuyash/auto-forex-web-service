@@ -140,6 +140,11 @@ const backtestTaskUpdateSchema = z
       .min(0, 'Hour must be between 0 and 23')
       .max(23, 'Hour must be between 0 and 23')
       .optional(),
+    max_tick_gap_hours: z.coerce
+      .number({ message: 'Tick gap threshold must be a number' })
+      .int('Tick gap threshold must be an integer')
+      .min(1, 'Tick gap threshold must be at least 1 hour')
+      .optional(),
   })
   .refine((data) => data.start_time < data.end_time, {
     message: 'Start date must be before end date',
@@ -230,6 +235,7 @@ export default function BacktestTaskUpdateForm({
           market_close_hour_utc: data.market_close_hour_utc,
           market_open_weekday: data.market_open_weekday,
           market_open_hour_utc: data.market_open_hour_utc,
+          max_tick_gap_hours: data.max_tick_gap_hours,
           debug_options: { tracemalloc },
         },
       });
@@ -696,6 +702,38 @@ export default function BacktestTaskUpdateForm({
                   }
                   error={!!errors.market_idle_resume_delay_minutes}
                   inputProps={{ min: 0, max: 720, step: 1 }}
+                />
+              )}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, sm: 4 }}>
+            <Controller
+              name="max_tick_gap_hours"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  value={field.value ?? ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    field.onChange(val === '' ? undefined : Number(val));
+                  }}
+                  fullWidth
+                  type="number"
+                  label={t(
+                    'backtest:form.maxTickGapHours',
+                    'Max tick gap before fail (hours)'
+                  )}
+                  helperText={
+                    errors.max_tick_gap_hours?.message ||
+                    t(
+                      'backtest:form.maxTickGapHoursHelp',
+                      'Fail the backtest if replayed ticks jump forward by more than this many hours. Default: 120 (5 days).'
+                    )
+                  }
+                  error={!!errors.max_tick_gap_hours}
+                  inputProps={{ min: 1, step: 1 }}
                 />
               )}
             />

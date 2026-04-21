@@ -62,6 +62,7 @@ export interface BackendBacktestTask {
   market_close_hour_utc?: number;
   market_open_weekday?: number;
   market_open_hour_utc?: number;
+  max_tick_gap_hours?: number;
   created_at: string;
   updated_at: string;
   debug_options?: Record<string, unknown>;

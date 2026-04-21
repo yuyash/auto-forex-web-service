@@ -41,6 +41,7 @@ export default function BacktestTaskFormPage() {
         market_close_hour_utc: task.market_close_hour_utc,
         market_open_weekday: task.market_open_weekday,
         market_open_hour_utc: task.market_open_hour_utc,
+        max_tick_gap_hours: task.max_tick_gap_hours,
       }
     : null;
 
