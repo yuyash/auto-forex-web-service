@@ -233,3 +233,96 @@ class TestBacktestTickPublisherRunnerIntegration:
         assert rows[0].bid == expected_bid
         assert rows[0].ask == expected_ask
         assert rows[0].mid == expected_mid
+
+    def test_iter_aggregated_backtest_ticks_warns_on_wide_bar(self, caplog) -> None:
+        """A bucket with intra-bar range above the threshold emits a WARNING.
+
+        Reproduces the condition that caused a 1-minute backtest to drift
+        SL fills far past the intended price: a single bar contains
+        >30-pip travel in the bid series.
+        """
+        import logging
+
+        start = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        # Three ticks in a 30-second bucket whose bid spans 150.00 → 150.80
+        # (80 pips at pip_size 0.01) — well above a 30-pip threshold.
+        samples = [
+            (start, "150.00", "150.02", "150.01"),
+            (datetime(2024, 1, 1, 12, 0, 10, tzinfo=UTC), "150.80", "150.82", "150.81"),
+            (datetime(2024, 1, 1, 12, 0, 20, tzinfo=UTC), "150.40", "150.42", "150.41"),
+        ]
+        for ts, bid, ask, mid in samples:
+            TickData.objects.create(
+                instrument="USD_JPY",
+                timestamp=ts,
+                bid=Decimal(bid),
+                ask=Decimal(ask),
+                mid=Decimal(mid),
+            )
+
+        with caplog.at_level(logging.WARNING, logger="apps.market.services.backtest_ticks"):
+            rows = list(
+                iter_aggregated_backtest_ticks(
+                    instrument="USD_JPY",
+                    start_dt=start,
+                    end_dt=datetime(2024, 1, 1, 12, 0, 29, tzinfo=UTC),
+                    granularity="30s",
+                    mode="first",
+                    batch_size=10,
+                    range_warning_pips=Decimal("30"),
+                    pip_size=Decimal("0.01"),
+                    request_id="test-wide-bar",
+                )
+            )
+
+        # Still yields the representative tick as before.
+        assert len(rows) == 1
+
+        # A warning was emitted with the diagnostic context.
+        warnings = [
+            rec for rec in caplog.records if "range exceeds warning threshold" in rec.getMessage()
+        ]
+        assert len(warnings) == 1, "expected exactly one bar-range warning"
+        message = warnings[0].getMessage()
+        assert "USD_JPY" in message
+        assert "30s" in message
+        assert "80.0 pips" in message
+        assert "test-wide-bar" in message
+
+    def test_iter_aggregated_backtest_ticks_does_not_warn_when_threshold_disabled(
+        self, caplog
+    ) -> None:
+        """Non-positive threshold disables the warning check."""
+        import logging
+
+        start = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        samples = [
+            (start, "150.00", "150.02", "150.01"),
+            (datetime(2024, 1, 1, 12, 0, 10, tzinfo=UTC), "151.00", "151.02", "151.01"),
+        ]
+        for ts, bid, ask, mid in samples:
+            TickData.objects.create(
+                instrument="USD_JPY",
+                timestamp=ts,
+                bid=Decimal(bid),
+                ask=Decimal(ask),
+                mid=Decimal(mid),
+            )
+
+        with caplog.at_level(logging.WARNING, logger="apps.market.services.backtest_ticks"):
+            list(
+                iter_aggregated_backtest_ticks(
+                    instrument="USD_JPY",
+                    start_dt=start,
+                    end_dt=datetime(2024, 1, 1, 12, 0, 19, tzinfo=UTC),
+                    granularity="30s",
+                    mode="first",
+                    batch_size=10,
+                    range_warning_pips=Decimal("0"),
+                    pip_size=Decimal("0.01"),
+                )
+            )
+
+        assert not any(
+            "range exceeds warning threshold" in rec.getMessage() for rec in caplog.records
+        ), "warning should be suppressed when threshold is disabled"

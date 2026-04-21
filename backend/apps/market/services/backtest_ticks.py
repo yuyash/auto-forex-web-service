@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -11,6 +12,8 @@ from statistics import median
 from django.db import connection
 
 from apps.market.models import TickData
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,8 +59,22 @@ def iter_aggregated_backtest_ticks(
     granularity: str,
     mode: str,
     batch_size: int,
+    range_warning_pips: Decimal | None = None,
+    pip_size: Decimal | None = None,
+    request_id: str | None = None,
 ) -> Iterator[BacktestTickRow]:
-    """Yield aggregated backtest tick rows from PostgreSQL."""
+    """Yield aggregated backtest tick rows from PostgreSQL.
+
+    When ``range_warning_pips`` and ``pip_size`` are provided, each
+    bucket's intra-bar bid range (high - low) is compared against the
+    threshold and a WARNING log entry is emitted for each bucket that
+    exceeds it.  This highlights aggregation windows where the price
+    travelled far enough inside a single bar to invalidate SL / TP
+    trigger semantics that assume tick-level precision.  The returned
+    row itself is unchanged — the warning is purely diagnostic.
+    """
+    warn_threshold = _range_warn_threshold_price(range_warning_pips, pip_size)
+
     if connection.vendor != "postgresql":
         yield from _iter_aggregated_backtest_ticks_python(
             instrument=instrument,
@@ -66,6 +83,9 @@ def iter_aggregated_backtest_ticks(
             granularity=granularity,
             mode=mode,
             batch_size=batch_size,
+            warn_threshold=warn_threshold,
+            range_warning_pips=range_warning_pips,
+            request_id=request_id,
         )
         return
 
@@ -77,13 +97,83 @@ def iter_aggregated_backtest_ticks(
             rows = cursor.fetchmany(batch_size)
             if not rows:
                 return
-            for timestamp, bid, ask, mid in rows:
+            for timestamp, bid, ask, mid, bid_high, bid_low in rows:
+                bid_dec = Decimal(str(bid))
+                ask_dec = Decimal(str(ask))
+                mid_dec = Decimal(str(mid))
+                if warn_threshold is not None and bid_high is not None and bid_low is not None:
+                    bh = Decimal(str(bid_high))
+                    bl = Decimal(str(bid_low))
+                    bar_range = bh - bl
+                    if bar_range > warn_threshold:
+                        _log_range_warning(
+                            timestamp=timestamp,
+                            bar_range=bar_range,
+                            pip_size=pip_size,
+                            granularity=granularity,
+                            instrument=instrument,
+                            bid_high=bh,
+                            bid_low=bl,
+                            threshold_pips=range_warning_pips,
+                            request_id=request_id,
+                        )
                 yield BacktestTickRow(
                     timestamp=timestamp,
-                    bid=Decimal(str(bid)),
-                    ask=Decimal(str(ask)),
-                    mid=Decimal(str(mid)),
+                    bid=bid_dec,
+                    ask=ask_dec,
+                    mid=mid_dec,
                 )
+
+
+def _range_warn_threshold_price(
+    range_warning_pips: Decimal | None,
+    pip_size: Decimal | None,
+) -> Decimal | None:
+    """Convert the pip-denominated warning threshold to price units.
+
+    Returns ``None`` when the threshold is disabled (non-positive or
+    missing, or when ``pip_size`` is unavailable).
+    """
+    if range_warning_pips is None or pip_size is None:
+        return None
+    if range_warning_pips <= 0 or pip_size <= 0:
+        return None
+    return range_warning_pips * pip_size
+
+
+def _log_range_warning(
+    *,
+    timestamp: datetime,
+    bar_range: Decimal,
+    pip_size: Decimal | None,
+    granularity: str,
+    instrument: str,
+    bid_high: Decimal,
+    bid_low: Decimal,
+    threshold_pips: Decimal | None,
+    request_id: str | None,
+) -> None:
+    """Emit a WARNING for a bucket whose intra-bar range exceeds the threshold."""
+    if pip_size and pip_size > 0:
+        range_pips = bar_range / pip_size
+        range_repr = f"{range_pips:.1f} pips"
+    else:
+        range_repr = f"{bar_range}"
+    threshold_repr = f"{threshold_pips} pips" if threshold_pips is not None else "n/a"
+    request_suffix = f" request_id={request_id}" if request_id else ""
+    logger.warning(
+        "Aggregated backtest bar range exceeds warning threshold: "
+        "instrument=%s granularity=%s bucket=%s range=%s (high=%s low=%s) "
+        "threshold=%s — strategy SL/TP semantics may be inaccurate on this bar.%s",
+        instrument,
+        granularity,
+        timestamp.isoformat() if hasattr(timestamp, "isoformat") else timestamp,
+        range_repr,
+        bid_high,
+        bid_low,
+        threshold_repr,
+        request_suffix,
+    )
 
 
 def _build_aggregation_sql(*, mode: str) -> str:
@@ -105,26 +195,30 @@ def _build_aggregation_sql(*, mode: str) -> str:
     if mode == "average":
         average_sql = """
             SELECT
-                bucket AS timestamp,
-                AVG(bid) AS bid,
-                AVG(ask) AS ask,
-                AVG(mid) AS mid
-            FROM filtered
-            GROUP BY bucket
-            ORDER BY bucket
+                f.bucket AS timestamp,
+                AVG(f.bid) AS bid,
+                AVG(f.ask) AS ask,
+                AVG(f.mid) AS mid,
+                MAX(f.bid) AS bid_high,
+                MIN(f.bid) AS bid_low
+            FROM filtered f
+            GROUP BY f.bucket
+            ORDER BY f.bucket
             """  # nosec B608
         return filtered_cte + average_sql
 
     if mode == "median":
         median_sql = """
             SELECT
-                bucket AS timestamp,
-                percentile_cont(0.5) WITHIN GROUP (ORDER BY bid) AS bid,
-                percentile_cont(0.5) WITHIN GROUP (ORDER BY ask) AS ask,
-                percentile_cont(0.5) WITHIN GROUP (ORDER BY mid) AS mid
-            FROM filtered
-            GROUP BY bucket
-            ORDER BY bucket
+                f.bucket AS timestamp,
+                percentile_cont(0.5) WITHIN GROUP (ORDER BY f.bid) AS bid,
+                percentile_cont(0.5) WITHIN GROUP (ORDER BY f.ask) AS ask,
+                percentile_cont(0.5) WITHIN GROUP (ORDER BY f.mid) AS mid,
+                MAX(f.bid) AS bid_high,
+                MIN(f.bid) AS bid_low
+            FROM filtered f
+            GROUP BY f.bucket
+            ORDER BY f.bucket
             """  # nosec B608
         return filtered_cte + median_sql
 
@@ -142,15 +236,23 @@ def _build_aggregation_sql(*, mode: str) -> str:
                     ORDER BY timestamp {ordering}
                 ) AS row_num
             FROM filtered
+        ),
+        bucket_stats AS (
+            SELECT bucket, MAX(bid) AS bid_high, MIN(bid) AS bid_low
+            FROM filtered
+            GROUP BY bucket
         )
         SELECT
-            bucket AS timestamp,
-            bid,
-            ask,
-            mid
-        FROM ranked
-        WHERE row_num = 1
-        ORDER BY bucket
+            r.bucket AS timestamp,
+            r.bid,
+            r.ask,
+            r.mid,
+            bs.bid_high,
+            bs.bid_low
+        FROM ranked r
+        JOIN bucket_stats bs ON bs.bucket = r.bucket
+        WHERE r.row_num = 1
+        ORDER BY r.bucket
         """  # nosec B608
     return filtered_cte + ranked_sql
 
@@ -163,6 +265,9 @@ def _iter_aggregated_backtest_ticks_python(
     granularity: str,
     mode: str,
     batch_size: int,
+    warn_threshold: Decimal | None = None,
+    range_warning_pips: Decimal | None = None,
+    request_id: str | None = None,
 ) -> Iterator[BacktestTickRow]:
     bucket_seconds = _INTERVAL_SECONDS_BY_GRANULARITY[granularity]
     qs = (
@@ -179,7 +284,32 @@ def _iter_aggregated_backtest_ticks_python(
         bucket = _bucket_start(row["timestamp"], bucket_seconds)
         buckets.setdefault(bucket, []).append(row)
 
+    pip_size = None
+    if warn_threshold is not None and range_warning_pips is not None and range_warning_pips > 0:
+        pip_size = warn_threshold / range_warning_pips
+
     for bucket, rows in sorted(buckets.items(), key=lambda item: item[0]):
+        bid_values = [Decimal(str(row["bid"])) for row in rows]
+        bid_high = max(bid_values) if bid_values else None
+        bid_low = min(bid_values) if bid_values else None
+        if (
+            warn_threshold is not None
+            and bid_high is not None
+            and bid_low is not None
+            and (bid_high - bid_low) > warn_threshold
+        ):
+            _log_range_warning(
+                timestamp=bucket,
+                bar_range=bid_high - bid_low,
+                pip_size=pip_size,
+                granularity=granularity,
+                instrument=instrument,
+                bid_high=bid_high,
+                bid_low=bid_low,
+                threshold_pips=range_warning_pips,
+                request_id=request_id,
+            )
+
         if mode == "first":
             selected = rows[0]
             yield BacktestTickRow(

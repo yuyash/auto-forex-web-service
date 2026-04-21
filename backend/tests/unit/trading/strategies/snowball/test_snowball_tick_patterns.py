@@ -984,18 +984,28 @@ class TestSnowballRebuildTpGridClamp:
 
     def test_upper_neighbor_tp_bound_finds_pending_above(self):
         s = _strategy(stop_loss=True)
+        from apps.trading.strategies.snowball.models import Direction, SnowballCycle
+
         layer = self._build_layer_with_grid(s)
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        cycle.grid.layers.append(layer)
 
-        # R3 looks up to R2 (pending) which has the nearest TP above.
-        assert s._upper_neighbor_tp_bound(layer, slot_index=3) == Decimal("130.87550")
-        # R1 (no neighbour between it and R0) falls back to R0's TP.
-        assert s._upper_neighbor_tp_bound(layer, slot_index=1) == Decimal("131.200")
-        # R0 has no upper neighbour.
-        assert s._upper_neighbor_tp_bound(layer, slot_index=0) is None
+        # R3 looks up to R2 (pending) and R0 (occupied) — the tighter of
+        # the two for LONG (minimum) is R2's 130.87550.
+        assert s._upper_neighbor_tp_bound(cycle, layer, slot_index=3) == Decimal("130.87550")
+        # R1 only sees R0 (no R2 yet in the predecessor range).
+        assert s._upper_neighbor_tp_bound(cycle, layer, slot_index=1) == Decimal("131.200")
+        # R0 has no predecessor at all.
+        assert s._upper_neighbor_tp_bound(cycle, layer, slot_index=0) is None
 
-    def test_rebuild_adjusted_tp_is_clamped_below_upper_neighbor(self):
-        """Reproduce the production failure: a large SL overshoot on R3
-        would otherwise push the rebuilt TP above R2's pending TP.
+    def test_rebuild_adjusted_tp_clamps_against_hard_bound_only(self):
+        """Pending_rebuild predecessors are pushed out, not used as a clamp.
+
+        Reproduces the production failure pattern: a large SL overshoot
+        on R3 produces an unclamped TP past R2's pending snapshot TP.
+        Under the cross-layer rule the clamp only respects **occupied**
+        predecessors (the R0 live entry); R2's pending snapshot is
+        extended to the new TP so the grid stays monotonic.
         """
         from apps.trading.strategies.snowball.models import (
             Direction,
@@ -1019,11 +1029,13 @@ class TestSnowballRebuildTpGridClamp:
             retracement_count=3,
             step=4,
             cycle_id=1,
-            rebuild_price_offset=Decimal("0.478"),  # > original → triggers clamp
+            rebuild_price_offset=Decimal("0.478"),  # > original → triggers extension
         )
 
         cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
         cycle.grid.layers.append(layer)
+        r2 = layer.slots[2]
+        original_r2_tp = r2.pending_rebuild.close_price
 
         # Tick at exactly the rebuild trigger (R3's original entry price).
         tick = _make_tick(datetime(2026, 1, 1, 9, tzinfo=UTC), Decimal("130.430"))
@@ -1032,11 +1044,78 @@ class TestSnowballRebuildTpGridClamp:
         events = s._process_stop_loss_rebuilds(ss, tick, cycle)
         assert r3.entry is not None, "R3 must have rebuilt to a live entry"
 
-        # Clamped to R2's TP — the upper neighbour — preserving grid ordering.
-        assert r3.entry.close_price == Decimal("130.87550")
-        # Event message reflects the clamped TP too.
+        # The rebuild keeps its full loss-recovery TP; R0 (occupied,
+        # hard bound at 131.200) is LONG-descending so the TP just needs
+        # to stay below it, which the computed 130.893 satisfies.
+        expected_r3_tp = Decimal("130.415") + Decimal("0.478")
+        assert r3.entry.close_price == expected_r3_tp
+
+        # R2 (pending) was extended outward so ordering stays monotonic.
+        # For LONG (descending TP expected), "outward" means upward —
+        # the pending TP needs to rise to at least the new rebuild TP.
+        assert r2.pending_rebuild is not None
+        assert r2.pending_rebuild.close_price == expected_r3_tp
+        assert r2.pending_rebuild.close_price > original_r2_tp
+
         assert events, "expected a rebuild event"
-        assert "130.87550" in events[-1].description or "130.876" in events[-1].description
+
+    def test_rebuild_adjusted_tp_still_clamps_against_occupied_neighbor(self):
+        """A live entry's TP is a hard ceiling — the rebuild must respect it.
+
+        Here R2 is **occupied** (not pending), so its TP can't be moved.
+        The rebuilt R3 TP is clamped to R2's TP instead of being pushed
+        past it.
+        """
+        from apps.trading.strategies.snowball.models import (
+            Direction,
+            Entry,
+            SnowballCycle,
+            StopLossClosedEntry,
+        )
+
+        s = _strategy(stop_loss=True)
+        layer = self._build_layer_with_grid(s)
+
+        # Convert R2 from pending_rebuild to a live occupied entry.
+        r2 = layer.slots[2]
+        r2.pending_rebuild = None
+        r2.entry = Entry(
+            entry_id=42,
+            step=3,
+            direction=Direction.LONG,
+            entry_price=Decimal("130.675"),
+            close_price=Decimal("130.87550"),
+            units=3000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="counter",
+            layer_number=1,
+            retracement_count=2,
+        )
+
+        r3 = layer.slots[3]
+        r3.pending_rebuild = StopLossClosedEntry(
+            entry_price=Decimal("130.415"),
+            close_price=Decimal("130.691"),
+            units=4000,
+            direction=Direction.LONG,
+            role="counter",
+            layer_number=1,
+            retracement_count=3,
+            step=4,
+            cycle_id=1,
+            rebuild_price_offset=Decimal("0.478"),
+        )
+
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        cycle.grid.layers.append(layer)
+
+        tick = _make_tick(datetime(2026, 1, 1, 9, tzinfo=UTC), Decimal("130.430"))
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("1000000"))
+
+        s._process_stop_loss_rebuilds(ss, tick, cycle)
+        assert r3.entry is not None
+        # Clamped at the live R2 TP — the hard ceiling.
+        assert r3.entry.close_price == Decimal("130.87550")
 
     def test_rebuild_adjusted_tp_retains_adjustment_when_within_bound(self):
         """If the adjusted TP is still below the upper neighbour, leave it alone."""
@@ -1074,3 +1153,186 @@ class TestSnowballRebuildTpGridClamp:
         assert r3.entry is not None
         # Original profit distance wins (0.276 > 0.010) and stays below 130.87550.
         assert r3.entry.close_price == Decimal("130.691")
+
+
+class TestSnowballRebuildCrossLayerTpOrdering:
+    """Regression tests for the cross-layer grid-ordering rule.
+
+    The grid validator walks layer-by-layer then slot-by-slot, so a
+    rebuild in a higher layer must remain monotonic with present slots
+    in every earlier layer — not only within its own layer.  These
+    tests reproduce the production failure pattern observed on a
+    1-minute aggregated-data run where a stop-loss filled far past the
+    intended price, inflated ``rebuild_price_offset``, and the in-layer-only
+    clamp missed the violation sitting in the previous layer.
+    """
+
+    @staticmethod
+    def _build_short_cross_layer_grid(strategy: SnowballStrategy):
+        """Construct a SHORT cycle with L1 (R0 occupied, R7 pending), L2
+        (R0 pending_rebuild with inflated offset ready to rebuild).
+
+        Returns the (cycle, L1, L2, L2.R0 slot) tuple.
+        """
+        from apps.trading.strategies.snowball.models import (
+            Direction,
+            Entry,
+            Layer,
+            Slot,
+            SnowballCycle,
+            StopLossClosedEntry,
+        )
+
+        l1 = Layer(layer_number=1, slots=[], base_units=1000, refill_up_to=3)
+        l2 = Layer(layer_number=2, slots=[], base_units=1000, refill_up_to=3)
+        for idx in range(8):
+            l1.slots.append(Slot(index=idx))
+            l2.slots.append(Slot(index=idx))
+
+        # L1/R0: live short entry (the cycle head).  TP is the least
+        # ascending — safely below every other TP.
+        l1.slots[0].entry = Entry(
+            entry_id=1,
+            step=1,
+            direction=Direction.SHORT,
+            entry_price=Decimal("130.000"),
+            close_price=Decimal("129.500"),
+            units=1000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="initial",
+            layer_number=1,
+            retracement_count=0,
+        )
+
+        # L1/R7: pending rebuild holding the original, conservative TP
+        # snapshot.  This is the slot whose TP needs to be pushed out
+        # when L2/R0 rebuilds with an inflated offset.
+        l1.slots[7].pending_rebuild = StopLossClosedEntry(
+            entry_price=Decimal("131.015"),
+            close_price=Decimal("130.644"),  # Pre-fix: caused the ordering violation.
+            units=8000,
+            direction=Direction.SHORT,
+            role="counter",
+            layer_number=1,
+            retracement_count=7,
+            step=8,
+            cycle_id=1,
+        )
+
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.SHORT)
+        cycle.grid.layers.extend([l1, l2])
+        return cycle, l1, l2
+
+    def test_cross_layer_rebuild_extends_preceding_pending_rebuild_tp(self):
+        """Reproduces prod task 788010da… / exec 3bd8ce1e…
+
+        L2/R0 rebuilds with a huge ``rebuild_price_offset`` (0.978)
+        that — under the old in-layer-only clamp — produced TP
+        130.199 and tripped ``_validate_grid_ordering`` against
+        L1/R7's pending snapshot TP 130.644.
+        """
+        from apps.trading.strategies.snowball.models import (
+            SnowballStrategyState,
+            StopLossClosedEntry,
+            Direction,
+        )
+
+        s = _strategy(stop_loss=True)
+        cycle, l1, l2 = self._build_short_cross_layer_grid(s)
+
+        # L2/R0 pending rebuild with the inflated offset that caused
+        # production to halt.
+        l2.slots[0].pending_rebuild = StopLossClosedEntry(
+            entry_price=Decimal("131.177"),
+            close_price=Decimal("130.64392"),
+            units=1000,
+            direction=Direction.SHORT,
+            role="layer_initial",
+            layer_number=2,
+            retracement_count=0,
+            step=1,
+            cycle_id=1,
+            rebuild_price_offset=Decimal("0.978"),
+        )
+
+        # Tick where the ask touches L2/R0's trigger price (131.177).
+        tick = _make_tick(datetime(2026, 1, 1, 9, tzinfo=UTC), Decimal("131.167"))
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("1000000"))
+
+        s._process_stop_loss_rebuilds(ss, tick, cycle)
+
+        # L2/R0 rebuilt to the offset-extended TP; the grid stays
+        # monotonic because L1/R7's pending snapshot was also extended.
+        assert l2.slots[0].entry is not None
+        expected_l2r0_tp = Decimal("131.177") - Decimal("0.978")
+        assert l2.slots[0].entry.close_price == expected_l2r0_tp
+
+        # L1/R7's snapshot TP was pushed outward (lower, for SHORT) to
+        # match L2/R0's new TP so prev_tp ≤ curr_tp still holds.
+        l1r7 = l1.slots[7]
+        assert l1r7.pending_rebuild is not None
+        assert l1r7.pending_rebuild.close_price == expected_l2r0_tp
+
+        # Running the validator after the rebuild must find no violation.
+        s._grid_order_violation = None
+        s._validate_grid_ordering(cycle)
+        assert s._grid_order_violation is None
+
+    def test_cross_layer_hard_bound_from_occupied_still_clamps(self):
+        """Occupied predecessors in earlier layers must clamp the rebuild.
+
+        If L1/R7 is *occupied* (not pending), its TP can't be moved, so
+        the rebuild has to honour it as a hard bound — even though it
+        is in a different layer.
+        """
+        from apps.trading.strategies.snowball.models import (
+            Direction,
+            Entry,
+            SnowballStrategyState,
+            StopLossClosedEntry,
+        )
+
+        s = _strategy(stop_loss=True)
+        cycle, l1, l2 = self._build_short_cross_layer_grid(s)
+
+        # Make L1/R7 a live occupied entry instead of a pending snapshot.
+        l1.slots[7].pending_rebuild = None
+        l1.slots[7].entry = Entry(
+            entry_id=99,
+            step=8,
+            direction=Direction.SHORT,
+            entry_price=Decimal("131.015"),
+            close_price=Decimal("130.644"),
+            units=8000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="counter",
+            layer_number=1,
+            retracement_count=7,
+        )
+
+        l2.slots[0].pending_rebuild = StopLossClosedEntry(
+            entry_price=Decimal("131.177"),
+            close_price=Decimal("130.64392"),
+            units=1000,
+            direction=Direction.SHORT,
+            role="layer_initial",
+            layer_number=2,
+            retracement_count=0,
+            step=1,
+            cycle_id=1,
+            rebuild_price_offset=Decimal("0.978"),
+        )
+
+        tick = _make_tick(datetime(2026, 1, 1, 9, tzinfo=UTC), Decimal("131.167"))
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("1000000"))
+
+        s._process_stop_loss_rebuilds(ss, tick, cycle)
+
+        # L2/R0's TP was clamped up to L1/R7's occupied TP (for SHORT a
+        # floor from the maximum prior TP).
+        assert l2.slots[0].entry is not None
+        assert l2.slots[0].entry.close_price == Decimal("130.644")
+
+        s._grid_order_violation = None
+        s._validate_grid_ordering(cycle)
+        assert s._grid_order_violation is None

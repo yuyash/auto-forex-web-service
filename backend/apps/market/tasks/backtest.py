@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from datetime import datetime
+from decimal import Decimal
 from logging import Logger, getLogger
 from typing import Any
 
@@ -35,6 +36,8 @@ def publish_ticks_for_backtest(
     tick_granularity: str = "tick",
     tick_window_value_mode: str = "last",
     execution_id: str | None = None,
+    pip_size: str | None = None,
+    bar_range_warning_pips: str | None = None,
 ) -> None:
     """Publish historical ticks from DB to Redis for a backtest run.
 
@@ -50,6 +53,13 @@ def publish_ticks_for_backtest(
         execution_id: Optional execution UUID.  When provided, the stream
             key is scoped to this execution run so a restarted task never
             reuses leftover entries from a previous execution.
+        pip_size: Pip size (as a decimal string) for the instrument.  Used
+            together with ``bar_range_warning_pips`` to emit warnings on
+            aggregated buckets whose intra-bar range is wider than the
+            threshold.  Ignored when ``tick_granularity == "tick"``.
+        bar_range_warning_pips: Intra-bar bid range (in pips) above which
+            a WARNING is logged per bucket.  ``None`` or non-positive
+            disables the check.
     """
     logger.info(
         f"[CELERY:PUBLISHER] Task started - request_id={request_id}, "
@@ -68,6 +78,8 @@ def publish_ticks_for_backtest(
         tick_granularity=tick_granularity,
         tick_window_value_mode=tick_window_value_mode,
         execution_id=execution_id,
+        pip_size=pip_size,
+        bar_range_warning_pips=bar_range_warning_pips,
     )
     logger.info(
         f"[CELERY:PUBLISHER] Task completed - request_id={request_id}, "
@@ -92,6 +104,8 @@ class BacktestTickPublisherRunner:
         tick_granularity: str = "tick",
         tick_window_value_mode: str = "last",
         execution_id: str | None = None,
+        pip_size: str | None = None,
+        bar_range_warning_pips: str | None = None,
     ) -> None:
         """Execute the backtest tick publishing task.
 
@@ -100,6 +114,11 @@ class BacktestTickPublisherRunner:
             start: Start time (ISO format)
             end: End time (ISO format)
             request_id: Unique request identifier
+            pip_size: Pip size as a decimal string.  Required (paired with
+                ``bar_range_warning_pips``) to enable aggregated-bar range
+                warnings.
+            bar_range_warning_pips: Intra-bar bid range threshold in pips.
+                Non-positive or missing disables the warning.
         """
         logger.info(
             f"[PUBLISHER:RUN] Starting publisher runner - request_id={request_id}, "
@@ -234,6 +253,8 @@ class BacktestTickPublisherRunner:
                 low_watermark=low_watermark,
                 backpressure_sleep=backpressure_sleep,
                 consumer_group=consumer_group,
+                pip_size=pip_size,
+                bar_range_warning_pips=bar_range_warning_pips,
             )
 
             if stopped_early:
@@ -330,6 +351,8 @@ class BacktestTickPublisherRunner:
         low_watermark: int = 50_000,
         backpressure_sleep: float = 0.5,
         consumer_group: str = "backtest",
+        pip_size: str | None = None,
+        bar_range_warning_pips: str | None = None,
     ) -> tuple[int, datetime | None, bool]:
         """Publish ticks to the per-request Redis Stream.
 
@@ -380,6 +403,9 @@ class BacktestTickPublisherRunner:
                 granularity=tick_granularity,
                 mode=tick_window_value_mode,
                 batch_size=batch_size,
+                pip_size=pip_size,
+                range_warning_pips=bar_range_warning_pips,
+                request_id=request_id,
             )
 
         for row in rows_iter:
@@ -612,7 +638,23 @@ class BacktestTickPublisherRunner:
         granularity: str,
         mode: str,
         batch_size: int,
+        pip_size: str | None = None,
+        range_warning_pips: str | None = None,
+        request_id: str | None = None,
     ) -> Any:
+        pip_size_dec: Decimal | None
+        try:
+            pip_size_dec = Decimal(pip_size) if pip_size else None
+        except (ArithmeticError, ValueError):
+            pip_size_dec = None
+        range_warning_dec: Decimal | None
+        try:
+            range_warning_dec = (
+                Decimal(range_warning_pips) if range_warning_pips is not None else None
+            )
+        except (ArithmeticError, ValueError):
+            range_warning_dec = None
+
         for row in iter_aggregated_backtest_ticks(
             instrument=instrument,
             start_dt=start_dt,
@@ -620,6 +662,9 @@ class BacktestTickPublisherRunner:
             granularity=granularity,
             mode=mode,
             batch_size=batch_size,
+            range_warning_pips=range_warning_dec,
+            pip_size=pip_size_dec,
+            request_id=request_id,
         ):
             yield {
                 "timestamp": row.timestamp,

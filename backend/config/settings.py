@@ -302,6 +302,16 @@ MARKET_BACKTEST_STREAM_CONSUMER_GROUP = os.getenv(
 # being mistaken for a valid backtest result.
 MARKET_BACKTEST_MAX_TICK_GAP_HOURS = int(os.getenv("MARKET_BACKTEST_MAX_TICK_GAP_HOURS", "72"))
 
+# When replaying aggregated tick buckets (``tick_granularity != "tick"``),
+# emit a WARNING log for any bucket whose intra-bar bid range (high - low)
+# exceeds this many pips.  A wide intra-bar range means the bucket's single
+# representative price hides significant movement, which can cause SL / TP
+# trigger semantics to fire at prices far from the intended level (see the
+# stop-loss drift issue on 1-minute replays).  Set to ``0`` to disable.
+MARKET_BACKTEST_BAR_RANGE_WARNING_PIPS = float(
+    os.getenv("MARKET_BACKTEST_BAR_RANGE_WARNING_PIPS", "30")
+)
+
 
 # Django REST Framework Configuration
 # https://www.django-rest-framework.org/api-guide/settings/
