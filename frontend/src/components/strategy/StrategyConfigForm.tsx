@@ -25,6 +25,7 @@ import type {
   JsonPrimitive,
   StrategyConfig,
 } from '../../types/strategy';
+import { orderConfigFieldTuples } from '../../utils/configFieldOrder';
 
 interface StrategyConfigFormProps {
   configSchema: ConfigSchema;
@@ -954,6 +955,8 @@ const StrategyConfigForm = ({
         });
         if (visibleFields.length === 0) return null;
 
+        const orderedVisibleFields = orderConfigFieldTuples(visibleFields);
+
         return (
           <Box key={groupName || '__ungrouped'} sx={{ mb: 3 }}>
             {groupIdx > 0 && <Divider sx={{ mb: 2 }} />}
@@ -963,7 +966,7 @@ const StrategyConfigForm = ({
               </Typography>
             )}
             <Stack spacing={2}>
-              {visibleFields.map(([fieldName, fieldSchema]) => (
+              {orderedVisibleFields.map(([fieldName, fieldSchema]) => (
                 <Box key={fieldName}>{renderField(fieldName, fieldSchema)}</Box>
               ))}
             </Stack>

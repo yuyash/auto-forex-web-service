@@ -22,6 +22,7 @@ import { useCopyConfiguration } from '../hooks/useConfigurationMutations';
 import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
 import { STRATEGY_CONFIG_SCHEMAS } from '../components/configurations/strategyConfigSchemas';
 import type { ConfigProperty, ConfigSchema } from '../types/strategy';
+import { orderConfigEntries } from '../utils/configFieldOrder';
 
 /** Keys excluded from the detail view (not user-facing). */
 const HIDDEN_KEYS = new Set(['pip_size']);
@@ -318,65 +319,68 @@ export default function ConfigurationDetailPage() {
               </Typography>
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {groupedParams.map(({ name: groupName, entries }, groupIdx) => (
-                  <Box key={groupName || '__ungrouped'}>
-                    {groupName && (
-                      <>
-                        {groupIdx > 0 && <Divider sx={{ mt: 1, mb: 1 }} />}
-                        <Typography
-                          variant="subtitle2"
-                          color="text.secondary"
-                          sx={{ display: 'block', mb: 0.5 }}
-                        >
-                          {groupName}
-                        </Typography>
-                      </>
-                    )}
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 0.75,
-                      }}
-                    >
-                      {entries.map(({ key, value }) => (
-                        <Box
-                          key={key}
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'baseline',
-                            gap: 2,
-                          }}
-                        >
-                          <Box sx={{ minWidth: 0 }}>
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                fontWeight: 600,
-                                display: 'block',
-                                lineHeight: 1.4,
-                              }}
-                            >
-                              {displayLabel(key)}
-                            </Typography>
-                          </Box>
+                {groupedParams.map(({ name: groupName, entries }, groupIdx) => {
+                  const orderedEntries = orderConfigEntries(entries);
+                  return (
+                    <Box key={groupName || '__ungrouped'}>
+                      {groupName && (
+                        <>
+                          {groupIdx > 0 && <Divider sx={{ mt: 1, mb: 1 }} />}
                           <Typography
-                            variant="caption"
+                            variant="subtitle2"
                             color="text.secondary"
+                            sx={{ display: 'block', mb: 0.5 }}
+                          >
+                            {groupName}
+                          </Typography>
+                        </>
+                      )}
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 0.75,
+                        }}
+                      >
+                        {orderedEntries.map(({ key, value }) => (
+                          <Box
+                            key={key}
                             sx={{
-                              textAlign: 'right',
-                              wordBreak: 'break-word',
-                              flexShrink: 0,
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'baseline',
+                              gap: 2,
                             }}
                           >
-                            {displayValue(key, value)}
-                          </Typography>
-                        </Box>
-                      ))}
+                            <Box sx={{ minWidth: 0 }}>
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  fontWeight: 600,
+                                  display: 'block',
+                                  lineHeight: 1.4,
+                                }}
+                              >
+                                {displayLabel(key)}
+                              </Typography>
+                            </Box>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{
+                                textAlign: 'right',
+                                wordBreak: 'break-word',
+                                flexShrink: 0,
+                              }}
+                            >
+                              {displayValue(key, value)}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Box>
                     </Box>
-                  </Box>
-                ))}
+                  );
+                })}
               </Box>
             )}
           </Paper>
