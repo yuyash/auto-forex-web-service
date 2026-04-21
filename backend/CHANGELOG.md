@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.41.8](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.41.7...backend-v1.41.8) (2026-04-21)
+
+
+### Bug Fixes
+
+* **strategy:** show close trade pnl in jpy ([#574](https://github.com/yuyash/auto-forex-web-service/issues/574)) ([af7f414](https://github.com/yuyash/auto-forex-web-service/commit/af7f41430ab3b03233d35a1e5fec53640f5204ef))
+
 ## [1.41.7](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.41.6...backend-v1.41.7) (2026-04-21)
 
 
