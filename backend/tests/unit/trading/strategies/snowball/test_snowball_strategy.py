@@ -825,6 +825,118 @@ class TestGridOrderingValidation:
         assert result.is_error is True
         assert "Grid ordering violation" in (result.stop_reason or "")
 
+    def test_violation_does_not_fail_task_when_validation_disabled(self):
+        s = _strategy(
+            counter_tp_mode="fixed",
+            counter_tp_pips="25",
+            grid_order_validation_enabled=False,
+        )
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=3, direction=Direction.LONG)
+        layer = Layer.create(1, 7, 1000, 3)
+        layer.slot_at(0).fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("160.000"),
+                close_price=Decimal("160.500"),
+                units=1000,
+                opened_at=T0,
+                role="initial",
+                layer_number=1,
+                retracement_count=0,
+                root_entry_id=1,
+            )
+        )
+        layer.slot_at(1).fill(
+            Entry(
+                entry_id=2,
+                step=2,
+                direction=Direction.LONG,
+                entry_price=Decimal("160.100"),
+                close_price=Decimal("160.400"),
+                units=2000,
+                opened_at=T0,
+                role="counter",
+                layer_number=1,
+                retracement_count=1,
+                root_entry_id=1,
+                parent_entry_id=1,
+            )
+        )
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+
+        state = DummyState(strategy_state=ss.to_dict())
+        result = s.on_tick(tick=_tick(T0 + timedelta(minutes=1), "160.10", "160.12"), state=state)
+
+        assert result.should_stop is False
+        assert result.is_error is False
+        assert result.stop_reason == ""
+
+    def test_same_tick_counter_add_skips_rebuilt_slot_with_synthetic_entry_price(self):
+        s = _strategy()
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=4, direction=Direction.LONG)
+        layer = Layer.create(2, 7, 1000, 3)
+        layer.slot_at(0).fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("157.797"),
+                close_price=Decimal("158.100"),
+                units=1000,
+                opened_at=T0,
+                role="initial",
+                layer_number=2,
+                retracement_count=0,
+                root_entry_id=1,
+            )
+        )
+        layer.slot_at(1).fill(
+            Entry(
+                entry_id=2,
+                step=2,
+                direction=Direction.LONG,
+                entry_price=Decimal("157.150"),
+                close_price=Decimal("157.450"),
+                units=2000,
+                opened_at=T0,
+                role="counter",
+                layer_number=2,
+                retracement_count=1,
+                root_entry_id=1,
+                parent_entry_id=1,
+            )
+        )
+        layer.slot_at(2).fill(
+            Entry(
+                entry_id=3,
+                step=3,
+                direction=Direction.LONG,
+                entry_price=Decimal("156.852"),
+                close_price=Decimal("157.525"),
+                units=3000,
+                opened_at=T0 + timedelta(minutes=1),
+                role="counter",
+                layer_number=2,
+                retracement_count=2,
+                root_entry_id=1,
+                parent_entry_id=1,
+                is_rebuild=True,
+            )
+        )
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+
+        tick = _tick(T0 + timedelta(minutes=1), "156.864", "156.866")
+        events = s._process_cycle_counter_adds(ss, tick, cycle)
+
+        assert events == []
+        assert layer.slot_at(3).entry is None
+
     def test_short_cycle_fails_when_tp_prices_are_not_ascending(self):
         s = _strategy(counter_tp_mode="fixed", counter_tp_pips="25")
         ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))

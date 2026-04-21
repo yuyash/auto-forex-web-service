@@ -98,6 +98,8 @@ class SnowballStrategyConfig:
     cooldown_sec: int
     stop_loss_enabled: bool
     disable_loss_cut_after_rebuild: bool
+    grid_order_validation_enabled: bool
+    preserve_highest_retracement_enabled: bool
     preserve_highest_r_from: int
     # When ``stop_loss_enabled`` is True, controls whether a stopped-out
     # slot is rebuilt (re-opened) once price returns to the original
@@ -212,7 +214,15 @@ class SnowballStrategyConfig:
             cooldown_sec=_parse_int(raw.get("cooldown_sec", 300), 300),
             stop_loss_enabled=bool(raw.get("stop_loss_enabled", False)),
             disable_loss_cut_after_rebuild=bool(raw.get("disable_loss_cut_after_rebuild", False)),
-            preserve_highest_r_from=_parse_int(raw.get("preserve_highest_r_from", 0), 0),
+            grid_order_validation_enabled=bool(raw.get("grid_order_validation_enabled", True)),
+            preserve_highest_retracement_enabled=bool(
+                raw.get("preserve_highest_retracement_enabled", False)
+            ),
+            preserve_highest_r_from=(
+                _parse_int(raw.get("preserve_highest_r_from", 1), 1)
+                if bool(raw.get("preserve_highest_retracement_enabled", False))
+                else 0
+            ),
             rebuild_enabled=bool(raw.get("rebuild_enabled", True)),
             complete_cycle_when_empty=bool(raw.get("complete_cycle_when_empty", False)),
             emergency_enabled=bool(raw.get("emergency_enabled", True)),
@@ -265,6 +275,8 @@ class SnowballStrategyConfig:
             "cooldown_sec": self.cooldown_sec,
             "stop_loss_enabled": self.stop_loss_enabled,
             "disable_loss_cut_after_rebuild": self.disable_loss_cut_after_rebuild,
+            "grid_order_validation_enabled": self.grid_order_validation_enabled,
+            "preserve_highest_retracement_enabled": self.preserve_highest_retracement_enabled,
             "preserve_highest_r_from": self.preserve_highest_r_from,
             "rebuild_enabled": self.rebuild_enabled,
             "complete_cycle_when_empty": self.complete_cycle_when_empty,
@@ -282,8 +294,15 @@ class SnowballStrategyConfig:
         """Raise ``ValueError`` on invalid combinations."""
         if self.stop_loss_enabled and self.shrink_enabled:
             raise ValueError("stop_loss_enabled and shrink_enabled cannot both be true")
-        if not 0 <= self.preserve_highest_r_from <= self.r_max:
-            raise ValueError(f"preserve_highest_r_from must be >= 0 and <= r_max ({self.r_max})")
+        if self.preserve_highest_retracement_enabled:
+            if not 1 <= self.preserve_highest_r_from <= self.r_max:
+                raise ValueError(
+                    f"preserve_highest_r_from must be >= 1 and <= r_max ({self.r_max})"
+                )
+        elif self.preserve_highest_r_from != 0:
+            raise ValueError(
+                "preserve_highest_r_from must be 0 when preserve_highest_retracement_enabled is false"
+            )
         if self.shrink_enabled and self.lock_enabled and not self.m_th < self.n_th < Decimal("100"):
             raise ValueError("Must satisfy m_th < n_th < 100")
         if self.shrink_enabled and not Decimal("0") < self.m_th < Decimal("100"):

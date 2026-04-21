@@ -336,6 +336,7 @@
         "manual": "手動"
       },
       "default": "constant",
+      "deferDefaultUntilConfigured": true,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
@@ -467,15 +468,42 @@
       "group_ja": "証拠金保護"
     },
 
+    "grid_order_validation_enabled": {
+      "type": "boolean",
+      "title": "Fail On Grid Ordering Violation",
+      "title_ja": "グリッド順序違反で失敗",
+      "description": "When enabled, any detected grid entry/TP ordering violation is logged and stops the task as an error. When disabled, the strategy still logs the violation but continues running.",
+      "description_ja": "有効時、グリッドの建玉価格/利確価格の順序違反を検出するとログ出力し、タスクをエラーで停止します。無効時は違反をログ出力しますが、タスクは継続します。",
+      "default": true,
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
+    "preserve_highest_retracement_enabled": {
+      "type": "boolean",
+      "title": "Preserve Highest Retracement",
+      "title_ja": "最上位リトレース保持",
+      "description": "When enabled, the highest live R-slot in each layer can ignore stop-loss if it reaches the configured threshold.",
+      "description_ja": "有効時、各レイヤーで現在もっとも高いRスロットは、設定した閾値以上であればロスカットを無視できます。",
+      "default": false,
+      "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
     "preserve_highest_r_from": {
       "type": "integer",
       "title": "Preserve Highest R From",
       "title_ja": "最上位R保護開始番号",
-      "description": "Keep the highest live R-slot in each layer open even when stop-loss is hit, but only when that highest slot number is at or above this threshold. Set to 0 to disable.",
-      "description_ja": "各レイヤーでライブ中の最上位Rスロットがロスカット価格に達しても、そのR番号がこの閾値以上なら維持します。0で無効です。",
-      "default": 0,
-      "minimum": 0,
-      "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
+      "description": "Keep the highest live R-slot in each layer open even when stop-loss is hit, but only when that highest slot number is at or above this threshold.",
+      "description_ja": "各レイヤーでライブ中の最上位Rスロットがロスカット価格に達しても、そのR番号がこの閾値以上なら維持します。",
+      "default": 1,
+      "minimum": 1,
+      "dependsOn": {
+        "field": "preserve_highest_retracement_enabled",
+        "values": [true],
+        "and": [{ "field": "stop_loss_enabled", "values": [true] }]
+      },
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
     },

@@ -93,7 +93,9 @@ class TestSnowballStrategyClassMethods:
         assert isinstance(result, dict)
         assert result["base_units"] == 2000
         assert result["disable_loss_cut_after_rebuild"] is False
-        assert result["preserve_highest_r_from"] == 0
+        assert result["grid_order_validation_enabled"] is True
+        assert result["preserve_highest_retracement_enabled"] is False
+        assert "preserve_highest_r_from" not in result
 
     def test_default_parameters(self):
         defaults = SnowballStrategy.default_parameters()
@@ -101,7 +103,9 @@ class TestSnowballStrategyClassMethods:
         assert "base_units" in defaults
         assert "m_pips" in defaults
         assert "disable_loss_cut_after_rebuild" in defaults
-        assert "preserve_highest_r_from" in defaults
+        assert "grid_order_validation_enabled" in defaults
+        assert "preserve_highest_retracement_enabled" in defaults
+        assert "preserve_highest_r_from" not in defaults
 
     def test_validate_parameters_valid(self):
         """validate_parameters should not raise for valid params + schema."""
@@ -212,6 +216,7 @@ class TestSnowballStopLossProtectionThreshold:
         s = _strategy(
             {
                 "stop_loss_enabled": True,
+                "preserve_highest_retracement_enabled": True,
                 "preserve_highest_r_from": 2,
             }
         )
@@ -231,6 +236,7 @@ class TestSnowballStopLossProtectionThreshold:
         s = _strategy(
             {
                 "stop_loss_enabled": True,
+                "preserve_highest_retracement_enabled": True,
                 "preserve_highest_r_from": 3,
             }
         )
@@ -247,6 +253,7 @@ class TestSnowballStopLossProtectionThreshold:
         s = _strategy(
             {
                 "stop_loss_enabled": True,
+                "preserve_highest_retracement_enabled": True,
                 "preserve_highest_r_from": 1,
             }
         )
