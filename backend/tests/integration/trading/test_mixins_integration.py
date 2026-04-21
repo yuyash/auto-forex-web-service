@@ -890,6 +890,43 @@ class TestTrades:
         assert response.data["count"] == 1
         assert response.data["results"][0]["id"] == str(target.pk)
 
+    def test_trades_include_realized_pnl_for_close_rows(self):
+        task = _make_task()
+        client = _auth_client(task.user)
+        now = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+
+        position = Position.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            instrument="USD_JPY",
+            direction=Direction.LONG,
+            units=1000,
+            entry_price=Decimal("150.500"),
+            entry_time=now,
+            is_open=False,
+            exit_price=Decimal("151.100"),
+            exit_time=now + timedelta(minutes=5),
+        )
+        Trade.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            timestamp=now + timedelta(minutes=5),
+            direction=Direction.LONG,
+            units=1000,
+            instrument="USD_JPY",
+            price=Decimal("151.100"),
+            execution_method="close_position",
+            position=position,
+        )
+
+        response = client.get(f"/api/trading/tasks/backtest/{task.pk}/trades/")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 1
+        assert response.data["results"][0]["pnl"] == "600.0000000000"
+
 
 @pytest.mark.django_db
 class TestPositions:
