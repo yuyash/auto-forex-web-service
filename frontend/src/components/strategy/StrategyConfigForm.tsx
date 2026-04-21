@@ -854,6 +854,9 @@ const StrategyConfigForm = ({
     const descriptions: Record<string, string> = {
       auto: 'Legacy Snowball stop-loss formula based on next interval and TP',
       constant: 'Same value for every layer / retracement',
+      same: 'Reuse the absolute stop-loss price that closed the previous position',
+      manual:
+        'Use per-slot absolute pip distances from the rebuilt entry price',
       additive: 'Increases by a fixed amount each time (e.g. 10 → 15 → 20)',
       subtractive:
         'Decreases by a fixed amount each time (e.g. 30 → 25 → 20, min 0)',

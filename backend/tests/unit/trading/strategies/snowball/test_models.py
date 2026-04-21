@@ -56,6 +56,8 @@ class TestSnowballStrategyConfig:
         assert cfg.stop_loss_mode == "auto"
         assert cfg.counter_tp_mode == "weighted_avg"
         assert cfg.disable_loss_cut_after_rebuild is False
+        assert cfg.rebuild_stop_loss_mode == "same"
+        assert cfg.rebuild_stop_loss_manual_pips == []
         assert cfg.grid_order_validation_enabled is True
         assert cfg.preserve_highest_retracement_enabled is False
         assert cfg.preserve_highest_r_from == 0
@@ -80,6 +82,8 @@ class TestSnowballStrategyConfig:
             {
                 "m_pips": "30",
                 "disable_loss_cut_after_rebuild": True,
+                "rebuild_stop_loss_mode": "manual",
+                "rebuild_stop_loss_manual_pips": ["11", "12", "13", "14", "15", "16"],
                 "grid_order_validation_enabled": False,
                 "preserve_highest_retracement_enabled": True,
                 "preserve_highest_r_from": 3,
@@ -90,6 +94,15 @@ class TestSnowballStrategyConfig:
         assert cfg2.m_pips == Decimal("30")
         assert cfg2.base_units == cfg.base_units
         assert cfg2.disable_loss_cut_after_rebuild is True
+        assert cfg2.rebuild_stop_loss_mode == "manual"
+        assert cfg2.rebuild_stop_loss_manual_pips == [
+            Decimal("11"),
+            Decimal("12"),
+            Decimal("13"),
+            Decimal("14"),
+            Decimal("15"),
+            Decimal("16"),
+        ]
         assert cfg2.grid_order_validation_enabled is False
         assert cfg2.preserve_highest_retracement_enabled is True
         assert cfg2.preserve_highest_r_from == 3
@@ -122,6 +135,16 @@ class TestSnowballStrategyConfig:
             }
         )
         cfg.validate()
+
+    def test_validate_rebuild_manual_stop_loss_requires_all_slots(self):
+        with pytest.raises(ValueError, match="rebuild_stop_loss_manual_pips"):
+            SnowballStrategyConfig.from_dict(
+                {
+                    "r_max": 5,
+                    "rebuild_stop_loss_mode": "manual",
+                    "rebuild_stop_loss_manual_pips": ["10", "11", "12"],
+                }
+            ).validate()
 
     def test_validate_rejects_preserve_highest_r_from_above_r_max(self):
         with pytest.raises(ValueError, match="preserve_highest_r_from"):

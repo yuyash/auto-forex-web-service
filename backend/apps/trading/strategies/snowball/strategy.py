@@ -39,6 +39,7 @@ from apps.trading.strategies.registry import register_strategy
 from apps.trading.strategies.snowball.calculators import (
     counter_interval_pips,
     counter_tp_pips,
+    round_to_step,
     stop_loss_pips,
 )
 from apps.trading.strategies.snowball.enums import CycleStatus, ProtectionLevel
@@ -1651,6 +1652,33 @@ class SnowballStrategy(Strategy):
         if sl_pips > 0:
             self._assign_stop_loss(entry, sl_pips)
 
+    def _assign_rebuild_stop_loss(
+        self,
+        entry: Entry,
+        pending: StopLossClosedEntry,
+    ) -> None:
+        """Assign stop-loss to a rebuilt entry using rebuild-specific settings."""
+        if not self.config.stop_loss_enabled or self.config.disable_loss_cut_after_rebuild:
+            return
+
+        if self.config.rebuild_stop_loss_mode == "same":
+            # Reuse the absolute stop-loss price that closed the prior slot lifecycle.
+            if pending.stop_loss_price is not None:
+                entry.stop_loss_price = pending.stop_loss_price
+                return
+            # Backward-compatible fallback for older pending snapshots that
+            # were serialized before stop_loss_price was persisted.
+            self._assign_configured_stop_loss(entry, pending.retracement_count + 1)
+            return
+
+        values = self.config.rebuild_stop_loss_manual_pips
+        if not values:
+            return
+        idx = min(max(pending.retracement_count, 0), len(values) - 1)
+        sl_pips = round_to_step(values[idx], self.config.round_step_pips)
+        if sl_pips > 0:
+            self._assign_stop_loss(entry, sl_pips)
+
     def _is_stop_loss_temporarily_protected(self, layer: Layer, entry: Entry) -> bool:
         """Return True when the layer's highest live R should ignore stop-loss.
 
@@ -1763,6 +1791,7 @@ class SnowballStrategy(Strategy):
                     parent_entry_id=entry.parent_entry_id,
                     cycle_id=cycle.cycle_id,
                     position_id=entry.position_id,
+                    stop_loss_price=entry.stop_loss_price,
                     lifecycle_realized_pnl=entry.lifecycle_realized_pnl,
                     lifecycle_stop_loss_count=entry.lifecycle_stop_loss_count,
                     rebuild_price_offset=rebuild_price_offset,
@@ -1967,9 +1996,7 @@ class SnowballStrategy(Strategy):
                 entry.lifecycle_stop_loss_count = pending.lifecycle_stop_loss_count
                 entry.rebuild_price_offset = pending.rebuild_price_offset
 
-                # Optionally keep rebuilt positions exempt from further stop-loss closes.
-                if self.config.stop_loss_enabled and not self.config.disable_loss_cut_after_rebuild:
-                    self._assign_configured_stop_loss(entry, pending.retracement_count + 1)
+                self._assign_rebuild_stop_loss(entry, pending)
 
                 slot.complete_rebuild(entry)
 
