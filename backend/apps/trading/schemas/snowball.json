@@ -349,8 +349,8 @@
       "type": "number",
       "title": "Stop Loss Head (pips)",
       "title_ja": "ロスカット幅初期値（pips）",
-      "description": "Pip distance from entry to stop-loss for the first slot (R0). For decaying modes, this is the starting value.",
-      "description_ja": "最初のスロット（R0）の建玉から見たロスカットまでの距離（pips）。減衰モードでは開始値。",
+      "description": "Absolute pip distance from entry to stop-loss for the first slot (R0). The strategy places it below long entries and above short entries automatically. For decaying modes, this is the starting value.",
+      "description_ja": "最初のスロット（R0）の建玉から見たロスカットまでの絶対距離（pips）。LONG では建値より下、SHORT では建値より上に自動配置されます。減衰モードでは開始値です。",
       "default": 30,
       "minimum": 1,
       "dependsOn": {
@@ -371,8 +371,8 @@
       "type": "number",
       "title": "Stop Loss Tail (pips)",
       "title_ja": "ロスカット幅終端値（pips）",
-      "description": "Pip distance from entry to stop-loss after full decay.",
-      "description_ja": "完全減衰後の建玉からロスカットまでの距離（pips）。",
+      "description": "Absolute pip distance from entry to stop-loss after full decay.",
+      "description_ja": "完全減衰後の建玉からロスカットまでの絶対距離（pips）。",
       "default": 14,
       "minimum": 1,
       "dependsOn": {
@@ -419,8 +419,8 @@
       "type": "array",
       "title": "Manual Stop Loss Distances (pips)",
       "title_ja": "手動ロスカット幅（pips）",
-      "description": "Per-slot stop-loss pip distance when stop_loss_mode is 'manual'. One value per slot from R0 upward.",
-      "description_ja": "手動モード時のスロットごとのロスカット幅（pips）。R0 から順に1スロット1値。",
+      "description": "Per-slot absolute stop-loss pip distance when stop_loss_mode is 'manual'. One value per slot from R0 upward. The strategy applies the distance below long entries and above short entries automatically.",
+      "description_ja": "手動モード時のスロットごとの絶対ロスカット幅（pips）。R0 から順に1スロット1値です。LONG では建値より下、SHORT では建値より上に自動配置されます。",
       "default": [],
       "items": { "type": "number", "minimum": 1 },
       "dependsOn": { "field": "stop_loss_mode", "values": ["manual"] },
@@ -469,6 +469,50 @@
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
+    },
+
+    "rebuild_stop_loss_mode": {
+      "type": "string",
+      "title": "Rebuild Stop Loss Mode",
+      "title_ja": "再建後ロスカットモード",
+      "description": "How to set the stop-loss on rebuilt positions when loss cut after rebuild is allowed. Same reuses the absolute stop-loss price that closed the previous position. Manual uses a per-slot absolute pip distance from the rebuilt entry price.",
+      "description_ja": "再建後もロスカットを有効にする場合の、再建ポジションのロスカット設定方法です。Same は直前のポジションを決済したロスカット価格をそのまま再利用します。Manual は再建ポジションの建値からの絶対 pips 幅をスロットごとに使います。",
+      "enum": ["same", "manual"],
+      "enum_labels": {
+        "same": "Same as Original SL Price",
+        "manual": "Manual"
+      },
+      "enum_labels_ja": {
+        "same": "元のロスカット価格を再利用",
+        "manual": "手動"
+      },
+      "default": "same",
+      "dependsOn": {
+        "field": "rebuild_enabled",
+        "values": [true],
+        "and": [
+          { "field": "stop_loss_enabled", "values": [true] },
+          { "field": "disable_loss_cut_after_rebuild", "values": [false] }
+        ]
+      },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
+    "rebuild_stop_loss_manual_pips": {
+      "type": "array",
+      "title": "Rebuild Manual Stop Loss Distances (pips)",
+      "title_ja": "再建後 手動ロスカット幅（pips）",
+      "description": "Per-slot absolute stop-loss pip distance for rebuilt positions when rebuild_stop_loss_mode is 'manual'. Values are measured from the rebuilt entry price, with the strategy placing them below long entries and above short entries automatically.",
+      "description_ja": "rebuild_stop_loss_mode が manual のときに使う、再建ポジション用のスロットごとの絶対ロスカット幅（pips）です。再建ポジションの建値基準で、LONG では下、SHORT では上に自動配置されます。",
+      "default": [],
+      "items": { "type": "number", "minimum": 1 },
+      "dependsOn": { "field": "rebuild_stop_loss_mode", "values": ["manual"] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護",
+      "linkedCount": { "field": "r_max", "offset": 1 },
+      "itemLabel": "Rebuild slot R{index} stop loss (pips)",
+      "itemLabel_ja": "再建 R{index} ロスカット幅（pips）"
     },
 
     "grid_order_validation_enabled": {

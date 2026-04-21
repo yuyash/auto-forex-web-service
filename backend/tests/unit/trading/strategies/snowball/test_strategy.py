@@ -17,6 +17,7 @@ from apps.trading.strategies.snowball.models import (
     SnowballCycle,
     SnowballStrategyConfig,
     SnowballStrategyState,
+    StopLossClosedEntry,
 )
 from apps.trading.strategies.snowball.strategy import SnowballStrategy
 
@@ -93,6 +94,7 @@ class TestSnowballStrategyClassMethods:
         assert isinstance(result, dict)
         assert result["base_units"] == 2000
         assert result["disable_loss_cut_after_rebuild"] is False
+        assert result["rebuild_stop_loss_mode"] == "same"
         assert result["grid_order_validation_enabled"] is True
         assert result["preserve_highest_retracement_enabled"] is False
         assert result["stop_loss_mode"] == "auto"
@@ -104,6 +106,7 @@ class TestSnowballStrategyClassMethods:
         assert "base_units" in defaults
         assert "m_pips" in defaults
         assert "disable_loss_cut_after_rebuild" in defaults
+        assert "rebuild_stop_loss_mode" in defaults
         assert "grid_order_validation_enabled" in defaults
         assert "preserve_highest_retracement_enabled" in defaults
         assert defaults["stop_loss_mode"] == "auto"
@@ -335,6 +338,106 @@ class TestSnowballStopLossModes:
         s._assign_configured_stop_loss(entry, 2)
 
         assert entry.stop_loss_price == Decimal("154.70")
+
+    def test_constant_mode_treats_stop_loss_pips_as_absolute_distance_for_short(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "stop_loss_mode": "constant",
+                "stop_loss_pips_head": "30",
+            }
+        )
+        entry = Entry(
+            entry_id=1,
+            step=2,
+            direction=Direction.SHORT,
+            entry_price=Decimal("155.00"),
+            close_price=Decimal("154.50"),
+            units=2000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="counter",
+            layer_number=1,
+            retracement_count=1,
+        )
+
+        s._assign_configured_stop_loss(entry, 2)
+
+        assert entry.stop_loss_price == Decimal("155.30")
+
+
+class TestSnowballRebuildStopLossModes:
+    def _make_pending_rebuild(
+        self,
+        *,
+        direction: Direction = Direction.LONG,
+        stop_loss_price: str = "154.40",
+        retracement_count: int = 1,
+    ) -> StopLossClosedEntry:
+        return StopLossClosedEntry(
+            entry_price=Decimal("154.70"),
+            close_price=Decimal("155.00") if direction == Direction.LONG else Decimal("154.40"),
+            units=2000,
+            direction=direction,
+            role="counter",
+            layer_number=1,
+            retracement_count=retracement_count,
+            step=2,
+            cycle_id=1,
+            stop_loss_price=Decimal(stop_loss_price),
+        )
+
+    def test_same_mode_reuses_original_stop_loss_price(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "disable_loss_cut_after_rebuild": False,
+                "rebuild_stop_loss_mode": "same",
+            }
+        )
+        entry = Entry(
+            entry_id=9,
+            step=2,
+            direction=Direction.LONG,
+            entry_price=Decimal("154.70"),
+            close_price=Decimal("155.00"),
+            units=2000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="counter",
+            layer_number=1,
+            retracement_count=1,
+            is_rebuild=True,
+        )
+
+        s._assign_rebuild_stop_loss(entry, self._make_pending_rebuild())
+
+        assert entry.stop_loss_price == Decimal("154.40")
+
+    def test_manual_mode_applies_absolute_pips_from_rebuild_entry(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "disable_loss_cut_after_rebuild": False,
+                "rebuild_stop_loss_mode": "manual",
+                "rebuild_stop_loss_manual_pips": ["8", "12", "16", "20", "24", "28", "32", "36"],
+            }
+        )
+        entry = Entry(
+            entry_id=9,
+            step=2,
+            direction=Direction.LONG,
+            entry_price=Decimal("154.70"),
+            close_price=Decimal("155.00"),
+            units=2000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="counter",
+            layer_number=1,
+            retracement_count=1,
+            is_rebuild=True,
+        )
+
+        s._assign_rebuild_stop_loss(entry, self._make_pending_rebuild())
+
+        assert entry.stop_loss_price == Decimal("154.58")
 
 
 # ===================================================================

@@ -98,6 +98,8 @@ class SnowballStrategyConfig:
     cooldown_sec: int
     stop_loss_enabled: bool
     disable_loss_cut_after_rebuild: bool
+    rebuild_stop_loss_mode: str
+    rebuild_stop_loss_manual_pips: list[Decimal]
     grid_order_validation_enabled: bool
     preserve_highest_retracement_enabled: bool
     preserve_highest_r_from: int
@@ -165,6 +167,12 @@ class SnowballStrategyConfig:
             for v in sl_manual_raw:
                 stop_loss_manual_pips.append(_parse_decimal(v, "30"))
 
+        rebuild_sl_manual_raw = raw.get("rebuild_stop_loss_manual_pips", [])
+        rebuild_stop_loss_manual_pips: list[Decimal] = []
+        if isinstance(rebuild_sl_manual_raw, list):
+            for v in rebuild_sl_manual_raw:
+                rebuild_stop_loss_manual_pips.append(_parse_decimal(v, "30"))
+
         # Legacy Snowball stop-loss behaviour was derived from the next
         # counter interval and the slot TP, not from a dedicated flat
         # pip-distance progression.  Keep that behaviour as the default
@@ -213,6 +221,8 @@ class SnowballStrategyConfig:
             cooldown_sec=_parse_int(raw.get("cooldown_sec", 300), 300),
             stop_loss_enabled=bool(raw.get("stop_loss_enabled", False)),
             disable_loss_cut_after_rebuild=bool(raw.get("disable_loss_cut_after_rebuild", False)),
+            rebuild_stop_loss_mode=_parse_str(raw.get("rebuild_stop_loss_mode"), "same"),
+            rebuild_stop_loss_manual_pips=rebuild_stop_loss_manual_pips,
             grid_order_validation_enabled=bool(raw.get("grid_order_validation_enabled", True)),
             preserve_highest_retracement_enabled=bool(
                 raw.get("preserve_highest_retracement_enabled", False)
@@ -274,6 +284,8 @@ class SnowballStrategyConfig:
             "cooldown_sec": self.cooldown_sec,
             "stop_loss_enabled": self.stop_loss_enabled,
             "disable_loss_cut_after_rebuild": self.disable_loss_cut_after_rebuild,
+            "rebuild_stop_loss_mode": self.rebuild_stop_loss_mode,
+            "rebuild_stop_loss_manual_pips": [str(v) for v in self.rebuild_stop_loss_manual_pips],
             "grid_order_validation_enabled": self.grid_order_validation_enabled,
             "preserve_highest_retracement_enabled": self.preserve_highest_retracement_enabled,
             "preserve_highest_r_from": self.preserve_highest_r_from,
@@ -355,6 +367,16 @@ class SnowballStrategyConfig:
                 )
             if any(v <= 0 for v in self.stop_loss_manual_pips):
                 raise ValueError("All stop_loss_manual_pips values must be > 0")
+        if self.rebuild_stop_loss_mode not in {"same", "manual"}:
+            raise ValueError("rebuild_stop_loss_mode must be either 'same' or 'manual'")
+        if self.rebuild_stop_loss_mode == "manual":
+            if len(self.rebuild_stop_loss_manual_pips) < self.r_max + 1:
+                raise ValueError(
+                    "rebuild_stop_loss_manual_pips must have at least r_max + 1 entries "
+                    f"(got {len(self.rebuild_stop_loss_manual_pips)}, need {self.r_max + 1})"
+                )
+            if any(v <= 0 for v in self.rebuild_stop_loss_manual_pips):
+                raise ValueError("All rebuild_stop_loss_manual_pips values must be > 0")
         # rebuild_enabled is only meaningful when stop_loss is on.  We
         # silently ignore the flag when SL is off — it simply does not
         # apply.  complete_cycle_when_empty likewise only does anything
@@ -756,6 +778,7 @@ class StopLossClosedEntry:
     parent_entry_id: int | None = None
     cycle_id: int = 0
     position_id: str | None = None
+    stop_loss_price: Decimal | None = None
 
     # Running lifecycle P/L for the slot: accumulates every stop-loss
     # loss so the rebuilt entry can continue the chain and the final
@@ -792,6 +815,8 @@ class StopLossClosedEntry:
         }
         if self.position_id is not None:
             result["position_id"] = self.position_id
+        if self.stop_loss_price is not None:
+            result["stop_loss_price"] = str(self.stop_loss_price)
         return result
 
     @staticmethod
@@ -819,6 +844,11 @@ class StopLossClosedEntry:
             ),
             cycle_id=_parse_int(d.get("cycle_id", 0), 0),
             position_id=d.get("position_id"),
+            stop_loss_price=(
+                _parse_decimal(d.get("stop_loss_price", "0"), "0")
+                if d.get("stop_loss_price") is not None
+                else None
+            ),
             lifecycle_realized_pnl=_parse_decimal(d.get("lifecycle_realized_pnl", "0"), "0"),
             lifecycle_stop_loss_count=_parse_int(d.get("lifecycle_stop_loss_count", 0), 0),
             rebuild_price_offset=_parse_decimal(d.get("rebuild_price_offset", "0"), "0"),
