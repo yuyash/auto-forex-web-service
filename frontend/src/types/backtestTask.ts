@@ -30,6 +30,7 @@ export interface BacktestTask {
   market_close_hour_utc?: number;
   market_open_weekday?: number;
   market_open_hour_utc?: number;
+  max_tick_gap_hours?: number;
   latest_execution?: ExecutionSummary;
   execution_id?: string;
   started_at?: string;
@@ -63,6 +64,7 @@ export interface BacktestTaskCreateData {
   market_close_hour_utc?: number;
   market_open_weekday?: number;
   market_open_hour_utc?: number;
+  max_tick_gap_hours?: number;
 }
 
 // Form data type - matches the validation schema (after transformation)
@@ -89,6 +91,7 @@ export interface BacktestTaskFormData {
   market_close_hour_utc?: number;
   market_open_weekday?: number;
   market_open_hour_utc?: number;
+  max_tick_gap_hours?: number;
 }
 
 export interface BacktestTaskUpdateData {
@@ -114,6 +117,7 @@ export interface BacktestTaskUpdateData {
   market_close_hour_utc?: number;
   market_open_weekday?: number;
   market_open_hour_utc?: number;
+  max_tick_gap_hours?: number;
   debug_options?: Record<string, unknown>;
 }
 

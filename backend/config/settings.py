@@ -300,7 +300,7 @@ MARKET_BACKTEST_STREAM_CONSUMER_GROUP = os.getenv(
 # jump forward by more than this many hours (and the gap is not a regular
 # weekend closure), the run is aborted.  This prevents silent data loss from
 # being mistaken for a valid backtest result.
-MARKET_BACKTEST_MAX_TICK_GAP_HOURS = int(os.getenv("MARKET_BACKTEST_MAX_TICK_GAP_HOURS", "72"))
+MARKET_BACKTEST_MAX_TICK_GAP_HOURS = int(os.getenv("MARKET_BACKTEST_MAX_TICK_GAP_HOURS", "120"))
 
 # When replaying aggregated tick buckets (``tick_granularity != "tick"``),
 # emit a WARNING log for any bucket whose intra-bar bid range (high - low)

@@ -1151,3 +1151,14 @@ class TestSuspiciousTickGapDetection:
         previous = datetime(2024, 6, 12, 10, 0, 0, tzinfo=UTC)
         current = datetime(2024, 6, 12, 14, 0, 0, tzinfo=UTC)  # 4h
         assert TaskExecutor._is_suspicious_tick_gap(previous, current) is True
+
+    def test_explicit_threshold_parameter_overrides_settings(self, settings) -> None:
+        """Task-level override should take precedence over the global default."""
+        from apps.trading.tasks.executor import TaskExecutor
+
+        settings.MARKET_BACKTEST_MAX_TICK_GAP_HOURS = 2
+
+        previous = datetime(2024, 6, 12, 10, 0, 0, tzinfo=UTC)
+        current = datetime(2024, 6, 15, 10, 0, 0, tzinfo=UTC)  # 72h
+
+        assert TaskExecutor._is_suspicious_tick_gap(previous, current, max_gap_hours=120) is False

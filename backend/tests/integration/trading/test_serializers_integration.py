@@ -57,6 +57,7 @@ class TestBacktestTaskSerializer:
         assert data["name"] == task.name
         assert data["instrument"] == task.instrument
         assert data["status"] == task.status
+        assert data["max_tick_gap_hours"] == task.max_tick_gap_hours
         assert "initial_balance" in data
         assert "start_time" in data
         assert "end_time" in data
@@ -111,6 +112,49 @@ class TestBacktestTaskCreateSerializer:
         assert task.user == user
         assert task.config == config
         assert task.name == "Test Backtest"
+        assert task.max_tick_gap_hours == 120
+
+    def test_create_persists_max_tick_gap_hours(self):
+        user = UserFactory()
+        config = StrategyConfigurationFactory(user=user)
+        now = datetime.now(timezone.utc)
+        start = now - timedelta(days=30)
+        end = now - timedelta(days=1)
+
+        TickData.objects.create(
+            instrument="USD_JPY",
+            timestamp=start - timedelta(hours=1),
+            bid=Decimal("150.000"),
+            ask=Decimal("150.005"),
+            mid=Decimal("150.0025"),
+        )
+        TickData.objects.create(
+            instrument="USD_JPY",
+            timestamp=end + timedelta(hours=1),
+            bid=Decimal("151.000"),
+            ask=Decimal("151.005"),
+            mid=Decimal("151.0025"),
+        )
+
+        request = _fake_request(user)
+        serializer = BacktestTaskCreateSerializer(
+            data={
+                "config": str(config.pk),
+                "name": "Custom Gap Threshold",
+                "data_source": "postgresql",
+                "start_time": start.isoformat(),
+                "end_time": end.isoformat(),
+                "initial_balance": "50000.00",
+                "instrument": "USD_JPY",
+                "max_tick_gap_hours": 168,
+            },
+            context={"request": request},
+        )
+
+        assert serializer.is_valid(), serializer.errors
+        task = serializer.save()
+
+        assert task.max_tick_gap_hours == 168
 
     def test_validation_error_wrong_user_config(self):
         user1 = UserFactory()

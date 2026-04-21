@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.41.5",
+        "version": "1.41.6",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -5607,6 +5607,12 @@
                         "minimum": 0,
                         "description": "Hour (UTC) at which the market reopens on open weekday. 0–23."
                     },
+                    "max_tick_gap_hours": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
+                    },
                     "sell_on_stop": {
                         "type": "boolean",
                         "description": "Close all positions at current tick price when the task is stopped"
@@ -5815,6 +5821,12 @@
                         "minimum": 0,
                         "description": "Hour (UTC) at which the market reopens on open weekday. 0–23."
                     },
+                    "max_tick_gap_hours": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 1,
+                        "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
+                    },
                     "sell_on_stop": {
                         "type": "boolean",
                         "description": "Close all positions at current tick price when the task is stopped"
@@ -5968,6 +5980,11 @@
                         "readOnly": true,
                         "description": "Hour (UTC) at which the market reopens on open weekday. 0–23."
                     },
+                    "max_tick_gap_hours": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
+                    },
                     "sell_on_stop": {
                         "type": "boolean",
                         "readOnly": true,
@@ -6041,6 +6058,7 @@
                     "market_idle_resume_delay_minutes",
                     "market_open_hour_utc",
                     "market_open_weekday",
+                    "max_tick_gap_hours",
                     "name",
                     "pip_size",
                     "sell_on_stop",
@@ -6176,6 +6194,12 @@
                         "maximum": 32767,
                         "minimum": 0,
                         "description": "Hour (UTC) at which the market reopens on open weekday. 0–23."
+                    },
+                    "max_tick_gap_hours": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 0,
+                        "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
                     },
                     "sell_on_stop": {
                         "type": "boolean",
@@ -8002,6 +8026,12 @@
                         "maximum": 23,
                         "minimum": 0,
                         "description": "Hour (UTC) at which the market reopens on open weekday. 0–23."
+                    },
+                    "max_tick_gap_hours": {
+                        "type": "integer",
+                        "maximum": 2147483647,
+                        "minimum": 1,
+                        "description": "Maximum forward gap between replayed ticks, in hours, before the backtest is failed as suspicious. Default: 120 (5 days)."
                     },
                     "sell_on_stop": {
                         "type": "boolean",

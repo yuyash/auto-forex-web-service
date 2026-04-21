@@ -279,6 +279,13 @@ class BacktestTask(UUIDModel):
         default=21,
         help_text="Hour (UTC) at which the market reopens on open weekday. 0–23.",
     )
+    max_tick_gap_hours = models.PositiveIntegerField(
+        default=120,
+        help_text=(
+            "Maximum forward gap between replayed ticks, in hours, before the backtest "
+            "is failed as suspicious. Default: 120 (5 days)."
+        ),
+    )
 
     class Meta:
         db_table = "backtest_tasks"
@@ -346,6 +353,7 @@ class BacktestTask(UUIDModel):
             initial_balance=self.initial_balance,
             account_currency=self.account_currency,
             commission_per_trade=self.commission_per_trade,
+            max_tick_gap_hours=self.max_tick_gap_hours,
             status=TaskStatus.CREATED,
         )
 

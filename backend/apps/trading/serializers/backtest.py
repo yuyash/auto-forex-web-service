@@ -47,6 +47,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "market_close_hour_utc",
             "market_open_weekday",
             "market_open_hour_utc",
+            "max_tick_gap_hours",
             "sell_on_stop",
             "status",
             "execution_id",
@@ -118,6 +119,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             "market_close_hour_utc",
             "market_open_weekday",
             "market_open_hour_utc",
+            "max_tick_gap_hours",
             "sell_on_stop",
             "debug_options",
         ]
@@ -159,6 +161,7 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
                 "min_value": 0,
                 "max_value": 23,
             },
+            "max_tick_gap_hours": {"required": False, "min_value": 1},
             "sell_on_stop": {"required": False},
             "debug_options": {"required": False},
         }

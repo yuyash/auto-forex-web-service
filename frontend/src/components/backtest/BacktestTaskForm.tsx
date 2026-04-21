@@ -321,6 +321,7 @@ export default function BacktestTaskForm({
       market_close_hour_utc: 21,
       market_open_weekday: 6,
       market_open_hour_utc: 21,
+      max_tick_gap_hours: 120,
     };
 
     return {
@@ -561,6 +562,7 @@ export default function BacktestTaskForm({
       market_close_hour_utc: completeData.market_close_hour_utc,
       market_open_weekday: completeData.market_open_weekday,
       market_open_hour_utc: completeData.market_open_hour_utc,
+      max_tick_gap_hours: completeData.max_tick_gap_hours,
     };
 
     try {
@@ -1112,6 +1114,38 @@ export default function BacktestTaskForm({
                       }
                       error={!!errors.market_idle_resume_delay_minutes}
                       inputProps={{ min: 0, max: 720, step: 1 }}
+                    />
+                  )}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <Controller
+                  name="max_tick_gap_hours"
+                  control={control}
+                  render={({ field }) => (
+                    <TextField
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        field.onChange(val === '' ? undefined : Number(val));
+                      }}
+                      fullWidth
+                      type="number"
+                      label={t(
+                        'backtest:form.maxTickGapHours',
+                        'Max tick gap before fail (hours)'
+                      )}
+                      helperText={
+                        errors.max_tick_gap_hours?.message ||
+                        t(
+                          'backtest:form.maxTickGapHoursHelp',
+                          'Fail the backtest if replayed ticks jump forward by more than this many hours. Default: 120 (5 days).'
+                        )
+                      }
+                      error={!!errors.max_tick_gap_hours}
+                      inputProps={{ min: 1, step: 1 }}
                     />
                   )}
                 />
