@@ -277,6 +277,161 @@ class TestSnowballStopLossProtectionThreshold:
 
 
 # ===================================================================
+# Stop-loss rebuild toggle (rebuild_enabled / complete_cycle_when_empty)
+# ===================================================================
+
+
+class TestSnowballRebuildDisabled:
+    """``rebuild_enabled=False`` closes SL slots permanently.
+
+    The key invariant is: when a stop-loss fires under this mode, the
+    slot is sealed (``slot.close(refillable=False)``), not converted
+    into a ``pending_rebuild`` snapshot.  The cycle's
+    ``_process_stop_loss_rebuilds`` pass is a no-op.
+    """
+
+    def _make_cycle_with_two_entries(
+        self,
+    ) -> tuple[SnowballStrategyState, SnowballCycle, Entry, Entry]:
+        ss = SnowballStrategyState()
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        layer = Layer.create(1, 3, 1000, 2)
+        r0 = Entry(
+            entry_id=1,
+            step=1,
+            direction=Direction.LONG,
+            entry_price=Decimal("155.00"),
+            close_price=Decimal("155.50"),
+            units=1000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="initial",
+            layer_number=1,
+            retracement_count=0,
+            stop_loss_price=Decimal("154.10"),
+        )
+        r1 = Entry(
+            entry_id=2,
+            step=2,
+            direction=Direction.LONG,
+            entry_price=Decimal("154.70"),
+            close_price=Decimal("155.00"),
+            units=2000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="counter",
+            layer_number=1,
+            retracement_count=1,
+            stop_loss_price=Decimal("154.40"),
+        )
+        layer.slot_at(0).fill(r0)
+        layer.slot_at(1).fill(r1)
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+        return ss, cycle, r0, r1
+
+    def test_stop_loss_seals_slot_without_pending_rebuild(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "rebuild_enabled": False,
+            }
+        )
+        ss, cycle, r0, r1 = self._make_cycle_with_two_entries()
+        tick = _make_tick(datetime(2026, 1, 1, tzinfo=UTC), "154.39", "154.41")
+
+        events = s._process_stop_loss_closes(ss, tick, cycle)
+        closed_ids = {event.entry_id for event in events}
+        assert r1.entry_id in closed_ids
+
+        layer = cycle.grid.layers[0]
+        r1_slot = layer.slot_at(1)
+        assert r1_slot is not None
+        # Sealed: no live entry, no pending snapshot, no reopen allowed.
+        assert r1_slot.entry is None
+        assert r1_slot.pending_rebuild is None
+        assert r1_slot.ever_closed is True
+        # R0 is still alive.
+        assert layer.slot_at(0).entry is r0
+
+    def test_rebuild_pass_is_noop_when_disabled(self):
+        """Even if a pending_rebuild somehow existed, the rebuild pass
+        does nothing when the feature is off — no events, no state
+        changes.  Guards against accidental re-enable by state
+        deserialization of an older run.
+        """
+        from apps.trading.strategies.snowball.models import StopLossClosedEntry
+
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "rebuild_enabled": False,
+            }
+        )
+        ss, cycle, _r0, _r1 = self._make_cycle_with_two_entries()
+        layer = cycle.grid.layers[0]
+        r1_slot = layer.slot_at(1)
+        assert r1_slot is not None
+        # Manually install a pending snapshot to simulate stale state.
+        r1_slot.entry = None
+        r1_slot.pending_rebuild = StopLossClosedEntry(
+            entry_price=Decimal("154.70"),
+            close_price=Decimal("155.00"),
+            units=2000,
+            direction=Direction.LONG,
+            role="counter",
+            layer_number=1,
+            retracement_count=1,
+            step=2,
+            cycle_id=1,
+        )
+        tick = _make_tick(datetime(2026, 1, 1, tzinfo=UTC), "154.71", "154.73")
+
+        events = s._process_stop_loss_rebuilds(ss, tick, cycle)
+
+        assert events == []
+        assert r1_slot.entry is None
+        assert r1_slot.pending_rebuild is not None
+
+
+class TestSnowballCompleteCycleWhenEmpty:
+    """``complete_cycle_when_empty`` gates automatic re-seed.
+
+    Only relevant when ``rebuild_enabled=False``.  With the flag set,
+    the strategy re-seeds a fresh cycle as soon as the last live entry
+    of the direction closes; without it, the strategy stays idle for
+    that direction.
+    """
+
+    def test_config_validation_requires_stop_loss_enabled(self):
+        with pytest.raises(
+            ValueError, match="complete_cycle_when_empty requires stop_loss_enabled"
+        ):
+            SnowballStrategyConfig.from_dict(
+                {
+                    "stop_loss_enabled": False,
+                    "rebuild_enabled": False,
+                    "complete_cycle_when_empty": True,
+                }
+            ).validate()
+
+    def test_config_validation_requires_rebuild_disabled(self):
+        with pytest.raises(
+            ValueError, match="complete_cycle_when_empty requires rebuild_enabled to be false"
+        ):
+            SnowballStrategyConfig.from_dict(
+                {
+                    "stop_loss_enabled": True,
+                    "rebuild_enabled": True,
+                    "complete_cycle_when_empty": True,
+                }
+            ).validate()
+
+    def test_defaults_rebuild_true_complete_cycle_false(self):
+        cfg = SnowballStrategyConfig.from_dict({})
+        assert cfg.rebuild_enabled is True
+        assert cfg.complete_cycle_when_empty is False
+
+
+# ===================================================================
 # on_tick — trend basket take-profit
 # ===================================================================
 

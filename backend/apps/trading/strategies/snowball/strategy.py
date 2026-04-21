@@ -39,7 +39,7 @@ from apps.trading.strategies.registry import register_strategy
 from apps.trading.strategies.snowball.calculators import (
     counter_interval_pips,
     counter_tp_pips,
-    stop_loss_price,
+    stop_loss_pips,
 )
 from apps.trading.strategies.snowball.enums import CycleStatus, ProtectionLevel
 from apps.trading.strategies.snowball.models import (
@@ -268,9 +268,9 @@ class SnowballStrategy(Strategy):
 
         # Compute stop-loss for this entry at creation time
         if cfg.stop_loss_enabled:
-            next_interval = counter_interval_pips(1, cfg)
-            if next_interval > 0:
-                self._assign_stop_loss(entry, next_interval)
+            sl_pips = stop_loss_pips(1, cfg)
+            if sl_pips > 0:
+                self._assign_stop_loss(entry, sl_pips)
 
         evt = entry.to_open_event(
             timestamp=tick.timestamp,
@@ -454,25 +454,143 @@ class SnowballStrategy(Strategy):
             logger.error("Grid ordering violation detail: %s", self._grid_order_violation)
             return
 
-    def _upper_neighbor_tp_bound(self, layer: "Layer", slot_index: int) -> Decimal | None:
-        """Return the TP of the nearest present slot above ``slot_index``.
+    def _upper_neighbor_tp_bound(
+        self,
+        cycle: "SnowballCycle",
+        layer: "Layer",
+        slot_index: int,
+    ) -> Decimal | None:
+        """Return the TP bound that ``_validate_grid_ordering`` imposes.
 
         "Present" means occupied (``slot.entry`` set) or pending rebuild.
-        Returns ``None`` when no such neighbor exists, in which case the
-        rebuilt slot has no in-layer upper bound to respect.  This is
-        used by the SL-rebuild path to clamp ``adjusted_close_price`` so
-        the grid stays monotonic and ``_validate_grid_ordering`` keeps
-        passing after the rebuild completes.
+
+        The validator traverses the grid layer-by-layer (L1, L2, …) and,
+        within each layer, slot-by-slot in index order, then enforces
+        monotonic ``(entry_price, close_price)`` pairs across the whole
+        sequence.  A rebuild at ``(layer, slot_index)`` therefore has to
+        respect not only its in-layer predecessors but also every present
+        slot in all earlier layers.
+
+        For LONG the expected TP order is descending: the new TP must
+        not exceed the minimum of all prior TPs, so we return that
+        minimum as an upper (ceiling) bound.
+
+        For SHORT the expected TP order is ascending: the new TP must
+        not fall below the maximum of all prior TPs, so we return that
+        maximum as a lower (floor) bound.
+
+        Both are returned under the same name; the caller interprets the
+        direction and clamps accordingly.  ``None`` is returned when no
+        prior present slot exists, in which case no bound applies.
         """
-        upper_tp: Decimal | None = None
-        for s in layer.slots:
-            if s.index >= slot_index:
+        hard, soft = self._grid_tp_bounds(cycle, layer, slot_index)
+        if hard is None:
+            return soft
+        if soft is None:
+            return hard
+        if cycle.direction == Direction.LONG:
+            return hard if hard < soft else soft
+        return hard if hard > soft else soft
+
+    def _grid_tp_bounds(
+        self,
+        cycle: "SnowballCycle",
+        layer: "Layer",
+        slot_index: int,
+    ) -> tuple[Decimal | None, Decimal | None]:
+        """Return (hard_bound, soft_bound) TP limits from preceding slots.
+
+        - ``hard_bound`` derives from **occupied** preceding slots whose
+          TP is already committed on a live position and cannot be
+          modified without disturbing an open trade.
+        - ``soft_bound`` derives from **pending_rebuild** preceding slots
+          whose TP is a snapshot awaiting rebuild and can be pushed
+          outward to accommodate an extended rebuild TP on the current
+          slot.
+
+        Bounds follow the same semantics as :meth:`_upper_neighbor_tp_bound`:
+        LONG uses the tightest ceiling (minimum observed TP), SHORT uses
+        the tightest floor (maximum observed TP).  ``None`` means no
+        bound in that category.
+        """
+        direction = cycle.direction
+        hard: Decimal | None = None
+        soft: Decimal | None = None
+
+        def _combine(existing: Decimal | None, candidate: Decimal) -> Decimal:
+            if existing is None:
+                return candidate
+            if direction == Direction.LONG:
+                return candidate if candidate < existing else existing
+            return candidate if candidate > existing else existing
+
+        for lyr in cycle.grid.layers:
+            if lyr.layer_number > layer.layer_number:
                 continue
-            if s.entry is not None:
-                upper_tp = s.entry.close_price
-            elif s.pending_rebuild is not None:
-                upper_tp = s.pending_rebuild.close_price
-        return upper_tp
+            for s in lyr.slots:
+                if lyr is layer and s.index >= slot_index:
+                    continue
+                if s.entry is not None:
+                    hard = _combine(hard, s.entry.close_price)
+                elif s.pending_rebuild is not None:
+                    soft = _combine(soft, s.pending_rebuild.close_price)
+
+        return hard, soft
+
+    def _propagate_pending_rebuild_tp(
+        self,
+        cycle: "SnowballCycle",
+        layer: "Layer",
+        slot_index: int,
+        new_tp: Decimal,
+    ) -> list[tuple[int, int, Decimal, Decimal]]:
+        """Extend preceding pending_rebuild TPs to stay monotonic with ``new_tp``.
+
+        When a rebuild has absorbed an inflated ``rebuild_price_offset``
+        (typically caused by a stop-loss that filled far past the
+        intended SL price — common with aggregated-bar data), its new
+        TP can end up extended past the TPs of earlier pending_rebuild
+        slots that still hold their original snapshots.  Left alone,
+        that flips the grid ordering and trips
+        :meth:`_validate_grid_ordering`.
+
+        This routine walks all preceding pending_rebuild slots (earlier
+        layers plus earlier indices in the same layer) and, for each
+        whose snapshot TP would violate monotonicity against ``new_tp``,
+        pushes the snapshot's ``close_price`` outward to ``new_tp`` so
+        ordering is preserved.  Occupied slots are never touched — their
+        TP is already committed on a live position.
+
+        Returns a list of ``(layer_number, slot_index, old_tp, new_tp)``
+        tuples describing each adjustment performed, useful for logging
+        and tests.
+        """
+        direction = cycle.direction
+        adjusted: list[tuple[int, int, Decimal, Decimal]] = []
+
+        for lyr in cycle.grid.layers:
+            if lyr.layer_number > layer.layer_number:
+                continue
+            for s in lyr.slots:
+                if lyr is layer and s.index >= slot_index:
+                    continue
+                if s.pending_rebuild is None:
+                    continue
+                old_tp = s.pending_rebuild.close_price
+                if direction == Direction.LONG:
+                    # Descending expected: prev_tp >= curr_tp.  If the
+                    # pending TP is below the new rebuild TP, pull it
+                    # up so the pair stays ordered.
+                    if old_tp < new_tp:
+                        s.pending_rebuild.close_price = new_tp
+                        adjusted.append((lyr.layer_number, s.index, old_tp, new_tp))
+                else:
+                    # SHORT, ascending expected: prev_tp <= curr_tp.
+                    if old_tp > new_tp:
+                        s.pending_rebuild.close_price = new_tp
+                        adjusted.append((lyr.layer_number, s.index, old_tp, new_tp))
+
+        return adjusted
 
     # ------------------------------------------------------------------
     # Per-cycle tick processing
@@ -999,9 +1117,9 @@ class SnowballStrategy(Strategy):
 
         # Compute stop-loss for this entry at creation time
         if cfg.stop_loss_enabled:
-            next_interval = counter_interval_pips(slot.index + 1, cfg)
-            if next_interval > 0:
-                self._assign_stop_loss(entry, next_interval)
+            sl_pips = stop_loss_pips(slot.index + 1, cfg)
+            if sl_pips > 0:
+                self._assign_stop_loss(entry, sl_pips)
 
         logger.info(
             "Counter add (%s) in cycle %d: L%d/R%d, units=%d, adverse=%.1f pips",
@@ -1129,9 +1247,9 @@ class SnowballStrategy(Strategy):
 
         # Compute stop-loss for this entry at creation time
         if cfg.stop_loss_enabled:
-            next_interval = counter_interval_pips(1, cfg)
-            if next_interval > 0:
-                self._assign_stop_loss(layer_entry, next_interval)
+            sl_pips = stop_loss_pips(1, cfg)
+            if sl_pips > 0:
+                self._assign_stop_loss(layer_entry, sl_pips)
 
         logger.info(
             "Layer initial L%d/R0 in cycle %d, TP=%.3f",
@@ -1442,45 +1560,29 @@ class SnowballStrategy(Strategy):
     def _assign_stop_loss(
         self,
         entry: Entry,
-        next_interval_pips: Decimal,
+        sl_pips: Decimal,
     ) -> None:
         """Compute and assign a stop-loss price to *entry* at creation time.
 
-        The SL is derived from the hypothetical next entry's price, which is
-        deterministic: ``entry_price ∓ next_interval_pips * pip_size``.
-
-        Formula:
-        - R0 entries use a one-interval stop so the distance to SL matches the
-          distance from R0 to R1.
-        - tp_pips = |close_price - entry_price| / pip_size
-        - next_entry_price = entry_price - next_interval_pips * pip_size  (LONG)
-                             entry_price + next_interval_pips * pip_size  (SHORT)
-        - if tp_pips < next_interval_pips: SL = next_entry_price
-        - else: SL = next_entry_price - next_interval_pips * pip_size  (LONG)
-                     SL = next_entry_price + next_interval_pips * pip_size  (SHORT)
+        ``sl_pips`` is the pip distance between the entry price and the
+        stop-loss price, typically supplied by
+        :func:`stop_loss_pips` for the slot's R index.  LONG entries
+        place the SL below the entry; SHORT entries place it above.
         """
-        tp_pips = abs(entry.close_price - entry.entry_price) / self.pip_size
+        if sl_pips <= 0:
+            return
         if entry.is_long:
-            next_entry_price = entry.entry_price - next_interval_pips * self.pip_size
-            if entry.retracement_count == 0:
-                sl = next_entry_price
-            else:
-                sl = stop_loss_price(tp_pips, next_entry_price, next_interval_pips, self.pip_size)
+            sl = entry.entry_price - sl_pips * self.pip_size
         else:
-            next_entry_price = entry.entry_price + next_interval_pips * self.pip_size
-            if entry.retracement_count == 0 or tp_pips < next_interval_pips:
-                sl = next_entry_price
-            else:
-                sl = next_entry_price + next_interval_pips * self.pip_size
+            sl = entry.entry_price + sl_pips * self.pip_size
         entry.stop_loss_price = sl
         logger.debug(
-            "SL assigned: entry_id=%d L%d/R%d, SL=%.5f (tp_pips=%.1f, next_interval=%.1f)",
+            "SL assigned: entry_id=%d L%d/R%d, SL=%.5f (sl_pips=%.1f)",
             entry.entry_id,
             entry.layer_number,
             entry.retracement_count,
             sl,
-            tp_pips,
-            next_interval_pips,
+            sl_pips,
         )
 
     def _is_stop_loss_temporarily_protected(self, layer: Layer, entry: Entry) -> bool:
@@ -1582,24 +1684,33 @@ class SnowballStrategy(Strategy):
             rebuild_price_offset = entry.rebuild_price_offset + sl_price_drift
             entry.rebuild_price_offset = rebuild_price_offset
 
-            sl_snapshot = StopLossClosedEntry(
-                entry_price=entry.entry_price,
-                close_price=entry.close_price,
-                units=entry.units,
-                direction=entry.direction,
-                role=entry.role,
-                layer_number=entry.layer_number,
-                retracement_count=entry.retracement_count,
-                step=entry.step,
-                root_entry_id=entry.root_entry_id,
-                parent_entry_id=entry.parent_entry_id,
-                cycle_id=cycle.cycle_id,
-                position_id=entry.position_id,
-                lifecycle_realized_pnl=entry.lifecycle_realized_pnl,
-                lifecycle_stop_loss_count=entry.lifecycle_stop_loss_count,
-                rebuild_price_offset=rebuild_price_offset,
-            )
-            slot.close_for_stop_loss(sl_snapshot)
+            if self.config.rebuild_enabled:
+                sl_snapshot = StopLossClosedEntry(
+                    entry_price=entry.entry_price,
+                    close_price=entry.close_price,
+                    units=entry.units,
+                    direction=entry.direction,
+                    role=entry.role,
+                    layer_number=entry.layer_number,
+                    retracement_count=entry.retracement_count,
+                    step=entry.step,
+                    root_entry_id=entry.root_entry_id,
+                    parent_entry_id=entry.parent_entry_id,
+                    cycle_id=cycle.cycle_id,
+                    position_id=entry.position_id,
+                    lifecycle_realized_pnl=entry.lifecycle_realized_pnl,
+                    lifecycle_stop_loss_count=entry.lifecycle_stop_loss_count,
+                    rebuild_price_offset=rebuild_price_offset,
+                )
+                slot.close_for_stop_loss(sl_snapshot)
+            else:
+                # Rebuilds disabled — close the slot permanently so it
+                # cannot be reused or rebuilt.  The grid shrinks on
+                # every SL instead of recovering; once the cycle loses
+                # its last live entry it will be marked COMPLETED (and,
+                # when ``complete_cycle_when_empty`` is set, a fresh
+                # cycle is re-seeded automatically).
+                slot.close(refillable=False)
 
             events.append(close_event)
 
@@ -1618,6 +1729,11 @@ class SnowballStrategy(Strategy):
         position is re-opened in-place.
         """
         if not self.config.stop_loss_enabled:
+            return []
+        if not self.config.rebuild_enabled:
+            # No pending_rebuild snapshots are ever produced in this
+            # mode, so there is nothing to do.  Short-circuit to keep
+            # the tick loop cheap.
             return []
 
         events: list[StrategyEvent] = []
@@ -1683,17 +1799,32 @@ class SnowballStrategy(Strategy):
                         adjusted_close_price = pending.entry_price - required_profit_distance
 
                     # Preserve the monotonic grid ordering that
-                    # ``_validate_grid_ordering`` enforces: the rebuilt
-                    # slot's TP must not cross the TP of the nearest
-                    # present slot immediately above it in this layer.
-                    # When the rebuild offset would push the TP past
-                    # that bound, clamp it back so the grid stays
-                    # ordered.  Loss recovery beyond the bound is
-                    # sacrificed; stability of the overall grid wins.
-                    upper_tp_bound = self._upper_neighbor_tp_bound(layer, slot.index)
-                    if upper_tp_bound is not None:
+                    # ``_validate_grid_ordering`` enforces.  The grid is
+                    # traversed layer-by-layer (L1, L2, …) and then
+                    # slot-by-slot within each layer, so the rebuilt
+                    # slot must respect every present slot in all
+                    # earlier layers as well as earlier slots in the
+                    # same layer.
+                    #
+                    # We distinguish two classes of predecessor bound:
+                    #
+                    # - **hard** — bounds from ``occupied`` slots.
+                    #   Their TP is already live on an open position
+                    #   and cannot be changed, so the rebuild TP is
+                    #   clamped against them.  Loss recovery beyond
+                    #   the hard bound is sacrificed; stability wins.
+                    #
+                    # - **soft** — bounds from ``pending_rebuild``
+                    #   slots.  Their TP is a snapshot that will be
+                    #   re-materialised when the slot itself rebuilds,
+                    #   so we can push those snapshot TPs outward to
+                    #   match the current rebuild and avoid clamping.
+                    #   This keeps as much of the loss-recovery budget
+                    #   as the hard bound allows.
+                    hard_bound, _soft_bound = self._grid_tp_bounds(cycle, layer, slot.index)
+                    if hard_bound is not None:
                         if pending.direction == Direction.LONG:
-                            if adjusted_close_price > upper_tp_bound:
+                            if adjusted_close_price > hard_bound:
                                 logger.info(
                                     "Rebuild TP clamped to upper neighbor: "
                                     "L%d/R%d, pending_tp=%.5f, computed_adj=%.5f, clamped_to=%.5f",
@@ -1701,11 +1832,11 @@ class SnowballStrategy(Strategy):
                                     pending.retracement_count,
                                     pending.close_price,
                                     adjusted_close_price,
-                                    upper_tp_bound,
+                                    hard_bound,
                                 )
-                                adjusted_close_price = upper_tp_bound
+                                adjusted_close_price = hard_bound
                         else:
-                            if adjusted_close_price < upper_tp_bound:
+                            if adjusted_close_price < hard_bound:
                                 logger.info(
                                     "Rebuild TP clamped to upper neighbor: "
                                     "L%d/R%d, pending_tp=%.5f, computed_adj=%.5f, clamped_to=%.5f",
@@ -1713,9 +1844,32 @@ class SnowballStrategy(Strategy):
                                     pending.retracement_count,
                                     pending.close_price,
                                     adjusted_close_price,
-                                    upper_tp_bound,
+                                    hard_bound,
                                 )
-                                adjusted_close_price = upper_tp_bound
+                                adjusted_close_price = hard_bound
+
+                    # Now that ``adjusted_close_price`` respects the hard
+                    # bound, extend any earlier pending_rebuild snapshot
+                    # TPs that would otherwise violate monotonicity
+                    # against it.  Those slots will be rebuilt later and
+                    # can absorb the extension without affecting any
+                    # live position.
+                    propagated = self._propagate_pending_rebuild_tp(
+                        cycle, layer, slot.index, adjusted_close_price
+                    )
+                    for lno, sidx, old_tp, new_tp in propagated:
+                        logger.info(
+                            "Pending-rebuild TP extended to preserve ordering: "
+                            "L%d/R%d, old_tp=%.5f, new_tp=%.5f "
+                            "(triggered by L%d/R%d rebuild @ TP=%.5f)",
+                            lno,
+                            sidx,
+                            old_tp,
+                            new_tp,
+                            pending.layer_number,
+                            pending.retracement_count,
+                            adjusted_close_price,
+                        )
                 else:
                     adjusted_close_price = pending.close_price
 
@@ -1750,11 +1904,9 @@ class SnowballStrategy(Strategy):
 
                 # Optionally keep rebuilt positions exempt from further stop-loss closes.
                 if self.config.stop_loss_enabled and not self.config.disable_loss_cut_after_rebuild:
-                    next_interval = counter_interval_pips(
-                        pending.retracement_count + 1, self.config
-                    )
-                    if next_interval > 0:
-                        self._assign_stop_loss(entry, next_interval)
+                    sl_pips_val = stop_loss_pips(pending.retracement_count + 1, self.config)
+                    if sl_pips_val > 0:
+                        self._assign_stop_loss(entry, sl_pips_val)
 
                 slot.complete_rebuild(entry)
 
@@ -1973,7 +2125,27 @@ class SnowballStrategy(Strategy):
                 continue
             dir_cycles = [c for c in active if c.direction == direction]
             if not dir_cycles:
-                # No active or pending cycles — all completed.
+                # No active or pending cycles — all completed.  When
+                # stop-loss is on but rebuilds are off, this is the
+                # normal state reached after every live slot has been
+                # stopped out or taken profit.  Only re-seed in that
+                # regime when the user opted in via
+                # ``complete_cycle_when_empty`` — otherwise the strategy
+                # stays idle for this direction so the operator can
+                # inspect the final cycle without the loop spawning
+                # another one immediately.
+                if (
+                    self.config.stop_loss_enabled
+                    and not self.config.rebuild_enabled
+                    and not self.config.complete_cycle_when_empty
+                ):
+                    logger.debug(
+                        "No active %s cycle but auto re-seed disabled — "
+                        "staying idle (stop_loss_enabled, rebuild_enabled=False, "
+                        "complete_cycle_when_empty=False)",
+                        direction.value.upper(),
+                    )
+                    continue
                 logger.info(
                     "No active %s cycle — creating new cycle",
                     direction.value.upper(),

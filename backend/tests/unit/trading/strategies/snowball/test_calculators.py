@@ -6,6 +6,7 @@ from apps.trading.strategies.snowball.calculators import (
     counter_interval_pips,
     counter_tp_pips,
     round_to_step,
+    stop_loss_pips,
 )
 from apps.trading.strategies.snowball.models import SnowballStrategyConfig
 
@@ -105,3 +106,55 @@ class TestCounterTpPips:
         cfg = _cfg(counter_tp_mode="weighted_avg")
         assert counter_tp_pips(1, cfg) == Decimal("0")
         assert counter_tp_pips(5, cfg) == Decimal("0")
+
+
+class TestStopLossPips:
+    def test_defaults_match_interval_head(self):
+        """Without explicit ``stop_loss_*`` values, SL pips inherit the
+        counter-trend interval head and mode, preserving the intent of
+        the older SL formula at k=1 (R0)."""
+        cfg = _cfg(interval_mode="constant", n_pips_head="30")
+        assert stop_loss_pips(1, cfg) == Decimal("30.0")
+        assert stop_loss_pips(5, cfg) == Decimal("30.0")
+
+    def test_constant_override(self):
+        cfg = _cfg(stop_loss_mode="constant", stop_loss_pips_head="15")
+        assert stop_loss_pips(1, cfg) == Decimal("15.0")
+        assert stop_loss_pips(7, cfg) == Decimal("15.0")
+
+    def test_decay_progression(self):
+        """Decay modes interpolate between head and tail using gamma."""
+        cfg = _cfg(
+            stop_loss_mode="additive",
+            stop_loss_pips_head="40",
+            stop_loss_pips_tail="10",
+            stop_loss_pips_flat_steps=1,
+            stop_loss_pips_gamma="1",
+        )
+        assert stop_loss_pips(1, cfg) == Decimal("40.0")
+        # With linear gamma, each step after flat reduces by (40-10)/(r_max-flat) = 30/6 = 5.
+        assert stop_loss_pips(2, cfg) == Decimal("35.0")
+        assert stop_loss_pips(7, cfg) == Decimal("10.0")
+        assert stop_loss_pips(20, cfg) == Decimal("10.0")
+
+    def test_manual_mode(self):
+        cfg = _cfg(
+            r_max=3,
+            stop_loss_mode="manual",
+            stop_loss_manual_pips=["12", "18", "24"],
+        )
+        assert stop_loss_pips(1, cfg) == Decimal("12.0")
+        assert stop_loss_pips(2, cfg) == Decimal("18.0")
+        assert stop_loss_pips(3, cfg) == Decimal("24.0")
+        # Beyond the list, clamp to the last value.
+        assert stop_loss_pips(99, cfg) == Decimal("24.0")
+
+    def test_manual_mode_empty_falls_back_to_flat_head(self):
+        cfg = _cfg(
+            stop_loss_mode="manual",
+            stop_loss_pips_head="22",
+            stop_loss_manual_pips=[],
+        )
+        # Empty manual list is treated as disabled; the formula falls
+        # through to the constant head.
+        assert stop_loss_pips(1, cfg) == Decimal("22.0")

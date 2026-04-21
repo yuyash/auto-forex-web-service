@@ -1055,6 +1055,7 @@ export function TaskStrategyTab({
                       displayLayer={displayLayer}
                       displayRet={displayRet}
                       timezone={timezone}
+                      currencyCode={pnlCurrencyCode}
                       onToggleSelection={handleToggleTradeSelection}
                       onOpenLifecycle={handleOpenLifecycle}
                     />
@@ -1107,6 +1108,7 @@ function TradeRow({
   displayLayer,
   displayRet,
   timezone,
+  currencyCode,
   onToggleSelection,
   onOpenLifecycle,
 }: {
@@ -1116,6 +1118,7 @@ function TradeRow({
   displayLayer: number | null | undefined;
   displayRet: number | null | undefined;
   timezone: string;
+  currencyCode: string | null;
   onToggleSelection: (id: string) => void;
   onOpenLifecycle: (positionId: string) => void;
 }) {
@@ -1250,18 +1253,22 @@ function TradeRow({
             </IconButton>
           </Tooltip>
         ) : null}
-        {trade.pnl != null
+        {trade.pnl != null &&
+        trade.execution_method !== 'open_position' &&
+        trade.execution_method !== 'rebuild_position'
           ? (() => {
               const pnlValue = parseFloat(trade.pnl!);
               if (!Number.isFinite(pnlValue)) return null;
-              const sign = pnlValue >= 0 ? '+' : '';
+              const symbol = currencySymbol(currencyCode) || '';
+              const sign = pnlValue >= 0 ? '+' : '-';
               return (
                 <Typography
                   variant="caption"
                   sx={{ fontWeight: 700, fontFamily: 'monospace' }}
                   color={pnlValue >= 0 ? 'success.main' : 'error.main'}
                 >
-                  {sign}¥
+                  {sign}
+                  {symbol}
                   {Math.abs(pnlValue).toLocaleString('en-US', {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 0,

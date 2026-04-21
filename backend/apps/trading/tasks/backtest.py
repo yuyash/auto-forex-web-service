@@ -8,6 +8,7 @@ from uuid import UUID
 
 from celery import shared_task
 
+from django.conf import settings
 from django.utils import timezone as dj_timezone
 
 from apps.trading.engine import TradingEngine
@@ -400,6 +401,8 @@ def trigger_backtest_publisher(
         )
 
     execution_id = getattr(task, "execution_id", None)
+    resolved_pip_size = task.pip_size or pip_size_for_instrument(task.instrument)
+    bar_range_warning = float(getattr(settings, "MARKET_BACKTEST_BAR_RANGE_WARNING_PIPS", 0) or 0)
     result = publish_ticks_for_backtest.apply_async(
         kwargs={
             "instrument": task.instrument,
@@ -409,6 +412,8 @@ def trigger_backtest_publisher(
             "tick_granularity": task.tick_granularity,
             "tick_window_value_mode": task.tick_window_value_mode,
             "execution_id": str(execution_id) if execution_id else None,
+            "pip_size": str(resolved_pip_size) if resolved_pip_size else None,
+            "bar_range_warning_pips": (str(bar_range_warning) if bar_range_warning > 0 else None),
         },
         queue="backtest_publisher",
     )

@@ -64,6 +64,78 @@ def counter_interval_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
     return round_to_step(max(interval, tail), cfg.round_step_pips)
 
 
+def _progression_pips(
+    *,
+    k: int,
+    mode: str,
+    head: Decimal,
+    tail: Decimal,
+    flat_steps: int,
+    gamma: Decimal,
+    r_max: int,
+    manual_values: list[Decimal],
+    round_step: Decimal,
+) -> Decimal:
+    """Shared ``head → tail`` progression used by interval and SL formulas.
+
+    Modes mirror :func:`counter_interval_pips`:
+    - ``constant`` — always ``head``.
+    - ``additive`` / ``subtractive`` / ``multiplicative`` / ``divisive`` —
+      flat for ``flat_steps`` then decay toward ``tail`` using ``gamma``.
+      (The mode name here is retained for schema parity; the actual curve
+      is the same gamma decay regardless of which of these four is
+      chosen.  Past and future refinements can diverge the curves
+      without changing the caller.)
+    - ``manual`` — read value at index ``k - 1`` from ``manual_values``,
+      clamped to the end of the list.
+    """
+    if mode == "manual" and manual_values:
+        idx = min(max(k - 1, 0), len(manual_values) - 1)
+        return round_to_step(manual_values[idx], round_step)
+
+    if mode == "constant":
+        return round_to_step(head, round_step)
+
+    if k <= flat_steps:
+        return round_to_step(head, round_step)
+
+    t = k - flat_steps
+    r_decay = r_max - flat_steps
+    if r_decay <= 0:
+        return round_to_step(tail, round_step)
+
+    progress = Decimal(str(t)) / Decimal(str(r_decay))
+    curved = progress**gamma
+    value = head - (head - tail) * curved
+    return round_to_step(max(value, tail), round_step)
+
+
+def stop_loss_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
+    """Return the pip distance from entry to stop-loss for the *k*-th slot.
+
+    ``k`` is 1-based: R0 uses ``k=1`` (treat the layer-initial like the
+    first add so the SL distance lines up with the interval to the next
+    slot), R1 uses ``k=2``, and so on.
+
+    The progression shape mirrors :func:`counter_interval_pips` but reads
+    its parameters from dedicated ``stop_loss_*`` config fields, so the
+    SL distance can be tuned independently of the counter-trend
+    averaging interval (e.g. a tighter SL on a wider grid).  Defaults
+    reproduce the historical behaviour of "SL distance == next interval".
+    """
+    return _progression_pips(
+        k=k,
+        mode=cfg.stop_loss_mode,
+        head=cfg.stop_loss_pips_head,
+        tail=cfg.stop_loss_pips_tail,
+        flat_steps=cfg.stop_loss_pips_flat_steps,
+        gamma=cfg.stop_loss_pips_gamma,
+        r_max=cfg.r_max,
+        manual_values=cfg.stop_loss_manual_pips,
+        round_step=cfg.round_step_pips,
+    )
+
+
 def counter_tp_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
     """Return the take-profit pips for the *k*-th step (1-based).
 
@@ -104,41 +176,3 @@ def counter_tp_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
 
     # Fallback
     return round_to_step(base, step)
-
-
-def stop_loss_price(
-    current_tp_pips: Decimal,
-    next_entry_price: Decimal,
-    next_interval_pips: Decimal,
-    pip_size: Decimal,
-) -> Decimal:
-    """Calculate stop-loss price for a position when the next position opens.
-
-    The formula mirrors the Excel formula:
-    ``=IF(G2 < -(C3), B3, B3 - (-C3 / 100))``
-
-    Where:
-    - G2 = current position's take-profit distance in pips
-      (close_price - entry_price) / pip_size for LONG
-    - C3 = next position's interval (negative in Excel, positive here)
-    - B3 = next position's entry price
-
-    When the current position's TP pips are less than the next interval,
-    the stop-loss is set to the next position's entry price.
-    Otherwise, it is set to next_entry_price - next_interval_pips * pip_size.
-
-    For LONG positions, the stop-loss is always below the entry price.
-    For SHORT positions, the caller should negate/mirror appropriately.
-
-    Args:
-        current_tp_pips: Current position's TP distance in pips (always positive).
-        next_entry_price: The next (newly opened) position's entry price.
-        next_interval_pips: The interval (in pips) used to open the next position.
-        pip_size: Instrument pip size.
-
-    Returns:
-        The stop-loss price for the current position.
-    """
-    if current_tp_pips < next_interval_pips:
-        return next_entry_price
-    return next_entry_price - next_interval_pips * pip_size
