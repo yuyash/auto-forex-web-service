@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.55.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.55.2...frontend-v1.55.3) (2026-04-21)
+
+
+### Bug Fixes
+
+* **snowball:** re-trigger release-please for cross-layer TP bound fix ([#565](https://github.com/yuyash/auto-forex-web-service/issues/565)) ([575be2d](https://github.com/yuyash/auto-forex-web-service/commit/575be2d0352ed00621ff1894f1954ae65abf4a8a))
+
 ## [1.55.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.55.1...frontend-v1.55.2) (2026-04-20)
 
 
