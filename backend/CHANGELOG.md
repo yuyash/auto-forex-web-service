@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.42.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.41.8...backend-v1.42.0) (2026-04-21)
+
+
+### Features
+
+* **strategy:** configure rebuild stop loss ([#576](https://github.com/yuyash/auto-forex-web-service/issues/576)) ([205b98b](https://github.com/yuyash/auto-forex-web-service/commit/205b98b54fc5f084658af2393d007d08f0e1c8b4))
+
 ## [1.41.8](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.41.7...backend-v1.41.8) (2026-04-21)
 
 
