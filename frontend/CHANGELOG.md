@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.56.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.0...frontend-v1.56.1) (2026-04-21)
+
+
+### Bug Fixes
+
+* **configuration:** reorder stop loss controls ([#578](https://github.com/yuyash/auto-forex-web-service/issues/578)) ([400f426](https://github.com/yuyash/auto-forex-web-service/commit/400f4260e1a7d9089f28f2a8a70367302f89e178))
+
 ## [1.56.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.55.7...frontend-v1.56.0) (2026-04-21)
 
 
