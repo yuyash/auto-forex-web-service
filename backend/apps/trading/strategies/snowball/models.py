@@ -69,6 +69,19 @@ class SnowballStrategyConfig:
     interval_mode: str
     manual_intervals: list[Decimal]
 
+    # Stop-loss pip distance formula.  Mirrors the counter-trend
+    # interval progression (``stop_loss_mode`` accepts the same values
+    # as ``interval_mode``) but is configured independently so the SL
+    # distance can be tuned separately from the averaging grid.  For
+    # example, a strategy can use a gentle interval progression but a
+    # uniform, tight SL on every slot.
+    stop_loss_mode: str
+    stop_loss_pips_head: Decimal
+    stop_loss_pips_tail: Decimal
+    stop_loss_pips_flat_steps: int
+    stop_loss_pips_gamma: Decimal
+    stop_loss_manual_pips: list[Decimal]
+
     # Counter-trend step TP
     counter_tp_mode: str
     counter_tp_pips: Decimal
@@ -86,6 +99,22 @@ class SnowballStrategyConfig:
     stop_loss_enabled: bool
     disable_loss_cut_after_rebuild: bool
     preserve_highest_r_from: int
+    # When ``stop_loss_enabled`` is True, controls whether a stopped-out
+    # slot is rebuilt (re-opened) once price returns to the original
+    # entry.  Historical behaviour is ``True`` — stop-losses always
+    # create a pending_rebuild snapshot and the slot comes back when
+    # price revisits.  Setting this to ``False`` makes a stop-loss close
+    # the slot permanently (no pending_rebuild snapshot is retained),
+    # so the grid shrinks on each SL instead of recovering.
+    rebuild_enabled: bool
+    # When True, a cycle that loses its last live entry is immediately
+    # moved to COMPLETED so the re-seed logic can start a fresh cycle
+    # on the next tick.  Intended for the ``stop_loss_enabled=True,
+    # rebuild_enabled=False`` combination, where pending_rebuild
+    # snapshots do not exist and the only way for a cycle to hold state
+    # is as COMPLETED (already the default in that combination, but
+    # this flag keeps the semantics explicit at the config layer).
+    complete_cycle_when_empty: bool
     emergency_enabled: bool
     emergency_threshold: Decimal
 
@@ -128,6 +157,26 @@ class SnowballStrategyConfig:
             for v in manual_raw:
                 manual_intervals.append(_parse_decimal(v, "30"))
 
+        sl_manual_raw = raw.get("stop_loss_manual_pips", [])
+        stop_loss_manual_pips: list[Decimal] = []
+        if isinstance(sl_manual_raw, list):
+            for v in sl_manual_raw:
+                stop_loss_manual_pips.append(_parse_decimal(v, "30"))
+
+        # The stop-loss progression parameters default to a simple
+        # constant-pip SL that matches the counter-trend interval head,
+        # so upgrading a config that only supplied ``interval_mode`` /
+        # ``n_pips_head`` preserves the original "SL distance ==
+        # interval head" effective behaviour without inheriting the
+        # interval shape (constant → SL constant by default).  Users
+        # who want decaying or manual SL progressions opt in via the
+        # dedicated ``stop_loss_*`` fields.
+        n_pips_head = _parse_decimal(raw.get("n_pips_head", "30"), "30")
+        n_pips_tail = _parse_decimal(raw.get("n_pips_tail", "14"), "14")
+        n_pips_flat_steps = _parse_int(raw.get("n_pips_flat_steps", 2), 2)
+        n_pips_gamma = _parse_decimal(raw.get("n_pips_gamma", "1.4"), "1.4")
+        interval_mode = _parse_str(raw.get("interval_mode"), "constant")
+
         return SnowballStrategyConfig(
             base_units=_parse_int(raw.get("base_units", 1000), 1000),
             m_pips=_parse_decimal(raw.get("m_pips", "50"), "50"),
@@ -136,12 +185,20 @@ class SnowballStrategyConfig:
             f_max=_parse_int(raw.get("f_max", 3), 3),
             post_r_max_base_factor=_parse_decimal(raw.get("post_r_max_base_factor", "1"), "1"),
             refill_up_to=_parse_int(raw.get("refill_up_to", 2), 2),
-            n_pips_head=_parse_decimal(raw.get("n_pips_head", "30"), "30"),
-            n_pips_tail=_parse_decimal(raw.get("n_pips_tail", "14"), "14"),
-            n_pips_flat_steps=_parse_int(raw.get("n_pips_flat_steps", 2), 2),
-            n_pips_gamma=_parse_decimal(raw.get("n_pips_gamma", "1.4"), "1.4"),
-            interval_mode=_parse_str(raw.get("interval_mode"), "constant"),
+            n_pips_head=n_pips_head,
+            n_pips_tail=n_pips_tail,
+            n_pips_flat_steps=n_pips_flat_steps,
+            n_pips_gamma=n_pips_gamma,
+            interval_mode=interval_mode,
             manual_intervals=manual_intervals,
+            stop_loss_mode=_parse_str(raw.get("stop_loss_mode"), "constant"),
+            stop_loss_pips_head=_parse_decimal(raw.get("stop_loss_pips_head"), str(n_pips_head)),
+            stop_loss_pips_tail=_parse_decimal(raw.get("stop_loss_pips_tail"), str(n_pips_tail)),
+            stop_loss_pips_flat_steps=_parse_int(
+                raw.get("stop_loss_pips_flat_steps"), n_pips_flat_steps
+            ),
+            stop_loss_pips_gamma=_parse_decimal(raw.get("stop_loss_pips_gamma"), str(n_pips_gamma)),
+            stop_loss_manual_pips=stop_loss_manual_pips,
             counter_tp_mode=_parse_str(raw.get("counter_tp_mode"), "weighted_avg"),
             counter_tp_pips=_parse_decimal(raw.get("counter_tp_pips", "25"), "25"),
             counter_tp_step_amount=_parse_decimal(raw.get("counter_tp_step_amount", "2.5"), "2.5"),
@@ -156,6 +213,8 @@ class SnowballStrategyConfig:
             stop_loss_enabled=bool(raw.get("stop_loss_enabled", False)),
             disable_loss_cut_after_rebuild=bool(raw.get("disable_loss_cut_after_rebuild", False)),
             preserve_highest_r_from=_parse_int(raw.get("preserve_highest_r_from", 0), 0),
+            rebuild_enabled=bool(raw.get("rebuild_enabled", True)),
+            complete_cycle_when_empty=bool(raw.get("complete_cycle_when_empty", False)),
             emergency_enabled=bool(raw.get("emergency_enabled", True)),
             emergency_threshold=_parse_decimal(raw.get("emergency_threshold", "95"), "95"),
             pip_size=_parse_decimal(raw.get("pip_size", "0.01"), "0.01"),
@@ -187,6 +246,12 @@ class SnowballStrategyConfig:
             "n_pips_gamma": str(self.n_pips_gamma),
             "interval_mode": self.interval_mode,
             "manual_intervals": [str(v) for v in self.manual_intervals],
+            "stop_loss_mode": self.stop_loss_mode,
+            "stop_loss_pips_head": str(self.stop_loss_pips_head),
+            "stop_loss_pips_tail": str(self.stop_loss_pips_tail),
+            "stop_loss_pips_flat_steps": self.stop_loss_pips_flat_steps,
+            "stop_loss_pips_gamma": str(self.stop_loss_pips_gamma),
+            "stop_loss_manual_pips": [str(v) for v in self.stop_loss_manual_pips],
             "counter_tp_mode": self.counter_tp_mode,
             "counter_tp_pips": str(self.counter_tp_pips),
             "counter_tp_step_amount": str(self.counter_tp_step_amount),
@@ -201,6 +266,8 @@ class SnowballStrategyConfig:
             "stop_loss_enabled": self.stop_loss_enabled,
             "disable_loss_cut_after_rebuild": self.disable_loss_cut_after_rebuild,
             "preserve_highest_r_from": self.preserve_highest_r_from,
+            "rebuild_enabled": self.rebuild_enabled,
+            "complete_cycle_when_empty": self.complete_cycle_when_empty,
             "emergency_enabled": self.emergency_enabled,
             "emergency_threshold": str(self.emergency_threshold),
             "pip_size": str(self.pip_size),
@@ -250,6 +317,34 @@ class SnowballStrategyConfig:
             raise ValueError("rebuild_entry_price_buffer_pips must be >= 0")
         if self.rebuild_exit_price_buffer_pips < 0:
             raise ValueError("rebuild_exit_price_buffer_pips must be >= 0")
+        # Stop-loss progression.
+        if not self.stop_loss_pips_head >= self.stop_loss_pips_tail > 0:
+            raise ValueError("Must satisfy stop_loss_pips_head >= stop_loss_pips_tail > 0")
+        if not 0 <= self.stop_loss_pips_flat_steps < max(self.r_max, 1):
+            raise ValueError("stop_loss_pips_flat_steps must be >= 0 and < r_max")
+        if self.stop_loss_pips_gamma <= 0:
+            raise ValueError("stop_loss_pips_gamma must be > 0")
+        if self.stop_loss_mode == "manual":
+            # R0 uses k=1 and R(r_max) uses k=r_max+1 in the SL formula,
+            # so the manual list needs one slot more than the interval
+            # list.  A shorter list is permitted because the progression
+            # clamps to the last value, but we forbid shorter-than-r_max
+            # to catch accidental misconfiguration.
+            if len(self.stop_loss_manual_pips) < self.r_max:
+                raise ValueError(
+                    "stop_loss_manual_pips must have at least r_max entries "
+                    f"(got {len(self.stop_loss_manual_pips)}, need {self.r_max})"
+                )
+            if any(v <= 0 for v in self.stop_loss_manual_pips):
+                raise ValueError("All stop_loss_manual_pips values must be > 0")
+        # rebuild_enabled is only meaningful when stop_loss is on.  We
+        # silently ignore the flag when SL is off — it simply does not
+        # apply.  complete_cycle_when_empty likewise only does anything
+        # when rebuilds are disabled.
+        if self.complete_cycle_when_empty and not self.stop_loss_enabled:
+            raise ValueError("complete_cycle_when_empty requires stop_loss_enabled to be true")
+        if self.complete_cycle_when_empty and self.rebuild_enabled:
+            raise ValueError("complete_cycle_when_empty requires rebuild_enabled to be false")
 
 
 # ---------------------------------------------------------------------------

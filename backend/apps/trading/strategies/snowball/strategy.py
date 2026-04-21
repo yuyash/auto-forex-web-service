@@ -39,7 +39,7 @@ from apps.trading.strategies.registry import register_strategy
 from apps.trading.strategies.snowball.calculators import (
     counter_interval_pips,
     counter_tp_pips,
-    stop_loss_price,
+    stop_loss_pips,
 )
 from apps.trading.strategies.snowball.enums import CycleStatus, ProtectionLevel
 from apps.trading.strategies.snowball.models import (
@@ -268,9 +268,9 @@ class SnowballStrategy(Strategy):
 
         # Compute stop-loss for this entry at creation time
         if cfg.stop_loss_enabled:
-            next_interval = counter_interval_pips(1, cfg)
-            if next_interval > 0:
-                self._assign_stop_loss(entry, next_interval)
+            sl_pips = stop_loss_pips(1, cfg)
+            if sl_pips > 0:
+                self._assign_stop_loss(entry, sl_pips)
 
         evt = entry.to_open_event(
             timestamp=tick.timestamp,
@@ -1117,9 +1117,9 @@ class SnowballStrategy(Strategy):
 
         # Compute stop-loss for this entry at creation time
         if cfg.stop_loss_enabled:
-            next_interval = counter_interval_pips(slot.index + 1, cfg)
-            if next_interval > 0:
-                self._assign_stop_loss(entry, next_interval)
+            sl_pips = stop_loss_pips(slot.index + 1, cfg)
+            if sl_pips > 0:
+                self._assign_stop_loss(entry, sl_pips)
 
         logger.info(
             "Counter add (%s) in cycle %d: L%d/R%d, units=%d, adverse=%.1f pips",
@@ -1247,9 +1247,9 @@ class SnowballStrategy(Strategy):
 
         # Compute stop-loss for this entry at creation time
         if cfg.stop_loss_enabled:
-            next_interval = counter_interval_pips(1, cfg)
-            if next_interval > 0:
-                self._assign_stop_loss(layer_entry, next_interval)
+            sl_pips = stop_loss_pips(1, cfg)
+            if sl_pips > 0:
+                self._assign_stop_loss(layer_entry, sl_pips)
 
         logger.info(
             "Layer initial L%d/R0 in cycle %d, TP=%.3f",
@@ -1560,45 +1560,29 @@ class SnowballStrategy(Strategy):
     def _assign_stop_loss(
         self,
         entry: Entry,
-        next_interval_pips: Decimal,
+        sl_pips: Decimal,
     ) -> None:
         """Compute and assign a stop-loss price to *entry* at creation time.
 
-        The SL is derived from the hypothetical next entry's price, which is
-        deterministic: ``entry_price ∓ next_interval_pips * pip_size``.
-
-        Formula:
-        - R0 entries use a one-interval stop so the distance to SL matches the
-          distance from R0 to R1.
-        - tp_pips = |close_price - entry_price| / pip_size
-        - next_entry_price = entry_price - next_interval_pips * pip_size  (LONG)
-                             entry_price + next_interval_pips * pip_size  (SHORT)
-        - if tp_pips < next_interval_pips: SL = next_entry_price
-        - else: SL = next_entry_price - next_interval_pips * pip_size  (LONG)
-                     SL = next_entry_price + next_interval_pips * pip_size  (SHORT)
+        ``sl_pips`` is the pip distance between the entry price and the
+        stop-loss price, typically supplied by
+        :func:`stop_loss_pips` for the slot's R index.  LONG entries
+        place the SL below the entry; SHORT entries place it above.
         """
-        tp_pips = abs(entry.close_price - entry.entry_price) / self.pip_size
+        if sl_pips <= 0:
+            return
         if entry.is_long:
-            next_entry_price = entry.entry_price - next_interval_pips * self.pip_size
-            if entry.retracement_count == 0:
-                sl = next_entry_price
-            else:
-                sl = stop_loss_price(tp_pips, next_entry_price, next_interval_pips, self.pip_size)
+            sl = entry.entry_price - sl_pips * self.pip_size
         else:
-            next_entry_price = entry.entry_price + next_interval_pips * self.pip_size
-            if entry.retracement_count == 0 or tp_pips < next_interval_pips:
-                sl = next_entry_price
-            else:
-                sl = next_entry_price + next_interval_pips * self.pip_size
+            sl = entry.entry_price + sl_pips * self.pip_size
         entry.stop_loss_price = sl
         logger.debug(
-            "SL assigned: entry_id=%d L%d/R%d, SL=%.5f (tp_pips=%.1f, next_interval=%.1f)",
+            "SL assigned: entry_id=%d L%d/R%d, SL=%.5f (sl_pips=%.1f)",
             entry.entry_id,
             entry.layer_number,
             entry.retracement_count,
             sl,
-            tp_pips,
-            next_interval_pips,
+            sl_pips,
         )
 
     def _is_stop_loss_temporarily_protected(self, layer: Layer, entry: Entry) -> bool:
@@ -1700,24 +1684,33 @@ class SnowballStrategy(Strategy):
             rebuild_price_offset = entry.rebuild_price_offset + sl_price_drift
             entry.rebuild_price_offset = rebuild_price_offset
 
-            sl_snapshot = StopLossClosedEntry(
-                entry_price=entry.entry_price,
-                close_price=entry.close_price,
-                units=entry.units,
-                direction=entry.direction,
-                role=entry.role,
-                layer_number=entry.layer_number,
-                retracement_count=entry.retracement_count,
-                step=entry.step,
-                root_entry_id=entry.root_entry_id,
-                parent_entry_id=entry.parent_entry_id,
-                cycle_id=cycle.cycle_id,
-                position_id=entry.position_id,
-                lifecycle_realized_pnl=entry.lifecycle_realized_pnl,
-                lifecycle_stop_loss_count=entry.lifecycle_stop_loss_count,
-                rebuild_price_offset=rebuild_price_offset,
-            )
-            slot.close_for_stop_loss(sl_snapshot)
+            if self.config.rebuild_enabled:
+                sl_snapshot = StopLossClosedEntry(
+                    entry_price=entry.entry_price,
+                    close_price=entry.close_price,
+                    units=entry.units,
+                    direction=entry.direction,
+                    role=entry.role,
+                    layer_number=entry.layer_number,
+                    retracement_count=entry.retracement_count,
+                    step=entry.step,
+                    root_entry_id=entry.root_entry_id,
+                    parent_entry_id=entry.parent_entry_id,
+                    cycle_id=cycle.cycle_id,
+                    position_id=entry.position_id,
+                    lifecycle_realized_pnl=entry.lifecycle_realized_pnl,
+                    lifecycle_stop_loss_count=entry.lifecycle_stop_loss_count,
+                    rebuild_price_offset=rebuild_price_offset,
+                )
+                slot.close_for_stop_loss(sl_snapshot)
+            else:
+                # Rebuilds disabled — close the slot permanently so it
+                # cannot be reused or rebuilt.  The grid shrinks on
+                # every SL instead of recovering; once the cycle loses
+                # its last live entry it will be marked COMPLETED (and,
+                # when ``complete_cycle_when_empty`` is set, a fresh
+                # cycle is re-seeded automatically).
+                slot.close(refillable=False)
 
             events.append(close_event)
 
@@ -1736,6 +1729,11 @@ class SnowballStrategy(Strategy):
         position is re-opened in-place.
         """
         if not self.config.stop_loss_enabled:
+            return []
+        if not self.config.rebuild_enabled:
+            # No pending_rebuild snapshots are ever produced in this
+            # mode, so there is nothing to do.  Short-circuit to keep
+            # the tick loop cheap.
             return []
 
         events: list[StrategyEvent] = []
@@ -1906,11 +1904,9 @@ class SnowballStrategy(Strategy):
 
                 # Optionally keep rebuilt positions exempt from further stop-loss closes.
                 if self.config.stop_loss_enabled and not self.config.disable_loss_cut_after_rebuild:
-                    next_interval = counter_interval_pips(
-                        pending.retracement_count + 1, self.config
-                    )
-                    if next_interval > 0:
-                        self._assign_stop_loss(entry, next_interval)
+                    sl_pips_val = stop_loss_pips(pending.retracement_count + 1, self.config)
+                    if sl_pips_val > 0:
+                        self._assign_stop_loss(entry, sl_pips_val)
 
                 slot.complete_rebuild(entry)
 
@@ -2129,7 +2125,27 @@ class SnowballStrategy(Strategy):
                 continue
             dir_cycles = [c for c in active if c.direction == direction]
             if not dir_cycles:
-                # No active or pending cycles — all completed.
+                # No active or pending cycles — all completed.  When
+                # stop-loss is on but rebuilds are off, this is the
+                # normal state reached after every live slot has been
+                # stopped out or taken profit.  Only re-seed in that
+                # regime when the user opted in via
+                # ``complete_cycle_when_empty`` — otherwise the strategy
+                # stays idle for this direction so the operator can
+                # inspect the final cycle without the loop spawning
+                # another one immediately.
+                if (
+                    self.config.stop_loss_enabled
+                    and not self.config.rebuild_enabled
+                    and not self.config.complete_cycle_when_empty
+                ):
+                    logger.debug(
+                        "No active %s cycle but auto re-seed disabled — "
+                        "staying idle (stop_loss_enabled, rebuild_enabled=False, "
+                        "complete_cycle_when_empty=False)",
+                        direction.value.upper(),
+                    )
+                    continue
                 logger.info(
                     "No active %s cycle — creating new cycle",
                     direction.value.upper(),
