@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.41.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.41.3...backend-v1.41.4) (2026-04-21)
+
+
+### Bug Fixes
+
+* **snowball:** re-trigger release-please for cross-layer TP bound fix ([#565](https://github.com/yuyash/auto-forex-web-service/issues/565)) ([575be2d](https://github.com/yuyash/auto-forex-web-service/commit/575be2d0352ed00621ff1894f1954ae65abf4a8a))
+
 ## [1.41.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.41.2...backend-v1.41.3) (2026-04-20)
 
 
