@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.41.6](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.41.5...backend-v1.41.6) (2026-04-21)
+
+
+### Bug Fixes
+
+* **strategy:** restore snowball stop loss auto mode ([#570](https://github.com/yuyash/auto-forex-web-service/issues/570)) ([eca4503](https://github.com/yuyash/auto-forex-web-service/commit/eca45035d9725b955248342c5a37ec3a3c1fb2c6))
+
 ## [1.41.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.41.4...backend-v1.41.5) (2026-04-21)
 
 
