@@ -309,9 +309,10 @@
       "type": "string",
       "title": "Stop Loss Distance Mode",
       "title_ja": "ロスカット幅モード",
-      "description": "How the stop-loss pip distance is calculated per step. Matches the counter-trend interval modes so SL can follow the same shape (flat, decaying) independently of the averaging grid.",
-      "description_ja": "段ごとのロスカット幅（pips）の計算方法。逆行側間隔と同じモードを備えており、平均化グリッドとは独立して同じ形状（一定、減衰など）で設定できます。",
+      "description": "How the stop-loss is calculated. Auto reproduces the legacy Snowball behaviour based on the next interval and TP. Constant uses the same fixed pip distance for every slot. The other modes use a dedicated per-slot pip progression.",
+      "description_ja": "ロスカットの計算方法。自動は旧 Snowball の挙動（次の間隔と TP を使う計算）を再現します。固定は全スロットで同じ pips 幅を使います。その他のモードは専用の段階的 pips 設定を使います。",
       "enum": [
+        "auto",
         "constant",
         "additive",
         "subtractive",
@@ -320,6 +321,7 @@
         "manual"
       ],
       "enum_labels": {
+        "auto": "Auto (Legacy)",
         "constant": "Constant",
         "additive": "Additive",
         "subtractive": "Subtractive",
@@ -328,6 +330,7 @@
         "manual": "Manual"
       },
       "enum_labels_ja": {
+        "auto": "自動（旧挙動）",
         "constant": "固定",
         "additive": "加算",
         "subtractive": "減算",
@@ -335,7 +338,7 @@
         "divisive": "除算",
         "manual": "手動"
       },
-      "default": "constant",
+      "default": "auto",
       "deferDefaultUntilConfigured": true,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
       "group": "Margin Protection",

@@ -165,14 +165,13 @@ class SnowballStrategyConfig:
             for v in sl_manual_raw:
                 stop_loss_manual_pips.append(_parse_decimal(v, "30"))
 
-        # The stop-loss progression parameters default to a simple
-        # constant-pip SL that matches the counter-trend interval head,
-        # so upgrading a config that only supplied ``interval_mode`` /
-        # ``n_pips_head`` preserves the original "SL distance ==
-        # interval head" effective behaviour without inheriting the
-        # interval shape (constant → SL constant by default).  Users
-        # who want decaying or manual SL progressions opt in via the
-        # dedicated ``stop_loss_*`` fields.
+        # Legacy Snowball stop-loss behaviour was derived from the next
+        # counter interval and the slot TP, not from a dedicated flat
+        # pip-distance progression.  Keep that behaviour as the default
+        # ``auto`` mode when upgrading older configs that have no
+        # explicit ``stop_loss_*`` fields.  Users opt into true fixed or
+        # progressive pip-distance SLs via the dedicated stop-loss
+        # fields below.
         n_pips_head = _parse_decimal(raw.get("n_pips_head", "30"), "30")
         n_pips_tail = _parse_decimal(raw.get("n_pips_tail", "14"), "14")
         n_pips_flat_steps = _parse_int(raw.get("n_pips_flat_steps", 2), 2)
@@ -193,7 +192,7 @@ class SnowballStrategyConfig:
             n_pips_gamma=n_pips_gamma,
             interval_mode=interval_mode,
             manual_intervals=manual_intervals,
-            stop_loss_mode=_parse_str(raw.get("stop_loss_mode"), "constant"),
+            stop_loss_mode=_parse_str(raw.get("stop_loss_mode"), "auto"),
             stop_loss_pips_head=_parse_decimal(raw.get("stop_loss_pips_head"), str(n_pips_head)),
             stop_loss_pips_tail=_parse_decimal(raw.get("stop_loss_pips_tail"), str(n_pips_tail)),
             stop_loss_pips_flat_steps=_parse_int(

@@ -852,6 +852,7 @@ const StrategyConfigForm = ({
   // Get description for progression modes
   const getProgressionDescription = (mode: string): string => {
     const descriptions: Record<string, string> = {
+      auto: 'Legacy Snowball stop-loss formula based on next interval and TP',
       constant: 'Same value for every layer / retracement',
       additive: 'Increases by a fixed amount each time (e.g. 10 → 15 → 20)',
       subtractive:
