@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.42.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.42.2...backend-v1.42.3) (2026-04-22)
+
+
+### Bug Fixes
+
+* **strategy:** clamp rebuild entry price to preserve grid ordering ([#584](https://github.com/yuyash/auto-forex-web-service/issues/584)) ([4a5f999](https://github.com/yuyash/auto-forex-web-service/commit/4a5f9996282033d653119ae96b46853c10d6b9da))
+
 ## [1.42.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.42.1...backend-v1.42.2) (2026-04-22)
 
 
