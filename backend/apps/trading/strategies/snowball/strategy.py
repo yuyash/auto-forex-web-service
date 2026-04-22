@@ -545,6 +545,42 @@ class SnowballStrategy(Strategy):
 
         return hard, soft
 
+    def _preceding_entry_bound(
+        self,
+        cycle: "SnowballCycle",
+        layer: "Layer",
+        slot_index: int,
+    ) -> Decimal | None:
+        """Return the tightest entry-price bound from preceding occupied slots.
+
+        For a LONG grid, entries must be descending so the bound is the
+        **minimum** entry price among all occupied slots that precede
+        ``(layer, slot_index)`` in grid traversal order.  For SHORT
+        grids, entries must be ascending so the bound is the
+        **maximum**.  Returns ``None`` when no preceding occupied slot
+        exists.
+        """
+        direction = cycle.direction
+        bound: Decimal | None = None
+
+        for lyr in cycle.grid.layers:
+            if lyr.layer_number > layer.layer_number:
+                continue
+            for s in lyr.slots:
+                if lyr is layer and s.index >= slot_index:
+                    continue
+                if s.entry is None:
+                    continue
+                ep = s.entry.entry_price
+                if bound is None:
+                    bound = ep
+                elif direction == Direction.LONG:
+                    bound = ep if ep < bound else bound
+                else:
+                    bound = ep if ep > bound else bound
+
+        return bound
+
     def _propagate_pending_rebuild_tp(
         self,
         cycle: "SnowballCycle",
@@ -1856,6 +1892,41 @@ class SnowballStrategy(Strategy):
                         trigger_price = pending.entry_price - entry_buffer_price
                 else:
                     trigger_price = pending.entry_price
+
+                # Clamp the trigger price so the rebuilt entry does not
+                # violate the monotonic grid ordering that
+                # ``_validate_grid_ordering`` enforces.  For LONG grids
+                # entries must be descending (earlier slots ≥ later
+                # slots); for SHORT grids they must be ascending.  The
+                # entry buffer can push the trigger past a neighboring
+                # occupied entry — especially when the neighbor and this
+                # slot were opened at the same price (grid exhaustion on
+                # a single tick) and the buffer then shifts this slot's
+                # entry beyond the neighbor.
+                entry_bound = self._preceding_entry_bound(cycle, layer, slot.index)
+                if entry_bound is not None:
+                    if pending.direction == Direction.LONG and trigger_price > entry_bound:
+                        logger.info(
+                            "Rebuild entry clamped to preserve grid ordering: "
+                            "L%d/R%d, trigger=%.5f, bound=%.5f, clamped_to=%.5f",
+                            pending.layer_number,
+                            pending.retracement_count,
+                            trigger_price,
+                            entry_bound,
+                            entry_bound,
+                        )
+                        trigger_price = entry_bound
+                    elif pending.direction == Direction.SHORT and trigger_price < entry_bound:
+                        logger.info(
+                            "Rebuild entry clamped to preserve grid ordering: "
+                            "L%d/R%d, trigger=%.5f, bound=%.5f, clamped_to=%.5f",
+                            pending.layer_number,
+                            pending.retracement_count,
+                            trigger_price,
+                            entry_bound,
+                            entry_bound,
+                        )
+                        trigger_price = entry_bound
 
                 # Check if price has returned to the trigger price
                 hit = False
