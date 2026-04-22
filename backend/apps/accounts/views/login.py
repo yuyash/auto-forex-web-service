@@ -17,6 +17,7 @@ from apps.accounts.models import PublicAccountSettings, User, WhitelistedEmail
 from apps.accounts.serializers import UserLoginSerializer
 from apps.accounts.services.events import SecurityEventService
 from apps.accounts.services.jwt import JWTService
+from apps.accounts.services.sessions import get_or_create_user_session
 from apps.accounts.utils.cookies import set_refresh_cookie
 
 logger: Logger = getLogger(name=__name__)
@@ -287,8 +288,15 @@ class UserLoginView(APIView):
         )
 
         jwt_service = JWTService()
+        user_session = get_or_create_user_session(
+            request,
+            user,
+            ip_address=ip_address,
+            user_agent=request.META.get("HTTP_USER_AGENT", ""),
+        )
         refresh_token = jwt_service.create_refresh_token(
             user,
+            session=user_session,
             ip_address=ip_address,
             user_agent=request.META.get("HTTP_USER_AGENT", ""),
         )

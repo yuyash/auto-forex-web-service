@@ -114,6 +114,7 @@ class JWTService:
         self,
         user: Any,
         *,
+        session: Any | None = None,
         ip_address: str | None = None,
         user_agent: str = "",
     ) -> str:
@@ -128,6 +129,7 @@ class JWTService:
 
         RefreshToken.objects.create(
             user=user,
+            session=session,
             token=token_hash,
             expires_at=expires_at,
             ip_address=ip_address,
@@ -177,10 +179,14 @@ class JWTService:
             # --- Family revocation: detect reuse of a revoked token ----------
             if rt.revoked_at is not None:
                 # Someone is replaying an already-used token -> compromise assumed.
-                self.revoke_all_refresh_tokens(rt.user)
+                if rt.session_id:
+                    self.revoke_refresh_tokens_for_session(rt.session)
+                else:
+                    self.revoke_all_refresh_tokens(rt.user)
                 logger.warning(
-                    "Refresh token reuse detected for user %s - all tokens revoked",
+                    "Refresh token reuse detected for user %s - refresh tokens revoked for %s",
                     rt.user_id,
+                    f"session {rt.session_id}" if rt.session_id else "entire account",
                 )
                 return None
 
@@ -200,10 +206,26 @@ class JWTService:
             new_access = self.generate_token(user)
             new_refresh = self.create_refresh_token(
                 user,
+                session=rt.session,
                 ip_address=ip_address,
                 user_agent=user_agent,
             )
             return new_access, new_refresh, user
+
+    @staticmethod
+    def revoke_refresh_tokens_for_session(session: Any | None) -> int:
+        """Revoke all active refresh tokens bound to one UserSession."""
+        from django.utils import timezone
+
+        from apps.accounts.models import RefreshToken
+
+        if session is None:
+            return 0
+
+        return RefreshToken.objects.filter(
+            session=session,
+            revoked_at__isnull=True,
+        ).update(revoked_at=timezone.now())
 
     @staticmethod
     def revoke_all_refresh_tokens(user: Any) -> int:

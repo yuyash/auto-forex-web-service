@@ -161,13 +161,15 @@ class TestJWTService:
         service = JWTService()
         mock_user = MagicMock()
         mock_user.id = 1
+        mock_session = MagicMock()
 
         with patch("apps.accounts.models.RefreshToken.objects.create") as mock_create:
-            refresh_token = service.create_refresh_token(mock_user)
+            refresh_token = service.create_refresh_token(mock_user, session=mock_session)
 
         assert isinstance(refresh_token, str)
         assert refresh_token
         mock_create.assert_called_once()
+        assert mock_create.call_args.kwargs["session"] == mock_session
         assert mock_create.call_args.kwargs["token"] == JWTService.hash_refresh_token(refresh_token)
         assert mock_create.call_args.kwargs["token"] != refresh_token
 
@@ -178,6 +180,8 @@ class TestJWTService:
             def __init__(self, user: MagicMock) -> None:
                 self.user = user
                 self.user_id = user.id
+                self.session = MagicMock()
+                self.session_id = 99
                 self.revoked_at = None
 
             @property
@@ -229,7 +233,7 @@ class TestJWTService:
                 "create_refresh_token",
                 return_value="new-refresh",
             ) as mock_refresh,
-            patch.object(service, "revoke_all_refresh_tokens") as mock_revoke_family,
+            patch.object(service, "revoke_refresh_tokens_for_session") as mock_revoke_session,
         ):
             with ThreadPoolExecutor(max_workers=2) as executor:
                 futures = [
@@ -242,4 +246,4 @@ class TestJWTService:
         assert results.count(None) == 1
         assert mock_access.call_count == 1
         assert mock_refresh.call_count == 1
-        mock_revoke_family.assert_called_once_with(user)
+        mock_revoke_session.assert_called_once_with(fake_rt.session)

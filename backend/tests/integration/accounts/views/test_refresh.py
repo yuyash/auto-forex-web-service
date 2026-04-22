@@ -7,7 +7,7 @@ import pytest
 from django.test import RequestFactory
 from rest_framework import status
 
-from apps.accounts.models import RefreshToken, User
+from apps.accounts.models import RefreshToken, User, UserSession
 from apps.accounts.services.jwt import JWTService
 from apps.accounts.views.refresh import TokenRefreshView
 
@@ -140,3 +140,44 @@ class TestTokenRefreshView:
         legacy_row.refresh_from_db()
         assert legacy_row.revoked_at is not None
         assert RefreshToken.objects.filter(user=user).count() == 2
+
+    def test_revoked_token_reuse_only_revokes_same_session_family(self) -> None:
+        """Replay detection should not kill refresh tokens for other sessions."""
+        user = self._create_user()
+        session_a = UserSession.objects.create(
+            user=user,
+            session_key="session-a",
+            ip_address="127.0.0.1",
+        )
+        session_b = UserSession.objects.create(
+            user=user,
+            session_key="session-b",
+            ip_address="127.0.0.2",
+        )
+
+        refresh_a = self.jwt.create_refresh_token(user, session=session_a)
+        refresh_b = self.jwt.create_refresh_token(user, session=session_b)
+
+        request = self.factory.post(
+            "/api/accounts/auth/refresh",
+            data=json.dumps({}),
+            content_type="application/json",
+            HTTP_COOKIE=f"refresh_token={refresh_a}",
+        )
+        response = self.view(request)
+        assert response.status_code == status.HTTP_200_OK
+
+        replay_request = self.factory.post(
+            "/api/accounts/auth/refresh",
+            data=json.dumps({}),
+            content_type="application/json",
+            HTTP_COOKIE=f"refresh_token={refresh_a}",
+        )
+        replay_response = self.view(replay_request)
+        assert replay_response.status_code == status.HTTP_401_UNAUTHORIZED
+
+        other_session_token = RefreshToken.objects.get(
+            token=JWTService.hash_refresh_token(refresh_b)
+        )
+        other_session_token.refresh_from_db()
+        assert other_session_token.revoked_at is None

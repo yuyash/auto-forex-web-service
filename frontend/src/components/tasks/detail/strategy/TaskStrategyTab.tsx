@@ -32,11 +32,15 @@ import type {
   StrategyCycle,
   CycleTrade,
   StrategyGridState,
-  StrategyGridSlot,
 } from '../../../../types/strategyVisualization';
 import { StrategyGroupChart } from './StrategyGroupChart';
 import { StrategyGridIndicator } from './StrategyGridIndicator';
 import { PositionLifecycleDialog } from '../PositionLifecycleDialog';
+import {
+  buildDisplayGridState,
+  buildSlotBuildCounts,
+  gridHasPositions,
+} from './gridState';
 import {
   formatAppNumber,
   formatAppPercent,
@@ -119,104 +123,6 @@ function formatCyclePnl(
     total: formatSignedCurrency(total, currencyCode, 1),
     color:
       total > 0 ? 'success.main' : total < 0 ? 'error.main' : 'text.secondary',
-  };
-}
-
-function getSlotBuildCountKey(layer: number, slot: number): string {
-  return `${layer}:${slot}`;
-}
-
-/**
- * Check if a grid state has any non-empty slots (i.e. positions exist).
- */
-function gridHasPositions(gridState: StrategyGridState): boolean {
-  return gridState.layers.some((layer) =>
-    layer.slots.some((slot) => slot.state !== 'empty')
-  );
-}
-
-function buildSlotBuildCounts(
-  cycle: StrategyCycle | null
-): Record<string, number> {
-  if (!cycle) return {};
-
-  const uniquePositionIdsBySlot = new Map<string, Set<string>>();
-
-  for (const trade of cycle.trades) {
-    if (trade.execution_method !== 'open_position') continue;
-    if (!trade.position_id) continue;
-
-    const isInitialEntry = trade.id === cycle.cycle_id;
-    const layer = isInitialEntry ? 1 : trade.layer_index;
-    const slot = isInitialEntry ? 0 : trade.retracement_count;
-
-    if (layer == null || slot == null) continue;
-
-    const key = getSlotBuildCountKey(layer, slot);
-    const positionIds = uniquePositionIdsBySlot.get(key) ?? new Set<string>();
-    positionIds.add(trade.position_id);
-    uniquePositionIdsBySlot.set(key, positionIds);
-  }
-
-  return Object.fromEntries(
-    Array.from(uniquePositionIdsBySlot.entries(), ([key, positionIds]) => [
-      key,
-      positionIds.size,
-    ])
-  );
-}
-
-/**
- * Extend a cycle's grid_state to include layers that were historically reached
- * (based on trade data) but are no longer present in the current grid state.
- * This is needed for completed cycles where the grid may have been trimmed
- * to only L1 after all positions were closed.
- */
-function extendGridStateFromTrades(
-  gridState: StrategyGridState | null | undefined,
-  slotBuildCounts: Record<string, number>
-): StrategyGridState | null | undefined {
-  if (!gridState) return gridState;
-
-  // Find the max layer from build counts
-  let maxLayerFromTrades = 0;
-  for (const key of Object.keys(slotBuildCounts)) {
-    const [layerStr] = key.split(':');
-    const layer = parseInt(layerStr, 10);
-    if (!isNaN(layer) && layer > maxLayerFromTrades) {
-      maxLayerFromTrades = layer;
-    }
-  }
-
-  const maxLayerInGrid =
-    gridState.layers.length > 0
-      ? Math.max(...gridState.layers.map((l) => l.layer))
-      : 0;
-
-  // If trades show higher layers than the grid, extend the grid
-  if (maxLayerFromTrades <= maxLayerInGrid) return gridState;
-
-  const slotsPerLayer = gridState.summary.slot_count_per_layer || 1;
-  const extendedLayers = [...gridState.layers];
-  let { empty, layer_count } = gridState.summary;
-
-  for (let layer = maxLayerInGrid + 1; layer <= maxLayerFromTrades; layer++) {
-    const slots: StrategyGridSlot[] = Array.from(
-      { length: slotsPerLayer },
-      (_, i) => ({ slot: i, state: 'empty' as const, position_id: null })
-    );
-    extendedLayers.push({ layer, slots });
-    empty += slotsPerLayer;
-    layer_count += 1;
-  }
-
-  return {
-    layers: extendedLayers,
-    summary: {
-      ...gridState.summary,
-      layer_count,
-      empty,
-    },
   };
 }
 
@@ -352,11 +258,7 @@ export function TaskStrategyTab({
   const sidebarExtendedGridStates = useMemo(() => {
     const map = new Map<string, StrategyGridState | null | undefined>();
     for (const cycle of displayedCycles) {
-      const counts = buildSlotBuildCounts(cycle);
-      map.set(
-        cycle.cycle_id,
-        extendGridStateFromTrades(cycle.grid_state, counts)
-      );
+      map.set(cycle.cycle_id, buildDisplayGridState(cycle));
     }
     return map;
   }, [displayedCycles]);
@@ -395,12 +297,8 @@ export function TaskStrategyTab({
     [selectedCycle]
   );
   const selectedCycleExtendedGridState = useMemo(
-    () =>
-      extendGridStateFromTrades(
-        selectedCycle?.grid_state,
-        selectedCycleSlotBuildCounts
-      ),
-    [selectedCycle?.grid_state, selectedCycleSlotBuildCounts]
+    () => buildDisplayGridState(selectedCycle),
+    [selectedCycle]
   );
 
   const {
