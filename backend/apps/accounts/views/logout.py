@@ -11,9 +11,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.middlewares.utils import get_client_ip
-from apps.accounts.models import User, UserSession
+from apps.accounts.models import RefreshToken, User
 from apps.accounts.services.events import SecurityEventService
 from apps.accounts.services.jwt import JWTService
+from apps.accounts.services.sessions import get_user_session_for_request
 from apps.accounts.utils.cookies import clear_refresh_cookie
 
 logger: Logger = getLogger(name=__name__)
@@ -67,13 +68,37 @@ class UserLogoutView(APIView):
         auth_user = cast(User, user_obj)
 
         ip_address = get_client_ip(request)
+        current_session = get_user_session_for_request(request, auth_user)
+        sessions_terminated = 0
+        if current_session and current_session.is_active:
+            current_session.terminate()
+            sessions_terminated = 1
 
-        active_sessions = UserSession.objects.filter(user=auth_user, is_active=True)
-        for session in active_sessions:
-            session.terminate()
+        refresh_cookie_name = getattr(request, "COOKIES", {}).get
+        refresh_token_value = str(
+            refresh_cookie_name("refresh_token", "")
+            if callable(refresh_cookie_name)
+            else request.COOKIES.get("refresh_token", "")
+        ).strip()
+        revoked_count = 0
+        if refresh_token_value:
+            token_hash = JWTService.hash_refresh_token(refresh_token_value)
+            refresh_token = (
+                RefreshToken.objects.filter(user=auth_user, token=token_hash)
+                .select_related("session")
+                .first()
+            )
+            if refresh_token is None:
+                refresh_token = (
+                    RefreshToken.objects.filter(user=auth_user, token=refresh_token_value)
+                    .select_related("session")
+                    .first()
+                )
+            if refresh_token and refresh_token.session_id:
+                revoked_count = JWTService.revoke_refresh_tokens_for_session(refresh_token.session)
 
-        # Revoke all refresh tokens for this user
-        revoked_count = JWTService.revoke_all_refresh_tokens(auth_user)
+        if revoked_count == 0 and current_session is not None:
+            revoked_count = JWTService.revoke_refresh_tokens_for_session(current_session)
 
         logger.info(
             "User %s logged out successfully from %s",
@@ -84,7 +109,7 @@ class UserLogoutView(APIView):
                 "email": auth_user.email,
                 "ip_address": ip_address,
                 "user_agent": request.META.get("HTTP_USER_AGENT", ""),
-                "sessions_terminated": active_sessions.count(),
+                "sessions_terminated": sessions_terminated,
                 "refresh_tokens_revoked": revoked_count,
             },
         )
@@ -97,7 +122,7 @@ class UserLogoutView(APIView):
         response = Response(
             {
                 "message": "Logged out successfully.",
-                "sessions_terminated": active_sessions.count(),
+                "sessions_terminated": sessions_terminated,
             },
             status=status.HTTP_200_OK,
         )

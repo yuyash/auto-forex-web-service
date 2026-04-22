@@ -5,10 +5,9 @@ from logging import Logger, getLogger
 
 from django.core.cache import cache
 from django.http import HttpRequest, HttpResponse
-from django.utils import timezone
-
-from apps.accounts.models import User, UserSession
+from apps.accounts.models import User
 from apps.accounts.services.events import SecurityEventService
+from apps.accounts.services.sessions import get_or_create_user_session
 
 from .limiter import RateLimiter
 from .utils import get_authenticated_user, get_client_ip
@@ -55,6 +54,7 @@ class SecurityMonitoringMiddleware:
         if auth_user and response.status_code == 200:
             user_agent = request.META.get("HTTP_USER_AGENT", "")
             self._create_or_update_user_session(
+                request,
                 auth_user,
                 ip_address,
                 user_agent,
@@ -69,6 +69,7 @@ class SecurityMonitoringMiddleware:
 
     def _create_or_update_user_session(
         self,
+        request: HttpRequest,
         user: User,
         ip_address: str,
         user_agent: str,
@@ -78,31 +79,17 @@ class SecurityMonitoringMiddleware:
         Uses a short-lived cache key to avoid hitting the database on every
         single authenticated request.
         """
-        cache_key = f"session_exists:{user.pk}:{ip_address}"
+        session = getattr(request, "session", None)
+        session_key = getattr(session, "session_key", None)
+        cache_key = f"session_exists:{user.pk}:{session_key or ip_address}"
         if cache.get(cache_key):
             return
 
-        existing_session = UserSession.objects.filter(
-            user=user, ip_address=ip_address, is_active=True
-        ).exists()
-
-        if not existing_session:
-            session_key = f"{user.pk}_{ip_address}_{timezone.now().timestamp()}"
-            UserSession.objects.create(
-                user=user,
-                session_key=session_key,
-                ip_address=ip_address,
-                user_agent=user_agent,
-            )
-            logger.info(
-                "Created session for user %s from %s",
-                user.email,
-                ip_address,
-                extra={
-                    "user_id": user.pk,
-                    "email": user.email,
-                    "ip_address": ip_address,
-                },
-            )
+        get_or_create_user_session(
+            request,
+            user,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
 
         cache.set(cache_key, True, timeout=_SESSION_CHECK_CACHE_TTL)

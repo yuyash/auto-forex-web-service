@@ -92,17 +92,25 @@ class TestUserLogoutView:
             id=1,
             pk=1,
         )
+        request.COOKIES["refresh_token"] = "valid_refresh_token"
+        request.session = MagicMock(session_key="session-key")
         view = UserLogoutView()
-
-        active_sessions = MagicMock()
-        active_sessions.count.return_value = 0
+        mock_session = MagicMock(is_active=True)
+        mock_refresh_token = MagicMock(session_id=123, session=mock_session)
 
         with (
-            patch("apps.accounts.views.logout.UserSession") as mock_sessions,
+            patch(
+                "apps.accounts.views.logout.get_user_session_for_request",
+                return_value=mock_session,
+            ),
+            patch("apps.accounts.views.logout.RefreshToken.objects") as mock_tokens,
             patch("apps.accounts.views.logout.JWTService") as mock_jwt,
         ):
-            mock_sessions.objects.filter.return_value = active_sessions
-            mock_jwt.revoke_all_refresh_tokens.return_value = 1
+            mock_tokens.filter.return_value.select_related.return_value.first.return_value = (
+                mock_refresh_token
+            )
+            mock_jwt.hash_refresh_token.return_value = "hashed-token"
+            mock_jwt.revoke_refresh_tokens_for_session.return_value = 1
             response = view.post(request)
 
         assert response.status_code == status.HTTP_200_OK
