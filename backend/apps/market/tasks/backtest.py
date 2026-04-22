@@ -384,6 +384,17 @@ class BacktestTickPublisherRunner:
         last_ts: datetime | None = None
         backpressure_waiting = False
 
+        # Window-level tracking so we can emit an INFO log for every
+        # publisher "batch" (every ``progress_every`` ticks) that
+        # records the simulated-time range of the ticks written to
+        # Redis in that window along with wall-clock time.  This makes
+        # it trivially easy to answer "when did the publisher send
+        # ticks covering simulated time X?" without having to parse
+        # per-tick logs.
+        progress_every = max(batch_size * 10, 1)
+        window_first_ts: datetime | None = None
+        window_count = 0
+
         logger.info(
             f"[PUBLISHER:PUBLISH] Query created, starting iteration - request_id={request_id}"
         )
@@ -481,16 +492,33 @@ class BacktestTickPublisherRunner:
 
             published += 1
             last_ts = ts
+            if window_first_ts is None:
+                window_first_ts = ts
+            window_count += 1
 
-            if published % max(batch_size * 10, 1) == 0:
+            if published % progress_every == 0:
                 logger.info(
-                    f"[PUBLISHER:PUBLISH] Progress update - request_id={request_id}, "
-                    f"published={published}"
+                    f"[PUBLISHER:BATCH] Published batch - request_id={request_id}, "
+                    f"published={published}, window_count={window_count}, "
+                    f"window_first_ts={window_first_ts.isoformat() if window_first_ts else None}, "
+                    f"window_last_ts={ts.isoformat() if ts else None}"
                 )
                 self.task_service.heartbeat(
                     status_message=f"published={published}",
                     meta_update={"published": published},
                 )
+                window_first_ts = None
+                window_count = 0
+
+        # Flush the tail window that did not reach ``progress_every``
+        # so the final simulated-time coverage is always logged.
+        if window_count > 0 and window_first_ts is not None and last_ts is not None:
+            logger.info(
+                f"[PUBLISHER:BATCH] Published batch (tail) - request_id={request_id}, "
+                f"published={published}, window_count={window_count}, "
+                f"window_first_ts={window_first_ts.isoformat()}, "
+                f"window_last_ts={last_ts.isoformat()}"
+            )
 
         logger.info(
             f"[PUBLISHER:PUBLISH] Iteration complete - request_id={request_id}, "
@@ -554,6 +582,83 @@ class BacktestTickPublisherRunner:
         except (IndexError, TypeError, ValueError):
             return 0
 
+    @staticmethod
+    def _group_lag(client: Any, channel: str, consumer_group: str) -> int | None:
+        """Return the consumer group's total lag (undelivered + pending).
+
+        ``XINFO GROUPS`` reports a ``lag`` field per group which counts
+        the entries that have been added to the stream but not yet
+        delivered to any consumer in the group, i.e. those that the
+        subscriber would obtain from its next ``XREADGROUP ... >``.
+        Adding the group's ``pending`` count gives the true queue depth
+        the subscriber still has to work through.  This is the signal
+        we must back-pressure on — ``XPENDING`` alone only counts
+        entries the subscriber has already read with ``XREADGROUP`` but
+        has not yet ACKed, so if the subscriber stalls before even
+        reading an entry, ``XPENDING`` stays at zero and the publisher
+        would happily keep adding entries, eventually forcing MAXLEN
+        trim to drop undelivered data.
+
+        Returns ``None`` when ``XINFO GROUPS`` does not expose ``lag``
+        (older Redis or fakeredis).  Callers must fall back to
+        ``XLEN`` + ``XPENDING`` heuristics in that case.
+        """
+        try:
+            groups = client.xinfo_groups(channel)
+        except Exception:
+            return None
+
+        if not isinstance(groups, (list, tuple)) or not groups:
+            return None
+
+        for group in groups:
+            name = None
+            lag = None
+            pending = None
+            if isinstance(group, dict):
+                name = group.get("name")
+                lag = group.get("lag")
+                pending = group.get("pending")
+            else:
+                try:
+                    mapping = dict(zip(group[::2], group[1::2], strict=False))
+                except (TypeError, ValueError):
+                    continue
+                name = mapping.get("name")
+                lag = mapping.get("lag")
+                pending = mapping.get("pending")
+
+            if str(name) != consumer_group:
+                continue
+            if lag is None:
+                return None
+            try:
+                lag_int = int(lag)
+            except (TypeError, ValueError):
+                return None
+            try:
+                pending_int = int(pending) if pending is not None else 0
+            except (TypeError, ValueError):
+                pending_int = 0
+            return lag_int + pending_int
+
+        return None
+
+    def _consumer_lag(self, client: Any, channel: str, consumer_group: str) -> int:
+        """Best-effort consumer lag: prefer XINFO GROUPS lag, fall back
+        to XPENDING. ``XLEN`` is a very conservative fallback because
+        it does not shrink on ACK, but it is only used when the
+        previous two probes are unavailable.
+        """
+        group_lag = self._group_lag(client, channel, consumer_group)
+        if group_lag is not None:
+            return group_lag
+        pending = self._xpending_count(client, channel, consumer_group)
+        try:
+            return max(pending, int(client.xlen(channel)))
+        except Exception:
+            return pending
+
     def _apply_backpressure(
         self,
         *,
@@ -566,19 +671,31 @@ class BacktestTickPublisherRunner:
         already_waiting: bool,
         consumer_group: str,
     ) -> bool:
-        """Sleep while more entries are pending (unACKed) than allowed.
+        """Sleep while more entries are pending than allowed.
+
+        Uses :meth:`_consumer_lag` (XINFO GROUPS ``lag`` + ``pending``)
+        so ticks that the publisher has written but the subscriber has
+        not yet read via ``XREADGROUP ... >`` still count toward the
+        queue depth.  This is crucial: ``XPENDING`` alone only tracks
+        entries that were delivered then not ACKed, so a stalled
+        subscriber would leave ``XPENDING`` at zero and the publisher
+        would happily keep adding entries until ``MAXLEN`` trim
+        silently dropped undelivered data.  We hit that exact failure
+        mode once (see task 788010da in April 2026, which produced a
+        five-day tick gap because ~700k undelivered entries aged out
+        of a 200k stream).
 
         Returns the updated ``waiting`` flag so the caller can avoid
-        spamming the log.  We only log once at the start and end of each
-        back-pressure episode.
+        spamming the log.  We only log once at the start and end of
+        each back-pressure episode.
         """
-        pending = self._xpending_count(client, channel, consumer_group)
+        lag = self._consumer_lag(client, channel, consumer_group)
 
-        if pending < high_watermark:
-            if already_waiting and pending <= low_watermark:
+        if lag < high_watermark:
+            if already_waiting and lag <= low_watermark:
                 logger.info(
                     f"[PUBLISHER:BACKPRESSURE] Consumer caught up, resuming - "
-                    f"request_id={request_id}, pending={pending}"
+                    f"request_id={request_id}, lag={lag}"
                 )
                 return False
             return already_waiting
@@ -586,7 +703,7 @@ class BacktestTickPublisherRunner:
         if not already_waiting:
             logger.info(
                 f"[PUBLISHER:BACKPRESSURE] Consumer falling behind, pausing - "
-                f"request_id={request_id}, pending={pending}, "
+                f"request_id={request_id}, lag={lag}, "
                 f"high_watermark={high_watermark}, low_watermark={low_watermark}"
             )
 
@@ -599,14 +716,14 @@ class BacktestTickPublisherRunner:
             if self._should_stop_publishing(request_id):
                 logger.info(
                     f"[PUBLISHER:BACKPRESSURE] Stop signal received while paused - "
-                    f"request_id={request_id}, pending={pending}"
+                    f"request_id={request_id}, lag={lag}"
                 )
                 return True
-            pending = self._xpending_count(client, channel, consumer_group)
-            if pending <= low_watermark:
+            lag = self._consumer_lag(client, channel, consumer_group)
+            if lag <= low_watermark:
                 logger.info(
                     f"[PUBLISHER:BACKPRESSURE] Drained below low watermark - "
-                    f"request_id={request_id}, pending={pending}"
+                    f"request_id={request_id}, lag={lag}"
                 )
                 return False
 

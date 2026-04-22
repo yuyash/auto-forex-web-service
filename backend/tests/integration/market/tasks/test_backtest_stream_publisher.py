@@ -129,14 +129,18 @@ class TestBacktestStreamPublisher:
         groups = fake_client.xinfo_groups(stream_key)
         assert any(g.get("name") in ("backtest", b"backtest") for g in groups)
 
-    def test_backpressure_pauses_on_pending_then_resumes_on_acks(self, settings) -> None:
-        """Backpressure is driven by XPENDING, not XLEN.
+    def test_backpressure_pauses_on_lag_then_resumes_on_drain(self, settings) -> None:
+        """Backpressure is driven by XINFO GROUPS lag + pending, not XLEN.
 
-        We rig XPENDING to report a full queue for the first few
-        checks, then to report the queue draining as if the consumer
-        ACKed.  The publisher must pause and subsequently resume.  If
-        the implementation still used XLEN it would never resume
-        because XLEN does not shrink on ACK.
+        We rig ``XINFO GROUPS`` to report a large combined lag for the
+        first few checks, then to report the queue draining to
+        simulate the consumer catching up.  The publisher must pause
+        and subsequently resume.  Unlike the old XPENDING-only guard,
+        this signal also accounts for entries the subscriber hasn't
+        even read yet (``lag``), so a subscriber that stalls before
+        its first ``XREADGROUP`` still applies back-pressure — that
+        is the failure mode that previously produced silent MAXLEN
+        trimming of undelivered ticks.
         """
         settings.MARKET_BACKTEST_STREAM_MAXLEN = 10_000
         settings.MARKET_BACKTEST_BACKPRESSURE_HIGH_WATERMARK = 100
@@ -146,13 +150,13 @@ class TestBacktestStreamPublisher:
         task = _make_task(suffix="bp")
         _seed_ticks(3, start=task.start_time)
 
-        # First two xpending calls: pending=200 (paused).  Then pending
+        # First three xinfo_groups calls: lag=200 (paused). Then lag
         # drops below low_watermark so the publisher resumes.
-        pending_values = [200, 200, 200, 30, 30, 0, 0, 0, 0, 0, 0]
+        lag_values = [200, 200, 200, 30, 30, 0, 0, 0, 0, 0, 0]
 
-        def fake_xpending(_stream_key, _group):
-            val = pending_values.pop(0) if pending_values else 0
-            return {"pending": val, "min": None, "max": None, "consumers": []}
+        def fake_xinfo_groups(_stream_key):
+            val = lag_values.pop(0) if lag_values else 0
+            return [{"name": "backtest", "lag": val, "pending": 0}]
 
         xadd_calls: list = []
 
@@ -161,7 +165,8 @@ class TestBacktestStreamPublisher:
             return b"1-0"
 
         fake_client = MagicMock()
-        fake_client.xpending.side_effect = fake_xpending
+        fake_client.xinfo_groups.side_effect = fake_xinfo_groups
+        fake_client.xpending.return_value = {"pending": 0}
         fake_client.xadd.side_effect = fake_xadd
         fake_client.delete.return_value = 0
         fake_client.xgroup_create.return_value = True
@@ -183,10 +188,10 @@ class TestBacktestStreamPublisher:
         )
         assert len(eof_calls) == 1
 
-        # XPENDING is the mechanism we rely on — assert we actually
-        # consulted it during the run (multiple times because of the
-        # backpressure loop).
-        assert fake_client.xpending.call_count >= 3
+        # XINFO GROUPS is the primary signal now — assert we consulted
+        # it during the run (multiple times because of the backpressure
+        # loop).
+        assert fake_client.xinfo_groups.call_count >= 3
 
     def test_publisher_uses_maxlen_trimming(self, settings) -> None:
         settings.MARKET_BACKTEST_STREAM_MAXLEN = 123

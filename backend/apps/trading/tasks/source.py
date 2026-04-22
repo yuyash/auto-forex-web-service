@@ -495,6 +495,17 @@ class RedisStreamTickDataSource(TickDataSource):
         reconnect_count = 0
         max_reconnect_attempts = 5
         total_ticks = 0
+        # Window-level tracking so the subscriber emits an INFO log
+        # for every ``progress_every`` ticks received with the
+        # simulated-time range of the ticks in that window.  Wall-
+        # clock time (from the log prefix) tells us when we received
+        # them, ts_first/ts_last tells us which simulated-time slice
+        # they represent.  Paired with the publisher's matching
+        # [PUBLISHER:BATCH] log this makes the hand-off observable.
+        progress_every = max(self.batch_size * 10, 1)
+        window_first_ts = None
+        window_last_ts = None
+        window_count = 0
         # IDs that we have read from the group but not yet ACKed.  The
         # executor can still reject/drop ticks (invalid payloads etc.)
         # after we've consumed them from the stream; those entries must
@@ -629,6 +640,27 @@ class RedisStreamTickDataSource(TickDataSource):
                     for entry_id, fields in stream_entries:
                         self._last_seen_id = entry_id
                         pending_ack.append(entry_id)
+
+                        # Redis returns ``fields=None`` for a pending
+                        # entry whose payload has been trimmed (MAXLEN)
+                        # between the XADD that placed it in this
+                        # consumer's Pending Entries List and the
+                        # XREADGROUP call that re-delivered it.  That
+                        # is silent data loss, so we log loudly and
+                        # ACK the tombstone to keep the pending list
+                        # clean.  The surviving defensive gap check in
+                        # the executor will still catch any resulting
+                        # simulated-time gap.
+                        if fields is None:
+                            logger.error(
+                                "[SUBSCRIBER:TRIMMED] Entry %s on %s was trimmed "
+                                "before redelivery — a tick was LOST. total_ticks=%s",
+                                entry_id,
+                                self.stream_key,
+                                total_ticks,
+                            )
+                            continue
+
                         kind = str(fields.get("type") or "tick")
 
                         if kind == "eof":
@@ -662,6 +694,27 @@ class RedisStreamTickDataSource(TickDataSource):
 
                         batch.append(tick)
                         total_ticks += 1
+                        if window_first_ts is None:
+                            window_first_ts = tick.timestamp
+                        window_last_ts = tick.timestamp
+                        window_count += 1
+
+                        if total_ticks % progress_every == 0:
+                            logger.info(
+                                "[SUBSCRIBER:BATCH] Consumed batch - "
+                                "stream=%s total_ticks=%s window_count=%s "
+                                "window_first_ts=%s window_last_ts=%s "
+                                "last_stream_id=%s",
+                                self.stream_key,
+                                total_ticks,
+                                window_count,
+                                window_first_ts.isoformat() if window_first_ts else None,
+                                window_last_ts.isoformat() if window_last_ts else None,
+                                self._last_seen_id,
+                            )
+                            window_first_ts = None
+                            window_last_ts = None
+                            window_count = 0
 
                         if len(batch) >= self.batch_size:
                             _flush_acks()
@@ -677,6 +730,23 @@ class RedisStreamTickDataSource(TickDataSource):
                     break
 
         finally:
+            # Emit a final [SUBSCRIBER:BATCH] tail log so the last
+            # partial window is also observable.  Helpful to see
+            # exactly which simulated-time tick was the last one this
+            # consumer actually processed.
+            if window_count > 0:
+                logger.info(
+                    "[SUBSCRIBER:BATCH] Consumed batch (tail) - "
+                    "stream=%s total_ticks=%s window_count=%s "
+                    "window_first_ts=%s window_last_ts=%s "
+                    "last_stream_id=%s",
+                    self.stream_key,
+                    total_ticks,
+                    window_count,
+                    window_first_ts.isoformat() if window_first_ts else None,
+                    window_last_ts.isoformat() if window_last_ts else None,
+                    self._last_seen_id,
+                )
             _flush_acks()
             self.close()
 

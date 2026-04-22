@@ -1102,12 +1102,26 @@ class TaskExecutor:
                 max_gap_hours=self._max_backtest_tick_gap_hours(),
             ):
                 gap = delivered_ts - loop.last_delivered_tick_timestamp
+                # Log the task/execution identifiers and the gap endpoints
+                # in a structured, grep-friendly form.  When paired with
+                # the publisher's [PUBLISHER:BATCH] and subscriber's
+                # [SUBSCRIBER:BATCH] logs (both emit simulated-time
+                # window first/last ts with wall-clock), this is enough
+                # to answer "which batch did we skip?" directly from the
+                # log stream.
                 msg = (
-                    "Suspicious tick gap detected in backtest stream - "
-                    f"previous_ts={loop.last_delivered_tick_timestamp}, "
-                    f"current_ts={delivered_ts}, gap={gap}. "
-                    "This usually indicates silent message loss; aborting to "
-                    "prevent a corrupted backtest result."
+                    "[EXECUTOR:TICK_GAP] Suspicious tick gap detected in backtest stream - "
+                    f"task_id={self.task.pk}, "
+                    f"execution_id={self.task.execution_id}, "
+                    f"previous_ts={loop.last_delivered_tick_timestamp.isoformat()}, "
+                    f"current_ts={delivered_ts.isoformat()}, "
+                    f"gap_seconds={gap.total_seconds():.0f}, "
+                    f"gap_hours={gap.total_seconds() / 3600:.2f}, "
+                    f"ticks_processed={loop.state.ticks_processed}. "
+                    "Aborting to prevent a corrupted backtest result. "
+                    "Cross-reference [PUBLISHER:BATCH] / [SUBSCRIBER:BATCH] "
+                    "log lines covering this simulated-time window to see "
+                    "who dropped the batch."
                 )
                 logger.error(msg)
                 loop.stopped_early = True
