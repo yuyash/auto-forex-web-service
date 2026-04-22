@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.56.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.1...frontend-v1.56.2) (2026-04-22)
+
+
+### Bug Fixes
+
+* **strategy:** show historical slot loss-cut states ([#582](https://github.com/yuyash/auto-forex-web-service/issues/582)) ([c3ab2b4](https://github.com/yuyash/auto-forex-web-service/commit/c3ab2b49143bc7f1fbdacc8862a95917effa87a2))
+
 ## [1.56.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.0...frontend-v1.56.1) (2026-04-21)
 
 
