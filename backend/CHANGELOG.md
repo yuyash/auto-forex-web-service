@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.42.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.42.0...backend-v1.42.1) (2026-04-22)
+
+
+### Bug Fixes
+
+* **backtest:** prevent silent tick loss and add batch-level observabi… ([#580](https://github.com/yuyash/auto-forex-web-service/issues/580)) ([84de5a3](https://github.com/yuyash/auto-forex-web-service/commit/84de5a37018faa81c7c4afbf4bbacd94f2ae41ed))
+* **backtest:** prevent silent tick loss and add batch-level observability ([84de5a3](https://github.com/yuyash/auto-forex-web-service/commit/84de5a37018faa81c7c4afbf4bbacd94f2ae41ed))
+
 ## [1.42.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.41.8...backend-v1.42.0) (2026-04-21)
 
 
