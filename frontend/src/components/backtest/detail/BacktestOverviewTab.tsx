@@ -237,6 +237,16 @@ export function BacktestOverviewTab({
                 </Typography>
               </Box>
             )}
+            <Box>
+              <Typography variant="caption" color="text.secondary">
+                {t('common:labels.sellOnStop')}
+              </Typography>
+              <Typography variant="body1">
+                {task.sell_at_completion
+                  ? t('common:labels.yes')
+                  : t('common:labels.no')}
+              </Typography>
+            </Box>
             {tracemallocEnabled && (
               <Box>
                 <Typography variant="caption" color="text.secondary">
