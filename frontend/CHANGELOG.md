@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.56.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.3...frontend-v1.56.4) (2026-04-23)
+
+
+### Bug Fixes
+
+* backtest sell on stop field mapping ([#588](https://github.com/yuyash/auto-forex-web-service/issues/588)) ([fa0ed47](https://github.com/yuyash/auto-forex-web-service/commit/fa0ed478b9122f616096e0b0cc677df411caf2d5))
+
 ## [1.56.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.2...frontend-v1.56.3) (2026-04-22)
 
 
