@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.42.4](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.42.3...backend-v1.42.4) (2026-04-23)
+
+
+### Bug Fixes
+
+* **strategy:** guard layer initial entry against grid ordering violation ([#586](https://github.com/yuyash/auto-forex-web-service/issues/586)) ([f27ef62](https://github.com/yuyash/auto-forex-web-service/commit/f27ef624d7ffecafd2752d22a9fef9aba8114937))
+
 ## [1.42.3](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.42.2...backend-v1.42.3) (2026-04-22)
 
 
