@@ -1254,6 +1254,45 @@ class SnowballStrategy(Strategy):
         cycle.add_layer(layer)
 
         price = tick.ask if direction == Direction.LONG else tick.bid
+
+        # Guard: the new layer's entry must not violate the monotonic
+        # grid ordering.  For LONG grids, entries are descending so the
+        # new entry must be ≤ every occupied entry in earlier layers.
+        # This can fail when intermediate layers were emptied by shrink
+        # or stop-loss and the market has since moved past the stuck
+        # entries in even earlier layers.  In that case we skip the
+        # layer creation — the strategy will retry on a later tick.
+        for earlier_layer in cycle.grid.layers:
+            if earlier_layer.layer_number >= layer.layer_number:
+                continue
+            for s in earlier_layer.slots:
+                if s.entry is None:
+                    continue
+                if direction == Direction.LONG and price > s.entry.entry_price:
+                    logger.info(
+                        "Skipping layer initial L%d/R0: entry %.5f would exceed "
+                        "L%d/R%d entry %.5f (grid ordering)",
+                        layer.layer_number,
+                        price,
+                        s.entry.layer_number,
+                        s.entry.retracement_count,
+                        s.entry.entry_price,
+                    )
+                    cycle.grid.layers.remove(layer)
+                    return []
+                if direction == Direction.SHORT and price < s.entry.entry_price:
+                    logger.info(
+                        "Skipping layer initial L%d/R0: entry %.5f would be below "
+                        "L%d/R%d entry %.5f (grid ordering)",
+                        layer.layer_number,
+                        price,
+                        s.entry.layer_number,
+                        s.entry.retracement_count,
+                        s.entry.entry_price,
+                    )
+                    cycle.grid.layers.remove(layer)
+                    return []
+
         layer_entry = Entry.open(
             state=ss,
             tick=tick,
