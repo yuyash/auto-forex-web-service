@@ -54,7 +54,7 @@ export interface BacktestTaskCreateData {
   instrument: string;
   tick_granularity?: string;
   tick_window_value_mode?: string;
-  sell_at_completion?: boolean;
+  sell_on_stop?: boolean;
   hedging_enabled?: boolean;
   drain_duration_hours?: number;
   market_idle_pre_close_minutes?: number;
@@ -107,7 +107,7 @@ export interface BacktestTaskUpdateData {
   instrument?: string;
   tick_granularity?: string;
   tick_window_value_mode?: string;
-  sell_at_completion?: boolean;
+  sell_on_stop?: boolean;
   hedging_enabled?: boolean;
   drain_duration_hours?: number;
   market_idle_pre_close_minutes?: number;
