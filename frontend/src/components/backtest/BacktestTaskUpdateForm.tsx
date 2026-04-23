@@ -224,7 +224,7 @@ export default function BacktestTaskUpdateForm({
           instrument: data.instrument,
           tick_granularity: data.tick_granularity,
           tick_window_value_mode: data.tick_window_value_mode,
-          sell_at_completion: data.sell_at_completion,
+          sell_on_stop: data.sell_at_completion,
           hedging_enabled: data.hedging_enabled,
           drain_duration_hours: data.drain_duration_hours,
           market_idle_pre_close_minutes: data.market_idle_pre_close_minutes,
