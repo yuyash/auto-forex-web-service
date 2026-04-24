@@ -32,7 +32,7 @@ from apps.trading.services.runtime_metrics import (
 from apps.trading.services.unrealized_pnl import update_unrealized_pnl
 from apps.trading.tasks.source import TickDataSource
 from apps.trading.tasks.state import StateManager
-from apps.trading.utils import format_money
+from apps.trading.utils import format_money, quote_to_account_rate
 
 if TYPE_CHECKING:
     from apps.trading.services.market_schedule import MarketSessionConfig
@@ -582,7 +582,7 @@ class TaskExecutor:
         # allocates a new execution_id and the task is expected to replay
         # from ``task.start_time``, so there is nothing to restore.
         if resumed:
-            self._restore_metric_counters()
+            self._restore_metric_counters(state=state)
 
         logger.info("Engine started, events_count=%d", len(result.events))
         self._persist_config_snapshot()
@@ -1270,12 +1270,50 @@ class TaskExecutor:
         positions = self.order_service.get_open_positions(instrument=self.instrument)
         self._runtime_metrics.sync_open_positions(positions)
 
-    def _restore_metric_counters(self) -> None:
-        """Restore cumulative metric counters from DB for resumed executions."""
+    def _restore_metric_counters(self, *, state: ExecutionState) -> None:
+        """Restore cumulative metric counters for resumed executions.
+
+        Prefer the persisted runtime metrics on ``ExecutionState`` so
+        pause/resume keeps continuity. Fall back to DB aggregation when
+        metrics are unavailable (legacy rows).
+        """
         from django.db.models import Case, F, Sum, Value, When
 
         from apps.trading.models.positions import Position
         from apps.trading.models.trades import Trade
+
+        account_currency = getattr(self.task, "account_currency", "") or getattr(
+            getattr(self.task, "oanda_account", None), "currency", ""
+        )
+        strategy_state = state.strategy_state if isinstance(state.strategy_state, dict) else {}
+        persisted_metrics = (
+            strategy_state.get("metrics") if isinstance(strategy_state.get("metrics"), dict) else {}
+        )
+
+        if persisted_metrics:
+            realized_pnl = self._to_decimal_metric(persisted_metrics.get("realized_pnl"))
+            realized_pnl_quote = self._to_decimal_metric(
+                persisted_metrics.get("realized_pnl_quote")
+            )
+            if realized_pnl_quote == Decimal("0") and realized_pnl != Decimal("0"):
+                last_mid = self._to_decimal_metric(state.last_tick_price)
+                conversion = quote_to_account_rate(
+                    self.instrument,
+                    last_mid if last_mid > 0 else Decimal("1"),
+                    str(account_currency or ""),
+                )
+                if conversion > 0:
+                    realized_pnl_quote = realized_pnl / conversion
+
+            self._runtime_metrics.restore_counters(
+                realized_pnl=realized_pnl,
+                realized_pnl_quote=realized_pnl_quote,
+                total_trades=self._to_int_metric(persisted_metrics.get("total_trades")),
+                closed_positions=self._to_int_metric(persisted_metrics.get("closed_positions")),
+                winning_trades=self._to_int_metric(persisted_metrics.get("winning_trades")),
+                losing_trades=self._to_int_metric(persisted_metrics.get("losing_trades")),
+            )
+            return
 
         base_filter: dict = {
             "task_type": self.task_type.value,
@@ -1337,8 +1375,18 @@ class TaskExecutor:
             ),
         )
 
+        realized_pnl_quote = agg["realized_pnl"] or Decimal("0")
+        last_mid = self._to_decimal_metric(state.last_tick_price)
+        conversion = quote_to_account_rate(
+            self.instrument,
+            last_mid if last_mid > 0 else Decimal("1"),
+            str(account_currency or ""),
+        )
+        realized_pnl = realized_pnl_quote * conversion if conversion > 0 else realized_pnl_quote
+
         self._runtime_metrics.restore_counters(
-            realized_pnl=agg["realized_pnl"] or Decimal("0"),
+            realized_pnl=realized_pnl,
+            realized_pnl_quote=realized_pnl_quote,
             total_trades=Trade.objects.filter(
                 **base_filter, execution_method="open_position"
             ).count(),
@@ -1346,6 +1394,30 @@ class TaskExecutor:
             winning_trades=agg["winning"] or 0,
             losing_trades=agg["losing"] or 0,
         )
+
+    @staticmethod
+    def _to_decimal_metric(value: object) -> Decimal:
+        """Parse metric payload values into Decimal safely."""
+        if isinstance(value, Decimal):
+            return value
+        if value in (None, ""):
+            return Decimal("0")
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, TypeError, ValueError):
+            return Decimal("0")
+
+    @staticmethod
+    def _to_int_metric(value: object) -> int:
+        """Parse metric payload values into int safely."""
+        if isinstance(value, int):
+            return value
+        if value in (None, ""):
+            return 0
+        try:
+            return int(str(value))
+        except (TypeError, ValueError):
+            return 0
 
     def _update_common_metrics(self, state: ExecutionState, tick) -> None:
         """Merge strategy-agnostic runtime metrics into state.strategy_state.metrics."""

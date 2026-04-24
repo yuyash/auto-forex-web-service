@@ -1046,6 +1046,101 @@ class TestCommonRuntimeMetrics:
         assert metrics["margin_ratio"] == "0"
         assert "current_atr" in metrics
 
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_restore_metric_counters_prefers_persisted_metrics(self, mock_handler):
+        from apps.trading.models import BacktestTask
+        from apps.trading.tasks.executor import TaskExecutor
+
+        task = MagicMock(spec=BacktestTask)
+        task.pk = uuid4()
+        task.instrument = "USD_JPY"
+        task.pip_size = Decimal("0.01")
+        task.initial_balance = Decimal("100000")
+        task.account_currency = "USD"
+        task.config.config_dict = {}
+        task.execution_id = uuid4()
+
+        executor = TaskExecutor(
+            task=task,
+            engine=MagicMock(),
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=MagicMock(),
+            state_manager=MagicMock(),
+        )
+        executor._runtime_metrics.restore_counters = MagicMock()  # type: ignore[method-assign]
+
+        state = MagicMock()
+        state.last_tick_price = Decimal("150")
+        state.strategy_state = {
+            "metrics": {
+                "realized_pnl": "120.5",
+                "realized_pnl_quote": "18075",
+                "total_trades": "10",
+                "closed_positions": "6",
+                "winning_trades": "4",
+                "losing_trades": "2",
+            }
+        }
+
+        executor._restore_metric_counters(state=state)
+
+        executor._runtime_metrics.restore_counters.assert_called_once_with(
+            realized_pnl=Decimal("120.5"),
+            realized_pnl_quote=Decimal("18075"),
+            total_trades=10,
+            closed_positions=6,
+            winning_trades=4,
+            losing_trades=2,
+        )
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_restore_metric_counters_derives_quote_when_missing(self, mock_handler):
+        from apps.trading.models import BacktestTask
+        from apps.trading.tasks.executor import TaskExecutor
+
+        task = MagicMock(spec=BacktestTask)
+        task.pk = uuid4()
+        task.instrument = "USD_JPY"
+        task.pip_size = Decimal("0.01")
+        task.initial_balance = Decimal("100000")
+        task.account_currency = "USD"
+        task.config.config_dict = {}
+        task.execution_id = uuid4()
+
+        executor = TaskExecutor(
+            task=task,
+            engine=MagicMock(),
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=MagicMock(),
+            state_manager=MagicMock(),
+        )
+        executor._runtime_metrics.restore_counters = MagicMock()  # type: ignore[method-assign]
+
+        state = MagicMock()
+        state.last_tick_price = Decimal("150")
+        state.strategy_state = {
+            "metrics": {
+                "realized_pnl": "100",
+                "total_trades": "3",
+                "closed_positions": "2",
+                "winning_trades": "1",
+                "losing_trades": "1",
+            }
+        }
+
+        executor._restore_metric_counters(state=state)
+
+        executor._runtime_metrics.restore_counters.assert_called_once_with(
+            realized_pnl=Decimal("100"),
+            realized_pnl_quote=Decimal("15000"),
+            total_trades=3,
+            closed_positions=2,
+            winning_trades=1,
+            losing_trades=1,
+        )
+
 
 class TestHandleEmptyBatch:
     """Tests for empty-batch handling in the executor loop."""
