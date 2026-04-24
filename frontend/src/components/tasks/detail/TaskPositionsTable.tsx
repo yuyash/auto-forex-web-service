@@ -17,8 +17,6 @@ import {
   Alert,
   TablePagination,
   IconButton,
-  InputAdornment,
-  TextField,
   Tooltip,
   ToggleButtonGroup,
   ToggleButton,
@@ -27,8 +25,6 @@ import {
 import {
   History as HistoryIcon,
   Settings as SettingsIcon,
-  Search as SearchIcon,
-  Clear as ClearIcon,
 } from '@mui/icons-material';
 import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
@@ -57,7 +53,7 @@ import {
 } from '../../../utils/persistentState';
 import { formatAppNumber } from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
-import { DateRangeFilter } from '../../common/DateRangeFilter';
+import { TaskPositionFilterBar } from './TaskPositionFilterBar';
 import { useTaskPositionFilters } from './useTaskPositionFilters';
 
 type ViewMode = 'all' | 'byDirection' | 'byStatus';
@@ -1427,97 +1423,29 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
             />
           </Box>
         </Box>
-        <Box
-          sx={{
-            mb: 2,
-            display: 'flex',
-            gap: 1,
-            flexWrap: 'wrap',
-            alignItems: 'center',
+        <TaskPositionFilterBar
+          cycleIdFilter={cycleIdFilter}
+          onCycleIdFilterChange={setCycleIdFilter}
+          hasCycleIdFilter={hasCycleIdFilter}
+          isCycleIdFilterValid={isCycleIdFilterValid}
+          positionIdFilter={positionIdFilter}
+          onPositionIdFilterChange={(value) => {
+            setPositionIdFilter(value);
+            setAllPage(0);
           }}
-        >
-          <TextField
-            size="small"
-            placeholder={t('tables.positions.cycleIdFilter')}
-            value={cycleIdFilter}
-            onChange={(e) => setCycleIdFilter(e.target.value)}
-            error={hasCycleIdFilter && !isCycleIdFilterValid}
-            helperText={
-              hasCycleIdFilter && !isCycleIdFilterValid
-                ? t('tables.positions.invalidCycleId')
-                : undefined
-            }
-            sx={{ width: 280 }}
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" />
-                  </InputAdornment>
-                ),
-                endAdornment: cycleIdFilter ? (
-                  <InputAdornment position="end">
-                    <IconButton
-                      size="small"
-                      onClick={() => setCycleIdFilter('')}
-                      edge="end"
-                    >
-                      <ClearIcon fontSize="small" />
-                    </IconButton>
-                  </InputAdornment>
-                ) : null,
-              },
-            }}
-          />
-          <TextField
-            size="small"
-            placeholder={t('tables.positions.positionIdFilter')}
-            value={positionIdFilter}
-            onChange={(e) => {
-              setPositionIdFilter(e.target.value);
-              setAllPage(0);
-            }}
-            error={hasPositionIdFilter && !isPositionIdFilterValid}
-            helperText={
-              hasPositionIdFilter && !isPositionIdFilterValid
-                ? t('tables.positions.invalidPositionId')
-                : undefined
-            }
-            sx={{ width: 280 }}
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" />
-                  </InputAdornment>
-                ),
-                endAdornment: positionIdFilter ? (
-                  <InputAdornment position="end">
-                    <IconButton
-                      size="small"
-                      onClick={() => setPositionIdFilter('')}
-                      edge="end"
-                    >
-                      <ClearIcon fontSize="small" />
-                    </IconButton>
-                  </InputAdornment>
-                ) : null,
-              },
-            }}
-          />
-          <DateRangeFilter
-            from={dateFrom}
-            to={dateTo}
-            onFromChange={(v) => {
-              setDateFrom(v);
-              setAllPage(0);
-            }}
-            onToChange={(v) => {
-              setDateTo(v);
-              setAllPage(0);
-            }}
-          />
-        </Box>
+          hasPositionIdFilter={hasPositionIdFilter}
+          isPositionIdFilterValid={isPositionIdFilterValid}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onDateFromChange={(value) => {
+            setDateFrom(value);
+            setAllPage(0);
+          }}
+          onDateToChange={(value) => {
+            setDateTo(value);
+            setAllPage(0);
+          }}
+        />
         <DataTable
           columns={columns}
           data={data}
@@ -1661,82 +1589,16 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       {/* === By Status mode (legacy 4-table layout) === */}
       {viewMode === 'byStatus' && (
         <>
-          <Box
-            sx={{
-              mb: 2,
-              display: 'flex',
-              gap: 1,
-              flexWrap: 'wrap',
-              alignItems: 'center',
-            }}
-          >
-            <TextField
-              size="small"
-              placeholder={t('tables.positions.cycleIdFilter')}
-              value={cycleIdFilter}
-              onChange={(e) => setCycleIdFilter(e.target.value)}
-              error={hasCycleIdFilter && !isCycleIdFilterValid}
-              helperText={
-                hasCycleIdFilter && !isCycleIdFilterValid
-                  ? t('tables.positions.invalidCycleId')
-                  : undefined
-              }
-              sx={{ width: 280 }}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
-                  endAdornment: cycleIdFilter ? (
-                    <InputAdornment position="end">
-                      <IconButton
-                        size="small"
-                        onClick={() => setCycleIdFilter('')}
-                        edge="end"
-                      >
-                        <ClearIcon fontSize="small" />
-                      </IconButton>
-                    </InputAdornment>
-                  ) : null,
-                },
-              }}
-            />
-            <TextField
-              size="small"
-              placeholder={t('tables.positions.positionIdFilter')}
-              value={positionIdFilter}
-              onChange={(e) => setPositionIdFilter(e.target.value)}
-              error={hasPositionIdFilter && !isPositionIdFilterValid}
-              helperText={
-                hasPositionIdFilter && !isPositionIdFilterValid
-                  ? t('tables.positions.invalidPositionId')
-                  : undefined
-              }
-              sx={{ width: 280 }}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
-                  endAdornment: positionIdFilter ? (
-                    <InputAdornment position="end">
-                      <IconButton
-                        size="small"
-                        onClick={() => setPositionIdFilter('')}
-                        edge="end"
-                      >
-                        <ClearIcon fontSize="small" />
-                      </IconButton>
-                    </InputAdornment>
-                  ) : null,
-                },
-              }}
-            />
-          </Box>
+          <TaskPositionFilterBar
+            cycleIdFilter={cycleIdFilter}
+            onCycleIdFilterChange={setCycleIdFilter}
+            hasCycleIdFilter={hasCycleIdFilter}
+            isCycleIdFilterValid={isCycleIdFilterValid}
+            positionIdFilter={positionIdFilter}
+            onPositionIdFilterChange={setPositionIdFilter}
+            hasPositionIdFilter={hasPositionIdFilter}
+            isPositionIdFilterValid={isPositionIdFilterValid}
+          />
           {renderPair(
             t('tables.positions.closedPositions'),
             closedLongPos,

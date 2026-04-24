@@ -5,7 +5,7 @@
  * time-series data (for charts) and the latest snapshot (for overview).
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useReducer, useRef } from 'react';
 import type { TaskType } from '../types/common';
 import {
   fetchLatestMetrics,
@@ -43,6 +43,82 @@ export interface UseTaskMetricsResult {
   refresh: () => Promise<void>;
 }
 
+interface MetricsState {
+  data: MetricPoint[];
+  latest: MetricPoint | null;
+  dataSource: string;
+  resumeCursorTimestamp: string | null;
+  consistencyWarnings: Array<Record<string, unknown>>;
+  isLoading: boolean;
+  error: Error | null;
+}
+
+type MetricsAction =
+  | { type: 'loading' }
+  | { type: 'failed'; error: Error }
+  | {
+      type: 'latestLoaded';
+      latest: MetricPoint | null;
+      dataSource: string;
+      resumeCursorTimestamp: string | null;
+      consistencyWarnings: Array<Record<string, unknown>>;
+    }
+  | {
+      type: 'seriesLoaded';
+      data: MetricPoint[];
+      latest: MetricPoint | null;
+      dataSource: string;
+      resumeCursorTimestamp: string | null;
+      consistencyWarnings: Array<Record<string, unknown>>;
+    }
+  | { type: 'clearSeries' }
+  | { type: 'loaded' };
+
+const initialMetricsState: MetricsState = {
+  data: [],
+  latest: null,
+  dataSource: 'unknown',
+  resumeCursorTimestamp: null,
+  consistencyWarnings: [],
+  isLoading: false,
+  error: null,
+};
+
+function metricsReducer(
+  state: MetricsState,
+  action: MetricsAction
+): MetricsState {
+  switch (action.type) {
+    case 'loading':
+      return { ...state, isLoading: true, error: null };
+    case 'failed':
+      return { ...state, isLoading: false, error: action.error };
+    case 'latestLoaded':
+      return {
+        ...state,
+        latest: action.latest,
+        dataSource: action.dataSource,
+        resumeCursorTimestamp: action.resumeCursorTimestamp,
+        consistencyWarnings: action.consistencyWarnings,
+      };
+    case 'seriesLoaded':
+      return {
+        ...state,
+        data: action.data,
+        latest: action.latest,
+        dataSource: action.dataSource,
+        resumeCursorTimestamp: action.resumeCursorTimestamp,
+        consistencyWarnings: action.consistencyWarnings,
+      };
+    case 'clearSeries':
+      return { ...state, data: [] };
+    case 'loaded':
+      return { ...state, isLoading: false };
+    default:
+      return state;
+  }
+}
+
 export function useTaskMetrics({
   taskId,
   taskType,
@@ -54,33 +130,22 @@ export function useTaskMetrics({
   fetchSeries = true,
   pollingInterval = 0,
 }: UseTaskMetricsOptions): UseTaskMetricsResult {
-  const [data, setData] = useState<MetricPoint[]>([]);
-  const [latest, setLatest] = useState<MetricPoint | null>(null);
-  const [dataSource, setDataSource] = useState('unknown');
-  const [resumeCursorTimestamp, setResumeCursorTimestamp] = useState<
-    string | null
-  >(null);
-  const [consistencyWarnings, setConsistencyWarnings] = useState<
-    Array<Record<string, unknown>>
-  >([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  const [state, dispatch] = useReducer(metricsReducer, initialMetricsState);
   const mountedRef = useRef(true);
   const latestTimestampRef = useRef<string | undefined>(undefined);
   const inFlightRef = useRef(false);
   const dataRef = useRef<MetricPoint[]>([]);
 
   useEffect(() => {
-    dataRef.current = data;
-  }, [data]);
+    dataRef.current = state.data;
+  }, [state.data]);
 
   const fetchData = useCallback(
     async (incremental = false) => {
       if (!taskId || !enabled) return;
       if (inFlightRef.current) return;
       inFlightRef.current = true;
-      setIsLoading(true);
-      setError(null);
+      dispatch({ type: 'loading' });
       try {
         if (!fetchSeries) {
           const latestPage = await fetchLatestMetrics({
@@ -89,10 +154,13 @@ export function useTaskMetrics({
             executionRunId,
           });
           if (mountedRef.current) {
-            setLatest(latestPage.result);
-            setDataSource(latestPage.data_source);
-            setResumeCursorTimestamp(latestPage.resume_cursor_timestamp);
-            setConsistencyWarnings(latestPage.consistency_warnings);
+            dispatch({
+              type: 'latestLoaded',
+              latest: latestPage.result,
+              dataSource: latestPage.data_source,
+              resumeCursorTimestamp: latestPage.resume_cursor_timestamp,
+              consistencyWarnings: latestPage.consistency_warnings,
+            });
           }
           return;
         }
@@ -123,19 +191,25 @@ export function useTaskMetrics({
           latestTimestampRef.current = nextLatest
             ? new Date(nextLatest.t * 1000).toISOString()
             : latestTimestampRef.current;
-          setData(nextData);
-          setLatest(nextLatest);
-          setDataSource(page.data_source);
-          setResumeCursorTimestamp(page.resume_cursor_timestamp);
-          setConsistencyWarnings(page.consistency_warnings);
+          dispatch({
+            type: 'seriesLoaded',
+            data: nextData,
+            latest: nextLatest,
+            dataSource: page.data_source,
+            resumeCursorTimestamp: page.resume_cursor_timestamp,
+            consistencyWarnings: page.consistency_warnings,
+          });
         }
       } catch (err) {
         if (mountedRef.current) {
-          setError(err instanceof Error ? err : new Error(String(err)));
+          dispatch({
+            type: 'failed',
+            error: err instanceof Error ? err : new Error(String(err)),
+          });
         }
       } finally {
         if (mountedRef.current) {
-          setIsLoading(false);
+          dispatch({ type: 'loaded' });
         }
         inFlightRef.current = false;
       }
@@ -162,19 +236,10 @@ export function useTaskMetrics({
   useEffect(() => {
     latestTimestampRef.current = undefined;
     if (!fetchSeries) {
-      setData([]);
+      dispatch({ type: 'clearSeries' });
     }
     fetchData();
-  }, [
-    taskId,
-    taskType,
-    executionRunId,
-    interval,
-    since,
-    until,
-    enabled,
-    fetchSeries,
-  ]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchData, fetchSeries]);
 
   useEffect(() => {
     if (!pollingInterval || pollingInterval <= 0 || !enabled) return;
@@ -183,13 +248,13 @@ export function useTaskMetrics({
   }, [pollingInterval, fetchData, enabled]);
 
   return {
-    data,
-    latest,
-    dataSource,
-    resumeCursorTimestamp,
-    consistencyWarnings,
-    isLoading,
-    error,
+    data: state.data,
+    latest: state.latest,
+    dataSource: state.dataSource,
+    resumeCursorTimestamp: state.resumeCursorTimestamp,
+    consistencyWarnings: state.consistencyWarnings,
+    isLoading: state.isLoading,
+    error: state.error,
     refresh: fetchData,
   };
 }

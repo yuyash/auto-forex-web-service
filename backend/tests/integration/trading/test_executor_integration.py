@@ -21,6 +21,7 @@ from apps.trading.models import (
     TradingEvent,
 )
 from apps.trading.order import OrderService
+from apps.trading.tasks.execution_state_store import ExecutionStateConflict
 from apps.trading.tasks.executor import BacktestExecutor, TaskExecutor, TradingExecutor
 from tests.integration.factories import (
     BacktestTaskFactory,
@@ -207,6 +208,29 @@ class TestSaveState:
         assert reloaded.ticks_processed == 100
         assert reloaded.current_balance == Decimal("10500")
         assert reloaded.last_tick_timestamp is not None
+
+    def test_rejects_stale_state_version(self):
+        executor = _make_executor()
+
+        state = ExecutionState.objects.create(
+            task_type=TaskType.BACKTEST,
+            task_id=executor.task.pk,
+            execution_id=executor.task.execution_id,
+            strategy_state={},
+            current_balance=Decimal("10000"),
+            ticks_processed=0,
+        )
+        stale_state = ExecutionState.objects.get(pk=state.pk)
+
+        state.ticks_processed = 1
+        executor.save_state(state)
+
+        stale_state.ticks_processed = 2
+        with pytest.raises(ExecutionStateConflict):
+            executor.save_state(stale_state)
+
+        reloaded = ExecutionState.objects.get(pk=state.pk)
+        assert reloaded.ticks_processed == 1
 
 
 @pytest.mark.django_db

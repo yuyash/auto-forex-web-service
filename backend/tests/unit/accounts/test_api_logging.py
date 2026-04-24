@@ -53,6 +53,9 @@ class TestCustomExceptionHandler:
 
         assert response is not None
         assert response.status_code == 400
+        assert response.data["error"] == "Validation error"
+        assert response.data["error_code"] == "invalid"
+        assert "password" in response.data
         mock_warning.assert_called_once()
         extra = mock_warning.call_args.kwargs["extra"]
         assert extra["status_code"] == 400

@@ -6,6 +6,7 @@ OANDA API access uses a real practice account via GitHub Secrets.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -42,7 +43,8 @@ TICK_CSV = FIXTURES_DIR / "tick_data_usd_jpy.csv"
 def django_db_setup(django_db_blocker):
     """Create tables and load tick data fixture once per session."""
     with django_db_blocker.unblock():
-        call_command("migrate", "--run-syncdb", verbosity=0)
+        if os.getenv("E2E_DB_PREMIGRATED") != "true":
+            call_command("migrate", "--run-syncdb", verbosity=0)
         if TICK_CSV.exists():
             call_command("load_data", from_csv=str(TICK_CSV))
 
