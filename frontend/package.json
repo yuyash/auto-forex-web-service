@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
+    "test:e2e:report": "playwright show-report --host 127.0.0.1 --port 9323",
     "test:visual": "playwright test tests/e2e/visual.spec.ts --project=chromium",
     "test:visual:update": "playwright test tests/e2e/visual.spec.ts --project=chromium --update-snapshots",
     "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
