@@ -125,4 +125,26 @@ describe('DataTable', () => {
       screen.getByRole('region', { name: 'Test table' })
     ).toBeInTheDocument();
   });
+
+  it('uses explicit column widths so resizing one column does not stretch others', () => {
+    const fixedColumns: Column<TestRow>[] = [
+      { id: 'id', label: 'ID', width: 80 },
+      { id: 'name', label: 'Name', width: 160 },
+      { id: 'value', label: 'Value', width: 120 },
+    ];
+
+    const { container } = render(
+      <DataTable columns={fixedColumns} data={data} />
+    );
+
+    const table = container.querySelector('table');
+    const columnsInDom = Array.from(container.querySelectorAll('col'));
+
+    expect(table).toHaveStyle({ width: '360px' });
+    expect(columnsInDom.map((column) => column.getAttribute('style'))).toEqual([
+      'width: 80px;',
+      'width: 160px;',
+      'width: 120px;',
+    ]);
+  });
 });

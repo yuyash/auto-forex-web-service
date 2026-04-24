@@ -282,8 +282,16 @@ function DataTable<T extends object>({
         sum + (columnWidths[colId] ?? column.width ?? column.minWidth ?? 120)
       );
     }, selectionWidth);
-    return Math.max(480, columnWidth);
+    return Math.max(1, columnWidth);
   }, [columnWidths, columns, selectable]);
+
+  const getColumnWidth = useCallback(
+    (column: Column<T>): number => {
+      const colId = String(column.id);
+      return columnWidths[colId] ?? column.width ?? column.minWidth ?? 120;
+    },
+    [columnWidths]
+  );
 
   // Real-time updates effect
   React.useEffect(() => {
@@ -297,12 +305,11 @@ function DataTable<T extends object>({
   }, [enableRealTimeUpdates, onRefresh]);
 
   const getColumnStyle = (column: Column<T>): React.CSSProperties => {
-    const colId = String(column.id);
-    const w = columnWidths[colId] ?? column.width;
+    const w = getColumnWidth(column);
     return {
-      width: w ? `${w}px` : undefined,
-      minWidth: column.minWidth ?? 40,
-      maxWidth: w ? `${w}px` : undefined,
+      width: `${w}px`,
+      minWidth: `${w}px`,
+      maxWidth: `${w}px`,
       position: 'relative',
       overflow: 'hidden',
       textOverflow: 'ellipsis',
@@ -331,19 +338,34 @@ function DataTable<T extends object>({
   };
 
   // Render loading skeleton
+  const colGroup = (
+    <colgroup>
+      {selectable && <col style={{ width: 50 }} />}
+      {columns.map((column) => (
+        <col
+          key={String(column.id)}
+          style={{ width: getColumnWidth(column) }}
+        />
+      ))}
+    </colgroup>
+  );
+
   if (isLoading && data.length === 0) {
     return (
-      <Paper sx={{ width: '100%', overflow: 'hidden' }}>
+      <Paper sx={{ width: '100%', minWidth: 0, overflow: 'hidden' }}>
         <TableContainer
           sx={{
             maxHeight: tableMaxHeight ?? 'calc(100vh - 640px)',
             overflowX: 'auto',
+            width: '100%',
+            minWidth: 0,
           }}
         >
           <Table
             stickyHeader={stickyHeader}
-            sx={{ tableLayout: 'fixed', minWidth: tableMinWidth }}
+            sx={{ tableLayout: 'fixed', width: `${tableMinWidth}px` }}
           >
+            {colGroup}
             <TableHead>
               <TableRow>
                 {selectable && (
@@ -405,7 +427,7 @@ function DataTable<T extends object>({
 
   return (
     <Paper
-      sx={{ width: '100%', overflow: 'hidden' }}
+      sx={{ width: '100%', minWidth: 0, overflow: 'hidden' }}
       role="region"
       aria-label={ariaLabel || 'Data table'}
     >
@@ -413,12 +435,15 @@ function DataTable<T extends object>({
         sx={{
           maxHeight: tableMaxHeight ?? 'calc(100vh - 640px)',
           overflowX: 'auto',
+          width: '100%',
+          minWidth: 0,
         }}
       >
         <Table
           stickyHeader={stickyHeader}
-          sx={{ tableLayout: 'fixed', minWidth: tableMinWidth }}
+          sx={{ tableLayout: 'fixed', width: `${tableMinWidth}px` }}
         >
+          {colGroup}
           <TableHead>
             <TableRow>
               {selectable && (
