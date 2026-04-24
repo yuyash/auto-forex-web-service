@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.42.6](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.42.5...backend-v1.42.6) (2026-04-24)
+
+
+### Refactoring
+
+* codebase quality pass ([#590](https://github.com/yuyash/auto-forex-web-service/issues/590)) ([6046edd](https://github.com/yuyash/auto-forex-web-service/commit/6046edd32a3763f56feed0fb81f140c3406f18ba))
+
 ## [1.42.5](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.42.4...backend-v1.42.5) (2026-04-23)
 
 
