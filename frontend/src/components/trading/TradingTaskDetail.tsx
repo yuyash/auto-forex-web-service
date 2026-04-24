@@ -114,6 +114,7 @@ export const TradingTaskDetail: React.FC = () => {
   } = useTabConfig('trading_detail', defaultTabs);
   const tabParam = searchParams.get('tab') || 'overview';
   const visibleTabIds = visibleTabs.map((tab) => tab.id);
+  const activeTabId = visibleTabIds.includes(tabParam) ? tabParam : 'overview';
 
   const {
     optimisticStatus,
@@ -174,6 +175,14 @@ export const TradingTaskDetail: React.FC = () => {
   const [metricsInterval, setMetricsInterval] = useState(0);
   const [metricsSince, setMetricsSince] = useState('');
   const [metricsUntil, setMetricsUntil] = useState('');
+  const [metricsNowMs, setMetricsNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (metricsUntil || task?.completed_at) return;
+    if (!shouldPollTaskStatus(currentStatus)) return;
+    const id = window.setInterval(() => setMetricsNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, [currentStatus, metricsUntil, task?.completed_at]);
 
   const effectiveMetricsInterval = useMemo(() => {
     if (metricsInterval !== 0) return metricsInterval;
@@ -189,14 +198,12 @@ export const TradingTaskDetail: React.FC = () => {
       ? new Date(metricsUntil).getTime() / 1000
       : task?.completed_at
         ? new Date(task.completed_at).getTime() / 1000
-        : task?.started_at
-          ? new Date(task.started_at).getTime() / 1000
-          : 0;
+        : metricsNowMs / 1000;
     if (start && end > start) {
       return computeAutoInterval(end - start);
     }
     return 1;
-  }, [metricsInterval, metricsSince, metricsUntil, task]);
+  }, [metricsInterval, metricsSince, metricsUntil, metricsNowMs, task]);
 
   const metricsResult = useTaskMetrics({
     taskId,
@@ -206,6 +213,7 @@ export const TradingTaskDetail: React.FC = () => {
     since: metricsSince ? new Date(metricsSince).toISOString() : undefined,
     until: metricsUntil ? new Date(metricsUntil).toISOString() : undefined,
     enabled: !!taskId,
+    fetchSeries: activeTabId === 'metrics',
     pollingInterval:
       !isViewingHistorical && shouldPollTaskStatus(currentStatus) ? 30000 : 0,
   });
@@ -217,7 +225,7 @@ export const TradingTaskDetail: React.FC = () => {
       }
     : null;
 
-  const activeTabIndex = Math.max(0, visibleTabIds.indexOf(tabParam));
+  const activeTabIndex = Math.max(0, visibleTabIds.indexOf(activeTabId));
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     const next: Record<string, string> = {
       tab: visibleTabIds[newValue] || 'overview',

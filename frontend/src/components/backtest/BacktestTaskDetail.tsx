@@ -119,6 +119,7 @@ export const BacktestTaskDetail: React.FC = () => {
   // Get tab from URL, default to 'overview'
   const tabParam = searchParams.get('tab') || 'overview';
   const visibleTabIds = visibleTabs.map((t) => t.id);
+  const activeTabId = visibleTabIds.includes(tabParam) ? tabParam : 'overview';
 
   const {
     optimisticStatus,
@@ -209,6 +210,7 @@ export const BacktestTaskDetail: React.FC = () => {
     since: metricsSince ? new Date(metricsSince).toISOString() : undefined,
     until: metricsUntil ? new Date(metricsUntil).toISOString() : undefined,
     enabled: !!taskId,
+    fetchSeries: activeTabId === 'metrics',
     pollingInterval:
       !isViewingHistorical && shouldPollTaskStatus(currentStatus) ? 30000 : 0,
   });
@@ -221,7 +223,7 @@ export const BacktestTaskDetail: React.FC = () => {
     : null;
 
   // Derive tab value from URL parameter (use this for rendering)
-  const activeTabIndex = Math.max(0, visibleTabIds.indexOf(tabParam));
+  const activeTabIndex = Math.max(0, visibleTabIds.indexOf(activeTabId));
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     const tabName = visibleTabIds[newValue] || 'overview';

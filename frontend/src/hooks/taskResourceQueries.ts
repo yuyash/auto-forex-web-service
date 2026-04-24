@@ -65,29 +65,36 @@ interface TaskSummaryResponse {
 
 type TaskListParams = BacktestTaskListParams | TradingTaskListParams;
 type TaskEntity = BacktestTask | TradingTask;
+const POLLING_STATUSES = new Set([
+  'starting',
+  'running',
+  'paused',
+  'idle',
+  'draining',
+  'stopping',
+]);
+
+function parseNumber(value: string | number | null | undefined): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseNullableNumber(
+  value: string | number | null | undefined
+): number | null {
+  if (value == null) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 
 export function shouldPollTaskStatus(status: string | undefined): boolean {
-  return (
-    status === 'starting' ||
-    status === 'running' ||
-    status === 'paused' ||
-    status === 'idle' ||
-    status === 'draining' ||
-    status === 'stopping'
-  );
+  return status != null && POLLING_STATUSES.has(status);
 }
 
 export function shouldEnableRealtimeTaskUpdates(
   status: string | undefined
 ): boolean {
-  return (
-    status === 'starting' ||
-    status === 'running' ||
-    status === 'paused' ||
-    status === 'idle' ||
-    status === 'draining' ||
-    status === 'stopping'
-  );
+  return shouldPollTaskStatus(status);
 }
 
 export function createTaskListQuery<TTask extends TaskEntity>(
@@ -164,8 +171,8 @@ export function createTaskSummaryQuery(
         return {
           timestamp: d.timestamp ?? null,
           pnl: {
-            realized: parseFloat(String(d.pnl?.realized ?? 0)) || 0,
-            unrealized: parseFloat(String(d.pnl?.unrealized ?? 0)) || 0,
+            realized: parseNumber(d.pnl?.realized),
+            unrealized: parseNumber(d.pnl?.unrealized),
           },
           counts: {
             totalTrades: d.counts?.total_trades ?? 0,
@@ -177,26 +184,16 @@ export function createTaskSummaryQuery(
             losingTrades: d.counts?.losing_trades ?? 0,
           },
           execution: {
-            currentBalance:
-              d.execution?.current_balance != null
-                ? parseFloat(String(d.execution.current_balance))
-                : null,
+            currentBalance: parseNullableNumber(d.execution?.current_balance),
             ticksProcessed: d.execution?.ticks_processed ?? 0,
             accountCurrency: d.execution?.account_currency ?? null,
-            currentBalanceDisplay:
-              d.execution?.current_balance_display != null
-                ? parseFloat(String(d.execution.current_balance_display))
-                : null,
+            currentBalanceDisplay: parseNullableNumber(
+              d.execution?.current_balance_display
+            ),
             displayCurrency: d.execution?.display_currency ?? null,
             resumeCursorTimestamp: d.execution?.resume_cursor_timestamp ?? null,
-            marginRatio:
-              d.execution?.margin_ratio != null
-                ? parseFloat(String(d.execution.margin_ratio))
-                : null,
-            currentAtr:
-              d.execution?.current_atr != null
-                ? parseFloat(String(d.execution.current_atr))
-                : null,
+            marginRatio: parseNullableNumber(d.execution?.margin_ratio),
+            currentAtr: parseNullableNumber(d.execution?.current_atr),
             recoveryStatus: d.execution?.recovery_status ?? null,
             recoveryWarnings: Array.isArray(d.execution?.recovery_warnings)
               ? d.execution.recovery_warnings
@@ -208,9 +205,9 @@ export function createTaskSummaryQuery(
           },
           tick: {
             timestamp: d.tick?.timestamp ?? null,
-            bid: d.tick?.bid != null ? parseFloat(String(d.tick.bid)) : null,
-            ask: d.tick?.ask != null ? parseFloat(String(d.tick.ask)) : null,
-            mid: d.tick?.mid != null ? parseFloat(String(d.tick.mid)) : null,
+            bid: parseNullableNumber(d.tick?.bid),
+            ask: parseNullableNumber(d.tick?.ask),
+            mid: parseNullableNumber(d.tick?.mid),
           },
           task: {
             status: d.task?.status ?? '',

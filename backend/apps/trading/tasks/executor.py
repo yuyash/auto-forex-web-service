@@ -52,6 +52,10 @@ class StrategyError(Exception):
     """
 
 
+class ExecutionStateConflict(RuntimeError):
+    """Raised when another writer updated the execution state first."""
+
+
 def is_forex_market_closed(
     now: datetime | None = None,
     *,
@@ -421,8 +425,10 @@ class TaskExecutor:
             state_version=state.state_version,
         ).update(**update_fields)
         if rows != 1:
-            raise RuntimeError(
-                "ExecutionState optimistic lock conflict: stale state_version detected"
+            raise ExecutionStateConflict(
+                "ExecutionState optimistic lock conflict: stale state_version detected "
+                f"(task_id={state.task_id}, execution_id={state.execution_id}, "
+                f"state_version={state.state_version})"
             )
         state.state_version += 1
 
@@ -1860,6 +1866,17 @@ class TaskExecutor:
 
     def _handle_execution_failure(self, error: Exception) -> None:
         """Record failed execution outcome."""
+        if isinstance(error, ExecutionStateConflict):
+            logger.error("Execution state conflict during execution: %s", error, exc_info=True)
+            self.state_manager.stop(
+                status_message=(
+                    "Execution stopped because persisted state changed concurrently. "
+                    "Review recovery diagnostics before resuming."
+                ),
+                failed=True,
+            )
+            return
+
         logger.error("Execution failed: %s", error, exc_info=True)
         self.state_manager.stop(status_message=f"Execution failed: {error}", failed=True)
 

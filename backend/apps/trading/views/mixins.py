@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from decimal import Decimal
+from urllib.parse import urlencode
 
 from django.db import models
 from django.db.models import Q
@@ -101,7 +102,7 @@ def _paginated_envelope(
             return None
         params["page"] = str(p)
         params["page_size"] = str(page_size)
-        qs = "&".join(f"{k}={v}" for k, v in params.items())
+        qs = urlencode(params, doseq=True)
         return f"{base_url}?{qs}"
 
     return {
@@ -308,6 +309,94 @@ class TaskSubResourceMixin:
         data = [{"t": int(ts.timestamp()), "metrics": _ensure_dict(m)} for ts, m in rows]
         envelope = _paginated_envelope(request, data, total_count, page, page_size)
         return _attach_metadata(envelope, "db_raw")
+
+    @extend_schema(
+        tags=["Trading"],
+        parameters=[MetricsQueryParamsSchemaSerializer],
+        responses={
+            200: inline_serializer(
+                "TaskLatestMetricResponse",
+                fields={
+                    "data_source": serializers.CharField(),
+                    "resume_cursor_timestamp": serializers.CharField(allow_null=True),
+                    "consistency_warnings": serializers.ListField(
+                        child=serializers.JSONField(), required=False
+                    ),
+                    "result": serializers.JSONField(allow_null=True),
+                },
+            )
+        },
+        description="Retrieve the latest time-series metric point for the task.",
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="latest-metrics",
+        throttle_classes=[TaskDataRateThrottle],
+    )
+    def latest_metrics(self, request: Request, pk: int | None = None) -> Response:
+        from apps.trading.models.metrics import Metrics
+        from apps.trading.models.metrics import ExecutionMetricAggregate
+        from apps.trading.models.state import ExecutionState
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        query = MetricsQueryParams.from_request(
+            request,
+            default_execution_id=task.execution_id,
+            default_page_size=1,
+            max_page_size=1,
+        )
+
+        row = (
+            Metrics.objects.filter(
+                task_type=self.task_type_label,
+                task_id=task.pk,
+                execution_id=query.execution.execution_id,
+            )
+            .order_by("-timestamp")
+            .values_list("timestamp", "metrics")
+            .first()
+        )
+        aggregate = (
+            ExecutionMetricAggregate.objects.filter(
+                task_type=self.task_type_label,
+                task_id=task.pk,
+                execution_id=query.execution.execution_id,
+            )
+            .only("continuity_warnings")
+            .first()
+        )
+        state = (
+            ExecutionState.objects.filter(
+                task_type=self.task_type_label,
+                task_id=task.pk,
+                execution_id=query.execution.execution_id,
+            )
+            .only("resume_cursor_timestamp")
+            .order_by("-updated_at")
+            .first()
+        )
+
+        return Response(
+            {
+                "data_source": "db_latest",
+                "resume_cursor_timestamp": (
+                    state.resume_cursor_timestamp.isoformat()
+                    if state and state.resume_cursor_timestamp
+                    else None
+                ),
+                "consistency_warnings": (
+                    aggregate.continuity_warnings
+                    if aggregate and isinstance(aggregate.continuity_warnings, list)
+                    else []
+                ),
+                "result": (
+                    {"t": int(row[0].timestamp()), "metrics": _ensure_dict(row[1])}
+                    if row is not None
+                    else None
+                ),
+            }
+        )
 
     @extend_schema(
         tags=["Trading"],

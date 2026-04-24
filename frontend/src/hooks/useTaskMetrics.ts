@@ -7,7 +7,11 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { TaskType } from '../types/common';
-import { fetchPaginatedMetrics, type MetricPoint } from '../utils/fetchMetrics';
+import {
+  fetchLatestMetrics,
+  fetchPaginatedMetrics,
+  type MetricPoint,
+} from '../utils/fetchMetrics';
 
 export interface UseTaskMetricsOptions {
   taskId: string;
@@ -20,6 +24,8 @@ export interface UseTaskMetricsOptions {
   /** RFC3339 upper-bound timestamp */
   until?: string;
   enabled?: boolean;
+  /** Fetch the full chart series. Keep false outside the metrics tab. */
+  fetchSeries?: boolean;
   /** Polling interval in ms (0 = no polling) */
   pollingInterval?: number;
 }
@@ -45,9 +51,11 @@ export function useTaskMetrics({
   since,
   until,
   enabled = true,
+  fetchSeries = true,
   pollingInterval = 0,
 }: UseTaskMetricsOptions): UseTaskMetricsResult {
   const [data, setData] = useState<MetricPoint[]>([]);
+  const [latest, setLatest] = useState<MetricPoint | null>(null);
   const [dataSource, setDataSource] = useState('unknown');
   const [resumeCursorTimestamp, setResumeCursorTimestamp] = useState<
     string | null
@@ -58,37 +66,91 @@ export function useTaskMetrics({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const mountedRef = useRef(true);
+  const latestTimestampRef = useRef<string | undefined>(undefined);
+  const inFlightRef = useRef(false);
+  const dataRef = useRef<MetricPoint[]>([]);
 
-  const fetchData = useCallback(async () => {
-    if (!taskId || !enabled) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const page = await fetchPaginatedMetrics({
-        taskId,
-        taskType,
-        executionRunId,
-        interval: interval > 1 ? interval : undefined,
-        since,
-        until,
-        pageSize: 500,
-      });
-      if (mountedRef.current) {
-        setData(page.results);
-        setDataSource(page.data_source);
-        setResumeCursorTimestamp(page.resume_cursor_timestamp);
-        setConsistencyWarnings(page.consistency_warnings);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+
+  const fetchData = useCallback(
+    async (incremental = false) => {
+      if (!taskId || !enabled) return;
+      if (inFlightRef.current) return;
+      inFlightRef.current = true;
+      setIsLoading(true);
+      setError(null);
+      try {
+        if (!fetchSeries) {
+          const latestPage = await fetchLatestMetrics({
+            taskId,
+            taskType,
+            executionRunId,
+          });
+          if (mountedRef.current) {
+            setLatest(latestPage.result);
+            setDataSource(latestPage.data_source);
+            setResumeCursorTimestamp(latestPage.resume_cursor_timestamp);
+            setConsistencyWarnings(latestPage.consistency_warnings);
+          }
+          return;
+        }
+
+        const effectiveSince =
+          incremental && !since ? latestTimestampRef.current : since;
+        const page = await fetchPaginatedMetrics({
+          taskId,
+          taskType,
+          executionRunId,
+          interval: interval > 1 ? interval : undefined,
+          since: effectiveSince,
+          until,
+          pageSize: 500,
+          maxPages: incremental ? 2 : 20,
+          existingResults: incremental ? dataRef.current : undefined,
+        });
+        if (mountedRef.current) {
+          const deduped = new Map<number, MetricPoint>();
+          for (const point of page.results) {
+            deduped.set(point.t, point);
+          }
+          const nextData = Array.from(deduped.values()).sort(
+            (a, b) => a.t - b.t
+          );
+          const nextLatest =
+            nextData.length > 0 ? nextData[nextData.length - 1] : null;
+          latestTimestampRef.current = nextLatest
+            ? new Date(nextLatest.t * 1000).toISOString()
+            : latestTimestampRef.current;
+          setData(nextData);
+          setLatest(nextLatest);
+          setDataSource(page.data_source);
+          setResumeCursorTimestamp(page.resume_cursor_timestamp);
+          setConsistencyWarnings(page.consistency_warnings);
+        }
+      } catch (err) {
+        if (mountedRef.current) {
+          setError(err instanceof Error ? err : new Error(String(err)));
+        }
+      } finally {
+        if (mountedRef.current) {
+          setIsLoading(false);
+        }
+        inFlightRef.current = false;
       }
-    } catch (err) {
-      if (mountedRef.current) {
-        setError(err instanceof Error ? err : new Error(String(err)));
-      }
-    } finally {
-      if (mountedRef.current) {
-        setIsLoading(false);
-      }
-    }
-  }, [taskId, taskType, executionRunId, interval, since, until, enabled]);
+    },
+    [
+      taskId,
+      taskType,
+      executionRunId,
+      interval,
+      since,
+      until,
+      enabled,
+      fetchSeries,
+    ]
+  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -98,16 +160,27 @@ export function useTaskMetrics({
   }, []);
 
   useEffect(() => {
+    latestTimestampRef.current = undefined;
+    if (!fetchSeries) {
+      setData([]);
+    }
     fetchData();
-  }, [taskId, taskType, executionRunId, interval, since, until, enabled]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [
+    taskId,
+    taskType,
+    executionRunId,
+    interval,
+    since,
+    until,
+    enabled,
+    fetchSeries,
+  ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!pollingInterval || pollingInterval <= 0 || !enabled) return;
-    const id = setInterval(fetchData, pollingInterval);
+    const id = setInterval(() => fetchData(true), pollingInterval);
     return () => clearInterval(id);
   }, [pollingInterval, fetchData, enabled]);
-
-  const latest = data.length > 0 ? data[data.length - 1] : null;
 
   return {
     data,

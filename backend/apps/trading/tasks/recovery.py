@@ -14,6 +14,7 @@ This module provides:
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -43,6 +44,15 @@ _ACTIVE_STATUSES = [TaskStatus.RUNNING, TaskStatus.STARTING]
 _MAX_RECOVERY_BATCH = 100
 _RECOVERY_RUN_LOCK_SECONDS = 45
 _TASK_RECOVERY_COOLDOWN_SECONDS = 120
+
+
+@dataclass(frozen=True, slots=True)
+class OrphanDecision:
+    """Decision produced by orphan detection for auditability and tests."""
+
+    is_orphaned: bool
+    reason: str
+    detail: str = ""
 
 
 def _instance_key(task: BacktestTask | TradingTask) -> str:
@@ -180,40 +190,58 @@ def _is_orphaned_prefetched(
     active_task_ids: set[str],
 ) -> bool:
     """Return True if the task has no recent heartbeat (using prefetched data)."""
+    decision = _orphan_decision_prefetched(
+        task,
+        heartbeats,
+        cutoff,
+        source=source,
+        active_task_ids=active_task_ids,
+    )
+    if decision.is_orphaned:
+        logger.info(
+            "[RECOVERY] Task considered orphaned - task_id=%s, reason=%s%s",
+            task.pk,
+            decision.reason,
+            f", detail={decision.detail}" if decision.detail else "",
+        )
+    return decision.is_orphaned
+
+
+def _orphan_decision_prefetched(
+    task: BacktestTask | TradingTask,
+    heartbeats: dict[str, CeleryTaskStatus],
+    cutoff: datetime,
+    *,
+    source: str,
+    active_task_ids: set[str],
+) -> OrphanDecision:
+    """Return an explainable orphan decision using prefetched heartbeat data."""
     # Fall back to execution_id for older rows that pre-date the
     # celery_task_id field and may still have it set to NULL.
     celery_task_id = str(task.celery_task_id or task.execution_id or "")
     if celery_task_id and celery_task_id in active_task_ids:
-        return False
+        return OrphanDecision(False, "active_celery_task", celery_task_id)
 
     if source == "worker_ready":
-        logger.info(
-            "[RECOVERY] No active Celery execution found during startup for task_id=%s "
-            "(celery_task_id=%s) — treating as orphaned immediately",
-            task.pk,
-            task.celery_task_id,
+        return OrphanDecision(
+            True,
+            "startup_no_active_celery_task",
+            f"celery_task_id={task.celery_task_id}",
         )
-        return True
 
     cts = heartbeats.get(_instance_key(task))
 
     if cts is None:
-        logger.info(
-            "[RECOVERY] No CeleryTaskStatus row for task_id=%s — treating as orphaned",
-            task.pk,
-        )
-        return True
+        return OrphanDecision(True, "missing_heartbeat_row")
 
     if cts.last_heartbeat_at is None or cts.last_heartbeat_at < cutoff:
-        logger.info(
-            "[RECOVERY] Stale heartbeat for task_id=%s — last_heartbeat=%s, cutoff=%s",
-            task.pk,
-            cts.last_heartbeat_at,
-            cutoff,
+        return OrphanDecision(
+            True,
+            "stale_heartbeat",
+            f"last_heartbeat={cts.last_heartbeat_at}, cutoff={cutoff}",
         )
-        return True
 
-    return False
+    return OrphanDecision(False, "recent_heartbeat", str(cts.last_heartbeat_at))
 
 
 def _active_celery_task_ids() -> set[str]:

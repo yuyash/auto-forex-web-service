@@ -2508,6 +2508,103 @@
                 }
             }
         },
+        "/api/trading/tasks/backtest/{id}/latest-metrics/": {
+            "get": {
+                "operationId": "trading_tasks_backtest_latest_metrics_retrieve",
+                "description": "Retrieve the latest time-series metric point for the task.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                        },
+                        "description": "Filter by execution ID (UUID)."
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "interval",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 1440,
+                            "minimum": 1
+                        },
+                        "description": "Aggregation interval in minutes. Default 1. When greater than 1, returns one point per N-minute window."
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Page number (1-based)."
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 500,
+                            "minimum": 1
+                        },
+                        "description": "Results per page. Default 100, maximum 500."
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
+                    },
+                    {
+                        "in": "query",
+                        "name": "until",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "RFC3339 upper-bound timestamp (exclusive)."
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskLatestMetricResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/backtest/{id}/log-components/": {
             "get": {
                 "operationId": "trading_tasks_backtest_log_components_retrieve",
@@ -4292,6 +4389,103 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/TaskExecution"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/trading/{id}/latest-metrics/": {
+            "get": {
+                "operationId": "trading_tasks_trading_latest_metrics_retrieve",
+                "description": "Retrieve the latest time-series metric point for the task.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                        },
+                        "description": "Filter by execution ID (UUID)."
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "interval",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 1440,
+                            "minimum": 1
+                        },
+                        "description": "Aggregation interval in minutes. Default 1. When greater than 1, returns one point per N-minute window."
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Page number (1-based)."
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 500,
+                            "minimum": 1
+                        },
+                        "description": "Results per page. Default 100, maximum 500."
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
+                    },
+                    {
+                        "in": "query",
+                        "name": "until",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "RFC3339 upper-bound timestamp (exclusive)."
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskLatestMetricResponse"
                                 }
                             }
                         },
@@ -9240,6 +9434,30 @@
                     "started_at",
                     "status",
                     "stop_reason"
+                ]
+            },
+            "TaskLatestMetricResponse": {
+                "type": "object",
+                "properties": {
+                    "data_source": {
+                        "type": "string"
+                    },
+                    "resume_cursor_timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "consistency_warnings": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "result": {
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "data_source",
+                    "result",
+                    "resume_cursor_timestamp"
                 ]
             },
             "TaskLog": {
