@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
     reject_on_worker_lost=True,
     track_started=True,
 )
-def run_trading_task(self: Any, task_id: UUID) -> None:
+def run_trading_task(self: Any, task_id: UUID, dispatch_idempotency_key: str | None = None) -> None:
     """Celery task wrapper for running trading tasks."""
     task = None
     logging_session: TaskLoggingSession | None = None
@@ -44,6 +44,17 @@ def run_trading_task(self: Any, task_id: UUID) -> None:
         task = TradingTask.objects.get(pk=task_id)
         logging_session = TaskLoggingSession(task)
         logging_session.start()
+
+        if dispatch_idempotency_key and str(task.dispatch_idempotency_key) != str(
+            dispatch_idempotency_key
+        ):
+            logger.warning(
+                "SKIPPING stale redelivery - task_id=%s, expected_key=%s, received_key=%s",
+                task_id,
+                task.dispatch_idempotency_key,
+                dispatch_idempotency_key,
+            )
+            return
 
         if task.status != TaskStatus.STARTING:
             logger.warning(

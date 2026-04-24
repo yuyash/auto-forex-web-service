@@ -15,6 +15,7 @@ from django.db import transaction
 from apps.trading.enums import StopMode, TaskStatus
 from apps.trading.models import BacktestTask, TradingTask
 from apps.trading.tasks.lifecycle_events import TaskLifecycleEventPublisher
+from apps.trading.tasks.lifecycle_state_machine import allowed_statuses_for_command
 
 if TYPE_CHECKING:
     from apps.trading.tasks.service import TaskService
@@ -107,6 +108,11 @@ class TaskLifecycleCommands:
         )
 
     def start(self, task: BacktestTask | TradingTask) -> BacktestTask | TradingTask:
+        self._assert_transition_allowed(
+            command="start",
+            task_status=task.status,
+            message=(f"Task must be in CREATED status to submit (current status: {task.status})"),
+        )
         self.logger.info(
             "[SERVICE:START] Submitting task - task_id=%s, task_status=%s, instrument=%s, start_time=%s, end_time=%s",
             task.pk,
@@ -141,6 +147,15 @@ class TaskLifecycleCommands:
                 task.pk,
                 task.execution_id,
                 task.status,
+            )
+            self._audit_lifecycle_transition(
+                command="start",
+                task_id=task.pk,
+                task_type=task_type,
+                from_status=TaskStatus.CREATED,
+                to_status=task.status,
+                execution_id=task.execution_id,
+                celery_task_id=getattr(task, "celery_task_id", None),
             )
             self.events.publish(
                 task=task,
@@ -193,6 +208,7 @@ class TaskLifecycleCommands:
             task.status,
             task.execution_id,
         )
+        previous_status = task.status
 
         if task.status in [TaskStatus.STOPPED, TaskStatus.COMPLETED, TaskStatus.FAILED]:
             self.logger.info(
@@ -201,6 +217,11 @@ class TaskLifecycleCommands:
                 task_id,
             )
             return True
+        self._assert_transition_allowed(
+            command="stop",
+            task_status=task.status,
+            message=f"Task cannot be stopped from {task.status} state",
+        )
 
         # A stop issued while the task is DRAINING means the user wants to
         # terminate now rather than waiting for positions to reach breakeven.
@@ -243,6 +264,17 @@ class TaskLifecycleCommands:
             task.sell_on_stop = True
             update_fields.append("sell_on_stop")
         task.save(update_fields=update_fields)
+        self._audit_lifecycle_transition(
+            command="stop",
+            task_id=task.pk,
+            task_type=task_type,
+            from_status=previous_status,
+            to_status=task.status,
+            execution_id=task.execution_id,
+            celery_task_id=getattr(task, "celery_task_id", None),
+            mode=stop_mode.value,
+            drain_duration_minutes=drain_duration_minutes,
+        )
 
         # Persist per-stop drain duration override so the executor picks
         # it up on the next drain evaluation. Written only when drain is
@@ -282,6 +314,7 @@ class TaskLifecycleCommands:
 
     def pause(self, task_id: UUID) -> bool:
         task, task_type = self.service._get_task_and_type(task_id)
+        previous_status = task.status
 
         # Pause is only supported for backtest tasks.  Trading tasks should
         # use stop (which preserves execution state) and then resume.
@@ -291,9 +324,9 @@ class TaskLifecycleCommands:
                 "Use stop instead — stopped trading tasks can be resumed."
             )
 
-        self.service._ensure_task_status(
-            task,
-            allowed=(TaskStatus.STARTING, TaskStatus.RUNNING),
+        self._assert_transition_allowed(
+            command="pause",
+            task_status=task.status,
             message=(
                 f"Task cannot be paused in {task.status} state. "
                 "Only STARTING or RUNNING tasks can be paused."
@@ -305,6 +338,15 @@ class TaskLifecycleCommands:
             else "trading.tasks.run_trading_task"
         )
         self.service.writer.persist_state(task, status=TaskStatus.PAUSED)
+        self._audit_lifecycle_transition(
+            command="pause",
+            task_id=task.pk,
+            task_type=task_type,
+            from_status=previous_status,
+            to_status=TaskStatus.PAUSED,
+            execution_id=task.execution_id,
+            celery_task_id=getattr(task, "celery_task_id", None),
+        )
         self._signal_redis_pause(
             task_id=task_id,
             task_name=task_name,
@@ -345,6 +387,12 @@ class TaskLifecycleCommands:
 
     def restart(self, task_id: UUID) -> BacktestTask | TradingTask:
         task, task_type = self.service._get_task_and_type(task_id)
+        self._assert_transition_allowed(
+            command="restart",
+            task_status=task.status,
+            message=f"Task cannot be restarted from {task.status} state",
+        )
+        previous_status = task.status
         if task.status in [TaskStatus.STARTING, TaskStatus.RUNNING, TaskStatus.STOPPING]:
             try:
                 self.service.stop_task(task_id)
@@ -376,6 +424,15 @@ class TaskLifecycleCommands:
         task.refresh_from_db()
         if task.status != TaskStatus.CREATED:
             raise RuntimeError(f"Failed to reset task status: expected CREATED, got {task.status}")
+        self._audit_lifecycle_transition(
+            command="restart",
+            task_id=task.pk,
+            task_type=task_type,
+            from_status=previous_status,
+            to_status=TaskStatus.CREATED,
+            execution_id=task.execution_id,
+            celery_task_id=getattr(task, "celery_task_id", None),
+        )
         self.events.publish(
             task=task,
             task_type=task_type,
@@ -390,22 +447,25 @@ class TaskLifecycleCommands:
         is_trading = task_type == "trading"
 
         # Trading tasks can resume from PAUSED, STOPPED, or FAILED.
-        # Backtest tasks can only resume from PAUSED (unchanged behaviour).
+        # Backtests can resume from PAUSED or STOPPED while preserving their
+        # execution_id and ExecutionState; the publisher continues from the
+        # last processed tick instead of replaying from task.start_time.
         if is_trading:
-            allowed_statuses = (TaskStatus.PAUSED, TaskStatus.STOPPED, TaskStatus.FAILED)
+            allowed_statuses = allowed_statuses_for_command("resume_trading")
         else:
-            allowed_statuses = (TaskStatus.PAUSED,)
+            allowed_statuses = allowed_statuses_for_command("resume_backtest")
 
         with transaction.atomic():
             locked_task = model_class.objects.select_for_update().get(pk=task.pk)
-            if locked_task.status not in allowed_statuses:
-                from apps.trading.tasks.service import TaskValidationError
-
-                allowed_labels = ", ".join(str(s.value).upper() for s in allowed_statuses)
-                raise TaskValidationError(
+            previous_status = locked_task.status
+            self._assert_transition_allowed(
+                command="resume_trading" if is_trading else "resume_backtest",
+                task_status=locked_task.status,
+                message=(
                     f"Task cannot be resumed from {locked_task.status} state. "
-                    f"Only {allowed_labels} tasks can be resumed."
-                )
+                    f"Only {', '.join(str(s.value).upper() for s in allowed_statuses)} tasks can be resumed."
+                ),
+            )
             if not locked_task.execution_id:
                 from apps.trading.tasks.service import TaskValidationError
 
@@ -468,6 +528,15 @@ class TaskLifecycleCommands:
 
             locked_task.status = TaskStatus.STARTING
             locked_task.save(update_fields=update_fields)
+            self._audit_lifecycle_transition(
+                command="resume",
+                task_id=locked_task.pk,
+                task_type=task_type,
+                from_status=previous_status,
+                to_status=locked_task.status,
+                execution_id=locked_task.execution_id,
+                celery_task_id=locked_task.celery_task_id,
+            )
             task = locked_task
 
         self.events.publish(
@@ -674,3 +743,41 @@ class TaskLifecycleCommands:
                 f"but Celery task is still {celery_state}. "
                 "Please wait for the task to fully stop before resuming."
             )
+
+    def _assert_transition_allowed(
+        self,
+        *,
+        command: str,
+        task_status: TaskStatus,
+        message: str,
+    ) -> None:
+        allowed = allowed_statuses_for_command(command)
+        if not allowed or task_status in allowed:
+            return
+        from apps.trading.tasks.service import TaskValidationError
+
+        raise TaskValidationError(message)
+
+    def _audit_lifecycle_transition(
+        self,
+        *,
+        command: str,
+        task_id: UUID,
+        task_type: str,
+        from_status: TaskStatus | str,
+        to_status: TaskStatus | str,
+        execution_id: object,
+        celery_task_id: object,
+        **extra: object,
+    ) -> None:
+        payload: dict[str, object] = {
+            "command": command,
+            "task_id": str(task_id),
+            "task_type": task_type,
+            "from_status": str(from_status),
+            "to_status": str(to_status),
+            "execution_id": str(execution_id) if execution_id else "",
+            "celery_task_id": str(celery_task_id) if celery_task_id else "",
+        }
+        payload.update(extra)
+        self.logger.info("[LIFECYCLE:AUDIT] %s", payload)

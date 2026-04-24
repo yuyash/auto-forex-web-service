@@ -132,10 +132,25 @@ class TaskService:
             celery_task_id = uuid4()
             type(task).objects.filter(pk=task.pk).update(celery_task_id=celery_task_id)
             task.celery_task_id = celery_task_id
+
+        dispatch_idempotency_key = uuid4()
+        model_objects = getattr(type(task), "objects", None)
+        if model_objects is not None:
+            model_objects.filter(pk=task.pk).update(
+                dispatch_idempotency_key=dispatch_idempotency_key,
+                updated_at=timezone.now(),
+            )
+        task.dispatch_idempotency_key = dispatch_idempotency_key
         celery_task.apply_async(
-            args=[task.pk],
+            args=[task.pk, str(dispatch_idempotency_key)],
             task_id=str(celery_task_id),
             queue=queue,
+            headers={
+                "dispatch_idempotency_key": str(dispatch_idempotency_key),
+                "task_id": str(task.pk),
+                "execution_id": str(getattr(task, "execution_id", "") or ""),
+                "task_type": task_type,
+            },
         )
 
     @staticmethod

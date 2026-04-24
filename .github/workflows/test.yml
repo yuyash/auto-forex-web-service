@@ -11,6 +11,9 @@ permissions:
   checks: write
   pull-requests: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   test-backend:
     name: Backend Tests
@@ -18,6 +21,18 @@ jobs:
     defaults:
       run:
         working-directory: ./backend
+    env:
+      DB_NAME: test_db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_HOST: localhost
+      DB_PORT: 5432
+      REDIS_URL: redis://localhost:6379/0
+      SECRET_KEY: test-secret-key-for-ci-only-minimum-50-characters-long
+      JWT_SECRET_KEY: test-jwt-secret-key-for-ci-only-minimum-50-characters-long
+      DEBUG: "False"
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      DJANGO_SETTINGS_MODULE: config.settings_test
 
     services:
       postgres:
@@ -29,7 +44,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres -d test_db"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -46,10 +61,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v8.1.0
 
       - name: Set up Python
         run: uv python install 3.13
@@ -67,20 +82,9 @@ jobs:
         run: uv run ty check
 
       - name: Run unit tests
-        env:
-          DB_NAME: test_db
-          DB_USER: postgres
-          DB_PASSWORD: postgres
-          DB_HOST: localhost
-          DB_PORT: 5432
-          REDIS_URL: redis://localhost:6379/0
-          SECRET_KEY: test-secret-key-for-ci-only-minimum-50-characters-long
-          DEBUG: "False"
-          ALLOWED_HOSTS: localhost,127.0.0.1
-          DJANGO_SETTINGS_MODULE: config.settings_test
         run: |
           echo "::group::Running unit tests"
-          uv run pytest tests/unit/ -v --cov=. --cov-report=xml --cov-report=html --cov-append --junitxml=junit-unit.xml
+          uv run python scripts/ci_pytest.py unit --coverage --coverage-append --junitxml=junit-unit.xml
           UNIT_EXIT_CODE=$?
           echo "::endgroup::"
           if [ $UNIT_EXIT_CODE -ne 0 ]; then
@@ -91,20 +95,9 @@ jobs:
 
       # Integration tests
       - name: Run integration tests with parallel execution
-        env:
-          DB_NAME: test_db
-          DB_USER: postgres
-          DB_PASSWORD: postgres
-          DB_HOST: localhost
-          DB_PORT: 5432
-          REDIS_URL: redis://localhost:6379/0
-          SECRET_KEY: test-secret-key-for-ci-only-minimum-50-characters-long
-          DEBUG: "False"
-          ALLOWED_HOSTS: localhost,127.0.0.1
-          DJANGO_SETTINGS_MODULE: config.settings_test
         run: |
           echo "::group::Running integration tests"
-          uv run pytest tests/integration/ -n auto -v --timeout=30 --cov=. --cov-report=xml --cov-report=html --cov-append --junitxml=junit-integration.xml
+          uv run python scripts/ci_pytest.py integration --coverage --coverage-append --junitxml=junit-integration.xml
           INTEGRATION_EXIT_CODE=$?
           echo "::endgroup::"
           if [ $INTEGRATION_EXIT_CODE -ne 0 ]; then
@@ -114,17 +107,6 @@ jobs:
           echo "Integration tests passed"
 
       - name: Check coverage threshold
-        env:
-          DB_NAME: test_db
-          DB_USER: postgres
-          DB_PASSWORD: postgres
-          DB_HOST: localhost
-          DB_PORT: 5432
-          REDIS_URL: redis://localhost:6379/0
-          SECRET_KEY: test-secret-key-for-ci-only-minimum-50-characters-long
-          DEBUG: "False"
-          ALLOWED_HOSTS: localhost,127.0.0.1
-          DJANGO_SETTINGS_MODULE: config.settings_test
         run: |
           echo "::group::Checking coverage threshold"
           uv run coverage combine || true
@@ -138,24 +120,20 @@ jobs:
           echo "Coverage threshold met (60%)"
 
       # E2E tests — use real PostgreSQL + Redis
+      - name: Prepare E2E database
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings_e2e
+        run: uv run python manage.py migrate --noinput
+
       - name: Run E2E tests
         env:
-          DB_NAME: test_db
-          DB_USER: postgres
-          DB_PASSWORD: postgres
-          DB_HOST: localhost
-          DB_PORT: 5432
-          REDIS_URL: redis://localhost:6379/0
-          SECRET_KEY: test-secret-key-for-ci-only-minimum-50-characters-long
-          JWT_SECRET_KEY: test-jwt-secret-key-for-ci-only-minimum-50-characters-long
-          DEBUG: "False"
-          ALLOWED_HOSTS: localhost,127.0.0.1
           DJANGO_SETTINGS_MODULE: config.settings_e2e
+          E2E_DB_PREMIGRATED: "true"
           OANDA_ACCOUNT_ID: ${{ secrets.OANDA_ACCOUNT_ID }}
           OANDA_API_TOKEN: ${{ secrets.OANDA_API_TOKEN }}
         run: |
           echo "::group::Running E2E tests"
-          uv run pytest tests/e2e/ -v --timeout=300 --junitxml=junit-e2e.xml
+          uv run python scripts/ci_pytest.py e2e --junitxml=junit-e2e.xml
           E2E_EXIT_CODE=$?
           echo "::endgroup::"
           if [ $E2E_EXIT_CODE -ne 0 ]; then
@@ -176,7 +154,7 @@ jobs:
           comment_mode: off
 
       - name: Upload coverage report to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         if: always()
         with:
           files: ./backend/coverage.xml
@@ -184,7 +162,7 @@ jobs:
           flags: backend
 
       - name: Upload HTML coverage report as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: coverage-report-backend
@@ -192,7 +170,7 @@ jobs:
           retention-days: 30
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: test-results-backend
@@ -203,11 +181,12 @@ jobs:
           retention-days: 7
 
       - name: Upload E2E API report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: e2e-api-report
           path: ./backend/e2e-api-test-results.html
+          if-no-files-found: ignore
           retention-days: 30
 
   test-frontend:
@@ -219,10 +198,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: "npm"
@@ -286,11 +265,11 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       # ── Backend setup ─────────────────────────────────────
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: false
 
@@ -337,7 +316,7 @@ jobs:
 
       # ── Frontend setup ────────────────────────────────────
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: "npm"
@@ -361,7 +340,7 @@ jobs:
 
       # ── Artifacts ─────────────────────────────────────────
       - name: Upload Playwright report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-report
@@ -369,7 +348,7 @@ jobs:
           retention-days: 14
 
       - name: Upload Playwright test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-test-results
@@ -382,7 +361,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Create dummy .env file
         run: |

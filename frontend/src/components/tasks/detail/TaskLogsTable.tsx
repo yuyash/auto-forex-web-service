@@ -31,7 +31,7 @@ import { DateRangeFilter } from '../../common/DateRangeFilter';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
 import { useTaskLogs, type TaskLog } from '../../../hooks/useTaskLogs';
 import { useTaskLogComponents } from '../../../hooks/useTaskLogComponents';
-import { TaskType } from '../../../types/common';
+import type { TaskType } from '../../../types/common';
 import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
 import {
   useColumnConfig,

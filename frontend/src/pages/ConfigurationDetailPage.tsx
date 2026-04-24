@@ -118,31 +118,6 @@ export default function ConfigurationDetailPage() {
     return formatValue(value);
   };
 
-  /** Check whether a dependsOn condition is satisfied by the current params. */
-  const matchesDependsOn = useCallback(
-    (
-      params: Record<string, unknown>,
-      schema: ConfigSchema,
-      dependsOn: ConfigProperty['dependsOn']
-    ): boolean => {
-      if (!dependsOn) return true;
-      const raw =
-        params[dependsOn.field] ??
-        schema.properties?.[dependsOn.field]?.default;
-      const normalize = (v: unknown) => {
-        if (v === undefined || v === null) return v;
-        if (typeof v === 'string') {
-          const lower = v.trim().toLowerCase();
-          if (lower === 'true') return true;
-          if (lower === 'false') return false;
-        }
-        return v;
-      };
-      return dependsOn.values.some((expected) => normalize(raw) === expected);
-    },
-    []
-  );
-
   /** Build grouped parameter entries preserving schema order. */
   const groupedParams = (() => {
     if (!configuration?.parameters) return [];
@@ -156,16 +131,16 @@ export default function ConfigurationDetailPage() {
     if (schema?.properties) {
       Object.entries(schema.properties).forEach(([key, prop]) => {
         if (HIDDEN_KEYS.has(key)) return;
-        // Skip fields whose dependsOn condition is not met
-        if (prop.dependsOn && !matchesDependsOn(params, schema, prop.dependsOn))
-          return;
-        // Use saved value, or fall back to schema default for boolean toggles
+        // Use saved value, or fall back to schema defaults so details and
+        // snapshots always expose every configured field.
         const value =
           key in params
             ? params[key]
-            : prop.type === 'boolean'
-              ? (prop.default ?? false)
-              : undefined;
+            : prop.default !== undefined
+              ? prop.default
+              : prop.type === 'boolean'
+                ? false
+                : undefined;
         if (value === undefined) return;
         const groupName =
           localized(prop, 'group') || t('configuration:form.otherParameters');

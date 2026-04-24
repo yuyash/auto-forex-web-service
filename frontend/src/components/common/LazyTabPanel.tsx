@@ -31,7 +31,7 @@ export function LazyTabPanel({
         flexDirection: 'column',
         flex: 1,
         minHeight: 0,
-        overflow: 'auto',
+        overflow: 'hidden',
       }}
       {...other}
     >
@@ -43,6 +43,7 @@ export function LazyTabPanel({
             flexDirection: 'column',
             flex: 1,
             minHeight: 0,
+            overflow: 'auto',
           }}
         >
           {children}

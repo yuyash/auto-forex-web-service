@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from decimal import Decimal
+from urllib.parse import urlencode
 
 from django.db import models
 from django.db.models import Q
@@ -101,7 +102,7 @@ def _paginated_envelope(
             return None
         params["page"] = str(p)
         params["page_size"] = str(page_size)
-        qs = "&".join(f"{k}={v}" for k, v in params.items())
+        qs = urlencode(params, doseq=True)
         return f"{base_url}?{qs}"
 
     return {
@@ -127,6 +128,11 @@ class TaskSubResourceMixin:
                     "count": serializers.IntegerField(),
                     "next": serializers.CharField(allow_null=True),
                     "previous": serializers.CharField(allow_null=True),
+                    "data_source": serializers.CharField(),
+                    "resume_cursor_timestamp": serializers.CharField(allow_null=True),
+                    "consistency_warnings": serializers.ListField(
+                        child=serializers.JSONField(), required=False
+                    ),
                     "results": serializers.ListField(
                         child=inline_serializer(
                             "TaskMetricPoint",
@@ -146,6 +152,8 @@ class TaskSubResourceMixin:
     )
     def metrics(self, request: Request, pk: int | None = None) -> Response:
         from apps.trading.models.metrics import Metrics
+        from apps.trading.models.metrics import ExecutionMetricAggregate
+        from apps.trading.models.state import ExecutionState
 
         task = self.get_object()  # type: ignore[attr-defined]
         query = MetricsQueryParams.from_request(
@@ -160,6 +168,39 @@ class TaskSubResourceMixin:
             task_id=task.pk,
             execution_id=query.execution.execution_id,
         ).order_by("timestamp")
+        aggregate = (
+            ExecutionMetricAggregate.objects.filter(
+                task_type=self.task_type_label,
+                task_id=task.pk,
+                execution_id=query.execution.execution_id,
+            )
+            .only("continuity_warnings")
+            .first()
+        )
+        state = (
+            ExecutionState.objects.filter(
+                task_type=self.task_type_label,
+                task_id=task.pk,
+                execution_id=query.execution.execution_id,
+            )
+            .only("resume_cursor_timestamp")
+            .order_by("-updated_at")
+            .first()
+        )
+
+        def _attach_metadata(envelope: dict, data_source: str) -> Response:
+            envelope["data_source"] = data_source
+            envelope["resume_cursor_timestamp"] = (
+                state.resume_cursor_timestamp.isoformat()
+                if state and state.resume_cursor_timestamp
+                else None
+            )
+            envelope["consistency_warnings"] = (
+                aggregate.continuity_warnings
+                if aggregate and isinstance(aggregate.continuity_warnings, list)
+                else []
+            )
+            return Response(envelope)
 
         if query.execution.since:
             queryset = queryset.filter(timestamp__gt=query.execution.since)
@@ -171,7 +212,6 @@ class TaskSubResourceMixin:
 
         if interval > 1:
             from django.db import connection
-            from django.db.models.sql import Query  # noqa: F401
 
             if connection.vendor != "postgresql":
                 rows = list(queryset.values_list("timestamp", "metrics"))
@@ -195,28 +235,44 @@ class TaskSubResourceMixin:
                     {"t": int(ts.timestamp()), "metrics": _ensure_dict(metrics)}
                     for ts, metrics in page_rows
                 ]
-                return Response(_paginated_envelope(request, data, total_count, page, page_size))
+                envelope = _paginated_envelope(request, data, total_count, page, page_size)
+                return _attach_metadata(envelope, "db_window_last_python")
 
             # Build a sub-query that buckets timestamps into N-minute windows
             # and picks the last metrics JSON per window.
             base_where = "task_type = %s AND task_id = %s"
-            params: list = [self.task_type_label, str(task.pk)]
+            where_params: list = [self.task_type_label, str(task.pk)]
 
             if query.execution.execution_id is None:
                 base_where += " AND execution_id IS NULL"
             else:
                 base_where += " AND execution_id = %s"
-                params.append(str(query.execution.execution_id))
+                where_params.append(str(query.execution.execution_id))
 
             if query.execution.since:
                 base_where += " AND timestamp > %s"
-                params.append(query.execution.since)
+                where_params.append(query.execution.since)
             if query.until:
                 base_where += " AND timestamp < %s"
-                params.append(query.until)
+                where_params.append(query.until)
 
             interval_seconds = interval * 60
-            params.append(interval_seconds)
+            page, page_size = (
+                query.execution.pagination.page,
+                query.execution.pagination.page_size,
+            )
+            offset = (page - 1) * page_size
+
+            # base_where is assembled from fixed clauses; all user values use cursor params.
+            count_sql = (
+                "SELECT COUNT(*) "  # nosec B608
+                "FROM ("
+                "  SELECT FLOOR(EXTRACT(EPOCH FROM timestamp) / %s) AS bucket "
+                "  FROM metrics "
+                f"  WHERE {base_where} "
+                "  GROUP BY bucket"
+                ") sub"
+            )
 
             sql = (
                 "SELECT DISTINCT ON (bucket) "  # nosec B608
@@ -227,28 +283,19 @@ class TaskSubResourceMixin:
                 "  FROM metrics "
                 f"  WHERE {base_where}"
                 ") sub "
-                "ORDER BY bucket, timestamp DESC"
+                "ORDER BY bucket, timestamp DESC "
+                "LIMIT %s OFFSET %s"
             )
-            # %s for interval_seconds is the first param in the SELECT,
-            # but we appended it last — reorder
-            reordered_params = [interval_seconds] + params[:-1]
 
             with connection.cursor() as cursor:
-                cursor.execute(sql, reordered_params)
+                cursor.execute(count_sql, [interval_seconds, *where_params])
+                total_count = int(cursor.fetchone()[0])
+                cursor.execute(sql, [interval_seconds, *where_params, page_size, offset])
                 rows = cursor.fetchall()
 
-            total_count = len(rows)
-            # Manual pagination over raw SQL results
-            page, page_size = (
-                query.execution.pagination.page,
-                query.execution.pagination.page_size,
-            )
-            start = (page - 1) * page_size
-            end = start + page_size
-            page_rows = rows[start:end]
-
-            data = [{"t": int(ts.timestamp()), "metrics": _ensure_dict(m)} for ts, m in page_rows]
-            return Response(_paginated_envelope(request, data, total_count, page, page_size))
+            data = [{"t": int(ts.timestamp()), "metrics": _ensure_dict(m)} for ts, m in rows]
+            envelope = _paginated_envelope(request, data, total_count, page, page_size)
+            return _attach_metadata(envelope, "db_window_last")
 
         # Default: interval=1, use ORM with cursor pagination
         total_count = queryset.count()
@@ -260,7 +307,96 @@ class TaskSubResourceMixin:
         rows = queryset.values_list("timestamp", "metrics")[start : start + page_size]
 
         data = [{"t": int(ts.timestamp()), "metrics": _ensure_dict(m)} for ts, m in rows]
-        return Response(_paginated_envelope(request, data, total_count, page, page_size))
+        envelope = _paginated_envelope(request, data, total_count, page, page_size)
+        return _attach_metadata(envelope, "db_raw")
+
+    @extend_schema(
+        tags=["Trading"],
+        parameters=[MetricsQueryParamsSchemaSerializer],
+        responses={
+            200: inline_serializer(
+                "TaskLatestMetricResponse",
+                fields={
+                    "data_source": serializers.CharField(),
+                    "resume_cursor_timestamp": serializers.CharField(allow_null=True),
+                    "consistency_warnings": serializers.ListField(
+                        child=serializers.JSONField(), required=False
+                    ),
+                    "result": serializers.JSONField(allow_null=True),
+                },
+            )
+        },
+        description="Retrieve the latest time-series metric point for the task.",
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="latest-metrics",
+        throttle_classes=[TaskDataRateThrottle],
+    )
+    def latest_metrics(self, request: Request, pk: int | None = None) -> Response:
+        from apps.trading.models.metrics import Metrics
+        from apps.trading.models.metrics import ExecutionMetricAggregate
+        from apps.trading.models.state import ExecutionState
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        query = MetricsQueryParams.from_request(
+            request,
+            default_execution_id=task.execution_id,
+            default_page_size=1,
+            max_page_size=1,
+        )
+
+        row = (
+            Metrics.objects.filter(
+                task_type=self.task_type_label,
+                task_id=task.pk,
+                execution_id=query.execution.execution_id,
+            )
+            .order_by("-timestamp")
+            .values_list("timestamp", "metrics")
+            .first()
+        )
+        aggregate = (
+            ExecutionMetricAggregate.objects.filter(
+                task_type=self.task_type_label,
+                task_id=task.pk,
+                execution_id=query.execution.execution_id,
+            )
+            .only("continuity_warnings")
+            .first()
+        )
+        state = (
+            ExecutionState.objects.filter(
+                task_type=self.task_type_label,
+                task_id=task.pk,
+                execution_id=query.execution.execution_id,
+            )
+            .only("resume_cursor_timestamp")
+            .order_by("-updated_at")
+            .first()
+        )
+
+        return Response(
+            {
+                "data_source": "db_latest",
+                "resume_cursor_timestamp": (
+                    state.resume_cursor_timestamp.isoformat()
+                    if state and state.resume_cursor_timestamp
+                    else None
+                ),
+                "consistency_warnings": (
+                    aggregate.continuity_warnings
+                    if aggregate and isinstance(aggregate.continuity_warnings, list)
+                    else []
+                ),
+                "result": (
+                    {"t": int(row[0].timestamp()), "metrics": _ensure_dict(row[1])}
+                    if row is not None
+                    else None
+                ),
+            }
+        )
 
     @extend_schema(
         tags=["Trading"],
@@ -520,6 +656,12 @@ class TaskSubResourceMixin:
             ordering = ("timestamp", "sequence_number")
         queryset = queryset.order_by(*ordering)
 
+        total_count = queryset.count()
+        page, page_size = (
+            query.execution.pagination.page,
+            query.execution.pagination.page_size,
+        )
+        start = (page - 1) * page_size
         trades_qs = queryset.values(
             "id",
             "direction",
@@ -540,7 +682,7 @@ class TaskSubResourceMixin:
             "is_rebuild",
             stop_loss_price=models.F("position__stop_loss_price"),
             entry_price=models.F("position__entry_price"),
-        )
+        )[start : start + page_size]
         normalized: list[dict] = []
         for trade in trades_qs:
             raw_direction = trade["direction"]
@@ -567,10 +709,8 @@ class TaskSubResourceMixin:
             else:
                 trade.pop("entry_price", None)
             normalized.append(trade)
-        paginator = TradePositionPagination()
-        page = paginator.paginate_queryset(normalized, request)
-        serializer = TradeSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+        serializer = TradeSerializer(normalized, many=True)
+        return Response(_paginated_envelope(request, serializer.data, total_count, page, page_size))
 
     @extend_schema(
         tags=["Trading"],

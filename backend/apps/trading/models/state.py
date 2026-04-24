@@ -65,6 +65,14 @@ class ExecutionState(UUIDModel):
         blank=True,
         help_text="Timestamp of the last processed tick",
     )
+    resume_cursor_timestamp = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Exclusive cursor for resume/restart data loading. "
+            "Defaults to last_tick_timestamp when unset."
+        ),
+    )
     last_tick_price = models.DecimalField(
         max_digits=20,
         decimal_places=10,
@@ -85,6 +93,13 @@ class ExecutionState(UUIDModel):
         null=True,
         blank=True,
         help_text="Ask price of the last processed tick",
+    )
+    state_version = models.PositiveBigIntegerField(
+        default=0,
+        help_text=(
+            "Monotonic state version for optimistic locking. "
+            "Incremented on every persisted state update."
+        ),
     )
 
     class Meta:

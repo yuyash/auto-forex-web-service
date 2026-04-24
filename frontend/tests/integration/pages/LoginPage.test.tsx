@@ -10,6 +10,7 @@ import { ApiError } from '../../../src/api/apiClient';
 import { authApi } from '../../../src/services/api';
 import { useLogin } from '../../../src/hooks/useAuthMutations';
 import { createAuthPageWrapper } from '../../utils/authPageTestUtils';
+import { changeInputByLabel } from '../../utils/formTestUtils';
 
 // Lazy-loaded page — import the default export
 import LoginPage from '../../../src/pages/LoginPage';
@@ -118,10 +119,10 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     await renderLoginPage();
 
-    const emailField = await screen.findByLabelText(/email/i);
+    await screen.findByLabelText(/email/i);
     const btn = await getEnabledSubmitButton();
 
-    await user.type(emailField, 'notanemail');
+    changeInputByLabel(/email/i, 'notanemail');
     await user.click(btn);
 
     await waitFor(() => {
@@ -133,10 +134,10 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     await renderLoginPage();
 
-    const emailField = await screen.findByLabelText(/email/i);
+    await screen.findByLabelText(/email/i);
     const btn = await getEnabledSubmitButton();
 
-    await user.type(emailField, 'user@example.com');
+    changeInputByLabel(/email/i, 'user@example.com');
     await user.click(btn);
 
     await waitFor(() => {
@@ -154,12 +155,12 @@ describe('LoginPage', () => {
 
     await renderLoginPage();
 
-    const emailField = await screen.findByLabelText(/email/i);
-    const passwordField = await screen.findByLabelText(/password/i);
+    await screen.findByLabelText(/email/i);
+    await screen.findByLabelText(/password/i);
     const btn = await getEnabledSubmitButton();
 
-    await user.type(emailField, 'user@example.com');
-    await user.type(passwordField, 'wrongpassword');
+    changeInputByLabel(/email/i, 'user@example.com');
+    changeInputByLabel(/password/i, 'wrongpassword');
     await user.click(btn);
 
     await waitFor(() => {

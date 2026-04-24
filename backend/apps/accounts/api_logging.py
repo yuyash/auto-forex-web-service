@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from http import HTTPStatus
 from logging import Logger, getLogger
 from typing import Any
 
 from django.http import HttpRequest
 from django.http.request import RawPostDataException
+from rest_framework.exceptions import ErrorDetail
 from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
 
@@ -31,6 +33,56 @@ SENSITIVE_KEYS = {
     "token",
 }
 MAX_BODY_LOG_LENGTH = 2000
+
+
+def _code_from_exception(exc: Exception, response: Response) -> str:
+    """Return a stable machine-readable error code for a DRF response."""
+    default_code = getattr(exc, "default_code", None)
+    if isinstance(default_code, str) and default_code:
+        return default_code
+    try:
+        status_name = HTTPStatus(response.status_code).phrase
+    except ValueError:
+        status_name = "error"
+    return str(status_name).lower().replace(" ", "_").replace("-", "_")
+
+
+def _stringify_error(value: Any) -> str:
+    """Return a human-readable message from DRF error payloads."""
+    if isinstance(value, ErrorDetail):
+        return str(value)
+    if isinstance(value, str):
+        return value
+    if isinstance(value, Mapping):
+        detail = value.get("detail")
+        if detail:
+            return _stringify_error(detail)
+        non_field = value.get("non_field_errors")
+        if non_field:
+            return _stringify_error(non_field)
+        return "Validation error"
+    if isinstance(value, list) and value:
+        return _stringify_error(value[0])
+    return "API request failed"
+
+
+def standardize_error_response(exc: Exception, response: Response) -> None:
+    """Ensure handled API errors expose ``error`` and ``error_code`` fields."""
+    original_data = response.data
+    error_code = _code_from_exception(exc, response)
+
+    if isinstance(original_data, Mapping):
+        data = dict(original_data)
+        data.setdefault("error", _stringify_error(original_data))
+        data.setdefault("error_code", error_code)
+        response.data = data
+        return
+
+    response.data = {
+        "error": _stringify_error(original_data),
+        "error_code": error_code,
+        "detail": original_data,
+    }
 
 
 def _is_sensitive_key(key: str) -> bool:
@@ -142,6 +194,8 @@ def custom_exception_handler(exc: Exception, context: dict[str, Any]) -> Respons
     if response is None:
         logger.exception("Unhandled API exception", extra=log_context)
         return None
+
+    standardize_error_response(exc, response)
 
     log_context["status_code"] = response.status_code
     try:

@@ -28,7 +28,7 @@ import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
 import { useTaskTrades, type TaskTrade } from '../../../hooks/useTaskTrades';
-import { TaskType } from '../../../types/common';
+import type { TaskType } from '../../../types/common';
 import { useAuth } from '../../../contexts/AuthContext';
 import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';
 import {

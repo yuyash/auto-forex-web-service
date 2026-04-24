@@ -11,6 +11,7 @@ from decimal import Decimal
 from logging import Logger, getLogger
 from typing import Any, TypeVar
 
+from django.db.models import F
 from django.utils import timezone as dj_timezone
 
 from apps.market.services.oanda import OandaService, OrderDirection
@@ -104,7 +105,7 @@ class TradingResumeReconciler:
         self._sync_strategy_state_with_positions(open_positions, report)
         self._validate_safety(report=report, resumed=resumed)
         self._record_reconciliation_metadata(report=report)
-        self.state.save()
+        self._persist_state()
         return report
 
     def detect_runtime_drift(self) -> ReconciliationReport:
@@ -392,6 +393,9 @@ class TradingResumeReconciler:
             self.state.strategy_state if isinstance(self.state.strategy_state, dict) else {}
         )
         strategy_state["broker_reconciled_at"] = dj_timezone.now().isoformat()
+        strategy_state["broker_reconciliation_status"] = (
+            "blocked" if report.blockers else "warning" if report.warnings else "ok"
+        )
         strategy_state["broker_unrealized_pnl"] = str(unrealized_total)
         strategy_state["broker_open_trade_count"] = report.broker_open_positions
         strategy_state["broker_pending_order_count"] = report.pending_broker_orders
@@ -400,6 +404,31 @@ class TradingResumeReconciler:
         if report.blockers:
             strategy_state["broker_reconciliation_blockers"] = report.blockers
         self.state.strategy_state = strategy_state
+
+    def _persist_state(self) -> None:
+        now = dj_timezone.now()
+        rows = ExecutionState.objects.filter(
+            pk=self.state.pk,
+            state_version=self.state.state_version,
+        ).update(
+            strategy_state=self.state.strategy_state,
+            current_balance=self.state.current_balance,
+            ticks_processed=self.state.ticks_processed,
+            last_tick_timestamp=self.state.last_tick_timestamp,
+            resume_cursor_timestamp=(
+                self.state.resume_cursor_timestamp or self.state.last_tick_timestamp
+            ),
+            last_tick_price=self.state.last_tick_price,
+            last_tick_bid=self.state.last_tick_bid,
+            last_tick_ask=self.state.last_tick_ask,
+            updated_at=now,
+            state_version=F("state_version") + 1,
+        )
+        if rows != 1:
+            raise TradingSafetyError(
+                "Execution state changed during broker reconciliation. Retry resume after refresh."
+            )
+        self.state.state_version += 1
 
     def _sync_strategy_state_with_positions(
         self,

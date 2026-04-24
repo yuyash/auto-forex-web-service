@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -52,11 +52,11 @@ class TestStartTask:
         task.validate_configuration.return_value = (True, None)
         execution_uuid = uuid4()
         celery_uuid = uuid4()
+        dispatch_uuid = uuid4()
         # _prepare_detached_start_task calls uuid4() twice: first for
-        # execution_id, then for celery_task_id.  _dispatch_task pulls
-        # celery_task_id from the task attribute, so we return both in
-        # call order.
-        mock_uuid.side_effect = [execution_uuid, celery_uuid]
+        # execution_id, then for celery_task_id. _dispatch_task rotates
+        # dispatch_idempotency_key once per enqueue.
+        mock_uuid.side_effect = [execution_uuid, celery_uuid, dispatch_uuid]
         mock_celery_task.apply_async.return_value = MagicMock(id=str(celery_uuid))
         mock_app.control.inspect.return_value.active.return_value = {"worker1": []}
 
@@ -71,9 +71,10 @@ class TestStartTask:
         assert task.execution_id == execution_uuid
         assert task.celery_task_id == celery_uuid
         mock_celery_task.apply_async.assert_called_once_with(
-            args=[task.pk],
+            args=[task.pk, str(dispatch_uuid)],
             task_id=str(celery_uuid),
             queue="backtest",
+            headers=ANY,
         )
 
     @patch("celery.current_app")
@@ -96,7 +97,8 @@ class TestStartTask:
         task.validate_configuration.return_value = (True, None)
         execution_uuid = uuid4()
         celery_uuid = uuid4()
-        mock_uuid.side_effect = [execution_uuid, celery_uuid]
+        dispatch_uuid = uuid4()
+        mock_uuid.side_effect = [execution_uuid, celery_uuid, dispatch_uuid]
         mock_celery_task.apply_async.return_value = MagicMock(id=str(celery_uuid))
         mock_app.control.inspect.return_value.active.return_value = {"worker1": []}
 
@@ -232,7 +234,8 @@ class TestRecoverTradingTask:
         locked.celery_task_id = task.celery_task_id
 
         new_celery_task_id = uuid4()
-        mock_uuid.return_value = new_celery_task_id
+        dispatch_uuid = uuid4()
+        mock_uuid.side_effect = [new_celery_task_id, dispatch_uuid]
 
         mock_tt.objects.select_for_update.return_value.get.return_value = locked
 
@@ -245,9 +248,10 @@ class TestRecoverTradingTask:
         # celery_task_id is rotated to avoid the revoke-list of the previous worker.
         assert locked.celery_task_id == new_celery_task_id
         mock_run_trading_task.apply_async.assert_called_once_with(
-            args=[locked.pk],
+            args=[locked.pk, str(dispatch_uuid)],
             task_id=str(new_celery_task_id),
             queue="trading",
+            headers=ANY,
         )
 
     @patch("apps.trading.tasks.service.transaction.atomic")
@@ -339,9 +343,10 @@ class TestResumeTask:
         # suppressed by the revoke list.
         assert locked.celery_task_id == new_celery_task_id
         mock_run_backtest_task.apply_async.assert_called_once_with(
-            args=[task_id],
+            args=[task_id, ANY],
             task_id=str(new_celery_task_id),
             queue="backtest",
+            headers=ANY,
         )
 
     @patch("apps.trading.tasks.service.transaction.atomic")
@@ -432,9 +437,10 @@ class TestResumeTask:
         # celery_task_id is rotated to avoid the revoke-list collision.
         assert locked.celery_task_id == new_celery_task_id
         mock_run_trading_task.apply_async.assert_called_once_with(
-            args=[task_id],
+            args=[task_id, ANY],
             task_id=str(new_celery_task_id),
             queue="trading",
+            headers=ANY,
         )
 
 

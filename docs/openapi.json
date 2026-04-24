@@ -2,7 +2,7 @@
     "openapi": "3.0.3",
     "info": {
         "title": "Auto Forex Trader API",
-        "version": "1.42.3",
+        "version": "1.42.5",
         "description": "Auto Forex Trader Backend API.\n\n## Authentication\nMost endpoints require JWT authentication. Include the token in the `Authorization: Bearer <token>` header.\n\n## Rate Limiting\nAuthentication endpoints are rate-limited to prevent abuse."
     },
     "paths": {
@@ -1450,6 +1450,93 @@
                 }
             }
         },
+        "/api/trading/recovery-attempts/": {
+            "get": {
+                "operationId": "trading_recovery_attempts_list",
+                "description": "Read-only list of automatic task recovery audit records.",
+                "parameters": [
+                    {
+                        "name": "ordering",
+                        "required": false,
+                        "in": "query",
+                        "description": "Which field to use when ordering the results.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "required": false,
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "result",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "required": false,
+                        "in": "query",
+                        "description": "A search term.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "source",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "task_type",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "backtest",
+                                "trading"
+                            ]
+                        }
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedRecoveryAttemptList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/strategies/": {
             "get": {
                 "operationId": "trading_strategies_list",
@@ -2500,6 +2587,103 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/TaskExecution"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/backtest/{id}/latest-metrics/": {
+            "get": {
+                "operationId": "trading_tasks_backtest_latest_metrics_retrieve",
+                "description": "Retrieve the latest time-series metric point for the task.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                        },
+                        "description": "Filter by execution ID (UUID)."
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "interval",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 1440,
+                            "minimum": 1
+                        },
+                        "description": "Aggregation interval in minutes. Default 1. When greater than 1, returns one point per N-minute window."
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Page number (1-based)."
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 500,
+                            "minimum": 1
+                        },
+                        "description": "Results per page. Default 100, maximum 500."
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
+                    },
+                    {
+                        "in": "query",
+                        "name": "until",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "RFC3339 upper-bound timestamp (exclusive)."
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskLatestMetricResponse"
                                 }
                             }
                         },
@@ -4300,6 +4484,103 @@
                 }
             }
         },
+        "/api/trading/tasks/trading/{id}/latest-metrics/": {
+            "get": {
+                "operationId": "trading_tasks_trading_latest_metrics_retrieve",
+                "description": "Retrieve the latest time-series metric point for the task.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "nullable": true
+                        },
+                        "description": "Filter by execution ID (UUID)."
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "interval",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 1440,
+                            "minimum": 1
+                        },
+                        "description": "Aggregation interval in minutes. Default 1. When greater than 1, returns one point per N-minute window."
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Page number (1-based)."
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 500,
+                            "minimum": 1
+                        },
+                        "description": "Results per page. Default 100, maximum 500."
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "RFC3339 timestamp for incremental fetch."
+                    },
+                    {
+                        "in": "query",
+                        "name": "until",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "RFC3339 upper-bound timestamp (exclusive)."
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskLatestMetricResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/trading/{id}/log-components/": {
             "get": {
                 "operationId": "trading_tasks_trading_log_components_retrieve",
@@ -5455,6 +5736,29 @@
     },
     "components": {
         "schemas": {
+            "ApiError": {
+                "type": "object",
+                "required": [
+                    "error",
+                    "error_code"
+                ],
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    },
+                    "error_code": {
+                        "type": "string"
+                    },
+                    "detail": {},
+                    "message": {
+                        "type": "string"
+                    },
+                    "retry_after": {
+                        "type": "integer"
+                    }
+                },
+                "additionalProperties": true
+            },
             "ApiTypeEnum": {
                 "enum": [
                     "practice",
@@ -5522,6 +5826,11 @@
                         "format": "decimal",
                         "pattern": "^-?\\d{0,13}(?:\\.\\d{0,2})?$",
                         "description": "Initial account balance for backtest"
+                    },
+                    "account_currency": {
+                        "type": "string",
+                        "description": "Account base currency (e.g., USD, JPY)",
+                        "maxLength": 3
                     },
                     "commission_per_trade": {
                         "type": "string",
@@ -5667,9 +5976,15 @@
                     },
                     "debug_options": {
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"
+                    },
+                    "can_resume": {
+                        "type": "boolean",
+                        "description": "Check if task can be resumed with state recovery.",
+                        "readOnly": true
                     }
                 },
                 "required": [
+                    "can_resume",
                     "completed_at",
                     "config_id",
                     "config_name",
@@ -5904,6 +6219,11 @@
                         "readOnly": true,
                         "description": "Initial account balance for backtest"
                     },
+                    "account_currency": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Account base currency (e.g., USD, JPY)"
+                    },
                     "pip_size": {
                         "type": "string",
                         "format": "decimal",
@@ -6034,9 +6354,16 @@
                     "debug_options": {
                         "readOnly": true,
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"
+                    },
+                    "can_resume": {
+                        "type": "boolean",
+                        "description": "Check if task can be resumed with state recovery.",
+                        "readOnly": true
                     }
                 },
                 "required": [
+                    "account_currency",
+                    "can_resume",
                     "completed_at",
                     "config_id",
                     "config_name",
@@ -6109,6 +6436,12 @@
                         "format": "decimal",
                         "pattern": "^-?\\d{0,13}(?:\\.\\d{0,2})?$",
                         "description": "Initial account balance for backtest"
+                    },
+                    "account_currency": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Account base currency (e.g., USD, JPY)",
+                        "maxLength": 3
                     },
                     "commission_per_trade": {
                         "type": "string",
@@ -6436,13 +6769,53 @@
                     "display_currency": {
                         "type": "string",
                         "nullable": true
+                    },
+                    "resume_cursor_timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "margin_ratio": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "nullable": true
+                    },
+                    "current_atr": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "nullable": true
+                    },
+                    "recovery_status": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "recovery_warnings": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "recovery_blockers": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "reconciled_at": {
+                        "type": "string",
+                        "nullable": true
                     }
                 },
                 "required": [
                     "account_currency",
+                    "current_atr",
                     "current_balance",
                     "current_balance_display",
                     "display_currency",
+                    "margin_ratio",
+                    "recovery_status",
+                    "resume_cursor_timestamp",
                     "ticks_processed"
                 ]
             },
@@ -7831,6 +8204,37 @@
                     }
                 }
             },
+            "PaginatedRecoveryAttemptList": {
+                "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "example": 123
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=4"
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=2"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RecoveryAttempt"
+                        }
+                    }
+                }
+            },
             "PaginatedStrategyConfigPaginatedResponseList": {
                 "type": "object",
                 "required": [
@@ -8496,6 +8900,81 @@
                         "description": "Whether email whitelist is enforced for registration/login"
                     }
                 }
+            },
+            "RecoveryAttempt": {
+                "type": "object",
+                "description": "Serializer for automatic task recovery audit records.",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "description": "Unique identifier for this recovery attempt"
+                    },
+                    "task_type": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TaskTypeEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "Type of task (backtest or trading)\n\n* `backtest` - Backtest\n* `trading` - Trading"
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "description": "Recovered task UUID"
+                    },
+                    "execution_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Execution run UUID at the time of recovery"
+                    },
+                    "source": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "reason": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "action": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "result": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "detail": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "metadata": {
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "action",
+                    "created_at",
+                    "detail",
+                    "execution_id",
+                    "id",
+                    "metadata",
+                    "reason",
+                    "result",
+                    "source",
+                    "task_id",
+                    "task_type"
+                ]
             },
             "RegisteredUser": {
                 "type": "object",
@@ -9173,6 +9652,30 @@
                     "stop_reason"
                 ]
             },
+            "TaskLatestMetricResponse": {
+                "type": "object",
+                "properties": {
+                    "data_source": {
+                        "type": "string"
+                    },
+                    "resume_cursor_timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "consistency_warnings": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "result": {
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "data_source",
+                    "result",
+                    "resume_cursor_timestamp"
+                ]
+            },
             "TaskLog": {
                 "type": "object",
                 "description": "Serializer for TaskLog model.\n\nProvides access to task execution logs with timestamp, level, and message.",
@@ -9310,6 +9813,17 @@
                         "type": "string",
                         "nullable": true
                     },
+                    "data_source": {
+                        "type": "string"
+                    },
+                    "resume_cursor_timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "consistency_warnings": {
+                        "type": "array",
+                        "items": {}
+                    },
                     "results": {
                         "type": "array",
                         "items": {
@@ -9319,9 +9833,11 @@
                 },
                 "required": [
                     "count",
+                    "data_source",
                     "next",
                     "previous",
-                    "results"
+                    "results",
+                    "resume_cursor_timestamp"
                 ]
             },
             "TaskOrderPaginatedResponse": {

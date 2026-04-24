@@ -8,7 +8,7 @@
 export * from './types';
 
 // Export API client
-export { api, ApiError } from './apiClient';
+export { api, ApiError, type ApiErrorBody } from './apiClient';
 
 // Export API config
 export { apiConfig } from './apiConfig';

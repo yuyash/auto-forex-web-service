@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
@@ -15,6 +16,7 @@ from apps.trading.engine import TradingEngine
 from apps.trading.enums import TaskStatus, TaskType
 from apps.trading.logging import TaskLoggingSession
 from apps.trading.models import BacktestTask
+from apps.trading.models.state import ExecutionState
 from apps.trading.services.execution_lifecycle import transition_task_to_running
 from apps.trading.tasks.executor import BacktestExecutor
 from apps.trading.tasks.lifecycle_events import (
@@ -137,7 +139,9 @@ def _purge_stale_task_streams(request_id: str, *, keep_execution_id: str | None 
     reject_on_worker_lost=True,
     track_started=True,
 )
-def run_backtest_task(self: Any, task_id: UUID) -> None:
+def run_backtest_task(
+    self: Any, task_id: UUID, dispatch_idempotency_key: str | None = None
+) -> None:
     """Celery task wrapper for running backtest tasks."""
     task = None
     logging_session: TaskLoggingSession | None = None
@@ -152,6 +156,17 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
         task = BacktestTask.objects.get(pk=task_id)
         logging_session = TaskLoggingSession(task)
         logging_session.start()
+
+        if dispatch_idempotency_key and str(task.dispatch_idempotency_key) != str(
+            dispatch_idempotency_key
+        ):
+            logger.warning(
+                "SKIPPING stale redelivery - task_id=%s, expected_key=%s, received_key=%s",
+                task_id,
+                task.dispatch_idempotency_key,
+                dispatch_idempotency_key,
+            )
+            return
 
         logger.info(
             "Task loaded from DB - task_id=%s, status=%s, instrument=%s, "
@@ -324,6 +339,42 @@ def execute_backtest(task: BacktestTask) -> None:
     executor.execute()
 
 
+def _backtest_resume_start_time(task: BacktestTask):
+    """Return the next publisher start for a resumed backtest execution.
+
+    Backtest resume preserves ``execution_id`` and ``ExecutionState``.  If we
+    publish again from the original task start, the executor replays old ticks
+    into an already-restored strategy state, which can make balances and
+    metrics jump sharply.  Start just after the last persisted tick instead.
+    """
+
+    execution_id = getattr(task, "execution_id", None)
+    if not execution_id or not isinstance(execution_id, UUID):
+        return task.start_time
+
+    state = (
+        ExecutionState.objects.filter(
+            task_type=TaskType.BACKTEST.value,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+        )
+        .only("last_tick_timestamp", "ticks_processed")
+        .first()
+    )
+    if not state or state.ticks_processed <= 0:
+        return task.start_time
+
+    resume_cursor = state.resume_cursor_timestamp or state.last_tick_timestamp
+    if not resume_cursor:
+        return task.start_time
+    resume_start = resume_cursor + timedelta(microseconds=1)
+    if resume_start >= task.end_time:
+        return task.end_time
+    if resume_start < task.start_time:
+        return task.start_time
+    return resume_start
+
+
 def trigger_backtest_publisher(
     task: BacktestTask,
 ) -> None:
@@ -345,7 +396,7 @@ def trigger_backtest_publisher(
 
     request_id = str(task.pk)
 
-    effective_start = task.start_time
+    effective_start = _backtest_resume_start_time(task)
 
     logger.info(
         "Triggering backtest publisher - task_id=%s, request_id=%s, "

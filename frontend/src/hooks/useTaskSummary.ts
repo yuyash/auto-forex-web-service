@@ -11,7 +11,7 @@
  * Supports optional polling for real-time updates.
  */
 
-import { TaskType } from '../types/common';
+import type { TaskType } from '../types/common';
 import { refreshTaskSummary } from './taskResourceCache';
 import { createTaskSummaryQuery } from './taskResourceQueries';
 import { usePollingPolicy } from './usePollingPolicy';
@@ -45,8 +45,13 @@ export interface ExecutionInfo {
   accountCurrency: string | null;
   currentBalanceDisplay: number | null;
   displayCurrency: string | null;
+  resumeCursorTimestamp: string | null;
   marginRatio: number | null;
   currentAtr: number | null;
+  recoveryStatus: string | null;
+  recoveryWarnings: string[];
+  recoveryBlockers: string[];
+  reconciledAt: string | null;
 }
 
 export interface TaskInfo {
@@ -98,8 +103,13 @@ const INITIAL_SUMMARY: TaskSummary = {
     accountCurrency: null,
     currentBalanceDisplay: null,
     displayCurrency: null,
+    resumeCursorTimestamp: null,
     marginRatio: null,
     currentAtr: null,
+    recoveryStatus: null,
+    recoveryWarnings: [],
+    recoveryBlockers: [],
+    reconciledAt: null,
   },
   tick: { timestamp: null, bid: null, ask: null, mid: null },
   task: {

@@ -81,3 +81,50 @@ class TaskLog(models.Model):
 
     def __str__(self) -> str:
         return f"[{self.level}] {self.task_type}:{self.task_id} @ {self.timestamp.isoformat()}: {self.message[:50]}"
+
+
+class RecoveryAttempt(models.Model):
+    """Structured audit record for automatic task recovery attempts."""
+
+    id = models.UUIDField(
+        primary_key=True,
+        default=uuid4,
+        editable=False,
+        help_text="Unique identifier for this recovery attempt",
+    )
+    task_type = models.CharField(
+        max_length=32,
+        choices=TaskType.choices,
+        db_index=True,
+        help_text="Type of task (backtest or trading)",
+    )
+    task_id = models.UUIDField(db_index=True, help_text="Recovered task UUID")
+    execution_id = models.UUIDField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Execution run UUID at the time of recovery",
+    )
+    source = models.CharField(max_length=64, db_index=True)
+    reason = models.CharField(max_length=128, blank=True, default="")
+    action = models.CharField(max_length=64)
+    result = models.CharField(max_length=32, db_index=True)
+    detail = models.TextField(blank=True, default="")
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "recovery_attempts"
+        verbose_name = "Recovery Attempt"
+        verbose_name_plural = "Recovery Attempts"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["task_type", "task_id", "created_at"]),
+            models.Index(fields=["source", "result", "created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.task_type}:{self.task_id} recovery {self.action}"
+            f" -> {self.result} ({self.source})"
+        )

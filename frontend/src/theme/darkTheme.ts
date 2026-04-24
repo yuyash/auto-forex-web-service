@@ -1,5 +1,6 @@
 import { createTheme } from '@mui/material/styles';
 import type { ThemeOptions } from '@mui/material/styles';
+import { breakpoints, componentDensity, typography } from './density';
 
 /**
  * Dark theme for Auto Forex Trader.
@@ -56,42 +57,6 @@ const palette = {
   divider: '#2a2e39',
 };
 
-const breakpoints = {
-  values: { xs: 0, sm: 600, md: 960, lg: 1280, xl: 1920 },
-};
-
-const typography = {
-  fontFamily: [
-    '-apple-system',
-    'BlinkMacSystemFont',
-    '"Segoe UI"',
-    'Roboto',
-    '"Helvetica Neue"',
-    'Arial',
-    'sans-serif',
-  ].join(','),
-  h1: { fontSize: '2.5rem', fontWeight: 500, lineHeight: 1.2 },
-  h2: { fontSize: '2rem', fontWeight: 500, lineHeight: 1.3 },
-  h3: { fontSize: '1.75rem', fontWeight: 500, lineHeight: 1.4 },
-  h4: { fontSize: '1.5rem', fontWeight: 500, lineHeight: 1.4 },
-  h5: { fontSize: '1.25rem', fontWeight: 500, lineHeight: 1.5 },
-  h6: { fontSize: '1rem', fontWeight: 500, lineHeight: 1.6 },
-  body1: { fontSize: '1rem', lineHeight: 1.5 },
-  body2: { fontSize: '0.875rem', lineHeight: 1.43 },
-  button: {
-    fontSize: '0.875rem',
-    fontWeight: 500,
-    textTransform: 'none' as const,
-  },
-  caption: { fontSize: '0.75rem', lineHeight: 1.66 },
-  overline: {
-    fontSize: '0.75rem',
-    fontWeight: 500,
-    lineHeight: 2.66,
-    textTransform: 'uppercase' as const,
-  },
-};
-
 const components = {
   MuiCssBaseline: {
     styleOverrides: {
@@ -123,9 +88,9 @@ const components = {
       root: {
         borderRadius: 4,
         textTransform: 'none' as const,
-        fontSize: '0.8rem',
-        padding: '3px 10px',
-        minHeight: 30,
+        fontSize: componentDensity.buttonFontSize,
+        padding: componentDensity.buttonPadding,
+        minHeight: componentDensity.buttonMinHeight,
         '&:focus-visible': {
           outline: '2px solid',
           outlineColor: palette.primary.main,
@@ -138,7 +103,7 @@ const components = {
     defaultProps: { size: 'small' as const },
     styleOverrides: {
       root: {
-        padding: 4,
+        padding: componentDensity.iconButtonPadding,
         '&:focus-visible': {
           outline: '2px solid',
           outlineColor: palette.primary.main,
@@ -151,8 +116,13 @@ const components = {
     defaultProps: { size: 'small' as const },
     styleOverrides: {
       root: {
-        '& .MuiInputBase-input': { fontSize: '0.8rem', padding: '6px 10px' },
-        '& .MuiInputLabel-root': { fontSize: '0.8rem' },
+        '& .MuiInputBase-input': {
+          fontSize: componentDensity.controlFontSize,
+          padding: componentDensity.controlPadding,
+        },
+        '& .MuiInputLabel-root': {
+          fontSize: componentDensity.controlFontSize,
+        },
       },
     },
   },
@@ -160,22 +130,22 @@ const components = {
   MuiSelect: { defaultProps: { size: 'small' as const } },
   MuiInputLabel: {
     defaultProps: { size: 'small' as const },
-    styleOverrides: { root: { fontSize: '0.8rem' } },
+    styleOverrides: { root: { fontSize: componentDensity.controlFontSize } },
   },
   MuiMenuItem: {
     styleOverrides: {
       root: {
-        fontSize: '0.75rem',
-        minHeight: 28,
-        paddingTop: 2,
-        paddingBottom: 2,
+        fontSize: componentDensity.controlFontSize,
+        minHeight: componentDensity.menuItemMinHeight,
+        paddingTop: componentDensity.menuItemPaddingY,
+        paddingBottom: componentDensity.menuItemPaddingY,
       },
     },
   },
   MuiListItemText: {
     styleOverrides: {
-      primary: { fontSize: '0.75rem' },
-      secondary: { fontSize: '0.65rem' },
+      primary: { fontSize: componentDensity.listPrimaryFontSize },
+      secondary: { fontSize: componentDensity.listSecondaryFontSize },
     },
   },
   MuiListItemIcon: {
@@ -185,15 +155,17 @@ const components = {
   },
   MuiOutlinedInput: {
     styleOverrides: {
-      root: { fontSize: '0.8rem' },
-      input: { padding: '6px 10px' },
+      root: { fontSize: componentDensity.controlFontSize },
+      input: { padding: componentDensity.controlPadding },
     },
   },
   MuiAutocomplete: { defaultProps: { size: 'small' as const } },
   MuiChip: { defaultProps: { size: 'small' as const } },
   MuiSwitch: { defaultProps: { size: 'small' as const } },
   MuiCheckbox: { defaultProps: { size: 'small' as const } },
-  MuiFormControlLabel: { styleOverrides: { label: { fontSize: '0.75rem' } } },
+  MuiFormControlLabel: {
+    styleOverrides: { label: { fontSize: componentDensity.controlFontSize } },
+  },
   MuiRadio: { defaultProps: { size: 'small' as const } },
   MuiFab: { defaultProps: { size: 'small' as const } },
   MuiToggleButton: { defaultProps: { size: 'small' as const } },

@@ -7,6 +7,7 @@
 
 import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios';
 import { apiConfig, getAuthHeaders } from './apiConfig';
+import { handleAuthErrorStatus } from '../utils/authEvents';
 
 export class ApiError extends Error {
   public readonly status: number;
@@ -24,9 +25,12 @@ export class ApiError extends Error {
   }
 }
 
-type ApiErrorBody = {
+export type ApiErrorBody = {
   error?: unknown;
   error_code?: unknown;
+  detail?: unknown;
+  message?: unknown;
+  retry_after?: unknown;
 };
 
 export function getApiErrorBody(error: unknown): ApiErrorBody | null {
@@ -47,11 +51,26 @@ export function getApiErrorCode(error: unknown): string | null {
 
 export function getApiErrorMessage(error: unknown): string | null {
   const body = getApiErrorBody(error);
-  return typeof body?.error === 'string' ? body.error : null;
+  if (typeof body?.error === 'string') {
+    return body.error;
+  }
+  if (typeof body?.detail === 'string') {
+    return body.detail;
+  }
+  return typeof body?.message === 'string' ? body.message : null;
 }
 
 function buildUrl(path: string): string {
   return `${apiConfig.BASE}${path}`;
+}
+
+function notifyAuthError(status: number, url: string): void {
+  handleAuthErrorStatus(status, {
+    source: 'http',
+    status,
+    url,
+    context: 'api_client',
+  });
 }
 
 async function makeRequest<T>(
@@ -94,6 +113,7 @@ async function makeRequest<T>(
     response = await axios.request<T>(config);
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
+      notifyAuthError(error.response.status, url);
       throw new ApiError(
         url,
         error.response.status,
@@ -105,6 +125,7 @@ async function makeRequest<T>(
   }
 
   if (response.status >= 400) {
+    notifyAuthError(response.status, url);
     throw new ApiError(
       url,
       response.status,

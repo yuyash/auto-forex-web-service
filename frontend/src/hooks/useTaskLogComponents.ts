@@ -4,7 +4,7 @@
  * Fetches distinct logger/component names for a task's logs.
  */
 
-import { TaskType } from '../types/common';
+import type { TaskType } from '../types/common';
 import { createTaskLogComponentsQuery } from './taskLogComponentQueries';
 import { mapQueryStateFields, useSimpleQueryState } from './useTaskCollections';
 

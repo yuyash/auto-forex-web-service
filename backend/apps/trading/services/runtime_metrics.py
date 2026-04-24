@@ -158,6 +158,7 @@ class RuntimeMetricsTracker:
             ),
             "current_balance": str(current_balance),
             "realized_pnl": str(self._realized_pnl),
+            "realized_pnl_quote": str(self._realized_pnl_quote),
             "unrealized_pnl": str(unrealized_pnl),
             "total_pnl": str(total_pnl),
             "total_return": str(total_return),

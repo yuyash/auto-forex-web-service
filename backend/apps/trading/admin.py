@@ -6,6 +6,7 @@ from apps.trading.models import (
     Equity,
     Order,
     Position,
+    RecoveryAttempt,
     StrategyConfiguration,
     TaskLog,
     Trade,
@@ -132,6 +133,36 @@ class TaskLogAdmin(admin.ModelAdmin):
         "component",
         "message",
         "details",
+    )
+
+
+@admin.register(RecoveryAttempt)
+class RecoveryAttemptAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "created_at",
+        "task_type",
+        "task_id",
+        "source",
+        "action",
+        "result",
+        "reason",
+    )
+    list_filter = ("task_type", "source", "result", "action", "created_at")
+    search_fields = ("task_id", "execution_id", "source", "reason", "detail")
+    ordering = ("-created_at",)
+    readonly_fields = (
+        "id",
+        "task_type",
+        "task_id",
+        "execution_id",
+        "source",
+        "reason",
+        "action",
+        "result",
+        "detail",
+        "metadata",
+        "created_at",
     )
 
 

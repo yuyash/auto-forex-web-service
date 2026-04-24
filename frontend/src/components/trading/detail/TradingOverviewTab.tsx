@@ -1,22 +1,21 @@
 import { useState, useMemo } from 'react';
 import {
+  Alert,
   Box,
   Chip,
-  Dialog,
-  DialogContent,
-  DialogTitle,
   Divider,
   Grid,
-  IconButton,
   Link,
   Typography,
 } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { StatusBadge } from '../../tasks/display/StatusBadge';
 import { ExecutionHistoryTable } from '../../tasks/display/ExecutionHistoryTable';
 import { LatestMetricsSummary } from '../../tasks/detail/LatestMetricsSummary';
+import { TaskSettingsList } from '../../tasks/detail/TaskSettingsList';
+import { StrategyParameterDialog } from '../../tasks/detail/StrategyParameterDialog';
+import { buildTradingTaskSettingDefinitions } from '../../tasks/detail/taskSettingDefinitions';
 import type { TaskSummary } from '../../../hooks/useTaskSummary';
 import { getStrategyDisplayName } from '../../../hooks/useStrategies';
 import type { Strategy } from '../../../services/api/strategies';
@@ -24,11 +23,7 @@ import { TaskType, type TaskStatus } from '../../../types/common';
 import type { TradingTask } from '../../../types';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
 import { formatAppNumber, formatAppPercent } from '../../../utils/numberFormat';
-import {
-  buildParameterLabelMap,
-  resolveParameterLabel,
-} from '../../../utils/strategySchemaLabels';
-import { isParameterVisible } from '../../../utils/strategySchemaDependsOn';
+import { buildParameterLabelMap } from '../../../utils/strategySchemaLabels';
 import type { ConfigProperty } from '../../../types/strategy';
 
 interface TradingOverviewTabProps {
@@ -107,6 +102,12 @@ export function TradingOverviewTab({
     : summary.execution.marginRatio;
 
   const tracemallocEnabled = Boolean(task.debug_options?.tracemalloc);
+  const taskSettings = useMemo(
+    () => buildTradingTaskSettingDefinitions(t),
+    [t]
+  );
+  const recoveryBlockers = summary.execution.recoveryBlockers ?? [];
+  const recoveryWarnings = summary.execution.recoveryWarnings ?? [];
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
@@ -321,6 +322,26 @@ export function TradingOverviewTab({
         </Grid>
         <Grid size={{ xs: 12 }}>
           <Divider sx={{ my: 2 }} />
+          <TaskSettingsList
+            title={t('common:labels.taskSettings', 'Task settings')}
+            task={task as unknown as Record<string, unknown>}
+            snapshot={historicalTaskConfig}
+            definitions={taskSettings}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12 }}>
+          {recoveryBlockers.length > 0 ? (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {recoveryBlockers[0]}
+            </Alert>
+          ) : null}
+          {recoveryWarnings.length > 0 ? (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              {recoveryWarnings[0]}
+            </Alert>
+          ) : null}
+          <Divider sx={{ my: 2 }} />
           <Typography variant="h6" gutterBottom>
             {t('trading:detail.results')}
           </Typography>
@@ -478,6 +499,28 @@ export function TradingOverviewTab({
                 </Typography>
               </Box>
             )}
+            {summary.execution.resumeCursorTimestamp && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Resume Cursor
+                </Typography>
+                <Typography variant="body1">
+                  {new Date(
+                    summary.execution.resumeCursorTimestamp
+                  ).toLocaleString()}
+                </Typography>
+              </Box>
+            )}
+            {summary.execution.reconciledAt && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Broker Reconciled
+                </Typography>
+                <Typography variant="body1">
+                  {new Date(summary.execution.reconciledAt).toLocaleString()}
+                </Typography>
+              </Box>
+            )}
             <LatestMetricsSummary
               latest={latestMetrics ?? null}
               pnlCurrency={pnlCurrency}
@@ -497,73 +540,16 @@ export function TradingOverviewTab({
 
       {/* Snapshot parameters dialog */}
       {historicalStrategyConfig && (
-        <Dialog
+        <StrategyParameterDialog
           open={showSnapshotParams}
           onClose={() => setShowSnapshotParams(false)}
-          maxWidth="sm"
-          fullWidth
-        >
-          <DialogTitle
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            {historicalStrategyConfig.name}
-            <IconButton
-              size="small"
-              onClick={() => setShowSnapshotParams(false)}
-            >
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </DialogTitle>
-          <DialogContent dividers>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ mb: 2, display: 'block' }}
-            >
-              {t('common:labels.strategyType')}:{' '}
-              {historicalStrategyConfig.strategy_type}
-            </Typography>
-            {Object.entries(historicalStrategyConfig.parameters || {})
-              .filter(([key]) =>
-                isParameterVisible(
-                  key,
-                  historicalStrategyConfig.parameters || {},
-                  snapshotSchemaProperties
-                )
-              )
-              .map(([key, value]) => (
-                <Box
-                  key={key}
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    py: 0.5,
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                  }}
-                >
-                  <Typography variant="body2" color="text.secondary">
-                    {resolveParameterLabel(paramLabelMap, key)}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    fontWeight={500}
-                    sx={{ fontFamily: 'monospace' }}
-                  >
-                    {typeof value === 'boolean'
-                      ? value
-                        ? 'true'
-                        : 'false'
-                      : String(value ?? '-')}
-                  </Typography>
-                </Box>
-              ))}
-          </DialogContent>
-        </Dialog>
+          title={historicalStrategyConfig.name}
+          strategyType={historicalStrategyConfig.strategy_type}
+          parameters={historicalStrategyConfig.parameters || {}}
+          snapshotSchemaProperties={snapshotSchemaProperties}
+          paramLabelMap={paramLabelMap}
+          labels={{ strategyType: t('common:labels.strategyType') }}
+        />
       )}
     </Box>
   );

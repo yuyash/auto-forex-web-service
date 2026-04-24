@@ -60,8 +60,13 @@ class ExecutionInfo:
     account_currency: str | None
     current_balance_display: Decimal | None
     display_currency: str | None
+    resume_cursor_timestamp: str | None
     margin_ratio: Decimal | None
     current_atr: Decimal | None
+    recovery_status: str | None
+    recovery_warnings: list[str]
+    recovery_blockers: list[str]
+    reconciled_at: str | None
 
 
 @dataclass(frozen=True)
@@ -199,8 +204,13 @@ def compute_task_summary(
     account_currency: str | None = None
     current_balance_display: Decimal | None = None
     display_currency: str | None = None
+    resume_cursor_timestamp: str | None = None
     margin_ratio: Decimal | None = None
     current_atr: Decimal | None = None
+    recovery_status: str | None = None
+    recovery_warnings: list[str] = []
+    recovery_blockers: list[str] = []
+    reconciled_at: str | None = None
 
     from apps.trading.models.state import ExecutionState
 
@@ -213,6 +223,8 @@ def compute_task_summary(
         ticks_processed = state.ticks_processed
         if state.last_tick_timestamp:
             tick_timestamp = state.last_tick_timestamp.isoformat()
+        if state.resume_cursor_timestamp:
+            resume_cursor_timestamp = state.resume_cursor_timestamp.isoformat()
         tick_bid = state.last_tick_bid
         tick_ask = state.last_tick_ask
         tick_mid = state.last_tick_price
@@ -233,6 +245,24 @@ def compute_task_summary(
                     current_atr = Decimal(str(raw_atr))
                 except (InvalidOperation, TypeError, ValueError):
                     pass  # nosec B110
+        recovery_status = (
+            str(ss.get("broker_reconciliation_status"))
+            if ss.get("broker_reconciliation_status") is not None
+            else None
+        )
+        recovery_warnings = (
+            [str(item) for item in ss.get("broker_reconciliation_warnings", [])]
+            if isinstance(ss.get("broker_reconciliation_warnings"), list)
+            else []
+        )
+        recovery_blockers = (
+            [str(item) for item in ss.get("broker_reconciliation_blockers", [])]
+            if isinstance(ss.get("broker_reconciliation_blockers"), list)
+            else []
+        )
+        reconciled_at = (
+            str(ss.get("broker_reconciled_at")) if ss.get("broker_reconciled_at") else None
+        )
 
     # Task info
     status = ""
@@ -298,8 +328,13 @@ def compute_task_summary(
             account_currency=account_currency,
             current_balance_display=current_balance_display,
             display_currency=display_currency,
+            resume_cursor_timestamp=resume_cursor_timestamp,
             margin_ratio=margin_ratio,
             current_atr=current_atr,
+            recovery_status=recovery_status,
+            recovery_warnings=recovery_warnings,
+            recovery_blockers=recovery_blockers,
+            reconciled_at=reconciled_at,
         ),
         tick=TickInfo(
             timestamp=tick_timestamp,

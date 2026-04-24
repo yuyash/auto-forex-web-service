@@ -39,6 +39,26 @@ class TestRunBacktestTask:
         run_backtest_task.__wrapped__(task.pk)
         mock_exec.assert_not_called()
 
+    @patch("apps.trading.tasks.backtest.TaskLoggingSession")
+    @patch("apps.trading.tasks.backtest.execute_backtest")
+    @patch("apps.trading.tasks.backtest.BacktestTask")
+    def test_skips_stale_redelivery_when_idempotency_key_mismatches(
+        self, mock_model, mock_exec, mock_logging
+    ):
+        from apps.trading.tasks.backtest import run_backtest_task
+
+        task = MagicMock(
+            pk=uuid4(),
+            status=TaskStatus.STARTING,
+            instrument="EUR_USD",
+            dispatch_idempotency_key=uuid4(),
+        )
+        mock_model.objects.get.return_value = task
+        mock_model.DoesNotExist = _DoesNotExist
+
+        run_backtest_task.__wrapped__(task.pk, str(uuid4()))
+        mock_exec.assert_not_called()
+
     @patch("apps.trading.tasks.backtest.finalize_task_terminal_lifecycle")
     @patch("apps.trading.tasks.backtest.publish_task_lifecycle_event")
     @patch("apps.trading.tasks.backtest.TaskLoggingSession")
@@ -214,13 +234,11 @@ class TestTriggerBacktestPublisher:
         trigger_backtest_publisher(task)
         mock_publish.apply_async.assert_called_once()
 
+    @patch("apps.trading.tasks.backtest.ExecutionState")
     @patch("apps.market.tasks.publish_ticks_for_backtest")
     @patch("celery.current_app")
-    def test_passes_execution_id_and_start_time(self, mock_app, mock_publish):
-        """Publisher is always invoked with the task's configured start_time
-        and the current execution_id, so a restarted backtest replays from
-        the beginning rather than resuming from a stale ``ExecutionState``.
-        """
+    def test_passes_execution_id_and_start_time(self, mock_app, mock_publish, mock_execution_state):
+        """Publisher starts at task.start_time when no resume state exists."""
         from apps.trading.tasks.backtest import trigger_backtest_publisher
 
         execution_id = uuid4()
@@ -230,10 +248,84 @@ class TestTriggerBacktestPublisher:
         mock_app.control.inspect.return_value.active_queues.return_value = {
             "worker1": [{"name": "backtest"}],
         }
+        mock_execution_state.objects.filter.return_value.only.return_value.first.return_value = None
         trigger_backtest_publisher(task)
         kwargs = mock_publish.apply_async.call_args.kwargs["kwargs"]
         assert kwargs["start"] == "2024-01-01T00:00:00"
         assert kwargs["execution_id"] == str(execution_id)
+
+    @patch("apps.trading.tasks.backtest.ExecutionState")
+    @patch("apps.market.tasks.publish_ticks_for_backtest")
+    @patch("celery.current_app")
+    def test_resume_starts_after_last_processed_tick(
+        self, mock_app, mock_publish, mock_execution_state
+    ):
+        """A resumed backtest must not replay ticks already reflected in state."""
+        from datetime import datetime, timezone
+
+        from apps.trading.tasks.backtest import trigger_backtest_publisher
+
+        execution_id = uuid4()
+        last_tick = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        state = MagicMock(
+            last_tick_timestamp=last_tick,
+            resume_cursor_timestamp=None,
+            ticks_processed=123,
+        )
+        mock_execution_state.objects.filter.return_value.only.return_value.first.return_value = (
+            state
+        )
+
+        task = MagicMock(pk=uuid4(), instrument="EUR_USD", execution_id=execution_id)
+        task.start_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        task.end_time = datetime(2024, 1, 2, 0, 0, 0, tzinfo=timezone.utc)
+        task.tick_granularity = "tick"
+        task.tick_window_value_mode = "last"
+        task.pip_size = "0.0001"
+        mock_app.control.inspect.return_value.active_queues.return_value = {
+            "worker1": [{"name": "backtest"}],
+        }
+
+        trigger_backtest_publisher(task)
+
+        kwargs = mock_publish.apply_async.call_args.kwargs["kwargs"]
+        assert kwargs["start"] == "2024-01-01T12:00:00.000001+00:00"
+
+    @patch("apps.trading.tasks.backtest.ExecutionState")
+    @patch("apps.market.tasks.publish_ticks_for_backtest")
+    @patch("celery.current_app")
+    def test_resume_prefers_resume_cursor_timestamp(
+        self, mock_app, mock_publish, mock_execution_state
+    ):
+        from datetime import datetime, timezone
+
+        from apps.trading.tasks.backtest import trigger_backtest_publisher
+
+        execution_id = uuid4()
+        last_tick = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        resume_cursor = datetime(2024, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
+        state = MagicMock(
+            last_tick_timestamp=last_tick,
+            resume_cursor_timestamp=resume_cursor,
+            ticks_processed=123,
+        )
+        mock_execution_state.objects.filter.return_value.only.return_value.first.return_value = (
+            state
+        )
+
+        task = MagicMock(pk=uuid4(), instrument="EUR_USD", execution_id=execution_id)
+        task.start_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        task.end_time = datetime(2024, 1, 2, 0, 0, 0, tzinfo=timezone.utc)
+        task.tick_granularity = "tick"
+        task.tick_window_value_mode = "last"
+        task.pip_size = "0.0001"
+        mock_app.control.inspect.return_value.active_queues.return_value = {
+            "worker1": [{"name": "backtest"}],
+        }
+
+        trigger_backtest_publisher(task)
+        kwargs = mock_publish.apply_async.call_args.kwargs["kwargs"]
+        assert kwargs["start"] == "2024-01-01T12:05:00.000001+00:00"
 
 
 class TestStopBacktestTask:

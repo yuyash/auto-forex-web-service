@@ -7,7 +7,7 @@ import type {
 } from 'lightweight-charts';
 import type { OverlaySettings } from './chartOverlaySettings';
 import { detectMarketGaps } from '../../utils/marketClosedMarkers';
-import { MarketClosedHighlight } from '../../utils/MarketClosedHighlight';
+import type { MarketClosedHighlight } from '../../utils/MarketClosedHighlight';
 
 interface CandlePoint {
   time: UTCTimestamp;

@@ -2,80 +2,69 @@
 
 ## [1.56.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.3...frontend-v1.56.4) (2026-04-23)
 
-
 ### Bug Fixes
 
-* backtest sell on stop field mapping ([#588](https://github.com/yuyash/auto-forex-web-service/issues/588)) ([fa0ed47](https://github.com/yuyash/auto-forex-web-service/commit/fa0ed478b9122f616096e0b0cc677df411caf2d5))
+- backtest sell on stop field mapping ([#588](https://github.com/yuyash/auto-forex-web-service/issues/588)) ([fa0ed47](https://github.com/yuyash/auto-forex-web-service/commit/fa0ed478b9122f616096e0b0cc677df411caf2d5))
 
 ## [1.56.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.2...frontend-v1.56.3) (2026-04-22)
 
-
 ### Bug Fixes
 
-* **strategy:** clamp rebuild entry price to preserve grid ordering ([#584](https://github.com/yuyash/auto-forex-web-service/issues/584)) ([4a5f999](https://github.com/yuyash/auto-forex-web-service/commit/4a5f9996282033d653119ae96b46853c10d6b9da))
+- **strategy:** clamp rebuild entry price to preserve grid ordering ([#584](https://github.com/yuyash/auto-forex-web-service/issues/584)) ([4a5f999](https://github.com/yuyash/auto-forex-web-service/commit/4a5f9996282033d653119ae96b46853c10d6b9da))
 
 ## [1.56.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.1...frontend-v1.56.2) (2026-04-22)
 
-
 ### Bug Fixes
 
-* **strategy:** show historical slot loss-cut states ([#582](https://github.com/yuyash/auto-forex-web-service/issues/582)) ([c3ab2b4](https://github.com/yuyash/auto-forex-web-service/commit/c3ab2b49143bc7f1fbdacc8862a95917effa87a2))
+- **strategy:** show historical slot loss-cut states ([#582](https://github.com/yuyash/auto-forex-web-service/issues/582)) ([c3ab2b4](https://github.com/yuyash/auto-forex-web-service/commit/c3ab2b49143bc7f1fbdacc8862a95917effa87a2))
 
 ## [1.56.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.0...frontend-v1.56.1) (2026-04-21)
 
-
 ### Bug Fixes
 
-* **configuration:** reorder stop loss controls ([#578](https://github.com/yuyash/auto-forex-web-service/issues/578)) ([400f426](https://github.com/yuyash/auto-forex-web-service/commit/400f4260e1a7d9089f28f2a8a70367302f89e178))
+- **configuration:** reorder stop loss controls ([#578](https://github.com/yuyash/auto-forex-web-service/issues/578)) ([400f426](https://github.com/yuyash/auto-forex-web-service/commit/400f4260e1a7d9089f28f2a8a70367302f89e178))
 
 ## [1.56.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.55.7...frontend-v1.56.0) (2026-04-21)
 
-
 ### Features
 
-* **strategy:** configure rebuild stop loss ([#576](https://github.com/yuyash/auto-forex-web-service/issues/576)) ([205b98b](https://github.com/yuyash/auto-forex-web-service/commit/205b98b54fc5f084658af2393d007d08f0e1c8b4))
+- **strategy:** configure rebuild stop loss ([#576](https://github.com/yuyash/auto-forex-web-service/issues/576)) ([205b98b](https://github.com/yuyash/auto-forex-web-service/commit/205b98b54fc5f084658af2393d007d08f0e1c8b4))
 
 ## [1.55.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.55.6...frontend-v1.55.7) (2026-04-21)
 
-
 ### Bug Fixes
 
-* **strategy:** show close trade pnl in jpy ([#574](https://github.com/yuyash/auto-forex-web-service/issues/574)) ([af7f414](https://github.com/yuyash/auto-forex-web-service/commit/af7f41430ab3b03233d35a1e5fec53640f5204ef))
+- **strategy:** show close trade pnl in jpy ([#574](https://github.com/yuyash/auto-forex-web-service/issues/574)) ([af7f414](https://github.com/yuyash/auto-forex-web-service/commit/af7f41430ab3b03233d35a1e5fec53640f5204ef))
 
 ## [1.55.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.55.5...frontend-v1.55.6) (2026-04-21)
 
-
 ### Bug Fixes
 
-* **backtest:** make tick gap threshold configurable ([#572](https://github.com/yuyash/auto-forex-web-service/issues/572)) ([e055e9f](https://github.com/yuyash/auto-forex-web-service/commit/e055e9f3eea2e4894e1e02244144bdbce8b12709))
+- **backtest:** make tick gap threshold configurable ([#572](https://github.com/yuyash/auto-forex-web-service/issues/572)) ([e055e9f](https://github.com/yuyash/auto-forex-web-service/commit/e055e9f3eea2e4894e1e02244144bdbce8b12709))
 
 ## [1.55.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.55.4...frontend-v1.55.5) (2026-04-21)
 
-
 ### Bug Fixes
 
-* **strategy:** restore snowball stop loss auto mode ([#570](https://github.com/yuyash/auto-forex-web-service/issues/570)) ([eca4503](https://github.com/yuyash/auto-forex-web-service/commit/eca45035d9725b955248342c5a37ec3a3c1fb2c6))
+- **strategy:** restore snowball stop loss auto mode ([#570](https://github.com/yuyash/auto-forex-web-service/issues/570)) ([eca4503](https://github.com/yuyash/auto-forex-web-service/commit/eca45035d9725b955248342c5a37ec3a3c1fb2c6))
 
 ## [1.55.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.55.3...frontend-v1.55.4) (2026-04-21)
 
-
 ### Bug Fixes
 
-* **strategy:** guard snowball grid ordering validation ([#567](https://github.com/yuyash/auto-forex-web-service/issues/567)) ([771005b](https://github.com/yuyash/auto-forex-web-service/commit/771005b38606e9083757faa6bb9985f6578b95ed))
+- **strategy:** guard snowball grid ordering validation ([#567](https://github.com/yuyash/auto-forex-web-service/issues/567)) ([771005b](https://github.com/yuyash/auto-forex-web-service/commit/771005b38606e9083757faa6bb9985f6578b95ed))
 
 ## [1.55.3](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.55.2...frontend-v1.55.3) (2026-04-21)
 
-
 ### Bug Fixes
 
-* **snowball:** re-trigger release-please for cross-layer TP bound fix ([#565](https://github.com/yuyash/auto-forex-web-service/issues/565)) ([575be2d](https://github.com/yuyash/auto-forex-web-service/commit/575be2d0352ed00621ff1894f1954ae65abf4a8a))
+- **snowball:** re-trigger release-please for cross-layer TP bound fix ([#565](https://github.com/yuyash/auto-forex-web-service/issues/565)) ([575be2d](https://github.com/yuyash/auto-forex-web-service/commit/575be2d0352ed00621ff1894f1954ae65abf4a8a))
 
 ## [1.55.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.55.1...frontend-v1.55.2) (2026-04-20)
 
-
 ### Bug Fixes
 
-* **snowball:** sync actual fill prices into strategy state ([#562](https://github.com/yuyash/auto-forex-web-service/issues/562)) ([e7c5130](https://github.com/yuyash/auto-forex-web-service/commit/e7c51304652cebd9474d1e435c491067ec820e7c))
+- **snowball:** sync actual fill prices into strategy state ([#562](https://github.com/yuyash/auto-forex-web-service/issues/562)) ([e7c5130](https://github.com/yuyash/auto-forex-web-service/commit/e7c51304652cebd9474d1e435c491067ec820e7c))
 
 ## [1.55.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.55.0...frontend-v1.55.1) (2026-04-20)
 

@@ -22,6 +22,7 @@ from apps.trading.tasks.service import (
     TaskSubmissionError,
     TaskValidationError,
 )
+from apps.trading.views.errors import api_error
 from apps.trading.views.mixins import TaskSubResourceMixin
 
 logger = logging.getLogger(__name__)
@@ -144,8 +145,11 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
     @staticmethod
     def _capacity_error_payload(exc: TaskCapacityError) -> dict[str, Any]:
         payload: dict[str, Any] = {
-            "error": "Task capacity exhausted",
-            "detail": str(exc),
+            **api_error(
+                "Task capacity exhausted",
+                code="task_capacity_exhausted",
+                detail=str(exc),
+            ),
         }
         decision = getattr(exc, "decision", None)
         if decision is None:
@@ -166,24 +170,26 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         return payload
 
     @staticmethod
-    def _task_conflict_payload(*, task_type_label: str) -> dict[str, str]:
-        return {
-            "error": "Task cannot be started due to a conflict",
-            "detail": (
+    def _task_conflict_payload(*, task_type_label: str) -> dict[str, Any]:
+        return api_error(
+            "Task cannot be started due to a conflict",
+            code="task_conflict",
+            detail=(
                 f"Another active {task_type_label} task or account-level constraint is blocking this "
                 "request. Stop the conflicting task and try again."
             ),
-        }
+        )
 
     @staticmethod
-    def _task_validation_payload(*, action_name: str) -> dict[str, str]:
-        return {
-            "error": f"Invalid {action_name} request for current task state",
-            "detail": (
+    def _task_validation_payload(*, action_name: str) -> dict[str, Any]:
+        return api_error(
+            f"Invalid {action_name} request for current task state",
+            code=f"invalid_{action_name}_state",
+            detail=(
                 f"This task cannot be {action_name}ed with its current configuration or lifecycle "
                 "state. Review the task settings and try again."
             ),
-        }
+        )
 
     @action(detail=True, methods=["post"])
     def start(self, request: Request, pk: str | None = None) -> Response:
@@ -192,20 +198,22 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         if task.status != TaskStatus.CREATED:
             if task.status == TaskStatus.STOPPED:
                 return Response(
-                    {
-                        "error": "Cannot submit a stopped task",
-                        "detail": (
+                    api_error(
+                        "Cannot submit a stopped task",
+                        code="stopped_task_requires_restart",
+                        detail=(
                             "Use 'restart' to clear execution data and start fresh. "
                             "Resume is only available while the task is paused."
                         ),
-                    },
+                    ),
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             return Response(
-                {
-                    "error": "Task must be in CREATED status to submit",
-                    "detail": f"Current status: {task.status}",
-                },
+                api_error(
+                    "Task must be in CREATED status to submit",
+                    code="invalid_start_state",
+                    detail=f"Current status: {task.status}",
+                ),
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -247,7 +255,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 "Failed to submit %s task", self.task_type_label, extra={"task_id": str(task.pk)}
             )
             return Response(
-                {"error": "Failed to submit task"},
+                api_error("Failed to submit task", code="task_submission_failed"),
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         except Exception:
@@ -255,7 +263,11 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 "Unexpected %s start failure", self.task_type_label, extra={"task_id": str(task.pk)}
             )
             return Response(
-                {"error": "Internal server error", "detail": "An unexpected error occurred"},
+                api_error(
+                    "Internal server error",
+                    code="internal_error",
+                    detail="An unexpected error occurred",
+                ),
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -272,7 +284,10 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         except ValueError as exc:
             logger.warning("Stop validation failed: task_id=%s, detail=%s", task.pk, exc)
             return Response(
-                {"error": "Invalid stop request for current task state"},
+                api_error(
+                    "Invalid stop request for current task state",
+                    code="invalid_stop_state",
+                ),
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception:
@@ -280,13 +295,13 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 "Unexpected %s stop failure", self.task_type_label, extra={"task_id": str(task.pk)}
             )
             return Response(
-                {"error": "Failed to stop task"},
+                api_error("Failed to stop task", code="stop_failed"),
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
         if not success:
             return Response(
-                {"error": "Failed to stop task"},
+                api_error("Failed to stop task", code="stop_failed"),
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -304,7 +319,11 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         task = self.get_object()
         if task.status not in {TaskStatus.RUNNING, TaskStatus.STARTING}:
             return Response(
-                {"error": f"Task cannot be paused from {task.status} state"},
+                api_error(
+                    f"Task cannot be paused from {task.status} state",
+                    code="invalid_pause_state",
+                    detail=f"Current status: {task.status}",
+                ),
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
@@ -312,7 +331,10 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         except ValueError as exc:
             logger.warning("Pause validation failed: task_id=%s, detail=%s", task.pk, exc)
             return Response(
-                {"error": "Invalid pause request for current task state"},
+                api_error(
+                    "Invalid pause request for current task state",
+                    code="invalid_pause_state",
+                ),
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception:
@@ -320,13 +342,13 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 "Unexpected %s pause failure", self.task_type_label, extra={"task_id": str(task.pk)}
             )
             return Response(
-                {"error": "Failed to pause task"},
+                api_error("Failed to pause task", code="pause_failed"),
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
         if not success:
             return Response(
-                {"error": "Failed to pause task"},
+                api_error("Failed to pause task", code="pause_failed"),
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -343,12 +365,15 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         fully-static ``Response`` payloads when they were written
         lexically inside a handler for an exception.
         """
-        return {"error": "Task cannot be resumed due to a conflict"}
+        return api_error("Task cannot be resumed due to a conflict", code="resume_conflict")
 
     @staticmethod
     def _resume_validation_payload() -> dict[str, Any]:
         """Return the fixed 400 payload for a resume validation failure."""
-        return {"error": "Invalid resume request for current task state"}
+        return api_error(
+            "Invalid resume request for current task state",
+            code="invalid_resume_state",
+        )
 
     @action(detail=True, methods=["post"])
     def resume(self, request: Request, pk: str | None = None) -> Response:
@@ -381,7 +406,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 extra={"task_id": str(task.pk)},
             )
             return Response(
-                {"error": "Failed to resume task"},
+                api_error("Failed to resume task", code="resume_failed"),
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -418,7 +443,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 extra={"task_id": str(task.pk)},
             )
             return Response(
-                {"error": "Failed to restart task"},
+                api_error("Failed to restart task", code="restart_failed"),
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -438,7 +463,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 "Failed to copy %s task", self.task_type_label, extra={"task_id": str(task.pk)}
             )
             return Response(
-                {"error": "Failed to copy task"},
+                api_error("Failed to copy task", code="copy_failed"),
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
         return Response(self._serialize_detail(clone), status=status.HTTP_201_CREATED)

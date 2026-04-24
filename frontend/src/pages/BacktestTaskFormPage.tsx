@@ -1,15 +1,27 @@
 import { Container, Box, Typography, Paper } from '@mui/material';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import type { ComponentProps } from 'react';
-import BacktestTaskForm from '../components/backtest/BacktestTaskForm';
-import BacktestTaskUpdateForm from '../components/backtest/BacktestTaskUpdateForm';
+import { lazy, Suspense } from 'react';
+import type { BacktestTaskUpdateFormProps } from '../components/backtest/BacktestTaskUpdateForm';
 import { useBacktestTask } from '../hooks/useBacktestTasks';
 import { LoadingSpinner, Breadcrumbs } from '../components/common';
 
-type BacktestTaskUpdateInitialData = ComponentProps<
-  typeof BacktestTaskUpdateForm
->['initialData'];
+const BacktestTaskForm = lazy(
+  () => import('../components/backtest/BacktestTaskForm')
+);
+const BacktestTaskUpdateForm = lazy(
+  () => import('../components/backtest/BacktestTaskUpdateForm')
+);
+
+type BacktestTaskUpdateInitialData = BacktestTaskUpdateFormProps['initialData'];
+
+function FormLoadingFallback() {
+  return (
+    <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+      <LoadingSpinner />
+    </Box>
+  );
+}
 
 export default function BacktestTaskFormPage() {
   const { t } = useTranslation('backtest');
@@ -71,18 +83,20 @@ export default function BacktestTaskFormPage() {
           {taskId ? t('pages.editTitle') : t('pages.createTitle')}
         </Typography>
 
-        <Paper sx={{ p: 4, mt: 3 }}>
-          {taskId && task ? (
-            <BacktestTaskUpdateForm
-              taskId={taskId}
-              taskName={task.name}
-              taskDescription={task.description}
-              debugOptions={task.debug_options}
-              initialData={updateInitialData!}
-            />
-          ) : (
-            <BacktestTaskForm />
-          )}
+        <Paper sx={{ p: { xs: 2, sm: 3 }, mt: 3 }}>
+          <Suspense fallback={<FormLoadingFallback />}>
+            {taskId && task ? (
+              <BacktestTaskUpdateForm
+                taskId={taskId}
+                taskName={task.name}
+                taskDescription={task.description}
+                debugOptions={task.debug_options}
+                initialData={updateInitialData!}
+              />
+            ) : (
+              <BacktestTaskForm />
+            )}
+          </Suspense>
         </Paper>
       </Box>
     </Container>

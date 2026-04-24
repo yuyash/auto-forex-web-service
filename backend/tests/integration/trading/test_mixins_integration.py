@@ -53,6 +53,13 @@ def _make_task(user=None, *, strategy_type: str = "floor") -> BacktestTask:
     return task
 
 
+def _assert_invalid_query_param(response, detail: str) -> None:
+    assert response.data["code"] == "invalid_query_param"
+    assert str(response.data["detail"]) == detail
+    assert response.data["error"] == detail
+    assert response.data["error_code"] == "invalid"
+
+
 @pytest.mark.django_db
 class TestMetrics:
     """GET /api/trading/tasks/backtest/{id}/metrics/"""
@@ -74,6 +81,7 @@ class TestMetrics:
         response = client.get(f"/api/trading/tasks/backtest/{task.pk}/metrics/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 3
+        assert response.data["data_source"] == "db_raw"
         assert len(response.data["results"]) == 3
 
     def test_without_data(self):
@@ -83,6 +91,7 @@ class TestMetrics:
         response = client.get(f"/api/trading/tasks/backtest/{task.pk}/metrics/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 0
+        assert response.data["data_source"] == "db_raw"
         assert response.data["results"] == []
 
     def test_interval_metrics_with_null_execution_id(self):
@@ -107,6 +116,7 @@ class TestMetrics:
         )
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 1
+        assert response.data["data_source"] in {"db_window_last", "db_window_last_python"}
         assert len(response.data["results"]) == 1
 
 
@@ -124,10 +134,7 @@ class TestStrictQueryValidation:
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.data == {
-            "code": "invalid_query_param",
-            "detail": "Invalid execution_id: not-a-uuid",
-        }
+        _assert_invalid_query_param(response, "Invalid execution_id: not-a-uuid")
 
     def test_rejects_invalid_since(self):
         task = _make_task()
@@ -139,10 +146,7 @@ class TestStrictQueryValidation:
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.data == {
-            "code": "invalid_query_param",
-            "detail": "Invalid datetime value: bad-date",
-        }
+        _assert_invalid_query_param(response, "Invalid datetime value: bad-date")
 
     def test_rejects_invalid_page(self):
         task = _make_task()
@@ -154,10 +158,7 @@ class TestStrictQueryValidation:
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.data == {
-            "code": "invalid_query_param",
-            "detail": "Invalid page parameter",
-        }
+        _assert_invalid_query_param(response, "Invalid page parameter")
 
     def test_rejects_non_positive_page_size(self):
         task = _make_task()
@@ -169,10 +170,7 @@ class TestStrictQueryValidation:
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.data == {
-            "code": "invalid_query_param",
-            "detail": "page_size must be greater than 0",
-        }
+        _assert_invalid_query_param(response, "page_size must be greater than 0")
 
     def test_rejects_page_size_above_maximum(self):
         task = _make_task()
@@ -184,10 +182,7 @@ class TestStrictQueryValidation:
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.data == {
-            "code": "invalid_query_param",
-            "detail": "page_size exceeds maximum allowed value of 1000",
-        }
+        _assert_invalid_query_param(response, "page_size exceeds maximum allowed value of 1000")
 
     def test_rejects_inverted_range(self):
         task = _make_task()
@@ -204,10 +199,10 @@ class TestStrictQueryValidation:
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.data == {
-            "code": "invalid_query_param",
-            "detail": "range_from must be earlier than or equal to range_to",
-        }
+        _assert_invalid_query_param(
+            response,
+            "range_from must be earlier than or equal to range_to",
+        )
 
     @pytest.mark.parametrize(
         ("path", "params", "detail"),
@@ -234,10 +229,7 @@ class TestStrictQueryValidation:
         response = client.get(f"/api/trading/tasks/backtest/{task.pk}/{path}/", params)
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.data == {
-            "code": "invalid_query_param",
-            "detail": detail,
-        }
+        _assert_invalid_query_param(response, detail)
 
 
 @pytest.mark.django_db
@@ -1236,10 +1228,7 @@ class TestPositionLifecycle:
         )
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.data == {
-            "code": "invalid_query_param",
-            "detail": "Invalid query parameters.",
-        }
+        _assert_invalid_query_param(response, "Invalid query parameters.")
 
 
 @pytest.mark.django_db

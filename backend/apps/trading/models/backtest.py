@@ -3,6 +3,7 @@
 from datetime import timedelta
 from decimal import Decimal
 from typing import Any
+from uuid import uuid4
 
 from django.db import models
 
@@ -187,6 +188,14 @@ class BacktestTask(UUIDModel):
         db_index=True,
         help_text="Celery task_id for the current worker invocation",
     )
+    dispatch_idempotency_key = models.UUIDField(
+        default=uuid4,
+        db_index=True,
+        help_text=(
+            "Idempotency key rotated for each dispatch. "
+            "Workers skip stale redeliveries with mismatched keys."
+        ),
+    )
 
     # Execution State
     started_at = models.DateTimeField(
@@ -355,6 +364,12 @@ class BacktestTask(UUIDModel):
             commission_per_trade=self.commission_per_trade,
             max_tick_gap_hours=self.max_tick_gap_hours,
             status=TaskStatus.CREATED,
+        )
+
+    def can_resume(self) -> bool:
+        """Whether the current execution can resume from persisted state."""
+        return (
+            self.status in (TaskStatus.PAUSED, TaskStatus.STOPPED) and self.execution_id is not None
         )
 
     def delete(self, *args, **kwargs) -> tuple[int, dict[str, int]]:

@@ -10,9 +10,9 @@ import type {
 import { useAuth } from '../../contexts/AuthContext';
 import { useWindowedCandles } from '../../hooks/useWindowedCandles';
 import type { Granularity } from '../../types/chart';
-import { AdaptiveTimeScale } from '../../utils/adaptiveTimeScalePlugin';
+import type { AdaptiveTimeScale } from '../../utils/adaptiveTimeScalePlugin';
 import { getTimezoneAbbr } from '../../utils/chartTimezone';
-import { MarketClosedHighlight } from '../../utils/MarketClosedHighlight';
+import type { MarketClosedHighlight } from '../../utils/MarketClosedHighlight';
 import { MarketChartTooltip } from './MarketChartTooltip';
 import { MarketChartStatusOverlays } from './MarketChartStatusOverlays';
 import {

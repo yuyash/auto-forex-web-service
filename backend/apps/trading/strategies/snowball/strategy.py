@@ -1183,11 +1183,14 @@ class SnowballStrategy(Strategy):
         evt = entry.to_open_event(
             timestamp=tick.timestamp,
             planned_exit_price_formula=formula,
-            description=(
-                f"Counter add ({direction.value.upper()}) | "
-                f"L{layer.layer_number}/R{slot.index}, units={units}, "
-                f"adverse={adverse:.1f} pips, TP={close_price:.3f}"
-                + (f", SL={entry.stop_loss_price:.3f}" if entry.stop_loss_price is not None else "")
+            description=self._format_counter_add_description(
+                direction=direction,
+                layer=layer,
+                slot=slot,
+                units=units,
+                adverse=adverse,
+                close_price=close_price,
+                stop_loss_price=entry.stop_loss_price,
             ),
         )
         slot.fill(entry)
@@ -1209,6 +1212,27 @@ class SnowballStrategy(Strategy):
                     s.entry.close_price = s.entry.entry_price - step_tp * self.pip_size
 
         return [evt]
+
+    @staticmethod
+    def _format_counter_add_description(
+        *,
+        direction: Direction,
+        layer: Layer,
+        slot: Slot,
+        units: int,
+        adverse: Decimal,
+        close_price: Decimal,
+        stop_loss_price: Decimal | None,
+    ) -> str:
+        """Build the user-facing description for a counter-add event."""
+        description = (
+            f"Counter add ({direction.value.upper()}) | "
+            f"L{layer.layer_number}/R{slot.index}, units={units}, "
+            f"adverse={adverse:.1f} pips, TP={close_price:.3f}"
+        )
+        if stop_loss_price is not None:
+            description += f", SL={stop_loss_price:.3f}"
+        return description
 
     def _open_layer_initial(
         self,

@@ -8,10 +8,11 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Grid,
-  Paper,
-  Typography,
-  CircularProgress,
   Alert,
+  CircularProgress,
+  Typography,
+  Chip,
+  Stack,
 } from '@mui/material';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { LineChart } from '@mui/x-charts/LineChart';
@@ -19,13 +20,18 @@ import { useTranslation } from 'react-i18next';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
 import { MetricsToolbar } from './MetricsToolbar';
 import { MetricsOhlcChart } from './MetricsOhlcChart';
+import { ChartPanel } from './ChartPanel';
 import { useMetricsOrder } from '../../../hooks/useMetricsOrder';
+import { layoutTokens, spacingTokens } from '../../../theme/density';
 
 interface TaskMetricsTabProps {
   data: MetricPoint[];
   isLoading: boolean;
   error: Error | null;
   currency?: string;
+  dataSource?: string;
+  resumeCursorTimestamp?: string | null;
+  consistencyWarnings?: Array<Record<string, unknown>>;
   interval: number;
   since: string;
   until: string;
@@ -208,8 +214,13 @@ function formatYLabel(v: number, format?: 'pct' | 'int' | 'currency'): string {
 /** Compute a suitable Y-axis tick count based on the value range. */
 function computeYTickCount(yValues: number[]): number {
   if (yValues.length < 2) return 4;
-  const min = Math.min(...yValues);
-  const max = Math.max(...yValues);
+  let min = yValues[0];
+  let max = yValues[0];
+  for (let i = 1; i < yValues.length; i += 1) {
+    const value = yValues[i];
+    if (value < min) min = value;
+    if (value > max) max = value;
+  }
   const range = max - min;
   if (range === 0) return 2;
   // Aim for 4-5 ticks for most charts
@@ -232,6 +243,9 @@ export function TaskMetricsTab({
   isLoading,
   error,
   currency,
+  dataSource = 'unknown',
+  resumeCursorTimestamp = null,
+  consistencyWarnings = [],
   interval,
   since,
   until,
@@ -330,8 +344,13 @@ export function TaskMetricsTab({
       const cd = chartDataMap[m.key];
       if (!cd || cd.y.length === 0) continue;
       let maxChars = 0;
-      const yMin = Math.min(...cd.y);
-      const yMax = Math.max(...cd.y);
+      let yMin = cd.y[0];
+      let yMax = cd.y[0];
+      for (let i = 1; i < cd.y.length; i += 1) {
+        const value = cd.y[i];
+        if (value < yMin) yMin = value;
+        if (value > yMax) yMax = value;
+      }
       for (const v of [yMin, yMax, yMin * 1.2, yMax * 1.2]) {
         const label = formatYLabel(v, m.format);
         if (label.length > maxChars) maxChars = label.length;
@@ -412,7 +431,16 @@ export function TaskMetricsTab({
   };
 
   return (
-    <Box sx={{ p: { xs: 1, sm: 2 } }}>
+    <Box
+      sx={{
+        px: layoutTokens.pagePadding,
+        py: { xs: 1, sm: 1.5 },
+        minWidth: 0,
+        width: '100%',
+        maxWidth: layoutTokens.contentMaxWidth,
+        mx: 'auto',
+      }}
+    >
       <MetricsToolbar
         interval={interval}
         since={since}
@@ -423,14 +451,43 @@ export function TaskMetricsTab({
         onRefresh={onRefresh}
         isLoading={isLoading}
       />
-      <Grid container spacing={2}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1}
+        sx={{ mb: 1.5, alignItems: { sm: 'center' } }}
+      >
+        <Chip
+          size="small"
+          variant="outlined"
+          label={`Source: ${dataSource}`}
+          sx={{ width: 'fit-content' }}
+        />
+        {resumeCursorTimestamp ? (
+          <Typography variant="caption" color="text.secondary">
+            Resume cursor: {new Date(resumeCursorTimestamp).toLocaleString()}
+          </Typography>
+        ) : null}
+      </Stack>
+      {consistencyWarnings.length > 0 ? (
+        <Alert severity="warning" sx={{ mb: 1.5 }}>
+          {consistencyWarnings.length} continuity warning(s) detected after
+          resume. Review the latest metric jump before trusting this run.
+        </Alert>
+      ) : null}
+      <Grid
+        container
+        spacing={layoutTokens.sectionGap}
+        justifyContent="center"
+        alignItems="stretch"
+        sx={{ mt: 0, minWidth: 0, width: '100%' }}
+      >
         {orderedKeys.map((key) => {
           // OHLC chart
           if (key === OHLC_KEY) {
             return (
               <Grid
                 key={OHLC_KEY}
-                size={{ xs: 12, md: 6 }}
+                size={{ xs: 12, lg: 6, xl: 4 }}
                 draggable
                 onDragStart={(e) => handleDragStart(e, OHLC_KEY)}
                 onDragOver={handleDragOver}
@@ -439,6 +496,7 @@ export function TaskMetricsTab({
                 sx={{
                   opacity: dragKey === OHLC_KEY ? 0.4 : 1,
                   cursor: 'grab',
+                  minWidth: 0,
                 }}
               >
                 <MetricsOhlcChart
@@ -466,7 +524,7 @@ export function TaskMetricsTab({
           return (
             <Grid
               key={m.key}
-              size={{ xs: 12, md: 6 }}
+              size={{ xs: 12, lg: 6, xl: 4 }}
               draggable
               onDragStart={(e) => handleDragStart(e, m.key)}
               onDragOver={handleDragOver}
@@ -475,44 +533,26 @@ export function TaskMetricsTab({
               sx={{
                 opacity: dragKey === m.key ? 0.4 : 1,
                 cursor: 'grab',
+                minWidth: 0,
               }}
             >
-              <Paper
-                variant="outlined"
-                sx={{ p: 1.5, height: CHART_CARD_HEIGHT, overflow: 'hidden' }}
-              >
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'baseline',
-                    mb: 0.5,
-                  }}
-                >
-                  <Box
+              <ChartPanel
+                title={t(`metrics.${m.key}`, {
+                  defaultValue: m.key.replace(/_/g, ' '),
+                })}
+                valueLabel={formatValue(lastVal, m.format)}
+                height={CHART_CARD_HEIGHT}
+                headerPrefix={
+                  <DragIndicatorIcon
                     sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 0.5,
+                      fontSize: 16,
+                      color: 'text.disabled',
+                      cursor: 'grab',
+                      mr: spacingTokens.xxs,
                     }}
-                  >
-                    <DragIndicatorIcon
-                      sx={{
-                        fontSize: 16,
-                        color: 'text.disabled',
-                        cursor: 'grab',
-                      }}
-                    />
-                    <Typography variant="subtitle2">
-                      {t(`metrics.${m.key}`, {
-                        defaultValue: m.key.replace(/_/g, ' '),
-                      })}
-                    </Typography>
-                  </Box>
-                  <Typography variant="body2" color="text.secondary">
-                    {formatValue(lastVal, m.format)}
-                  </Typography>
-                </Box>
+                  />
+                }
+              >
                 <LineChart
                   xAxis={[
                     {
@@ -556,7 +596,7 @@ export function TaskMetricsTab({
                     left: 8,
                     right: metricYAxisWidth,
                     top: 8,
-                    bottom: 36,
+                    bottom: 32,
                   }}
                   hideLegend
                   slotProps={{
@@ -564,8 +604,12 @@ export function TaskMetricsTab({
                       style: { fontSize: 10 },
                     },
                   }}
+                  sx={{
+                    width: '100%',
+                    minWidth: 0,
+                  }}
                 />
-              </Paper>
+              </ChartPanel>
             </Grid>
           );
         })}

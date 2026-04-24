@@ -14,15 +14,17 @@ This module provides:
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
 
 from celery import shared_task
 from celery import current_app
+from django.core.cache import cache
 from django.utils import timezone as dj_timezone
 
 from apps.trading.enums import TaskStatus, TaskType
-from apps.trading.models import BacktestTask, TaskLog, TradingTask
+from apps.trading.models import BacktestTask, RecoveryAttempt, TaskLog, TradingTask
 from apps.trading.models.celery import CeleryTaskStatus
 
 logger = logging.getLogger(__name__)
@@ -40,10 +42,28 @@ _ACTIVE_STATUSES = [TaskStatus.RUNNING, TaskStatus.STARTING]
 # Maximum number of orphaned tasks to process per recovery run to avoid
 # unbounded memory usage if many tasks are stuck.
 _MAX_RECOVERY_BATCH = 100
+_RECOVERY_RUN_LOCK_SECONDS = 45
+_TASK_RECOVERY_COOLDOWN_SECONDS = 120
+
+
+@dataclass(frozen=True, slots=True)
+class OrphanDecision:
+    """Decision produced by orphan detection for auditability and tests."""
+
+    is_orphaned: bool
+    reason: str
+    detail: str = ""
 
 
 def _instance_key(task: BacktestTask | TradingTask) -> str:
     return f"{task.pk}:{task.execution_id}"
+
+
+def _cache_safe_task_execution_id(task: BacktestTask | TradingTask) -> str:
+    execution_id = getattr(task, "execution_id", None)
+    if execution_id is None:
+        return "none"
+    return str(execution_id).replace(" ", "_").replace(":", "_")
 
 
 def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
@@ -68,47 +88,61 @@ def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
     """
     from apps.trading.tasks.service import TaskService
 
+    lock_key = f"trading:orphan-recovery:lock:{source}"
+    if not cache.add(lock_key, dj_timezone.now().isoformat(), timeout=_RECOVERY_RUN_LOCK_SECONDS):
+        logger.info(
+            "[RECOVERY:%s] Recovery run already in progress; skipping duplicate trigger",
+            source,
+        )
+        return {"backtest": 0, "trading": 0}
+
     service = TaskService()
     counts: dict[str, int] = {"backtest": 0, "trading": 0}
+    try:
+        # --- Backtest tasks (bounded queryset) ---
+        orphaned_backtest = list(
+            BacktestTask.objects.filter(
+                status__in=_ACTIVE_STATUSES,
+            ).order_by("started_at")[:_MAX_RECOVERY_BATCH]
+        )
+        active_task_ids = _active_celery_task_ids()
+        backtest_heartbeats = _prefetch_heartbeats(
+            orphaned_backtest, "trading.tasks.run_backtest_task"
+        )
+        for task in orphaned_backtest:
+            if not _is_orphaned_prefetched(
+                task,
+                backtest_heartbeats,
+                dj_timezone.now() - BACKTEST_ORPHAN_HEARTBEAT_THRESHOLD,
+                source=source,
+                active_task_ids=active_task_ids,
+            ):
+                continue
+            if _recover_task(task, TaskType.BACKTEST, service, source):
+                counts["backtest"] += 1
 
-    # --- Backtest tasks (bounded queryset) ---
-    orphaned_backtest = list(
-        BacktestTask.objects.filter(
-            status__in=_ACTIVE_STATUSES,
-        ).order_by("started_at")[:_MAX_RECOVERY_BATCH]
-    )
-    active_task_ids = _active_celery_task_ids()
-    backtest_heartbeats = _prefetch_heartbeats(orphaned_backtest, "trading.tasks.run_backtest_task")
-    for task in orphaned_backtest:
-        if not _is_orphaned_prefetched(
-            task,
-            backtest_heartbeats,
-            dj_timezone.now() - BACKTEST_ORPHAN_HEARTBEAT_THRESHOLD,
-            source=source,
-            active_task_ids=active_task_ids,
-        ):
-            continue
-        if _recover_task(task, TaskType.BACKTEST, service, source):
-            counts["backtest"] += 1
-
-    # --- Trading tasks (bounded queryset) ---
-    orphaned_trading = list(
-        TradingTask.objects.filter(
-            status__in=_ACTIVE_STATUSES,
-        ).order_by("started_at")[:_MAX_RECOVERY_BATCH]
-    )
-    trading_heartbeats = _prefetch_heartbeats(orphaned_trading, "trading.tasks.run_trading_task")
-    for task in orphaned_trading:
-        if not _is_orphaned_prefetched(
-            task,
-            trading_heartbeats,
-            dj_timezone.now() - TRADING_ORPHAN_HEARTBEAT_THRESHOLD,
-            source=source,
-            active_task_ids=active_task_ids,
-        ):
-            continue
-        if _recover_task(task, TaskType.TRADING, service, source):
-            counts["trading"] += 1
+        # --- Trading tasks (bounded queryset) ---
+        orphaned_trading = list(
+            TradingTask.objects.filter(
+                status__in=_ACTIVE_STATUSES,
+            ).order_by("started_at")[:_MAX_RECOVERY_BATCH]
+        )
+        trading_heartbeats = _prefetch_heartbeats(
+            orphaned_trading, "trading.tasks.run_trading_task"
+        )
+        for task in orphaned_trading:
+            if not _is_orphaned_prefetched(
+                task,
+                trading_heartbeats,
+                dj_timezone.now() - TRADING_ORPHAN_HEARTBEAT_THRESHOLD,
+                source=source,
+                active_task_ids=active_task_ids,
+            ):
+                continue
+            if _recover_task(task, TaskType.TRADING, service, source):
+                counts["trading"] += 1
+    finally:
+        cache.delete(lock_key)
 
     total = counts["backtest"] + counts["trading"]
     if total:
@@ -156,40 +190,58 @@ def _is_orphaned_prefetched(
     active_task_ids: set[str],
 ) -> bool:
     """Return True if the task has no recent heartbeat (using prefetched data)."""
+    decision = _orphan_decision_prefetched(
+        task,
+        heartbeats,
+        cutoff,
+        source=source,
+        active_task_ids=active_task_ids,
+    )
+    if decision.is_orphaned:
+        logger.info(
+            "[RECOVERY] Task considered orphaned - task_id=%s, reason=%s%s",
+            task.pk,
+            decision.reason,
+            f", detail={decision.detail}" if decision.detail else "",
+        )
+    return decision.is_orphaned
+
+
+def _orphan_decision_prefetched(
+    task: BacktestTask | TradingTask,
+    heartbeats: dict[str, CeleryTaskStatus],
+    cutoff: datetime,
+    *,
+    source: str,
+    active_task_ids: set[str],
+) -> OrphanDecision:
+    """Return an explainable orphan decision using prefetched heartbeat data."""
     # Fall back to execution_id for older rows that pre-date the
     # celery_task_id field and may still have it set to NULL.
     celery_task_id = str(task.celery_task_id or task.execution_id or "")
     if celery_task_id and celery_task_id in active_task_ids:
-        return False
+        return OrphanDecision(False, "active_celery_task", celery_task_id)
 
     if source == "worker_ready":
-        logger.info(
-            "[RECOVERY] No active Celery execution found during startup for task_id=%s "
-            "(celery_task_id=%s) — treating as orphaned immediately",
-            task.pk,
-            task.celery_task_id,
+        return OrphanDecision(
+            True,
+            "startup_no_active_celery_task",
+            f"celery_task_id={task.celery_task_id}",
         )
-        return True
 
     cts = heartbeats.get(_instance_key(task))
 
     if cts is None:
-        logger.info(
-            "[RECOVERY] No CeleryTaskStatus row for task_id=%s — treating as orphaned",
-            task.pk,
-        )
-        return True
+        return OrphanDecision(True, "missing_heartbeat_row")
 
     if cts.last_heartbeat_at is None or cts.last_heartbeat_at < cutoff:
-        logger.info(
-            "[RECOVERY] Stale heartbeat for task_id=%s — last_heartbeat=%s, cutoff=%s",
-            task.pk,
-            cts.last_heartbeat_at,
-            cutoff,
+        return OrphanDecision(
+            True,
+            "stale_heartbeat",
+            f"last_heartbeat={cts.last_heartbeat_at}, cutoff={cutoff}",
         )
-        return True
 
-    return False
+    return OrphanDecision(False, "recent_heartbeat", str(cts.last_heartbeat_at))
 
 
 def _active_celery_task_ids() -> set[str]:
@@ -252,6 +304,32 @@ def _recover_task(
     source: str,
 ) -> bool:
     """Handle an orphaned task according to its task type."""
+    action = "resume_same_execution" if task_type == TaskType.TRADING else "mark_stopped"
+    task_cooldown_key = (
+        "trading:orphan-recovery:task:"
+        f"{task_type.value}:{task.pk}:{_cache_safe_task_execution_id(task)}"
+    )
+    if not cache.add(
+        task_cooldown_key,
+        dj_timezone.now().isoformat(),
+        timeout=_TASK_RECOVERY_COOLDOWN_SECONDS,
+    ):
+        logger.info(
+            "[RECOVERY:%s] Task recovery cooldown active - task_id=%s, type=%s",
+            source,
+            task.pk,
+            task_type,
+        )
+        _record_recovery_attempt(
+            task=task,
+            task_type=task_type,
+            source=source,
+            action=action,
+            result="skipped",
+            reason="cooldown",
+        )
+        return False
+
     logger.warning(
         "[RECOVERY:%s] Recovering orphaned task - task_id=%s, type=%s, "
         "old_status=%s, execution_id=%s",
@@ -285,6 +363,14 @@ def _recover_task(
 
     if rows == 0:
         logger.info("[RECOVERY:%s] Task already transitioned - task_id=%s", source, task.pk)
+        _record_recovery_attempt(
+            task=task,
+            task_type=task_type,
+            source=source,
+            action=action,
+            result="skipped",
+            reason="already_transitioned",
+        )
         return False
 
     heartbeat_qs = CeleryTaskStatus.objects.filter(
@@ -316,6 +402,14 @@ def _recover_task(
         source,
         task.pk,
     )
+    _record_recovery_attempt(
+        task=task,
+        task_type=task_type,
+        source=source,
+        action=action,
+        result="success",
+        reason="orphaned_backtest",
+    )
     return True
 
 
@@ -330,6 +424,14 @@ def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, sou
     ).update(status=TaskStatus.STARTING)
     if rows == 0:
         logger.info("[RECOVERY:%s] Trading task already transitioned - task_id=%s", source, task.pk)
+        _record_recovery_attempt(
+            task=task,
+            task_type=TaskType.TRADING,
+            source=source,
+            action="resume_same_execution",
+            result="skipped",
+            reason="already_transitioned",
+        )
         return False
 
     CeleryTaskStatus.objects.filter(
@@ -358,6 +460,14 @@ def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, sou
             task.pk,
             task.execution_id,
         )
+        _record_recovery_attempt(
+            task=task,
+            task_type=TaskType.TRADING,
+            source=source,
+            action="resume_same_execution",
+            result="success",
+            reason="orphaned_trading",
+        )
         return True
     except Exception:
         logger.exception(
@@ -369,7 +479,43 @@ def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, sou
             status=TaskStatus.FAILED,
             error_message=f"Recovery failed after crash (source={source})",
         )
+        _record_recovery_attempt(
+            task=task,
+            task_type=TaskType.TRADING,
+            source=source,
+            action="resume_same_execution",
+            result="failed",
+            reason="resume_failed",
+        )
         return False
+
+
+def _record_recovery_attempt(
+    *,
+    task: BacktestTask | TradingTask,
+    task_type: TaskType,
+    source: str,
+    action: str,
+    result: str,
+    reason: str,
+    detail: str = "",
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """Persist a structured recovery audit record without affecting recovery."""
+    try:
+        RecoveryAttempt.objects.create(
+            task_type=task_type,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            source=source,
+            action=action,
+            result=result,
+            reason=reason,
+            detail=detail,
+            metadata=metadata or {"status": str(task.status)},
+        )
+    except Exception:  # pragma: no cover - audit write should never block recovery
+        logger.debug("[RECOVERY:%s] Failed to persist recovery attempt", source, exc_info=True)
 
 
 # ---------------------------------------------------------------------------

@@ -30,8 +30,8 @@ import {
   backtestTaskSchema,
   type BacktestTaskSchemaOutput,
 } from '../tasks/forms/validationSchemas';
-import { type BacktestTaskCreateData } from '../../types/backtestTask';
 import { DataSource } from '../../types/common';
+import { buildBacktestTaskCreatePayload } from '../tasks/forms/backtestTaskPayload';
 import {
   useCreateBacktestTask,
   useUpdateBacktestTask,
@@ -538,20 +538,19 @@ export default function BacktestTaskForm({
     const completeData = { ...formData, ...data } as BacktestTaskSchemaOutput;
 
     // Zod has already validated and converted types, so we can use the data directly
-    const apiData: BacktestTaskCreateData = {
-      config: completeData.config_id,
+    const apiData = buildBacktestTaskCreatePayload({
+      config_id: completeData.config_id,
       name: completeData.name,
       description: completeData.description,
-      data_source: DataSource.POSTGRESQL,
       start_time: completeData.start_time,
       end_time: completeData.end_time,
       initial_balance: completeData.initial_balance,
       commission_per_trade: completeData.commission_per_trade,
-      ...(completeData.pip_size != null && { pip_size: completeData.pip_size }),
+      pip_size: completeData.pip_size,
       instrument: completeData.instrument,
       tick_granularity: completeData.tick_granularity,
       tick_window_value_mode: completeData.tick_window_value_mode,
-      sell_on_stop: completeData.sell_at_completion,
+      sell_at_completion: completeData.sell_at_completion,
       hedging_enabled: completeData.hedging_enabled,
       drain_duration_hours: completeData.drain_duration_hours,
       market_idle_pre_close_minutes: completeData.market_idle_pre_close_minutes,
@@ -563,7 +562,7 @@ export default function BacktestTaskForm({
       market_open_weekday: completeData.market_open_weekday,
       market_open_hour_utc: completeData.market_open_hour_utc,
       max_tick_gap_hours: completeData.max_tick_gap_hours,
-    };
+    });
 
     try {
       if (taskId) {

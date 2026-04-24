@@ -11,6 +11,7 @@ import { authApi } from '../../../src/services/api';
 import { useRegister } from '../../../src/hooks/useAuthMutations';
 import RegisterPage from '../../../src/pages/RegisterPage';
 import { createAuthPageWrapper } from '../../utils/authPageTestUtils';
+import { changeInputByLabel } from '../../utils/formTestUtils';
 
 vi.mock('../../../src/api', () => ({
   setAuthToken: vi.fn(),
@@ -110,8 +111,8 @@ describe('RegisterPage', () => {
     const user = userEvent.setup();
     await renderRegisterPage();
 
-    const usernameField = await screen.findByLabelText(/username/i);
-    await user.type(usernameField, 'ab');
+    await screen.findByLabelText(/username/i);
+    changeInputByLabel(/username/i, 'ab');
 
     const btn = await getEnabledSubmitButton();
     await user.click(btn);
@@ -125,11 +126,9 @@ describe('RegisterPage', () => {
     const user = userEvent.setup();
     await renderRegisterPage();
 
-    const usernameField = await screen.findByLabelText(/username/i);
-    const emailField = screen.getByLabelText(/email/i);
-
-    await user.type(usernameField, 'testuser');
-    await user.type(emailField, 'notanemail');
+    await screen.findByLabelText(/username/i);
+    changeInputByLabel(/username/i, 'testuser');
+    changeInputByLabel(/email/i, 'notanemail');
 
     const btn = await getEnabledSubmitButton();
     await user.click(btn);
@@ -143,13 +142,10 @@ describe('RegisterPage', () => {
     const user = userEvent.setup();
     await renderRegisterPage();
 
-    const usernameField = await screen.findByLabelText(/username/i);
-    const emailField = screen.getByLabelText(/email/i);
-    const passwordField = screen.getByLabelText(/^password/i);
-
-    await user.type(usernameField, 'testuser');
-    await user.type(emailField, 'test@example.com');
-    await user.type(passwordField, 'short');
+    await screen.findByLabelText(/username/i);
+    changeInputByLabel(/username/i, 'testuser');
+    changeInputByLabel(/email/i, 'test@example.com');
+    changeInputByLabel(/^password/i, 'short');
 
     const btn = await getEnabledSubmitButton();
     await user.click(btn);
@@ -163,15 +159,11 @@ describe('RegisterPage', () => {
     const user = userEvent.setup();
     await renderRegisterPage();
 
-    const usernameField = await screen.findByLabelText(/username/i);
-    const emailField = screen.getByLabelText(/email/i);
-    const passwordField = screen.getByLabelText(/^password/i);
-    const confirmField = screen.getByLabelText(/confirm password/i);
-
-    await user.type(usernameField, 'testuser');
-    await user.type(emailField, 'test@example.com');
-    await user.type(passwordField, 'StrongPass1');
-    await user.type(confirmField, 'DifferentPass1');
+    await screen.findByLabelText(/username/i);
+    changeInputByLabel(/username/i, 'testuser');
+    changeInputByLabel(/email/i, 'test@example.com');
+    changeInputByLabel(/^password/i, 'StrongPass1');
+    changeInputByLabel(/confirm password/i, 'DifferentPass1');
 
     const btn = await getEnabledSubmitButton();
     await user.click(btn);
@@ -202,15 +194,11 @@ describe('RegisterPage', () => {
     const user = userEvent.setup();
     await renderRegisterPage();
 
-    const usernameField = await screen.findByLabelText(/username/i);
-    const emailField = screen.getByLabelText(/email/i);
-    const passwordField = screen.getByLabelText(/^password/i);
-    const confirmField = screen.getByLabelText(/confirm password/i);
-
-    await user.type(usernameField, 'testuser');
-    await user.type(emailField, 'test@example.com');
-    await user.type(passwordField, 'StrongP@ss1');
-    await user.type(confirmField, 'StrongP@ss1');
+    await screen.findByLabelText(/username/i);
+    changeInputByLabel(/username/i, 'testuser');
+    changeInputByLabel(/email/i, 'test@example.com');
+    changeInputByLabel(/^password/i, 'StrongP@ss1');
+    changeInputByLabel(/confirm password/i, 'StrongP@ss1');
 
     const btn = await getEnabledSubmitButton();
     await user.click(btn);
@@ -230,15 +218,11 @@ describe('RegisterPage', () => {
     const user = userEvent.setup();
     await renderRegisterPage();
 
-    const usernameField = await screen.findByLabelText(/username/i);
-    const emailField = screen.getByLabelText(/email/i);
-    const passwordField = screen.getByLabelText(/^password/i);
-    const confirmField = screen.getByLabelText(/confirm password/i);
-
-    await user.type(usernameField, 'testuser');
-    await user.type(emailField, 'test@example.com');
-    await user.type(passwordField, 'StrongP@ss1');
-    await user.type(confirmField, 'StrongP@ss1');
+    await screen.findByLabelText(/username/i);
+    changeInputByLabel(/username/i, 'testuser');
+    changeInputByLabel(/email/i, 'test@example.com');
+    changeInputByLabel(/^password/i, 'StrongP@ss1');
+    changeInputByLabel(/confirm password/i, 'StrongP@ss1');
 
     const btn = await getEnabledSubmitButton();
     await user.click(btn);

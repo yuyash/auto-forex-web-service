@@ -38,8 +38,10 @@ describe('task polling hooks', () => {
     vi.clearAllMocks();
   });
 
-  afterEach(() => {
-    vi.runOnlyPendingTimers();
+  afterEach(async () => {
+    await act(async () => {
+      vi.runOnlyPendingTimers();
+    });
     vi.useRealTimers();
   });
 
@@ -98,6 +100,12 @@ describe('task polling hooks', () => {
         previous: null,
         results: [{ id: 'exec-1', status: 'completed' }],
       } as never);
+    vi.mocked(tradingTasksApi.getExecutions).mockResolvedValue({
+      count: 1,
+      next: null,
+      previous: null,
+      results: [{ id: 'exec-1', status: 'completed' }],
+    } as never);
 
     const { result } = renderHook(
       () =>
@@ -125,6 +133,7 @@ describe('task polling hooks', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000);
     });
+    await flushAsyncWork();
 
     // Polling continues regardless of execution status
     expect(tradingTasksApi.getExecutions).toHaveBeenCalledTimes(3);

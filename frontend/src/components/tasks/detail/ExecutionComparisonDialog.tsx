@@ -36,7 +36,7 @@ import {
 import { LineChart } from '@mui/x-charts/LineChart';
 import React from 'react';
 import type { TaskExecution } from '../../../types/execution';
-import { TaskType } from '../../../types/common';
+import type { TaskType } from '../../../types/common';
 import {
   fetchPaginatedMetrics,
   type MetricPoint,
@@ -263,7 +263,7 @@ export function ExecutionComparisonDialog({
 
       const entries = await Promise.all(
         sorted.map(async (exec) => {
-          const points = await fetchPaginatedMetrics({
+          const page = await fetchPaginatedMetrics({
             taskId,
             taskType,
             executionRunId: exec.id,
@@ -271,7 +271,7 @@ export function ExecutionComparisonDialog({
             pageSize: 500,
             maxPages: 10,
           });
-          return [exec.id, points] as const;
+          return [exec.id, page.results] as const;
         })
       );
       if (mountedRef.current) {

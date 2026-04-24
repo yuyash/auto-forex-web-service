@@ -27,6 +27,16 @@ def _serialise_value(v: Any) -> Any:
     return v
 
 
+def _decimal_metric(snapshot: dict[str, Any], key: str) -> Decimal | None:
+    raw = snapshot.get(key)
+    if raw in (None, ""):
+        return None
+    try:
+        return Decimal(str(raw))
+    except Exception:  # nosec B110
+        return None
+
+
 class MetricsAggregator:
     """Collect per-tick metrics and flush minute-level snapshots to the DB.
 
@@ -86,6 +96,7 @@ class MetricsAggregator:
             return 0
 
         from apps.trading.models.metrics import Metrics
+        from apps.trading.models.metrics import ExecutionMetricAggregate
 
         sorted_keys = sorted(self._buckets)
 
@@ -111,6 +122,63 @@ class MetricsAggregator:
 
         created = Metrics.objects.bulk_create(objs, ignore_conflicts=True)
         count = len(created)
+
+        if keys_to_flush:
+            latest_key = keys_to_flush[-1]
+            latest_snapshot = self._buckets[latest_key]
+            aggregate, _ = ExecutionMetricAggregate.objects.get_or_create(
+                task_type=self.task_type,
+                task_id=self.task_id,
+                execution_id=self.execution_id,
+                defaults={
+                    "latest_timestamp": latest_key,
+                    "latest_metrics": latest_snapshot,
+                    "sample_count": 0,
+                    "balance_min": _decimal_metric(latest_snapshot, "current_balance"),
+                    "balance_max": _decimal_metric(latest_snapshot, "current_balance"),
+                    "margin_ratio_min": _decimal_metric(latest_snapshot, "margin_ratio"),
+                    "margin_ratio_max": _decimal_metric(latest_snapshot, "margin_ratio"),
+                },
+            )
+            aggregate.latest_timestamp = latest_key
+            aggregate.latest_metrics = latest_snapshot
+            aggregate.sample_count = int(aggregate.sample_count) + len(keys_to_flush)
+            current_balance = _decimal_metric(latest_snapshot, "current_balance")
+            if current_balance is not None:
+                aggregate.balance_min = (
+                    current_balance
+                    if aggregate.balance_min is None
+                    else min(aggregate.balance_min, current_balance)
+                )
+                aggregate.balance_max = (
+                    current_balance
+                    if aggregate.balance_max is None
+                    else max(aggregate.balance_max, current_balance)
+                )
+            margin_ratio = _decimal_metric(latest_snapshot, "margin_ratio")
+            if margin_ratio is not None:
+                aggregate.margin_ratio_min = (
+                    margin_ratio
+                    if aggregate.margin_ratio_min is None
+                    else min(aggregate.margin_ratio_min, margin_ratio)
+                )
+                aggregate.margin_ratio_max = (
+                    margin_ratio
+                    if aggregate.margin_ratio_max is None
+                    else max(aggregate.margin_ratio_max, margin_ratio)
+                )
+            aggregate.save(
+                update_fields=[
+                    "latest_timestamp",
+                    "latest_metrics",
+                    "sample_count",
+                    "balance_min",
+                    "balance_max",
+                    "margin_ratio_min",
+                    "margin_ratio_max",
+                    "updated_at",
+                ]
+            )
 
         logger.debug(
             "MetricsAggregator flushed %d/%d buckets (final=%s) for task %s",

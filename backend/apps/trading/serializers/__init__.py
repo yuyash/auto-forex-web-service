@@ -25,6 +25,7 @@ from apps.trading.serializers.task import (
     BacktestTaskSerializer as BacktestTaskSerializerNew,
 )
 from apps.trading.serializers.task import (
+    RecoveryAttemptSerializer,
     TaskLogSerializer,
     TaskSerializer,
 )
@@ -55,6 +56,7 @@ __all__ = [
     "StrategyListSerializer",
     # Task (new unified serializers)
     "BacktestTaskSerializerNew",
+    "RecoveryAttemptSerializer",
     "TaskLogSerializer",
     "TaskSerializer",
     "TradingTaskSerializerNew",

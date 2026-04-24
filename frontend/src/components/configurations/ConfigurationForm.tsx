@@ -24,12 +24,7 @@ import { z } from 'zod';
 import StrategyConfigForm from '../strategy/StrategyConfigForm';
 import { useStrategies, useStrategyDefaults } from '../../hooks/useStrategies';
 import type { StrategyConfigCreateData } from '../../types/configuration';
-import type {
-  StrategyConfig,
-  ConfigSchema,
-  DependsOnCondition,
-  JsonPrimitive,
-} from '../../types/strategy';
+import type { StrategyConfig, ConfigSchema } from '../../types/strategy';
 import { STRATEGY_CONFIG_SCHEMAS } from './strategyConfigSchemas';
 
 // Validation schema
@@ -47,31 +42,6 @@ const configurationSchema = z.object({
 });
 
 type ConfigurationFormData = z.infer<typeof configurationSchema>;
-
-const normalizeComparableValue = (value: unknown): JsonPrimitive => {
-  if (value === null || value === undefined) return null;
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    const lower = trimmed.toLowerCase();
-    if (lower === 'true') return true;
-    if (lower === 'false') return false;
-    if (trimmed === '') return null;
-    const asNumber = Number(trimmed);
-    if (!Number.isNaN(asNumber)) return asNumber;
-    return trimmed;
-  }
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return value;
-  }
-  return String(value);
-};
-
-const conditionMatchesValue = (
-  currentValue: unknown,
-  expected: JsonPrimitive
-): boolean => {
-  return normalizeComparableValue(currentValue) === expected;
-};
 
 interface ConfigurationFormProps {
   mode?: 'create' | 'edit';
@@ -438,44 +408,11 @@ const ConfigurationForm = ({
     return String(value);
   };
 
-  // Filter parameters to only show visible ones (respecting dependsOn conditions)
-  const isParameterVisible = (key: string): boolean => {
-    if (!strategySchema) return true;
-    const fieldSchema = strategySchema.properties[key];
-    if (!fieldSchema?.dependsOn) return true;
-
-    const matchesSingleCondition = (cond: DependsOnCondition): boolean => {
-      const dependentRaw = parameters[cond.field];
-      if (
-        !cond.values.some((expected) =>
-          conditionMatchesValue(dependentRaw, expected)
-        )
-      ) {
-        return false;
-      }
-      if (!cond.and || cond.and.length === 0) return true;
-      return cond.and.every((andCond) => {
-        const rawCond = parameters[andCond.field];
-        return andCond.values.some((expected) =>
-          conditionMatchesValue(rawCond, expected)
-        );
-      });
-    };
-
-    if (matchesSingleCondition(fieldSchema.dependsOn)) return true;
-    if (!fieldSchema.dependsOn.or || fieldSchema.dependsOn.or.length === 0) {
-      return false;
-    }
-    return fieldSchema.dependsOn.or.some((orCond) =>
-      matchesSingleCondition(orCond)
-    );
-  };
-
   const reviewParameters: Array<[string, unknown]> = strategySchema
     ? [
-        ...Object.keys(strategySchema.properties)
-          .filter(isParameterVisible)
-          .map((key) => [key, parameters[key]] as [string, unknown]),
+        ...Object.keys(strategySchema.properties).map(
+          (key) => [key, parameters[key]] as [string, unknown]
+        ),
         ...Object.entries(parameters).filter(
           ([key]) => !(key in strategySchema.properties)
         ),

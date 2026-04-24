@@ -1,6 +1,7 @@
 import { queryClient, queryKeys } from '../config/reactQuery';
 import type { BacktestTask, PaginatedResponse, TradingTask } from '../types';
-import { TaskStatus, TaskType } from '../types/common';
+import type { TaskStatus } from '../types/common';
+import { TaskType } from '../types/common';
 import {
   clearTaskExecutions,
   patchTaskLogComponents,

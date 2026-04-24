@@ -29,6 +29,7 @@ def _mock_models():
         patch("apps.trading.tasks.recovery.TradingTask") as tt,
         patch("apps.trading.tasks.recovery.CeleryTaskStatus") as cts,
         patch("apps.trading.tasks.recovery.TaskLog") as tl,
+        patch("apps.trading.tasks.recovery.RecoveryAttempt"),
         patch("apps.trading.tasks.service.TaskService") as svc_cls,
         patch("apps.trading.tasks.recovery._active_celery_task_ids", return_value=set()),
     ):
@@ -50,6 +51,15 @@ class TestRecoverOrphanedTasks:
         from apps.trading.tasks.recovery import recover_orphaned_tasks
 
         result = recover_orphaned_tasks(source="test")
+        assert result == {"backtest": 0, "trading": 0}
+
+    @pytest.mark.usefixtures("_mock_models")
+    def test_skips_duplicate_recovery_run_when_lock_exists(self, _mock_models):
+        with patch("apps.trading.tasks.recovery.cache.add", return_value=False):
+            from apps.trading.tasks.recovery import recover_orphaned_tasks
+
+            result = recover_orphaned_tasks(source="test")
+
         assert result == {"backtest": 0, "trading": 0}
 
     @pytest.mark.usefixtures("_mock_models")
@@ -380,6 +390,29 @@ class TestRecoverOrphanedTasks:
         result = recover_orphaned_tasks(source="test")
         assert result["trading"] == 1
         service_instance.recover_trading_task.assert_called_once_with(task)
+
+    @pytest.mark.usefixtures("_mock_models")
+    def test_task_cooldown_blocks_duplicate_task_recovery(self, _mock_models):
+        bt, tt, cts, tl, svc_cls = _mock_models
+
+        task = MagicMock()
+        task.pk = uuid4()
+        task.status = TaskStatus.RUNNING
+        bt.objects.filter.return_value = _make_qs([task])
+        cts.objects.filter.return_value.__iter__ = MagicMock(return_value=iter([]))
+
+        type(task).objects = MagicMock()
+        type(task).objects.filter.return_value.update.return_value = 1
+
+        with patch(
+            "apps.trading.tasks.recovery.cache.add",
+            side_effect=[True, False],
+        ):
+            from apps.trading.tasks.recovery import recover_orphaned_tasks
+
+            result = recover_orphaned_tasks(source="test")
+
+        assert result["backtest"] == 0
 
 
 class TestRecoverOrphanedTasksBeat:

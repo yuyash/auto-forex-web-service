@@ -5,7 +5,7 @@
  * Mirrors BacktestTaskDetail's structure for consistency.
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { Suspense, useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -59,13 +59,19 @@ import { useOptimisticTaskStatus } from '../../hooks/useOptimisticTaskStatus';
 import { TaskDetailHeader } from '../tasks/detail/TaskDetailHeader';
 import { TaskDetailTabs } from '../tasks/detail/TaskDetailTabs';
 import { TaskStrategyTab } from '../tasks/detail/strategy/TaskStrategyTab';
-import { TaskMetricsTab } from '../tasks/detail/TaskMetricsTab';
+import { taskDetailLayout } from '../tasks/detail/detailLayout';
 import { TradingOverviewTab } from './detail/TradingOverviewTab';
 import { useTaskMetrics } from '../../hooks/useTaskMetrics';
 import { computeAutoInterval } from '../../utils/autoGranularity';
 import { useToast } from '../common';
 import { formatTaskActionError } from '../../utils/taskActionError';
 import { useTaskExecution } from '../../hooks/useTaskExecutions';
+
+const TaskMetricsTab = React.lazy(() =>
+  import('../tasks/detail/TaskMetricsTab').then((module) => ({
+    default: module.TaskMetricsTab,
+  }))
+);
 
 export const TradingTaskDetail: React.FC = () => {
   const { t } = useTranslation(['trading', 'common']);
@@ -108,6 +114,7 @@ export const TradingTaskDetail: React.FC = () => {
   } = useTabConfig('trading_detail', defaultTabs);
   const tabParam = searchParams.get('tab') || 'overview';
   const visibleTabIds = visibleTabs.map((tab) => tab.id);
+  const activeTabId = visibleTabIds.includes(tabParam) ? tabParam : 'overview';
 
   const {
     optimisticStatus,
@@ -168,6 +175,14 @@ export const TradingTaskDetail: React.FC = () => {
   const [metricsInterval, setMetricsInterval] = useState(0);
   const [metricsSince, setMetricsSince] = useState('');
   const [metricsUntil, setMetricsUntil] = useState('');
+  const [metricsNowMs, setMetricsNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (metricsUntil || task?.completed_at) return;
+    if (!shouldPollTaskStatus(currentStatus)) return;
+    const id = window.setInterval(() => setMetricsNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, [currentStatus, metricsUntil, task?.completed_at]);
 
   const effectiveMetricsInterval = useMemo(() => {
     if (metricsInterval !== 0) return metricsInterval;
@@ -183,14 +198,12 @@ export const TradingTaskDetail: React.FC = () => {
       ? new Date(metricsUntil).getTime() / 1000
       : task?.completed_at
         ? new Date(task.completed_at).getTime() / 1000
-        : task?.started_at
-          ? new Date(task.started_at).getTime() / 1000
-          : 0;
+        : metricsNowMs / 1000;
     if (start && end > start) {
       return computeAutoInterval(end - start);
     }
     return 1;
-  }, [metricsInterval, metricsSince, metricsUntil, task]);
+  }, [metricsInterval, metricsSince, metricsUntil, metricsNowMs, task]);
 
   const metricsResult = useTaskMetrics({
     taskId,
@@ -200,6 +213,7 @@ export const TradingTaskDetail: React.FC = () => {
     since: metricsSince ? new Date(metricsSince).toISOString() : undefined,
     until: metricsUntil ? new Date(metricsUntil).toISOString() : undefined,
     enabled: !!taskId,
+    fetchSeries: activeTabId === 'metrics',
     pollingInterval:
       !isViewingHistorical && shouldPollTaskStatus(currentStatus) ? 30000 : 0,
   });
@@ -211,7 +225,7 @@ export const TradingTaskDetail: React.FC = () => {
       }
     : null;
 
-  const activeTabIndex = Math.max(0, visibleTabIds.indexOf(tabParam));
+  const activeTabIndex = Math.max(0, visibleTabIds.indexOf(activeTabId));
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     const next: Record<string, string> = {
       tab: visibleTabIds[newValue] || 'overview',
@@ -256,18 +270,7 @@ export const TradingTaskDetail: React.FC = () => {
     : 'N/A';
 
   return (
-    <Container
-      maxWidth={false}
-      sx={{
-        py: { xs: 2, sm: 4 },
-        px: { xs: 1, sm: 3 },
-        display: 'flex',
-        flexDirection: 'column',
-        flex: 1,
-        minHeight: 0,
-        overflow: 'auto',
-      }}
-    >
+    <Container maxWidth={false} sx={taskDetailLayout.container}>
       <Breadcrumbs sx={{ mb: { xs: 1, sm: 2 } }}>
         <Link
           component="button"
@@ -358,16 +361,7 @@ export const TradingTaskDetail: React.FC = () => {
         onDelete={() => setDeleteDialogOpen(true)}
       />
 
-      <Paper
-        sx={{
-          mb: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          flex: 1,
-          minHeight: 0,
-          overflow: 'hidden',
-        }}
-      >
+      <Paper sx={taskDetailLayout.tabPaper}>
         <TaskDetailTabs
           activeTabIndex={activeTabIndex}
           visibleTabs={visibleTabs}
@@ -490,26 +484,39 @@ export const TradingTaskDetail: React.FC = () => {
             value={activeTabIndex}
             index={visibleTabIds.indexOf('metrics')}
           >
-            <TaskMetricsTab
-              data={metricsResult.data}
-              isLoading={metricsResult.isLoading}
-              error={metricsResult.error}
-              currency={s.execution.accountCurrency || pnlCurrency || 'USD'}
-              interval={metricsInterval}
-              since={metricsSince}
-              until={metricsUntil}
-              onIntervalChange={setMetricsInterval}
-              onSinceChange={setMetricsSince}
-              onUntilChange={setMetricsUntil}
-              onRefresh={metricsResult.refresh}
-              instrument={detailTask.instrument}
-              startTime={detailTask.started_at}
-              endTime={detailTask.completed_at}
-              currentTickTimestamp={polledTick?.timestamp}
-              currentTickPrice={
-                polledTick?.price != null ? parseFloat(polledTick.price) : null
+            <Suspense
+              fallback={
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                  <CircularProgress size={24} />
+                </Box>
               }
-            />
+            >
+              <TaskMetricsTab
+                data={metricsResult.data}
+                isLoading={metricsResult.isLoading}
+                error={metricsResult.error}
+                currency={s.execution.accountCurrency || pnlCurrency || 'USD'}
+                dataSource={metricsResult.dataSource}
+                resumeCursorTimestamp={metricsResult.resumeCursorTimestamp}
+                consistencyWarnings={metricsResult.consistencyWarnings}
+                interval={metricsInterval}
+                since={metricsSince}
+                until={metricsUntil}
+                onIntervalChange={setMetricsInterval}
+                onSinceChange={setMetricsSince}
+                onUntilChange={setMetricsUntil}
+                onRefresh={metricsResult.refresh}
+                instrument={detailTask.instrument}
+                startTime={detailTask.started_at}
+                endTime={detailTask.completed_at}
+                currentTickTimestamp={polledTick?.timestamp}
+                currentTickPrice={
+                  polledTick?.price != null
+                    ? parseFloat(polledTick.price)
+                    : null
+                }
+              />
+            </Suspense>
           </LazyTabPanel>
         )}
       </Paper>

@@ -30,9 +30,13 @@ from apps.trading.services.runtime_metrics import (
     config_int,
 )
 from apps.trading.services.unrealized_pnl import update_unrealized_pnl
+from apps.trading.tasks.execution_state_store import (
+    ExecutionStateConflict,
+    ExecutionStateStore,
+)
 from apps.trading.tasks.source import TickDataSource
 from apps.trading.tasks.state import StateManager
-from apps.trading.utils import format_money
+from apps.trading.utils import format_money, quote_to_account_rate
 
 if TYPE_CHECKING:
     from apps.trading.services.market_schedule import MarketSessionConfig
@@ -130,6 +134,7 @@ class TaskExecutor:
         self.event_context = event_context
         self.order_service = order_service
         self.state_manager = state_manager
+        self.state_store = ExecutionStateStore()
 
         # Extract properties from task
         self.instrument = task.instrument
@@ -381,6 +386,7 @@ class TaskExecutor:
             current_balance=self.initial_balance,
             ticks_processed=0,
             last_tick_timestamp=initial_timestamp,
+            resume_cursor_timestamp=initial_timestamp,
         )
         return state, False
 
@@ -398,8 +404,7 @@ class TaskExecutor:
             f"current_balance={state.current_balance}"
         )
 
-        # Save the model instance
-        state.save()
+        self.state_store.save(state)
 
     def _flush_metrics(self, state: ExecutionState) -> None:
         """Flush completed minute-level metric buckets to the database."""
@@ -582,7 +587,8 @@ class TaskExecutor:
         # allocates a new execution_id and the task is expected to replay
         # from ``task.start_time``, so there is nothing to restore.
         if resumed:
-            self._restore_metric_counters()
+            self._validate_resume_metrics_continuity(state=state)
+            self._restore_metric_counters(state=state)
 
         logger.info("Engine started, events_count=%d", len(result.events))
         self._persist_config_snapshot()
@@ -1163,6 +1169,7 @@ class TaskExecutor:
             if self.task.status == TaskStatus.IDLE:
                 loop.state.ticks_processed += 1
                 loop.state.last_tick_timestamp = tick_ts
+                loop.state.resume_cursor_timestamp = tick_ts
                 loop.state.last_tick_price = tick.mid
                 loop.state.last_tick_bid = tick.bid
                 loop.state.last_tick_ask = tick.ask
@@ -1195,6 +1202,7 @@ class TaskExecutor:
         tick_timestamp = self._coerce_tick_timestamp(tick.timestamp)
         loop.state.ticks_processed += 1
         loop.state.last_tick_timestamp = tick_timestamp
+        loop.state.resume_cursor_timestamp = tick_timestamp
         loop.state.last_tick_price = tick.mid
         loop.state.last_tick_bid = tick.bid
         loop.state.last_tick_ask = tick.ask
@@ -1270,12 +1278,50 @@ class TaskExecutor:
         positions = self.order_service.get_open_positions(instrument=self.instrument)
         self._runtime_metrics.sync_open_positions(positions)
 
-    def _restore_metric_counters(self) -> None:
-        """Restore cumulative metric counters from DB for resumed executions."""
+    def _restore_metric_counters(self, *, state: ExecutionState) -> None:
+        """Restore cumulative metric counters for resumed executions.
+
+        Prefer the persisted runtime metrics on ``ExecutionState`` so
+        pause/resume keeps continuity. Fall back to DB aggregation when
+        metrics are unavailable (legacy rows).
+        """
         from django.db.models import Case, F, Sum, Value, When
 
         from apps.trading.models.positions import Position
         from apps.trading.models.trades import Trade
+
+        account_currency = getattr(self.task, "account_currency", "") or getattr(
+            getattr(self.task, "oanda_account", None), "currency", ""
+        )
+        strategy_state = state.strategy_state if isinstance(state.strategy_state, dict) else {}
+        persisted_metrics = (
+            strategy_state.get("metrics") if isinstance(strategy_state.get("metrics"), dict) else {}
+        )
+
+        if persisted_metrics:
+            realized_pnl = self._to_decimal_metric(persisted_metrics.get("realized_pnl"))
+            realized_pnl_quote = self._to_decimal_metric(
+                persisted_metrics.get("realized_pnl_quote")
+            )
+            if realized_pnl_quote == Decimal("0") and realized_pnl != Decimal("0"):
+                last_mid = self._to_decimal_metric(state.last_tick_price)
+                conversion = quote_to_account_rate(
+                    self.instrument,
+                    last_mid if last_mid > 0 else Decimal("1"),
+                    str(account_currency or ""),
+                )
+                if conversion > 0:
+                    realized_pnl_quote = realized_pnl / conversion
+
+            self._runtime_metrics.restore_counters(
+                realized_pnl=realized_pnl,
+                realized_pnl_quote=realized_pnl_quote,
+                total_trades=self._to_int_metric(persisted_metrics.get("total_trades")),
+                closed_positions=self._to_int_metric(persisted_metrics.get("closed_positions")),
+                winning_trades=self._to_int_metric(persisted_metrics.get("winning_trades")),
+                losing_trades=self._to_int_metric(persisted_metrics.get("losing_trades")),
+            )
+            return
 
         base_filter: dict = {
             "task_type": self.task_type.value,
@@ -1337,8 +1383,18 @@ class TaskExecutor:
             ),
         )
 
+        realized_pnl_quote = agg["realized_pnl"] or Decimal("0")
+        last_mid = self._to_decimal_metric(state.last_tick_price)
+        conversion = quote_to_account_rate(
+            self.instrument,
+            last_mid if last_mid > 0 else Decimal("1"),
+            str(account_currency or ""),
+        )
+        realized_pnl = realized_pnl_quote * conversion if conversion > 0 else realized_pnl_quote
+
         self._runtime_metrics.restore_counters(
-            realized_pnl=agg["realized_pnl"] or Decimal("0"),
+            realized_pnl=realized_pnl,
+            realized_pnl_quote=realized_pnl_quote,
             total_trades=Trade.objects.filter(
                 **base_filter, execution_method="open_position"
             ).count(),
@@ -1346,6 +1402,88 @@ class TaskExecutor:
             winning_trades=agg["winning"] or 0,
             losing_trades=agg["losing"] or 0,
         )
+
+    def _validate_resume_metrics_continuity(self, *, state: ExecutionState) -> None:
+        """Warn when resumed state deviates from the latest persisted metrics snapshot."""
+        from apps.trading.models import ExecutionMetricAggregate
+
+        try:
+            aggregate = (
+                ExecutionMetricAggregate.objects.filter(
+                    task_type=self.task_type.value,
+                    task_id=self.task.pk,
+                    execution_id=self.task.execution_id,
+                )
+                .only("latest_metrics", "continuity_warnings")
+                .first()
+            )
+        except Exception:  # pragma: no cover - best-effort in non-DB unit tests
+            logger.debug(
+                "Skipping resume continuity check (aggregate lookup unavailable)",
+                exc_info=True,
+            )
+            return
+        if not aggregate or not isinstance(aggregate.latest_metrics, dict):
+            return
+
+        warnings: list[dict[str, object]] = []
+        state_metrics = (
+            state.strategy_state.get("metrics")
+            if isinstance(state.strategy_state, dict)
+            and isinstance(state.strategy_state.get("metrics"), dict)
+            else {}
+        )
+        prev_balance = self._to_decimal_metric(aggregate.latest_metrics.get("current_balance"))
+        resumed_balance = self._to_decimal_metric(state_metrics.get("current_balance"))
+        if prev_balance > 0 and resumed_balance > 0:
+            delta_ratio = abs((resumed_balance - prev_balance) / prev_balance)
+            if delta_ratio >= Decimal("0.10"):
+                warning = {
+                    "kind": "resume_balance_jump",
+                    "previous_balance": str(prev_balance),
+                    "resumed_balance": str(resumed_balance),
+                    "delta_ratio": str(delta_ratio),
+                }
+                warnings.append(warning)
+                logger.warning(
+                    "Resume continuity warning - task_id=%s, execution_id=%s, payload=%s",
+                    self.task.pk,
+                    self.task.execution_id,
+                    warning,
+                )
+
+        if warnings:
+            existing = (
+                aggregate.continuity_warnings
+                if isinstance(aggregate.continuity_warnings, list)
+                else []
+            )
+            aggregate.continuity_warnings = [*existing, *warnings][-20:]
+            aggregate.save(update_fields=["continuity_warnings", "updated_at"])
+
+    @staticmethod
+    def _to_decimal_metric(value: object) -> Decimal:
+        """Parse metric payload values into Decimal safely."""
+        if isinstance(value, Decimal):
+            return value
+        if value in (None, ""):
+            return Decimal("0")
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, TypeError, ValueError):
+            return Decimal("0")
+
+    @staticmethod
+    def _to_int_metric(value: object) -> int:
+        """Parse metric payload values into int safely."""
+        if isinstance(value, int):
+            return value
+        if value in (None, ""):
+            return 0
+        try:
+            return int(str(value))
+        except (TypeError, ValueError):
+            return 0
 
     def _update_common_metrics(self, state: ExecutionState, tick) -> None:
         """Merge strategy-agnostic runtime metrics into state.strategy_state.metrics."""
@@ -1649,17 +1787,7 @@ class TaskExecutor:
         self._metrics_aggregator.flush(final=True)
         logger.info("Engine stopped, events_count=%d", len(result.events))
 
-        if loop.stopped_early and loop.is_error:
-            logger.error(
-                "Execution failed: %s — ticks_processed=%d, final_balance=%s",
-                loop.stop_reason,
-                loop.state.ticks_processed,
-                format_money(loop.state.current_balance),
-            )
-            self.state_manager.stop(
-                status_message=f"Execution failed: {loop.stop_reason}",
-            )
-            raise StrategyError(loop.stop_reason)
+        self._raise_if_failed_stop(loop)
 
         if loop.paused_early:
             logger.info(
@@ -1694,8 +1822,35 @@ class TaskExecutor:
         )
         self.state_manager.stop(status_message="Execution completed successfully", completed=True)
 
+    def _raise_if_failed_stop(self, loop: ExecutionLoopState) -> None:
+        """Persist failed stop state and surface the strategy error."""
+        if not (loop.stopped_early and loop.is_error):
+            return
+
+        logger.error(
+            "Execution failed: %s — ticks_processed=%d, final_balance=%s",
+            loop.stop_reason,
+            loop.state.ticks_processed,
+            format_money(loop.state.current_balance),
+        )
+        self.state_manager.stop(
+            status_message=f"Execution failed: {loop.stop_reason}",
+        )
+        raise StrategyError(loop.stop_reason)
+
     def _handle_execution_failure(self, error: Exception) -> None:
         """Record failed execution outcome."""
+        if isinstance(error, ExecutionStateConflict):
+            logger.error("Execution state conflict during execution: %s", error, exc_info=True)
+            self.state_manager.stop(
+                status_message=(
+                    "Execution stopped because persisted state changed concurrently. "
+                    "Review recovery diagnostics before resuming."
+                ),
+                failed=True,
+            )
+            return
+
         logger.error("Execution failed: %s", error, exc_info=True)
         self.state_manager.stop(status_message=f"Execution failed: {error}", failed=True)
 

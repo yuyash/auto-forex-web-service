@@ -740,6 +740,17 @@ def _build_date_range_query(
     )
 
 
+def _validate_optional_datetime_range(
+    *,
+    start: datetime | None,
+    end: datetime | None,
+    start_name: str,
+    end_name: str,
+) -> None:
+    if start and end and start > end:
+        raise _invalid_query_param(f"{start_name} must be earlier than or equal to {end_name}")
+
+
 def _parse_datetime_value(value: str | None) -> datetime | None:
     if value:
         parsed = parse_datetime(value)
@@ -957,14 +968,22 @@ class MetricsQueryParams:
         max_page_size: int,
     ) -> MetricsQueryParams:
         parsed = _parse_endpoint_group("metrics", request)
+        execution = _build_execution_scoped_query(
+            request,
+            default_execution_id=default_execution_id,
+            default_page_size=default_page_size,
+            max_page_size=max_page_size,
+        )
+        until = cast(datetime | None, parsed["until"])
+        _validate_optional_datetime_range(
+            start=execution.since,
+            end=until,
+            start_name="since",
+            end_name="until",
+        )
         return cls(
-            execution=_build_execution_scoped_query(
-                request,
-                default_execution_id=default_execution_id,
-                default_page_size=default_page_size,
-                max_page_size=max_page_size,
-            ),
-            until=cast(datetime | None, parsed["until"]),
+            execution=execution,
+            until=until,
             interval=max(1, cast(int | None, parsed["interval"]) or 1),
         )
 

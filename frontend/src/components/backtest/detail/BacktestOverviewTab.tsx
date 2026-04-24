@@ -1,21 +1,12 @@
 import { useState, useMemo } from 'react';
-import {
-  Box,
-  Chip,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  Grid,
-  IconButton,
-  Link,
-  Typography,
-} from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
+import { Box, Chip, Divider, Grid, Link, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { StatusBadge } from '../../tasks/display/StatusBadge';
 import { ExecutionHistoryTable } from '../../tasks/display/ExecutionHistoryTable';
 import { LatestMetricsSummary } from '../../tasks/detail/LatestMetricsSummary';
+import { TaskSettingsList } from '../../tasks/detail/TaskSettingsList';
+import { StrategyParameterDialog } from '../../tasks/detail/StrategyParameterDialog';
+import { buildBacktestTaskSettingDefinitions } from '../../tasks/detail/taskSettingDefinitions';
 import type { TaskSummary } from '../../../hooks/useTaskSummary';
 import { getStrategyDisplayName } from '../../../hooks/useStrategies';
 import type { Strategy } from '../../../services/api/strategies';
@@ -24,11 +15,7 @@ import type { BacktestTask } from '../../../types';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
 import { formatAppNumber, formatAppPercent } from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
-import {
-  buildParameterLabelMap,
-  resolveParameterLabel,
-} from '../../../utils/strategySchemaLabels';
-import { isParameterVisible } from '../../../utils/strategySchemaDependsOn';
+import { buildParameterLabelMap } from '../../../utils/strategySchemaLabels';
 import type { ConfigProperty } from '../../../types/strategy';
 
 interface BacktestOverviewTabProps {
@@ -122,6 +109,10 @@ export function BacktestOverviewTab({
     : summary.execution.marginRatio;
 
   const tracemallocEnabled = Boolean(task.debug_options?.tracemalloc);
+  const taskSettings = useMemo(
+    () => buildBacktestTaskSettingDefinitions(t, timezone, language),
+    [language, t, timezone]
+  );
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
@@ -431,6 +422,16 @@ export function BacktestOverviewTab({
 
         <Grid size={{ xs: 12 }}>
           <Divider sx={{ my: 2 }} />
+          <TaskSettingsList
+            title={t('common:labels.taskSettings', 'Task settings')}
+            task={task as unknown as Record<string, unknown>}
+            snapshot={historicalTaskConfig}
+            definitions={taskSettings}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12 }}>
+          <Divider sx={{ my: 2 }} />
           <Typography variant="h6" gutterBottom>
             {t('backtest:detail.results')}
           </Typography>
@@ -608,73 +609,16 @@ export function BacktestOverviewTab({
 
       {/* Snapshot parameters dialog */}
       {historicalStrategyConfig && (
-        <Dialog
+        <StrategyParameterDialog
           open={showSnapshotParams}
           onClose={() => setShowSnapshotParams(false)}
-          maxWidth="sm"
-          fullWidth
-        >
-          <DialogTitle
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            {historicalStrategyConfig.name}
-            <IconButton
-              size="small"
-              onClick={() => setShowSnapshotParams(false)}
-            >
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </DialogTitle>
-          <DialogContent dividers>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ mb: 2, display: 'block' }}
-            >
-              {t('common:labels.strategyType')}:{' '}
-              {historicalStrategyConfig.strategy_type}
-            </Typography>
-            {Object.entries(historicalStrategyConfig.parameters || {})
-              .filter(([key]) =>
-                isParameterVisible(
-                  key,
-                  historicalStrategyConfig.parameters || {},
-                  snapshotSchemaProperties
-                )
-              )
-              .map(([key, value]) => (
-                <Box
-                  key={key}
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    py: 0.5,
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                  }}
-                >
-                  <Typography variant="body2" color="text.secondary">
-                    {resolveParameterLabel(paramLabelMap, key)}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    fontWeight={500}
-                    sx={{ fontFamily: 'monospace' }}
-                  >
-                    {typeof value === 'boolean'
-                      ? value
-                        ? 'true'
-                        : 'false'
-                      : String(value ?? '-')}
-                  </Typography>
-                </Box>
-              ))}
-          </DialogContent>
-        </Dialog>
+          title={historicalStrategyConfig.name}
+          strategyType={historicalStrategyConfig.strategy_type}
+          parameters={historicalStrategyConfig.parameters || {}}
+          snapshotSchemaProperties={snapshotSchemaProperties}
+          paramLabelMap={paramLabelMap}
+          labels={{ strategyType: t('common:labels.strategyType') }}
+        />
       )}
     </Box>
   );
