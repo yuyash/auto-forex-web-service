@@ -20,7 +20,7 @@ import type { MetricPoint } from '../../../utils/fetchMetrics';
 import { MetricsToolbar } from './MetricsToolbar';
 import { MetricsOhlcChart } from './MetricsOhlcChart';
 import { useMetricsOrder } from '../../../hooks/useMetricsOrder';
-import { layoutTokens } from '../../../theme/theme';
+import { layoutTokens } from '../../../theme/density';
 
 interface TaskMetricsTabProps {
   data: MetricPoint[];

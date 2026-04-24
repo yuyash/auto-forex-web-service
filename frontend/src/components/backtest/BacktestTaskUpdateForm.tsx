@@ -154,7 +154,7 @@ const backtestTaskUpdateSchema = z
 
 type BacktestTaskUpdateData = z.infer<typeof backtestTaskUpdateSchema>;
 
-interface BacktestTaskUpdateFormProps {
+export interface BacktestTaskUpdateFormProps {
   taskId: string;
   taskName: string;
   taskDescription?: string;

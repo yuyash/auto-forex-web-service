@@ -1,21 +1,15 @@
 import { createTheme } from '@mui/material/styles';
 import type { ThemeOptions } from '@mui/material/styles';
+import {
+  breakpoints,
+  componentDensity,
+  typography as baseTypography,
+} from './density';
 
 /**
  * High contrast theme for accessibility
  * Ensures all colors meet WCAG AA standards (4.5:1 contrast ratio)
  */
-
-// Define custom breakpoints (same as main theme)
-const breakpoints = {
-  values: {
-    xs: 0,
-    sm: 600,
-    md: 960,
-    lg: 1280,
-    xl: 1920,
-  },
-};
 
 // High contrast color palette
 const palette = {
@@ -70,65 +64,50 @@ const palette = {
 
 // Typography with enhanced readability
 const typography = {
-  fontFamily: [
-    '-apple-system',
-    'BlinkMacSystemFont',
-    '"Segoe UI"',
-    'Roboto',
-    '"Helvetica Neue"',
-    'Arial',
-    'sans-serif',
-  ].join(','),
+  ...baseTypography,
   h1: {
-    fontSize: '2.5rem',
+    ...baseTypography.h1,
     fontWeight: 700, // Bolder for better visibility
-    lineHeight: 1.2,
     color: '#000000',
   },
   h2: {
-    fontSize: '2rem',
+    ...baseTypography.h2,
     fontWeight: 700,
-    lineHeight: 1.3,
     color: '#000000',
   },
   h3: {
-    fontSize: '1.75rem',
+    ...baseTypography.h3,
     fontWeight: 700,
-    lineHeight: 1.4,
     color: '#000000',
   },
   h4: {
-    fontSize: '1.5rem',
+    ...baseTypography.h4,
     fontWeight: 700,
-    lineHeight: 1.4,
     color: '#000000',
   },
   h5: {
-    fontSize: '1.25rem',
+    ...baseTypography.h5,
     fontWeight: 700,
-    lineHeight: 1.5,
     color: '#000000',
   },
   h6: {
-    fontSize: '1rem',
+    ...baseTypography.h6,
     fontWeight: 700,
-    lineHeight: 1.6,
     color: '#000000',
   },
   body1: {
-    fontSize: '1rem',
+    ...baseTypography.body1,
     lineHeight: 1.6, // Increased for readability
     fontWeight: 500,
   },
   body2: {
-    fontSize: '0.875rem',
+    ...baseTypography.body2,
     lineHeight: 1.5,
     fontWeight: 500,
   },
   button: {
-    fontSize: '0.875rem',
+    ...baseTypography.button,
     fontWeight: 700, // Bolder buttons
-    textTransform: 'none' as const,
   },
 };
 
@@ -142,9 +121,9 @@ const components = {
       root: {
         borderRadius: 4,
         textTransform: 'none' as const,
-        fontSize: '0.8rem',
-        padding: '3px 10px',
-        minHeight: 30,
+        fontSize: componentDensity.buttonFontSize,
+        padding: componentDensity.buttonPadding,
+        minHeight: componentDensity.buttonMinHeight,
         border: '2px solid transparent',
         '&:focus-visible': {
           outline: '3px solid #000000',
@@ -171,7 +150,7 @@ const components = {
     },
     styleOverrides: {
       root: {
-        padding: 4,
+        padding: componentDensity.iconButtonPadding,
         border: '1px solid transparent',
         '&:focus-visible': {
           outline: '3px solid #000000',
@@ -187,11 +166,11 @@ const components = {
     styleOverrides: {
       root: {
         '& .MuiInputBase-input': {
-          fontSize: '0.8rem',
-          padding: '6px 10px',
+          fontSize: componentDensity.controlFontSize,
+          padding: componentDensity.controlPadding,
         },
         '& .MuiInputLabel-root': {
-          fontSize: '0.8rem',
+          fontSize: componentDensity.controlFontSize,
         },
         '& .MuiOutlinedInput-root': {
           '& fieldset': {
@@ -226,27 +205,27 @@ const components = {
     },
     styleOverrides: {
       root: {
-        fontSize: '0.8rem',
+        fontSize: componentDensity.controlFontSize,
       },
     },
   },
   MuiMenuItem: {
     styleOverrides: {
       root: {
-        fontSize: '0.75rem',
-        minHeight: 28,
-        paddingTop: 2,
-        paddingBottom: 2,
+        fontSize: componentDensity.controlFontSize,
+        minHeight: componentDensity.menuItemMinHeight,
+        paddingTop: componentDensity.menuItemPaddingY,
+        paddingBottom: componentDensity.menuItemPaddingY,
       },
     },
   },
   MuiListItemText: {
     styleOverrides: {
       primary: {
-        fontSize: '0.75rem',
+        fontSize: componentDensity.listPrimaryFontSize,
       },
       secondary: {
-        fontSize: '0.65rem',
+        fontSize: componentDensity.listSecondaryFontSize,
       },
     },
   },
@@ -263,10 +242,10 @@ const components = {
   MuiOutlinedInput: {
     styleOverrides: {
       root: {
-        fontSize: '0.8rem',
+        fontSize: componentDensity.controlFontSize,
       },
       input: {
-        padding: '6px 10px',
+        padding: componentDensity.controlPadding,
       },
     },
   },
@@ -299,7 +278,7 @@ const components = {
   MuiFormControlLabel: {
     styleOverrides: {
       label: {
-        fontSize: '0.75rem',
+        fontSize: componentDensity.controlFontSize,
       },
     },
   },
