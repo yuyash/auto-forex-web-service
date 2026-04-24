@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.56.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.4...frontend-v1.56.5) (2026-04-24)
+
+
+### Refactoring
+
+* codebase quality pass ([#590](https://github.com/yuyash/auto-forex-web-service/issues/590)) ([6046edd](https://github.com/yuyash/auto-forex-web-service/commit/6046edd32a3763f56feed0fb81f140c3406f18ba))
+
 ## [1.56.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.3...frontend-v1.56.4) (2026-04-23)
 
 ### Bug Fixes
