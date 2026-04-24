@@ -25,7 +25,7 @@ export class ApiError extends Error {
   }
 }
 
-type ApiErrorBody = {
+export type ApiErrorBody = {
   error?: unknown;
   error_code?: unknown;
   detail?: unknown;

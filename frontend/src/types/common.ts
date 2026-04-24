@@ -32,13 +32,11 @@ export interface PaginatedResponse<T> {
 }
 
 export interface ApiError {
-  error?: {
-    code?: string;
-    message: string;
-    details?: Record<string, unknown>;
-  };
+  error?: string;
+  error_code?: string;
   message?: string;
   detail?: string;
+  retry_after?: number;
   [key: string]: unknown;
 }
 

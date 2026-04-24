@@ -54,6 +54,7 @@ import {
 import { formatAppNumber } from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
 import { TaskPositionFilterBar } from './TaskPositionFilterBar';
+import { TaskPositionModeViews } from './TaskPositionModeViews';
 import { useTaskPositionFilters } from './useTaskPositionFilters';
 
 type ViewMode = 'all' | 'byDirection' | 'byStatus';
@@ -1532,9 +1533,9 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         )}
       </Box>
 
-      {/* === All mode === */}
-      {viewMode === 'all' &&
-        renderSingleTable(
+      <TaskPositionModeViews
+        viewMode={viewMode}
+        all={renderSingleTable(
           t('tables.positions.allPositions'),
           allPos,
           allTotal,
@@ -1549,110 +1550,107 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
           genericExtractors,
           () => setAllColConfigOpen(true)
         )}
-
-      {/* === By Direction mode === */}
-      {viewMode === 'byDirection' && (
-        <>
-          {renderSingleTable(
-            t('tables.positions.longPositions'),
-            longPos,
-            longTotal,
-            longSel,
-            longPage,
-            setLongPage,
-            longRpp,
-            setLongRpp,
-            rLong,
-            'long',
-            filteredDirCols('long'),
-            genericExtractors,
-            () => setDirColConfigOpen(true)
-          )}
-          {renderSingleTable(
-            t('tables.positions.shortPositions'),
-            shortPos,
-            shortTotal,
-            shortSel,
-            shortPage,
-            setShortPage,
-            shortRpp,
-            setShortRpp,
-            rShort,
-            'short',
-            filteredDirCols('short'),
-            genericExtractors,
-            () => setDirColConfigOpen(true)
-          )}
-        </>
-      )}
-
-      {/* === By Status mode (legacy 4-table layout) === */}
-      {viewMode === 'byStatus' && (
-        <>
-          <TaskPositionFilterBar
-            cycleIdFilter={cycleIdFilter}
-            onCycleIdFilterChange={setCycleIdFilter}
-            hasCycleIdFilter={hasCycleIdFilter}
-            isCycleIdFilterValid={isCycleIdFilterValid}
-            positionIdFilter={positionIdFilter}
-            onPositionIdFilterChange={setPositionIdFilter}
-            hasPositionIdFilter={hasPositionIdFilter}
-            isPositionIdFilterValid={isPositionIdFilterValid}
-          />
-          {renderPair(
-            t('tables.positions.closedPositions'),
-            closedLongPos,
-            closedLongTotal,
-            closedLongSel,
-            closedLongPage,
-            setClosedLongPage,
-            closedLongRpp,
-            setClosedLongRpp,
-            rCL,
-            'cl',
-            closedShortPos,
-            closedShortTotal,
-            closedShortSel,
-            closedShortPage,
-            setClosedShortPage,
-            closedShortRpp,
-            setClosedShortRpp,
-            rCS,
-            'cs',
-            filteredClosedCols,
-            t('tables.positions.totalRealizedPnl'),
-            totalRealizedPnl,
-            closedExtractors,
-            () => setClosedColConfigOpen(true)
-          )}
-          {renderPair(
-            t('tables.positions.openPositions'),
-            openLongPos,
-            openLongTotal,
-            openLongSel,
-            openLongPage,
-            setOpenLongPage,
-            openLongRpp,
-            setOpenLongRpp,
-            rOL,
-            'ol',
-            openShortPos,
-            openShortTotal,
-            openShortSel,
-            openShortPage,
-            setOpenShortPage,
-            openShortRpp,
-            setOpenShortRpp,
-            rOS,
-            'os',
-            filteredOpenCols,
-            t('tables.positions.totalUnrealizedPnl'),
-            totalUnrealizedPnl,
-            openExtractors,
-            () => setOpenColConfigOpen(true)
-          )}
-        </>
-      )}
+        byDirection={
+          <>
+            {renderSingleTable(
+              t('tables.positions.longPositions'),
+              longPos,
+              longTotal,
+              longSel,
+              longPage,
+              setLongPage,
+              longRpp,
+              setLongRpp,
+              rLong,
+              'long',
+              filteredDirCols('long'),
+              genericExtractors,
+              () => setDirColConfigOpen(true)
+            )}
+            {renderSingleTable(
+              t('tables.positions.shortPositions'),
+              shortPos,
+              shortTotal,
+              shortSel,
+              shortPage,
+              setShortPage,
+              shortRpp,
+              setShortRpp,
+              rShort,
+              'short',
+              filteredDirCols('short'),
+              genericExtractors,
+              () => setDirColConfigOpen(true)
+            )}
+          </>
+        }
+        byStatus={
+          <>
+            <TaskPositionFilterBar
+              cycleIdFilter={cycleIdFilter}
+              onCycleIdFilterChange={setCycleIdFilter}
+              hasCycleIdFilter={hasCycleIdFilter}
+              isCycleIdFilterValid={isCycleIdFilterValid}
+              positionIdFilter={positionIdFilter}
+              onPositionIdFilterChange={setPositionIdFilter}
+              hasPositionIdFilter={hasPositionIdFilter}
+              isPositionIdFilterValid={isPositionIdFilterValid}
+            />
+            {renderPair(
+              t('tables.positions.closedPositions'),
+              closedLongPos,
+              closedLongTotal,
+              closedLongSel,
+              closedLongPage,
+              setClosedLongPage,
+              closedLongRpp,
+              setClosedLongRpp,
+              rCL,
+              'cl',
+              closedShortPos,
+              closedShortTotal,
+              closedShortSel,
+              closedShortPage,
+              setClosedShortPage,
+              closedShortRpp,
+              setClosedShortRpp,
+              rCS,
+              'cs',
+              filteredClosedCols,
+              t('tables.positions.totalRealizedPnl'),
+              totalRealizedPnl,
+              closedExtractors,
+              () => setClosedColConfigOpen(true)
+            )}
+            {renderPair(
+              t('tables.positions.openPositions'),
+              openLongPos,
+              openLongTotal,
+              openLongSel,
+              openLongPage,
+              setOpenLongPage,
+              openLongRpp,
+              setOpenLongRpp,
+              rOL,
+              'ol',
+              openShortPos,
+              openShortTotal,
+              openShortSel,
+              openShortPage,
+              setOpenShortPage,
+              openShortRpp,
+              setOpenShortRpp,
+              rOS,
+              'os',
+              filteredOpenCols,
+              t('tables.positions.totalUnrealizedPnl'),
+              totalUnrealizedPnl,
+              openExtractors,
+              () => setOpenColConfigOpen(true)
+            )}
+          </>
+        }
+      />
 
       {/* Column config dialogs */}
       <ColumnConfigDialog

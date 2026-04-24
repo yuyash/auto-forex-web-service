@@ -3,7 +3,7 @@
 from rest_framework import serializers
 
 from apps.trading.models import BacktestTask, TradingTask
-from apps.trading.models.logs import TaskLog
+from apps.trading.models.logs import RecoveryAttempt, TaskLog
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -152,3 +152,24 @@ class TaskLogSerializer(serializers.ModelSerializer):
             "details",
         ]
         read_only_fields = ["id", "timestamp"]
+
+
+class RecoveryAttemptSerializer(serializers.ModelSerializer):
+    """Serializer for automatic task recovery audit records."""
+
+    class Meta:
+        model = RecoveryAttempt
+        fields = [
+            "id",
+            "task_type",
+            "task_id",
+            "execution_id",
+            "source",
+            "reason",
+            "action",
+            "result",
+            "detail",
+            "metadata",
+            "created_at",
+        ]
+        read_only_fields = fields

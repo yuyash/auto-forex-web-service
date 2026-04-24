@@ -66,6 +66,22 @@ def build_rest_settings(
         "EXTENSIONS": [
             "apps.accounts.openapi.JWTAuthenticationExtension",
         ],
+        "APPEND_COMPONENTS": {
+            "schemas": {
+                "ApiError": {
+                    "type": "object",
+                    "required": ["error", "error_code"],
+                    "properties": {
+                        "error": {"type": "string"},
+                        "error_code": {"type": "string"},
+                        "detail": {},
+                        "message": {"type": "string"},
+                        "retry_after": {"type": "integer"},
+                    },
+                    "additionalProperties": True,
+                },
+            },
+        },
         "ENUM_NAME_OVERRIDES": {
             "EventTypeEnum": "apps.trading.enums.EventType.choices",
         },

@@ -1450,6 +1450,93 @@
                 }
             }
         },
+        "/api/trading/recovery-attempts/": {
+            "get": {
+                "operationId": "trading_recovery_attempts_list",
+                "description": "Read-only list of automatic task recovery audit records.",
+                "parameters": [
+                    {
+                        "name": "ordering",
+                        "required": false,
+                        "in": "query",
+                        "description": "Which field to use when ordering the results.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "required": false,
+                        "in": "query",
+                        "description": "A page number within the paginated result set.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "result",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "required": false,
+                        "in": "query",
+                        "description": "A search term.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "source",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "task_type",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "backtest",
+                                "trading"
+                            ]
+                        }
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PaginatedRecoveryAttemptList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/strategies/": {
             "get": {
                 "operationId": "trading_strategies_list",
@@ -5649,6 +5736,29 @@
     },
     "components": {
         "schemas": {
+            "ApiError": {
+                "type": "object",
+                "required": [
+                    "error",
+                    "error_code"
+                ],
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    },
+                    "error_code": {
+                        "type": "string"
+                    },
+                    "detail": {},
+                    "message": {
+                        "type": "string"
+                    },
+                    "retry_after": {
+                        "type": "integer"
+                    }
+                },
+                "additionalProperties": true
+            },
             "ApiTypeEnum": {
                 "enum": [
                     "practice",
@@ -8094,6 +8204,37 @@
                     }
                 }
             },
+            "PaginatedRecoveryAttemptList": {
+                "type": "object",
+                "required": [
+                    "count",
+                    "results"
+                ],
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "example": 123
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=4"
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "uri",
+                        "example": "http://api.example.org/accounts/?page=2"
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RecoveryAttempt"
+                        }
+                    }
+                }
+            },
             "PaginatedStrategyConfigPaginatedResponseList": {
                 "type": "object",
                 "required": [
@@ -8759,6 +8900,81 @@
                         "description": "Whether email whitelist is enforced for registration/login"
                     }
                 }
+            },
+            "RecoveryAttempt": {
+                "type": "object",
+                "description": "Serializer for automatic task recovery audit records.",
+                "properties": {
+                    "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "description": "Unique identifier for this recovery attempt"
+                    },
+                    "task_type": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TaskTypeEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "Type of task (backtest or trading)\n\n* `backtest` - Backtest\n* `trading` - Trading"
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "description": "Recovered task UUID"
+                    },
+                    "execution_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Execution run UUID at the time of recovery"
+                    },
+                    "source": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "reason": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "action": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "result": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "detail": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "metadata": {
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "action",
+                    "created_at",
+                    "detail",
+                    "execution_id",
+                    "id",
+                    "metadata",
+                    "reason",
+                    "result",
+                    "source",
+                    "task_id",
+                    "task_type"
+                ]
             },
             "RegisteredUser": {
                 "type": "object",

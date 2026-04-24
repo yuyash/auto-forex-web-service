@@ -15,6 +15,7 @@ from apps.trading.views import (
     StrategyConfigView,
     StrategyDefaultsView,
     StrategyView,
+    RecoveryAttemptListView,
     TradingTaskViewSet,
 )
 
@@ -28,6 +29,7 @@ router.register(r"tasks/trading", TradingTaskViewSet, basename="trading-task")
 urlpatterns = [
     # Task-centric API endpoints
     path("", include(router.urls)),
+    path("recovery-attempts/", RecoveryAttemptListView.as_view(), name="recovery_attempts"),
     # Strategy endpoints
     path("strategies/", StrategyView.as_view(), name="strategy_list"),
     path(

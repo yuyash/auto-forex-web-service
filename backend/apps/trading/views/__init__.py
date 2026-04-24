@@ -14,6 +14,7 @@ from .configs import (
     StrategyConfigTasksView,
     StrategyConfigView,
 )
+from .recovery import RecoveryAttemptListView
 from .strategies import (
     StrategyDefaultsView,
     StrategyView,
@@ -32,4 +33,5 @@ __all__ = [
     # Tasks
     "BacktestTaskViewSet",
     "TradingTaskViewSet",
+    "RecoveryAttemptListView",
 ]
