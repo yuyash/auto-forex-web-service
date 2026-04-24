@@ -89,12 +89,11 @@ repos:
         pass_filenames: false
         files: ^backend/
 
-      - id: pytest
-        name: Run pytest
-        entry: bash -c 'cd backend && source .venv/bin/activate && python scripts/ci_pytest.py prepush'
+      - id: scoped-pre-push-checks
+        name: Scoped pre-push checks
+        entry: scripts/prepush_changed_checks.sh
         language: system
         pass_filenames: false
-        files: ^backend/.*\.py$
         stages: [pre-push]
 
       # Frontend checks
@@ -111,27 +110,3 @@ repos:
         language: system
         pass_filenames: false
         files: ^frontend/.*\.(ts|tsx)$
-
-      - id: frontend-build
-        name: Frontend Build Check
-        entry: bash -c 'cd frontend && npm run build'
-        language: system
-        pass_filenames: false
-        files: ^frontend/.*\.(ts|tsx|js|jsx|css|html)$
-        stages: [pre-push]
-
-      - id: frontend-npm-ci
-        name: Frontend npm ci Check
-        entry: bash -c 'cd frontend && npm ci --ignore-scripts --no-audit --no-fund'
-        language: system
-        pass_filenames: false
-        files: ^frontend/(package\.json|package-lock\.json|\.npmrc|Dockerfile)$
-        stages: [pre-push]
-
-      - id: vitest
-        name: Run Vitest
-        entry: bash -c 'cd frontend && npm run test'
-        language: system
-        pass_filenames: false
-        files: ^frontend/.*\.(ts|tsx|js|jsx)$
-        stages: [pre-push]
