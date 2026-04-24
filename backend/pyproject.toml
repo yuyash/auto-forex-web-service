@@ -69,12 +69,16 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "--import-mode=importlib",
+    "--durations=10",
     "-v",
 ]
 testpaths = ["tests"]
 markers = [
     "unit: marks tests as unit tests (deselect with '-m \"not unit\"')",
     "integration: Integration tests",
+    "contract: deterministic tests for third-party service response contracts",
+    "e2e: end-to-end API tests",
+    "db: tests that require database access",
     "slow: Slow running tests",
 ]
 # Global per-test timeout (seconds) – prevents CI from hanging indefinitely.

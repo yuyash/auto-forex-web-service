@@ -5,6 +5,9 @@ const routes = [
   { name: 'dashboard', path: '/dashboard' },
   { name: 'backtest-tasks', path: '/backtest-tasks' },
   { name: 'trading-tasks', path: '/trading-tasks' },
+  { name: 'configurations', path: '/configurations' },
+  { name: 'settings', path: '/settings' },
+  { name: 'profile', path: '/profile' },
 ] as const;
 
 async function expectNoHorizontalOverflow(page: Page) {

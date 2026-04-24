@@ -290,3 +290,42 @@ def test_position_query_reject_invalid_cycle_id():
         )
 
     assert "Invalid cycle_id" in str(exc_info.value.detail)
+
+
+@pytest.mark.parametrize(
+    ("query_class", "kwargs", "query"),
+    [
+        (
+            MetricsQueryParams,
+            {
+                "default_execution_id": None,
+                "default_page_size": MetricsPagination.page_size,
+                "max_page_size": MetricsPagination.max_page_size,
+            },
+            "?since=2026-01-02T00:00:00Z&until=2026-01-01T00:00:00Z",
+        ),
+        (
+            LogsQueryParams,
+            {
+                "default_execution_id": None,
+                "default_page_size": ActivityPagination.page_size,
+                "max_page_size": ActivityPagination.max_page_size,
+            },
+            "?timestamp_from=2026-01-02T00:00:00Z&timestamp_to=2026-01-01T00:00:00Z",
+        ),
+        (
+            PositionQuery,
+            {
+                "default_execution_id": None,
+                "default_page_size": TradePositionPagination.page_size,
+                "max_page_size": TradePositionPagination.max_page_size,
+            },
+            "?range_from=2026-01-02T00:00:00Z&range_to=2026-01-01T00:00:00Z",
+        ),
+    ],
+)
+def test_query_params_reject_reversed_ranges(query_class, kwargs, query):
+    with pytest.raises(ValidationError) as exc_info:
+        query_class.from_request(_request(query), **kwargs)
+
+    assert "must be earlier than or equal to" in str(exc_info.value.detail)

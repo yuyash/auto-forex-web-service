@@ -46,5 +46,6 @@ export default defineConfig({
     exclude: ['node_modules', 'dist', 'tests/e2e'],
     testTimeout: 60000,
     hookTimeout: 30000,
+    slowTestThreshold: 1000,
   },
 });
