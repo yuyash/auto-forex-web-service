@@ -39,8 +39,13 @@ interface TaskSummaryResponse {
     account_currency?: string | null;
     current_balance_display?: string | number | null;
     display_currency?: string | null;
+    resume_cursor_timestamp?: string | null;
     margin_ratio?: string | number | null;
     current_atr?: string | number | null;
+    recovery_status?: string | null;
+    recovery_warnings?: string[];
+    recovery_blockers?: string[];
+    reconciled_at?: string | null;
   };
   tick?: {
     timestamp?: string | null;
@@ -183,6 +188,7 @@ export function createTaskSummaryQuery(
                 ? parseFloat(String(d.execution.current_balance_display))
                 : null,
             displayCurrency: d.execution?.display_currency ?? null,
+            resumeCursorTimestamp: d.execution?.resume_cursor_timestamp ?? null,
             marginRatio:
               d.execution?.margin_ratio != null
                 ? parseFloat(String(d.execution.margin_ratio))
@@ -191,6 +197,14 @@ export function createTaskSummaryQuery(
               d.execution?.current_atr != null
                 ? parseFloat(String(d.execution.current_atr))
                 : null,
+            recoveryStatus: d.execution?.recovery_status ?? null,
+            recoveryWarnings: Array.isArray(d.execution?.recovery_warnings)
+              ? d.execution.recovery_warnings
+              : [],
+            recoveryBlockers: Array.isArray(d.execution?.recovery_blockers)
+              ? d.execution.recovery_blockers
+              : [],
+            reconciledAt: d.execution?.reconciled_at ?? null,
           },
           tick: {
             timestamp: d.tick?.timestamp ?? null,

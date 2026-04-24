@@ -79,6 +79,20 @@ def _normalize_entry(entry: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def _normalize_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
+    """Normalize numeric metric strings for stable resume comparisons."""
+    normalized: dict[str, Any] = {}
+    for key, value in metrics.items():
+        if value in (None, ""):
+            normalized[key] = value
+            continue
+        try:
+            normalized[key] = format(Decimal(str(value)).normalize(), "f")
+        except Exception:
+            normalized[key] = value
+    return normalized
+
+
 def _run_snowball_backtest(
     *,
     parameters: dict[str, Any],
@@ -351,7 +365,7 @@ class TestSnowballBacktestSimulation:
         full_metrics = {
             k: v for k, v in full_state.strategy_state["metrics"].items() if k not in _runtime_keys
         }
-        assert resumed_metrics == full_metrics
+        assert _normalize_metrics(resumed_metrics) == _normalize_metrics(full_metrics)
 
         def _head_entry(cycle_dict):
             """Extract the head entry (first occupied slot) from a cycle dict."""

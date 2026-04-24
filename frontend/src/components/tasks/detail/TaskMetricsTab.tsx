@@ -214,8 +214,13 @@ function formatYLabel(v: number, format?: 'pct' | 'int' | 'currency'): string {
 /** Compute a suitable Y-axis tick count based on the value range. */
 function computeYTickCount(yValues: number[]): number {
   if (yValues.length < 2) return 4;
-  const min = Math.min(...yValues);
-  const max = Math.max(...yValues);
+  let min = yValues[0];
+  let max = yValues[0];
+  for (let i = 1; i < yValues.length; i += 1) {
+    const value = yValues[i];
+    if (value < min) min = value;
+    if (value > max) max = value;
+  }
   const range = max - min;
   if (range === 0) return 2;
   // Aim for 4-5 ticks for most charts
@@ -339,8 +344,13 @@ export function TaskMetricsTab({
       const cd = chartDataMap[m.key];
       if (!cd || cd.y.length === 0) continue;
       let maxChars = 0;
-      const yMin = Math.min(...cd.y);
-      const yMax = Math.max(...cd.y);
+      let yMin = cd.y[0];
+      let yMax = cd.y[0];
+      for (let i = 1; i < cd.y.length; i += 1) {
+        const value = cd.y[i];
+        if (value < yMin) yMin = value;
+        if (value > yMax) yMax = value;
+      }
       for (const v of [yMin, yMax, yMin * 1.2, yMax * 1.2]) {
         const label = formatYLabel(v, m.format);
         if (label.length > maxChars) maxChars = label.length;

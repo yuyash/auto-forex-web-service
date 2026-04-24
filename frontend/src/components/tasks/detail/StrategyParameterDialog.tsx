@@ -19,7 +19,7 @@ interface StrategyParameterDialogProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   parameters: Record<string, any>;
   snapshotSchemaProperties?: Record<string, ConfigProperty>;
-  paramLabelMap: Record<string, string>;
+  paramLabelMap: Map<string, string>;
   labels: {
     strategyType: string;
   };
