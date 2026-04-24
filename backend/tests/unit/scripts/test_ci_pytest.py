@@ -1,4 +1,4 @@
-from scripts.ci_pytest import build_pytest_args
+from scripts.ci_pytest import build_pytest_args, parse_args
 
 
 def test_unit_suite_uses_importlib_and_coverage_outputs() -> None:
@@ -35,3 +35,22 @@ def test_prepush_suite_matches_backend_hook_scope() -> None:
     assert "--import-mode=importlib" in args
     assert "--timeout=30" in args
     assert "--tb=short" in args
+
+
+def test_parse_args_keeps_wrapper_and_pytest_args_separate() -> None:
+    args = parse_args(
+        [
+            "unit",
+            "--coverage",
+            "--coverage-append",
+            "--junitxml=junit-unit.xml",
+            "--",
+            "-q",
+        ]
+    )
+
+    assert args.suite == "unit"
+    assert args.coverage is True
+    assert args.coverage_append is True
+    assert args.junitxml == "junit-unit.xml"
+    assert args.extra_args == ["-q"]

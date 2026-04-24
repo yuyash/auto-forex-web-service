@@ -93,12 +93,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--coverage", action="store_true")
     parser.add_argument("--coverage-append", action="store_true")
     parser.add_argument("--junitxml")
-    parser.add_argument(
-        "extra_args",
-        nargs=argparse.REMAINDER,
-        help="additional pytest arguments, optionally after '--'",
-    )
-    return parser.parse_args(argv)
+    args, extra_args = parser.parse_known_args(argv)
+    args.extra_args = [arg for arg in extra_args if arg != "--"]
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -107,13 +104,12 @@ def main(argv: list[str] | None = None) -> int:
     import pytest
 
     args = parse_args(sys.argv[1:] if argv is None else argv)
-    extra_args = tuple(arg for arg in args.extra_args if arg != "--")
     pytest_args = build_pytest_args(
         args.suite,
         coverage=args.coverage,
         coverage_append=args.coverage_append,
         junitxml=args.junitxml,
-        extra_args=extra_args,
+        extra_args=tuple(args.extra_args),
     )
     return pytest.main(pytest_args)
 
