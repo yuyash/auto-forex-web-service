@@ -1649,17 +1649,7 @@ class TaskExecutor:
         self._metrics_aggregator.flush(final=True)
         logger.info("Engine stopped, events_count=%d", len(result.events))
 
-        if loop.stopped_early and loop.is_error:
-            logger.error(
-                "Execution failed: %s — ticks_processed=%d, final_balance=%s",
-                loop.stop_reason,
-                loop.state.ticks_processed,
-                format_money(loop.state.current_balance),
-            )
-            self.state_manager.stop(
-                status_message=f"Execution failed: {loop.stop_reason}",
-            )
-            raise StrategyError(loop.stop_reason)
+        self._raise_if_failed_stop(loop)
 
         if loop.paused_early:
             logger.info(
@@ -1693,6 +1683,22 @@ class TaskExecutor:
             loop.state.current_balance,
         )
         self.state_manager.stop(status_message="Execution completed successfully", completed=True)
+
+    def _raise_if_failed_stop(self, loop: ExecutionLoopState) -> None:
+        """Persist failed stop state and surface the strategy error."""
+        if not (loop.stopped_early and loop.is_error):
+            return
+
+        logger.error(
+            "Execution failed: %s — ticks_processed=%d, final_balance=%s",
+            loop.stop_reason,
+            loop.state.ticks_processed,
+            format_money(loop.state.current_balance),
+        )
+        self.state_manager.stop(
+            status_message=f"Execution failed: {loop.stop_reason}",
+        )
+        raise StrategyError(loop.stop_reason)
 
     def _handle_execution_failure(self, error: Exception) -> None:
         """Record failed execution outcome."""

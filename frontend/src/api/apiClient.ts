@@ -7,6 +7,7 @@
 
 import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios';
 import { apiConfig, getAuthHeaders } from './apiConfig';
+import { handleAuthErrorStatus } from '../utils/authEvents';
 
 export class ApiError extends Error {
   public readonly status: number;
@@ -54,6 +55,15 @@ function buildUrl(path: string): string {
   return `${apiConfig.BASE}${path}`;
 }
 
+function notifyAuthError(status: number, url: string): void {
+  handleAuthErrorStatus(status, {
+    source: 'http',
+    status,
+    url,
+    context: 'api_client',
+  });
+}
+
 async function makeRequest<T>(
   method: string,
   path: string,
@@ -94,6 +104,7 @@ async function makeRequest<T>(
     response = await axios.request<T>(config);
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
+      notifyAuthError(error.response.status, url);
       throw new ApiError(
         url,
         error.response.status,
@@ -105,6 +116,7 @@ async function makeRequest<T>(
   }
 
   if (response.status >= 400) {
+    notifyAuthError(response.status, url);
     throw new ApiError(
       url,
       response.status,

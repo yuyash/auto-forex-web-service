@@ -33,6 +33,7 @@ import {
 } from '../../hooks/useStrategies';
 import { useAuth } from '../../contexts/AuthContext';
 import { logger } from '../../utils/logger';
+import { buildBacktestTaskUpdatePayload } from '../tasks/forms/backtestTaskPayload';
 
 // Update schema - only editable fields
 const weekdayOptions: ReadonlyArray<{
@@ -213,31 +214,7 @@ export default function BacktestTaskUpdateForm({
     try {
       await updateTask.mutate({
         id: taskId,
-        data: {
-          config: data.config_id,
-          data_source: DataSource.POSTGRESQL,
-          start_time: data.start_time,
-          end_time: data.end_time,
-          initial_balance: data.initial_balance.toString(),
-          commission_per_trade: data.commission_per_trade?.toString(),
-          pip_size: data.pip_size?.toString(),
-          instrument: data.instrument,
-          tick_granularity: data.tick_granularity,
-          tick_window_value_mode: data.tick_window_value_mode,
-          sell_on_stop: data.sell_at_completion,
-          hedging_enabled: data.hedging_enabled,
-          drain_duration_hours: data.drain_duration_hours,
-          market_idle_pre_close_minutes: data.market_idle_pre_close_minutes,
-          market_idle_resume_delay_minutes:
-            data.market_idle_resume_delay_minutes,
-          market_close_enabled: data.market_close_enabled,
-          market_close_weekday: data.market_close_weekday,
-          market_close_hour_utc: data.market_close_hour_utc,
-          market_open_weekday: data.market_open_weekday,
-          market_open_hour_utc: data.market_open_hour_utc,
-          max_tick_gap_hours: data.max_tick_gap_hours,
-          debug_options: { tracemalloc },
-        },
+        data: buildBacktestTaskUpdatePayload(data, { tracemalloc }),
       });
 
       navigate('/backtest-tasks');

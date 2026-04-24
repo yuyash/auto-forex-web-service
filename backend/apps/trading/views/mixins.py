@@ -171,7 +171,6 @@ class TaskSubResourceMixin:
 
         if interval > 1:
             from django.db import connection
-            from django.db.models.sql import Query  # noqa: F401
 
             if connection.vendor != "postgresql":
                 rows = list(queryset.values_list("timestamp", "metrics"))
@@ -200,23 +199,38 @@ class TaskSubResourceMixin:
             # Build a sub-query that buckets timestamps into N-minute windows
             # and picks the last metrics JSON per window.
             base_where = "task_type = %s AND task_id = %s"
-            params: list = [self.task_type_label, str(task.pk)]
+            where_params: list = [self.task_type_label, str(task.pk)]
 
             if query.execution.execution_id is None:
                 base_where += " AND execution_id IS NULL"
             else:
                 base_where += " AND execution_id = %s"
-                params.append(str(query.execution.execution_id))
+                where_params.append(str(query.execution.execution_id))
 
             if query.execution.since:
                 base_where += " AND timestamp > %s"
-                params.append(query.execution.since)
+                where_params.append(query.execution.since)
             if query.until:
                 base_where += " AND timestamp < %s"
-                params.append(query.until)
+                where_params.append(query.until)
 
             interval_seconds = interval * 60
-            params.append(interval_seconds)
+            page, page_size = (
+                query.execution.pagination.page,
+                query.execution.pagination.page_size,
+            )
+            offset = (page - 1) * page_size
+
+            # base_where is assembled from fixed clauses; all user values use cursor params.
+            count_sql = (
+                "SELECT COUNT(*) "  # nosec B608
+                "FROM ("
+                "  SELECT FLOOR(EXTRACT(EPOCH FROM timestamp) / %s) AS bucket "
+                "  FROM metrics "
+                f"  WHERE {base_where} "
+                "  GROUP BY bucket"
+                ") sub"
+            )
 
             sql = (
                 "SELECT DISTINCT ON (bucket) "  # nosec B608
@@ -227,27 +241,17 @@ class TaskSubResourceMixin:
                 "  FROM metrics "
                 f"  WHERE {base_where}"
                 ") sub "
-                "ORDER BY bucket, timestamp DESC"
+                "ORDER BY bucket, timestamp DESC "
+                "LIMIT %s OFFSET %s"
             )
-            # %s for interval_seconds is the first param in the SELECT,
-            # but we appended it last — reorder
-            reordered_params = [interval_seconds] + params[:-1]
 
             with connection.cursor() as cursor:
-                cursor.execute(sql, reordered_params)
+                cursor.execute(count_sql, [interval_seconds, *where_params])
+                total_count = int(cursor.fetchone()[0])
+                cursor.execute(sql, [interval_seconds, *where_params, page_size, offset])
                 rows = cursor.fetchall()
 
-            total_count = len(rows)
-            # Manual pagination over raw SQL results
-            page, page_size = (
-                query.execution.pagination.page,
-                query.execution.pagination.page_size,
-            )
-            start = (page - 1) * page_size
-            end = start + page_size
-            page_rows = rows[start:end]
-
-            data = [{"t": int(ts.timestamp()), "metrics": _ensure_dict(m)} for ts, m in page_rows]
+            data = [{"t": int(ts.timestamp()), "metrics": _ensure_dict(m)} for ts, m in rows]
             return Response(_paginated_envelope(request, data, total_count, page, page_size))
 
         # Default: interval=1, use ORM with cursor pagination
@@ -520,6 +524,12 @@ class TaskSubResourceMixin:
             ordering = ("timestamp", "sequence_number")
         queryset = queryset.order_by(*ordering)
 
+        total_count = queryset.count()
+        page, page_size = (
+            query.execution.pagination.page,
+            query.execution.pagination.page_size,
+        )
+        start = (page - 1) * page_size
         trades_qs = queryset.values(
             "id",
             "direction",
@@ -540,7 +550,7 @@ class TaskSubResourceMixin:
             "is_rebuild",
             stop_loss_price=models.F("position__stop_loss_price"),
             entry_price=models.F("position__entry_price"),
-        )
+        )[start : start + page_size]
         normalized: list[dict] = []
         for trade in trades_qs:
             raw_direction = trade["direction"]
@@ -567,10 +577,8 @@ class TaskSubResourceMixin:
             else:
                 trade.pop("entry_price", None)
             normalized.append(trade)
-        paginator = TradePositionPagination()
-        page = paginator.paginate_queryset(normalized, request)
-        serializer = TradeSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+        serializer = TradeSerializer(normalized, many=True)
+        return Response(_paginated_envelope(request, serializer.data, total_count, page, page_size))
 
     @extend_schema(
         tags=["Trading"],
