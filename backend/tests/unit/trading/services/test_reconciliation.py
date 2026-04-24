@@ -18,6 +18,7 @@ from apps.trading.services.reconciliation import (
     _safe_decimal,
     _safe_int,
 )
+from apps.trading.services.oanda_retry import is_retryable_oanda_error
 from apps.trading.strategies.snowball.models import (
     Entry,
     Layer,
@@ -99,8 +100,16 @@ def _make_reconciler(
 
     if state is None:
         state = MagicMock()
+        state.pk = uuid4()
+        state.state_version = 0
         state.strategy_state = {}
         state.current_balance = Decimal("10000")
+        state.ticks_processed = 0
+        state.last_tick_timestamp = None
+        state.resume_cursor_timestamp = None
+        state.last_tick_price = None
+        state.last_tick_bid = None
+        state.last_tick_ask = None
 
     with patch.object(TradingResumeReconciler, "__init__", lambda self, **kw: None):
         reconciler = TradingResumeReconciler.__new__(TradingResumeReconciler)
@@ -203,6 +212,18 @@ class TestSyncAccountSnapshot:
         report = ReconciliationReport()
         with pytest.raises(RuntimeError, match="Fetch account snapshot failed after"):
             reconciler._sync_account_snapshot(report)
+
+
+class TestOandaRetryClassification:
+    def test_retries_transient_status_error(self):
+        from apps.market.services.oanda import OandaAPIError
+
+        assert is_retryable_oanda_error(OandaAPIError("Failed to fetch trades: status 503"))
+
+    def test_rejects_non_retryable_auth_error(self):
+        from apps.market.services.oanda import OandaAPIError
+
+        assert not is_retryable_oanda_error(OandaAPIError("Failed to fetch trades: status 401"))
 
 
 # ── Tests for _sync_positions_with_broker ───────────────────────────
@@ -322,6 +343,25 @@ class TestSyncPositionsWithBroker:
         assert call_kwargs["units"] == -500
 
 
+class TestReconcilePersistence:
+    @patch("apps.trading.services.reconciliation.ExecutionState")
+    def test_reconcile_persists_state_with_optimistic_lock(self, mock_state_model):
+        reconciler = _make_reconciler()
+        reconciler.state.pk = uuid4()
+        reconciler.state.state_version = 7
+        reconciler.state.last_tick_timestamp = dj_timezone.now()
+        reconciler.state.resume_cursor_timestamp = None
+        mock_state_model.objects.filter.return_value.update.return_value = 1
+
+        reconciler._persist_state()
+
+        mock_state_model.objects.filter.assert_called_once_with(
+            pk=reconciler.state.pk,
+            state_version=7,
+        )
+        assert reconciler.state.state_version == 8
+
+
 class TestDetectRuntimeDrift:
     @patch("apps.trading.services.reconciliation.Position")
     def test_reports_missing_broker_trade_as_runtime_drift(self, mock_pos_model):
@@ -385,12 +425,13 @@ class TestReconcile:
         reconciler.oanda_service.get_pending_orders.return_value = []
         reconciler.oanda_service.get_open_trades.return_value = []
         mock_pos_model.objects.filter.return_value.order_by.return_value = []
+        reconciler._persist_state = MagicMock()
 
         report = reconciler.reconcile(resumed=True)
 
         assert isinstance(report, ReconciliationReport)
         assert report.updated_account_snapshot is True
-        reconciler.state.save.assert_called_once()
+        reconciler._persist_state.assert_called_once()
 
     @patch("apps.trading.services.reconciliation.Position")
     def test_fresh_start_adopts_broker_open_trades_without_blocking(self, mock_pos_model):
@@ -399,6 +440,7 @@ class TestReconcile:
         reconciler.oanda_service.get_pending_orders.return_value = []
         reconciler.oanda_service.get_open_trades.return_value = [_make_open_trade()]
         mock_pos_model.objects.filter.return_value.order_by.return_value = []
+        reconciler._persist_state = MagicMock()
 
         report = reconciler.reconcile(resumed=False)
 
@@ -416,6 +458,7 @@ class TestReconcile:
         reconciler.oanda_service.get_pending_orders.return_value = [MagicMock()]
         reconciler.oanda_service.get_open_trades.return_value = []
         mock_pos_model.objects.filter.return_value.order_by.return_value = []
+        reconciler._persist_state = MagicMock()
 
         report = reconciler.reconcile(resumed=True)
 

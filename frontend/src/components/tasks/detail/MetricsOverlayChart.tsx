@@ -178,14 +178,16 @@ export function useMetricsOverlay({
         const results =
           page.next === null
             ? page.results
-            : await fetchPaginatedMetrics({
-                taskId,
-                taskType,
-                executionRunId,
-                since: new Date(bufFrom * 1000).toISOString(),
-                until: new Date(bufTo * 1000).toISOString(),
-                interval: computeInterval(bufTo - bufFrom),
-              });
+            : (
+                await fetchPaginatedMetrics({
+                  taskId,
+                  taskType,
+                  executionRunId,
+                  since: new Date(bufFrom * 1000).toISOString(),
+                  until: new Date(bufTo * 1000).toISOString(),
+                  interval: computeInterval(bufTo - bufFrom),
+                })
+              ).results;
         return {
           results,
           fetched: { from: bufFrom, to: bufTo },
@@ -291,12 +293,14 @@ export function useMetricsOverlay({
         const results =
           page.next === null
             ? page.results
-            : await fetchPaginatedMetrics({
-                taskId,
-                taskType,
-                executionRunId,
-                since: ts ? new Date(ts * 1000).toISOString() : undefined,
-              });
+            : (
+                await fetchPaginatedMetrics({
+                  taskId,
+                  taskType,
+                  executionRunId,
+                  since: ts ? new Date(ts * 1000).toISOString() : undefined,
+                })
+              ).results;
         if (results.length > 0)
           setSnapshots((prev) => mergeSnapshots(prev, results));
       } catch (error) {

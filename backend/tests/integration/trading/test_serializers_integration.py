@@ -473,10 +473,15 @@ class TestTradingTaskSummary:
             task_type=TaskType.TRADING,
             task_id=task.pk,
             execution_id=execution_id,
-            strategy_state={},
+            strategy_state={
+                "broker_reconciliation_status": "warning",
+                "broker_reconciliation_warnings": ["broker drift warning"],
+                "broker_reconciled_at": "2026-01-01T00:00:00+00:00",
+            },
             current_balance=Decimal("3000000"),
             ticks_processed=42,
             last_tick_timestamp=datetime.now(timezone.utc),
+            resume_cursor_timestamp=datetime.now(timezone.utc),
             last_tick_bid=Decimal("158.80"),
             last_tick_ask=Decimal("158.84"),
             last_tick_price=Decimal("158.82"),
@@ -489,3 +494,6 @@ class TestTradingTaskSummary:
         )
 
         assert result.execution.account_currency == "JPY"
+        assert result.execution.recovery_status == "warning"
+        assert result.execution.recovery_warnings == ["broker drift warning"]
+        assert result.execution.resume_cursor_timestamp is not None

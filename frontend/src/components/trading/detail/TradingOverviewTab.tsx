@@ -1,5 +1,13 @@
 import { useState, useMemo } from 'react';
-import { Box, Chip, Divider, Grid, Link, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Chip,
+  Divider,
+  Grid,
+  Link,
+  Typography,
+} from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { StatusBadge } from '../../tasks/display/StatusBadge';
@@ -98,6 +106,8 @@ export function TradingOverviewTab({
     () => buildTradingTaskSettingDefinitions(t),
     [t]
   );
+  const recoveryBlockers = summary.execution.recoveryBlockers ?? [];
+  const recoveryWarnings = summary.execution.recoveryWarnings ?? [];
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
@@ -321,6 +331,16 @@ export function TradingOverviewTab({
         </Grid>
 
         <Grid size={{ xs: 12 }}>
+          {recoveryBlockers.length > 0 ? (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {recoveryBlockers[0]}
+            </Alert>
+          ) : null}
+          {recoveryWarnings.length > 0 ? (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              {recoveryWarnings[0]}
+            </Alert>
+          ) : null}
           <Divider sx={{ my: 2 }} />
           <Typography variant="h6" gutterBottom>
             {t('trading:detail.results')}
@@ -476,6 +496,28 @@ export function TradingOverviewTab({
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}
+                </Typography>
+              </Box>
+            )}
+            {summary.execution.resumeCursorTimestamp && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Resume Cursor
+                </Typography>
+                <Typography variant="body1">
+                  {new Date(
+                    summary.execution.resumeCursorTimestamp
+                  ).toLocaleString()}
+                </Typography>
+              </Box>
+            )}
+            {summary.execution.reconciledAt && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Broker Reconciled
+                </Typography>
+                <Typography variant="body1">
+                  {new Date(summary.execution.reconciledAt).toLocaleString()}
                 </Typography>
               </Box>
             )}

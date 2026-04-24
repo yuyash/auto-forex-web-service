@@ -6465,13 +6465,53 @@
                     "display_currency": {
                         "type": "string",
                         "nullable": true
+                    },
+                    "resume_cursor_timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "margin_ratio": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "nullable": true
+                    },
+                    "current_atr": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,10}(?:\\.\\d{0,10})?$",
+                        "nullable": true
+                    },
+                    "recovery_status": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "recovery_warnings": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "recovery_blockers": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "reconciled_at": {
+                        "type": "string",
+                        "nullable": true
                     }
                 },
                 "required": [
                     "account_currency",
+                    "current_atr",
                     "current_balance",
                     "current_balance_display",
                     "display_currency",
+                    "margin_ratio",
+                    "recovery_status",
+                    "resume_cursor_timestamp",
                     "ticks_processed"
                 ]
             },
@@ -9342,6 +9382,14 @@
                     "data_source": {
                         "type": "string"
                     },
+                    "resume_cursor_timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "consistency_warnings": {
+                        "type": "array",
+                        "items": {}
+                    },
                     "results": {
                         "type": "array",
                         "items": {
@@ -9354,7 +9402,8 @@
                     "data_source",
                     "next",
                     "previous",
-                    "results"
+                    "results",
+                    "resume_cursor_timestamp"
                 ]
             },
             "TaskOrderPaginatedResponse": {

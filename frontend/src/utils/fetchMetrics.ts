@@ -17,6 +17,9 @@ export interface MetricsPage {
   count: number;
   next: string | null;
   previous: string | null;
+  data_source: string;
+  resume_cursor_timestamp: string | null;
+  consistency_warnings: Array<Record<string, unknown>>;
   results: MetricPoint[];
 }
 
@@ -87,6 +90,15 @@ export async function fetchMetrics(opts: {
     count: body.count ?? 0,
     next: body.next ?? null,
     previous: body.previous ?? null,
+    data_source:
+      typeof body.data_source === 'string' ? body.data_source : 'unknown',
+    resume_cursor_timestamp:
+      typeof body.resume_cursor_timestamp === 'string'
+        ? body.resume_cursor_timestamp
+        : null,
+    consistency_warnings: Array.isArray(body.consistency_warnings)
+      ? (body.consistency_warnings as Array<Record<string, unknown>>)
+      : [],
     results,
   };
 }
@@ -101,11 +113,14 @@ export async function fetchPaginatedMetrics(opts: {
   pageSize?: number;
   /** Maximum number of pages to fetch (default: unlimited). */
   maxPages?: number;
-}): Promise<MetricPoint[]> {
+}): Promise<MetricsPage> {
   const pageSize = opts.pageSize ?? 250;
   const maxPages = opts.maxPages ?? Infinity;
   const results: MetricPoint[] = [];
   let page = 1;
+  let dataSource = 'unknown';
+  let resumeCursorTimestamp: string | null = null;
+  let consistencyWarnings: Array<Record<string, unknown>> = [];
 
   while (page <= maxPages) {
     const response = await fetchMetrics({
@@ -113,11 +128,30 @@ export async function fetchPaginatedMetrics(opts: {
       page,
       pageSize,
     });
+    dataSource = response.data_source;
+    resumeCursorTimestamp = response.resume_cursor_timestamp;
+    consistencyWarnings = response.consistency_warnings;
     results.push(...response.results);
     if (!response.next) {
-      return results;
+      return {
+        count: results.length,
+        next: null,
+        previous: null,
+        data_source: dataSource,
+        resume_cursor_timestamp: resumeCursorTimestamp,
+        consistency_warnings: consistencyWarnings,
+        results,
+      };
     }
     page += 1;
   }
-  return results;
+  return {
+    count: results.length,
+    next: null,
+    previous: null,
+    data_source: dataSource,
+    resume_cursor_timestamp: resumeCursorTimestamp,
+    consistency_warnings: consistencyWarnings,
+    results,
+  };
 }

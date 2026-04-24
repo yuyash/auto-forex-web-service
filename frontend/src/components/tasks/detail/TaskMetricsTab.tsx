@@ -5,7 +5,15 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { Box, Grid, Alert, CircularProgress, Typography } from '@mui/material';
+import {
+  Box,
+  Grid,
+  Alert,
+  CircularProgress,
+  Typography,
+  Chip,
+  Stack,
+} from '@mui/material';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { LineChart } from '@mui/x-charts/LineChart';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +29,9 @@ interface TaskMetricsTabProps {
   isLoading: boolean;
   error: Error | null;
   currency?: string;
+  dataSource?: string;
+  resumeCursorTimestamp?: string | null;
+  consistencyWarnings?: Array<Record<string, unknown>>;
   interval: number;
   since: string;
   until: string;
@@ -227,6 +238,9 @@ export function TaskMetricsTab({
   isLoading,
   error,
   currency,
+  dataSource = 'unknown',
+  resumeCursorTimestamp = null,
+  consistencyWarnings = [],
   interval,
   since,
   until,
@@ -427,6 +441,29 @@ export function TaskMetricsTab({
         onRefresh={onRefresh}
         isLoading={isLoading}
       />
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1}
+        sx={{ mb: 1.5, alignItems: { sm: 'center' } }}
+      >
+        <Chip
+          size="small"
+          variant="outlined"
+          label={`Source: ${dataSource}`}
+          sx={{ width: 'fit-content' }}
+        />
+        {resumeCursorTimestamp ? (
+          <Typography variant="caption" color="text.secondary">
+            Resume cursor: {new Date(resumeCursorTimestamp).toLocaleString()}
+          </Typography>
+        ) : null}
+      </Stack>
+      {consistencyWarnings.length > 0 ? (
+        <Alert severity="warning" sx={{ mb: 1.5 }}>
+          {consistencyWarnings.length} continuity warning(s) detected after
+          resume. Review the latest metric jump before trusting this run.
+        </Alert>
+      ) : null}
       <Grid
         container
         spacing={layoutTokens.sectionGap}

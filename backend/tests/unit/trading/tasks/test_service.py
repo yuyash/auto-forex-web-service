@@ -74,6 +74,7 @@ class TestStartTask:
             args=[task.pk, str(dispatch_uuid)],
             task_id=str(celery_uuid),
             queue="backtest",
+            headers=ANY,
         )
 
     @patch("celery.current_app")
@@ -250,6 +251,7 @@ class TestRecoverTradingTask:
             args=[locked.pk, str(dispatch_uuid)],
             task_id=str(new_celery_task_id),
             queue="trading",
+            headers=ANY,
         )
 
     @patch("apps.trading.tasks.service.transaction.atomic")
@@ -344,6 +346,7 @@ class TestResumeTask:
             args=[task_id, ANY],
             task_id=str(new_celery_task_id),
             queue="backtest",
+            headers=ANY,
         )
 
     @patch("apps.trading.tasks.service.transaction.atomic")
@@ -437,6 +440,7 @@ class TestResumeTask:
             args=[task_id, ANY],
             task_id=str(new_celery_task_id),
             queue="trading",
+            headers=ANY,
         )
 
 

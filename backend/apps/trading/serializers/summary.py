@@ -41,6 +41,17 @@ class ExecutionInfoSerializer(serializers.Serializer):
         max_digits=20, decimal_places=2, allow_null=True
     )
     display_currency = serializers.CharField(allow_null=True)
+    resume_cursor_timestamp = serializers.CharField(allow_null=True)
+    margin_ratio = serializers.DecimalField(max_digits=20, decimal_places=10, allow_null=True)
+    current_atr = serializers.DecimalField(max_digits=20, decimal_places=10, allow_null=True)
+    recovery_status = serializers.CharField(allow_null=True)
+    recovery_warnings = serializers.ListField(
+        child=serializers.CharField(), required=False, allow_empty=True
+    )
+    recovery_blockers = serializers.ListField(
+        child=serializers.CharField(), required=False, allow_empty=True
+    )
+    reconciled_at = serializers.CharField(allow_null=True, required=False)
 
 
 class TaskInfoSerializer(serializers.Serializer):

@@ -13,6 +13,7 @@ call site.
 
 from __future__ import annotations
 
+import secrets
 import time
 from dataclasses import dataclass
 from logging import Logger, getLogger
@@ -32,6 +33,7 @@ class OandaRetryPolicy:
     max_attempts: int = 50
     backoff_base_seconds: float = 1.0
     backoff_max_seconds: float = 60.0
+    jitter_ratio: float = 0.2
 
     @classmethod
     def default(cls) -> "OandaRetryPolicy":
@@ -63,6 +65,11 @@ class OandaRetryPolicy:
             max_attempts=max_attempts,
             backoff_base_seconds=base,
             backoff_max_seconds=cap,
+            jitter_ratio=cls._coerce_float(
+                getattr(task, "api_retry_jitter_ratio", None),
+                default.jitter_ratio,
+                minimum=0.0,
+            ),
         )
 
     def delay_for_attempt(self, attempt: int) -> float:
@@ -84,6 +91,15 @@ class OandaRetryPolicy:
         if delay > self.backoff_max_seconds:
             return self.backoff_max_seconds
         return delay
+
+    def apply_jitter(self, delay: float) -> float:
+        if delay <= 0 or self.jitter_ratio <= 0:
+            return delay
+        jitter_max = int(delay * self.jitter_ratio * 10_000)
+        if jitter_max <= 0:
+            return delay
+        jitter = secrets.randbelow(jitter_max + 1) / 10_000
+        return min(self.backoff_max_seconds, delay + jitter)
 
     @staticmethod
     def _coerce_int(value: Any, default: int, *, minimum: int) -> int:
@@ -129,8 +145,11 @@ def call_with_retry(
             return fn(*args, **kwargs)
         except OandaAPIError as exc:
             last_exc = exc
+            if not is_retryable_oanda_error(exc):
+                logger.error("%s failed with non-retryable OANDA error: %s", label, exc)
+                break
             if attempt < max_attempts:
-                delay = policy.delay_for_attempt(attempt)
+                delay = policy.apply_jitter(policy.delay_for_attempt(attempt))
                 logger.warning(
                     "%s failed (attempt %d/%d): %s — retrying in %.2fs",
                     label,
@@ -150,3 +169,48 @@ def call_with_retry(
                 )
 
     raise RuntimeError(f"{label} failed after {max_attempts} retries: {last_exc}") from last_exc
+
+
+def is_retryable_oanda_error(exc: OandaAPIError) -> bool:
+    """Return True when the OANDA failure looks transient and safe to retry."""
+    haystack = " ".join(
+        part.strip().lower() for part in [str(exc), getattr(exc, "internal_detail", "")] if part
+    )
+    if not haystack:
+        return False
+
+    retryable_markers = (
+        "status 429",
+        "status 500",
+        "status 502",
+        "status 503",
+        "status 504",
+        "timed out",
+        "timeout",
+        "temporarily unavailable",
+        "connection reset",
+        "connection aborted",
+        "connection refused",
+        "connection error",
+        "service unavailable",
+        "broken pipe",
+        "remote end closed connection",
+        "eof occurred in violation of protocol",
+        "temporary failure",
+    )
+    non_retryable_markers = (
+        "status 400",
+        "status 401",
+        "status 403",
+        "status 404",
+        "status 405",
+        "status 409",
+        "status 422",
+        "market order rejected",
+        "account required",
+        "api client not initialized",
+        "insufficient authorization",
+    )
+    if any(marker in haystack for marker in non_retryable_markers):
+        return False
+    return any(marker in haystack for marker in retryable_markers)

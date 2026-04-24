@@ -70,6 +70,34 @@ class ExecutionMetricAggregate(models.Model):
         default=0,
         help_text="Number of metric rows ingested into this aggregate",
     )
+    balance_min = models.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        null=True,
+        blank=True,
+        help_text="Minimum observed current_balance in the aggregate window",
+    )
+    balance_max = models.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        null=True,
+        blank=True,
+        help_text="Maximum observed current_balance in the aggregate window",
+    )
+    margin_ratio_min = models.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        null=True,
+        blank=True,
+        help_text="Minimum observed margin_ratio in the aggregate window",
+    )
+    margin_ratio_max = models.DecimalField(
+        max_digits=20,
+        decimal_places=10,
+        null=True,
+        blank=True,
+        help_text="Maximum observed margin_ratio in the aggregate window",
+    )
     continuity_warnings = models.JSONField(
         default=list,
         blank=True,

@@ -19,6 +19,7 @@ from typing import Any
 
 from celery import shared_task
 from celery import current_app
+from django.core.cache import cache
 from django.utils import timezone as dj_timezone
 
 from apps.trading.enums import TaskStatus, TaskType
@@ -40,10 +41,19 @@ _ACTIVE_STATUSES = [TaskStatus.RUNNING, TaskStatus.STARTING]
 # Maximum number of orphaned tasks to process per recovery run to avoid
 # unbounded memory usage if many tasks are stuck.
 _MAX_RECOVERY_BATCH = 100
+_RECOVERY_RUN_LOCK_SECONDS = 45
+_TASK_RECOVERY_COOLDOWN_SECONDS = 120
 
 
 def _instance_key(task: BacktestTask | TradingTask) -> str:
     return f"{task.pk}:{task.execution_id}"
+
+
+def _cache_safe_task_execution_id(task: BacktestTask | TradingTask) -> str:
+    execution_id = getattr(task, "execution_id", None)
+    if execution_id is None:
+        return "none"
+    return str(execution_id).replace(" ", "_").replace(":", "_")
 
 
 def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
@@ -68,47 +78,61 @@ def recover_orphaned_tasks(*, source: str = "manual") -> dict[str, int]:
     """
     from apps.trading.tasks.service import TaskService
 
+    lock_key = f"trading:orphan-recovery:lock:{source}"
+    if not cache.add(lock_key, dj_timezone.now().isoformat(), timeout=_RECOVERY_RUN_LOCK_SECONDS):
+        logger.info(
+            "[RECOVERY:%s] Recovery run already in progress; skipping duplicate trigger",
+            source,
+        )
+        return {"backtest": 0, "trading": 0}
+
     service = TaskService()
     counts: dict[str, int] = {"backtest": 0, "trading": 0}
+    try:
+        # --- Backtest tasks (bounded queryset) ---
+        orphaned_backtest = list(
+            BacktestTask.objects.filter(
+                status__in=_ACTIVE_STATUSES,
+            ).order_by("started_at")[:_MAX_RECOVERY_BATCH]
+        )
+        active_task_ids = _active_celery_task_ids()
+        backtest_heartbeats = _prefetch_heartbeats(
+            orphaned_backtest, "trading.tasks.run_backtest_task"
+        )
+        for task in orphaned_backtest:
+            if not _is_orphaned_prefetched(
+                task,
+                backtest_heartbeats,
+                dj_timezone.now() - BACKTEST_ORPHAN_HEARTBEAT_THRESHOLD,
+                source=source,
+                active_task_ids=active_task_ids,
+            ):
+                continue
+            if _recover_task(task, TaskType.BACKTEST, service, source):
+                counts["backtest"] += 1
 
-    # --- Backtest tasks (bounded queryset) ---
-    orphaned_backtest = list(
-        BacktestTask.objects.filter(
-            status__in=_ACTIVE_STATUSES,
-        ).order_by("started_at")[:_MAX_RECOVERY_BATCH]
-    )
-    active_task_ids = _active_celery_task_ids()
-    backtest_heartbeats = _prefetch_heartbeats(orphaned_backtest, "trading.tasks.run_backtest_task")
-    for task in orphaned_backtest:
-        if not _is_orphaned_prefetched(
-            task,
-            backtest_heartbeats,
-            dj_timezone.now() - BACKTEST_ORPHAN_HEARTBEAT_THRESHOLD,
-            source=source,
-            active_task_ids=active_task_ids,
-        ):
-            continue
-        if _recover_task(task, TaskType.BACKTEST, service, source):
-            counts["backtest"] += 1
-
-    # --- Trading tasks (bounded queryset) ---
-    orphaned_trading = list(
-        TradingTask.objects.filter(
-            status__in=_ACTIVE_STATUSES,
-        ).order_by("started_at")[:_MAX_RECOVERY_BATCH]
-    )
-    trading_heartbeats = _prefetch_heartbeats(orphaned_trading, "trading.tasks.run_trading_task")
-    for task in orphaned_trading:
-        if not _is_orphaned_prefetched(
-            task,
-            trading_heartbeats,
-            dj_timezone.now() - TRADING_ORPHAN_HEARTBEAT_THRESHOLD,
-            source=source,
-            active_task_ids=active_task_ids,
-        ):
-            continue
-        if _recover_task(task, TaskType.TRADING, service, source):
-            counts["trading"] += 1
+        # --- Trading tasks (bounded queryset) ---
+        orphaned_trading = list(
+            TradingTask.objects.filter(
+                status__in=_ACTIVE_STATUSES,
+            ).order_by("started_at")[:_MAX_RECOVERY_BATCH]
+        )
+        trading_heartbeats = _prefetch_heartbeats(
+            orphaned_trading, "trading.tasks.run_trading_task"
+        )
+        for task in orphaned_trading:
+            if not _is_orphaned_prefetched(
+                task,
+                trading_heartbeats,
+                dj_timezone.now() - TRADING_ORPHAN_HEARTBEAT_THRESHOLD,
+                source=source,
+                active_task_ids=active_task_ids,
+            ):
+                continue
+            if _recover_task(task, TaskType.TRADING, service, source):
+                counts["trading"] += 1
+    finally:
+        cache.delete(lock_key)
 
     total = counts["backtest"] + counts["trading"]
     if total:
@@ -252,6 +276,23 @@ def _recover_task(
     source: str,
 ) -> bool:
     """Handle an orphaned task according to its task type."""
+    task_cooldown_key = (
+        "trading:orphan-recovery:task:"
+        f"{task_type.value}:{task.pk}:{_cache_safe_task_execution_id(task)}"
+    )
+    if not cache.add(
+        task_cooldown_key,
+        dj_timezone.now().isoformat(),
+        timeout=_TASK_RECOVERY_COOLDOWN_SECONDS,
+    ):
+        logger.info(
+            "[RECOVERY:%s] Task recovery cooldown active - task_id=%s, type=%s",
+            source,
+            task.pk,
+            task_type,
+        )
+        return False
+
     logger.warning(
         "[RECOVERY:%s] Recovering orphaned task - task_id=%s, type=%s, "
         "old_status=%s, execution_id=%s",

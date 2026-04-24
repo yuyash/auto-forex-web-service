@@ -128,6 +128,10 @@ class TaskSubResourceMixin:
                     "next": serializers.CharField(allow_null=True),
                     "previous": serializers.CharField(allow_null=True),
                     "data_source": serializers.CharField(),
+                    "resume_cursor_timestamp": serializers.CharField(allow_null=True),
+                    "consistency_warnings": serializers.ListField(
+                        child=serializers.JSONField(), required=False
+                    ),
                     "results": serializers.ListField(
                         child=inline_serializer(
                             "TaskMetricPoint",
@@ -147,6 +151,8 @@ class TaskSubResourceMixin:
     )
     def metrics(self, request: Request, pk: int | None = None) -> Response:
         from apps.trading.models.metrics import Metrics
+        from apps.trading.models.metrics import ExecutionMetricAggregate
+        from apps.trading.models.state import ExecutionState
 
         task = self.get_object()  # type: ignore[attr-defined]
         query = MetricsQueryParams.from_request(
@@ -161,6 +167,39 @@ class TaskSubResourceMixin:
             task_id=task.pk,
             execution_id=query.execution.execution_id,
         ).order_by("timestamp")
+        aggregate = (
+            ExecutionMetricAggregate.objects.filter(
+                task_type=self.task_type_label,
+                task_id=task.pk,
+                execution_id=query.execution.execution_id,
+            )
+            .only("continuity_warnings")
+            .first()
+        )
+        state = (
+            ExecutionState.objects.filter(
+                task_type=self.task_type_label,
+                task_id=task.pk,
+                execution_id=query.execution.execution_id,
+            )
+            .only("resume_cursor_timestamp")
+            .order_by("-updated_at")
+            .first()
+        )
+
+        def _attach_metadata(envelope: dict, data_source: str) -> Response:
+            envelope["data_source"] = data_source
+            envelope["resume_cursor_timestamp"] = (
+                state.resume_cursor_timestamp.isoformat()
+                if state and state.resume_cursor_timestamp
+                else None
+            )
+            envelope["consistency_warnings"] = (
+                aggregate.continuity_warnings
+                if aggregate and isinstance(aggregate.continuity_warnings, list)
+                else []
+            )
+            return Response(envelope)
 
         if query.execution.since:
             queryset = queryset.filter(timestamp__gt=query.execution.since)
@@ -196,8 +235,7 @@ class TaskSubResourceMixin:
                     for ts, metrics in page_rows
                 ]
                 envelope = _paginated_envelope(request, data, total_count, page, page_size)
-                envelope["data_source"] = "db_window_last_python"
-                return Response(envelope)
+                return _attach_metadata(envelope, "db_window_last_python")
 
             # Build a sub-query that buckets timestamps into N-minute windows
             # and picks the last metrics JSON per window.
@@ -256,8 +294,7 @@ class TaskSubResourceMixin:
 
             data = [{"t": int(ts.timestamp()), "metrics": _ensure_dict(m)} for ts, m in rows]
             envelope = _paginated_envelope(request, data, total_count, page, page_size)
-            envelope["data_source"] = "db_window_last"
-            return Response(envelope)
+            return _attach_metadata(envelope, "db_window_last")
 
         # Default: interval=1, use ORM with cursor pagination
         total_count = queryset.count()
@@ -270,8 +307,7 @@ class TaskSubResourceMixin:
 
         data = [{"t": int(ts.timestamp()), "metrics": _ensure_dict(m)} for ts, m in rows]
         envelope = _paginated_envelope(request, data, total_count, page, page_size)
-        envelope["data_source"] = "db_raw"
-        return Response(envelope)
+        return _attach_metadata(envelope, "db_raw")
 
     @extend_schema(
         tags=["Trading"],

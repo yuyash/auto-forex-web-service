@@ -29,6 +29,9 @@ export interface UseTaskMetricsResult {
   data: MetricPoint[];
   /** Latest metric snapshot (last element of data) */
   latest: MetricPoint | null;
+  dataSource: string;
+  resumeCursorTimestamp: string | null;
+  consistencyWarnings: Array<Record<string, unknown>>;
   isLoading: boolean;
   error: Error | null;
   refresh: () => Promise<void>;
@@ -45,6 +48,13 @@ export function useTaskMetrics({
   pollingInterval = 0,
 }: UseTaskMetricsOptions): UseTaskMetricsResult {
   const [data, setData] = useState<MetricPoint[]>([]);
+  const [dataSource, setDataSource] = useState('unknown');
+  const [resumeCursorTimestamp, setResumeCursorTimestamp] = useState<
+    string | null
+  >(null);
+  const [consistencyWarnings, setConsistencyWarnings] = useState<
+    Array<Record<string, unknown>>
+  >([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const mountedRef = useRef(true);
@@ -54,7 +64,7 @@ export function useTaskMetrics({
     setIsLoading(true);
     setError(null);
     try {
-      const points = await fetchPaginatedMetrics({
+      const page = await fetchPaginatedMetrics({
         taskId,
         taskType,
         executionRunId,
@@ -64,7 +74,10 @@ export function useTaskMetrics({
         pageSize: 500,
       });
       if (mountedRef.current) {
-        setData(points);
+        setData(page.results);
+        setDataSource(page.data_source);
+        setResumeCursorTimestamp(page.resume_cursor_timestamp);
+        setConsistencyWarnings(page.consistency_warnings);
       }
     } catch (err) {
       if (mountedRef.current) {
@@ -96,5 +109,14 @@ export function useTaskMetrics({
 
   const latest = data.length > 0 ? data[data.length - 1] : null;
 
-  return { data, latest, isLoading, error, refresh: fetchData };
+  return {
+    data,
+    latest,
+    dataSource,
+    resumeCursorTimestamp,
+    consistencyWarnings,
+    isLoading,
+    error,
+    refresh: fetchData,
+  };
 }

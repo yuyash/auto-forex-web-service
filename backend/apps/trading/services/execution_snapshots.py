@@ -182,8 +182,17 @@ def _deserialize_summary(raw: dict[str, Any]) -> TaskSummary:
             account_currency=_to_str_or_none(execution.get("account_currency")),
             current_balance_display=_to_optional_decimal(execution.get("current_balance_display")),
             display_currency=_to_str_or_none(execution.get("display_currency")),
+            resume_cursor_timestamp=_to_str_or_none(execution.get("resume_cursor_timestamp")),
             margin_ratio=_to_optional_decimal(execution.get("margin_ratio")),
             current_atr=_to_optional_decimal(execution.get("current_atr")),
+            recovery_status=_to_str_or_none(execution.get("recovery_status")),
+            recovery_warnings=[
+                str(item) for item in execution.get("recovery_warnings", []) if item is not None
+            ],
+            recovery_blockers=[
+                str(item) for item in execution.get("recovery_blockers", []) if item is not None
+            ],
+            reconciled_at=_to_str_or_none(execution.get("reconciled_at")),
         ),
         tick=TickInfo(
             timestamp=_to_str_or_none(tick.get("timestamp")),

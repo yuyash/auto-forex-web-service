@@ -145,6 +145,12 @@ class TaskService:
             args=[task.pk, str(dispatch_idempotency_key)],
             task_id=str(celery_task_id),
             queue=queue,
+            headers={
+                "dispatch_idempotency_key": str(dispatch_idempotency_key),
+                "task_id": str(task.pk),
+                "execution_id": str(getattr(task, "execution_id", "") or ""),
+                "task_type": task_type,
+            },
         )
 
     @staticmethod

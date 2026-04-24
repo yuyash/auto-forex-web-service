@@ -554,6 +554,9 @@ export const BacktestTaskDetail: React.FC = () => {
                 isLoading={metricsResult.isLoading}
                 error={metricsResult.error}
                 currency={s.execution.accountCurrency || 'USD'}
+                dataSource={metricsResult.dataSource}
+                resumeCursorTimestamp={metricsResult.resumeCursorTimestamp}
+                consistencyWarnings={metricsResult.consistencyWarnings}
                 interval={metricsInterval}
                 since={metricsSince}
                 until={metricsUntil}
