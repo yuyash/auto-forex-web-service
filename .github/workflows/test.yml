@@ -29,6 +29,7 @@ jobs:
       DB_PORT: 5432
       REDIS_URL: redis://localhost:6379/0
       SECRET_KEY: test-secret-key-for-ci-only-minimum-50-characters-long
+      JWT_SECRET_KEY: test-jwt-secret-key-for-ci-only-minimum-50-characters-long
       DEBUG: "False"
       ALLOWED_HOSTS: localhost,127.0.0.1
       DJANGO_SETTINGS_MODULE: config.settings_test
@@ -43,7 +44,7 @@ jobs:
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
+          --health-cmd "pg_isready -U postgres -d test_db"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -83,7 +84,7 @@ jobs:
       - name: Run unit tests
         run: |
           echo "::group::Running unit tests"
-          uv run pytest tests/unit/ --override-ini addopts= -n auto --dist=loadscope -v --cov=. --cov-report=xml --cov-report=html --cov-append --junitxml=junit-unit.xml
+          uv run pytest tests/unit/ --override-ini addopts= --strict-markers --strict-config --import-mode=importlib -n auto --dist=loadscope --durations=10 -v --cov=. --cov-report=xml --cov-report=html --cov-append --junitxml=junit-unit.xml
           UNIT_EXIT_CODE=$?
           echo "::endgroup::"
           if [ $UNIT_EXIT_CODE -ne 0 ]; then
@@ -96,7 +97,7 @@ jobs:
       - name: Run integration tests with parallel execution
         run: |
           echo "::group::Running integration tests"
-          uv run pytest tests/integration/ --override-ini addopts= -n auto -v --timeout=30 --cov=. --cov-report=xml --cov-report=html --cov-append --junitxml=junit-integration.xml
+          uv run pytest tests/integration/ --override-ini addopts= --strict-markers --strict-config --import-mode=importlib -n auto --durations=10 -v --timeout=30 --cov=. --cov-report=xml --cov-report=html --cov-append --junitxml=junit-integration.xml
           INTEGRATION_EXIT_CODE=$?
           echo "::endgroup::"
           if [ $INTEGRATION_EXIT_CODE -ne 0 ]; then
@@ -121,20 +122,18 @@ jobs:
       # E2E tests — use real PostgreSQL + Redis
       - name: Prepare E2E database
         env:
-          JWT_SECRET_KEY: test-jwt-secret-key-for-ci-only-minimum-50-characters-long
           DJANGO_SETTINGS_MODULE: config.settings_e2e
         run: uv run python manage.py migrate --noinput
 
       - name: Run E2E tests
         env:
-          JWT_SECRET_KEY: test-jwt-secret-key-for-ci-only-minimum-50-characters-long
           DJANGO_SETTINGS_MODULE: config.settings_e2e
           E2E_DB_PREMIGRATED: "true"
           OANDA_ACCOUNT_ID: ${{ secrets.OANDA_ACCOUNT_ID }}
           OANDA_API_TOKEN: ${{ secrets.OANDA_API_TOKEN }}
         run: |
           echo "::group::Running E2E tests"
-          uv run pytest tests/e2e/ --override-ini addopts= -n 0 -v --timeout=300 --junitxml=junit-e2e.xml
+          uv run pytest tests/e2e/ --override-ini addopts= --strict-markers --strict-config --import-mode=importlib -n 0 --durations=10 -v --timeout=300 --junitxml=junit-e2e.xml
           E2E_EXIT_CODE=$?
           echo "::endgroup::"
           if [ $E2E_EXIT_CODE -ne 0 ]; then
@@ -187,6 +186,7 @@ jobs:
         with:
           name: e2e-api-report
           path: ./backend/e2e-api-test-results.html
+          if-no-files-found: ignore
           retention-days: 30
 
   test-frontend:
