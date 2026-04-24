@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.56.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.6...frontend-v1.56.7) (2026-04-24)
+
+
+### Bug Fixes
+
+* **frontend:** improve task detail layout coverage ([#596](https://github.com/yuyash/auto-forex-web-service/issues/596)) ([7c841d5](https://github.com/yuyash/auto-forex-web-service/commit/7c841d51dd83ee4bdb442a5e2f6ecab430245180))
+
 ## [1.56.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.5...frontend-v1.56.6) (2026-04-24)
 
 
