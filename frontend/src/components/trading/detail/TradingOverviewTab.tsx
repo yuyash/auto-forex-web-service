@@ -10,7 +10,6 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
-import { StatusBadge } from '../../tasks/display/StatusBadge';
 import { ExecutionHistoryTable } from '../../tasks/display/ExecutionHistoryTable';
 import { LatestMetricsSummary } from '../../tasks/detail/LatestMetricsSummary';
 import { TaskSettingsList } from '../../tasks/detail/TaskSettingsList';
@@ -52,14 +51,12 @@ export function TradingOverviewTab({
   taskId,
   task,
   summary,
-  currentStatus,
   strategies,
   pnlCurrency,
   latestMetrics,
   isViewingHistorical = false,
   historicalStrategyConfig,
   historicalTaskConfig,
-  executionId,
   onOpenConfiguration,
 }: TradingOverviewTabProps) {
   const { t, i18n } = useTranslation(['trading', 'common']);
@@ -87,11 +84,6 @@ export function TradingOverviewTab({
   }, [strategies, historicalStrategyConfig, task.strategy_type]);
 
   // When viewing a historical execution, prefer snapshot values
-  const effectiveInstrument =
-    (isViewingHistorical && historicalTaskConfig?.instrument) ||
-    task.instrument;
-  const effectivePipSize =
-    (isViewingHistorical && historicalTaskConfig?.pip_size) || task.pip_size;
   const latestMarginRatioRaw = latestMetrics?.metrics.margin_ratio;
   const latestMarginRatio =
     latestMarginRatioRaw != null && latestMarginRatioRaw !== ''
@@ -101,10 +93,56 @@ export function TradingOverviewTab({
     ? latestMarginRatio
     : summary.execution.marginRatio;
 
-  const tracemallocEnabled = Boolean(task.debug_options?.tracemalloc);
   const taskSettings = useMemo(
-    () => buildTradingTaskSettingDefinitions(t),
-    [t]
+    () =>
+      buildTradingTaskSettingDefinitions(t).map((definition) =>
+        definition.key === 'config_name'
+          ? {
+              ...definition,
+              render: () => {
+                const label =
+                  (isViewingHistorical && historicalStrategyConfig?.name) ||
+                  task.config_name;
+                const targetId =
+                  (isViewingHistorical && historicalStrategyConfig?.id) ||
+                  task.config_id;
+
+                if (targetId) {
+                  return (
+                    <Link
+                      component={RouterLink}
+                      to={`/configurations/${targetId}`}
+                      variant="body1"
+                      sx={{ display: 'inline-block', maxWidth: '100%' }}
+                    >
+                      {label}
+                    </Link>
+                  );
+                }
+
+                return (
+                  <Link
+                    component="button"
+                    variant="body1"
+                    onClick={onOpenConfiguration}
+                    sx={{ textAlign: 'left' }}
+                  >
+                    {label}
+                  </Link>
+                );
+              },
+            }
+          : definition
+      ),
+    [
+      historicalStrategyConfig?.id,
+      historicalStrategyConfig?.name,
+      isViewingHistorical,
+      onOpenConfiguration,
+      t,
+      task.config_id,
+      task.config_name,
+    ]
   );
   const recoveryBlockers = summary.execution.recoveryBlockers ?? [];
   const recoveryWarnings = summary.execution.recoveryWarnings ?? [];
@@ -112,130 +150,6 @@ export function TradingOverviewTab({
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
       <Grid container spacing={{ xs: 2, sm: 3 }}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Typography variant="h6" gutterBottom>
-            {t('trading:detail.taskInformation')}
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('common:labels.name')}
-              </Typography>
-              <Typography variant="body1">{task.name}</Typography>
-            </Box>
-            {task.description && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  {t('common:labels.description')}
-                </Typography>
-                <Typography variant="body1">{task.description}</Typography>
-              </Box>
-            )}
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('common:labels.instrument')}
-              </Typography>
-              <Typography variant="body1">{effectiveInstrument}</Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('common:labels.pipSize')}
-              </Typography>
-              <Typography variant="body1">
-                {effectivePipSize
-                  ? parseFloat(String(effectivePipSize))
-                  : effectivePipSize}
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('common:labels.status')}
-              </Typography>
-              <Box sx={{ mt: 0.5 }}>
-                <StatusBadge
-                  status={currentStatus || task.status}
-                  showIcon={false}
-                />
-              </Box>
-            </Box>
-            {(() => {
-              const effectiveStatus = String(
-                currentStatus || task.status || ''
-              ).toLowerCase();
-              const terminalStatuses = [
-                'stopped',
-                'completed',
-                'failed',
-                'paused',
-              ];
-              if (!terminalStatuses.includes(effectiveStatus)) return null;
-              const stopReason =
-                summary.task.stopReason ||
-                summary.task.errorMessage ||
-                (effectiveStatus === 'completed'
-                  ? t('trading:detail.stopReasonCompleted')
-                  : effectiveStatus === 'stopped'
-                    ? t('trading:detail.stopReasonNormal')
-                    : effectiveStatus === 'paused'
-                      ? t('trading:detail.stopReasonPaused')
-                      : t('trading:detail.stopReasonFailedFallback'));
-              const isError = effectiveStatus === 'failed';
-              return (
-                <Box>
-                  <Typography variant="caption" color="text.secondary">
-                    {t('trading:detail.stopReason')}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color={isError ? 'error.main' : 'text.primary'}
-                    sx={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-                  >
-                    {stopReason}
-                  </Typography>
-                </Box>
-              );
-            })()}
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('common:labels.taskId')}
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}
-              >
-                {taskId}
-              </Typography>
-            </Box>
-            {(executionId || task.execution_id) && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  {t('trading:detail.executionId')}
-                </Typography>
-                <Typography
-                  variant="body2"
-                  sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}
-                >
-                  {executionId || task.execution_id}
-                </Typography>
-              </Box>
-            )}
-            {tracemallocEnabled && (
-              <Box>
-                <Typography variant="caption" color="text.secondary">
-                  {t('common:debug.title')}
-                </Typography>
-                <Box sx={{ mt: 0.5 }}>
-                  <Chip
-                    size="small"
-                    label={t('common:debug.tracemalloc')}
-                    color="warning"
-                    variant="filled"
-                  />
-                </Box>
-              </Box>
-            )}
-          </Box>
-        </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
           <Typography variant="h6" gutterBottom>
             {t('common:labels.configuration')}
@@ -323,7 +237,7 @@ export function TradingOverviewTab({
         <Grid size={{ xs: 12 }}>
           <Divider sx={{ my: 2 }} />
           <TaskSettingsList
-            title={t('common:labels.taskSettings', 'Task settings')}
+            title={t('common:labels.taskInformation')}
             task={task as unknown as Record<string, unknown>}
             snapshot={historicalTaskConfig}
             definitions={taskSettings}

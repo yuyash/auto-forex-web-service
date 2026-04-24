@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Container, Box, Paper, Alert, Typography } from '@mui/material';
+import { Box, Paper, Alert, Typography } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import { useTranslation } from 'react-i18next';
 import { useDefaultOandaAccount } from '../hooks/useOandaAccounts';
@@ -11,7 +11,7 @@ import {
   useSupportedGranularities,
   useSupportedInstruments,
 } from '../hooks/useMarketConfig';
-import { Breadcrumbs } from '../components/common';
+import { Breadcrumbs, PageContainer } from '../components/common';
 import ActiveTasksWidget from '../components/dashboard/ActiveTasksWidget';
 import RecentBacktestsWidget from '../components/dashboard/RecentBacktestsWidget';
 import QuickActionsWidget from '../components/dashboard/QuickActionsWidget';
@@ -87,12 +87,10 @@ const DashboardPage = () => {
   };
 
   return (
-    <Container
-      maxWidth={false}
+    <PageContainer
       sx={{
         mt: 4,
         mb: 4,
-        px: { xs: 1, sm: 2, md: 3 },
         display: 'flex',
         flexDirection: 'column',
         height: { xs: 'auto', md: 'calc(100vh - 64px)' },
@@ -126,10 +124,10 @@ const DashboardPage = () => {
         sx={{
           p: { xs: 1.5, sm: 2 },
           mb: 3,
-          flex: 1,
+          flex: { xs: 'none', md: 1 },
           display: 'flex',
           flexDirection: 'column',
-          minHeight: 0,
+          minHeight: { xs: 'auto', md: 0 },
           overflow: 'hidden',
         }}
       >
@@ -161,8 +159,9 @@ const DashboardPage = () => {
           sx={{
             width: '100%',
             position: 'relative',
-            flex: 1,
-            minHeight: 0,
+            flex: { xs: 'none', md: 1 },
+            height: { xs: 360, sm: 440, md: 'auto' },
+            minHeight: { xs: 360, sm: 440, md: 0 },
           }}
         >
           {!hasOandaAccount ? (
@@ -194,7 +193,7 @@ const DashboardPage = () => {
           )}
         </Box>
       </Paper>
-    </Container>
+    </PageContainer>
   );
 };
 

@@ -274,6 +274,17 @@ function DataTable<T extends object>({
     return sortedData.slice(startIndex, startIndex + rowsPerPage);
   }, [sortedData, page, rowsPerPage, hidePagination]);
 
+  const tableMinWidth = useMemo(() => {
+    const selectionWidth = selectable ? 50 : 0;
+    const columnWidth = columns.reduce((sum, column) => {
+      const colId = String(column.id);
+      return (
+        sum + (columnWidths[colId] ?? column.width ?? column.minWidth ?? 120)
+      );
+    }, selectionWidth);
+    return Math.max(480, columnWidth);
+  }, [columnWidths, columns, selectable]);
+
   // Real-time updates effect
   React.useEffect(() => {
     if (enableRealTimeUpdates && onRefresh) {
@@ -331,7 +342,7 @@ function DataTable<T extends object>({
         >
           <Table
             stickyHeader={stickyHeader}
-            sx={{ tableLayout: 'fixed', minWidth: 480 }}
+            sx={{ tableLayout: 'fixed', minWidth: tableMinWidth }}
           >
             <TableHead>
               <TableRow>
@@ -406,7 +417,7 @@ function DataTable<T extends object>({
       >
         <Table
           stickyHeader={stickyHeader}
-          sx={{ tableLayout: 'fixed', minWidth: 480 }}
+          sx={{ tableLayout: 'fixed', minWidth: tableMinWidth }}
         >
           <TableHead>
             <TableRow>

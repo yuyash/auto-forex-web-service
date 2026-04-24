@@ -103,6 +103,9 @@
     "invalidPassword": "Invalid password",
     "passwordMismatch": "Passwords do not match"
   },
+  "actions": {
+    "save": "Save"
+  },
   "display": {
     "dateNumberFormat": "Date & Number Format",
     "dateFormat": "Date Format",

@@ -8,7 +8,6 @@ import {
   Checkbox,
   Chip,
   CircularProgress,
-  Container,
   Dialog,
   DialogActions,
   DialogContent,
@@ -37,7 +36,7 @@ import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAccount } from '../hooks/useAccounts';
 import { useToast } from '../components/common/useToast';
-import { Breadcrumbs } from '../components/common';
+import { Breadcrumbs, PageContainer } from '../components/common';
 import DataTable, { type Column } from '../components/common/DataTable';
 import { TableSelectionToolbar } from '../components/common/TableSelectionToolbar';
 import { useTableRowSelection } from '../hooks/useTableRowSelection';
@@ -968,7 +967,7 @@ export default function OandaAccountDetailPage() {
   const queryClient = useQueryClient();
   const [rawDataOpen, setRawDataOpen] = useState(false);
 
-  const containerSx = useMemo(() => ({ mt: 4, mb: 4, px: 3 }), []);
+  const containerSx = useMemo(() => ({ mt: 4, mb: 4 }), []);
 
   const accountId = useMemo(() => {
     const raw = params.id;
@@ -1010,7 +1009,7 @@ export default function OandaAccountDetailPage() {
 
   if (loading) {
     return (
-      <Container maxWidth={false} sx={containerSx}>
+      <PageContainer sx={containerSx}>
         <Breadcrumbs />
         <Box display="flex" justifyContent="center" alignItems="center" py={4}>
           <CircularProgress />
@@ -1018,30 +1017,30 @@ export default function OandaAccountDetailPage() {
             {t('settings:accounts.loadingAccountData')}
           </Typography>
         </Box>
-      </Container>
+      </PageContainer>
     );
   }
 
   if (error) {
     return (
-      <Container maxWidth={false} sx={containerSx}>
+      <PageContainer sx={containerSx}>
         <Breadcrumbs />
         <Alert severity="error">{error}</Alert>
-      </Container>
+      </PageContainer>
     );
   }
 
   if (!account) {
     return (
-      <Container maxWidth={false} sx={containerSx}>
+      <PageContainer sx={containerSx}>
         <Breadcrumbs />
         <Alert severity="info">{t('common:messages.noData')}</Alert>
-      </Container>
+      </PageContainer>
     );
   }
 
   return (
-    <Container maxWidth={false} sx={containerSx}>
+    <PageContainer sx={containerSx}>
       <Breadcrumbs />
       <Box mb={2}>
         <Typography variant="h5">
@@ -1271,6 +1270,6 @@ export default function OandaAccountDetailPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+    </PageContainer>
   );
 }

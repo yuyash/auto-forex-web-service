@@ -1,10 +1,14 @@
-import { Container, Box, Typography, Paper } from '@mui/material';
+import { Box, Typography, Paper } from '@mui/material';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import TradingTaskForm from '../components/trading/TradingTaskForm';
 import TradingTaskUpdateForm from '../components/trading/TradingTaskUpdateForm';
 import { useTradingTask } from '../hooks/useTradingTasks';
-import { LoadingSpinner, Breadcrumbs } from '../components/common';
+import {
+  LoadingSpinner,
+  Breadcrumbs,
+  PageContainer,
+} from '../components/common';
 
 export default function TradingTaskFormPage() {
   const { t } = useTranslation('trading');
@@ -19,7 +23,7 @@ export default function TradingTaskFormPage() {
 
   if (isEditMode && (isLoading || !task)) {
     return (
-      <Container maxWidth="lg">
+      <PageContainer>
         <Box
           sx={{
             display: 'flex',
@@ -30,12 +34,12 @@ export default function TradingTaskFormPage() {
         >
           <LoadingSpinner />
         </Box>
-      </Container>
+      </PageContainer>
     );
   }
 
   return (
-    <Container maxWidth="lg">
+    <PageContainer>
       <Box sx={{ py: 4 }}>
         <Breadcrumbs />
 
@@ -79,6 +83,6 @@ export default function TradingTaskFormPage() {
           )}
         </Paper>
       </Box>
-    </Container>
+    </PageContainer>
   );
 }

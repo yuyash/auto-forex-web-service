@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 
 import {
   Box,
-  Container,
   Typography,
   Button,
   Tabs,
@@ -30,7 +29,11 @@ import { shouldPollTaskStatus } from '../hooks/taskResourceQueries';
 import { useBacktestTasks } from '../hooks/useBacktestTasks';
 import { TaskStatus } from '../types/common';
 import BacktestTaskCard from '../components/backtest/BacktestTaskCard';
-import { LoadingSpinner, Breadcrumbs } from '../components/common';
+import {
+  LoadingSpinner,
+  Breadcrumbs,
+  PageContainer,
+} from '../components/common';
 import { useSequentialPolling } from '../hooks/useSequentialPolling';
 import { usePollingPolicy } from '../hooks/usePollingPolicy';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
@@ -182,7 +185,7 @@ export default function BacktestTasksPage() {
   const totalPages = data ? Math.ceil(data.count / pageSize) : 0;
 
   return (
-    <Container maxWidth={false} sx={{ px: { xs: 1, sm: 3 } }}>
+    <PageContainer>
       <Box sx={{ py: { xs: 2, sm: 4 } }}>
         <Breadcrumbs />
 
@@ -472,6 +475,6 @@ export default function BacktestTasksPage() {
           )}
         </TabPanel>
       </Box>
-    </Container>
+    </PageContainer>
   );
 }

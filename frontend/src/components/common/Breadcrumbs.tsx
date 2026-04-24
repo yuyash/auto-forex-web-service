@@ -32,32 +32,32 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
     // Configuration routes - default without context
     '/configurations': [
       { label: t('breadcrumbs.home'), path: homePath },
-      { label: 'Configurations' },
+      { label: t('breadcrumbs.configurations') },
     ],
     '/configurations/new': [
       { label: t('breadcrumbs.home'), path: homePath },
-      { label: 'Configurations', path: '/configurations' },
-      { label: 'New Configuration' },
+      { label: t('breadcrumbs.configurations'), path: '/configurations' },
+      { label: t('breadcrumbs.newConfiguration') },
     ],
     // Backtest Task routes
     '/backtest-tasks': [
       { label: t('breadcrumbs.home'), path: homePath },
-      { label: 'Backtest Tasks' },
+      { label: t('breadcrumbs.backtestTasks') },
     ],
     '/backtest-tasks/new': [
       { label: t('breadcrumbs.home'), path: homePath },
-      { label: 'Backtest Tasks', path: '/backtest-tasks' },
-      { label: 'New Task' },
+      { label: t('breadcrumbs.backtestTasks'), path: '/backtest-tasks' },
+      { label: t('breadcrumbs.newTask') },
     ],
     // Trading Task routes
     '/trading-tasks': [
       { label: t('breadcrumbs.home'), path: homePath },
-      { label: 'Trading Tasks' },
+      { label: t('breadcrumbs.tradingTasks') },
     ],
     '/trading-tasks/new': [
       { label: t('breadcrumbs.home'), path: homePath },
-      { label: 'Trading Tasks', path: '/trading-tasks' },
-      { label: 'New Task' },
+      { label: t('breadcrumbs.tradingTasks'), path: '/trading-tasks' },
+      { label: t('breadcrumbs.newTask') },
     ],
     // Settings routes
     '/settings': [
@@ -78,8 +78,8 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
       ...customPath,
       {
         label: location.pathname.includes('/edit')
-          ? 'Edit Configuration'
-          : 'Configuration',
+          ? t('breadcrumbs.editConfiguration')
+          : t('breadcrumbs.configuration'),
       },
     ];
 
@@ -133,14 +133,14 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
     if (fromPage === 'backtest-tasks') {
       breadcrumbs = [
         { label: t('breadcrumbs.home'), path: homePath },
-        { label: 'Backtest Tasks', path: '/backtest-tasks' },
-        { label: 'Configurations' },
+        { label: t('breadcrumbs.backtestTasks'), path: '/backtest-tasks' },
+        { label: t('breadcrumbs.configurations') },
       ];
     } else if (fromPage === 'trading-tasks') {
       breadcrumbs = [
         { label: t('breadcrumbs.home'), path: homePath },
-        { label: 'Trading Tasks', path: '/trading-tasks' },
-        { label: 'Configurations' },
+        { label: t('breadcrumbs.tradingTasks'), path: '/trading-tasks' },
+        { label: t('breadcrumbs.configurations') },
       ];
     }
   }
@@ -150,19 +150,22 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
     if (fromPage === 'backtest-tasks') {
       breadcrumbs = [
         { label: t('breadcrumbs.home'), path: homePath },
-        { label: 'Backtest Tasks', path: '/backtest-tasks' },
+        { label: t('breadcrumbs.backtestTasks'), path: '/backtest-tasks' },
         {
-          label: 'Configurations',
+          label: t('breadcrumbs.configurations'),
           path: '/configurations?from=backtest-tasks',
         },
-        { label: 'New Configuration' },
+        { label: t('breadcrumbs.newConfiguration') },
       ];
     } else if (fromPage === 'trading-tasks') {
       breadcrumbs = [
         { label: t('breadcrumbs.home'), path: homePath },
-        { label: 'Trading Tasks', path: '/trading-tasks' },
-        { label: 'Configurations', path: '/configurations?from=trading-tasks' },
-        { label: 'New Configuration' },
+        { label: t('breadcrumbs.tradingTasks'), path: '/trading-tasks' },
+        {
+          label: t('breadcrumbs.configurations'),
+          path: '/configurations?from=trading-tasks',
+        },
+        { label: t('breadcrumbs.newConfiguration') },
       ];
     }
   }
@@ -173,59 +176,59 @@ const Breadcrumbs = ({ customPath }: BreadcrumbsProps = {}) => {
       if (fromPage === 'backtest-tasks') {
         breadcrumbs = [
           { label: t('breadcrumbs.home'), path: homePath },
-          { label: 'Backtest Tasks', path: '/backtest-tasks' },
+          { label: t('breadcrumbs.backtestTasks'), path: '/backtest-tasks' },
           {
-            label: 'Configurations',
+            label: t('breadcrumbs.configurations'),
             path: '/configurations?from=backtest-tasks',
           },
-          { label: 'Edit Configuration' },
+          { label: t('breadcrumbs.editConfiguration') },
         ];
       } else if (fromPage === 'trading-tasks') {
         breadcrumbs = [
           { label: t('breadcrumbs.home'), path: homePath },
-          { label: 'Trading Tasks', path: '/trading-tasks' },
+          { label: t('breadcrumbs.tradingTasks'), path: '/trading-tasks' },
           {
-            label: 'Configurations',
+            label: t('breadcrumbs.configurations'),
             path: '/configurations?from=trading-tasks',
           },
-          { label: 'Edit Configuration' },
+          { label: t('breadcrumbs.editConfiguration') },
         ];
       } else {
         breadcrumbs = [
           { label: t('breadcrumbs.home'), path: homePath },
-          { label: 'Configurations', path: '/configurations' },
-          { label: 'Edit Configuration' },
+          { label: t('breadcrumbs.configurations'), path: '/configurations' },
+          { label: t('breadcrumbs.editConfiguration') },
         ];
       }
     } else if (location.pathname.match(/^\/configurations\/\d+$/)) {
       breadcrumbs = [
         { label: t('breadcrumbs.home'), path: homePath },
-        { label: 'Configurations', path: '/configurations' },
-        { label: 'Configuration Details' },
+        { label: t('breadcrumbs.configurations'), path: '/configurations' },
+        { label: t('breadcrumbs.configurationDetails') },
       ];
-    } else if (location.pathname.match(/^\/backtest-tasks\/\d+$/)) {
+    } else if (location.pathname.match(/^\/backtest-tasks\/[^/]+$/)) {
       breadcrumbs = [
         { label: t('breadcrumbs.home'), path: homePath },
-        { label: 'Backtest Tasks', path: '/backtest-tasks' },
-        { label: 'Task Details' },
+        { label: t('breadcrumbs.backtestTasks'), path: '/backtest-tasks' },
+        { label: t('breadcrumbs.taskDetails') },
       ];
-    } else if (location.pathname.match(/^\/backtest-tasks\/\d+\/edit$/)) {
+    } else if (location.pathname.match(/^\/backtest-tasks\/[^/]+\/edit$/)) {
       breadcrumbs = [
         { label: t('breadcrumbs.home'), path: homePath },
-        { label: 'Backtest Tasks', path: '/backtest-tasks' },
-        { label: 'Edit Task' },
+        { label: t('breadcrumbs.backtestTasks'), path: '/backtest-tasks' },
+        { label: t('breadcrumbs.editTask') },
       ];
-    } else if (location.pathname.match(/^\/trading-tasks\/\d+$/)) {
+    } else if (location.pathname.match(/^\/trading-tasks\/[^/]+$/)) {
       breadcrumbs = [
         { label: t('breadcrumbs.home'), path: homePath },
-        { label: 'Trading Tasks', path: '/trading-tasks' },
-        { label: 'Task Details' },
+        { label: t('breadcrumbs.tradingTasks'), path: '/trading-tasks' },
+        { label: t('breadcrumbs.taskDetails') },
       ];
-    } else if (location.pathname.match(/^\/trading-tasks\/\d+\/edit$/)) {
+    } else if (location.pathname.match(/^\/trading-tasks\/[^/]+\/edit$/)) {
       breadcrumbs = [
         { label: t('breadcrumbs.home'), path: homePath },
-        { label: 'Trading Tasks', path: '/trading-tasks' },
-        { label: 'Edit Task' },
+        { label: t('breadcrumbs.tradingTasks'), path: '/trading-tasks' },
+        { label: t('breadcrumbs.editTask') },
       ];
     } else if (location.pathname.match(/^\/oanda-accounts\/\d+$/)) {
       breadcrumbs = [

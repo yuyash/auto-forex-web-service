@@ -6,7 +6,6 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Container,
   Divider,
   Paper,
   Typography,
@@ -16,7 +15,7 @@ import {
   ContentCopy as ContentCopyIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import { Breadcrumbs } from '../components/common';
+import { Breadcrumbs, PageContainer } from '../components/common';
 import { useConfiguration } from '../hooks/useConfigurations';
 import { useCopyConfiguration } from '../hooks/useConfigurationMutations';
 import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
@@ -179,7 +178,7 @@ export default function ConfigurationDetailPage() {
   })();
 
   return (
-    <Container maxWidth="md" sx={{ mt: 4, mb: 4, px: 3 }}>
+    <PageContainer sx={{ mt: 4, mb: 4 }}>
       <Breadcrumbs />
 
       {isLoading && (
@@ -361,6 +360,6 @@ export default function ConfigurationDetailPage() {
           </Paper>
         </>
       )}
-    </Container>
+    </PageContainer>
   );
 }

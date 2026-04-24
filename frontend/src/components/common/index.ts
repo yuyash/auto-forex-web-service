@@ -6,6 +6,7 @@ export { useToast } from './useToast';
 export { default as DataTable } from './DataTable';
 export type { Column } from './DataTable';
 export { default as Breadcrumbs } from './Breadcrumbs';
+export { default as PageContainer } from './PageContainer';
 export { default as SkipLinks } from './SkipLinks';
 export { default as GlobalKeyboardShortcuts } from './GlobalKeyboardShortcuts';
 export { TaskControlButtons } from './TaskControlButtons';

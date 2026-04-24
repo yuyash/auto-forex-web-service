@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Box, Typography } from '@mui/material';
 import {
   formatSettingValue,
@@ -9,6 +10,14 @@ export type TaskSettingDefinition<T extends Record<string, unknown>> = {
   key: keyof T & string;
   label: string;
   format?: (value: TaskSettingValue) => string;
+  render?: (
+    value: TaskSettingValue,
+    context: {
+      task: T;
+      snapshot?: Record<string, unknown> | null;
+      source: Record<string, unknown>;
+    }
+  ) => ReactNode;
 };
 
 interface TaskSettingsListProps<T extends Record<string, unknown>> {
@@ -44,6 +53,13 @@ export function TaskSettingsList<T extends Record<string, unknown>>({
       >
         {definitions.map((definition) => {
           const value = source[definition.key] ?? task[definition.key];
+          const renderedValue = definition.render
+            ? definition.render(value as TaskSettingValue, {
+                task,
+                snapshot,
+                source,
+              })
+            : null;
           return (
             <Box key={definition.key} sx={{ minWidth: 0 }}>
               <Typography
@@ -52,14 +68,18 @@ export function TaskSettingsList<T extends Record<string, unknown>>({
               >
                 {definition.label}
               </Typography>
-              <Typography
-                variant={typographyTokens.body}
-                sx={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}
-              >
-                {definition.format
-                  ? definition.format(value as TaskSettingValue)
-                  : formatSettingValue(value as TaskSettingValue)}
-              </Typography>
+              {renderedValue ? (
+                <Box sx={{ mt: 0.25, minWidth: 0 }}>{renderedValue}</Box>
+              ) : (
+                <Typography
+                  variant={typographyTokens.body}
+                  sx={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}
+                >
+                  {definition.format
+                    ? definition.format(value as TaskSettingValue)
+                    : formatSettingValue(value as TaskSettingValue)}
+                </Typography>
+              )}
             </Box>
           );
         })}

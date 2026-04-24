@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 
 import {
   Box,
-  Container,
   Typography,
   Button,
   Tabs,
@@ -33,8 +32,11 @@ import { refreshTaskSummary } from '../hooks/taskResourceCache';
 import { useTradingTasks } from '../hooks/useTradingTasks';
 import { TaskStatus, TaskType } from '../types/common';
 import TradingTaskCard from '../components/trading/TradingTaskCard';
-import { Breadcrumbs } from '../components/common';
-import { LoadingSpinner } from '../components/common';
+import {
+  Breadcrumbs,
+  LoadingSpinner,
+  PageContainer,
+} from '../components/common';
 import { ConfigurationSelector } from '../components/tasks/forms/ConfigurationSelector';
 import { useSequentialPolling } from '../hooks/useSequentialPolling';
 import { usePollingPolicy } from '../hooks/usePollingPolicy';
@@ -195,7 +197,7 @@ export default function TradingTasksPage() {
   const totalPages = data ? Math.ceil(data.count / pageSize) : 0;
 
   return (
-    <Container maxWidth={false} sx={{ px: { xs: 1, sm: 3 } }}>
+    <PageContainer>
       <Box sx={{ py: { xs: 2, sm: 4 } }}>
         <Breadcrumbs />
 
@@ -217,7 +219,25 @@ export default function TradingTasksPage() {
           >
             {t('trading:pages.title')}
           </Typography>
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <Box
+            sx={{
+              display: { xs: 'grid', sm: 'flex' },
+              gridTemplateColumns: {
+                xs: 'repeat(2, minmax(0, 1fr))',
+                '@media (max-width: 340px)': '1fr',
+              },
+              gap: 1,
+              width: { xs: '100%', sm: 'auto' },
+              flexWrap: { sm: 'wrap' },
+              justifyContent: { sm: 'flex-end' },
+              '& .MuiButton-root': {
+                minWidth: 0,
+                width: { xs: '100%', sm: 'auto' },
+                px: { xs: 1.25, sm: 2 },
+                whiteSpace: 'nowrap',
+              },
+            }}
+          >
             <Button
               variant="outlined"
               startIcon={<RefreshIcon />}
@@ -507,6 +527,6 @@ export default function TradingTasksPage() {
           )}
         </TabPanel>
       </Box>
-    </Container>
+    </PageContainer>
   );
 }

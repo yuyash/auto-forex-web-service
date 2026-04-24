@@ -10,6 +10,7 @@ Computes a comprehensive summary for a given task including:
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
@@ -509,6 +510,7 @@ def _abs_units():
 
 TASK_SUMMARY_CACHE_TTL_SECONDS = 30
 TASK_SUMMARY_SNAPSHOT_CACHE_TTL_SECONDS = 60 * 60 * 24
+_PROGRESS_ONLY_STATUS_RE = re.compile(r"^Processed\s+\d+\s+ticks$", re.IGNORECASE)
 
 
 def _is_terminal_status(status: str | None) -> bool:
@@ -553,11 +555,11 @@ def _compute_stop_reason(
         err = (getattr(task, "error_message", None) or "").strip()
         if err:
             return err
-        if status_message:
+        if status_message and not _is_progress_only_status_message(status_message):
             return status_message
         return None
 
-    if status_message:
+    if status_message and not _is_progress_only_status_message(status_message):
         return status_message
 
     # Last-resort default for normal terminal states without a stored
@@ -570,6 +572,12 @@ def _compute_stop_reason(
     if status == "paused":
         return "Execution paused"
     return None
+
+
+def _is_progress_only_status_message(message: str) -> bool:
+    """Return true when a status message is only heartbeat progress."""
+
+    return bool(_PROGRESS_ONLY_STATUS_RE.match(message.strip()))
 
 
 def _fetch_celery_status_message(
