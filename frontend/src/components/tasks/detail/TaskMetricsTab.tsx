@@ -418,6 +418,9 @@ export function TaskMetricsTab({
         px: layoutTokens.pagePadding,
         py: { xs: 1, sm: 1.5 },
         minWidth: 0,
+        width: '100%',
+        maxWidth: layoutTokens.contentMaxWidth,
+        mx: 'auto',
       }}
     >
       <MetricsToolbar
@@ -435,7 +438,7 @@ export function TaskMetricsTab({
         spacing={layoutTokens.sectionGap}
         justifyContent="center"
         alignItems="stretch"
-        sx={{ mt: 0, minWidth: 0 }}
+        sx={{ mt: 0, minWidth: 0, width: '100%' }}
       >
         {orderedKeys.map((key) => {
           // OHLC chart

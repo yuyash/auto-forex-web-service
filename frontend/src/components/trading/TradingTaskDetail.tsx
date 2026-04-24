@@ -59,6 +59,7 @@ import { useOptimisticTaskStatus } from '../../hooks/useOptimisticTaskStatus';
 import { TaskDetailHeader } from '../tasks/detail/TaskDetailHeader';
 import { TaskDetailTabs } from '../tasks/detail/TaskDetailTabs';
 import { TaskStrategyTab } from '../tasks/detail/strategy/TaskStrategyTab';
+import { taskDetailLayout } from '../tasks/detail/detailLayout';
 import { TradingOverviewTab } from './detail/TradingOverviewTab';
 import { useTaskMetrics } from '../../hooks/useTaskMetrics';
 import { computeAutoInterval } from '../../utils/autoGranularity';
@@ -261,18 +262,7 @@ export const TradingTaskDetail: React.FC = () => {
     : 'N/A';
 
   return (
-    <Container
-      maxWidth={false}
-      sx={{
-        py: { xs: 2, sm: 4 },
-        px: { xs: 1, sm: 3 },
-        display: 'flex',
-        flexDirection: 'column',
-        flex: 1,
-        minHeight: 0,
-        overflow: 'auto',
-      }}
-    >
+    <Container maxWidth={false} sx={taskDetailLayout.container}>
       <Breadcrumbs sx={{ mb: { xs: 1, sm: 2 } }}>
         <Link
           component="button"
@@ -363,16 +353,7 @@ export const TradingTaskDetail: React.FC = () => {
         onDelete={() => setDeleteDialogOpen(true)}
       />
 
-      <Paper
-        sx={{
-          mb: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          flex: 1,
-          minHeight: 0,
-          overflow: 'hidden',
-        }}
-      >
+      <Paper sx={taskDetailLayout.tabPaper}>
         <TaskDetailTabs
           activeTabIndex={activeTabIndex}
           visibleTabs={visibleTabs}

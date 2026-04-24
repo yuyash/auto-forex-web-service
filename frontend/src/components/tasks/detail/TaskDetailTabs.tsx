@@ -2,6 +2,7 @@ import { Settings as SettingsIcon } from '@mui/icons-material';
 import { Box, IconButton, Tab, Tabs, Tooltip } from '@mui/material';
 import type { SyntheticEvent } from 'react';
 import type { TabItem } from '../../../hooks/useTabConfig';
+import { componentDensity } from '../../../theme/density';
 
 function a11yProps(index: number) {
   return {
@@ -42,7 +43,13 @@ export function TaskDetailTabs({
         variant="scrollable"
         scrollButtons="auto"
         allowScrollButtonsMobile
-        sx={{ flex: 1 }}
+        sx={{
+          flex: 1,
+          minHeight: 40,
+          '& .MuiTabs-scrollButtons': {
+            width: 32,
+          },
+        }}
       >
         {visibleTabs.map((tab, idx) => (
           <Tab
@@ -51,8 +58,9 @@ export function TaskDetailTabs({
             {...a11yProps(idx)}
             sx={{
               minWidth: { xs: 'auto', sm: 90 },
-              px: { xs: 1, sm: 2 },
-              fontSize: { xs: '0.75rem', sm: '0.875rem' },
+              minHeight: 40,
+              px: { xs: 1, sm: 1.5 },
+              fontSize: componentDensity.controlFontSize,
             }}
           />
         ))}

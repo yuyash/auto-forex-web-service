@@ -13,7 +13,7 @@ export const layoutTokens = {
   sectionGap: { xs: 1.5, sm: 2 },
   toolbarGap: 1,
   chartCardHeight: { xs: 240, sm: 260 },
-  contentMaxWidth: '100%',
+  contentMaxWidth: 1600,
 } as const;
 
 export const fontFamily = [

@@ -104,5 +104,6 @@ class TestRuntimeMetricsTracker:
         )
 
         assert Decimal(metrics["realized_pnl"]) == Decimal("0")
+        assert Decimal(metrics["realized_pnl_quote"]) == Decimal("0")
         assert Decimal(metrics["unrealized_pnl"]) == Decimal("-69.000")
         assert Decimal(metrics["total_pnl"]) == Decimal("-69.000")
