@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.42.7](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.42.6...backend-v1.42.7) (2026-04-24)
+
+
+### Bug Fixes
+
+* improve task detail and dashboard UI ([#593](https://github.com/yuyash/auto-forex-web-service/issues/593)) ([12a88ba](https://github.com/yuyash/auto-forex-web-service/commit/12a88ba5d1ffa2f65349e323c7d45e9d4778ed33))
+
 ## [1.42.6](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.42.5...backend-v1.42.6) (2026-04-24)
 
 
