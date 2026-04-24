@@ -74,6 +74,7 @@ class TestMetrics:
         response = client.get(f"/api/trading/tasks/backtest/{task.pk}/metrics/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 3
+        assert response.data["data_source"] == "db_raw"
         assert len(response.data["results"]) == 3
 
     def test_without_data(self):
@@ -83,6 +84,7 @@ class TestMetrics:
         response = client.get(f"/api/trading/tasks/backtest/{task.pk}/metrics/")
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 0
+        assert response.data["data_source"] == "db_raw"
         assert response.data["results"] == []
 
     def test_interval_metrics_with_null_execution_id(self):
@@ -107,6 +109,7 @@ class TestMetrics:
         )
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 1
+        assert response.data["data_source"] in {"db_window_last", "db_window_last_python"}
         assert len(response.data["results"]) == 1
 
 

@@ -127,6 +127,7 @@ class TaskSubResourceMixin:
                     "count": serializers.IntegerField(),
                     "next": serializers.CharField(allow_null=True),
                     "previous": serializers.CharField(allow_null=True),
+                    "data_source": serializers.CharField(),
                     "results": serializers.ListField(
                         child=inline_serializer(
                             "TaskMetricPoint",
@@ -194,7 +195,9 @@ class TaskSubResourceMixin:
                     {"t": int(ts.timestamp()), "metrics": _ensure_dict(metrics)}
                     for ts, metrics in page_rows
                 ]
-                return Response(_paginated_envelope(request, data, total_count, page, page_size))
+                envelope = _paginated_envelope(request, data, total_count, page, page_size)
+                envelope["data_source"] = "db_window_last_python"
+                return Response(envelope)
 
             # Build a sub-query that buckets timestamps into N-minute windows
             # and picks the last metrics JSON per window.
@@ -252,7 +255,9 @@ class TaskSubResourceMixin:
                 rows = cursor.fetchall()
 
             data = [{"t": int(ts.timestamp()), "metrics": _ensure_dict(m)} for ts, m in rows]
-            return Response(_paginated_envelope(request, data, total_count, page, page_size))
+            envelope = _paginated_envelope(request, data, total_count, page, page_size)
+            envelope["data_source"] = "db_window_last"
+            return Response(envelope)
 
         # Default: interval=1, use ORM with cursor pagination
         total_count = queryset.count()
@@ -264,7 +269,9 @@ class TaskSubResourceMixin:
         rows = queryset.values_list("timestamp", "metrics")[start : start + page_size]
 
         data = [{"t": int(ts.timestamp()), "metrics": _ensure_dict(m)} for ts, m in rows]
-        return Response(_paginated_envelope(request, data, total_count, page, page_size))
+        envelope = _paginated_envelope(request, data, total_count, page, page_size)
+        envelope["data_source"] = "db_raw"
+        return Response(envelope)
 
     @extend_schema(
         tags=["Trading"],

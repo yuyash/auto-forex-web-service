@@ -27,7 +27,7 @@ export function TaskSettingsList<T extends Record<string, unknown>>({
 
   return (
     <Box>
-      <Typography variant="h6" gutterBottom>
+      <Typography variant="subtitle1" gutterBottom>
         {title}
       </Typography>
       <Box

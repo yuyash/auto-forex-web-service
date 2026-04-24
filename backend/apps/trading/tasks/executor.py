@@ -398,8 +398,21 @@ class TaskExecutor:
             f"current_balance={state.current_balance}"
         )
 
-        # Save the model instance
-        state.save()
+        # Hot path optimisation: only persist fields that are updated during
+        # execution. This avoids issuing full-row UPDATE statements on every
+        # batch flush while keeping ``updated_at`` accurate.
+        state.save(
+            update_fields=[
+                "strategy_state",
+                "current_balance",
+                "ticks_processed",
+                "last_tick_timestamp",
+                "last_tick_price",
+                "last_tick_bid",
+                "last_tick_ask",
+                "updated_at",
+            ]
+        )
 
     def _flush_metrics(self, state: ExecutionState) -> None:
         """Flush completed minute-level metric buckets to the database."""

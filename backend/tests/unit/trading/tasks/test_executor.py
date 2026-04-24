@@ -360,7 +360,18 @@ class TestSaveState:
 
         executor.save_state(state)
 
-        state.save.assert_called_once()
+        state.save.assert_called_once_with(
+            update_fields=[
+                "strategy_state",
+                "current_balance",
+                "ticks_processed",
+                "last_tick_timestamp",
+                "last_tick_price",
+                "last_tick_bid",
+                "last_tick_ask",
+                "updated_at",
+            ]
+        )
         state.refresh_from_db.assert_not_called()
 
 
@@ -1257,3 +1268,12 @@ class TestSuspiciousTickGapDetection:
         current = datetime(2024, 6, 15, 10, 0, 0, tzinfo=UTC)  # 72h
 
         assert TaskExecutor._is_suspicious_tick_gap(previous, current, max_gap_hours=120) is False
+
+    def test_flags_friday_midday_to_sunday_gap_when_threshold_exceeded(self) -> None:
+        """Only Friday evening closure is exempt once the gap exceeds threshold."""
+        from apps.trading.tasks.executor import TaskExecutor
+
+        previous = datetime(2024, 6, 14, 12, 0, 0, tzinfo=UTC)  # Friday noon
+        current = datetime(2024, 6, 16, 21, 5, 0, tzinfo=UTC)  # Sunday reopen
+
+        assert TaskExecutor._is_suspicious_tick_gap(previous, current, max_gap_hours=24) is True

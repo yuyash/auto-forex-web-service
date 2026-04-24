@@ -139,6 +139,57 @@ def test_pause_uses_injected_adapter_for_backtest() -> None:
     adapters.signal_pause.assert_called_once()
 
 
+def test_stop_rejects_created_task_state() -> None:
+    task_id = uuid4()
+    task = MagicMock(
+        pk=task_id,
+        status=TaskStatus.CREATED,
+        execution_id=uuid4(),
+        celery_task_id=uuid4(),
+    )
+    service = MagicMock()
+    service._get_task_and_type.return_value = (task, "backtest")
+
+    commands, adapters = _make_commands(service)
+
+    with pytest.raises(ValueError, match="cannot be stopped from"):
+        commands.stop(task_id, "graceful")
+
+    adapters.dispatch_stop.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_resume_emits_audit_log_payload() -> None:
+    task_id = uuid4()
+    execution_id = uuid4()
+    old_celery_task_id = uuid4()
+    task = MagicMock(
+        pk=task_id,
+        status=TaskStatus.STOPPED,
+        execution_id=execution_id,
+        celery_task_id=old_celery_task_id,
+    )
+    task.save = MagicMock()
+    task_model = MagicMock()
+    task_model.objects.select_for_update.return_value.get.return_value = task
+    service = MagicMock()
+    service._get_task_and_type.return_value = (task, "backtest")
+    service._get_task_model.return_value = task_model
+    service.get_celery_result.return_value = None
+    service._dispatch_task = MagicMock()
+
+    commands, _ = _make_commands(service)
+
+    commands.resume(task_id)
+
+    audit_calls = [
+        c
+        for c in commands.logger.info.call_args_list
+        if c.args and isinstance(c.args[0], str) and c.args[0].startswith("[LIFECYCLE:AUDIT]")
+    ]
+    assert audit_calls
+
+
 @pytest.mark.django_db
 def test_resume_allows_stopped_backtest_and_rotates_only_celery_task_id() -> None:
     task_id = uuid4()
