@@ -16,6 +16,21 @@ export const layoutTokens = {
   contentMaxWidth: 1600,
 } as const;
 
+export const spacingTokens = {
+  xxs: 0.5, // 4px
+  xs: 1, // 8px
+  sm: 1.5, // 12px
+  md: 2, // 16px
+  lg: 3, // 24px
+} as const;
+
+export const typographyTokens = {
+  sectionTitle: 'h6',
+  subsectionTitle: 'subtitle1',
+  body: 'body2',
+  caption: 'caption',
+} as const;
+
 export const fontFamily = [
   '-apple-system',
   'BlinkMacSystemFont',

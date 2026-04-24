@@ -15,6 +15,7 @@ from django.db import transaction
 from apps.trading.enums import StopMode, TaskStatus
 from apps.trading.models import BacktestTask, TradingTask
 from apps.trading.tasks.lifecycle_events import TaskLifecycleEventPublisher
+from apps.trading.tasks.lifecycle_state_machine import allowed_statuses_for_command
 
 if TYPE_CHECKING:
     from apps.trading.tasks.service import TaskService
@@ -105,32 +106,6 @@ class TaskLifecycleCommands:
             dispatch_stop=_default_dispatch_stop,
             sleep=time.sleep,
         )
-        self._allowed_status_by_command: dict[str, tuple[TaskStatus, ...]] = {
-            "start": (TaskStatus.CREATED,),
-            "stop": (
-                TaskStatus.STARTING,
-                TaskStatus.RUNNING,
-                TaskStatus.PAUSED,
-                TaskStatus.IDLE,
-                TaskStatus.STOPPING,
-                TaskStatus.DRAINING,
-            ),
-            "pause": (TaskStatus.STARTING, TaskStatus.RUNNING),
-            "resume_backtest": (TaskStatus.PAUSED, TaskStatus.STOPPED),
-            "resume_trading": (TaskStatus.PAUSED, TaskStatus.STOPPED, TaskStatus.FAILED),
-            "restart": (
-                TaskStatus.CREATED,
-                TaskStatus.STARTING,
-                TaskStatus.RUNNING,
-                TaskStatus.PAUSED,
-                TaskStatus.STOPPING,
-                TaskStatus.STOPPED,
-                TaskStatus.DRAINING,
-                TaskStatus.IDLE,
-                TaskStatus.COMPLETED,
-                TaskStatus.FAILED,
-            ),
-        }
 
     def start(self, task: BacktestTask | TradingTask) -> BacktestTask | TradingTask:
         self._assert_transition_allowed(
@@ -476,9 +451,9 @@ class TaskLifecycleCommands:
         # execution_id and ExecutionState; the publisher continues from the
         # last processed tick instead of replaying from task.start_time.
         if is_trading:
-            allowed_statuses = self._allowed_status_by_command["resume_trading"]
+            allowed_statuses = allowed_statuses_for_command("resume_trading")
         else:
-            allowed_statuses = self._allowed_status_by_command["resume_backtest"]
+            allowed_statuses = allowed_statuses_for_command("resume_backtest")
 
         with transaction.atomic():
             locked_task = model_class.objects.select_for_update().get(pk=task.pk)
@@ -776,7 +751,7 @@ class TaskLifecycleCommands:
         task_status: TaskStatus,
         message: str,
     ) -> None:
-        allowed = self._allowed_status_by_command.get(command, ())
+        allowed = allowed_statuses_for_command(command)
         if not allowed or task_status in allowed:
             return
         from apps.trading.tasks.service import TaskValidationError

@@ -334,7 +334,8 @@ class TestSaveState:
     """Tests for TaskExecutor.save_state."""
 
     @patch("apps.trading.tasks.executor.EventHandler")
-    def test_save_state_calls_save(self, mock_handler):
+    @patch("apps.trading.tasks.executor.ExecutionState")
+    def test_save_state_calls_optimistic_update(self, mock_es, mock_handler):
         from apps.trading.models import BacktestTask
         from apps.trading.tasks.executor import TaskExecutor
 
@@ -357,22 +358,19 @@ class TestSaveState:
         state.ticks_processed = 100
         state.last_tick_timestamp = None
         state.current_balance = Decimal("10000")
+        state.resume_cursor_timestamp = None
+        state.last_tick_price = None
+        state.last_tick_bid = None
+        state.last_tick_ask = None
+        state.pk = uuid4()
+        state.state_version = 3
+
+        mock_es.objects.filter.return_value.update.return_value = 1
 
         executor.save_state(state)
 
-        state.save.assert_called_once_with(
-            update_fields=[
-                "strategy_state",
-                "current_balance",
-                "ticks_processed",
-                "last_tick_timestamp",
-                "last_tick_price",
-                "last_tick_bid",
-                "last_tick_ask",
-                "updated_at",
-            ]
-        )
-        state.refresh_from_db.assert_not_called()
+        mock_es.objects.filter.assert_called_once_with(pk=state.pk, state_version=3)
+        assert state.state_version == 4
 
 
 class TestSaveEvents:

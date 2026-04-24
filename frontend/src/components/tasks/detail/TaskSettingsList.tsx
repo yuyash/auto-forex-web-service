@@ -3,6 +3,7 @@ import {
   formatSettingValue,
   type TaskSettingValue,
 } from './taskSettingsFormat';
+import { spacingTokens, typographyTokens } from '../../../theme/density';
 
 export type TaskSettingDefinition<T extends Record<string, unknown>> = {
   key: keyof T & string;
@@ -27,7 +28,7 @@ export function TaskSettingsList<T extends Record<string, unknown>>({
 
   return (
     <Box>
-      <Typography variant="subtitle1" gutterBottom>
+      <Typography variant={typographyTokens.subsectionTitle} gutterBottom>
         {title}
       </Typography>
       <Box
@@ -38,18 +39,21 @@ export function TaskSettingsList<T extends Record<string, unknown>>({
             sm: 'repeat(2, minmax(0, 1fr))',
             lg: 'repeat(3, minmax(0, 1fr))',
           },
-          gap: 1.5,
+          gap: spacingTokens.sm,
         }}
       >
         {definitions.map((definition) => {
           const value = source[definition.key] ?? task[definition.key];
           return (
             <Box key={definition.key} sx={{ minWidth: 0 }}>
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant={typographyTokens.caption}
+                color="text.secondary"
+              >
                 {definition.label}
               </Typography>
               <Typography
-                variant="body2"
+                variant={typographyTokens.body}
                 sx={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}
               >
                 {definition.format

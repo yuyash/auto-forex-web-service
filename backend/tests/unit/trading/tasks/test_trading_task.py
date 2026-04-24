@@ -40,6 +40,26 @@ class TestRunTradingTask:
         run_trading_task.__wrapped__(task.pk)
         mock_exec.assert_not_called()
 
+    @patch("apps.trading.tasks.trading.TaskLoggingSession")
+    @patch("apps.trading.tasks.trading.execute_trading")
+    @patch("apps.trading.tasks.trading.TradingTask")
+    def test_skips_stale_redelivery_when_idempotency_key_mismatches(
+        self, mock_model, mock_exec, mock_logging
+    ):
+        from apps.trading.tasks.trading import run_trading_task
+
+        task = MagicMock(
+            pk=uuid4(),
+            status=TaskStatus.STARTING,
+            instrument="EUR_USD",
+            dispatch_idempotency_key=uuid4(),
+        )
+        mock_model.objects.get.return_value = task
+        mock_model.DoesNotExist = _DoesNotExist
+
+        run_trading_task.__wrapped__(task.pk, str(uuid4()))
+        mock_exec.assert_not_called()
+
     @patch("apps.trading.tasks.trading.finalize_task_terminal_lifecycle")
     @patch("apps.trading.tasks.trading.publish_task_lifecycle_event")
     @patch("apps.trading.tasks.trading.TaskLoggingSession")

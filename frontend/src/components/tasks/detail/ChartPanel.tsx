@@ -1,0 +1,67 @@
+import { Box, Paper, Typography } from '@mui/material';
+import type { ReactNode } from 'react';
+
+interface ChartPanelProps {
+  title: string;
+  valueLabel?: string;
+  height: number;
+  headerPrefix?: ReactNode;
+  children: ReactNode;
+}
+
+export function ChartPanel({
+  title,
+  valueLabel,
+  height,
+  headerPrefix,
+  children,
+}: ChartPanelProps) {
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        p: { xs: 1, sm: 1.25 },
+        height,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        width: '100%',
+        mx: 'auto',
+      }}
+    >
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          mb: 0.5,
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          {headerPrefix}
+          <Typography variant="subtitle2">{title}</Typography>
+        </Box>
+        {valueLabel ? (
+          <Typography variant="body2" color="text.secondary">
+            {valueLabel}
+          </Typography>
+        ) : null}
+      </Box>
+      <Box
+        sx={{
+          flex: 1,
+          minWidth: 0,
+          width: '100%',
+          display: 'flex',
+          justifyContent: 'center',
+          '& .MuiCharts-root': {
+            width: '100%',
+          },
+        }}
+      >
+        {children}
+      </Box>
+    </Paper>
+  );
+}

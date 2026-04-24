@@ -86,6 +86,7 @@ class MetricsAggregator:
             return 0
 
         from apps.trading.models.metrics import Metrics
+        from apps.trading.models.metrics import ExecutionMetricAggregate
 
         sorted_keys = sorted(self._buckets)
 
@@ -111,6 +112,31 @@ class MetricsAggregator:
 
         created = Metrics.objects.bulk_create(objs, ignore_conflicts=True)
         count = len(created)
+
+        if keys_to_flush:
+            latest_key = keys_to_flush[-1]
+            latest_snapshot = self._buckets[latest_key]
+            aggregate, _ = ExecutionMetricAggregate.objects.get_or_create(
+                task_type=self.task_type,
+                task_id=self.task_id,
+                execution_id=self.execution_id,
+                defaults={
+                    "latest_timestamp": latest_key,
+                    "latest_metrics": latest_snapshot,
+                    "sample_count": 0,
+                },
+            )
+            aggregate.latest_timestamp = latest_key
+            aggregate.latest_metrics = latest_snapshot
+            aggregate.sample_count = int(aggregate.sample_count) + len(keys_to_flush)
+            aggregate.save(
+                update_fields=[
+                    "latest_timestamp",
+                    "latest_metrics",
+                    "sample_count",
+                    "updated_at",
+                ]
+            )
 
         logger.debug(
             "MetricsAggregator flushed %d/%d buckets (final=%s) for task %s",

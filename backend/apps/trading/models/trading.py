@@ -3,6 +3,7 @@
 from datetime import timedelta
 from decimal import Decimal
 from typing import Any
+from uuid import uuid4
 
 from django.db import models
 
@@ -105,6 +106,14 @@ class TradingTask(UUIDModel):
         blank=True,
         db_index=True,
         help_text="Celery task_id for the current worker invocation",
+    )
+    dispatch_idempotency_key = models.UUIDField(
+        default=uuid4,
+        db_index=True,
+        help_text=(
+            "Idempotency key rotated for each dispatch. "
+            "Workers skip stale redeliveries with mismatched keys."
+        ),
     )
 
     # Execution State

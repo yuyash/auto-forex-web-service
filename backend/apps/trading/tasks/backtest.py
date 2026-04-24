@@ -139,7 +139,9 @@ def _purge_stale_task_streams(request_id: str, *, keep_execution_id: str | None 
     reject_on_worker_lost=True,
     track_started=True,
 )
-def run_backtest_task(self: Any, task_id: UUID) -> None:
+def run_backtest_task(
+    self: Any, task_id: UUID, dispatch_idempotency_key: str | None = None
+) -> None:
     """Celery task wrapper for running backtest tasks."""
     task = None
     logging_session: TaskLoggingSession | None = None
@@ -154,6 +156,17 @@ def run_backtest_task(self: Any, task_id: UUID) -> None:
         task = BacktestTask.objects.get(pk=task_id)
         logging_session = TaskLoggingSession(task)
         logging_session.start()
+
+        if dispatch_idempotency_key and str(task.dispatch_idempotency_key) != str(
+            dispatch_idempotency_key
+        ):
+            logger.warning(
+                "SKIPPING stale redelivery - task_id=%s, expected_key=%s, received_key=%s",
+                task_id,
+                task.dispatch_idempotency_key,
+                dispatch_idempotency_key,
+            )
+            return
 
         logger.info(
             "Task loaded from DB - task_id=%s, status=%s, instrument=%s, "
@@ -348,10 +361,13 @@ def _backtest_resume_start_time(task: BacktestTask):
         .only("last_tick_timestamp", "ticks_processed")
         .first()
     )
-    if not state or not state.last_tick_timestamp or state.ticks_processed <= 0:
+    if not state or state.ticks_processed <= 0:
         return task.start_time
 
-    resume_start = state.last_tick_timestamp + timedelta(microseconds=1)
+    resume_cursor = state.resume_cursor_timestamp or state.last_tick_timestamp
+    if not resume_cursor:
+        return task.start_time
+    resume_start = resume_cursor + timedelta(microseconds=1)
     if resume_start >= task.end_time:
         return task.end_time
     if resume_start < task.start_time:

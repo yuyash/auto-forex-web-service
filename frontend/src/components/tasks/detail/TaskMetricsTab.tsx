@@ -5,22 +5,16 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react';
-import {
-  Box,
-  Grid,
-  Paper,
-  Typography,
-  CircularProgress,
-  Alert,
-} from '@mui/material';
+import { Box, Grid, Alert, CircularProgress, Typography } from '@mui/material';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { LineChart } from '@mui/x-charts/LineChart';
 import { useTranslation } from 'react-i18next';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
 import { MetricsToolbar } from './MetricsToolbar';
 import { MetricsOhlcChart } from './MetricsOhlcChart';
+import { ChartPanel } from './ChartPanel';
 import { useMetricsOrder } from '../../../hooks/useMetricsOrder';
-import { layoutTokens } from '../../../theme/density';
+import { layoutTokens, spacingTokens } from '../../../theme/density';
 
 interface TaskMetricsTabProps {
   data: MetricPoint[];
@@ -455,6 +449,7 @@ export function TaskMetricsTab({
                 sx={{
                   opacity: dragKey === OHLC_KEY ? 0.4 : 1,
                   cursor: 'grab',
+                  minWidth: 0,
                 }}
               >
                 <MetricsOhlcChart
@@ -491,122 +486,83 @@ export function TaskMetricsTab({
               sx={{
                 opacity: dragKey === m.key ? 0.4 : 1,
                 cursor: 'grab',
+                minWidth: 0,
               }}
             >
-              <Paper
-                variant="outlined"
-                sx={{
-                  p: { xs: 1, sm: 1.25 },
-                  height: CHART_CARD_HEIGHT,
-                  overflow: 'hidden',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  minWidth: 0,
-                  width: '100%',
-                }}
-              >
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'baseline',
-                    mb: 0.5,
-                  }}
-                >
-                  <Box
+              <ChartPanel
+                title={t(`metrics.${m.key}`, {
+                  defaultValue: m.key.replace(/_/g, ' '),
+                })}
+                valueLabel={formatValue(lastVal, m.format)}
+                height={CHART_CARD_HEIGHT}
+                headerPrefix={
+                  <DragIndicatorIcon
                     sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 0.5,
-                    }}
-                  >
-                    <DragIndicatorIcon
-                      sx={{
-                        fontSize: 16,
-                        color: 'text.disabled',
-                        cursor: 'grab',
-                      }}
-                    />
-                    <Typography variant="subtitle2">
-                      {t(`metrics.${m.key}`, {
-                        defaultValue: m.key.replace(/_/g, ' '),
-                      })}
-                    </Typography>
-                  </Box>
-                  <Typography variant="body2" color="text.secondary">
-                    {formatValue(lastVal, m.format)}
-                  </Typography>
-                </Box>
-                <Box
-                  sx={{
-                    flex: 1,
-                    minWidth: 0,
-                    width: '100%',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    '& .MuiCharts-root': {
-                      width: '100%',
-                    },
-                  }}
-                >
-                  <LineChart
-                    xAxis={[
-                      {
-                        data: cd.x,
-                        scaleType: 'time' as const,
-                        tickNumber: xTickCount,
-                        tickLabelStyle: { fontSize: 10 },
-                        valueFormatter: (
-                          v: Date,
-                          context: { location: string }
-                        ) => {
-                          if (context.location === 'tooltip') {
-                            return formatTooltipDate(v, effectiveInterval);
-                          }
-                          return formatTickLabel(v, rangeMs, effectiveInterval);
-                        },
-                      },
-                    ]}
-                    yAxis={[
-                      {
-                        position: 'right',
-                        width: metricYAxisWidth,
-                        tickNumber: yTickCount,
-                        valueFormatter: (v: number | null) =>
-                          v != null ? formatYLabel(v, m.format) : '',
-                      },
-                    ]}
-                    series={[
-                      {
-                        data: cd.y,
-                        color: m.color,
-                        showMark: false,
-                        valueFormatter: (v: number | null) =>
-                          v != null ? formatValue(v, m.format) : '',
-                      },
-                    ]}
-                    axisHighlight={{ x: 'line', y: 'none' }}
-                    grid={{ vertical: true, horizontal: true }}
-                    height={200}
-                    margin={{
-                      left: 8,
-                      right: metricYAxisWidth,
-                      top: 8,
-                      bottom: 36,
-                    }}
-                    hideLegend
-                    slotProps={{
-                      axisTickLabel: {
-                        style: { fontSize: 10 },
-                      },
-                    }}
-                    sx={{
-                      width: '100%',
-                      minWidth: 0,
+                      fontSize: 16,
+                      color: 'text.disabled',
+                      cursor: 'grab',
+                      mr: spacingTokens.xxs,
                     }}
                   />
-                </Box>
-              </Paper>
+                }
+              >
+                <LineChart
+                  xAxis={[
+                    {
+                      data: cd.x,
+                      scaleType: 'time' as const,
+                      tickNumber: xTickCount,
+                      tickLabelStyle: { fontSize: 10 },
+                      valueFormatter: (
+                        v: Date,
+                        context: { location: string }
+                      ) => {
+                        if (context.location === 'tooltip') {
+                          return formatTooltipDate(v, effectiveInterval);
+                        }
+                        return formatTickLabel(v, rangeMs, effectiveInterval);
+                      },
+                    },
+                  ]}
+                  yAxis={[
+                    {
+                      position: 'right',
+                      width: metricYAxisWidth,
+                      tickNumber: yTickCount,
+                      valueFormatter: (v: number | null) =>
+                        v != null ? formatYLabel(v, m.format) : '',
+                    },
+                  ]}
+                  series={[
+                    {
+                      data: cd.y,
+                      color: m.color,
+                      showMark: false,
+                      valueFormatter: (v: number | null) =>
+                        v != null ? formatValue(v, m.format) : '',
+                    },
+                  ]}
+                  axisHighlight={{ x: 'line', y: 'none' }}
+                  grid={{ vertical: true, horizontal: true }}
+                  height={200}
+                  margin={{
+                    left: 8,
+                    right: metricYAxisWidth,
+                    top: 8,
+                    bottom: 32,
+                  }}
+                  hideLegend
+                  slotProps={{
+                    axisTickLabel: {
+                      style: { fontSize: 10 },
+                    },
+                  }}
+                  sx={{
+                    width: '100%',
+                    minWidth: 0,
+                  }}
+                />
+              </ChartPanel>
             </Grid>
           );
         })}

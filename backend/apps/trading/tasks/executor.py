@@ -381,6 +381,7 @@ class TaskExecutor:
             current_balance=self.initial_balance,
             ticks_processed=0,
             last_tick_timestamp=initial_timestamp,
+            resume_cursor_timestamp=initial_timestamp,
         )
         return state, False
 
@@ -398,21 +399,32 @@ class TaskExecutor:
             f"current_balance={state.current_balance}"
         )
 
-        # Hot path optimisation: only persist fields that are updated during
-        # execution. This avoids issuing full-row UPDATE statements on every
-        # batch flush while keeping ``updated_at`` accurate.
-        state.save(
-            update_fields=[
-                "strategy_state",
-                "current_balance",
-                "ticks_processed",
-                "last_tick_timestamp",
-                "last_tick_price",
-                "last_tick_bid",
-                "last_tick_ask",
-                "updated_at",
-            ]
-        )
+        # Hot path optimization with optimistic locking: persist only touched
+        # columns and atomically bump ``state_version`` to detect concurrent
+        # writers for the same execution row.
+        from django.db.models import F
+
+        update_fields: dict[str, object] = {
+            "strategy_state": state.strategy_state,
+            "current_balance": state.current_balance,
+            "ticks_processed": state.ticks_processed,
+            "last_tick_timestamp": state.last_tick_timestamp,
+            "resume_cursor_timestamp": (state.resume_cursor_timestamp or state.last_tick_timestamp),
+            "last_tick_price": state.last_tick_price,
+            "last_tick_bid": state.last_tick_bid,
+            "last_tick_ask": state.last_tick_ask,
+            "updated_at": dj_timezone.now(),
+            "state_version": F("state_version") + 1,
+        }
+        rows = ExecutionState.objects.filter(
+            pk=state.pk,
+            state_version=state.state_version,
+        ).update(**update_fields)
+        if rows != 1:
+            raise RuntimeError(
+                "ExecutionState optimistic lock conflict: stale state_version detected"
+            )
+        state.state_version += 1
 
     def _flush_metrics(self, state: ExecutionState) -> None:
         """Flush completed minute-level metric buckets to the database."""
@@ -595,6 +607,7 @@ class TaskExecutor:
         # allocates a new execution_id and the task is expected to replay
         # from ``task.start_time``, so there is nothing to restore.
         if resumed:
+            self._validate_resume_metrics_continuity(state=state)
             self._restore_metric_counters(state=state)
 
         logger.info("Engine started, events_count=%d", len(result.events))
@@ -1176,6 +1189,7 @@ class TaskExecutor:
             if self.task.status == TaskStatus.IDLE:
                 loop.state.ticks_processed += 1
                 loop.state.last_tick_timestamp = tick_ts
+                loop.state.resume_cursor_timestamp = tick_ts
                 loop.state.last_tick_price = tick.mid
                 loop.state.last_tick_bid = tick.bid
                 loop.state.last_tick_ask = tick.ask
@@ -1208,6 +1222,7 @@ class TaskExecutor:
         tick_timestamp = self._coerce_tick_timestamp(tick.timestamp)
         loop.state.ticks_processed += 1
         loop.state.last_tick_timestamp = tick_timestamp
+        loop.state.resume_cursor_timestamp = tick_timestamp
         loop.state.last_tick_price = tick.mid
         loop.state.last_tick_bid = tick.bid
         loop.state.last_tick_ask = tick.ask
@@ -1407,6 +1422,64 @@ class TaskExecutor:
             winning_trades=agg["winning"] or 0,
             losing_trades=agg["losing"] or 0,
         )
+
+    def _validate_resume_metrics_continuity(self, *, state: ExecutionState) -> None:
+        """Warn when resumed state deviates from the latest persisted metrics snapshot."""
+        from apps.trading.models import ExecutionMetricAggregate
+
+        try:
+            aggregate = (
+                ExecutionMetricAggregate.objects.filter(
+                    task_type=self.task_type.value,
+                    task_id=self.task.pk,
+                    execution_id=self.task.execution_id,
+                )
+                .only("latest_metrics", "continuity_warnings")
+                .first()
+            )
+        except Exception:  # pragma: no cover - best-effort in non-DB unit tests
+            logger.debug(
+                "Skipping resume continuity check (aggregate lookup unavailable)",
+                exc_info=True,
+            )
+            return
+        if not aggregate or not isinstance(aggregate.latest_metrics, dict):
+            return
+
+        warnings: list[dict[str, object]] = []
+        state_metrics = (
+            state.strategy_state.get("metrics")
+            if isinstance(state.strategy_state, dict)
+            and isinstance(state.strategy_state.get("metrics"), dict)
+            else {}
+        )
+        prev_balance = self._to_decimal_metric(aggregate.latest_metrics.get("current_balance"))
+        resumed_balance = self._to_decimal_metric(state_metrics.get("current_balance"))
+        if prev_balance > 0 and resumed_balance > 0:
+            delta_ratio = abs((resumed_balance - prev_balance) / prev_balance)
+            if delta_ratio >= Decimal("0.10"):
+                warning = {
+                    "kind": "resume_balance_jump",
+                    "previous_balance": str(prev_balance),
+                    "resumed_balance": str(resumed_balance),
+                    "delta_ratio": str(delta_ratio),
+                }
+                warnings.append(warning)
+                logger.warning(
+                    "Resume continuity warning - task_id=%s, execution_id=%s, payload=%s",
+                    self.task.pk,
+                    self.task.execution_id,
+                    warning,
+                )
+
+        if warnings:
+            existing = (
+                aggregate.continuity_warnings
+                if isinstance(aggregate.continuity_warnings, list)
+                else []
+            )
+            aggregate.continuity_warnings = [*existing, *warnings][-20:]
+            aggregate.save(update_fields=["continuity_warnings", "updated_at"])
 
     @staticmethod
     def _to_decimal_metric(value: object) -> Decimal:
