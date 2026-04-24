@@ -38,7 +38,7 @@ import {
   type TaskPosition,
 } from '../../../hooks/useTaskPositions';
 import { useTaskSummary } from '../../../hooks/useTaskSummary';
-import { TaskType } from '../../../types/common';
+import type { TaskType } from '../../../types/common';
 import { useAuth } from '../../../contexts/AuthContext';
 import { PositionLifecycleDialog } from './PositionLifecycleDialog';
 import { ColumnConfigDialog } from '../../common/ColumnConfigDialog';

@@ -1,4 +1,4 @@
-import { Page, Locator } from '@playwright/test';
+import type { Page, Locator } from '@playwright/test';
 
 /**
  * Table helper for common table operations (events, logs, trades)

@@ -6,7 +6,7 @@
  * cycles only new records are fetched and merged into the local cache.
  */
 
-import { TaskType } from '../types/common';
+import type { TaskType } from '../types/common';
 import { toIncrementalCollectionState } from './useTaskCollections';
 import { useIncrementalTaskResource } from './useIncrementalTaskResource';
 

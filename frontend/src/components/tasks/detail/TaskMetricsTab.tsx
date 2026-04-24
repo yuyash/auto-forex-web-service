@@ -20,6 +20,7 @@ import type { MetricPoint } from '../../../utils/fetchMetrics';
 import { MetricsToolbar } from './MetricsToolbar';
 import { MetricsOhlcChart } from './MetricsOhlcChart';
 import { useMetricsOrder } from '../../../hooks/useMetricsOrder';
+import { layoutTokens } from '../../../theme/theme';
 
 interface TaskMetricsTabProps {
   data: MetricPoint[];
@@ -412,7 +413,13 @@ export function TaskMetricsTab({
   };
 
   return (
-    <Box sx={{ p: { xs: 1, sm: 2 } }}>
+    <Box
+      sx={{
+        px: layoutTokens.pagePadding,
+        py: { xs: 1, sm: 1.5 },
+        minWidth: 0,
+      }}
+    >
       <MetricsToolbar
         interval={interval}
         since={since}
@@ -423,14 +430,20 @@ export function TaskMetricsTab({
         onRefresh={onRefresh}
         isLoading={isLoading}
       />
-      <Grid container spacing={2}>
+      <Grid
+        container
+        spacing={layoutTokens.sectionGap}
+        justifyContent="center"
+        alignItems="stretch"
+        sx={{ mt: 0, minWidth: 0 }}
+      >
         {orderedKeys.map((key) => {
           // OHLC chart
           if (key === OHLC_KEY) {
             return (
               <Grid
                 key={OHLC_KEY}
-                size={{ xs: 12, md: 6 }}
+                size={{ xs: 12, lg: 6, xl: 4 }}
                 draggable
                 onDragStart={(e) => handleDragStart(e, OHLC_KEY)}
                 onDragOver={handleDragOver}
@@ -466,7 +479,7 @@ export function TaskMetricsTab({
           return (
             <Grid
               key={m.key}
-              size={{ xs: 12, md: 6 }}
+              size={{ xs: 12, lg: 6, xl: 4 }}
               draggable
               onDragStart={(e) => handleDragStart(e, m.key)}
               onDragOver={handleDragOver}
@@ -479,7 +492,15 @@ export function TaskMetricsTab({
             >
               <Paper
                 variant="outlined"
-                sx={{ p: 1.5, height: CHART_CARD_HEIGHT, overflow: 'hidden' }}
+                sx={{
+                  p: { xs: 1, sm: 1.25 },
+                  height: CHART_CARD_HEIGHT,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minWidth: 0,
+                  width: '100%',
+                }}
               >
                 <Box
                   sx={{
@@ -513,58 +534,75 @@ export function TaskMetricsTab({
                     {formatValue(lastVal, m.format)}
                   </Typography>
                 </Box>
-                <LineChart
-                  xAxis={[
-                    {
-                      data: cd.x,
-                      scaleType: 'time' as const,
-                      tickNumber: xTickCount,
-                      tickLabelStyle: { fontSize: 10 },
-                      valueFormatter: (
-                        v: Date,
-                        context: { location: string }
-                      ) => {
-                        if (context.location === 'tooltip') {
-                          return formatTooltipDate(v, effectiveInterval);
-                        }
-                        return formatTickLabel(v, rangeMs, effectiveInterval);
+                <Box
+                  sx={{
+                    flex: 1,
+                    minWidth: 0,
+                    width: '100%',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    '& .MuiCharts-root': {
+                      width: '100%',
+                    },
+                  }}
+                >
+                  <LineChart
+                    xAxis={[
+                      {
+                        data: cd.x,
+                        scaleType: 'time' as const,
+                        tickNumber: xTickCount,
+                        tickLabelStyle: { fontSize: 10 },
+                        valueFormatter: (
+                          v: Date,
+                          context: { location: string }
+                        ) => {
+                          if (context.location === 'tooltip') {
+                            return formatTooltipDate(v, effectiveInterval);
+                          }
+                          return formatTickLabel(v, rangeMs, effectiveInterval);
+                        },
                       },
-                    },
-                  ]}
-                  yAxis={[
-                    {
-                      position: 'right',
-                      width: metricYAxisWidth,
-                      tickNumber: yTickCount,
-                      valueFormatter: (v: number | null) =>
-                        v != null ? formatYLabel(v, m.format) : '',
-                    },
-                  ]}
-                  series={[
-                    {
-                      data: cd.y,
-                      color: m.color,
-                      showMark: false,
-                      valueFormatter: (v: number | null) =>
-                        v != null ? formatValue(v, m.format) : '',
-                    },
-                  ]}
-                  axisHighlight={{ x: 'line', y: 'none' }}
-                  grid={{ vertical: true, horizontal: true }}
-                  height={200}
-                  margin={{
-                    left: 8,
-                    right: metricYAxisWidth,
-                    top: 8,
-                    bottom: 36,
-                  }}
-                  hideLegend
-                  slotProps={{
-                    axisTickLabel: {
-                      style: { fontSize: 10 },
-                    },
-                  }}
-                />
+                    ]}
+                    yAxis={[
+                      {
+                        position: 'right',
+                        width: metricYAxisWidth,
+                        tickNumber: yTickCount,
+                        valueFormatter: (v: number | null) =>
+                          v != null ? formatYLabel(v, m.format) : '',
+                      },
+                    ]}
+                    series={[
+                      {
+                        data: cd.y,
+                        color: m.color,
+                        showMark: false,
+                        valueFormatter: (v: number | null) =>
+                          v != null ? formatValue(v, m.format) : '',
+                      },
+                    ]}
+                    axisHighlight={{ x: 'line', y: 'none' }}
+                    grid={{ vertical: true, horizontal: true }}
+                    height={200}
+                    margin={{
+                      left: 8,
+                      right: metricYAxisWidth,
+                      top: 8,
+                      bottom: 36,
+                    }}
+                    hideLegend
+                    slotProps={{
+                      axisTickLabel: {
+                        style: { fontSize: 10 },
+                      },
+                    }}
+                    sx={{
+                      width: '100%',
+                      minWidth: 0,
+                    }}
+                  />
+                </Box>
               </Paper>
             </Grid>
           );

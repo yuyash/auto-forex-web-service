@@ -1,5 +1,5 @@
 // Backtest Task types
-import { TaskStatus, DataSource } from './common';
+import type { TaskStatus, DataSource } from './common';
 import type { ExecutionSummary } from './execution';
 
 export interface BacktestTask {

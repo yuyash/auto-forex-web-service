@@ -1,5 +1,5 @@
 // Task Execution types
-import { TaskStatus, TaskType } from './common';
+import type { TaskStatus, TaskType } from './common';
 
 export interface ExecutionLog {
   timestamp: string;

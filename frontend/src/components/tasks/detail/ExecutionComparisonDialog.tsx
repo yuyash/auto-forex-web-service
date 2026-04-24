@@ -36,7 +36,7 @@ import {
 import { LineChart } from '@mui/x-charts/LineChart';
 import React from 'react';
 import type { TaskExecution } from '../../../types/execution';
-import { TaskType } from '../../../types/common';
+import type { TaskType } from '../../../types/common';
 import {
   fetchPaginatedMetrics,
   type MetricPoint,

@@ -10,7 +10,7 @@
  * generated OpenAPI client being regenerated.
  */
 
-import { TaskType } from '../types/common';
+import type { TaskType } from '../types/common';
 import { toIncrementalCollectionState } from './useTaskCollections';
 import { useIncrementalTaskResource } from './useIncrementalTaskResource';
 

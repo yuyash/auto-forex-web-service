@@ -11,7 +11,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { TaskType } from '../types/common';
+import type { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
 import { logger } from '../utils/logger';
 import { usePollingPolicy } from './usePollingPolicy';

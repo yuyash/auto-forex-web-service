@@ -1,6 +1,6 @@
 import type { UseQueryOptions } from '@tanstack/react-query';
 import { queryKeys } from '../config/reactQuery';
-import { TaskType } from '../types/common';
+import type { TaskType } from '../types/common';
 import { handleAuthErrorStatus } from '../utils/authEvents';
 import {
   fetchTaskResourceObject,

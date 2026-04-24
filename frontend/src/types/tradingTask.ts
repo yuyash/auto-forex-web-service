@@ -1,5 +1,5 @@
 // Trading Task types
-import { TaskStatus } from './common';
+import type { TaskStatus } from './common';
 import type { ExecutionSummary } from './execution';
 
 export interface TradingTask {

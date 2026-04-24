@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { TaskStatus } from '../types/common';
+import type { TaskStatus } from '../types/common';
 
 const DEFAULT_STATUS_POLL_MS = 5_000;
 const FAST_STATUS_POLL_MS = 1_000;

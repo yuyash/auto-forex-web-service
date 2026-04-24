@@ -67,6 +67,14 @@ const palette = {
   },
 };
 
+export const layoutTokens = {
+  pagePadding: { xs: 1.5, sm: 2, md: 3 },
+  sectionGap: { xs: 1.5, sm: 2 },
+  toolbarGap: 1,
+  chartCardHeight: { xs: 240, sm: 260 },
+  contentMaxWidth: '100%',
+} as const;
+
 // Define typography
 const typography = {
   fontFamily: [
@@ -112,7 +120,7 @@ const typography = {
     lineHeight: 1.6,
   },
   body1: {
-    fontSize: '1rem',
+    fontSize: '0.875rem',
     lineHeight: 1.5,
   },
   body2: {
@@ -149,9 +157,9 @@ const components = {
       root: {
         borderRadius: 4,
         textTransform: 'none' as const,
-        fontSize: '0.8rem',
-        padding: '3px 10px',
-        minHeight: 30,
+        fontSize: '0.8125rem',
+        padding: '4px 10px',
+        minHeight: 32,
         '&:focus-visible': {
           outline: '2px solid',
           outlineColor: palette.primary.main,
@@ -166,7 +174,7 @@ const components = {
     },
     styleOverrides: {
       root: {
-        padding: 4,
+        padding: 5,
         '&:focus-visible': {
           outline: '2px solid',
           outlineColor: palette.primary.main,
@@ -182,11 +190,11 @@ const components = {
     styleOverrides: {
       root: {
         '& .MuiInputBase-input': {
-          fontSize: '0.8rem',
+          fontSize: '0.8125rem',
           padding: '6px 10px',
         },
         '& .MuiInputLabel-root': {
-          fontSize: '0.8rem',
+          fontSize: '0.8125rem',
         },
         '& .MuiOutlinedInput-root': {
           '&:focus-within': {
@@ -214,27 +222,27 @@ const components = {
     },
     styleOverrides: {
       root: {
-        fontSize: '0.8rem',
+        fontSize: '0.8125rem',
       },
     },
   },
   MuiMenuItem: {
     styleOverrides: {
       root: {
-        fontSize: '0.75rem',
-        minHeight: 28,
-        paddingTop: 2,
-        paddingBottom: 2,
+        fontSize: '0.8125rem',
+        minHeight: 32,
+        paddingTop: 4,
+        paddingBottom: 4,
       },
     },
   },
   MuiListItemText: {
     styleOverrides: {
       primary: {
-        fontSize: '0.75rem',
+        fontSize: '0.8125rem',
       },
       secondary: {
-        fontSize: '0.65rem',
+        fontSize: '0.75rem',
       },
     },
   },
@@ -251,7 +259,7 @@ const components = {
   MuiOutlinedInput: {
     styleOverrides: {
       root: {
-        fontSize: '0.8rem',
+        fontSize: '0.8125rem',
       },
       input: {
         padding: '6px 10px',
@@ -281,7 +289,7 @@ const components = {
   MuiFormControlLabel: {
     styleOverrides: {
       label: {
-        fontSize: '0.75rem',
+        fontSize: '0.8125rem',
       },
     },
   },

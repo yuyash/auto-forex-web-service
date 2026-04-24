@@ -27,7 +27,7 @@ import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { useTaskStrategyEvents } from '../../../../hooks/useTaskStrategyEvents';
 import { useTaskTrades } from '../../../../hooks/useTaskTrades';
-import { TaskType } from '../../../../types/common';
+import type { TaskType } from '../../../../types/common';
 import type {
   StrategyCycle,
   CycleTrade,

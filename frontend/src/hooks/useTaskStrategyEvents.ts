@@ -1,6 +1,6 @@
 import { refreshTaskStrategyEvents } from './taskResourceCache';
 import { createTaskStrategyEventsQuery } from './taskResourceQueries';
-import { TaskType } from '../types/common';
+import type { TaskType } from '../types/common';
 import type { StrategyCyclesResponse } from '../types/strategyVisualization';
 import { usePollingPolicy } from './usePollingPolicy';
 import { usePolledTaskResource } from './useTaskCollections';

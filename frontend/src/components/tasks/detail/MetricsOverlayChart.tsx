@@ -29,7 +29,7 @@ import {
   fetchMetrics,
   type MetricPoint,
 } from '../../../utils/fetchMetrics';
-import { TaskType } from '../../../types/common';
+import type { TaskType } from '../../../types/common';
 import { getRetryAfterMsFromError } from '../../../utils/retryAfter';
 
 export interface UseMetricsOverlayOptions {

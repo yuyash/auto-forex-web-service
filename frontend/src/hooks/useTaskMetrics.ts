@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { TaskType } from '../types/common';
+import type { TaskType } from '../types/common';
 import { fetchPaginatedMetrics, type MetricPoint } from '../utils/fetchMetrics';
 
 export interface UseTaskMetricsOptions {

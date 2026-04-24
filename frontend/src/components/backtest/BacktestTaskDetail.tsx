@@ -6,7 +6,7 @@
  *
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { Suspense, useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -61,13 +61,18 @@ import { useOptimisticTaskStatus } from '../../hooks/useOptimisticTaskStatus';
 import { TaskDetailHeader } from '../tasks/detail/TaskDetailHeader';
 import { TaskDetailTabs } from '../tasks/detail/TaskDetailTabs';
 import { TaskStrategyTab } from '../tasks/detail/strategy/TaskStrategyTab';
-import { TaskMetricsTab } from '../tasks/detail/TaskMetricsTab';
 import { BacktestOverviewTab } from './detail/BacktestOverviewTab';
 import { useTaskMetrics } from '../../hooks/useTaskMetrics';
 import { computeAutoInterval } from '../../utils/autoGranularity';
 import { useToast } from '../common';
 import { formatTaskActionError } from '../../utils/taskActionError';
 import { useTaskExecution } from '../../hooks/useTaskExecutions';
+
+const TaskMetricsTab = React.lazy(() =>
+  import('../tasks/detail/TaskMetricsTab').then((module) => ({
+    default: module.TaskMetricsTab,
+  }))
+);
 
 export const BacktestTaskDetail: React.FC = () => {
   const { t } = useTranslation(['backtest', 'common']);
@@ -556,26 +561,36 @@ export const BacktestTaskDetail: React.FC = () => {
             value={activeTabIndex}
             index={visibleTabIds.indexOf('metrics')}
           >
-            <TaskMetricsTab
-              data={metricsResult.data}
-              isLoading={metricsResult.isLoading}
-              error={metricsResult.error}
-              currency={s.execution.accountCurrency || 'USD'}
-              interval={metricsInterval}
-              since={metricsSince}
-              until={metricsUntil}
-              onIntervalChange={setMetricsInterval}
-              onSinceChange={setMetricsSince}
-              onUntilChange={setMetricsUntil}
-              onRefresh={metricsResult.refresh}
-              instrument={detailTask.instrument}
-              startTime={task?.start_time}
-              endTime={task?.end_time}
-              currentTickTimestamp={polledTick?.timestamp}
-              currentTickPrice={
-                polledTick?.price != null ? parseFloat(polledTick.price) : null
+            <Suspense
+              fallback={
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                  <CircularProgress size={24} />
+                </Box>
               }
-            />
+            >
+              <TaskMetricsTab
+                data={metricsResult.data}
+                isLoading={metricsResult.isLoading}
+                error={metricsResult.error}
+                currency={s.execution.accountCurrency || 'USD'}
+                interval={metricsInterval}
+                since={metricsSince}
+                until={metricsUntil}
+                onIntervalChange={setMetricsInterval}
+                onSinceChange={setMetricsSince}
+                onUntilChange={setMetricsUntil}
+                onRefresh={metricsResult.refresh}
+                instrument={detailTask.instrument}
+                startTime={task?.start_time}
+                endTime={task?.end_time}
+                currentTickTimestamp={polledTick?.timestamp}
+                currentTickPrice={
+                  polledTick?.price != null
+                    ? parseFloat(polledTick.price)
+                    : null
+                }
+              />
+            </Suspense>
           </LazyTabPanel>
         )}
       </Paper>

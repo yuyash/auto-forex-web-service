@@ -11,7 +11,7 @@
  * Supports optional polling for real-time updates.
  */
 
-import { TaskType } from '../types/common';
+import type { TaskType } from '../types/common';
 import { refreshTaskSummary } from './taskResourceCache';
 import { createTaskSummaryQuery } from './taskResourceQueries';
 import { usePollingPolicy } from './usePollingPolicy';
