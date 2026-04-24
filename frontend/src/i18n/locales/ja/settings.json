@@ -103,6 +103,9 @@
     "invalidPassword": "無効なパスワード",
     "passwordMismatch": "パスワードが一致しません"
   },
+  "actions": {
+    "save": "セーブ"
+  },
   "display": {
     "dateNumberFormat": "日付・数値フォーマット",
     "dateFormat": "日付フォーマット",

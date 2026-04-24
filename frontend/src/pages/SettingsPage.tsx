@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Container, Typography, Box, Tabs, Tab, Paper } from '@mui/material';
+import { Typography, Box, Tabs, Tab, Paper } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Breadcrumbs } from '../components/common';
+import { Breadcrumbs, PageContainer } from '../components/common';
 import {
   GeneralSettings,
   DisplaySettings,
@@ -39,7 +39,7 @@ const SettingsPage = () => {
   };
 
   return (
-    <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
+    <PageContainer sx={{ mt: 4, mb: 4 }}>
       <Breadcrumbs />
       <Box>
         <Typography variant="h4" gutterBottom>
@@ -93,7 +93,7 @@ const SettingsPage = () => {
           </Paper>
         </TabPanel>
       </Box>
-    </Container>
+    </PageContainer>
   );
 };
 

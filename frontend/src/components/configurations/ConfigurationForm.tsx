@@ -26,6 +26,7 @@ import { useStrategies, useStrategyDefaults } from '../../hooks/useStrategies';
 import type { StrategyConfigCreateData } from '../../types/configuration';
 import type { StrategyConfig, ConfigSchema } from '../../types/strategy';
 import { STRATEGY_CONFIG_SCHEMAS } from './strategyConfigSchemas';
+import { isParameterVisible } from '../../utils/strategySchemaDependsOn';
 
 // Validation schema
 const configurationSchema = z.object({
@@ -410,9 +411,14 @@ const ConfigurationForm = ({
 
   const reviewParameters: Array<[string, unknown]> = strategySchema
     ? [
-        ...Object.keys(strategySchema.properties).map(
-          (key) => [key, parameters[key]] as [string, unknown]
-        ),
+        ...Object.entries(strategySchema.properties)
+          .filter(([key]) =>
+            isParameterVisible(key, parameters, strategySchema.properties)
+          )
+          .map(
+            ([key, prop]) =>
+              [key, parameters[key] ?? prop.default] as [string, unknown]
+          ),
         ...Object.entries(parameters).filter(
           ([key]) => !(key in strategySchema.properties)
         ),

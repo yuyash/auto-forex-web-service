@@ -20,8 +20,6 @@ import {
   MenuItem,
   CircularProgress,
   Alert,
-  Container,
-  Tooltip,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -33,7 +31,7 @@ import {
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Breadcrumbs } from '../components/common';
+import { Breadcrumbs, PageContainer } from '../components/common';
 import { useToast } from '../components/common/useToast';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import type { Account, AccountUpsertData } from '../types/strategy';
@@ -359,10 +357,7 @@ export default function OandaAccountsPage() {
   };
 
   return (
-    <Container
-      maxWidth={false}
-      sx={{ mt: { xs: 2, sm: 4 }, mb: 4, px: { xs: 1, sm: 3 } }}
-    >
+    <PageContainer sx={{ mt: { xs: 2, sm: 4 }, mb: 4 }}>
       <Breadcrumbs />
       <Box
         display="flex"
@@ -377,22 +372,21 @@ export default function OandaAccountsPage() {
         >
           {t('settings:accounts.title')}
         </Typography>
-        <Box display="flex" gap={0.5} flexShrink={0}>
-          <Tooltip title={t('common:actions.reload')}>
-            <IconButton
-              onClick={() =>
-                queryClient.invalidateQueries({ queryKey: ['accounts'] })
-              }
-            >
-              <RefreshIcon />
-            </IconButton>
-          </Tooltip>
+        <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, flexWrap: 'wrap' }}>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon />}
+            onClick={() =>
+              queryClient.invalidateQueries({ queryKey: ['accounts'] })
+            }
+          >
+            {t('common:actions.refresh')}
+          </Button>
           <Button
             variant="contained"
             color="primary"
             startIcon={<AddIcon />}
             onClick={handleAddClick}
-            sx={{ whiteSpace: 'nowrap', minWidth: 0, px: { xs: 1.5, sm: 2 } }}
           >
             {t('settings:accounts.addAccount')}
           </Button>
@@ -578,6 +572,6 @@ export default function OandaAccountsPage() {
           setAccountToDelete(null);
         }}
       />
-    </Container>
+    </PageContainer>
   );
 }

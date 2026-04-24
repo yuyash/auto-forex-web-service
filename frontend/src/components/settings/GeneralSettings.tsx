@@ -292,7 +292,11 @@ const GeneralSettings = () => {
             disabled={submitting}
             sx={{ minWidth: 120 }}
           >
-            {submitting ? <CircularProgress size={24} /> : t('common:save')}
+            {submitting ? (
+              <CircularProgress size={24} />
+            ) : (
+              t('settings:actions.save')
+            )}
           </Button>
         </Box>
       </Box>

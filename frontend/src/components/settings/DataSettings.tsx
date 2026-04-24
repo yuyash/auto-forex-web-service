@@ -174,7 +174,7 @@ const DataSettings = () => {
           {t('common:reset')}
         </Button>
         <Button variant="contained" onClick={handleSave} disabled={saving}>
-          {saving ? <CircularProgress size={20} /> : t('common:save')}
+          {saving ? <CircularProgress size={20} /> : t('settings:actions.save')}
         </Button>
       </Box>
     </Box>

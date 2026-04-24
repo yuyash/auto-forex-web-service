@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
 import {
-  Container,
   Typography,
   Box,
   Paper,
@@ -20,7 +19,7 @@ import AddIcon from '@mui/icons-material/Add';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useConfigurations } from '../hooks/useConfigurations';
-import { Breadcrumbs } from '../components/common';
+import { Breadcrumbs, PageContainer } from '../components/common';
 import ConfigurationCard from '../components/configurations/ConfigurationCard';
 import type { SelectChangeEvent } from '@mui/material';
 import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
@@ -86,7 +85,7 @@ const ConfigurationsPage = () => {
   };
 
   return (
-    <Container maxWidth={false} sx={{ mt: 4, mb: 4, px: 3 }}>
+    <PageContainer sx={{ mt: 4, mb: 4 }}>
       <Breadcrumbs />
 
       {/* Header */}
@@ -277,7 +276,7 @@ const ConfigurationsPage = () => {
           )}
         </>
       )}
-    </Container>
+    </PageContainer>
   );
 };
 

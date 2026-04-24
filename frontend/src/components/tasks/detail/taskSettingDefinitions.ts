@@ -1,12 +1,22 @@
 import type { TFunction } from 'i18next';
 import type { TaskSettingDefinition } from './TaskSettingsList';
-import { formatBoolean, formatDateTimeSetting } from './taskSettingsFormat';
+import {
+  formatDateTimeSetting,
+  type TaskSettingValue,
+} from './taskSettingsFormat';
+
+function formatBooleanWithTranslation(t: TFunction) {
+  return (value: TaskSettingValue): string =>
+    value ? t('common:labels.yes') : t('common:labels.no');
+}
 
 export function buildBacktestTaskSettingDefinitions(
   t: TFunction,
   timezone: string,
   language?: string
 ): Array<TaskSettingDefinition<Record<string, unknown>>> {
+  const formatBoolean = formatBooleanWithTranslation(t);
+
   return [
     { key: 'name', label: t('common:labels.name') },
     { key: 'description', label: t('common:labels.description') },
@@ -102,10 +112,6 @@ export function buildBacktestTaskSettingDefinitions(
       key: 'execution_id',
       label: t('common:labels.executionId', 'Execution ID'),
     },
-    {
-      key: 'celery_task_id',
-      label: t('common:labels.celeryTaskId', 'Celery task ID'),
-    },
     { key: 'debug_options', label: t('common:debug.title') },
   ];
 }
@@ -113,6 +119,8 @@ export function buildBacktestTaskSettingDefinitions(
 export function buildTradingTaskSettingDefinitions(
   t: TFunction
 ): Array<TaskSettingDefinition<Record<string, unknown>>> {
+  const formatBoolean = formatBooleanWithTranslation(t);
+
   return [
     { key: 'name', label: t('common:labels.name') },
     { key: 'description', label: t('common:labels.description') },
@@ -179,10 +187,6 @@ export function buildTradingTaskSettingDefinitions(
     {
       key: 'execution_id',
       label: t('common:labels.executionId', 'Execution ID'),
-    },
-    {
-      key: 'celery_task_id',
-      label: t('common:labels.celeryTaskId', 'Celery task ID'),
     },
     { key: 'debug_options', label: t('common:debug.title') },
   ];

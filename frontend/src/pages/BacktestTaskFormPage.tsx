@@ -1,10 +1,14 @@
-import { Container, Box, Typography, Paper } from '@mui/material';
+import { Box, Typography, Paper } from '@mui/material';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { lazy, Suspense } from 'react';
 import type { BacktestTaskUpdateFormProps } from '../components/backtest/BacktestTaskUpdateForm';
 import { useBacktestTask } from '../hooks/useBacktestTasks';
-import { LoadingSpinner, Breadcrumbs } from '../components/common';
+import {
+  LoadingSpinner,
+  Breadcrumbs,
+  PageContainer,
+} from '../components/common';
 
 const BacktestTaskForm = lazy(
   () => import('../components/backtest/BacktestTaskForm')
@@ -59,7 +63,7 @@ export default function BacktestTaskFormPage() {
 
   if (taskId && (isLoading || !task)) {
     return (
-      <Container maxWidth="lg">
+      <PageContainer>
         <Box
           sx={{
             display: 'flex',
@@ -70,12 +74,12 @@ export default function BacktestTaskFormPage() {
         >
           <LoadingSpinner />
         </Box>
-      </Container>
+      </PageContainer>
     );
   }
 
   return (
-    <Container maxWidth="lg">
+    <PageContainer>
       <Box sx={{ py: 4 }}>
         <Breadcrumbs />
 
@@ -99,6 +103,6 @@ export default function BacktestTaskFormPage() {
           </Suspense>
         </Paper>
       </Box>
-    </Container>
+    </PageContainer>
   );
 }

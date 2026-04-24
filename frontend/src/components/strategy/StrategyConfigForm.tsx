@@ -21,11 +21,14 @@ import { useTranslation } from 'react-i18next';
 import type {
   ConfigSchema,
   ConfigProperty,
-  DependsOnCondition,
-  JsonPrimitive,
   StrategyConfig,
 } from '../../types/strategy';
 import { orderConfigFieldTuples } from '../../utils/configFieldOrder';
+import {
+  conditionMatchesValue,
+  isParameterVisible,
+  normalizeComparableValue,
+} from '../../utils/strategySchemaDependsOn';
 
 interface StrategyConfigFormProps {
   configSchema: ConfigSchema;
@@ -38,31 +41,6 @@ interface StrategyConfigFormProps {
 interface ValidationErrors {
   [key: string]: string;
 }
-
-const normalizeComparableValue = (value: unknown): JsonPrimitive => {
-  if (value === null || value === undefined) return null;
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    const lower = trimmed.toLowerCase();
-    if (lower === 'true') return true;
-    if (lower === 'false') return false;
-    if (trimmed === '') return null;
-    const asNumber = Number(trimmed);
-    if (!Number.isNaN(asNumber)) return asNumber;
-    return trimmed;
-  }
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return value;
-  }
-  return String(value);
-};
-
-const conditionMatchesValue = (
-  currentValue: unknown,
-  expected: JsonPrimitive
-): boolean => {
-  return normalizeComparableValue(currentValue) === expected;
-};
 
 const StrategyConfigForm = ({
   configSchema,
@@ -104,28 +82,6 @@ const StrategyConfigForm = ({
     Record<string, string>
   >({});
 
-  const matchesDependsOn = (
-    currentConfig: StrategyConfig,
-    dependsOn: DependsOnCondition
-  ): boolean => {
-    const matchesSingleCondition = (cond: DependsOnCondition): boolean => {
-      const raw = currentConfig[cond.field];
-      if (!cond.values.some((expected) => conditionMatchesValue(raw, expected)))
-        return false;
-      if (!cond.and || cond.and.length === 0) return true;
-      return cond.and.every((andCond) => {
-        const rawCondValue = currentConfig[andCond.field];
-        return andCond.values.some((expected) =>
-          conditionMatchesValue(rawCondValue, expected)
-        );
-      });
-    };
-
-    if (matchesSingleCondition(dependsOn)) return true;
-    if (!dependsOn.or || dependsOn.or.length === 0) return false;
-    return dependsOn.or.some((orCond) => matchesSingleCondition(orCond));
-  };
-
   useEffect(() => {
     if (!configSchema.properties) {
       return;
@@ -139,7 +95,11 @@ const StrategyConfigForm = ({
           return;
         }
 
-        const matches = matchesDependsOn(config, fieldSchema.dependsOn);
+        const matches = isParameterVisible(
+          fieldName,
+          config,
+          configSchema.properties
+        );
 
         if (
           !matches &&
@@ -156,7 +116,7 @@ const StrategyConfigForm = ({
     if (updatedConfig) {
       onChange(updatedConfig);
     }
-  }, [config, configSchema, onChange]);
+  }, [config, configSchema.properties, onChange]);
 
   // Auto-resize linkedCount arrays when the source field value changes.
   useEffect(() => {
@@ -230,6 +190,12 @@ const StrategyConfigForm = ({
     Object.entries(configSchema.properties || {}).forEach(
       ([fieldName, fieldSchema]) => {
         const value = currentConfig[fieldName];
+
+        if (
+          !isParameterVisible(fieldName, currentConfig, configSchema.properties)
+        ) {
+          return;
+        }
 
         // Skip validation if field is empty and not required
         if (
@@ -527,7 +493,7 @@ const StrategyConfigForm = ({
           key={fieldName}
           control={
             <Checkbox
-              checked={Boolean(value)}
+              checked={normalizeComparableValue(value) === true}
               onChange={(e) => handleFieldChange(fieldName, e.target.checked)}
               disabled={disabled}
             />
@@ -909,6 +875,9 @@ const StrategyConfigForm = ({
 
     Object.entries(configSchema.properties || {}).forEach(
       ([fieldName, fieldSchema]) => {
+        if (!isParameterVisible(fieldName, config, configSchema.properties)) {
+          return;
+        }
         const groupName = localized(fieldSchema, 'group') || '';
         if (!groupMap.has(groupName)) {
           groupMap.set(groupName, []);
@@ -923,7 +892,7 @@ const StrategyConfigForm = ({
     });
 
     return groups;
-  }, [configSchema.properties, localized]);
+  }, [config, configSchema.properties, localized]);
 
   if (
     !configSchema.properties ||

@@ -1,15 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Container,
-  Paper,
-  Typography,
-  Box,
-  Alert,
-  CircularProgress,
-} from '@mui/material';
+import { Paper, Typography, Box, Alert, CircularProgress } from '@mui/material';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Breadcrumbs } from '../components/common';
+import { Breadcrumbs, PageContainer } from '../components/common';
 import ConfigurationForm from '../components/configurations/ConfigurationForm';
 import { useConfiguration } from '../hooks/useConfigurations';
 import { useConfigurationMutations } from '../hooks/useConfigurationMutations';
@@ -139,16 +132,16 @@ const ConfigurationFormPage = () => {
 
   if (isEditMode && isLoadingConfig) {
     return (
-      <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
+      <PageContainer sx={{ mt: 4, mb: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
           <CircularProgress />
         </Box>
-      </Container>
+      </PageContainer>
     );
   }
 
   return (
-    <Container maxWidth="md" sx={{ mt: 4, mb: 4, px: 3 }}>
+    <PageContainer sx={{ mt: 4, mb: 4 }}>
       <Breadcrumbs
         customPath={
           fromState?.from
@@ -254,7 +247,7 @@ const ConfigurationFormPage = () => {
           />
         )}
       </Paper>
-    </Container>
+    </PageContainer>
   );
 };
 
