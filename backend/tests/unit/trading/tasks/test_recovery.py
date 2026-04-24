@@ -29,6 +29,7 @@ def _mock_models():
         patch("apps.trading.tasks.recovery.TradingTask") as tt,
         patch("apps.trading.tasks.recovery.CeleryTaskStatus") as cts,
         patch("apps.trading.tasks.recovery.TaskLog") as tl,
+        patch("apps.trading.tasks.recovery.RecoveryAttempt"),
         patch("apps.trading.tasks.service.TaskService") as svc_cls,
         patch("apps.trading.tasks.recovery._active_celery_task_ids", return_value=set()),
     ):

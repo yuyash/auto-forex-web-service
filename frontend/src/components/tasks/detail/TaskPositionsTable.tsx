@@ -58,10 +58,9 @@ import {
 import { formatAppNumber } from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
 import { DateRangeFilter } from '../../common/DateRangeFilter';
+import { useTaskPositionFilters } from './useTaskPositionFilters';
 
 type ViewMode = 'all' | 'byDirection' | 'byStatus';
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const VIEW_MODE_STORAGE_KEY = 'positions_view_mode';
 
@@ -129,31 +128,24 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   // --- Reload state ---
   const [reloading, setReloading] = useState<Record<string, boolean>>({});
 
-  // --- Cycle ID filter ---
-  const [cycleIdFilter, setCycleIdFilter] = useState('');
-  const hasCycleIdFilter = cycleIdFilter.trim().length > 0;
-  const isCycleIdFilterValid =
-    !hasCycleIdFilter || UUID_PATTERN.test(cycleIdFilter.trim());
-  const effectiveCycleId = isCycleIdFilterValid ? cycleIdFilter.trim() : '';
-
-  // --- Position ID filter (prefix match) ---
-  const [positionIdFilter, setPositionIdFilter] = useState('');
-  const hasPositionIdFilter = positionIdFilter.trim().length > 0;
-  // Prefix search: allow 4+ hex characters (including dashes for full UUID).
-  const POSITION_ID_PREFIX_PATTERN = /^[0-9a-f-]{4,}$/i;
-  const isPositionIdFilterValid =
-    !hasPositionIdFilter ||
-    POSITION_ID_PREFIX_PATTERN.test(positionIdFilter.trim());
-  const effectivePositionId =
-    hasPositionIdFilter && isPositionIdFilterValid
-      ? positionIdFilter.trim()
-      : '';
-
-  // --- Date range filter ---
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const rangeFrom = dateFrom ? new Date(dateFrom).toISOString() : undefined;
-  const rangeTo = dateTo ? new Date(dateTo).toISOString() : undefined;
+  const {
+    cycleIdFilter,
+    setCycleIdFilter,
+    hasCycleIdFilter,
+    isCycleIdFilterValid,
+    effectiveCycleId,
+    positionIdFilter,
+    setPositionIdFilter,
+    hasPositionIdFilter,
+    isPositionIdFilterValid,
+    effectivePositionId,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    rangeFrom,
+    rangeTo,
+  } = useTaskPositionFilters();
 
   // --- Selection ---
   const closedLongSel = useTableRowSelection();

@@ -334,8 +334,7 @@ class TestSaveState:
     """Tests for TaskExecutor.save_state."""
 
     @patch("apps.trading.tasks.executor.EventHandler")
-    @patch("apps.trading.tasks.executor.ExecutionState")
-    def test_save_state_calls_optimistic_update(self, mock_es, mock_handler):
+    def test_save_state_delegates_to_state_store(self, mock_handler):
         from apps.trading.models import BacktestTask
         from apps.trading.tasks.executor import TaskExecutor
 
@@ -365,12 +364,11 @@ class TestSaveState:
         state.pk = uuid4()
         state.state_version = 3
 
-        mock_es.objects.filter.return_value.update.return_value = 1
+        executor.state_store = MagicMock()
 
         executor.save_state(state)
 
-        mock_es.objects.filter.assert_called_once_with(pk=state.pk, state_version=3)
-        assert state.state_version == 4
+        executor.state_store.save.assert_called_once_with(state)
 
 
 class TestSaveEvents:

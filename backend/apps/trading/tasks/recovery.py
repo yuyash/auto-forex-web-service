@@ -24,7 +24,7 @@ from django.core.cache import cache
 from django.utils import timezone as dj_timezone
 
 from apps.trading.enums import TaskStatus, TaskType
-from apps.trading.models import BacktestTask, TaskLog, TradingTask
+from apps.trading.models import BacktestTask, RecoveryAttempt, TaskLog, TradingTask
 from apps.trading.models.celery import CeleryTaskStatus
 
 logger = logging.getLogger(__name__)
@@ -304,6 +304,7 @@ def _recover_task(
     source: str,
 ) -> bool:
     """Handle an orphaned task according to its task type."""
+    action = "resume_same_execution" if task_type == TaskType.TRADING else "mark_stopped"
     task_cooldown_key = (
         "trading:orphan-recovery:task:"
         f"{task_type.value}:{task.pk}:{_cache_safe_task_execution_id(task)}"
@@ -318,6 +319,14 @@ def _recover_task(
             source,
             task.pk,
             task_type,
+        )
+        _record_recovery_attempt(
+            task=task,
+            task_type=task_type,
+            source=source,
+            action=action,
+            result="skipped",
+            reason="cooldown",
         )
         return False
 
@@ -354,6 +363,14 @@ def _recover_task(
 
     if rows == 0:
         logger.info("[RECOVERY:%s] Task already transitioned - task_id=%s", source, task.pk)
+        _record_recovery_attempt(
+            task=task,
+            task_type=task_type,
+            source=source,
+            action=action,
+            result="skipped",
+            reason="already_transitioned",
+        )
         return False
 
     heartbeat_qs = CeleryTaskStatus.objects.filter(
@@ -385,6 +402,14 @@ def _recover_task(
         source,
         task.pk,
     )
+    _record_recovery_attempt(
+        task=task,
+        task_type=task_type,
+        source=source,
+        action=action,
+        result="success",
+        reason="orphaned_backtest",
+    )
     return True
 
 
@@ -399,6 +424,14 @@ def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, sou
     ).update(status=TaskStatus.STARTING)
     if rows == 0:
         logger.info("[RECOVERY:%s] Trading task already transitioned - task_id=%s", source, task.pk)
+        _record_recovery_attempt(
+            task=task,
+            task_type=TaskType.TRADING,
+            source=source,
+            action="resume_same_execution",
+            result="skipped",
+            reason="already_transitioned",
+        )
         return False
 
     CeleryTaskStatus.objects.filter(
@@ -427,6 +460,14 @@ def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, sou
             task.pk,
             task.execution_id,
         )
+        _record_recovery_attempt(
+            task=task,
+            task_type=TaskType.TRADING,
+            source=source,
+            action="resume_same_execution",
+            result="success",
+            reason="orphaned_trading",
+        )
         return True
     except Exception:
         logger.exception(
@@ -438,7 +479,43 @@ def _recover_trading_task(*, task: BacktestTask | TradingTask, service: Any, sou
             status=TaskStatus.FAILED,
             error_message=f"Recovery failed after crash (source={source})",
         )
+        _record_recovery_attempt(
+            task=task,
+            task_type=TaskType.TRADING,
+            source=source,
+            action="resume_same_execution",
+            result="failed",
+            reason="resume_failed",
+        )
         return False
+
+
+def _record_recovery_attempt(
+    *,
+    task: BacktestTask | TradingTask,
+    task_type: TaskType,
+    source: str,
+    action: str,
+    result: str,
+    reason: str,
+    detail: str = "",
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """Persist a structured recovery audit record without affecting recovery."""
+    try:
+        RecoveryAttempt.objects.create(
+            task_type=task_type,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+            source=source,
+            action=action,
+            result=result,
+            reason=reason,
+            detail=detail,
+            metadata=metadata or {"status": str(task.status)},
+        )
+    except Exception:  # pragma: no cover - audit write should never block recovery
+        logger.debug("[RECOVERY:%s] Failed to persist recovery attempt", source, exc_info=True)
 
 
 # ---------------------------------------------------------------------------

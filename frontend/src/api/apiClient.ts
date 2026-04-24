@@ -28,6 +28,9 @@ export class ApiError extends Error {
 type ApiErrorBody = {
   error?: unknown;
   error_code?: unknown;
+  detail?: unknown;
+  message?: unknown;
+  retry_after?: unknown;
 };
 
 export function getApiErrorBody(error: unknown): ApiErrorBody | null {
@@ -48,7 +51,13 @@ export function getApiErrorCode(error: unknown): string | null {
 
 export function getApiErrorMessage(error: unknown): string | null {
   const body = getApiErrorBody(error);
-  return typeof body?.error === 'string' ? body.error : null;
+  if (typeof body?.error === 'string') {
+    return body.error;
+  }
+  if (typeof body?.detail === 'string') {
+    return body.detail;
+  }
+  return typeof body?.message === 'string' ? body.message : null;
 }
 
 function buildUrl(path: string): string {

@@ -30,6 +30,10 @@ from apps.trading.services.runtime_metrics import (
     config_int,
 )
 from apps.trading.services.unrealized_pnl import update_unrealized_pnl
+from apps.trading.tasks.execution_state_store import (
+    ExecutionStateConflict,
+    ExecutionStateStore,
+)
 from apps.trading.tasks.source import TickDataSource
 from apps.trading.tasks.state import StateManager
 from apps.trading.utils import format_money, quote_to_account_rate
@@ -50,10 +54,6 @@ class StrategyError(Exception):
     ``should_stop=True`` with ``is_error=True``.  Task runners should
     catch this to transition the task to FAILED with the error message.
     """
-
-
-class ExecutionStateConflict(RuntimeError):
-    """Raised when another writer updated the execution state first."""
 
 
 def is_forex_market_closed(
@@ -134,6 +134,7 @@ class TaskExecutor:
         self.event_context = event_context
         self.order_service = order_service
         self.state_manager = state_manager
+        self.state_store = ExecutionStateStore()
 
         # Extract properties from task
         self.instrument = task.instrument
@@ -403,34 +404,7 @@ class TaskExecutor:
             f"current_balance={state.current_balance}"
         )
 
-        # Hot path optimization with optimistic locking: persist only touched
-        # columns and atomically bump ``state_version`` to detect concurrent
-        # writers for the same execution row.
-        from django.db.models import F
-
-        update_fields: dict[str, object] = {
-            "strategy_state": state.strategy_state,
-            "current_balance": state.current_balance,
-            "ticks_processed": state.ticks_processed,
-            "last_tick_timestamp": state.last_tick_timestamp,
-            "resume_cursor_timestamp": (state.resume_cursor_timestamp or state.last_tick_timestamp),
-            "last_tick_price": state.last_tick_price,
-            "last_tick_bid": state.last_tick_bid,
-            "last_tick_ask": state.last_tick_ask,
-            "updated_at": dj_timezone.now(),
-            "state_version": F("state_version") + 1,
-        }
-        rows = ExecutionState.objects.filter(
-            pk=state.pk,
-            state_version=state.state_version,
-        ).update(**update_fields)
-        if rows != 1:
-            raise ExecutionStateConflict(
-                "ExecutionState optimistic lock conflict: stale state_version detected "
-                f"(task_id={state.task_id}, execution_id={state.execution_id}, "
-                f"state_version={state.state_version})"
-            )
-        state.state_version += 1
+        self.state_store.save(state)
 
     def _flush_metrics(self, state: ExecutionState) -> None:
         """Flush completed minute-level metric buckets to the database."""
