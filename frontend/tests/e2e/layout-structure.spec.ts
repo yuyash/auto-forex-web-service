@@ -81,6 +81,10 @@ async function visibleTabs(page: Page) {
 }
 
 async function expectTabsRender(page: Page) {
+  await expect(page.locator('[role="tablist"]').first()).toBeVisible({
+    timeout: 10_000,
+  });
+
   const tabs = await visibleTabs(page);
   expect(tabs.length).toBeGreaterThan(0);
 
