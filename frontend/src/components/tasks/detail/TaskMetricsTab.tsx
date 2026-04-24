@@ -591,7 +591,6 @@ export function TaskMetricsTab({
                   ]}
                   axisHighlight={{ x: 'line', y: 'none' }}
                   grid={{ vertical: true, horizontal: true }}
-                  height={200}
                   margin={{
                     left: 8,
                     right: metricYAxisWidth,

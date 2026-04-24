@@ -51,12 +51,19 @@ export function ChartPanel({
       <Box
         sx={{
           flex: 1,
+          minHeight: 0,
           minWidth: 0,
+          height: '100%',
           width: '100%',
           display: 'flex',
           justifyContent: 'center',
+          alignItems: 'center',
           '& .MuiCharts-root': {
             width: '100%',
+            height: '100%',
+          },
+          '& svg': {
+            display: 'block',
           },
         }}
       >

@@ -244,7 +244,8 @@ export function MetricsOhlcChart({
 
       const observer = new ResizeObserver(() => {
         const w = container.clientWidth;
-        if (w > 0) chart.applyOptions({ width: w });
+        const h = container.clientHeight;
+        if (w > 0 && h > 0) chart.applyOptions({ width: w, height: h });
       });
       observer.observe(container);
       observerRef.current = observer;
@@ -360,6 +361,9 @@ export function MetricsOhlcChart({
       variant="outlined"
       sx={{
         p: 1.5,
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
         ...(cardHeight ? { height: cardHeight, overflow: 'hidden' } : {}),
       }}
     >
@@ -414,7 +418,10 @@ export function MetricsOhlcChart({
           </Tooltip>
         </Box>
       </Box>
-      <Box ref={containerRef} sx={{ width: '100%' }} />
+      <Box
+        ref={containerRef}
+        sx={{ width: '100%', height: chartHeight, minHeight: 0 }}
+      />
     </Paper>
   );
 }

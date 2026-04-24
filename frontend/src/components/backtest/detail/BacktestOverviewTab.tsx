@@ -1,11 +1,10 @@
-import { useState, useMemo } from 'react';
-import { Box, Chip, Divider, Grid, Link, Typography } from '@mui/material';
+import { useMemo } from 'react';
+import { Box, Divider, Grid, Link, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink } from 'react-router-dom';
 import { ExecutionHistoryTable } from '../../tasks/display/ExecutionHistoryTable';
 import { LatestMetricsSummary } from '../../tasks/detail/LatestMetricsSummary';
 import { TaskSettingsList } from '../../tasks/detail/TaskSettingsList';
-import { StrategyParameterDialog } from '../../tasks/detail/StrategyParameterDialog';
 import { buildBacktestTaskSettingDefinitions } from '../../tasks/detail/taskSettingDefinitions';
 import type { TaskSummary } from '../../../hooks/useTaskSummary';
 import { getStrategyDisplayName } from '../../../hooks/useStrategies';
@@ -15,8 +14,6 @@ import type { BacktestTask } from '../../../types';
 import type { MetricPoint } from '../../../utils/fetchMetrics';
 import { formatAppNumber, formatAppPercent } from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
-import { buildParameterLabelMap } from '../../../utils/strategySchemaLabels';
-import type { ConfigProperty } from '../../../types/strategy';
 
 interface BacktestOverviewTabProps {
   taskId: string;
@@ -56,29 +53,7 @@ export function BacktestOverviewTab({
   historicalTaskConfig,
   onOpenConfiguration,
 }: BacktestOverviewTabProps) {
-  const { t, i18n } = useTranslation(['backtest', 'common']);
-  const [showSnapshotParams, setShowSnapshotParams] = useState(false);
-
-  // Build localized parameter label map from strategy JSON schema
-  const paramLabelMap = useMemo(() => {
-    const strategyType =
-      historicalStrategyConfig?.strategy_type || task.strategy_type;
-    return buildParameterLabelMap(strategies, strategyType, i18n.language);
-  }, [strategies, historicalStrategyConfig, task.strategy_type, i18n.language]);
-
-  // Resolve the JSON schema's `properties` map for the historical
-  // strategy so we can filter snapshot parameters by `dependsOn`.
-  const snapshotSchemaProperties = useMemo<
-    Record<string, ConfigProperty> | undefined
-  >(() => {
-    const strategyType =
-      historicalStrategyConfig?.strategy_type || task.strategy_type;
-    const strategy = strategies.find((s) => s.id === strategyType);
-    const schema = strategy?.config_schema as
-      | { properties?: Record<string, ConfigProperty> }
-      | undefined;
-    return schema?.properties;
-  }, [strategies, historicalStrategyConfig, task.strategy_type]);
+  const { t } = useTranslation(['backtest', 'common']);
 
   // When viewing a historical execution, prefer snapshot values for task settings
   const effectiveStartTime =
@@ -86,12 +61,6 @@ export function BacktestOverviewTab({
     task.start_time;
   const effectiveEndTime =
     (isViewingHistorical && historicalTaskConfig?.end_time) || task.end_time;
-  const effectiveInitialBalance =
-    (isViewingHistorical && historicalTaskConfig?.initial_balance) ||
-    task.initial_balance;
-  const effectiveCommission =
-    (isViewingHistorical && historicalTaskConfig?.commission_per_trade) ||
-    task.commission_per_trade;
   const effectiveInstrument =
     (isViewingHistorical && historicalTaskConfig?.instrument) ||
     task.instrument;
@@ -107,54 +76,73 @@ export function BacktestOverviewTab({
   const taskSettings = useMemo(
     () =>
       buildBacktestTaskSettingDefinitions(t, timezone, language).map(
-        (definition) =>
-          definition.key === 'config_name'
-            ? {
-                ...definition,
-                render: () => {
-                  const label =
-                    (isViewingHistorical && historicalStrategyConfig?.name) ||
-                    task.config_name;
-                  const targetId =
-                    (isViewingHistorical && historicalStrategyConfig?.id) ||
-                    task.config_id;
+        (definition) => {
+          if (definition.key === 'config_name') {
+            return {
+              ...definition,
+              render: () => {
+                const label =
+                  (isViewingHistorical && historicalStrategyConfig?.name) ||
+                  task.config_name;
+                const targetId =
+                  (isViewingHistorical && historicalStrategyConfig?.id) ||
+                  task.config_id;
 
-                  if (targetId) {
-                    return (
-                      <Link
-                        component={RouterLink}
-                        to={`/configurations/${targetId}`}
-                        variant="body1"
-                        sx={{ display: 'inline-block', maxWidth: '100%' }}
-                      >
-                        {label}
-                      </Link>
-                    );
-                  }
-
+                if (targetId) {
                   return (
                     <Link
-                      component="button"
+                      component={RouterLink}
+                      to={`/configurations/${targetId}`}
                       variant="body1"
-                      onClick={onOpenConfiguration}
-                      sx={{ textAlign: 'left' }}
+                      sx={{ display: 'inline-block', maxWidth: '100%' }}
                     >
                       {label}
                     </Link>
                   );
-                },
-              }
-            : definition
+                }
+
+                return (
+                  <Link
+                    component="button"
+                    variant="body1"
+                    onClick={onOpenConfiguration}
+                    sx={{ textAlign: 'left' }}
+                  >
+                    {label}
+                  </Link>
+                );
+              },
+            };
+          }
+
+          if (definition.key === 'strategy_type') {
+            return {
+              ...definition,
+              render: () =>
+                getStrategyDisplayName(
+                  strategies,
+                  (isViewingHistorical &&
+                    historicalStrategyConfig?.strategy_type) ||
+                    task.strategy_type
+                ),
+            };
+          }
+
+          return definition;
+        }
       ),
     [
       historicalStrategyConfig?.id,
       historicalStrategyConfig?.name,
+      historicalStrategyConfig?.strategy_type,
       isViewingHistorical,
       language,
       onOpenConfiguration,
+      strategies,
       t,
       task.config_id,
       task.config_name,
+      task.strategy_type,
       timezone,
     ]
   );
@@ -162,94 +150,13 @@ export function BacktestOverviewTab({
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
       <Grid container spacing={{ xs: 2, sm: 3 }}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Typography variant="h6" gutterBottom>
-            {t('common:labels.configuration')}
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('common:labels.strategyConfiguration')}
-                {isViewingHistorical && historicalStrategyConfig && (
-                  <Chip
-                    size="small"
-                    label={t('common:labels.snapshot')}
-                    color="info"
-                    variant="outlined"
-                    sx={{ ml: 1, height: 18, fontSize: '0.65rem' }}
-                  />
-                )}
-              </Typography>
-              {isViewingHistorical && historicalStrategyConfig ? (
-                <Link
-                  component="button"
-                  variant="body1"
-                  onClick={() => setShowSnapshotParams(true)}
-                  sx={{ textAlign: 'left', display: 'block' }}
-                >
-                  {historicalStrategyConfig.name}
-                </Link>
-              ) : (
-                <Link
-                  component="button"
-                  variant="body1"
-                  onClick={onOpenConfiguration}
-                  sx={{ textAlign: 'left', display: 'block' }}
-                >
-                  {task.config_name}
-                </Link>
-              )}
-            </Box>
-
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('common:labels.strategyType')}
-              </Typography>
-              <Typography variant="body1" sx={{ textTransform: 'capitalize' }}>
-                {isViewingHistorical && historicalStrategyConfig
-                  ? getStrategyDisplayName(
-                      strategies,
-                      historicalStrategyConfig.strategy_type
-                    )
-                  : getStrategyDisplayName(strategies, task.strategy_type)}
-              </Typography>
-            </Box>
-
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('backtest:detail.dataSource')}
-              </Typography>
-              <Typography variant="body1" sx={{ textTransform: 'capitalize' }}>
-                {task.data_source}
-              </Typography>
-            </Box>
-
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('backtest:detail.initialBalance')}
-              </Typography>
-              <Typography variant="body1">
-                $
-                {formatAppNumber(parseFloat(String(effectiveInitialBalance)), {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </Typography>
-            </Box>
-
-            <Box>
-              <Typography variant="caption" color="text.secondary">
-                {t('backtest:detail.commissionPerTrade')}
-              </Typography>
-              <Typography variant="body1">
-                $
-                {formatAppNumber(parseFloat(String(effectiveCommission)), {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </Typography>
-            </Box>
-          </Box>
+        <Grid size={{ xs: 12 }}>
+          <TaskSettingsList
+            title={t('common:labels.taskInformation')}
+            task={task as unknown as Record<string, unknown>}
+            snapshot={historicalTaskConfig}
+            definitions={taskSettings}
+          />
         </Grid>
 
         <Grid size={{ xs: 12 }}>
@@ -324,16 +231,6 @@ export function BacktestOverviewTab({
               </Typography>
             </Box>
           </Box>
-        </Grid>
-
-        <Grid size={{ xs: 12 }}>
-          <Divider sx={{ my: 2 }} />
-          <TaskSettingsList
-            title={t('common:labels.taskInformation')}
-            task={task as unknown as Record<string, unknown>}
-            snapshot={historicalTaskConfig}
-            definitions={taskSettings}
-          />
         </Grid>
 
         <Grid size={{ xs: 12 }}>
@@ -512,20 +409,6 @@ export function BacktestOverviewTab({
           />
         </Grid>
       </Grid>
-
-      {/* Snapshot parameters dialog */}
-      {historicalStrategyConfig && (
-        <StrategyParameterDialog
-          open={showSnapshotParams}
-          onClose={() => setShowSnapshotParams(false)}
-          title={historicalStrategyConfig.name}
-          strategyType={historicalStrategyConfig.strategy_type}
-          parameters={historicalStrategyConfig.parameters || {}}
-          snapshotSchemaProperties={snapshotSchemaProperties}
-          paramLabelMap={paramLabelMap}
-          labels={{ strategyType: t('common:labels.strategyType') }}
-        />
-      )}
     </Box>
   );
 }
