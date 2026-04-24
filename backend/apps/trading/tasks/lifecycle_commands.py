@@ -390,11 +390,13 @@ class TaskLifecycleCommands:
         is_trading = task_type == "trading"
 
         # Trading tasks can resume from PAUSED, STOPPED, or FAILED.
-        # Backtest tasks can only resume from PAUSED (unchanged behaviour).
+        # Backtests can resume from PAUSED or STOPPED while preserving their
+        # execution_id and ExecutionState; the publisher continues from the
+        # last processed tick instead of replaying from task.start_time.
         if is_trading:
             allowed_statuses = (TaskStatus.PAUSED, TaskStatus.STOPPED, TaskStatus.FAILED)
         else:
-            allowed_statuses = (TaskStatus.PAUSED,)
+            allowed_statuses = (TaskStatus.PAUSED, TaskStatus.STOPPED)
 
         with transaction.atomic():
             locked_task = model_class.objects.select_for_update().get(pk=task.pk)

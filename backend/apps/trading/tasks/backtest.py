@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
@@ -15,6 +16,7 @@ from apps.trading.engine import TradingEngine
 from apps.trading.enums import TaskStatus, TaskType
 from apps.trading.logging import TaskLoggingSession
 from apps.trading.models import BacktestTask
+from apps.trading.models.state import ExecutionState
 from apps.trading.services.execution_lifecycle import transition_task_to_running
 from apps.trading.tasks.executor import BacktestExecutor
 from apps.trading.tasks.lifecycle_events import (
@@ -324,6 +326,39 @@ def execute_backtest(task: BacktestTask) -> None:
     executor.execute()
 
 
+def _backtest_resume_start_time(task: BacktestTask):
+    """Return the next publisher start for a resumed backtest execution.
+
+    Backtest resume preserves ``execution_id`` and ``ExecutionState``.  If we
+    publish again from the original task start, the executor replays old ticks
+    into an already-restored strategy state, which can make balances and
+    metrics jump sharply.  Start just after the last persisted tick instead.
+    """
+
+    execution_id = getattr(task, "execution_id", None)
+    if not execution_id or not isinstance(execution_id, UUID):
+        return task.start_time
+
+    state = (
+        ExecutionState.objects.filter(
+            task_type=TaskType.BACKTEST.value,
+            task_id=task.pk,
+            execution_id=task.execution_id,
+        )
+        .only("last_tick_timestamp", "ticks_processed")
+        .first()
+    )
+    if not state or not state.last_tick_timestamp or state.ticks_processed <= 0:
+        return task.start_time
+
+    resume_start = state.last_tick_timestamp + timedelta(microseconds=1)
+    if resume_start >= task.end_time:
+        return task.end_time
+    if resume_start < task.start_time:
+        return task.start_time
+    return resume_start
+
+
 def trigger_backtest_publisher(
     task: BacktestTask,
 ) -> None:
@@ -345,7 +380,7 @@ def trigger_backtest_publisher(
 
     request_id = str(task.pk)
 
-    effective_start = task.start_time
+    effective_start = _backtest_resume_start_time(task)
 
     logger.info(
         "Triggering backtest publisher - task_id=%s, request_id=%s, "

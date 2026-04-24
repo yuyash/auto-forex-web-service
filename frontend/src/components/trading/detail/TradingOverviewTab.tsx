@@ -17,6 +17,11 @@ import { Link as RouterLink } from 'react-router-dom';
 import { StatusBadge } from '../../tasks/display/StatusBadge';
 import { ExecutionHistoryTable } from '../../tasks/display/ExecutionHistoryTable';
 import { LatestMetricsSummary } from '../../tasks/detail/LatestMetricsSummary';
+import {
+  TaskSettingsList,
+  type TaskSettingDefinition,
+} from '../../tasks/detail/TaskSettingsList';
+import { formatBoolean } from '../../tasks/detail/taskSettingsFormat';
 import type { TaskSummary } from '../../../hooks/useTaskSummary';
 import { getStrategyDisplayName } from '../../../hooks/useStrategies';
 import type { Strategy } from '../../../services/api/strategies';
@@ -107,6 +112,74 @@ export function TradingOverviewTab({
     : summary.execution.marginRatio;
 
   const tracemallocEnabled = Boolean(task.debug_options?.tracemalloc);
+  const taskSettings = useMemo(
+    (): Array<TaskSettingDefinition<Record<string, unknown>>> => [
+      { key: 'name', label: t('common:labels.name') },
+      { key: 'description', label: t('common:labels.description') },
+      { key: 'config_name', label: t('common:labels.strategyConfiguration') },
+      { key: 'strategy_type', label: t('common:labels.strategyType') },
+      { key: 'instrument', label: t('common:labels.instrument') },
+      { key: 'pip_size', label: t('common:labels.pipSize') },
+      { key: 'account_name', label: t('trading:detail.account', 'Account') },
+      {
+        key: 'account_type',
+        label: t('trading:detail.accountType', 'Account type'),
+      },
+      {
+        key: 'sell_on_stop',
+        label: t('common:labels.sellOnStop'),
+        format: formatBoolean,
+      },
+      {
+        key: 'dry_run',
+        label: t('trading:form.dryRun', 'Dry run'),
+        format: formatBoolean,
+      },
+      {
+        key: 'hedging_enabled',
+        label: t('common:labels.hedgingEnabled', 'Hedging enabled'),
+        format: formatBoolean,
+      },
+      {
+        key: 'api_retry_max_attempts',
+        label: t('trading:form.apiRetryMaxAttempts', 'API retry attempts'),
+      },
+      {
+        key: 'api_retry_backoff_base_seconds',
+        label: t(
+          'trading:form.apiRetryBackoffBaseSeconds',
+          'API retry base backoff'
+        ),
+      },
+      {
+        key: 'api_retry_backoff_max_seconds',
+        label: t(
+          'trading:form.apiRetryBackoffMaxSeconds',
+          'API retry max backoff'
+        ),
+      },
+      {
+        key: 'drain_duration_hours',
+        label: t('trading:form.drainDurationHours', 'Drain duration (hours)'),
+      },
+      {
+        key: 'market_idle_pre_close_minutes',
+        label: t(
+          'trading:form.marketIdlePreCloseMinutes',
+          'Market pre-close idle (minutes)'
+        ),
+      },
+      {
+        key: 'market_idle_resume_delay_minutes',
+        label: t(
+          'trading:form.marketIdleResumeDelayMinutes',
+          'Market resume delay (minutes)'
+        ),
+      },
+      { key: 'debug_options', label: t('common:debug.title') },
+    ],
+    [t]
+  );
 
   return (
     <Box sx={{ p: { xs: 1.5, sm: 3 } }}>
@@ -319,6 +392,16 @@ export function TradingOverviewTab({
             </Box>
           </Box>
         </Grid>
+        <Grid size={{ xs: 12 }}>
+          <Divider sx={{ my: 2 }} />
+          <TaskSettingsList
+            title={t('common:labels.taskSettings', 'Task settings')}
+            task={task as unknown as Record<string, unknown>}
+            snapshot={historicalTaskConfig}
+            definitions={taskSettings}
+          />
+        </Grid>
+
         <Grid size={{ xs: 12 }}>
           <Divider sx={{ my: 2 }} />
           <Typography variant="h6" gutterBottom>

@@ -23,7 +23,7 @@ class TestBacktestTaskSerializer:
         assert "initial_balance" in fields
         assert "progress" not in fields
         assert "current_tick" not in fields
-        assert "account_currency" not in fields
+        assert "account_currency" in fields
 
 
 class TestBacktestTaskListSerializer:
@@ -38,7 +38,7 @@ class TestBacktestTaskListSerializer:
         assert "tick_window_value_mode" in fields
         assert "max_tick_gap_hours" in fields
         assert "progress" not in fields
-        assert "account_currency" not in fields
+        assert "account_currency" in fields
 
 
 class TestBacktestTaskCreateSerializer:

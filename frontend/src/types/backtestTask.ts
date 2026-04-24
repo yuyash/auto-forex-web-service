@@ -14,6 +14,7 @@ export interface BacktestTask {
   start_time: string;
   end_time: string;
   initial_balance: string;
+  account_currency?: string;
   commission_per_trade: string;
   pip_size?: string;
   instrument: string;
@@ -32,6 +33,7 @@ export interface BacktestTask {
   market_open_hour_utc?: number;
   max_tick_gap_hours?: number;
   latest_execution?: ExecutionSummary;
+  can_resume?: boolean;
   execution_id?: string;
   started_at?: string;
   completed_at?: string;

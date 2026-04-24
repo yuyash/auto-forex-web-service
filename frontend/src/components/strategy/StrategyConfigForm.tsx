@@ -949,13 +949,7 @@ const StrategyConfigForm = ({
       )}
 
       {groupedFields.map(({ name: groupName, fields }, groupIdx) => {
-        const visibleFields = fields.filter(([, fieldSchema]) => {
-          if (!fieldSchema.dependsOn) return true;
-          return matchesDependsOn(config, fieldSchema.dependsOn);
-        });
-        if (visibleFields.length === 0) return null;
-
-        const orderedVisibleFields = orderConfigFieldTuples(visibleFields);
+        const orderedVisibleFields = orderConfigFieldTuples(fields);
 
         return (
           <Box key={groupName || '__ungrouped'} sx={{ mb: 3 }}>

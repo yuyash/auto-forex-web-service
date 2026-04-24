@@ -65,7 +65,7 @@ class TestBacktestTaskSerializer:
         # progress and current_tick are now served via /summary/ endpoint
         assert "progress" not in data
         assert "current_tick" not in data
-        assert "account_currency" not in data
+        assert "account_currency" in data
 
 
 @pytest.mark.django_db

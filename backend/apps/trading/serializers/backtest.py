@@ -18,6 +18,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     config_id = serializers.UUIDField(source="config.id", read_only=True)
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
+    can_resume = serializers.SerializerMethodField()
 
     class Meta:
         model = BacktestTask
@@ -33,6 +34,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "start_time",
             "end_time",
             "initial_balance",
+            "account_currency",
             "commission_per_trade",
             "pip_size",
             "instrument",
@@ -57,6 +59,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "debug_options",
+            "can_resume",
         ]
         read_only_fields = [
             "id",
@@ -71,7 +74,12 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "error_message",
             "created_at",
             "updated_at",
+            "can_resume",
         ]
+
+    def get_can_resume(self, obj: BacktestTask) -> bool:
+        """Check if task can be resumed with state recovery."""
+        return obj.can_resume()
 
 
 class BacktestTaskListSerializer(BacktestTaskSerializer):

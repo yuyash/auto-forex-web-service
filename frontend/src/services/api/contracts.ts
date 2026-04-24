@@ -42,6 +42,7 @@ export interface BackendBacktestTask {
   start_time: string;
   end_time: string;
   initial_balance: string;
+  account_currency?: string;
   commission_per_trade: string;
   pip_size?: string | null;
   instrument: string;
@@ -55,6 +56,7 @@ export interface BackendBacktestTask {
   completed_at?: string | null;
   error_message?: string | null;
   latest_execution?: BackendTaskExecutionSummary | null;
+  can_resume?: boolean;
   drain_duration_hours?: number;
   market_idle_pre_close_minutes?: number;
   market_idle_resume_delay_minutes?: number;

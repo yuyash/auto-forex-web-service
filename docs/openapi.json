@@ -5523,6 +5523,11 @@
                         "pattern": "^-?\\d{0,13}(?:\\.\\d{0,2})?$",
                         "description": "Initial account balance for backtest"
                     },
+                    "account_currency": {
+                        "type": "string",
+                        "description": "Account base currency (e.g., USD, JPY)",
+                        "maxLength": 3
+                    },
                     "commission_per_trade": {
                         "type": "string",
                         "format": "decimal",
@@ -5667,9 +5672,15 @@
                     },
                     "debug_options": {
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"
+                    },
+                    "can_resume": {
+                        "type": "boolean",
+                        "description": "Check if task can be resumed with state recovery.",
+                        "readOnly": true
                     }
                 },
                 "required": [
+                    "can_resume",
                     "completed_at",
                     "config_id",
                     "config_name",
@@ -5904,6 +5915,11 @@
                         "readOnly": true,
                         "description": "Initial account balance for backtest"
                     },
+                    "account_currency": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Account base currency (e.g., USD, JPY)"
+                    },
                     "pip_size": {
                         "type": "string",
                         "format": "decimal",
@@ -6034,9 +6050,16 @@
                     "debug_options": {
                         "readOnly": true,
                         "description": "Debug settings. Supported: {\"tracemalloc\": true}"
+                    },
+                    "can_resume": {
+                        "type": "boolean",
+                        "description": "Check if task can be resumed with state recovery.",
+                        "readOnly": true
                     }
                 },
                 "required": [
+                    "account_currency",
+                    "can_resume",
                     "completed_at",
                     "config_id",
                     "config_name",
@@ -6109,6 +6132,12 @@
                         "format": "decimal",
                         "pattern": "^-?\\d{0,13}(?:\\.\\d{0,2})?$",
                         "description": "Initial account balance for backtest"
+                    },
+                    "account_currency": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Account base currency (e.g., USD, JPY)",
+                        "maxLength": 3
                     },
                     "commission_per_trade": {
                         "type": "string",

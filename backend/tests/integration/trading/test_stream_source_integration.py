@@ -278,6 +278,15 @@ class TestRedisStreamTickDataSourceIter:
         assert source._consumer_caught_up_with_publisher() is True
 
     def test_triggers_publisher_callback(self):
+        """Verify the trigger is called and the subscriber reads entries.
+
+        fakeredis does not deliver cross-thread (or post-group-creation)
+        stream notifications for ``XREADGROUP``.  Therefore the entries
+        that a real publisher would ``XADD`` must be seeded **before** the
+        subscriber iterates, matching the pattern documented at the top
+        of this module.  We still exercise the trigger callback to verify
+        it runs.
+        """
         server = fakeredis.FakeServer()
         stream_key = "test:backtest:stream:trigger"
         _seed_group(server, stream_key)
@@ -285,29 +294,24 @@ class TestRedisStreamTickDataSourceIter:
         trigger_called = {"count": 0}
 
         def _trigger():
-            # Simulate what the real publisher does: create the consumer
-            # group (already done above) and XADD into the stream.  The
-            # callback runs synchronously so entries are ready for the
-            # very first XREADGROUP.
             trigger_called["count"] += 1
-            client = fakeredis.FakeRedis(server=server, decode_responses=True)
-            try:
-                client.xadd(
-                    stream_key,
-                    {
-                        "type": "tick",
-                        "instrument": "USD_JPY",
-                        "timestamp": "2024-01-01T00:00:00Z",
-                        "bid": "150.0",
-                        "ask": "150.02",
-                        "mid": "150.01",
-                    },
-                    maxlen=100,
-                    approximate=True,
-                )
-                client.xadd(stream_key, {"type": "eof"}, maxlen=100, approximate=True)
-            finally:
-                client.close()
+
+        # Pre-seed the entries that the real publisher would XADD.
+        _add_entries(
+            server,
+            stream_key,
+            [
+                {
+                    "type": "tick",
+                    "instrument": "USD_JPY",
+                    "timestamp": "2024-01-01T00:00:00Z",
+                    "bid": "150.0",
+                    "ask": "150.02",
+                    "mid": "150.01",
+                },
+                {"type": "eof"},
+            ],
+        )
 
         source = RedisStreamTickDataSource(
             stream_key=stream_key,
@@ -339,6 +343,7 @@ class TestRedisStreamTickDataSourceIter:
 
         assert trigger_called["count"] == 1
         assert len(received) == 1
+        assert received[0].bid == Decimal("150.0")
 
     def test_skips_invalid_ticks(self):
         """Malformed entries must not break the stream."""

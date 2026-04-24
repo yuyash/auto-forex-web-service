@@ -357,6 +357,12 @@ class BacktestTask(UUIDModel):
             status=TaskStatus.CREATED,
         )
 
+    def can_resume(self) -> bool:
+        """Whether the current execution can resume from persisted state."""
+        return (
+            self.status in (TaskStatus.PAUSED, TaskStatus.STOPPED) and self.execution_id is not None
+        )
+
     def delete(self, *args, **kwargs) -> tuple[int, dict[str, int]]:
         """Delete the task.
 

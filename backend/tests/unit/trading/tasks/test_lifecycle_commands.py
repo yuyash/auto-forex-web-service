@@ -139,6 +139,38 @@ def test_pause_uses_injected_adapter_for_backtest() -> None:
     adapters.signal_pause.assert_called_once()
 
 
+@pytest.mark.django_db
+def test_resume_allows_stopped_backtest_and_rotates_only_celery_task_id() -> None:
+    task_id = uuid4()
+    execution_id = uuid4()
+    old_celery_task_id = uuid4()
+    task = MagicMock(
+        pk=task_id,
+        status=TaskStatus.STOPPED,
+        execution_id=execution_id,
+        celery_task_id=old_celery_task_id,
+    )
+    task.save = MagicMock()
+    task_model = MagicMock()
+    task_model.objects.select_for_update.return_value.get.return_value = task
+    service = MagicMock()
+    service._get_task_and_type.return_value = (task, "backtest")
+    service._get_task_model.return_value = task_model
+    service.get_celery_result.return_value = None
+    service._dispatch_task = MagicMock()
+
+    commands, adapters = _make_commands(service)
+
+    result = commands.resume(task_id)
+
+    assert result is task
+    assert task.status == TaskStatus.STARTING
+    assert task.execution_id == execution_id
+    assert task.celery_task_id != old_celery_task_id
+    adapters.revoke_execution.assert_called_once_with(old_celery_task_id)
+    service._dispatch_task.assert_called_once_with(task, "backtest")
+
+
 @patch("apps.market.tasks.ensure_tick_pubsub_running.apply_async")
 @pytest.mark.django_db
 def test_start_trading_task_kicks_market_supervisor(mock_apply_async, settings) -> None:
