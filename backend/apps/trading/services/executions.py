@@ -308,11 +308,36 @@ def _serialize_execution_row(
     # Attach config snapshots and notes when available
     snapshot = _get_config_snapshot(task_type=task_type, task_id=task_id, run_id=run_id)
     if snapshot is not None:
-        row["task_config"] = snapshot.get("task_config")
-        row["strategy_config"] = snapshot.get("strategy_config")
+        task_config = snapshot.get("task_config")
+        strategy_config = snapshot.get("strategy_config")
+        row["task_config"] = task_config
+        row["strategy_config"] = strategy_config
+        row["segment_index"] = _extract_segment_index(task_config, strategy_config)
+        row["config_revision_count"] = _extract_revision_count(task_config, strategy_config)
         row["notes"] = snapshot.get("notes", "")
 
     return row
+
+
+def _extract_segment_index(task_config: Any, strategy_config: Any) -> int:
+    for config in (strategy_config, task_config):
+        if isinstance(config, dict):
+            try:
+                return int(config.get("segment_index") or 1)
+            except (TypeError, ValueError):
+                return 1
+    return 1
+
+
+def _extract_revision_count(task_config: Any, strategy_config: Any) -> int:
+    return max(_revision_count(task_config), _revision_count(strategy_config))
+
+
+def _revision_count(config: Any) -> int:
+    if not isinstance(config, dict):
+        return 0
+    revisions = config.get("revisions")
+    return len(revisions) if isinstance(revisions, list) else 0
 
 
 def _get_cached_execution_metrics(

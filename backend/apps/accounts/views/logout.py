@@ -15,7 +15,9 @@ from apps.accounts.models import RefreshToken, User
 from apps.accounts.services.events import SecurityEventService
 from apps.accounts.services.jwt import JWTService
 from apps.accounts.services.sessions import get_user_session_for_request
-from apps.accounts.utils.cookies import clear_refresh_cookie
+from django.conf import settings
+
+from apps.accounts.utils.cookies import clear_auth_cookies
 
 logger: Logger = getLogger(name=__name__)
 
@@ -59,12 +61,15 @@ class UserLogoutView(APIView):
         """Handle user logout."""
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
         user_obj = getattr(request, "user", None)
-        if not auth_header.startswith("Bearer ") or not isinstance(user_obj, User):
+        access_cookie = request.COOKIES.get(settings.AUTH_ACCESS_COOKIE_NAME, "")
+        if not (auth_header.startswith("Bearer ") or access_cookie) or not isinstance(
+            user_obj, User
+        ):
             response = Response(
                 {"error": "Authentication required."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
-            return clear_refresh_cookie(response)
+            return clear_auth_cookies(response)
         auth_user = cast(User, user_obj)
 
         ip_address = get_client_ip(request)
@@ -74,11 +79,8 @@ class UserLogoutView(APIView):
             current_session.terminate()
             sessions_terminated = 1
 
-        refresh_cookie_name = getattr(request, "COOKIES", {}).get
         refresh_token_value = str(
-            refresh_cookie_name("refresh_token", "")
-            if callable(refresh_cookie_name)
-            else request.COOKIES.get("refresh_token", "")
+            request.COOKIES.get(settings.AUTH_REFRESH_COOKIE_NAME, "")
         ).strip()
         revoked_count = 0
         if refresh_token_value:
@@ -126,4 +128,4 @@ class UserLogoutView(APIView):
             },
             status=status.HTTP_200_OK,
         )
-        return clear_refresh_cookie(response)
+        return clear_auth_cookies(response)

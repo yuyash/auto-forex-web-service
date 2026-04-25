@@ -241,10 +241,14 @@ function computeXTickCount(dataLen: number): number {
 }
 
 /** Fixed height for all chart cards to ensure consistent grid layout */
-const CHART_CARD_HEIGHT = 260;
+const CHART_CARD_HEIGHT = 360;
 const LINE_CHART_FALLBACK_HEIGHT = CHART_CARD_HEIGHT - 52;
 const OHLC_KEY = '__ohlc__';
 const MIN_CHART_MEASURE_PX = 1;
+const LINE_CHART_LEFT_MARGIN = 8;
+const LINE_CHART_RIGHT_MARGIN = 8;
+const LINE_CHART_TOP_MARGIN = 4;
+const LINE_CHART_BOTTOM_MARGIN = 22;
 
 function FillLineChart({
   fallbackHeight,
@@ -516,7 +520,7 @@ export function TaskMetricsTab({
         py: { xs: 1, sm: 1.5 },
         minWidth: 0,
         width: '100%',
-        maxWidth: layoutTokens.contentMaxWidth,
+        maxWidth: { xs: '100%', xl: 1920 },
         mx: 'auto',
       }}
     >
@@ -560,7 +564,7 @@ export function TaskMetricsTab({
             return (
               <Grid
                 key={OHLC_KEY}
-                size={{ xs: 12, lg: 6, xl: 4 }}
+                size={{ xs: 12, lg: 6 }}
                 draggable
                 onDragStart={(e) => handleDragStart(e, OHLC_KEY)}
                 onDragOver={handleDragOver}
@@ -597,7 +601,7 @@ export function TaskMetricsTab({
           return (
             <Grid
               key={m.key}
-              size={{ xs: 12, lg: 6, xl: 4 }}
+              size={{ xs: 12, lg: 6 }}
               draggable
               onDragStart={(e) => handleDragStart(e, m.key)}
               onDragOver={handleDragOver}
@@ -666,10 +670,10 @@ export function TaskMetricsTab({
                   axisHighlight={{ x: 'line', y: 'none' }}
                   grid={{ vertical: true, horizontal: true }}
                   margin={{
-                    left: metricYAxisWidth,
-                    right: metricYAxisWidth,
-                    top: 8,
-                    bottom: 28,
+                    left: LINE_CHART_LEFT_MARGIN,
+                    right: LINE_CHART_RIGHT_MARGIN,
+                    top: LINE_CHART_TOP_MARGIN,
+                    bottom: LINE_CHART_BOTTOM_MARGIN,
                   }}
                   hideLegend
                   slotProps={{

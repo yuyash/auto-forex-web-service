@@ -27,23 +27,25 @@ def _request(path: str = "/api/tasks/1/") -> Request:
     return Request(factory.get(path))
 
 
-def test_log_components_uses_log_components_query_params():
+def test_log_components_delegates_to_task_activity_service():
     view = DummyTaskSubResourceView()
     request = _request("/api/tasks/1/log-components")
 
-    with (
-        patch("apps.trading.views.mixins.LogComponentsQueryParams.from_request") as from_request,
-        patch("apps.trading.models.logs.TaskLog.objects.filter") as task_log_filter,
-    ):
-        from_request.return_value = SimpleNamespace(execution_id="exec-1")
-        task_log_filter.return_value.values_list.return_value.distinct.return_value.order_by.return_value = [
+    with patch(
+        "apps.trading.views.mixins.TaskActivityQueryService.log_components"
+    ) as log_components:
+        log_components.return_value = [
             "executor",
             "strategy",
         ]
 
         response = view.log_components(request, pk=1)
 
-    from_request.assert_called_once_with(request, default_execution_id="exec-1")
+    log_components.assert_called_once_with(
+        request=request,
+        task=view.get_object(),
+        task_type_label="backtest",
+    )
     assert response.data == {"components": ["executor", "strategy"]}
 
 

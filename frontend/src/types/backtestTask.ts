@@ -1,5 +1,5 @@
 // Backtest Task types
-import type { TaskStatus, DataSource } from './common';
+import type { TaskActionPolicy, TaskStatus, DataSource } from './common';
 import type { ExecutionSummary } from './execution';
 
 export interface BacktestTask {
@@ -34,6 +34,7 @@ export interface BacktestTask {
   max_tick_gap_hours?: number;
   latest_execution?: ExecutionSummary;
   can_resume?: boolean;
+  action_policy?: TaskActionPolicy;
   execution_id?: string;
   started_at?: string;
   completed_at?: string;

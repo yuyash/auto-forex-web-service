@@ -320,6 +320,7 @@ export const TradingTaskDetail: React.FC = () => {
             ? (executionDetail?.status as TaskStatus)
             : currentStatus
         }
+        actionPolicy={detailTask.action_policy}
         taskType="trading"
         strategyName={getStrategyDisplayName(
           strategies,

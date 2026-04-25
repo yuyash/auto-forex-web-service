@@ -332,7 +332,13 @@ class TestResumeTask:
         mock_bt.objects.get.return_value = task
         mock_bt.DoesNotExist = _DoesNotExist
 
-        with patch.object(TaskService, "get_celery_result", return_value=None):
+        with (
+            patch.object(TaskService, "get_celery_result", return_value=None),
+            patch(
+                "apps.trading.services.resume_config.validate_resume_configuration",
+                return_value=MagicMock(),
+            ),
+        ):
             result = TaskService().resume_task(task_id)
 
         assert result is locked
@@ -429,6 +435,10 @@ class TestResumeTask:
                 "TaskLifecycleCommands._kick_market_supervisor"
             ),
             patch("apps.trading.tasks.lifecycle_events.TaskLifecycleEventPublisher.publish"),
+            patch(
+                "apps.trading.services.resume_config.validate_resume_configuration",
+                return_value=MagicMock(),
+            ),
         ):
             TaskService().resume_task(task_id)
 

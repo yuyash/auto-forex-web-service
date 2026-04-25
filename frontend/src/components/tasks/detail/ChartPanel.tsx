@@ -20,7 +20,7 @@ export function ChartPanel({
     <Paper
       variant="outlined"
       sx={{
-        p: { xs: 1, sm: 1.25 },
+        p: { xs: 0.75, sm: 1 },
         height,
         overflow: 'hidden',
         display: 'flex',
@@ -35,7 +35,7 @@ export function ChartPanel({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'baseline',
-          mb: 0.5,
+          mb: 0.25,
         }}
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>

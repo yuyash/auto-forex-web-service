@@ -59,6 +59,14 @@ const weekdayOptions: ReadonlyArray<{
 
 const backtestTaskUpdateSchema = z
   .object({
+    name: z
+      .string()
+      .min(1, 'Task name is required')
+      .max(100, 'Task name must be less than 100 characters'),
+    description: z
+      .string()
+      .max(500, 'Description must be less than 500 characters')
+      .optional(),
     config_id: z
       .string()
       .min(1, 'Configuration is required')
@@ -153,13 +161,18 @@ const backtestTaskUpdateSchema = z
   });
 
 type BacktestTaskUpdateData = z.infer<typeof backtestTaskUpdateSchema>;
+type BacktestTaskUpdateInitialData = Omit<
+  BacktestTaskUpdateData,
+  'name' | 'description'
+>;
 
 export interface BacktestTaskUpdateFormProps {
   taskId: string;
   taskName: string;
   taskDescription?: string;
-  initialData: BacktestTaskUpdateData;
+  initialData: BacktestTaskUpdateInitialData;
   debugOptions?: Record<string, unknown>;
+  restartRequiredForExecutionEdits?: boolean;
 }
 
 export default function BacktestTaskUpdateForm({
@@ -168,6 +181,7 @@ export default function BacktestTaskUpdateForm({
   taskDescription,
   initialData,
   debugOptions,
+  restartRequiredForExecutionEdits = false,
 }: BacktestTaskUpdateFormProps) {
   const { t } = useTranslation(['backtest', 'common']);
   const { user } = useAuth();
@@ -188,7 +202,11 @@ export default function BacktestTaskUpdateForm({
     resolver: zodResolver(
       backtestTaskUpdateSchema
     ) as Resolver<BacktestTaskUpdateData>,
-    defaultValues: { ...initialData, data_source: DataSource.POSTGRESQL },
+    defaultValues: {
+      ...initialData,
+      name: taskName,
+      description: taskDescription ?? '',
+    },
   });
 
   const { strategies } = useStrategies();
@@ -235,6 +253,8 @@ export default function BacktestTaskUpdateForm({
 
         const fieldMapping: Record<string, string> = {
           config: 'Configuration',
+          name: 'Task name',
+          description: 'Description',
           start_time: 'Start Date',
           end_time: 'End Date',
           initial_balance: 'Initial Balance',
@@ -264,23 +284,41 @@ export default function BacktestTaskUpdateForm({
     <Box>
       <Paper sx={{ p: 3, mb: 3, bgcolor: 'action.hover' }}>
         <Typography variant="h6" gutterBottom>
-          {t('trading:updateForm.taskInfoReadOnly')}
+          {t('common:labels.taskDetails', 'Task details')}
         </Typography>
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, md: 6 }}>
-            <Typography variant="subtitle2" color="text.secondary">
-              {t('backtest:form.taskName')}
-            </Typography>
-            <Typography variant="body1">{taskName}</Typography>
+            <Controller
+              name="name"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  label={t('backtest:form.taskName')}
+                  error={!!errors.name}
+                  helperText={errors.name?.message}
+                />
+              )}
+            />
           </Grid>
-          {taskDescription && (
-            <Grid size={{ xs: 12 }}>
-              <Typography variant="subtitle2" color="text.secondary">
-                {t('common:labels.description')}
-              </Typography>
-              <Typography variant="body1">{taskDescription}</Typography>
-            </Grid>
-          )}
+          <Grid size={{ xs: 12 }}>
+            <Controller
+              name="description"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  label={t('common:labels.description')}
+                  multiline
+                  rows={3}
+                  error={!!errors.description}
+                  helperText={errors.description?.message}
+                />
+              )}
+            />
+          </Grid>
         </Grid>
       </Paper>
 
@@ -288,6 +326,14 @@ export default function BacktestTaskUpdateForm({
         {submitError && (
           <Alert severity="error" sx={{ mb: 3 }}>
             {submitError}
+          </Alert>
+        )}
+        {restartRequiredForExecutionEdits && (
+          <Alert severity="info" sx={{ mb: 3 }}>
+            {t(
+              'backtest:form.restartRequiredForExecutionEdits',
+              'Execution setting changes apply to the next restart. Name and description changes apply immediately.'
+            )}
           </Alert>
         )}
 

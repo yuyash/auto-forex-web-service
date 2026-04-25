@@ -367,6 +367,7 @@ export const BacktestTaskDetail: React.FC = () => {
             ? (executionDetail?.status as TaskStatus)
             : currentStatus
         }
+        actionPolicy={detailTask.action_policy}
         taskType="backtest"
         strategyName={getStrategyDisplayName(
           strategies,

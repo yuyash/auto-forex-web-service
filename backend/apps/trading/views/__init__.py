@@ -1,37 +1,6 @@
-"""Trading views package.
+"""Trading view modules.
 
-This package organizes trading views into logical modules:
-- strategies: Strategy listing and defaults
-- configs: StrategyConfig CRUD operations
-- backtest: Backtest task ViewSet with full CRUD and lifecycle management
-- trading: Trading task ViewSet with full CRUD and lifecycle management
+Import concrete views from their modules instead of this package to avoid
+loading every task viewset when lightweight helpers such as query params are
+imported by services.
 """
-
-from .backtest import BacktestTaskViewSet
-from .configs import (
-    StrategyConfigCopyView,
-    StrategyConfigDetailView,
-    StrategyConfigTasksView,
-    StrategyConfigView,
-)
-from .recovery import RecoveryAttemptListView
-from .strategies import (
-    StrategyDefaultsView,
-    StrategyView,
-)
-from .trading import TradingTaskViewSet
-
-__all__ = [
-    # Strategies
-    "StrategyView",
-    "StrategyDefaultsView",
-    # Strategy Configs
-    "StrategyConfigView",
-    "StrategyConfigDetailView",
-    "StrategyConfigTasksView",
-    "StrategyConfigCopyView",
-    # Tasks
-    "BacktestTaskViewSet",
-    "TradingTaskViewSet",
-    "RecoveryAttemptListView",
-]

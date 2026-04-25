@@ -160,6 +160,21 @@ class Position(models.Model):
         indexes = [
             models.Index(fields=["task_type", "task_id", "-entry_time"]),
             models.Index(fields=["task_type", "task_id", "execution_id", "-entry_time"]),
+            models.Index(
+                fields=["task_type", "task_id", "execution_id", "updated_at"],
+                name="pos_task_exec_upd_idx",
+            ),
+            models.Index(
+                fields=[
+                    "task_type",
+                    "task_id",
+                    "execution_id",
+                    "is_open",
+                    "direction",
+                    "-entry_time",
+                ],
+                name="pos_task_exec_state_idx",
+            ),
             models.Index(fields=["task_type", "task_id", "instrument", "is_open"]),
             models.Index(fields=["is_open", "-entry_time"]),
             models.Index(fields=["instrument", "is_open"]),
@@ -176,32 +191,34 @@ class Position(models.Model):
         Comparison is rounded to the field's decimal_places (10) to avoid
         false positives from Decimal precision differences.
         """
-        if self.pk:
-            update_fields = kwargs.get("update_fields")
-            if update_fields is None or "planned_exit_price" in update_fields:
-                try:
-                    existing = (
-                        Position.objects.filter(pk=self.pk)
-                        .values_list("planned_exit_price", flat=True)
-                        .first()
-                    )
-                except Position.DoesNotExist:
-                    existing = None
-                if existing is not None and self.planned_exit_price is not None:
-                    # Round both to DB field precision (10 decimal places)
-                    # to avoid false positives from Decimal arithmetic precision.
-                    rounded_existing = round(Decimal(str(existing)), 10)
-                    rounded_new = round(Decimal(str(self.planned_exit_price)), 10)
-                    if rounded_new != rounded_existing:
-                        logger.warning(
-                            "Attempted to change immutable planned_exit_price on position %s "
-                            "(from %s to %s) — preserving original",
-                            self.pk,
-                            existing,
-                            self.planned_exit_price,
-                        )
-                        self.planned_exit_price = existing
+        self._preserve_planned_exit_price(kwargs.get("update_fields"))
         super().save(*args, **kwargs)
+
+    def _preserve_planned_exit_price(self, update_fields) -> None:
+        if not self.pk:
+            return
+        if update_fields is not None and "planned_exit_price" not in update_fields:
+            return
+
+        existing = (
+            Position.objects.filter(pk=self.pk).values_list("planned_exit_price", flat=True).first()
+        )
+        if existing is None or self.planned_exit_price is None:
+            return
+
+        rounded_existing = round(Decimal(str(existing)), 10)
+        rounded_new = round(Decimal(str(self.planned_exit_price)), 10)
+        if rounded_new == rounded_existing:
+            return
+
+        logger.warning(
+            "Attempted to change immutable planned_exit_price on position %s "
+            "(from %s to %s) — preserving original",
+            self.pk,
+            existing,
+            self.planned_exit_price,
+        )
+        self.planned_exit_price = existing
 
     def close(self, exit_price: Decimal, exit_time: models.DateTimeField) -> None:
         """

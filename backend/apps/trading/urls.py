@@ -7,17 +7,17 @@ This module defines URL patterns for trading data and strategy endpoints.
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from apps.trading.views import (
-    BacktestTaskViewSet,
+from apps.trading.views.backtest import BacktestTaskViewSet
+from apps.trading.views.configs import (
     StrategyConfigCopyView,
     StrategyConfigDetailView,
     StrategyConfigTasksView,
     StrategyConfigView,
-    StrategyDefaultsView,
-    StrategyView,
-    RecoveryAttemptListView,
-    TradingTaskViewSet,
 )
+from apps.trading.views.recovery import RecoveryAttemptListView
+from apps.trading.views.strategies import StrategyDefaultsView, StrategyView
+from apps.trading.views.stream import TaskEventStreamView
+from apps.trading.views.trading import TradingTaskViewSet
 
 app_name = "trading"
 
@@ -29,6 +29,11 @@ router.register(r"tasks/trading", TradingTaskViewSet, basename="trading-task")
 urlpatterns = [
     # Task-centric API endpoints
     path("", include(router.urls)),
+    path(
+        "tasks/<str:task_type>/<uuid:task_id>/stream/",
+        TaskEventStreamView.as_view(),
+        name="task_event_stream",
+    ),
     path("recovery-attempts/", RecoveryAttemptListView.as_view(), name="recovery_attempts"),
     # Strategy endpoints
     path("strategies/", StrategyView.as_view(), name="strategy_list"),

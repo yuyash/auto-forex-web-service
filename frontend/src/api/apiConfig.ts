@@ -20,6 +20,24 @@ export const apiConfig: ApiConfig = {
   WITH_CREDENTIALS: true,
 };
 
+const CSRF_COOKIE_NAME = 'csrftoken';
+
+function getCookie(name: string): string | undefined {
+  if (typeof document === 'undefined' || !document.cookie) {
+    return undefined;
+  }
+
+  const prefix = `${name}=`;
+  const cookie = document.cookie
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(prefix));
+  if (!cookie) {
+    return undefined;
+  }
+  return decodeURIComponent(cookie.slice(prefix.length));
+}
+
 /**
  * Helper to resolve the current auth token from apiConfig.
  */
@@ -41,6 +59,20 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   const token = await resolveToken();
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+export async function getRequestHeaders(
+  method: string
+): Promise<Record<string, string>> {
+  const headers = await getAuthHeaders();
+  const normalizedMethod = method.toUpperCase();
+  if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(normalizedMethod)) {
+    const csrfToken = getCookie(CSRF_COOKIE_NAME);
+    if (csrfToken) {
+      headers['X-CSRFToken'] = csrfToken;
+    }
   }
   return headers;
 }

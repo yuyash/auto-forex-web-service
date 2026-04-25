@@ -118,6 +118,16 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Parameters must be a JSON object")
         return value
 
+    def validate_name(self, value: str) -> str:
+        """Validate configuration name uniqueness per user."""
+        request: Request = self.context["request"]
+        query = StrategyConfiguration.objects.filter(user=request.user, name=value)
+        if self.instance is not None:
+            query = query.exclude(pk=self.instance.pk)
+        if query.exists():
+            raise serializers.ValidationError("A configuration with this name already exists.")
+        return value
+
     def validate(self, attrs: dict) -> dict:
         """Validate parameters against strategy schema."""
         from apps.trading.strategies.registry import registry
@@ -175,6 +185,11 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
         self, instance: StrategyConfiguration, validated_data: dict
     ) -> StrategyConfiguration:
         """Update strategy configuration."""
+        from apps.trading.services.task_audit import (
+            audit_strategy_config_update,
+            changed_field_values,
+        )
+
         if instance.has_active_tasks():
             raise serializers.ValidationError(
                 {
@@ -198,9 +213,11 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
                 }
             )
 
+        changes = changed_field_values(instance, validated_data)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+        audit_strategy_config_update(config=instance, changes=changes)
         return instance
 
 

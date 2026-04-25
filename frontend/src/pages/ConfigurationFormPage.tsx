@@ -211,6 +211,8 @@ const ConfigurationFormPage = () => {
                 await updateConfiguration({
                   id: configuration.id,
                   data: {
+                    name: data.name,
+                    description: data.description,
                     parameters: data.parameters,
                   },
                 });

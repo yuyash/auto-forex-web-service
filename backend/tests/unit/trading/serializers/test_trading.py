@@ -2,7 +2,10 @@
 
 from unittest.mock import MagicMock, patch
 
-from apps.trading.enums import TradingMode
+import pytest
+from rest_framework import serializers
+
+from apps.trading.enums import TaskStatus, TradingMode
 
 from apps.trading.serializers.trading import (
     TradingTaskCreateSerializer,
@@ -82,3 +85,13 @@ class TestTradingTaskCreateSerializer:
 
         mock_create.assert_called_once()
         assert mock_create.call_args.kwargs["trading_mode"] == TradingMode.NETTING
+
+    def test_update_validation_error_suppresses_exception_chain(self):
+        serializer = TradingTaskCreateSerializer()
+        task = MagicMock()
+        task.status = TaskStatus.RUNNING
+
+        with pytest.raises(serializers.ValidationError) as exc_info:
+            serializer.update(task, {"name": "Updated"})
+
+        assert exc_info.value.__cause__ is None

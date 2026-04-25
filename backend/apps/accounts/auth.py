@@ -4,12 +4,22 @@ JWT authentication backend for Django REST Framework.
 This module provides JWT token authentication for API endpoints.
 """
 
-from typing import Any
+from typing import Any, cast
 
+from django.conf import settings
+from django.http import HttpRequest
+from django.middleware.csrf import CsrfViewMiddleware
 from rest_framework import authentication, exceptions
 from rest_framework.request import Request
 
 from apps.accounts.services.jwt import JWTService
+
+
+class CSRFCheck(CsrfViewMiddleware):
+    """Return CSRF failure reasons instead of full HttpResponse objects."""
+
+    def _reject(self, request: Request, reason: str) -> str:
+        return reason
 
 
 class JWTAuthentication(authentication.BaseAuthentication):
@@ -21,6 +31,7 @@ class JWTAuthentication(authentication.BaseAuthentication):
     """
 
     keyword = "Bearer"
+    safe_methods = {"GET", "HEAD", "OPTIONS", "TRACE"}
 
     def authenticate(self, request: Request) -> tuple[Any, str] | None:
         """
@@ -37,7 +48,15 @@ class JWTAuthentication(authentication.BaseAuthentication):
         """
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
         if not auth_header:
-            return None
+            cookies = getattr(request, "COOKIES", {})
+            token = (
+                cookies.get(settings.AUTH_ACCESS_COOKIE_NAME) if isinstance(cookies, dict) else None
+            )
+            if not token:
+                return None
+            self._enforce_csrf_for_cookie_auth(request)
+            return self.authenticate_credentials(token)
+
         auth_parts = auth_header.split()
         if len(auth_parts) != 2:
             return None
@@ -79,3 +98,15 @@ class JWTAuthentication(authentication.BaseAuthentication):
             Authentication header value
         """
         return self.keyword
+
+    def _enforce_csrf_for_cookie_auth(self, request: Request) -> None:
+        """Require Django's CSRF token when authenticating unsafe cookie requests."""
+        if request.method in self.safe_methods:
+            return
+
+        django_request = cast(HttpRequest, getattr(request, "_request", request))
+        check = CSRFCheck(lambda req: None)
+        check.process_request(django_request)
+        reason = check.process_view(django_request, lambda req: None, (), {})
+        if reason:
+            raise exceptions.PermissionDenied("CSRF verification failed.")

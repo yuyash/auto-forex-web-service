@@ -599,7 +599,10 @@
       "description_ja": "再建の発動価格に対して、利益方向へ追加する安全バッファ（pips）。元の建玉価格より少なくともこの pips 分だけ有利な市場価格になるまで再建を待つことで、スリッページに対する余裕を作ります。0 はバッファなし。",
       "default": 0,
       "minimum": 0,
-      "dependsOn": { "field": "rebuild_price_adjustment_enabled", "values": [true] },
+      "dependsOn": {
+        "field": "rebuild_price_adjustment_enabled",
+        "values": [true]
+      },
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
     },
@@ -612,7 +615,10 @@
       "description_ja": "再建ポジションの利確価格に対して、ロスカット損失の相殺分に加えて利益方向へ追加する安全バッファ（pips）。完全な損益分岐点よりこの pips 分だけ早く決済することで、スリッページによるズレを吸収します。0 はバッファなし。",
       "default": 0,
       "minimum": 0,
-      "dependsOn": { "field": "rebuild_price_adjustment_enabled", "values": [true] },
+      "dependsOn": {
+        "field": "rebuild_price_adjustment_enabled",
+        "values": [true]
+      },
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
     },
@@ -632,12 +638,16 @@
       "type": "number",
       "title": "Margin Level 1 - Shrink (%)",
       "title_ja": "証拠金レベル1 - 縮小（%）",
-      "description": "Margin closeout ratio threshold to enter shrink mode (stop new entries, partial close).",
-      "description_ja": "縮小モードに入る証拠金清算割合の閾値（新規エントリー停止、部分決済）。",
+      "description": "Margin closeout ratio threshold to enter shrink mode. Lock mode also uses this level as the release baseline.",
+      "description_ja": "縮小モードに入る証拠金清算割合の閾値。ロックモードでは解除基準としても使用されます。",
       "default": 70,
       "minimum": 1,
       "maximum": 99,
-      "dependsOn": { "field": "shrink_enabled", "values": [true] },
+      "dependsOn": {
+        "field": "shrink_enabled",
+        "values": [true],
+        "or": [{ "field": "lock_enabled", "values": [true] }]
+      },
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
     },

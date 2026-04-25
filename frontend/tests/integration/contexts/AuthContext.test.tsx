@@ -147,14 +147,14 @@ describe('AuthContext', () => {
     expect(JSON.parse(localStorage.getItem('user')!)).toEqual(TEST_USER);
   });
 
-  it('calls setAuthToken on login', async () => {
-    const { setAuthToken } = await import('../../../src/api');
+  it('does not persist the access token in the API client on login', async () => {
+    const { clearAuthToken } = await import('../../../src/api');
     const user = userEvent.setup();
     renderWithAuth();
 
     await user.click(screen.getByTestId('login-btn'));
 
-    expect(setAuthToken).toHaveBeenCalledWith(TEST_TOKEN);
+    expect(clearAuthToken).toHaveBeenCalled();
   });
 
   // ── Logout ─────────────────────────────────────────────────────

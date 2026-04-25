@@ -121,6 +121,14 @@ def persist_execution_snapshot(*, task, task_type: str) -> TaskExecutionSnapshot
         summary=summary,
         fallback_mid_rate=summary.tick.mid,
     )
+    existing_snapshot = TaskExecutionSnapshot.objects.filter(
+        task_type=task_type,
+        task_id=task.pk,
+        execution_id=execution_id,
+    ).first()
+    from apps.trading.services.resume_config import build_config_snapshot_defaults
+
+    config_defaults = build_config_snapshot_defaults(snapshot=existing_snapshot, task=task)
     snapshot, _ = TaskExecutionSnapshot.objects.update_or_create(
         task_type=task_type,
         task_id=task.pk,
@@ -129,8 +137,7 @@ def persist_execution_snapshot(*, task, task_type: str) -> TaskExecutionSnapshot
             "completed_at": getattr(task, "completed_at", None),
             "summary": _make_json_safe(asdict(summary)),
             "metrics": _make_json_safe(metrics),
-            "task_config": _snapshot_task_config(task),
-            "strategy_config": _snapshot_strategy_config(task),
+            **config_defaults,
         },
     )
     return snapshot

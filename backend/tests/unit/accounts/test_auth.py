@@ -3,7 +3,9 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-from rest_framework.exceptions import AuthenticationFailed
+from django.conf import settings
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
+from rest_framework.test import APIRequestFactory
 
 from apps.accounts.auth import JWTAuthentication
 
@@ -19,6 +21,7 @@ class TestJWTAuthentication:
         auth = JWTAuthentication()
         request = MagicMock()
         request.META = {}
+        request.COOKIES = {}
         result = auth.authenticate(request)
         assert result is None
 
@@ -26,6 +29,7 @@ class TestJWTAuthentication:
         auth = JWTAuthentication()
         request = MagicMock()
         request.META = {"HTTP_AUTHORIZATION": ""}
+        request.COOKIES = {}
         result = auth.authenticate(request)
         assert result is None
 
@@ -33,6 +37,7 @@ class TestJWTAuthentication:
         auth = JWTAuthentication()
         request = MagicMock()
         request.META = {"HTTP_AUTHORIZATION": "Token abc123"}
+        request.COOKIES = {}
         result = auth.authenticate(request)
         assert result is None
 
@@ -40,6 +45,7 @@ class TestJWTAuthentication:
         auth = JWTAuthentication()
         request = MagicMock()
         request.META = {"HTTP_AUTHORIZATION": "Bearer"}
+        request.COOKIES = {}
         result = auth.authenticate(request)
         assert result is None
 
@@ -53,9 +59,44 @@ class TestJWTAuthentication:
         auth = JWTAuthentication()
         request = MagicMock()
         request.META = {"HTTP_AUTHORIZATION": "Bearer valid-token"}
+        request.COOKIES = {}
         user, token = auth.authenticate(request)
         assert user is mock_user
         assert token == "valid-token"
+
+    @patch("apps.accounts.auth.JWTService")
+    def test_authenticate_cookie_token_for_safe_request(self, mock_jwt_service_cls):
+        mock_user = MagicMock()
+        mock_user.is_active = True
+        mock_user.is_locked = False
+        mock_jwt_service_cls.return_value.get_user_from_token.return_value = mock_user
+
+        auth = JWTAuthentication()
+        request = MagicMock()
+        request.method = "GET"
+        request.META = {}
+        request.COOKIES = {settings.AUTH_ACCESS_COOKIE_NAME: "cookie-token"}
+
+        user, token = auth.authenticate(request)
+
+        assert user is mock_user
+        assert token == "cookie-token"
+
+    @patch("apps.accounts.auth.JWTService")
+    def test_authenticate_cookie_token_requires_csrf_for_unsafe_request(self, mock_jwt_service_cls):
+        mock_user = MagicMock()
+        mock_user.is_active = True
+        mock_user.is_locked = False
+        mock_jwt_service_cls.return_value.get_user_from_token.return_value = mock_user
+
+        auth = JWTAuthentication()
+        request = APIRequestFactory(enforce_csrf_checks=True).post(
+            "/api/protected/", {}, format="json"
+        )
+        request.COOKIES = {settings.AUTH_ACCESS_COOKIE_NAME: "cookie-token"}
+
+        with pytest.raises(PermissionDenied, match="CSRF"):
+            auth.authenticate(request)
 
     @patch("apps.accounts.auth.JWTService")
     def test_authenticate_invalid_token(self, mock_jwt_service_cls):

@@ -12,6 +12,7 @@ import {
 import { usePollingPolicy } from './usePollingPolicy';
 import { useTaskDetail, useTaskList } from './useTaskCollections';
 import type { QueryStateResult } from './useTaskCollections';
+import { useTaskEventStream } from './useTaskEventStream';
 
 interface UseTaskOptions {
   enabled?: boolean;
@@ -35,7 +36,7 @@ export function useTradingTask(
     enabled: Boolean(id) && options?.enablePolling === true,
     baseIntervalMs: options?.pollingInterval ?? 3000,
   });
-  return useTaskDetail<TradingTask>(
+  const state = useTaskDetail<TradingTask>(
     createTaskDetailQuery<TradingTask>(TaskType.TRADING, id, {
       ...options,
       enablePolling: pollingPolicy.isActive,
@@ -46,4 +47,10 @@ export function useTradingTask(
       shouldPoll: (task) => shouldPollTaskStatus(task?.status),
     }
   );
+  useTaskEventStream<TradingTask>({
+    taskType: TaskType.TRADING,
+    taskId: id,
+    enabled: Boolean(id) && options?.enablePolling === true,
+  });
+  return state;
 }

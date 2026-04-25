@@ -17,6 +17,7 @@ vi.mock('../../../src/api/apiConfig', () => ({
     WITH_CREDENTIALS: true,
   },
   getAuthHeaders: vi.fn().mockResolvedValue({}),
+  getRequestHeaders: vi.fn().mockResolvedValue({}),
 }));
 
 describe('useTaskPositions', () => {

@@ -148,23 +148,23 @@ class StrategyConfiguration(UUIDModel):
         )
 
     def has_active_tasks(self) -> bool:
-        """Check if configuration is used by any currently running tasks.
+        """Check if configuration is used by tasks currently owned by workers.
 
         Returns:
-            True if any running tasks reference this configuration,
+            True if any actively executing tasks reference this configuration,
             False otherwise.
         """
-        from apps.trading.enums import TaskStatus
         from apps.trading.models import BacktestTask, TradingTask
+        from apps.trading.services.task_policy import WORKER_OWNED_STATUSES
 
         return (
             TradingTask.objects.filter(
                 config=self,
-                status=TaskStatus.RUNNING,
+                status__in=WORKER_OWNED_STATUSES,
             ).exists()
             or BacktestTask.objects.filter(
                 config=self,
-                status=TaskStatus.RUNNING,
+                status__in=WORKER_OWNED_STATUSES,
             ).exists()
         )
 
@@ -173,15 +173,15 @@ class StrategyConfiguration(UUIDModel):
         """Return True when the given user has at least one running task.
 
         Configuration updates are globally locked per user while any trading or
-        backtest task is in RUNNING state.
+        backtest task is actively owned by a worker.
         """
-        from apps.trading.enums import TaskStatus
         from apps.trading.models import BacktestTask, TradingTask
+        from apps.trading.services.task_policy import WORKER_OWNED_STATUSES
 
         user_id = getattr(user, "pk", user)
         return (
-            TradingTask.objects.filter(user=user_id, status=TaskStatus.RUNNING).exists()
-            or BacktestTask.objects.filter(user=user_id, status=TaskStatus.RUNNING).exists()
+            TradingTask.objects.filter(user=user_id, status__in=WORKER_OWNED_STATUSES).exists()
+            or BacktestTask.objects.filter(user=user_id, status__in=WORKER_OWNED_STATUSES).exists()
         )
 
     def validate_parameters(self) -> tuple[bool, str | None]:

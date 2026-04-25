@@ -1,5 +1,5 @@
 // Trading Task types
-import type { TaskStatus } from './common';
+import type { TaskActionPolicy, TaskStatus } from './common';
 import type { ExecutionSummary } from './execution';
 
 export interface TradingTask {
@@ -27,6 +27,7 @@ export interface TradingTask {
   latest_execution?: ExecutionSummary;
   has_strategy_state?: boolean;
   can_resume?: boolean;
+  action_policy?: TaskActionPolicy;
   execution_id?: string;
   started_at?: string;
   completed_at?: string;

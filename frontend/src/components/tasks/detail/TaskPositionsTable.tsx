@@ -1492,6 +1492,90 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   }
 
   const totalPnl = totalRealizedPnl + totalUnrealizedPnl;
+  const directionTables = [
+    {
+      key: 'long',
+      label: t('tables.positions.longPositions'),
+      data: longPos,
+      total: longTotal,
+      selection: longSel,
+      page: longPage,
+      setPage: setLongPage,
+      rowsPerPage: longRpp,
+      setRowsPerPage: setLongRpp,
+      refresh: rLong,
+      columns: filteredDirCols('long'),
+    },
+    {
+      key: 'short',
+      label: t('tables.positions.shortPositions'),
+      data: shortPos,
+      total: shortTotal,
+      selection: shortSel,
+      page: shortPage,
+      setPage: setShortPage,
+      rowsPerPage: shortRpp,
+      setRowsPerPage: setShortRpp,
+      refresh: rShort,
+      columns: filteredDirCols('short'),
+    },
+  ];
+  const statusPairs = [
+    {
+      key: 'closed',
+      label: t('tables.positions.closedPositions'),
+      longData: closedLongPos,
+      longTotal: closedLongTotal,
+      longSelection: closedLongSel,
+      longPage: closedLongPage,
+      setLongPage: setClosedLongPage,
+      longRowsPerPage: closedLongRpp,
+      setLongRowsPerPage: setClosedLongRpp,
+      longRefresh: rCL,
+      longReloadKey: 'cl',
+      shortData: closedShortPos,
+      shortTotal: closedShortTotal,
+      shortSelection: closedShortSel,
+      shortPage: closedShortPage,
+      setShortPage: setClosedShortPage,
+      shortRowsPerPage: closedShortRpp,
+      setShortRowsPerPage: setClosedShortRpp,
+      shortRefresh: rCS,
+      shortReloadKey: 'cs',
+      columns: filteredClosedCols,
+      pnlLabel: t('tables.positions.totalRealizedPnl'),
+      pnlValue: totalRealizedPnl,
+      extractors: closedExtractors,
+      onConfigClick: () => setClosedColConfigOpen(true),
+    },
+    {
+      key: 'open',
+      label: t('tables.positions.openPositions'),
+      longData: openLongPos,
+      longTotal: openLongTotal,
+      longSelection: openLongSel,
+      longPage: openLongPage,
+      setLongPage: setOpenLongPage,
+      longRowsPerPage: openLongRpp,
+      setLongRowsPerPage: setOpenLongRpp,
+      longRefresh: rOL,
+      longReloadKey: 'ol',
+      shortData: openShortPos,
+      shortTotal: openShortTotal,
+      shortSelection: openShortSel,
+      shortPage: openShortPage,
+      setShortPage: setOpenShortPage,
+      shortRowsPerPage: openShortRpp,
+      setShortRowsPerPage: setOpenShortRpp,
+      shortRefresh: rOS,
+      shortReloadKey: 'os',
+      columns: filteredOpenCols,
+      pnlLabel: t('tables.positions.totalUnrealizedPnl'),
+      pnlValue: totalUnrealizedPnl,
+      extractors: openExtractors,
+      onConfigClick: () => setOpenColConfigOpen(true),
+    },
+  ];
 
   return (
     <Box sx={{ p: 3 }}>
@@ -1552,36 +1636,25 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         )}
         byDirection={
           <>
-            {renderSingleTable(
-              t('tables.positions.longPositions'),
-              longPos,
-              longTotal,
-              longSel,
-              longPage,
-              setLongPage,
-              longRpp,
-              setLongRpp,
-              rLong,
-              'long',
-              filteredDirCols('long'),
-              genericExtractors,
-              () => setDirColConfigOpen(true)
-            )}
-            {renderSingleTable(
-              t('tables.positions.shortPositions'),
-              shortPos,
-              shortTotal,
-              shortSel,
-              shortPage,
-              setShortPage,
-              shortRpp,
-              setShortRpp,
-              rShort,
-              'short',
-              filteredDirCols('short'),
-              genericExtractors,
-              () => setDirColConfigOpen(true)
-            )}
+            {directionTables.map((table) => (
+              <React.Fragment key={table.key}>
+                {renderSingleTable(
+                  table.label,
+                  table.data,
+                  table.total,
+                  table.selection,
+                  table.page,
+                  table.setPage,
+                  table.rowsPerPage,
+                  table.setRowsPerPage,
+                  table.refresh,
+                  table.key,
+                  table.columns,
+                  genericExtractors,
+                  () => setDirColConfigOpen(true)
+                )}
+              </React.Fragment>
+            ))}
           </>
         }
         byStatus={
@@ -1596,58 +1669,36 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
               hasPositionIdFilter={hasPositionIdFilter}
               isPositionIdFilterValid={isPositionIdFilterValid}
             />
-            {renderPair(
-              t('tables.positions.closedPositions'),
-              closedLongPos,
-              closedLongTotal,
-              closedLongSel,
-              closedLongPage,
-              setClosedLongPage,
-              closedLongRpp,
-              setClosedLongRpp,
-              rCL,
-              'cl',
-              closedShortPos,
-              closedShortTotal,
-              closedShortSel,
-              closedShortPage,
-              setClosedShortPage,
-              closedShortRpp,
-              setClosedShortRpp,
-              rCS,
-              'cs',
-              filteredClosedCols,
-              t('tables.positions.totalRealizedPnl'),
-              totalRealizedPnl,
-              closedExtractors,
-              () => setClosedColConfigOpen(true)
-            )}
-            {renderPair(
-              t('tables.positions.openPositions'),
-              openLongPos,
-              openLongTotal,
-              openLongSel,
-              openLongPage,
-              setOpenLongPage,
-              openLongRpp,
-              setOpenLongRpp,
-              rOL,
-              'ol',
-              openShortPos,
-              openShortTotal,
-              openShortSel,
-              openShortPage,
-              setOpenShortPage,
-              openShortRpp,
-              setOpenShortRpp,
-              rOS,
-              'os',
-              filteredOpenCols,
-              t('tables.positions.totalUnrealizedPnl'),
-              totalUnrealizedPnl,
-              openExtractors,
-              () => setOpenColConfigOpen(true)
-            )}
+            {statusPairs.map((pair) => (
+              <React.Fragment key={pair.key}>
+                {renderPair(
+                  pair.label,
+                  pair.longData,
+                  pair.longTotal,
+                  pair.longSelection,
+                  pair.longPage,
+                  pair.setLongPage,
+                  pair.longRowsPerPage,
+                  pair.setLongRowsPerPage,
+                  pair.longRefresh,
+                  pair.longReloadKey,
+                  pair.shortData,
+                  pair.shortTotal,
+                  pair.shortSelection,
+                  pair.shortPage,
+                  pair.setShortPage,
+                  pair.shortRowsPerPage,
+                  pair.setShortRowsPerPage,
+                  pair.shortRefresh,
+                  pair.shortReloadKey,
+                  pair.columns,
+                  pair.pnlLabel,
+                  pair.pnlValue,
+                  pair.extractors,
+                  pair.onConfigClick
+                )}
+              </React.Fragment>
+            ))}
           </>
         }
       />

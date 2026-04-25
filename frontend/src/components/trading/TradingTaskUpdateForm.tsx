@@ -27,6 +27,14 @@ import {
 
 // Update schema - editable fields for trading tasks
 const tradingTaskUpdateSchema = z.object({
+  name: z
+    .string()
+    .min(1, 'Task name is required')
+    .max(100, 'Task name must be less than 100 characters'),
+  description: z
+    .string()
+    .max(500, 'Description must be less than 500 characters')
+    .optional(),
   config_id: z.string().min(1, 'Configuration is required'),
   hedging_enabled: z.boolean().optional(),
   api_retry_max_attempts: z.coerce
@@ -63,6 +71,10 @@ const tradingTaskUpdateSchema = z.object({
 });
 
 type TradingTaskUpdateData = z.infer<typeof tradingTaskUpdateSchema>;
+type TradingTaskUpdateInitialData = Omit<
+  TradingTaskUpdateData,
+  'name' | 'description'
+>;
 
 interface TradingTaskUpdateFormProps {
   taskId: string;
@@ -70,8 +82,9 @@ interface TradingTaskUpdateFormProps {
   taskDescription?: string;
   accountId: number;
   accountName: string;
-  initialData: TradingTaskUpdateData;
+  initialData: TradingTaskUpdateInitialData;
   debugOptions?: Record<string, unknown>;
+  restartRequiredForExecutionEdits?: boolean;
 }
 
 export default function TradingTaskUpdateForm({
@@ -82,6 +95,7 @@ export default function TradingTaskUpdateForm({
   accountName,
   initialData,
   debugOptions,
+  restartRequiredForExecutionEdits = false,
 }: TradingTaskUpdateFormProps) {
   const { t } = useTranslation(['trading', 'common']);
   const navigate = useNavigate();
@@ -100,7 +114,11 @@ export default function TradingTaskUpdateForm({
     resolver: zodResolver(
       tradingTaskUpdateSchema
     ) as Resolver<TradingTaskUpdateData>,
-    defaultValues: initialData,
+    defaultValues: {
+      ...initialData,
+      name: taskName,
+      description: taskDescription ?? '',
+    },
   });
 
   const { strategies } = useStrategies();
@@ -125,6 +143,8 @@ export default function TradingTaskUpdateForm({
       await updateTask.mutate({
         id: taskId,
         data: {
+          name: data.name,
+          description: data.description,
           config: data.config_id,
           hedging_enabled:
             accountHedgingEnabled === false ? false : data.hedging_enabled,
@@ -153,6 +173,8 @@ export default function TradingTaskUpdateForm({
 
         const fieldMapping: Record<string, string> = {
           config: 'Configuration',
+          name: 'Task name',
+          description: 'Description',
           hedging_enabled: 'Hedging',
           api_retry_max_attempts: 'OANDA retry attempts',
           api_retry_backoff_base_seconds: 'Retry backoff base',
@@ -185,14 +207,23 @@ export default function TradingTaskUpdateForm({
     <Box>
       <Paper sx={{ p: 3, mb: 3, bgcolor: 'action.hover' }}>
         <Typography variant="h6" gutterBottom>
-          {t('trading:updateForm.taskInfoReadOnly')}
+          {t('common:labels.taskDetails', 'Task details')}
         </Typography>
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, md: 6 }}>
-            <Typography variant="subtitle2" color="text.secondary">
-              {t('trading:form.taskName')}
-            </Typography>
-            <Typography variant="body1">{taskName}</Typography>
+            <Controller
+              name="name"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  label={t('trading:form.taskName')}
+                  error={!!errors.name}
+                  helperText={errors.name?.message}
+                />
+              )}
+            />
           </Grid>
           <Grid size={{ xs: 12, md: 6 }}>
             <Typography variant="subtitle2" color="text.secondary">
@@ -200,14 +231,23 @@ export default function TradingTaskUpdateForm({
             </Typography>
             <Typography variant="body1">{accountName}</Typography>
           </Grid>
-          {taskDescription && (
-            <Grid size={{ xs: 12 }}>
-              <Typography variant="subtitle2" color="text.secondary">
-                {t('common:labels.description')}
-              </Typography>
-              <Typography variant="body1">{taskDescription}</Typography>
-            </Grid>
-          )}
+          <Grid size={{ xs: 12 }}>
+            <Controller
+              name="description"
+              control={control}
+              render={({ field }) => (
+                <TextField
+                  {...field}
+                  fullWidth
+                  label={t('common:labels.description')}
+                  multiline
+                  rows={3}
+                  error={!!errors.description}
+                  helperText={errors.description?.message}
+                />
+              )}
+            />
+          </Grid>
         </Grid>
       </Paper>
 
@@ -215,6 +255,14 @@ export default function TradingTaskUpdateForm({
         {submitError && (
           <Alert severity="error" sx={{ mb: 3 }}>
             {submitError}
+          </Alert>
+        )}
+        {restartRequiredForExecutionEdits && (
+          <Alert severity="info" sx={{ mb: 3 }}>
+            {t(
+              'trading:updateForm.restartRequiredForExecutionEdits',
+              'Execution setting changes apply to the next restart. Name and description changes apply immediately.'
+            )}
           </Alert>
         )}
 

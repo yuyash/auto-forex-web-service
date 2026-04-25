@@ -7,6 +7,10 @@ from rest_framework import serializers
 
 from apps.trading.enums import TaskStatus
 from apps.trading.models import BacktestTask, StrategyConfiguration
+from apps.trading.services.task_policy import (
+    action_policy_for_task,
+    task_update_validation_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +23,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
     can_resume = serializers.SerializerMethodField()
+    action_policy = serializers.SerializerMethodField()
 
     class Meta:
         model = BacktestTask
@@ -60,6 +65,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "updated_at",
             "debug_options",
             "can_resume",
+            "action_policy",
         ]
         read_only_fields = [
             "id",
@@ -75,11 +81,16 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "can_resume",
+            "action_policy",
         ]
 
     def get_can_resume(self, obj: BacktestTask) -> bool:
         """Check if task can be resumed with state recovery."""
         return obj.can_resume()
+
+    def get_action_policy(self, obj: BacktestTask) -> dict[str, bool]:
+        """Return task action permissions."""
+        return action_policy_for_task(obj, task_type="backtest").as_dict()
 
 
 class BacktestTaskListSerializer(BacktestTaskSerializer):
@@ -191,6 +202,16 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
         """Validate pip size is positive if provided."""
         if value is not None and value <= 0:
             raise serializers.ValidationError("Pip size must be positive")
+        return value
+
+    def validate_name(self, value: str) -> str:
+        """Validate task name uniqueness per user."""
+        user = self.context["request"].user
+        query = BacktestTask.objects.filter(user=user, name=value)
+        if self.instance is not None:
+            query = query.exclude(pk=self.instance.pk)
+        if query.exists():
+            raise serializers.ValidationError("A backtest task with this name already exists.")
         return value
 
     def validate(self, attrs: dict) -> dict:
@@ -326,10 +347,17 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
 
     def update(self, instance: BacktestTask, validated_data: dict) -> BacktestTask:
         """Update backtest task."""
-        # Don't allow updating if task is running
-        if instance.status == TaskStatus.RUNNING:
-            raise serializers.ValidationError("Cannot update a running task. Stop it first.")
+        from apps.trading.services.task_audit import audit_task_update, changed_field_values
 
+        error = task_update_validation_error(
+            task=instance,
+            changed_fields=set(validated_data),
+            task_type="backtest",
+        )
+        if error is not None:
+            raise serializers.ValidationError(error)
+
+        changes = changed_field_values(instance, validated_data)
         replay_settings_changed = any(
             field in validated_data and validated_data[field] != getattr(instance, field)
             for field in ("tick_granularity", "tick_window_value_mode")
@@ -345,4 +373,5 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
                 instance.status = TaskStatus.STOPPED
 
         instance.save()
+        audit_task_update(task=instance, task_type="backtest", changes=changes)
         return instance

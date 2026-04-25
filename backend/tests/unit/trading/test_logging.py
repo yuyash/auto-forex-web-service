@@ -4,6 +4,7 @@ import logging
 from unittest.mock import MagicMock
 
 from apps.trading.logging import (
+    BufferedJSONLoggingHandler,
     DEFAULT_TASK_LOGGER_NAMES,
     JSONLoggingHandler,
     TaskLoggingSession,
@@ -35,6 +36,39 @@ class TestJSONLoggingHandler:
         )
         # Should not raise even though TaskLog is not available
         handler.emit(record)
+
+
+class TestBufferedJSONLoggingHandler:
+    """Test BufferedJSONLoggingHandler."""
+
+    def test_flush_bulk_creates_buffered_records(self, monkeypatch):
+        task = MagicMock()
+        task.pk = 1
+        handler = BufferedJSONLoggingHandler(task, buffer_size=2)
+        created = []
+
+        def fake_bulk_create(objs, batch_size=None):
+            created.extend(objs)
+            return objs
+
+        monkeypatch.setattr("apps.trading.logging.TaskLog.objects.bulk_create", fake_bulk_create)
+
+        record = logging.LogRecord(
+            name="test",
+            level=logging.INFO,
+            pathname="",
+            lineno=0,
+            msg="buffered message",
+            args=(),
+            exc_info=None,
+        )
+
+        handler.emit(record)
+        assert created == []
+
+        handler.flush()
+        assert len(created) == 1
+        assert created[0].message == "buffered message"
 
 
 class TestGetTaskLogger:

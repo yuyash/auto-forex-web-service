@@ -24,6 +24,30 @@ export enum TaskType {
   TRADING = 'trading',
 }
 
+export interface TaskActionPolicy {
+  can_start: boolean;
+  can_stop: boolean;
+  can_pause: boolean;
+  can_resume: boolean;
+  can_restart: boolean;
+  can_delete: boolean;
+  can_edit_metadata: boolean;
+  can_edit_execution_settings: boolean;
+  restart_required_for_execution_edits: boolean;
+}
+
+export const WORKER_OWNED_TASK_STATUSES = new Set<TaskStatus>([
+  TaskStatus.STARTING,
+  TaskStatus.RUNNING,
+  TaskStatus.IDLE,
+  TaskStatus.DRAINING,
+  TaskStatus.STOPPING,
+]);
+
+export function isWorkerOwnedTaskStatus(status?: TaskStatus): boolean {
+  return status ? WORKER_OWNED_TASK_STATUSES.has(status) : false;
+}
+
 export interface PaginatedResponse<T> {
   count: number;
   next: string | null;

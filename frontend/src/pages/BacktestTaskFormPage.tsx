@@ -95,6 +95,9 @@ export default function BacktestTaskFormPage() {
                 taskName={task.name}
                 taskDescription={task.description}
                 debugOptions={task.debug_options}
+                restartRequiredForExecutionEdits={
+                  task.action_policy?.restart_required_for_execution_edits
+                }
                 initialData={updateInitialData!}
               />
             ) : (
