@@ -118,6 +118,16 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Parameters must be a JSON object")
         return value
 
+    def validate_name(self, value: str) -> str:
+        """Validate configuration name uniqueness per user."""
+        request: Request = self.context["request"]
+        query = StrategyConfiguration.objects.filter(user=request.user, name=value)
+        if self.instance is not None:
+            query = query.exclude(pk=self.instance.pk)
+        if query.exists():
+            raise serializers.ValidationError("A configuration with this name already exists.")
+        return value
+
     def validate(self, attrs: dict) -> dict:
         """Validate parameters against strategy schema."""
         from apps.trading.strategies.registry import registry

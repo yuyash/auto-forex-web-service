@@ -471,6 +471,23 @@ class TaskLifecycleCommands:
 
                 raise TaskValidationError("Cannot resume task without an execution_id")
 
+            try:
+                from apps.trading.services.resume_config import (
+                    log_effective_resume_configuration,
+                    validate_resume_configuration,
+                )
+
+                audit = validate_resume_configuration(task=locked_task, task_type=task_type)
+                log_effective_resume_configuration(
+                    logger=self.logger,
+                    audit=audit,
+                    task=locked_task,
+                )
+            except ValueError as exc:
+                from apps.trading.tasks.service import TaskValidationError
+
+                raise TaskValidationError(str(exc)) from exc
+
             previous_celery_task_id = locked_task.celery_task_id
             result = self.service.get_celery_result(
                 str(previous_celery_task_id) if previous_celery_task_id else None

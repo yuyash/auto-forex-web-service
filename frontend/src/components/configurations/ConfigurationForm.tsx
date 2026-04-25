@@ -294,8 +294,8 @@ const ConfigurationForm = ({
     e?.preventDefault();
 
     // Validate current step before advancing
-    if (!isEditMode && activeStep === 0) {
-      const valid = await trigger(['name']);
+    if (activeStep === 0) {
+      const valid = await trigger(['name', 'description']);
       if (!valid) return;
     }
     if (!isEditMode && activeStep === 1) {
@@ -348,6 +348,7 @@ const ConfigurationForm = ({
   // Different steps for create vs edit mode
   const steps = isEditMode
     ? [
+        t('configuration:form.steps.basicInformation'),
         t('configuration:form.steps.parameters'),
         t('configuration:form.steps.review'),
       ]
@@ -436,8 +437,8 @@ const ConfigurationForm = ({
       </Stepper>
 
       <form onSubmit={handleSubmit(onFormSubmit)}>
-        {/* Step 1: Basic Information (Create mode only) */}
-        {!isEditMode && activeStep === 0 && (
+        {/* Step 1: Basic Information */}
+        {activeStep === 0 && (
           <Box>
             <Typography variant="h6" gutterBottom>
               {t('configuration:form.basicInformation')}
@@ -587,7 +588,7 @@ const ConfigurationForm = ({
         )}
 
         {/* Step 3: Parameters (Create mode) or Step 1: Parameters (Edit mode) */}
-        {((isEditMode && activeStep === 0) ||
+        {((isEditMode && activeStep === 1) ||
           (!isEditMode && activeStep === 2)) && (
           <Box>
             <Typography variant="h6" gutterBottom>
@@ -639,7 +640,7 @@ const ConfigurationForm = ({
         )}
 
         {/* Step 4: Review (Create mode) or Step 2: Review (Edit mode) */}
-        {((isEditMode && activeStep === 1) ||
+        {((isEditMode && activeStep === 2) ||
           (!isEditMode && activeStep === 3)) && (
           <Box>
             <Typography variant="h6" gutterBottom>
@@ -651,72 +652,44 @@ const ConfigurationForm = ({
 
             <Card variant="outlined" sx={{ mb: 2 }}>
               <CardContent>
-                {!isEditMode && (
+                <Typography
+                  variant="subtitle2"
+                  color="text.secondary"
+                  gutterBottom
+                >
+                  {t('common:labels.name')}
+                </Typography>
+                <Typography variant="body1" sx={{ mb: 2 }}>
+                  {watch('name')}
+                </Typography>
+
+                {watch('description') && (
                   <>
                     <Typography
                       variant="subtitle2"
                       color="text.secondary"
                       gutterBottom
                     >
-                      {t('common:labels.name')}
+                      {t('common:labels.description')}
                     </Typography>
                     <Typography variant="body1" sx={{ mb: 2 }}>
-                      {watch('name')}
+                      {watch('description')}
                     </Typography>
-
-                    {watch('description') && (
-                      <>
-                        <Typography
-                          variant="subtitle2"
-                          color="text.secondary"
-                          gutterBottom
-                        >
-                          {t('common:labels.description')}
-                        </Typography>
-                        <Typography variant="body1" sx={{ mb: 2 }}>
-                          {watch('description')}
-                        </Typography>
-                      </>
-                    )}
-
-                    <Typography
-                      variant="subtitle2"
-                      color="text.secondary"
-                      gutterBottom
-                    >
-                      {t('common:labels.strategyType')}
-                    </Typography>
-                    <Typography variant="body1" sx={{ mb: 2 }}>
-                      {selectedStrategy?.name}
-                    </Typography>
-
-                    <Divider sx={{ my: 2 }} />
                   </>
                 )}
 
-                {isEditMode && (
-                  <>
-                    <Typography
-                      variant="subtitle2"
-                      color="text.secondary"
-                      gutterBottom
-                    >
-                      {t('common:labels.configuration')}
-                    </Typography>
-                    <Typography variant="body1" sx={{ mb: 1 }}>
-                      {watch('name')}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ mb: 2 }}
-                    >
-                      {selectedStrategy?.name}
-                    </Typography>
+                <Typography
+                  variant="subtitle2"
+                  color="text.secondary"
+                  gutterBottom
+                >
+                  {t('common:labels.strategyType')}
+                </Typography>
+                <Typography variant="body1" sx={{ mb: 2 }}>
+                  {selectedStrategy?.name}
+                </Typography>
 
-                    <Divider sx={{ my: 2 }} />
-                  </>
-                )}
+                <Divider sx={{ my: 2 }} />
 
                 <Typography
                   variant="subtitle2"

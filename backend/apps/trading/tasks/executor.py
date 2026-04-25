@@ -1766,24 +1766,29 @@ class TaskExecutor:
         execution fails before reaching the finalization step.
         """
         from apps.trading.models import TaskExecutionSnapshot
-        from apps.trading.services.execution_snapshots import (
-            _snapshot_strategy_config,
-            _snapshot_task_config,
-        )
 
         execution_id = getattr(self.task, "execution_id", None)
         if execution_id is None:
             return
         try:
+            from apps.trading.services.resume_config import (
+                build_config_snapshot_defaults,
+                log_effective_start_configuration,
+            )
+
+            snapshot = TaskExecutionSnapshot.objects.filter(
+                task_type=self.task_type.value,
+                task_id=self.task.pk,
+                execution_id=execution_id,
+            ).first()
+            defaults = build_config_snapshot_defaults(snapshot=snapshot, task=self.task)
             TaskExecutionSnapshot.objects.update_or_create(
                 task_type=self.task_type.value,
                 task_id=self.task.pk,
                 execution_id=execution_id,
-                defaults={
-                    "task_config": _snapshot_task_config(self.task),
-                    "strategy_config": _snapshot_strategy_config(self.task),
-                },
+                defaults=defaults,
             )
+            log_effective_start_configuration(logger=logger, task=self.task)
         except Exception:
             logger.warning("Failed to persist config snapshot", exc_info=True)
 

@@ -32,6 +32,8 @@ export interface BacktestTaskPayloadFormData {
 function sharedBacktestTaskPayload(data: BacktestTaskPayloadFormData) {
   return {
     config: data.config_id,
+    name: data.name,
+    description: data.description,
     data_source: DataSource.POSTGRESQL,
     start_time: data.start_time,
     end_time: data.end_time,

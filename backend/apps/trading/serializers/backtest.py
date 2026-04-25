@@ -10,6 +10,14 @@ from apps.trading.models import BacktestTask, StrategyConfiguration
 
 logger = logging.getLogger(__name__)
 
+WORKER_OWNED_STATUSES = (
+    TaskStatus.STARTING,
+    TaskStatus.RUNNING,
+    TaskStatus.IDLE,
+    TaskStatus.DRAINING,
+    TaskStatus.STOPPING,
+)
+
 
 class BacktestTaskSerializer(serializers.ModelSerializer):
     """Serializer for BacktestTask full details."""
@@ -193,6 +201,16 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Pip size must be positive")
         return value
 
+    def validate_name(self, value: str) -> str:
+        """Validate task name uniqueness per user."""
+        user = self.context["request"].user
+        query = BacktestTask.objects.filter(user=user, name=value)
+        if self.instance is not None:
+            query = query.exclude(pk=self.instance.pk)
+        if query.exists():
+            raise serializers.ValidationError("A backtest task with this name already exists.")
+        return value
+
     def validate(self, attrs: dict) -> dict:
         """Validate date ranges and configuration."""
         from django.utils import timezone
@@ -326,9 +344,10 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
 
     def update(self, instance: BacktestTask, validated_data: dict) -> BacktestTask:
         """Update backtest task."""
-        # Don't allow updating if task is running
-        if instance.status == TaskStatus.RUNNING:
-            raise serializers.ValidationError("Cannot update a running task. Stop it first.")
+        if instance.status in WORKER_OWNED_STATUSES:
+            raise serializers.ValidationError(
+                "Cannot update a task while it is actively running. Stop or pause it first."
+            )
 
         replay_settings_changed = any(
             field in validated_data and validated_data[field] != getattr(instance, field)

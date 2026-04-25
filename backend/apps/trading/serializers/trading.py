@@ -5,10 +5,18 @@ import logging
 from rest_framework import serializers
 
 from apps.market.models import OandaAccounts
-from apps.trading.enums import TradingMode
+from apps.trading.enums import TaskStatus, TradingMode
 from apps.trading.models import StrategyConfiguration, TradingTask
 
 logger = logging.getLogger(__name__)
+
+WORKER_OWNED_STATUSES = (
+    TaskStatus.STARTING,
+    TaskStatus.RUNNING,
+    TaskStatus.IDLE,
+    TaskStatus.DRAINING,
+    TaskStatus.STOPPING,
+)
 
 
 class TradingTaskSerializer(serializers.ModelSerializer):
@@ -216,6 +224,16 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Account is not active")
         return value
 
+    def validate_name(self, value: str) -> str:
+        """Validate task name uniqueness per user."""
+        user = self.context["request"].user
+        query = TradingTask.objects.filter(user=user, name=value)
+        if self.instance is not None:
+            query = query.exclude(pk=self.instance.pk)
+        if query.exists():
+            raise serializers.ValidationError("A trading task with this name already exists.")
+        return value
+
     def validate(self, attrs: dict) -> dict:
         """Validate configuration parameters."""
         # On create, config and oanda_account are required
@@ -293,9 +311,10 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
 
     def update(self, instance: TradingTask, validated_data: dict) -> TradingTask:
         """Update trading task."""
-        # Don't allow updating if task is running
-        if instance.status == "running":
-            raise serializers.ValidationError("Cannot update a running task. Stop it first.")
+        if instance.status in WORKER_OWNED_STATUSES:
+            raise serializers.ValidationError(
+                "Cannot update a task while it is actively running. Stop or pause it first."
+            )
 
         if "hedging_enabled" in validated_data:
             validated_data["trading_mode"] = (

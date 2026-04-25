@@ -402,8 +402,11 @@ class TradingTask(UUIDModel):
         return bool(self.strategy_state)
 
     def can_resume(self) -> bool:
-        """Whether the current execution can be resumed from a paused state."""
-        return self.status == TaskStatus.PAUSED and self.execution_id is not None
+        """Whether the current execution can resume from persisted state."""
+        return (
+            self.status in (TaskStatus.PAUSED, TaskStatus.STOPPED, TaskStatus.FAILED)
+            and self.execution_id is not None
+        )
 
     @property
     def account_id(self) -> int:
