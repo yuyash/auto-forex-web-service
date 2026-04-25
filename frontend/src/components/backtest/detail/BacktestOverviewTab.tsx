@@ -15,6 +15,14 @@ import type { MetricPoint } from '../../../utils/fetchMetrics';
 import { formatAppNumber, formatAppPercent } from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
 
+const BACKTEST_PERIOD_SETTING_KEYS = new Set([
+  'start_time',
+  'end_time',
+  'tick_granularity',
+  'tick_window_value_mode',
+  'max_tick_gap_hours',
+]);
+
 interface BacktestOverviewTabProps {
   taskId: string;
   task: BacktestTask;
@@ -75,8 +83,11 @@ export function BacktestOverviewTab({
 
   const taskSettings = useMemo(
     () =>
-      buildBacktestTaskSettingDefinitions(t, timezone, language).map(
-        (definition) => {
+      buildBacktestTaskSettingDefinitions(t, timezone, language)
+        .filter(
+          (definition) => !BACKTEST_PERIOD_SETTING_KEYS.has(definition.key)
+        )
+        .map((definition) => {
           if (definition.key === 'config_name') {
             return {
               ...definition,
@@ -129,8 +140,7 @@ export function BacktestOverviewTab({
           }
 
           return definition;
-        }
-      ),
+        }),
     [
       historicalStrategyConfig?.id,
       historicalStrategyConfig?.name,
