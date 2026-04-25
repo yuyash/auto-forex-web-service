@@ -227,8 +227,8 @@ class TestBacktestStreamPublisher:
 
 @pytest.mark.django_db
 class TestBacktestStreamPublisherExecutionIsolation:
-    """Execution-scoped stream keys plus DEL-before-XADD prevent a new
-    run from inheriting leftover entries from a previous execution."""
+    """Execution-scoped stream keys and fresh consumer groups prevent a
+    new run from inheriting leftover entries from a previous execution."""
 
     def test_execution_scoped_stream_receives_all_ticks(self, settings) -> None:
         """Writing with an ``execution_id`` produces an isolated stream."""
@@ -261,9 +261,9 @@ class TestBacktestStreamPublisherExecutionIsolation:
             "Legacy task-id-only stream should remain empty when execution_id is provided"
         )
 
-    def test_publisher_deletes_prior_entries_for_same_execution(self, settings) -> None:
+    def test_publisher_starts_group_after_prior_entries_for_same_execution(self, settings) -> None:
         """A crashed prior attempt left leftover entries — the next run
-        must wipe them before publishing."""
+        must not deliver them to the new consumer group."""
         settings.MARKET_BACKTEST_STREAM_MAXLEN = 1_000
         settings.MARKET_BACKTEST_BACKPRESSURE_HIGH_WATERMARK = 0
 
@@ -300,10 +300,19 @@ class TestBacktestStreamPublisherExecutionIsolation:
             )
 
         entries = fake_client.xrange(stream_key)
-        # Only the 2 DB ticks + 1 EOF — the stale tick is gone.
-        assert len(entries) == 3
-        for _id, fields in entries:
+        assert len(entries) == 4
+        assert any(fields.get("timestamp", "").startswith("2099") for _id, fields in entries)
+
+        delivered = fake_client.xreadgroup(
+            "backtest",
+            "consumer-1",
+            {stream_key: ">"},
+            count=10,
+        )
+        delivered_entries = delivered[0][1]
+        # Only the 2 DB ticks + 1 EOF are delivered to the fresh group; the
+        # stale tick remains in Redis but is behind the group's start offset.
+        assert len(delivered_entries) == 3
+        for _id, fields in delivered_entries:
             ts = fields.get("timestamp", "")
-            assert not ts.startswith("2099"), (
-                f"Stale entry from a prior run still present: {fields}"
-            )
+            assert not ts.startswith("2099"), f"Stale entry was delivered: {fields}"

@@ -409,6 +409,7 @@ export const TradingTaskDetail: React.FC = () => {
             <TaskStrategyTab
               taskId={taskId}
               taskType={TaskType.TRADING}
+              strategyType={detailTask.strategy_type}
               instrument={detailTask.instrument}
               executionRunId={activeExecutionId}
               enableRealTimeUpdates={enableRealtime}
@@ -447,6 +448,7 @@ export const TradingTaskDetail: React.FC = () => {
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
               enableRealTimeUpdates={enableRealtime}
+              strategyType={detailTask.strategy_type}
               pipSize={
                 detailTask.pip_size ? parseFloat(detailTask.pip_size) : null
               }
@@ -558,6 +560,7 @@ export const TradingTaskDetail: React.FC = () => {
           }
           onConfirm={async () => {
             const { type, taskId: actionTaskId } = pendingAction;
+            cancelAction();
             try {
               if (type === 'start') {
                 const updatedTask = await startTask.mutate(actionTaskId);
@@ -584,11 +587,9 @@ export const TradingTaskDetail: React.FC = () => {
               // type === 'stop' is never routed here anymore — it goes
               // through StopOptionsDialog below. Guard remains in case a
               // stale request slips in.
-              cancelAction();
               await refreshTask();
             } catch (error) {
               showError(formatTaskActionError(error, 'Failed to update task'));
-              cancelAction();
             }
           }}
         />

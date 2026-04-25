@@ -267,6 +267,7 @@ export function createTaskExecutionQuery(
   executionId: string,
   taskType: TaskType
 ): UseQueryOptions<TaskExecution> {
+  const hasExecutionId = Boolean(String(executionId || '').trim());
   return {
     queryKey:
       taskType === TaskType.BACKTEST
@@ -276,6 +277,7 @@ export function createTaskExecutionQuery(
       taskType === TaskType.BACKTEST
         ? backtestTasksApi.getExecution(taskId, executionId)
         : tradingTasksApi.getExecution(taskId, executionId),
+    enabled: Boolean(taskId) && hasExecutionId,
     staleTime: 10000,
   };
 }

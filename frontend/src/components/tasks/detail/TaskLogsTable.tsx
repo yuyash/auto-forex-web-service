@@ -212,7 +212,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     {
       id: 'message',
       label: t('tables.logs.message'),
-      width: 500,
+      width: 1000,
       minWidth: 400,
       render: (row) => {
         const strategyEventLabel = getStrategyEventLabel(row);

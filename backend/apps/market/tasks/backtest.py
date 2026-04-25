@@ -182,40 +182,14 @@ class BacktestTickPublisherRunner:
         client = redis_client()
         published = 0
 
-        # Reset the stream so a restarted run never inherits entries from
-        # a previous execution.  Because the stream key now includes the
-        # ``execution_id`` (when the caller supplies one), this DEL is
-        # guaranteed to only affect the current execution's stream and
-        # cannot disturb a concurrent run of the same task under a
-        # different execution id.  Legacy callers that pass only the
-        # task id still get the old behaviour, and in that case we fall
-        # back to destroying the stale consumer group only (below).
-        if execution_id:
-            try:
-                client.delete(channel)
-                logger.info(
-                    f"[PUBLISHER:RUN] Cleared stream for fresh execution - "
-                    f"request_id={request_id}, execution_id={execution_id}, "
-                    f"stream={channel}"
-                )
-            except Exception as exc:  # nosec B110
-                logger.debug(
-                    f"[PUBLISHER:RUN] DEL stream failed (non-fatal) - "
-                    f"request_id={request_id}, stream={channel}, error={exc}"
-                )
-
-        # Ensure the consumer group starts fresh.  We cannot simply
-        # ``DELETE`` the stream key here because in Celery eager mode
-        # (used by some tests) the subscriber is started in the same
-        # process and may already be blocked on ``XREADGROUP`` against
-        # the current stream; deleting the key would trigger a NOGROUP
-        # error on that in-flight call.  Instead we destroy the old
-        # consumer group (if any) — ``XGROUP DESTROY`` leaves the
-        # stream itself alone — and rely on ``XADD MAXLEN ~`` trimming
-        # to bound the stream size.  The subsequent
-        # ``_ensure_consumer_group`` below then creates a new group at
-        # ``$`` so the new run only ever sees entries this publisher
-        # adds from now on.
+        # Ensure the consumer group starts fresh.  Do not delete the stream
+        # here: the subscriber can already be blocked on XREADGROUP after
+        # triggering this publisher, and Redis unblocks that reader with
+        # ``UNBLOCKED the stream key no longer exists`` when the key is
+        # deleted.  The stream key includes execution_id for normal runs,
+        # so stale entries from older executions are isolated by key.  For
+        # same-key legacy/recovery cases, recreating the group at "$" below
+        # keeps this execution from reading pre-existing entries.
         try:
             destroyed = client.xgroup_destroy(channel, consumer_group)
             if destroyed:

@@ -12,6 +12,7 @@
   },
   "types": {
     "snowball": "スノーボール戦略",
+    "adaptive_net": "アダプティブ・ネット戦略",
     "trendFollowing": "トレンドフォロー",
     "maCrossover": "移動平均クロスオーバー",
     "breakout": "ブレイクアウト",
@@ -25,7 +26,8 @@
     "newsSpike": "ニュース/スパイク"
   },
   "descriptions": {
-    "snowball": "両建てヘッジ戦略：順行側の回転利確と、逆行側の段別決済によるナンピン平均化。"
+    "snowball": "両建てヘッジ戦略：順行側の回転利確と、逆行側の段別決済によるナンピン平均化。",
+    "adaptive_net": "プラグイン式メトリクスを統合し、目標ネット建玉にリバランスする米国口座対応戦略。"
   },
   "parameters": {
     "lotSize": "ロットサイズ",
@@ -74,5 +76,80 @@
     "invalidOption": "無効なオプションが選択されています",
     "formErrors": "以下のエラーを修正してから続行してください。",
     "linkedCountZero": "段別の値を設定するには、先に関連フィールドを設定してください。"
+  },
+  "adaptiveNet": {
+    "noState": "戦略がマーケットデータを処理すると、Adaptive Netの状態が表示されます。",
+    "directions": {
+      "flat": "フラット",
+      "netLong": "ネットロング",
+      "netShort": "ネットショート"
+    },
+    "summary": {
+      "currentNet": "現在ネット建玉",
+      "targetNet": "目標ネット建玉",
+      "nextOrder": "次の注文",
+      "openPosition": "保有ポジション",
+      "noRebalance": "リバランスなし",
+      "deltaToTarget": "目標との差分",
+      "noPosition": "ポジションなし"
+    },
+    "prediction": {
+      "title": "予測",
+      "description": "重み付けしたメトリクス出力を目標ネット建玉に変換します。",
+      "longProbability": "ロング {{value}}",
+      "shortProbability": "ショート {{value}}",
+      "riskMultiplier": "リスク x{{value}}",
+      "directionalEdge": "方向エッジ",
+      "decisionConfidence": "判断信頼度"
+    },
+    "metrics": {
+      "title": "メトリクス寄与",
+      "description": "各メトリクスは独立したシグナルプラグインです。メトリクス自体は注文を出しません。",
+      "count": "{{count}} 件のメトリクス",
+      "warmingUp": "メトリクスはウォームアップ中です。",
+      "score": "スコア {{value}}",
+      "confidence": "信頼度 {{value}}",
+      "sizeMultiplier": "サイズ x{{value}}"
+    },
+    "metricNames": {
+      "regime": "レジーム",
+      "trend_momentum": "トレンド・モメンタム",
+      "mean_reversion": "平均回帰",
+      "risk_condition": "リスク状態",
+      "inventory_exposure": "保有量リスク",
+      "timesfm_forecast": "TimesFM予測"
+    },
+    "metricReasons": {
+      "regime": "トレンド強度が持続している場合、方向性のある建玉を優先します。",
+      "trend_momentum": "直近の方向性のある値動きを実現ノイズで正規化します。",
+      "mean_reversion": "ローリング平均からの距離を逆張り圧力に変換します。",
+      "risk_condition": "スプレッドと執行コストで取引リスクを制御します。",
+      "inventory_exposure": "既存のネット建玉が同方向への追加を抑制します。",
+      "timesfm_forecast": "TimesFM予測プロバイダ接続までは中立のプレースホルダーです。"
+    },
+    "mechanism": {
+      "title": "建玉・決済メカニズム",
+      "description": "注文数量は、現在ネット建玉と目標ネット建玉の差分です。",
+      "tradeCount": "{{count}} 件の取引",
+      "activeCount": "アクティブ {{count}} 件",
+      "steps": {
+        "predict": {
+          "title": "1. 予測",
+          "body": "レジーム、トレンド、平均回帰、リスク、保有量、任意の予測メトリクスから確率加重エッジを作ります。"
+        },
+        "size": {
+          "title": "2. サイズ決定",
+          "body": "エッジをリスクで制御し、目標ネットユニット数に丸めます。"
+        },
+        "rebalance": {
+          "title": "3. リバランス",
+          "body": "現在のネット建玉との差分だけを新規建玉、縮小、または反転として実行します。"
+        }
+      }
+    },
+    "recentOpens": {
+      "title": "直近の建玉",
+      "unitsAt": "ユニット @ {{price}}"
+    }
   }
 }
