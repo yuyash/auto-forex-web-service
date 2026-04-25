@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.43.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.43.0...backend-v1.43.1) (2026-04-25)
+
+
+### Refactoring
+
+* responsibility boundaries ([#608](https://github.com/yuyash/auto-forex-web-service/issues/608)) ([bf7d3bc](https://github.com/yuyash/auto-forex-web-service/commit/bf7d3bc9836546017884c41cc588dee45a2b2b25))
+
 ## [1.43.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.42.7...backend-v1.43.0) (2026-04-25)
 
 
