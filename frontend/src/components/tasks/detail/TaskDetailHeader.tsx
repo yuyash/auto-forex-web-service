@@ -18,7 +18,7 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { TaskControlButtons } from '../../common/TaskControlButtons';
 import { StatusBadge } from '../display/StatusBadge';
 import { type TickInfo } from '../../../hooks/useTaskSummary';
-import { TaskStatus } from '../../../types/common';
+import { TaskStatus, type TaskActionPolicy } from '../../../types/common';
 
 interface TaskDetailHeaderProps {
   taskId: string;
@@ -27,6 +27,7 @@ interface TaskDetailHeaderProps {
   taskStatus: TaskStatus;
   currentStatus?: TaskStatus;
   taskType?: 'backtest' | 'trading';
+  actionPolicy?: TaskActionPolicy;
   strategyName: string;
   instrument: string;
   pipSize?: string;
@@ -105,6 +106,7 @@ export function TaskDetailHeader({
   taskStatus,
   currentStatus,
   taskType,
+  actionPolicy,
   strategyName,
   instrument,
   pipSize,
@@ -132,6 +134,8 @@ export function TaskDetailHeader({
     status === TaskStatus.PAUSED ||
     status === TaskStatus.IDLE ||
     status === TaskStatus.DRAINING;
+  const editDisabled = !(actionPolicy?.can_edit_metadata ?? !actionDisabled);
+  const deleteDisabled = !(actionPolicy?.can_delete ?? !actionDisabled);
   const tickText = buildTickText(tick, pipSize);
   const [expanded, setExpanded] = useState(true);
 
@@ -188,6 +192,7 @@ export function TaskDetailHeader({
                     taskId={taskId}
                     status={status}
                     taskType={taskType}
+                    actionPolicy={actionPolicy}
                     onStart={onStart}
                     onStop={onStop}
                     onRestart={onRestart}
@@ -196,7 +201,7 @@ export function TaskDetailHeader({
                   />
                   <ActionButton
                     title={editLabel}
-                    disabled={actionDisabled}
+                    disabled={editDisabled}
                     size={isMobile ? 'small' : 'medium'}
                     ariaLabel={editLabel}
                     onClick={onEdit}
@@ -205,7 +210,7 @@ export function TaskDetailHeader({
                   </ActionButton>
                   <ActionButton
                     title={deleteLabel}
-                    disabled={actionDisabled}
+                    disabled={deleteDisabled}
                     size={isMobile ? 'small' : 'medium'}
                     color="error"
                     ariaLabel={deleteLabel}

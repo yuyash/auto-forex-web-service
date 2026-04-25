@@ -80,6 +80,7 @@ interface TradingTaskUpdateFormProps {
   accountName: string;
   initialData: TradingTaskUpdateData;
   debugOptions?: Record<string, unknown>;
+  restartRequiredForExecutionEdits?: boolean;
 }
 
 export default function TradingTaskUpdateForm({
@@ -90,6 +91,7 @@ export default function TradingTaskUpdateForm({
   accountName,
   initialData,
   debugOptions,
+  restartRequiredForExecutionEdits = false,
 }: TradingTaskUpdateFormProps) {
   const { t } = useTranslation(['trading', 'common']);
   const navigate = useNavigate();
@@ -249,6 +251,14 @@ export default function TradingTaskUpdateForm({
         {submitError && (
           <Alert severity="error" sx={{ mb: 3 }}>
             {submitError}
+          </Alert>
+        )}
+        {restartRequiredForExecutionEdits && (
+          <Alert severity="info" sx={{ mb: 3 }}>
+            {t(
+              'trading:updateForm.restartRequiredForExecutionEdits',
+              'Execution setting changes apply to the next restart. Name and description changes apply immediately.'
+            )}
           </Alert>
         )}
 

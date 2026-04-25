@@ -7,16 +7,12 @@ from rest_framework import serializers
 
 from apps.trading.enums import TaskStatus
 from apps.trading.models import BacktestTask, StrategyConfiguration
+from apps.trading.services.task_policy import (
+    action_policy_for_task,
+    validate_task_update_fields,
+)
 
 logger = logging.getLogger(__name__)
-
-WORKER_OWNED_STATUSES = (
-    TaskStatus.STARTING,
-    TaskStatus.RUNNING,
-    TaskStatus.IDLE,
-    TaskStatus.DRAINING,
-    TaskStatus.STOPPING,
-)
 
 
 class BacktestTaskSerializer(serializers.ModelSerializer):
@@ -27,6 +23,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
     config_name = serializers.CharField(source="config.name", read_only=True)
     strategy_type = serializers.CharField(source="config.strategy_type", read_only=True)
     can_resume = serializers.SerializerMethodField()
+    action_policy = serializers.SerializerMethodField()
 
     class Meta:
         model = BacktestTask
@@ -68,6 +65,7 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "updated_at",
             "debug_options",
             "can_resume",
+            "action_policy",
         ]
         read_only_fields = [
             "id",
@@ -83,11 +81,16 @@ class BacktestTaskSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
             "can_resume",
+            "action_policy",
         ]
 
     def get_can_resume(self, obj: BacktestTask) -> bool:
         """Check if task can be resumed with state recovery."""
         return obj.can_resume()
+
+    def get_action_policy(self, obj: BacktestTask) -> dict[str, bool]:
+        """Return task action permissions."""
+        return action_policy_for_task(obj, task_type="backtest").as_dict()
 
 
 class BacktestTaskListSerializer(BacktestTaskSerializer):
@@ -344,11 +347,18 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
 
     def update(self, instance: BacktestTask, validated_data: dict) -> BacktestTask:
         """Update backtest task."""
-        if instance.status in WORKER_OWNED_STATUSES:
-            raise serializers.ValidationError(
-                "Cannot update a task while it is actively running. Stop or pause it first."
-            )
+        from apps.trading.services.task_audit import audit_task_update, changed_field_values
 
+        try:
+            validate_task_update_fields(
+                task=instance,
+                changed_fields=set(validated_data),
+                task_type="backtest",
+            )
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+
+        changes = changed_field_values(instance, validated_data)
         replay_settings_changed = any(
             field in validated_data and validated_data[field] != getattr(instance, field)
             for field in ("tick_granularity", "tick_window_value_mode")
@@ -364,4 +374,5 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
                 instance.status = TaskStatus.STOPPED
 
         instance.save()
+        audit_task_update(task=instance, task_type="backtest", changes=changes)
         return instance

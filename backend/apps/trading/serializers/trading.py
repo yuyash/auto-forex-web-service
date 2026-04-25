@@ -5,18 +5,14 @@ import logging
 from rest_framework import serializers
 
 from apps.market.models import OandaAccounts
-from apps.trading.enums import TaskStatus, TradingMode
+from apps.trading.enums import TradingMode
 from apps.trading.models import StrategyConfiguration, TradingTask
+from apps.trading.services.task_policy import (
+    action_policy_for_task,
+    validate_task_update_fields,
+)
 
 logger = logging.getLogger(__name__)
-
-WORKER_OWNED_STATUSES = (
-    TaskStatus.STARTING,
-    TaskStatus.RUNNING,
-    TaskStatus.IDLE,
-    TaskStatus.DRAINING,
-    TaskStatus.STOPPING,
-)
 
 
 class TradingTaskSerializer(serializers.ModelSerializer):
@@ -32,9 +28,11 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
     account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
     account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
+    action_policy = serializers.SerializerMethodField()
     # State management fields for frontend button logic
     has_strategy_state = serializers.SerializerMethodField()
     can_resume = serializers.SerializerMethodField()
+    action_policy = serializers.SerializerMethodField()
 
     class Meta:
         model = TradingTask
@@ -70,6 +68,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             # State management fields
             "has_strategy_state",
             "can_resume",
+            "action_policy",
             "created_at",
             "updated_at",
             "debug_options",
@@ -92,6 +91,7 @@ class TradingTaskSerializer(serializers.ModelSerializer):
             "pip_size",
             "has_strategy_state",
             "can_resume",
+            "action_policy",
             "created_at",
             "updated_at",
         ]
@@ -103,6 +103,10 @@ class TradingTaskSerializer(serializers.ModelSerializer):
     def get_can_resume(self, obj: TradingTask) -> bool:
         """Check if task can be resumed with state recovery."""
         return obj.can_resume()
+
+    def get_action_policy(self, obj: TradingTask) -> dict[str, bool]:
+        """Return task action permissions."""
+        return action_policy_for_task(obj, task_type="trading").as_dict()
 
 
 class TradingTaskListSerializer(serializers.ModelSerializer):
@@ -118,6 +122,7 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
     account_id = serializers.IntegerField(source="oanda_account.id", read_only=True)
     account_name = serializers.CharField(source="oanda_account.account_id", read_only=True)
     account_type = serializers.CharField(source="oanda_account.api_type", read_only=True)
+    action_policy = serializers.SerializerMethodField()
 
     class Meta:
         model = TradingTask
@@ -148,10 +153,15 @@ class TradingTaskListSerializer(serializers.ModelSerializer):
             "drain_duration_hours",
             "market_idle_pre_close_minutes",
             "market_idle_resume_delay_minutes",
+            "action_policy",
             "created_at",
             "updated_at",
         ]
         read_only_fields = fields
+
+    def get_action_policy(self, obj: TradingTask) -> dict[str, bool]:
+        """Return task action permissions."""
+        return action_policy_for_task(obj, task_type="trading").as_dict()
 
 
 class TradingTaskCreateSerializer(serializers.ModelSerializer):
@@ -311,17 +321,28 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
 
     def update(self, instance: TradingTask, validated_data: dict) -> TradingTask:
         """Update trading task."""
-        if instance.status in WORKER_OWNED_STATUSES:
-            raise serializers.ValidationError(
-                "Cannot update a task while it is actively running. Stop or pause it first."
-            )
+        from apps.trading.services.task_audit import audit_task_update, changed_field_values
 
+        try:
+            validate_task_update_fields(
+                task=instance,
+                changed_fields=set(validated_data),
+                task_type="trading",
+            )
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+
+        changes = changed_field_values(instance, validated_data)
         if "hedging_enabled" in validated_data:
             validated_data["trading_mode"] = (
                 TradingMode.HEDGING if validated_data["hedging_enabled"] else TradingMode.NETTING
+            )
+            changes.update(
+                changed_field_values(instance, {"trading_mode": validated_data["trading_mode"]})
             )
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+        audit_task_update(task=instance, task_type="trading", changes=changes)
         return instance

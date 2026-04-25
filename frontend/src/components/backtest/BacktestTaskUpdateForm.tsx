@@ -168,6 +168,7 @@ export interface BacktestTaskUpdateFormProps {
   taskDescription?: string;
   initialData: BacktestTaskUpdateData;
   debugOptions?: Record<string, unknown>;
+  restartRequiredForExecutionEdits?: boolean;
 }
 
 export default function BacktestTaskUpdateForm({
@@ -176,6 +177,7 @@ export default function BacktestTaskUpdateForm({
   taskDescription,
   initialData,
   debugOptions,
+  restartRequiredForExecutionEdits = false,
 }: BacktestTaskUpdateFormProps) {
   const { t } = useTranslation(['backtest', 'common']);
   const { user } = useAuth();
@@ -321,6 +323,14 @@ export default function BacktestTaskUpdateForm({
         {submitError && (
           <Alert severity="error" sx={{ mb: 3 }}>
             {submitError}
+          </Alert>
+        )}
+        {restartRequiredForExecutionEdits && (
+          <Alert severity="info" sx={{ mb: 3 }}>
+            {t(
+              'backtest:form.restartRequiredForExecutionEdits',
+              'Execution setting changes apply to the next restart. Name and description changes apply immediately.'
+            )}
           </Alert>
         )}
 

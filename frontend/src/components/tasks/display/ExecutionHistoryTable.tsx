@@ -185,6 +185,34 @@ export function ExecutionHistoryTable({
         render: (row: TaskExecution) => <StatusBadge status={row.status} />,
       },
       {
+        id: 'segment_index',
+        label: t('tables.executions.segment', 'Segment'),
+        width: 100,
+        minWidth: 80,
+        align: 'right' as const,
+        render: (row: TaskExecution) => row.segment_index ?? 1,
+      },
+      {
+        id: 'config_revision_count',
+        label: t('tables.executions.configRevisions', 'Config revs'),
+        width: 120,
+        minWidth: 90,
+        align: 'right' as const,
+        render: (row: TaskExecution) => {
+          const count = row.config_revision_count ?? 0;
+          const hash = row.strategy_config?.config_hash;
+          return (
+            <Tooltip title={hash ? `Current config hash: ${hash}` : ''}>
+              <Chip
+                label={count}
+                size="small"
+                variant={count ? 'filled' : 'outlined'}
+              />
+            </Tooltip>
+          );
+        },
+      },
+      {
         id: 'started_at',
         label: t('tables.executions.started'),
         width: 200,

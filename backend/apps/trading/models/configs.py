@@ -154,24 +154,17 @@ class StrategyConfiguration(UUIDModel):
             True if any actively executing tasks reference this configuration,
             False otherwise.
         """
-        from apps.trading.enums import TaskStatus
         from apps.trading.models import BacktestTask, TradingTask
+        from apps.trading.services.task_policy import WORKER_OWNED_STATUSES
 
-        worker_owned_statuses = (
-            TaskStatus.STARTING,
-            TaskStatus.RUNNING,
-            TaskStatus.IDLE,
-            TaskStatus.DRAINING,
-            TaskStatus.STOPPING,
-        )
         return (
             TradingTask.objects.filter(
                 config=self,
-                status__in=worker_owned_statuses,
+                status__in=WORKER_OWNED_STATUSES,
             ).exists()
             or BacktestTask.objects.filter(
                 config=self,
-                status__in=worker_owned_statuses,
+                status__in=WORKER_OWNED_STATUSES,
             ).exists()
         )
 
@@ -182,20 +175,13 @@ class StrategyConfiguration(UUIDModel):
         Configuration updates are globally locked per user while any trading or
         backtest task is actively owned by a worker.
         """
-        from apps.trading.enums import TaskStatus
         from apps.trading.models import BacktestTask, TradingTask
+        from apps.trading.services.task_policy import WORKER_OWNED_STATUSES
 
         user_id = getattr(user, "pk", user)
-        worker_owned_statuses = (
-            TaskStatus.STARTING,
-            TaskStatus.RUNNING,
-            TaskStatus.IDLE,
-            TaskStatus.DRAINING,
-            TaskStatus.STOPPING,
-        )
         return (
-            TradingTask.objects.filter(user=user_id, status__in=worker_owned_statuses).exists()
-            or BacktestTask.objects.filter(user=user_id, status__in=worker_owned_statuses).exists()
+            TradingTask.objects.filter(user=user_id, status__in=WORKER_OWNED_STATUSES).exists()
+            or BacktestTask.objects.filter(user=user_id, status__in=WORKER_OWNED_STATUSES).exists()
         )
 
     def validate_parameters(self) -> tuple[bool, str | None]:

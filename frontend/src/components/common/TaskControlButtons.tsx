@@ -24,13 +24,14 @@ import {
   Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import type { TaskStatus } from '../../types/common';
+import type { TaskActionPolicy, TaskStatus } from '../../types/common';
 import { TaskStatus as TaskStatusEnum } from '../../types/common';
 
 export interface TaskControlButtonsProps {
   taskId: string;
   status: TaskStatus;
   taskType?: 'backtest' | 'trading';
+  actionPolicy?: TaskActionPolicy;
   onStart?: (taskId: string) => void | Promise<void>;
   onStop?: (taskId: string) => void | Promise<void>;
   onPause?: (taskId: string) => void | Promise<void>;
@@ -83,6 +84,7 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
   taskId,
   status,
   taskType,
+  actionPolicy,
   onStart,
   onStop,
   onPause,
@@ -120,32 +122,42 @@ export const TaskControlButtons: React.FC<TaskControlButtonsProps> = ({
 
   const isTrading = taskType === 'trading';
 
-  const canStart = status === TaskStatusEnum.CREATED;
+  const canStart = actionPolicy?.can_start ?? status === TaskStatusEnum.CREATED;
 
-  const canStop = [
-    TaskStatusEnum.STARTING,
-    TaskStatusEnum.RUNNING,
-    TaskStatusEnum.IDLE,
-    TaskStatusEnum.DRAINING,
-    ...(isTrading ? [] : [TaskStatusEnum.PAUSED]),
-  ].includes(status);
-  const canPause = !isTrading && status === TaskStatusEnum.RUNNING;
-  const canResume = isTrading
-    ? [TaskStatusEnum.STOPPED, TaskStatusEnum.FAILED].includes(status)
-    : status === TaskStatusEnum.PAUSED;
+  const canStop =
+    actionPolicy?.can_stop ??
+    [
+      TaskStatusEnum.STARTING,
+      TaskStatusEnum.RUNNING,
+      TaskStatusEnum.IDLE,
+      TaskStatusEnum.DRAINING,
+      ...(isTrading ? [] : [TaskStatusEnum.PAUSED]),
+    ].includes(status);
+  const canPause =
+    actionPolicy?.can_pause ??
+    (!isTrading && status === TaskStatusEnum.RUNNING);
+  const canResume =
+    actionPolicy?.can_resume ??
+    (isTrading
+      ? [TaskStatusEnum.STOPPED, TaskStatusEnum.FAILED].includes(status)
+      : status === TaskStatusEnum.PAUSED);
   const pauseEnabled = canPause;
   const resumeEnabled = canResume;
-  const canRestart = [
-    TaskStatusEnum.STOPPED,
-    TaskStatusEnum.COMPLETED,
-    TaskStatusEnum.FAILED,
-  ].includes(status);
-  const canDelete = [
-    TaskStatusEnum.CREATED,
-    TaskStatusEnum.STOPPED,
-    TaskStatusEnum.COMPLETED,
-    TaskStatusEnum.FAILED,
-  ].includes(status);
+  const canRestart =
+    actionPolicy?.can_restart ??
+    [
+      TaskStatusEnum.STOPPED,
+      TaskStatusEnum.COMPLETED,
+      TaskStatusEnum.FAILED,
+    ].includes(status);
+  const canDelete =
+    actionPolicy?.can_delete ??
+    [
+      TaskStatusEnum.CREATED,
+      TaskStatusEnum.STOPPED,
+      TaskStatusEnum.COMPLETED,
+      TaskStatusEnum.FAILED,
+    ].includes(status);
 
   const handleAction = async (
     action?: (taskId: string) => void | Promise<void>

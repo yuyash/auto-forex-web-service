@@ -157,21 +157,14 @@ export default function TradingTaskActions({
     }
   };
 
-  const canEdit =
-    task.status !== TaskStatus.RUNNING &&
-    task.status !== TaskStatus.PAUSED &&
-    task.status !== TaskStatus.IDLE &&
-    task.status !== TaskStatus.DRAINING;
-  const canDelete =
-    task.status !== TaskStatus.RUNNING &&
-    task.status !== TaskStatus.PAUSED &&
-    task.status !== TaskStatus.IDLE &&
-    task.status !== TaskStatus.DRAINING;
+  const canEdit = task.action_policy?.can_edit_metadata ?? false;
+  const canDelete = task.action_policy?.can_delete ?? false;
   const canStop =
-    task.status === TaskStatus.RUNNING ||
-    task.status === TaskStatus.PAUSED ||
-    task.status === TaskStatus.IDLE ||
-    task.status === TaskStatus.DRAINING;
+    task.action_policy?.can_stop ??
+    (task.status === TaskStatus.RUNNING ||
+      task.status === TaskStatus.PAUSED ||
+      task.status === TaskStatus.IDLE ||
+      task.status === TaskStatus.DRAINING);
 
   return (
     <>

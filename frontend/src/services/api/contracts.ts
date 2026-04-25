@@ -1,4 +1,5 @@
 import type { PaginatedApiResponse } from './pagination';
+import type { TaskActionPolicy } from '../../types/common';
 
 export interface BackendExecutionMetrics {
   total_return?: string;
@@ -20,6 +21,8 @@ export interface BackendTaskExecutionSummary extends BackendExecutionMetrics {
   task_type: 'backtest' | 'trading';
   task_id: string;
   execution_number: string;
+  segment_index?: number;
+  config_revision_count?: number;
   status: string;
   progress: number;
   started_at?: string | null;
@@ -57,6 +60,7 @@ export interface BackendBacktestTask {
   error_message?: string | null;
   latest_execution?: BackendTaskExecutionSummary | null;
   can_resume?: boolean;
+  action_policy?: TaskActionPolicy;
   drain_duration_hours?: number;
   market_idle_pre_close_minutes?: number;
   market_idle_resume_delay_minutes?: number;
@@ -95,6 +99,7 @@ export interface BackendTradingTask {
   latest_execution?: BackendTaskExecutionSummary | null;
   has_strategy_state: boolean;
   can_resume: boolean;
+  action_policy?: TaskActionPolicy;
   api_retry_max_attempts?: number;
   api_retry_backoff_base_seconds?: string;
   api_retry_backoff_max_seconds?: string;

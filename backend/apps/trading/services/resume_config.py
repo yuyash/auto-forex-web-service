@@ -248,6 +248,7 @@ def _with_config_metadata(config: dict[str, Any]) -> dict[str, Any]:
         "current": json_safe,
         "revisions": [],
         "config_hash": _hash_json(json_safe),
+        "segment_index": 1,
     }
 
 
@@ -281,6 +282,7 @@ def _merge_config_revision(previous: Any, current: dict[str, Any]) -> dict[str, 
         "current": current_safe,
         "revisions": revisions,
         "config_hash": _hash_json(current_safe),
+        "segment_index": len(revisions) + 1,
     }
 
 
@@ -302,22 +304,14 @@ def _validate_snowball_layer_change(
 ) -> None:
     if strategy_type != "snowball":
         return
-    previous_r_max = _to_int(previous_params.get("r_max"))
-    current_r_max = _to_int(current_params.get("r_max"))
-    if previous_r_max is not None and current_r_max is not None and current_r_max < previous_r_max:
-        raise ValueError(
-            "Cannot resume a snowball execution after decreasing r_max. "
-            "Increase it or restart the task so existing layers are rebuilt from scratch."
-        )
+    from apps.trading.strategies.snowball.compatibility import (
+        validate_resume_parameter_compatibility,
+    )
 
-
-def _to_int(value: Any) -> int | None:
-    if value in (None, ""):
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
+    validate_resume_parameter_compatibility(
+        previous_params=previous_params,
+        current_params=current_params,
+    )
 
 
 def _hash_json(value: Any) -> str:

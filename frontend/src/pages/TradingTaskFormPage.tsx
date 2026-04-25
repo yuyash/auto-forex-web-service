@@ -59,6 +59,9 @@ export default function TradingTaskFormPage() {
               accountId={Number(task.account_id)}
               accountName={task.account_name}
               debugOptions={task.debug_options}
+              restartRequiredForExecutionEdits={
+                task.action_policy?.restart_required_for_execution_edits
+              }
               initialData={{
                 config_id: task.config_id,
                 hedging_enabled: task.hedging_enabled,

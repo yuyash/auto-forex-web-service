@@ -12,6 +12,8 @@ export interface TaskExecution {
   task_type: TaskType;
   task_id: string;
   execution_number: number;
+  segment_index?: number;
+  config_revision_count?: number;
   status: TaskStatus;
   progress: number;
   started_at: string;
@@ -30,6 +32,16 @@ export interface TaskExecution {
     id: string;
     name: string;
     strategy_type: string;
+    current?: {
+      id?: string;
+      name?: string;
+      strategy_type?: string;
+      parameters?: Record<string, unknown>;
+    };
+    initial?: Record<string, unknown>;
+    revisions?: Array<Record<string, unknown>>;
+    config_hash?: string;
+    segment_index?: number;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     parameters: Record<string, any>;
   } | null;

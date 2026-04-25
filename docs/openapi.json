@@ -5981,9 +5981,18 @@
                         "type": "boolean",
                         "description": "Check if task can be resumed with state recovery.",
                         "readOnly": true
+                    },
+                    "action_policy": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "boolean"
+                        },
+                        "description": "Return task action permissions.",
+                        "readOnly": true
                     }
                 },
                 "required": [
+                    "action_policy",
                     "can_resume",
                     "completed_at",
                     "config_id",
@@ -6359,10 +6368,19 @@
                         "type": "boolean",
                         "description": "Check if task can be resumed with state recovery.",
                         "readOnly": true
+                    },
+                    "action_policy": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "boolean"
+                        },
+                        "description": "Return task action permissions.",
+                        "readOnly": true
                     }
                 },
                 "required": [
                     "account_currency",
+                    "action_policy",
                     "can_resume",
                     "completed_at",
                     "config_id",
@@ -10587,6 +10605,14 @@
                         "description": "Check if task can be resumed with state recovery.",
                         "readOnly": true
                     },
+                    "action_policy": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "boolean"
+                        },
+                        "description": "Return task action permissions.",
+                        "readOnly": true
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -10607,6 +10633,7 @@
                     "account_id",
                     "account_name",
                     "account_type",
+                    "action_policy",
                     "can_resume",
                     "completed_at",
                     "config_id",
@@ -10853,6 +10880,14 @@
                         "readOnly": true,
                         "description": "Wait this many minutes after the market reopens before resuming trading. 0 disables the resume delay."
                     },
+                    "action_policy": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "boolean"
+                        },
+                        "description": "Return task action permissions.",
+                        "readOnly": true
+                    },
                     "created_at": {
                         "type": "string",
                         "format": "date-time",
@@ -10870,6 +10905,7 @@
                     "account_id",
                     "account_name",
                     "account_type",
+                    "action_policy",
                     "api_retry_backoff_base_seconds",
                     "api_retry_backoff_max_seconds",
                     "api_retry_max_attempts",

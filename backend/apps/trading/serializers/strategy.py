@@ -185,6 +185,11 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
         self, instance: StrategyConfiguration, validated_data: dict
     ) -> StrategyConfiguration:
         """Update strategy configuration."""
+        from apps.trading.services.task_audit import (
+            audit_strategy_config_update,
+            changed_field_values,
+        )
+
         if instance.has_active_tasks():
             raise serializers.ValidationError(
                 {
@@ -208,9 +213,11 @@ class StrategyConfigCreateSerializer(serializers.ModelSerializer):
                 }
             )
 
+        changes = changed_field_values(instance, validated_data)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+        audit_strategy_config_update(config=instance, changes=changes)
         return instance
 
 
