@@ -34,6 +34,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { logger } from '../../utils/logger';
 import { buildBacktestTaskUpdatePayload } from '../tasks/forms/backtestTaskPayload';
+import { hasDirtyExecutionSettings } from '../tasks/forms/executionEditGuards';
 
 // Update schema - only editable fields
 const weekdayOptions: ReadonlyArray<{
@@ -198,7 +199,7 @@ export default function BacktestTaskUpdateForm({
     handleSubmit,
     watch,
     setValue,
-    formState: { errors },
+    formState: { dirtyFields, errors },
   } = useForm<BacktestTaskUpdateData>({
     resolver: zodResolver(
       backtestTaskUpdateSchema
@@ -246,6 +247,9 @@ export default function BacktestTaskUpdateForm({
     selectedTickGranularity !== initialTickGranularity ||
     selectedTickWindowValueMode !== initialTickWindowValueMode;
   const watchedMarketCloseEnabled = watch('market_close_enabled');
+  const showRestartRequiredGuard =
+    restartRequiredForExecutionEdits &&
+    hasDirtyExecutionSettings(dirtyFields as Record<string, unknown>);
 
   const onSubmit = async (data: BacktestTaskUpdateData) => {
     setSubmitError(null);
@@ -358,7 +362,10 @@ export default function BacktestTaskUpdateForm({
           </Alert>
         )}
         {restartRequiredForExecutionEdits && (
-          <Alert severity="info" sx={{ mb: 3 }}>
+          <Alert
+            severity={showRestartRequiredGuard ? 'warning' : 'info'}
+            sx={{ mb: 3 }}
+          >
             {t(
               'backtest:form.restartRequiredForExecutionEdits',
               'Execution setting changes apply to the next restart. Name and description changes apply immediately.'

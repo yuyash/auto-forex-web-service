@@ -473,6 +473,7 @@ class TaskLifecycleCommands:
 
             try:
                 from apps.trading.services.resume_config import (
+                    ResumeConfigurationError,
                     log_effective_resume_configuration,
                     validate_resume_configuration,
                 )
@@ -483,6 +484,13 @@ class TaskLifecycleCommands:
                     audit=audit,
                     task=locked_task,
                 )
+            except ResumeConfigurationError as exc:
+                from apps.trading.tasks.service import TaskValidationError
+
+                raise TaskValidationError(
+                    str(exc),
+                    resume_config_error=exc.as_payload(),
+                ) from exc
             except ValueError as exc:
                 from apps.trading.tasks.service import TaskValidationError
 

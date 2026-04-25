@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from apps.trading.services.resume_config import ResumeConfigurationError
+
 
 def validate_resume_parameter_compatibility(
     *,
@@ -14,9 +16,11 @@ def validate_resume_parameter_compatibility(
     previous_r_max = _to_int(previous_params.get("r_max"))
     current_r_max = _to_int(current_params.get("r_max"))
     if previous_r_max is not None and current_r_max is not None and current_r_max < previous_r_max:
-        raise ValueError(
+        raise ResumeConfigurationError(
             "Cannot resume a snowball execution after decreasing r_max. "
-            "Increase it or restart the task so existing layers are rebuilt from scratch."
+            "Increase it or restart the task so existing layers are rebuilt from scratch.",
+            code="resume_snowball_r_max_decreased",
+            blocked_fields=["parameters.r_max"],
         )
 
 

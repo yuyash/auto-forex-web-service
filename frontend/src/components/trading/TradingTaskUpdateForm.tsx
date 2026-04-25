@@ -24,6 +24,7 @@ import {
   useStrategies,
   getStrategyDisplayName,
 } from '../../hooks/useStrategies';
+import { hasDirtyExecutionSettings } from '../tasks/forms/executionEditGuards';
 
 // Update schema - editable fields for trading tasks
 const tradingTaskUpdateSchema = z.object({
@@ -109,8 +110,8 @@ export default function TradingTaskUpdateForm({
     control,
     handleSubmit,
     watch,
-    formState: { errors },
     setValue,
+    formState: { dirtyFields, errors },
   } = useForm<TradingTaskUpdateData>({
     resolver: zodResolver(
       tradingTaskUpdateSchema
@@ -156,6 +157,9 @@ export default function TradingTaskUpdateForm({
       });
     }
   }, [accountHedgingEnabled, setValue, strategySupportsHedging]);
+  const showRestartRequiredGuard =
+    restartRequiredForExecutionEdits &&
+    hasDirtyExecutionSettings(dirtyFields as Record<string, unknown>);
 
   const onSubmit = async (data: TradingTaskUpdateData) => {
     setSubmitError(null);
@@ -281,7 +285,10 @@ export default function TradingTaskUpdateForm({
           </Alert>
         )}
         {restartRequiredForExecutionEdits && (
-          <Alert severity="info" sx={{ mb: 3 }}>
+          <Alert
+            severity={showRestartRequiredGuard ? 'warning' : 'info'}
+            sx={{ mb: 3 }}
+          >
             {t(
               'trading:updateForm.restartRequiredForExecutionEdits',
               'Execution setting changes apply to the next restart. Name and description changes apply immediately.'
