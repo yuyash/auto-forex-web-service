@@ -161,12 +161,16 @@ const backtestTaskUpdateSchema = z
   });
 
 type BacktestTaskUpdateData = z.infer<typeof backtestTaskUpdateSchema>;
+type BacktestTaskUpdateInitialData = Omit<
+  BacktestTaskUpdateData,
+  'name' | 'description'
+>;
 
 export interface BacktestTaskUpdateFormProps {
   taskId: string;
   taskName: string;
   taskDescription?: string;
-  initialData: BacktestTaskUpdateData;
+  initialData: BacktestTaskUpdateInitialData;
   debugOptions?: Record<string, unknown>;
   restartRequiredForExecutionEdits?: boolean;
 }
@@ -199,10 +203,9 @@ export default function BacktestTaskUpdateForm({
       backtestTaskUpdateSchema
     ) as Resolver<BacktestTaskUpdateData>,
     defaultValues: {
+      ...initialData,
       name: taskName,
       description: taskDescription ?? '',
-      ...initialData,
-      data_source: DataSource.POSTGRESQL,
     },
   });
 

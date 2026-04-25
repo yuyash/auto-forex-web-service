@@ -71,6 +71,10 @@ const tradingTaskUpdateSchema = z.object({
 });
 
 type TradingTaskUpdateData = z.infer<typeof tradingTaskUpdateSchema>;
+type TradingTaskUpdateInitialData = Omit<
+  TradingTaskUpdateData,
+  'name' | 'description'
+>;
 
 interface TradingTaskUpdateFormProps {
   taskId: string;
@@ -78,7 +82,7 @@ interface TradingTaskUpdateFormProps {
   taskDescription?: string;
   accountId: number;
   accountName: string;
-  initialData: TradingTaskUpdateData;
+  initialData: TradingTaskUpdateInitialData;
   debugOptions?: Record<string, unknown>;
   restartRequiredForExecutionEdits?: boolean;
 }
@@ -111,9 +115,9 @@ export default function TradingTaskUpdateForm({
       tradingTaskUpdateSchema
     ) as Resolver<TradingTaskUpdateData>,
     defaultValues: {
+      ...initialData,
       name: taskName,
       description: taskDescription ?? '',
-      ...initialData,
     },
   });
 
