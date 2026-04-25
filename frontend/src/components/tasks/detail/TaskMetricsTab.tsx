@@ -243,10 +243,14 @@ function computeXTickCount(dataLen: number): number {
 
 /** Fixed height for all chart cards to ensure consistent grid layout */
 const CHART_CARD_HEIGHT = 260;
+const LINE_CHART_FALLBACK_HEIGHT = CHART_CARD_HEIGHT - 52;
 const OHLC_KEY = '__ohlc__';
 const MIN_CHART_MEASURE_PX = 1;
 
-function FillLineChart(props: ComponentProps<typeof LineChart>) {
+function FillLineChart({
+  fallbackHeight,
+  ...chartProps
+}: ComponentProps<typeof LineChart> & { fallbackHeight: number }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
 
@@ -260,9 +264,10 @@ function FillLineChart(props: ComponentProps<typeof LineChart>) {
         MIN_CHART_MEASURE_PX,
         Math.floor(host.clientWidth || rect.width)
       );
+      const measuredHeight = Math.floor(host.clientHeight || rect.height);
       const nextHeight = Math.max(
         MIN_CHART_MEASURE_PX,
-        Math.floor(host.clientHeight || rect.height)
+        measuredHeight > MIN_CHART_MEASURE_PX ? measuredHeight : fallbackHeight
       );
       setSize((current) =>
         current.width === nextWidth && current.height === nextHeight
@@ -281,7 +286,7 @@ function FillLineChart(props: ComponentProps<typeof LineChart>) {
     const observer = new ResizeObserver(updateSize);
     observer.observe(host);
     return () => observer.disconnect();
-  }, []);
+  }, [fallbackHeight]);
 
   return (
     <Box
@@ -289,12 +294,14 @@ function FillLineChart(props: ComponentProps<typeof LineChart>) {
       sx={{
         width: '100%',
         height: '100%',
+        flex: '1 1 auto',
+        alignSelf: 'stretch',
         minWidth: 0,
         minHeight: 0,
       }}
     >
       {size.width > 0 && size.height > 0 ? (
-        <LineChart {...props} width={size.width} height={size.height} />
+        <LineChart {...chartProps} width={size.width} height={size.height} />
       ) : null}
     </Box>
   );
@@ -616,6 +623,7 @@ export function TaskMetricsTab({
                 }
               >
                 <FillLineChart
+                  fallbackHeight={LINE_CHART_FALLBACK_HEIGHT}
                   xAxis={[
                     {
                       data: cd.x,
