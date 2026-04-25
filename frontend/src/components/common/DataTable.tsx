@@ -160,16 +160,18 @@ function DataTable<T extends object>({
       };
 
       const handleMove = (moveEvent: MouseEvent | TouchEvent) => {
-        if (!resizingRef.current) return;
+        const resizing = resizingRef.current;
+        if (!resizing) return;
         const moveX =
           'touches' in moveEvent
             ? moveEvent.touches[0].clientX
             : (moveEvent as MouseEvent).clientX;
-        const diff = moveX - resizingRef.current.startX;
-        const newWidth = Math.max(40, resizingRef.current.startWidth + diff);
+        const diff = moveX - resizing.startX;
+        const newWidth = Math.max(40, resizing.startWidth + diff);
+        const { columnId: resizingColumnId } = resizing;
         setColumnWidths((prev) => ({
           ...prev,
-          [resizingRef.current!.columnId]: newWidth,
+          [resizingColumnId]: newWidth,
         }));
       };
 

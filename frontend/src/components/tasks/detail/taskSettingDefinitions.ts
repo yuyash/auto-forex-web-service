@@ -4,10 +4,39 @@ import {
   formatDateTimeSetting,
   type TaskSettingValue,
 } from './taskSettingsFormat';
+import { formatAppNumber } from '../../../utils/numberFormat';
 
 function formatBooleanWithTranslation(t: TFunction) {
   return (value: TaskSettingValue): string =>
     value ? t('common:labels.yes') : t('common:labels.no');
+}
+
+function formatPipSize(value: TaskSettingValue): string {
+  if (value === null || value === undefined || value === '') return '-';
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return String(value);
+  return formatAppNumber(numericValue, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+    useGrouping: false,
+  });
+}
+
+function formatInitialBalance(
+  value: TaskSettingValue,
+  source: Record<string, unknown>,
+  task: Record<string, unknown>
+): string {
+  if (value === null || value === undefined || value === '') return '-';
+  const numericValue = Number(value);
+  const formatted = Number.isFinite(numericValue)
+    ? formatAppNumber(numericValue, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      })
+    : String(value);
+  const currency = source.account_currency ?? task.account_currency;
+  return currency ? `${formatted} ${String(currency)}` : formatted;
 }
 
 export function buildBacktestTaskSettingDefinitions(
@@ -24,7 +53,11 @@ export function buildBacktestTaskSettingDefinitions(
     { key: 'strategy_type', label: t('common:labels.strategyType') },
     { key: 'data_source', label: t('backtest:detail.dataSource') },
     { key: 'instrument', label: t('common:labels.instrument') },
-    { key: 'pip_size', label: t('common:labels.pipSize') },
+    {
+      key: 'pip_size',
+      label: t('common:labels.pipSize'),
+      format: formatPipSize,
+    },
     {
       key: 'start_time',
       label: t('backtest:detail.startTime'),
@@ -35,7 +68,12 @@ export function buildBacktestTaskSettingDefinitions(
       label: t('backtest:detail.endTime'),
       format: (v) => formatDateTimeSetting(v, timezone, language),
     },
-    { key: 'initial_balance', label: t('backtest:detail.initialBalance') },
+    {
+      key: 'initial_balance',
+      label: t('backtest:detail.initialBalance'),
+      render: (value, { source, task }) =>
+        formatInitialBalance(value, source, task),
+    },
     {
       key: 'account_currency',
       label: t('common:labels.accountCurrency', 'Account currency'),
@@ -127,7 +165,11 @@ export function buildTradingTaskSettingDefinitions(
     { key: 'config_name', label: t('common:labels.strategyConfiguration') },
     { key: 'strategy_type', label: t('common:labels.strategyType') },
     { key: 'instrument', label: t('common:labels.instrument') },
-    { key: 'pip_size', label: t('common:labels.pipSize') },
+    {
+      key: 'pip_size',
+      label: t('common:labels.pipSize'),
+      format: formatPipSize,
+    },
     { key: 'account_name', label: t('trading:detail.account', 'Account') },
     {
       key: 'account_type',

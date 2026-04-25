@@ -308,7 +308,8 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     {
       id: 'description',
       label: t('tables.trades.description'),
-      minWidth: 200,
+      width: 400,
+      minWidth: 240,
       render: (row: TaskTrade) => row.description || '-',
     },
     {

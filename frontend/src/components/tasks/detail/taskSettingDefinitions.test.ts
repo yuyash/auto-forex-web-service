@@ -17,6 +17,26 @@ describe('task setting definition contracts', () => {
     expect(keys.has('celery_task_id')).toBe(false);
   });
 
+  it('formats backtest pip size and initial balance for task information', () => {
+    const definitions = buildBacktestTaskSettingDefinitions(t as never, 'UTC');
+    const pipSize = definitions.find(
+      (definition) => definition.key === 'pip_size'
+    );
+    const initialBalance = definitions.find(
+      (definition) => definition.key === 'initial_balance'
+    );
+
+    expect(pipSize?.format?.('0.01')).toBe('0.01');
+    expect(pipSize?.format?.('0.1234')).toBe('0.12');
+    expect(
+      initialBalance?.render?.('10000', {
+        task: { account_currency: 'USD' },
+        snapshot: null,
+        source: { initial_balance: '10000', account_currency: 'USD' },
+      })
+    ).toBe('10,000 USD');
+  });
+
   it('trading definitions contain user-facing lifecycle/config fields', () => {
     const definitions = buildTradingTaskSettingDefinitions(t as never);
     const keys = new Set(definitions.map((d) => d.key));
