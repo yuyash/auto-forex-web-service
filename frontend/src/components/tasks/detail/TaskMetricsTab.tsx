@@ -181,34 +181,34 @@ function formatTooltipDate(date: Date, intervalMin: number): string {
 }
 
 /**
- * Compute the pixel width needed for the widest Y-axis tick label across
- * all metric charts.  This guarantees labels are never truncated and all
- * charts share the same right margin so their plot areas align.
+ * Compute the pixel width needed for each metric chart's Y-axis tick labels.
+ * Axis labels are intentionally compact because these cards prioritize the
+ * plot area over high-precision tick text.
  *
  * MUI X Charts internally reserves `yAxis.width` for the axis region and
  * uses `axisWidth - tickSize(6) - TICK_LABEL_GAP(2)` as the maximum label
  * width.  Labels exceeding that limit are ellipsized.  We therefore need
  * `yAxis.width = maxLabelPx + 8` and `margin.right = yAxis.width`.
  *
- * We estimate text width at fontSize 10 using ~6.2 px per character, which
- * is a safe upper bound for proportional sans-serif digits.
+ * We estimate text width at fontSize 10 using a conservative proportional
+ * sans-serif digit width.
  */
-const CHAR_WIDTH_PX = 6.5; // conservative estimate at fontSize 10
+const CHAR_WIDTH_PX = 6;
 const Y_AXIS_OVERHEAD = 8; // tickSize(6) + TICK_LABEL_GAP(2)
-const MIN_Y_AXIS_WIDTH = 40; // minimum to avoid overly narrow axes
+const MIN_Y_AXIS_WIDTH = 34;
 
 /**
  * Format a Y-axis tick value exactly as the chart's valueFormatter does.
  * This must stay in sync with the valueFormatter passed to yAxis below.
  *
- * Always uses 2 decimal places for pct/currency to guarantee labels are
- * never truncated regardless of value magnitude.
+ * Avoid fixed two-decimal labels; they consume too much horizontal space in
+ * small chart cards and do not add useful precision for trend reading.
  */
 function formatYLabel(v: number, format?: 'pct' | 'int' | 'currency'): string {
-  if (format === 'pct') return `${v.toFixed(2)}%`;
-  if (format === 'currency') return v.toFixed(2);
+  if (format === 'pct') return `${v.toFixed(1)}%`;
+  if (format === 'currency') return v.toFixed(0);
   if (format === 'int') return Math.round(v).toLocaleString();
-  return v.toFixed(2);
+  return v.toFixed(1);
 }
 
 /** Compute a suitable Y-axis tick count based on the value range. */
@@ -424,10 +424,10 @@ export function TaskMetricsTab({
   const currencySuffix = currency ? ` ${currency}` : '';
 
   const formatValue = (val: number, format?: string) => {
-    if (format === 'pct') return `${val.toFixed(2)}%`;
+    if (format === 'pct') return `${val.toFixed(1)}%`;
     if (format === 'int') return Math.round(val).toLocaleString();
-    if (format === 'currency') return `${val.toFixed(2)}${currencySuffix}`;
-    return val.toFixed(2);
+    if (format === 'currency') return `${val.toFixed(0)}${currencySuffix}`;
+    return val.toFixed(1);
   };
 
   return (
@@ -592,10 +592,10 @@ export function TaskMetricsTab({
                   axisHighlight={{ x: 'line', y: 'none' }}
                   grid={{ vertical: true, horizontal: true }}
                   margin={{
-                    left: 8,
+                    left: metricYAxisWidth,
                     right: metricYAxisWidth,
                     top: 8,
-                    bottom: 32,
+                    bottom: 28,
                   }}
                   hideLegend
                   slotProps={{
