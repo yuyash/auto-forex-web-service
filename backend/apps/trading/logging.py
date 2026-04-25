@@ -11,6 +11,8 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Sequence
 
+from django.conf import settings
+
 from apps.trading.models.logs import TaskLog
 
 if TYPE_CHECKING:
@@ -18,6 +20,70 @@ if TYPE_CHECKING:
 
 
 DEFAULT_TASK_LOGGER_NAMES: tuple[str, ...] = ("apps.trading", "position.lifecycle")
+DEFAULT_TASK_LOG_BUFFER_SIZE = 100
+
+
+_STANDARD_LOG_RECORD_KEYS = frozenset(
+    {
+        "name",
+        "msg",
+        "args",
+        "created",
+        "filename",
+        "funcName",
+        "levelname",
+        "levelno",
+        "lineno",
+        "module",
+        "msecs",
+        "message",
+        "pathname",
+        "process",
+        "processName",
+        "relativeCreated",
+        "thread",
+        "threadName",
+        "exc_info",
+        "exc_text",
+        "stack_info",
+        "taskName",
+    }
+)
+
+
+def _task_type_for(task: BacktestTask | TradingTask) -> str:
+    from apps.trading.models import BacktestTask
+
+    return "backtest" if isinstance(task, BacktestTask) else "trading"
+
+
+def _record_context(record: logging.LogRecord) -> dict[str, Any]:
+    return {
+        key: value for key, value in record.__dict__.items() if key not in _STANDARD_LOG_RECORD_KEYS
+    }
+
+
+def _task_log_from_record(task: BacktestTask | TradingTask, record: logging.LogRecord) -> TaskLog:
+    task_type = _task_type_for(task)
+    log_entry: dict[str, Any] = {
+        "timestamp": datetime.fromtimestamp(record.created).isoformat(),
+        "level": record.levelname,
+        "message": record.getMessage(),
+        "task_id": str(task.pk),
+        "execution_id": str(getattr(task, "execution_id", None) or ""),
+        "task_type": task_type,
+        "logger": record.name,
+        "context": _record_context(record),
+    }
+    return TaskLog(
+        task_type=task_type,
+        task_id=task.pk,
+        execution_id=getattr(task, "execution_id", None),
+        level=record.levelname,
+        component=record.name or "unknown",
+        message=record.getMessage(),
+        details=log_entry,
+    )
 
 
 class JSONLoggingHandler(logging.Handler):
@@ -46,64 +112,7 @@ class JSONLoggingHandler(logging.Handler):
             record: The log record to emit
         """
         try:
-            # Extract extra context from record if present
-            context = {}
-            if hasattr(record, "__dict__"):
-                # Get all custom attributes added via extra parameter
-                for key, value in record.__dict__.items():
-                    if key not in [
-                        "name",
-                        "msg",
-                        "args",
-                        "created",
-                        "filename",
-                        "funcName",
-                        "levelname",
-                        "levelno",
-                        "lineno",
-                        "module",
-                        "msecs",
-                        "message",
-                        "pathname",
-                        "process",
-                        "processName",
-                        "relativeCreated",
-                        "thread",
-                        "threadName",
-                        "exc_info",
-                        "exc_text",
-                        "stack_info",
-                        "taskName",
-                    ]:
-                        context[key] = value
-
-            # Determine task type
-            from apps.trading.models import BacktestTask
-
-            task_type = "backtest" if isinstance(self.task, BacktestTask) else "trading"
-
-            # Build structured log entry
-            log_entry: dict[str, Any] = {
-                "timestamp": datetime.fromtimestamp(record.created).isoformat(),
-                "level": record.levelname,
-                "message": record.getMessage(),
-                "task_id": str(self.task.pk),
-                "execution_id": str(getattr(self.task, "execution_id", None) or ""),
-                "task_type": task_type,
-                "logger": record.name,
-                "context": context,
-            }
-
-            # Persist to database
-            TaskLog.objects.create(
-                task_type=task_type,
-                task_id=self.task.pk,
-                execution_id=getattr(self.task, "execution_id", None),
-                level=record.levelname,
-                component=record.name or "unknown",
-                message=record.getMessage(),
-                details=log_entry,
-            )
+            TaskLog.objects.bulk_create([_task_log_from_record(self.task, record)])
 
         except Exception:
             # Prevent logging errors from breaking the application.
@@ -113,6 +122,49 @@ class JSONLoggingHandler(logging.Handler):
                 self.handleError(record)
             except Exception:
                 pass  # nosec B110 — last-resort: nothing left to do if handleError also fails
+
+
+class BufferedJSONLoggingHandler(logging.Handler):
+    """Persist task log records in batches to reduce DB write amplification."""
+
+    def __init__(
+        self,
+        task: BacktestTask | TradingTask,
+        *,
+        buffer_size: int | None = None,
+    ) -> None:
+        super().__init__()
+        self.task = task
+        self.buffer_size = max(
+            1,
+            int(
+                buffer_size
+                if buffer_size is not None
+                else getattr(settings, "TASK_LOG_BUFFER_SIZE", DEFAULT_TASK_LOG_BUFFER_SIZE)
+            ),
+        )
+        self._buffer: list[TaskLog] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            self._buffer.append(_task_log_from_record(self.task, record))
+            if len(self._buffer) >= self.buffer_size or record.levelno >= logging.ERROR:
+                self.flush()
+        except Exception:
+            try:
+                self.handleError(record)
+            except Exception:
+                pass  # nosec B110
+
+    def flush(self) -> None:
+        if not self._buffer:
+            return
+        pending, self._buffer = self._buffer, []
+        try:
+            TaskLog.objects.bulk_create(pending, batch_size=self.buffer_size)
+        except Exception:
+            self._buffer = pending + self._buffer
+            raise
 
 
 def get_task_logger(
@@ -189,7 +241,7 @@ class TaskLoggingSession:
         self.level = level
         self.logger_names = tuple(logger_names or DEFAULT_TASK_LOGGER_NAMES)
         self.extra_logger_names = tuple(extra_logger_names or ())
-        self.handler = JSONLoggingHandler(task)
+        self.handler = BufferedJSONLoggingHandler(task)
         self.handler.setLevel(level)
         self._attached_loggers: list[logging.Logger] = []
 
@@ -202,7 +254,7 @@ class TaskLoggingSession:
 
             # Avoid duplicate writes for the same task logger pair.
             has_same_task_handler = any(
-                isinstance(h, JSONLoggingHandler)
+                isinstance(h, (JSONLoggingHandler, BufferedJSONLoggingHandler))
                 and (task := getattr(h, "task", None)) is not None
                 and task.pk == self.task.pk
                 for h in logger_obj.handlers
@@ -215,6 +267,13 @@ class TaskLoggingSession:
 
     def stop(self) -> None:
         """Detach handler from loggers where it was attached."""
+        try:
+            self.handler.flush()
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "Failed to flush task logs",
+                extra={"task_id": str(self.task.pk)},
+            )
         for logger_obj in self._attached_loggers:
             if self.handler in logger_obj.handlers:
                 logger_obj.removeHandler(self.handler)

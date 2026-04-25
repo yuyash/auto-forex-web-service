@@ -6,7 +6,7 @@
  */
 
 import axios, { type AxiosRequestConfig, type AxiosResponse } from 'axios';
-import { apiConfig, getAuthHeaders } from './apiConfig';
+import { apiConfig, getRequestHeaders } from './apiConfig';
 import { handleAuthErrorStatus } from '../utils/authEvents';
 
 export class ApiError extends Error {
@@ -83,7 +83,7 @@ async function makeRequest<T>(
   }
 ): Promise<T> {
   const url = buildUrl(path);
-  const authHeaders = await getAuthHeaders();
+  const authHeaders = await getRequestHeaders(method);
 
   const config: AxiosRequestConfig = {
     method,

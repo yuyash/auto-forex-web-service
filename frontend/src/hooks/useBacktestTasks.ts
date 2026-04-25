@@ -12,6 +12,7 @@ import {
 import { usePollingPolicy } from './usePollingPolicy';
 import { useTaskList, useTaskDetail } from './useTaskCollections';
 import type { QueryStateResult } from './useTaskCollections';
+import { useTaskEventStream } from './useTaskEventStream';
 
 interface UseTaskOptions {
   enabled?: boolean;
@@ -35,7 +36,7 @@ export function useBacktestTask(
     enabled: Boolean(id) && options?.enablePolling === true,
     baseIntervalMs: options?.pollingInterval ?? 3000,
   });
-  return useTaskDetail<BacktestTask>(
+  const state = useTaskDetail<BacktestTask>(
     createTaskDetailQuery<BacktestTask>(TaskType.BACKTEST, id, {
       ...options,
       enablePolling: pollingPolicy.isActive,
@@ -46,4 +47,10 @@ export function useBacktestTask(
       shouldPoll: (task) => shouldPollTaskStatus(task?.status),
     }
   );
+  useTaskEventStream<BacktestTask>({
+    taskType: TaskType.BACKTEST,
+    taskId: id,
+    enabled: Boolean(id) && options?.enablePolling === true,
+  });
+  return state;
 }

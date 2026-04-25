@@ -19,6 +19,7 @@ from .strategies import (
     StrategyDefaultsView,
     StrategyView,
 )
+from .stream import TaskEventStreamView
 from .trading import TradingTaskViewSet
 
 __all__ = [
@@ -30,6 +31,7 @@ __all__ = [
     "StrategyConfigDetailView",
     "StrategyConfigTasksView",
     "StrategyConfigCopyView",
+    "TaskEventStreamView",
     # Tasks
     "BacktestTaskViewSet",
     "TradingTaskViewSet",

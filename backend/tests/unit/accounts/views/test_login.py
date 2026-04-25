@@ -105,3 +105,4 @@ class TestUserLoginView:
         assert response.data["token"] == "access-token"  # type: ignore[index]
         assert "refresh_token" not in response.data  # type: ignore[operator]
         assert response.cookies["refresh_token"].value == "refresh-token"
+        assert response.cookies["access_token"].value == "access-token"

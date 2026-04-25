@@ -1,8 +1,11 @@
 """JWT token refresh view using opaque refresh tokens."""
 
 from logging import Logger, getLogger
+from typing import cast
 
 from django.conf import settings
+from django.http import HttpRequest
+from django.middleware.csrf import get_token
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny
@@ -12,7 +15,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.middlewares.utils import get_client_ip
 from apps.accounts.services.jwt import JWTService
-from apps.accounts.utils.cookies import clear_refresh_cookie, set_refresh_cookie
+from apps.accounts.utils.cookies import clear_auth_cookies, set_auth_cookies
 
 logger: Logger = getLogger(name=__name__)
 
@@ -68,15 +71,14 @@ class TokenRefreshView(APIView):
     def post(self, request: Request) -> Response:
         """Handle token refresh via opaque refresh token."""
         refresh_token_value = str(
-            request.data.get("refresh_token")
-            or request.COOKIES.get(settings.AUTH_REFRESH_COOKIE_NAME, "")
+            request.COOKIES.get(settings.AUTH_REFRESH_COOKIE_NAME, "")
         ).strip()
         if not refresh_token_value:
             response = Response(
-                {"error": "refresh_token is required."},
+                {"error": "refresh token cookie is required."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
-            return clear_refresh_cookie(response)
+            return clear_auth_cookies(response)
 
         ip_address = get_client_ip(request)
         user_agent = request.META.get("HTTP_USER_AGENT", "")
@@ -96,7 +98,7 @@ class TokenRefreshView(APIView):
                 {"error": "Invalid or expired refresh token."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
-            return clear_refresh_cookie(response)
+            return clear_auth_cookies(response)
 
         new_access, new_refresh, user = result
 
@@ -120,4 +122,5 @@ class TokenRefreshView(APIView):
             },
             status=status.HTTP_200_OK,
         )
-        return set_refresh_cookie(response, new_refresh)
+        get_token(cast(HttpRequest, request._request))
+        return set_auth_cookies(response, access_token=new_access, refresh_token=new_refresh)

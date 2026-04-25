@@ -377,6 +377,7 @@ AUTH_USER_MODEL = "accounts.User"
 # =============================================================================
 
 globals().update(build_logging_settings(BASE_DIR))
+TASK_LOG_BUFFER_SIZE = int(os.getenv("TASK_LOG_BUFFER_SIZE", "100"))
 
 
 # =============================================================================
@@ -404,6 +405,12 @@ AUTH_REFRESH_COOKIE_SAMESITE = _secret_settings["AUTH_REFRESH_COOKIE_SAMESITE"]
 AUTH_REFRESH_COOKIE_PATH = _secret_settings["AUTH_REFRESH_COOKIE_PATH"]
 AUTH_REFRESH_COOKIE_DOMAIN = _secret_settings["AUTH_REFRESH_COOKIE_DOMAIN"]
 AUTH_REFRESH_COOKIE_MAX_AGE = _secret_settings["AUTH_REFRESH_COOKIE_MAX_AGE"]
+AUTH_ACCESS_COOKIE_NAME = _secret_settings["AUTH_ACCESS_COOKIE_NAME"]
+AUTH_ACCESS_COOKIE_HTTPONLY = _secret_settings["AUTH_ACCESS_COOKIE_HTTPONLY"]
+AUTH_ACCESS_COOKIE_SECURE = _secret_settings["AUTH_ACCESS_COOKIE_SECURE"]
+AUTH_ACCESS_COOKIE_SAMESITE = _secret_settings["AUTH_ACCESS_COOKIE_SAMESITE"]
+AUTH_ACCESS_COOKIE_PATH = _secret_settings["AUTH_ACCESS_COOKIE_PATH"]
+AUTH_ACCESS_COOKIE_DOMAIN = _secret_settings["AUTH_ACCESS_COOKIE_DOMAIN"]
 
 
 # =============================================================================

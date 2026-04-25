@@ -1,0 +1,96 @@
+"""Server-sent task update streams."""
+
+from __future__ import annotations
+
+import json
+import time
+from collections.abc import Iterator
+from typing import Any
+from uuid import UUID
+
+from django.http import Http404, StreamingHttpResponse
+from django.utils import timezone
+from drf_spectacular.utils import extend_schema
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.request import Request
+from rest_framework.views import APIView
+
+from apps.trading.enums import TaskType
+from apps.trading.models import BacktestTask, TradingTask
+
+
+def _sse(event: str, data: dict[str, Any]) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
+
+
+class TaskEventStreamView(APIView):
+    """Stream lightweight task status snapshots over Server-Sent Events."""
+
+    permission_classes = [IsAuthenticated]
+    poll_interval_seconds = 3
+
+    @extend_schema(exclude=True)
+    def get(self, request: Request, task_type: str, task_id: UUID) -> StreamingHttpResponse:
+        task_model = self._task_model(task_type)
+        task = task_model.objects.filter(pk=task_id, user=request.user.pk).first()
+        if task is None:
+            raise Http404("Task not found")
+
+        response = StreamingHttpResponse(
+            self._event_stream(request, task_type=task_type, task_id=task_id),
+            content_type="text/event-stream",
+        )
+        response["Cache-Control"] = "no-cache"
+        response["X-Accel-Buffering"] = "no"
+        return response
+
+    def _event_stream(self, request: Request, *, task_type: str, task_id: UUID) -> Iterator[str]:
+        task_model = self._task_model(task_type)
+        last_payload: dict[str, Any] | None = None
+
+        while True:
+            if getattr(request, "_streaming_aborted", False):
+                return
+
+            task = task_model.objects.filter(pk=task_id, user=request.user.pk).first()
+            if task is None:
+                yield _sse("deleted", {"id": str(task_id), "task_type": task_type})
+                return
+
+            payload = self._snapshot(task, task_type)
+            if payload != last_payload:
+                yield _sse("snapshot", payload)
+                last_payload = payload
+            else:
+                yield _sse(
+                    "heartbeat",
+                    {
+                        "id": str(task_id),
+                        "task_type": task_type,
+                        "timestamp": timezone.now().isoformat(),
+                    },
+                )
+
+            time.sleep(self.poll_interval_seconds)
+
+    @staticmethod
+    def _snapshot(task: BacktestTask | TradingTask, task_type: str) -> dict[str, Any]:
+        return {
+            "id": str(task.pk),
+            "task_type": task_type,
+            "status": task.status,
+            "progress": getattr(task, "progress", None),
+            "execution_id": str(task.execution_id) if task.execution_id else None,
+            "started_at": task.started_at.isoformat() if task.started_at else None,
+            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+            "error_message": task.error_message,
+            "updated_at": task.updated_at.isoformat() if task.updated_at else None,
+        }
+
+    @staticmethod
+    def _task_model(task_type: str):
+        if task_type == TaskType.BACKTEST:
+            return BacktestTask
+        if task_type == TaskType.TRADING:
+            return TradingTask
+        raise Http404("Task type not found")

@@ -132,6 +132,15 @@ def build_secret_settings(*, debug: bool) -> dict[str, Any]:
         "AUTH_REFRESH_COOKIE_PATH": os.getenv("AUTH_REFRESH_COOKIE_PATH", "/api/accounts/auth/"),
         "AUTH_REFRESH_COOKIE_DOMAIN": os.getenv("AUTH_REFRESH_COOKIE_DOMAIN") or None,
         "AUTH_REFRESH_COOKIE_MAX_AGE": refresh_token_expiration,
+        "AUTH_ACCESS_COOKIE_NAME": os.getenv("AUTH_ACCESS_COOKIE_NAME", "access_token"),
+        "AUTH_ACCESS_COOKIE_HTTPONLY": True,
+        "AUTH_ACCESS_COOKIE_SECURE": (
+            os.getenv("AUTH_ACCESS_COOKIE_SECURE", "true" if not debug else "false").lower()
+            in {"true", "1", "yes", "on"}
+        ),
+        "AUTH_ACCESS_COOKIE_SAMESITE": os.getenv("AUTH_ACCESS_COOKIE_SAMESITE", "Lax"),
+        "AUTH_ACCESS_COOKIE_PATH": os.getenv("AUTH_ACCESS_COOKIE_PATH", "/api/"),
+        "AUTH_ACCESS_COOKIE_DOMAIN": os.getenv("AUTH_ACCESS_COOKIE_DOMAIN") or None,
     }
 
 

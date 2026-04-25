@@ -9,7 +9,7 @@ import React, {
 import type { ReactNode } from 'react';
 import type { User, SystemSettings, AuthContextType } from '../types/auth';
 import { AUTH_LOGOUT_EVENT, type AuthLogoutDetail } from '../utils/authEvents';
-import { setAuthToken, clearAuthToken } from '../api';
+import { clearAuthToken } from '../api';
 import i18n from '../i18n/config';
 import { useIdleTimeout } from '../hooks/useIdleTimeout';
 import { usePollingPolicy } from '../hooks/usePollingPolicy';
@@ -52,12 +52,9 @@ const appSettingsSchema = z.object({
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  // NOTE: The access token is held in React state (and synced to an in-memory
-  // variable via setAuthToken) which is standard for SPAs.  The refresh token
-  // is stored in an httpOnly cookie.  If the access-token lifetime
-  // (JWT_EXPIRATION, default 3600 s) is ever increased significantly, consider
-  // moving to an httpOnly cookie for the access token as well to reduce the
-  // XSS exposure window.
+  // The backend stores both access and refresh tokens in httpOnly cookies.
+  // This state is only a session marker for routing/idle timeout; API calls
+  // authenticate through cookies plus CSRF instead of a bearer token in JS.
   const [token, setToken] = useState<string | null>(null);
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(
     null
@@ -130,7 +127,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     tokenRef.current = newToken;
     setUser(newUser);
     writeStoredValue('user', newUser);
-    setAuthToken(newToken);
+    clearAuthToken();
     if (newUser.language && !readRawStoredValue('i18nextLng')) {
       i18n.changeLanguage(newUser.language);
     }

@@ -1,9 +1,11 @@
 """User login view."""
 
 from logging import Logger, getLogger
-from typing import Any
+from typing import Any, cast
 
 from django.contrib.auth import authenticate
+from django.http import HttpRequest
+from django.middleware.csrf import get_token
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny
@@ -18,7 +20,7 @@ from apps.accounts.serializers import UserLoginSerializer
 from apps.accounts.services.events import SecurityEventService
 from apps.accounts.services.jwt import JWTService
 from apps.accounts.services.sessions import get_or_create_user_session
-from apps.accounts.utils.cookies import set_refresh_cookie
+from apps.accounts.utils.cookies import set_auth_cookies
 
 logger: Logger = getLogger(name=__name__)
 
@@ -315,4 +317,5 @@ class UserLoginView(APIView):
             },
             status=status.HTTP_200_OK,
         )
-        return set_refresh_cookie(response, refresh_token)
+        get_token(cast(HttpRequest, request._request))
+        return set_auth_cookies(response, access_token=token, refresh_token=refresh_token)
