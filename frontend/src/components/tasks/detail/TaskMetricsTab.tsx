@@ -4,7 +4,14 @@
  * Renders a grid of line charts, one per metric key, using @mui/x-charts.
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+} from 'react';
 import {
   Box,
   Grid,
@@ -237,6 +244,61 @@ function computeXTickCount(dataLen: number): number {
 /** Fixed height for all chart cards to ensure consistent grid layout */
 const CHART_CARD_HEIGHT = 260;
 const OHLC_KEY = '__ohlc__';
+const MIN_CHART_MEASURE_PX = 1;
+
+function FillLineChart(props: ComponentProps<typeof LineChart>) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return undefined;
+
+    const updateSize = () => {
+      const rect = host.getBoundingClientRect();
+      const nextWidth = Math.max(
+        MIN_CHART_MEASURE_PX,
+        Math.floor(host.clientWidth || rect.width)
+      );
+      const nextHeight = Math.max(
+        MIN_CHART_MEASURE_PX,
+        Math.floor(host.clientHeight || rect.height)
+      );
+      setSize((current) =>
+        current.width === nextWidth && current.height === nextHeight
+          ? current
+          : { width: nextWidth, height: nextHeight }
+      );
+    };
+
+    updateSize();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateSize);
+      return () => window.removeEventListener('resize', updateSize);
+    }
+
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(host);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <Box
+      ref={hostRef}
+      sx={{
+        width: '100%',
+        height: '100%',
+        minWidth: 0,
+        minHeight: 0,
+      }}
+    >
+      {size.width > 0 && size.height > 0 ? (
+        <LineChart {...props} width={size.width} height={size.height} />
+      ) : null}
+    </Box>
+  );
+}
 
 export function TaskMetricsTab({
   data,
@@ -553,7 +615,7 @@ export function TaskMetricsTab({
                   />
                 }
               >
-                <LineChart
+                <FillLineChart
                   xAxis={[
                     {
                       data: cd.x,
@@ -602,10 +664,6 @@ export function TaskMetricsTab({
                     axisTickLabel: {
                       style: { fontSize: 10 },
                     },
-                  }}
-                  sx={{
-                    width: '100%',
-                    minWidth: 0,
                   }}
                 />
               </ChartPanel>
