@@ -53,6 +53,13 @@ export interface ConfigProperty {
   /** Localized enum labels: enum_labels, enum_labels_ja, etc. */
   enum_labels?: Record<string, string>;
   [localizedKey4: `enum_labels_${string}`]: Record<string, string> | undefined;
+  /** Localized enum descriptions: enum_descriptions, enum_descriptions_ja, etc. */
+  enum_descriptions?: Record<string, string>;
+  [localizedKey5: `enum_descriptions_${string}`]:
+    | Record<string, string>
+    | undefined;
+  /** Enum values to hide from the rendered selector while retaining schema validation. */
+  hidden_enum_values?: (string | number)[];
   /**
    * When true, the form should not pre-populate this field from schema/API
    * defaults until the user explicitly selects a value.

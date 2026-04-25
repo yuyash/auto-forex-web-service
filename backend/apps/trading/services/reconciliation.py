@@ -338,6 +338,11 @@ class TradingResumeReconciler:
         strategy_state = (
             self.state.strategy_state if isinstance(self.state.strategy_state, dict) else {}
         )
+        from apps.trading.strategies.registry import registry
+
+        supports_stateful_reconciliation = registry.is_registered(
+            strategy_type
+        ) and registry.supports_stateful_broker_reconciliation(strategy_type)
 
         if not resumed:
             if report.broker_open_positions > 0:
@@ -349,13 +354,13 @@ class TradingResumeReconciler:
             return
 
         # Block unsupported strategy types that had broker-side changes.
-        if strategy_type not in {"snowball"} and (
+        if not supports_stateful_reconciliation and (
             report.created_local_positions > 0
             or report.updated_local_positions > 0
             or report.closed_local_positions > 0
         ):
             report.blockers.append(
-                "Automatic broker reconciliation is only state-aware for the snowball strategy. "
+                "Automatic broker reconciliation is not state-aware for this strategy. "
                 f"Task strategy '{strategy_type or 'unknown'}' requires manual review before resume."
             )
 
@@ -437,161 +442,13 @@ class TradingResumeReconciler:
     ) -> None:
         strategy_type = str(getattr(self.task.config, "strategy_type", "") or "").strip().lower()
 
-        if strategy_type == "snowball":
-            self._sync_snowball_state_with_positions(open_positions, report)
+        from apps.trading.strategies.registry import registry
+
+        if not registry.is_registered(strategy_type):
             return
-
-    def _sync_snowball_state_with_positions(
-        self,
-        open_positions: list[Position],
-        report: ReconciliationReport,
-    ) -> None:
-        """Reconcile persisted snowball entries against open positions."""
-
-        from apps.trading.strategies.snowball.models import SnowballStrategyState
-
-        snowball_state = SnowballStrategyState.from_strategy_state(self.state.strategy_state)
-        by_id = {str(position.id): position for position in open_positions}
-        assigned_ids: set[str] = set()
-
-        for cycle in snowball_state.cycles:
-            for layer in cycle.grid.layers:
-                for slot in layer.slots:
-                    entry = slot.entry
-                    if entry is None:
-                        continue
-
-                    matched = self._match_position_for_snowball_entry(
-                        entry=entry,
-                        open_positions=open_positions,
-                        by_id=by_id,
-                        assigned_ids=assigned_ids,
-                    )
-                    if matched is None:
-                        report.removed_open_entries += 1
-                        report.blockers.append(
-                            f"Snowball entry {entry.entry_id} "
-                            f"(L{entry.layer_number}/R{entry.retracement_count}) "
-                            "has no matching broker position. "
-                            "The position may have been closed externally while "
-                            "the task was stopped. Use restart to begin a fresh execution."
-                        )
-                        continue
-
-                    self._apply_position_to_snowball_entry(
-                        entry=entry,
-                        position=matched,
-                        report=report,
-                    )
-                    assigned_ids.add(str(matched.id))
-
-            for entry in cycle.hedge_entries:
-                matched = self._match_position_for_snowball_entry(
-                    entry=entry,
-                    open_positions=open_positions,
-                    by_id=by_id,
-                    assigned_ids=assigned_ids,
-                )
-                if matched is None:
-                    report.removed_open_entries += 1
-                    report.blockers.append(
-                        f"Snowball hedge entry {entry.entry_id} "
-                        "has no matching broker position. "
-                        "The position may have been closed externally while "
-                        "the task was stopped. Use restart to begin a fresh execution."
-                    )
-                    continue
-
-                self._apply_position_to_snowball_entry(
-                    entry=entry,
-                    position=matched,
-                    report=report,
-                )
-                assigned_ids.add(str(matched.id))
-
-        unmatched_positions = [
-            position for position in open_positions if str(position.id) not in assigned_ids
-        ]
-        for position in unmatched_positions:
-            report.synthesized_open_entries += 1
-            report.blockers.append(
-                "Snowball strategy state could not match open position "
-                f"{position.id} (layer={position.layer_index}, retracement={position.retracement_count})."
-            )
-
-        snowball_state.account_balance = _safe_decimal(self.state.current_balance)
-        snowball_state.account_nav = snowball_state.account_balance + sum(
-            (_safe_decimal(position.unrealized_pnl) for position in open_positions),
-            Decimal("0"),
+        registry.reconcile_broker_positions(
+            identifier=strategy_type,
+            state=self.state,
+            open_positions=open_positions,
+            report=report,
         )
-        self.state.strategy_state = snowball_state.to_dict()
-
-    @staticmethod
-    def _apply_position_to_snowball_entry(
-        *,
-        entry: Any,
-        position: Position,
-        report: ReconciliationReport,
-    ) -> None:
-        """Apply reconciled position fields back onto a persisted snowball entry."""
-
-        position_id = str(position.id)
-        if entry.position_id != position_id:
-            entry.position_id = position_id
-            report.relinked_open_entries += 1
-
-        entry.direction = Direction(str(position.direction).lower())
-        entry.units = abs(int(position.units))
-        entry.entry_price = _safe_decimal(position.entry_price)
-        entry.layer_number = int(position.layer_index or entry.layer_number or 1)
-        entry.retracement_count = int(position.retracement_count or entry.retracement_count or 0)
-        if position.entry_time is not None:
-            entry.opened_at = position.entry_time
-
-    @staticmethod
-    def _match_position_for_snowball_entry(
-        *,
-        entry: Any,
-        open_positions: list[Position],
-        by_id: dict[str, Position],
-        assigned_ids: set[str],
-    ) -> Position | None:
-        """Best-effort match between a persisted snowball entry and an open position."""
-
-        position_id = str(getattr(entry, "position_id", "") or "").strip()
-        if position_id:
-            candidate = by_id.get(position_id)
-            if candidate is not None and str(candidate.id) not in assigned_ids:
-                return candidate
-
-        entry_layer = int(getattr(entry, "layer_number", 0) or 0)
-        entry_retracement = int(getattr(entry, "retracement_count", 0) or 0)
-        entry_direction = str(getattr(entry, "direction", "") or "").lower()
-        entry_units = abs(int(getattr(entry, "units", 0) or 0))
-        entry_price = _safe_decimal(getattr(entry, "entry_price", None))
-
-        best: Position | None = None
-        best_price_diff: Decimal | None = None
-
-        for candidate in open_positions:
-            candidate_id = str(candidate.id)
-            if candidate_id in assigned_ids:
-                continue
-            if entry_layer > 0 and int(candidate.layer_index or 0) != entry_layer:
-                continue
-            if int(candidate.retracement_count or 0) != entry_retracement:
-                continue
-            if (
-                entry_direction in {Direction.LONG, Direction.SHORT}
-                and str(candidate.direction) != entry_direction
-            ):
-                continue
-            if entry_units > 0 and abs(int(candidate.units)) != entry_units:
-                continue
-
-            price_diff = abs(_safe_decimal(candidate.entry_price) - entry_price)
-            if best is None or best_price_diff is None or price_diff < best_price_diff:
-                best = candidate
-                best_price_diff = price_diff
-
-        return best

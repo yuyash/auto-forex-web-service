@@ -134,6 +134,63 @@ class SnowballStrategy(Strategy):
     def strategy_type(self) -> StrategyType:
         return StrategyType.SNOWBALL
 
+    @classmethod
+    def supports_stateful_broker_reconciliation(cls) -> bool:
+        return True
+
+    @classmethod
+    def reconcile_broker_positions(
+        cls,
+        *,
+        state: ExecutionState,
+        open_positions: list[Any],
+        report: Any,
+    ) -> None:
+        from apps.trading.strategies.snowball.reconciliation import (
+            reconcile_broker_positions,
+        )
+
+        reconcile_broker_positions(
+            state=state,
+            open_positions=open_positions,
+            report=report,
+        )
+
+    @classmethod
+    def build_cycle_grid_state_map(
+        cls,
+        *,
+        strategy_state: dict[str, Any] | None,
+    ) -> dict[str, dict[str, Any]]:
+        from apps.trading.strategies.snowball.visualization import (
+            build_cycle_grid_state_map,
+        )
+
+        return build_cycle_grid_state_map(strategy_state=strategy_state)
+
+    @classmethod
+    def validate_resume_parameter_compatibility(
+        cls,
+        *,
+        previous_params: dict[str, Any],
+        current_params: dict[str, Any],
+    ) -> None:
+        from apps.trading.strategies.snowball.compatibility import (
+            validate_resume_parameter_compatibility,
+        )
+
+        validate_resume_parameter_compatibility(
+            previous_params=previous_params,
+            current_params=current_params,
+        )
+
+    def configure_runtime(self, *, account_currency: str, hedging_enabled: bool) -> None:
+        super().configure_runtime(
+            account_currency=account_currency,
+            hedging_enabled=hedging_enabled,
+        )
+        self._hedging_enabled = hedging_enabled
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------

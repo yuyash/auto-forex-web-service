@@ -110,6 +110,14 @@
         "divisive": "除算",
         "manual": "手動"
       },
+      "enum_descriptions": {
+        "constant": "Same interval for every counter-trend add.",
+        "additive": "Increases by a fixed amount each step.",
+        "subtractive": "Decreases by a fixed amount each step, down to zero.",
+        "multiplicative": "Multiplies by a factor each step.",
+        "divisive": "Divides by a factor each step.",
+        "manual": "Use the explicit per-step interval list."
+      },
       "default": "constant",
       "group": "Counter-Trend Interval",
       "group_ja": "逆行側間隔"
@@ -226,6 +234,14 @@
         "divisive": "除算",
         "weighted_avg": "加重平均"
       },
+      "enum_descriptions": {
+        "fixed": "Use the same take-profit distance for every counter-trend close.",
+        "additive": "Increase the take-profit distance by a fixed amount each step.",
+        "subtractive": "Decrease the take-profit distance by a fixed amount each step.",
+        "multiplicative": "Multiply the take-profit distance each step.",
+        "divisive": "Divide the take-profit distance each step.",
+        "weighted_avg": "Set the close price from the weighted average of open entries."
+      },
       "default": "weighted_avg",
       "group": "Counter-Trend Take-Profit",
       "group_ja": "逆行側決済"
@@ -337,6 +353,15 @@
         "multiplicative": "乗算",
         "divisive": "除算",
         "manual": "手動"
+      },
+      "enum_descriptions": {
+        "auto": "Use the legacy Snowball formula based on next interval and take-profit distance.",
+        "constant": "Use the same stop-loss distance for every slot.",
+        "additive": "Increase the stop-loss distance by a fixed amount each slot.",
+        "subtractive": "Decrease the stop-loss distance by a fixed amount each slot.",
+        "multiplicative": "Multiply the stop-loss distance each slot.",
+        "divisive": "Divide the stop-loss distance each slot.",
+        "manual": "Use the explicit per-slot stop-loss distance list."
       },
       "default": "auto",
       "deferDefaultUntilConfigured": true,
@@ -485,6 +510,10 @@
       "enum_labels_ja": {
         "same": "元のロスカット価格を再利用",
         "manual": "手動"
+      },
+      "enum_descriptions": {
+        "same": "Reuse the absolute stop-loss price that closed the previous position.",
+        "manual": "Use per-slot absolute pip distances from the rebuilt entry price."
       },
       "default": "same",
       "dependsOn": {

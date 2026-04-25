@@ -94,6 +94,49 @@ class StrategyRegistry:
             config_schema=strategy_info.config_schema,
         )
 
+    def supports_stateful_broker_reconciliation(self, identifier: str) -> bool:
+        strategy_info = self.get(identifier)
+        return strategy_info.strategy_cls.supports_stateful_broker_reconciliation()
+
+    def reconcile_broker_positions(
+        self,
+        *,
+        identifier: str,
+        state: Any,
+        open_positions: list[Any],
+        report: Any,
+    ) -> None:
+        strategy_info = self.get(identifier)
+        strategy_info.strategy_cls.reconcile_broker_positions(
+            state=state,
+            open_positions=open_positions,
+            report=report,
+        )
+
+    def build_cycle_grid_state_map(
+        self,
+        *,
+        identifier: str,
+        strategy_state: dict[str, Any] | None,
+    ) -> dict[str, dict[str, Any]]:
+        strategy_info = self.get(identifier)
+        return strategy_info.strategy_cls.build_cycle_grid_state_map(
+            strategy_state=strategy_state,
+        )
+
+    def validate_resume_parameter_compatibility(
+        self,
+        *,
+        identifier: str,
+        previous_params: dict[str, Any],
+        current_params: dict[str, Any],
+    ) -> None:
+        strategy_info = self.get(identifier)
+        strategy_info.strategy_cls.validate_resume_parameter_compatibility(
+            previous_params=previous_params,
+            current_params=current_params,
+        )
+
     def get_defaults(self, *, identifier: str) -> dict[str, Any]:
         strategy_info = self.get(identifier)
         defaults: dict[str, Any] = {}

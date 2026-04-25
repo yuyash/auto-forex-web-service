@@ -55,11 +55,10 @@ class TradingEngine:
 
         # Create strategy based on type
         self.strategy = self._create_strategy()
-        self.strategy.account_currency = account_currency
-
-        # Pass hedging flag to strategy if it supports it
-        if hasattr(self.strategy, "_hedging_enabled"):
-            self.strategy._hedging_enabled = hedging_enabled  # type: ignore[assignment]
+        self.strategy.configure_runtime(
+            account_currency=account_currency,
+            hedging_enabled=hedging_enabled,
+        )
 
         logger.info(
             "Initialized TradingEngine: instrument=%s, pip_size=%s, strategy=%s",
