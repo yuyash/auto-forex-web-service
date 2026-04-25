@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.43.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.42.7...backend-v1.43.0) (2026-04-25)
+
+
+### Features
+
+* security observability updates ([#606](https://github.com/yuyash/auto-forex-web-service/issues/606)) ([55dfa3c](https://github.com/yuyash/auto-forex-web-service/commit/55dfa3cd6975581af25fc5a8fc329adf3348c7a5))
+
 ## [1.42.7](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.42.6...backend-v1.42.7) (2026-04-24)
 
 
