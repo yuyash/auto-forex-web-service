@@ -62,9 +62,13 @@ export function ChartPanel({
             width: '100%',
             height: '100%',
           },
+          '& [class*="MuiChartsWrapper-root"]': {
+            width: '100% !important',
+            height: '100% !important',
+          },
           '& .MuiChartsSurface-root': {
-            width: '100%',
-            height: '100%',
+            width: '100% !important',
+            height: '100% !important',
           },
           '& svg': {
             display: 'block',

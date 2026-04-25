@@ -298,6 +298,10 @@ function FillLineChart({
         alignSelf: 'stretch',
         minWidth: 0,
         minHeight: 0,
+        '& > [class*="MuiChartsWrapper-root"]': {
+          width: '100% !important',
+          height: '100% !important',
+        },
       }}
     >
       {size.width > 0 && size.height > 0 ? (
