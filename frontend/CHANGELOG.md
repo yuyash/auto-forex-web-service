@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.56.10](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.9...frontend-v1.56.10) (2026-04-25)
+
+
+### Bug Fixes
+
+* metrics chart surface height ([#602](https://github.com/yuyash/auto-forex-web-service/issues/602)) ([bc5f1a0](https://github.com/yuyash/auto-forex-web-service/commit/bc5f1a00842bbef29b60fd530477900a8b7683bf))
+
 ## [1.56.9](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.8...frontend-v1.56.9) (2026-04-25)
 
 
