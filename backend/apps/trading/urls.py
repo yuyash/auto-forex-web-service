@@ -7,18 +7,17 @@ This module defines URL patterns for trading data and strategy endpoints.
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from apps.trading.views import (
-    BacktestTaskViewSet,
+from apps.trading.views.backtest import BacktestTaskViewSet
+from apps.trading.views.configs import (
     StrategyConfigCopyView,
     StrategyConfigDetailView,
     StrategyConfigTasksView,
     StrategyConfigView,
-    StrategyDefaultsView,
-    StrategyView,
-    TaskEventStreamView,
-    RecoveryAttemptListView,
-    TradingTaskViewSet,
 )
+from apps.trading.views.recovery import RecoveryAttemptListView
+from apps.trading.views.strategies import StrategyDefaultsView, StrategyView
+from apps.trading.views.stream import TaskEventStreamView
+from apps.trading.views.trading import TradingTaskViewSet
 
 app_name = "trading"
 

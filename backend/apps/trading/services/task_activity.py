@@ -6,17 +6,141 @@ from decimal import Decimal
 
 from django.db import models
 from django.db.models import Q
+from django.db.models.fields.json import KeyTextTransform
 from django.db.models.functions import Cast
 from rest_framework.request import Request
 
+from apps.trading.enums import EventType, LogLevel
+from apps.trading.models import TradingEvent
+from apps.trading.models.logs import TaskLog
+from apps.trading.models.orders import Order
 from apps.trading.models.positions import Position
 from apps.trading.models.trades import Trade
-from apps.trading.views.pagination import TradePositionPagination
-from apps.trading.views.query_params import PositionQuery, TradesQueryParams
+from apps.trading.views.pagination import ActivityPagination, TradePositionPagination
+from apps.trading.views.query_params import (
+    EventsQueryParams,
+    LogComponentsQueryParams,
+    LogsQueryParams,
+    OrdersQueryParams,
+    PositionQuery,
+    TradesQueryParams,
+)
 
 
 class TaskActivityQueryService:
     """Build querysets and rows for task activity endpoints."""
+
+    def logs_queryset(self, *, request: Request, task, task_type_label: str):
+        query = LogsQueryParams.from_request(
+            request,
+            default_execution_id=task.execution_id,
+            default_page_size=ActivityPagination.page_size,
+            max_page_size=ActivityPagination.max_page_size,
+        )
+        queryset = TaskLog.objects.filter(
+            task_type=task_type_label,
+            task_id=task.pk,
+            execution_id=query.execution.execution_id,
+        )
+        if query.levels:
+            resolved = [LogLevel[v] for v in query.levels if v in LogLevel.__members__]
+            if resolved:
+                queryset = queryset.filter(level__in=resolved)
+        if query.components:
+            queryset = queryset.filter(component__in=query.components)
+        if query.position_id:
+            queryset = queryset.annotate(
+                _pos_id=KeyTextTransform("position_id", KeyTextTransform("context", "details")),
+                _orig_pos_id=KeyTextTransform(
+                    "original_position_id", KeyTextTransform("context", "details")
+                ),
+            ).filter(
+                Q(_pos_id__startswith=query.position_id)
+                | Q(_orig_pos_id__startswith=query.position_id)
+            )
+        if query.timestamp_range.start:
+            queryset = queryset.filter(timestamp__gte=query.timestamp_range.start)
+        if query.timestamp_range.end:
+            queryset = queryset.filter(timestamp__lte=query.timestamp_range.end)
+        if query.execution.since:
+            queryset = queryset.filter(timestamp__gt=query.execution.since)
+        return queryset.order_by("-timestamp")
+
+    @staticmethod
+    def log_components(*, request: Request, task, task_type_label: str) -> list[str]:
+        query = LogComponentsQueryParams.from_request(
+            request,
+            default_execution_id=task.execution_id,
+        )
+        return list(
+            TaskLog.objects.filter(
+                task_type=task_type_label,
+                task_id=task.pk,
+                execution_id=query.execution_id,
+            )
+            .values_list("component", flat=True)
+            .distinct()
+            .order_by("component")
+        )
+
+    def events_queryset(self, *, request: Request, task, task_type_label: str):
+        query = EventsQueryParams.from_request(
+            request,
+            default_execution_id=task.execution_id,
+        )
+        queryset = TradingEvent.objects.filter(
+            task_type=task_type_label,
+            task_id=task.pk,
+            execution_id=query.execution.execution_id,
+        ).order_by("-created_at")
+        if query.event_type:
+            queryset = queryset.filter(event_type=query.event_type)
+        if query.severity:
+            queryset = queryset.filter(severity=query.severity)
+        if query.scope in {"trading", "task"}:
+            task_scoped_event_types = EventType.task_scoped_values()
+            if query.scope == "task":
+                queryset = queryset.filter(
+                    Q(details__kind__startswith="task_") | Q(event_type__in=task_scoped_event_types)
+                )
+            else:
+                queryset = queryset.filter(
+                    Q(details__kind__isnull=True) | ~Q(details__kind__startswith="task_")
+                ).exclude(event_type__in=task_scoped_event_types)
+        if query.execution.since:
+            queryset = queryset.filter(created_at__gt=query.execution.since)
+        if query.created_range.start:
+            queryset = queryset.filter(created_at__gte=query.created_range.start)
+        if query.created_range.end:
+            queryset = queryset.filter(created_at__lte=query.created_range.end)
+        return queryset
+
+    @staticmethod
+    def orders_queryset(*, request: Request, task, task_type_label: str):
+        query = OrdersQueryParams.from_request(
+            request,
+            default_execution_id=task.execution_id,
+            default_page_size=TradePositionPagination.page_size,
+            max_page_size=TradePositionPagination.max_page_size,
+        )
+        queryset = Order.objects.filter(
+            task_type=task_type_label,
+            task_id=task.pk,
+            execution_id=query.execution.execution_id,
+        ).order_by("-submitted_at")
+        if query.status:
+            queryset = queryset.filter(status=query.status)
+        if query.order_type:
+            queryset = queryset.filter(order_type=query.order_type)
+        if query.direction:
+            queryset = queryset.filter(direction=query.direction)
+        if query.order_id:
+            queryset = queryset.annotate(
+                _id_str=Cast("id", output_field=models.CharField())
+            ).filter(_id_str__istartswith=query.order_id)
+        if query.execution.since:
+            queryset = queryset.filter(updated_at__gt=query.execution.since)
+        return queryset
 
     def trades(
         self, *, request: Request, task, task_type_label: str

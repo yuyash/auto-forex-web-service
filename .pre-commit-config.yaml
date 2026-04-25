@@ -31,6 +31,12 @@ repos:
   # Type checking with ty
   - repo: local
     hooks:
+      - id: ruff-strict-refactor-surfaces
+        name: Ruff strict checks for refactored surfaces
+        entry: backend/.venv/bin/ruff check --config=backend/pyproject.toml --select B,C4,SIM,UP,RET
+        language: system
+        files: ^backend/(apps/(market/services/oanda_transport|trading/services/(task_activity|task_metrics))\.py|scripts/check_openapi_schema\.py|tests/unit/(market/services/test_oanda_transport|trading/(services/test_task_(activity|metrics)|strategies/snowball/test_grid_policy|tasks/test_event_processor))\.py)$
+
       - id: ty
         name: ty
         entry: bash -c 'cd backend && source .venv/bin/activate && ty check'
@@ -77,7 +83,7 @@ repos:
 
       - id: openapi-schema-generate
         name: OpenAPI Schema Generate
-        entry: bash -c 'tmpf=$(mktemp) && cd backend && .venv/bin/python manage.py spectacular --file "$tmpf" --format openapi-json --validate --fail-on-warn && printf "\n" >> "$tmpf" && if ! diff -q "$tmpf" ../docs/openapi.json >/dev/null 2>&1; then cp "$tmpf" ../docs/openapi.json; fi && rm -f "$tmpf"'
+        entry: bash -c 'cd backend && .venv/bin/python scripts/check_openapi_schema.py'
         language: system
         pass_filenames: false
         files: ^backend/

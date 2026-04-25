@@ -6,9 +6,6 @@ used by both BacktestTaskViewSet and TradingTaskViewSet.
 
 from __future__ import annotations
 
-from django.db import models
-from django.db.models import Q
-from django.db.models.functions import Cast
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
 from rest_framework.decorators import action
@@ -18,8 +15,6 @@ from rest_framework.response import Response
 
 from apps.trading.views.throttles import TaskDataRateThrottle
 
-from apps.trading.enums import EventType, LogLevel
-from apps.trading.models.logs import TaskLog
 from apps.trading.serializers.events import (
     OrderSerializer,
     PositionSerializer,
@@ -40,14 +35,10 @@ from apps.trading.views.query_params import (
     ExecutionDetailQueryParamsSchemaSerializer,
     ExecutionsQueryParams,
     ExecutionsQueryParamsSchemaSerializer,
-    EventsQueryParams,
     EventsQueryParamsSchemaSerializer,
-    LogComponentsQueryParams,
     LogComponentsQueryParamsSchemaSerializer,
-    LogsQueryParams,
     LogsQueryParamsSchemaSerializer,
     MetricsQueryParamsSchemaSerializer,
-    OrdersQueryParams,
     OrdersQueryParamsSchemaSerializer,
     PositionLifecycleQueryParams,
     PositionLifecycleQueryParamsSchemaSerializer,
@@ -164,49 +155,11 @@ class TaskSubResourceMixin:
     @action(detail=True, methods=["get"], throttle_classes=[TaskDataRateThrottle])
     def logs(self, request: Request, pk: int | None = None) -> Response:
         task = self.get_object()  # type: ignore[attr-defined]
-        query = LogsQueryParams.from_request(
-            request,
-            default_execution_id=task.execution_id,
-            default_page_size=ActivityPagination.page_size,
-            max_page_size=ActivityPagination.max_page_size,
+        queryset = TaskActivityQueryService().logs_queryset(
+            request=request,
+            task=task,
+            task_type_label=self.task_type_label,
         )
-        queryset = TaskLog.objects.filter(
-            task_type=self.task_type_label,
-            task_id=task.pk,
-            execution_id=query.execution.execution_id,
-        )
-        if query.levels:
-            resolved = [LogLevel[v] for v in query.levels if v in LogLevel.__members__]
-            if resolved:
-                queryset = queryset.filter(level__in=resolved)
-        if query.components:
-            queryset = queryset.filter(component__in=query.components)
-        if query.position_id:
-            # Support prefix match for truncated UUIDs (e.g. first 8 chars).
-            # Extract the nested JSON text value: details->'context'->>'position_id'
-            # Also match on original_position_id so that rebuild chains are
-            # visible when searching by either the original or rebuilt ID.
-            from django.db.models import Q
-            from django.db.models.fields.json import KeyTextTransform
-
-            queryset = queryset.annotate(
-                _pos_id=KeyTextTransform("position_id", KeyTextTransform("context", "details")),
-                _orig_pos_id=KeyTextTransform(
-                    "original_position_id", KeyTextTransform("context", "details")
-                ),
-            ).filter(
-                Q(_pos_id__startswith=query.position_id)
-                | Q(_orig_pos_id__startswith=query.position_id)
-            )
-        if query.timestamp_range.start:
-            queryset = queryset.filter(timestamp__gte=query.timestamp_range.start)
-        if query.timestamp_range.end:
-            queryset = queryset.filter(timestamp__lte=query.timestamp_range.end)
-
-        if query.execution.since:
-            queryset = queryset.filter(timestamp__gt=query.execution.since)
-
-        queryset = queryset.order_by("-timestamp")
         paginator = ActivityPagination()
         page = paginator.paginate_queryset(queryset, request)
         serializer = TaskLogSerializer(page, many=True)
@@ -232,19 +185,10 @@ class TaskSubResourceMixin:
     def log_components(self, request: Request, pk: int | None = None) -> Response:
         """Return distinct component names for the task's logs."""
         task = self.get_object()  # type: ignore[attr-defined]
-        query = LogComponentsQueryParams.from_request(
-            request,
-            default_execution_id=task.execution_id,
-        )
-        components = list(
-            TaskLog.objects.filter(
-                task_type=self.task_type_label,
-                task_id=task.pk,
-                execution_id=query.execution_id,
-            )
-            .values_list("component", flat=True)
-            .distinct()
-            .order_by("component")
+        components = TaskActivityQueryService().log_components(
+            request=request,
+            task=task,
+            task_type_label=self.task_type_label,
         )
         return Response({"components": components})
 
@@ -266,40 +210,12 @@ class TaskSubResourceMixin:
     )
     @action(detail=True, methods=["get"], throttle_classes=[TaskDataRateThrottle])
     def events(self, request: Request, pk: int | None = None) -> Response:
-        from apps.trading.models import TradingEvent
-
         task = self.get_object()  # type: ignore[attr-defined]
-        query = EventsQueryParams.from_request(
-            request,
-            default_execution_id=task.execution_id,
+        queryset = TaskActivityQueryService().events_queryset(
+            request=request,
+            task=task,
+            task_type_label=self.task_type_label,
         )
-        queryset = TradingEvent.objects.filter(
-            task_type=self.task_type_label,
-            task_id=task.pk,
-            execution_id=query.execution.execution_id,
-        ).order_by("-created_at")
-        if query.event_type:
-            queryset = queryset.filter(event_type=query.event_type)
-        if query.severity:
-            queryset = queryset.filter(severity=query.severity)
-        if query.scope in {"trading", "task"}:
-            task_scoped_event_types = EventType.task_scoped_values()
-            if query.scope == "task":
-                queryset = queryset.filter(
-                    Q(details__kind__startswith="task_") | Q(event_type__in=task_scoped_event_types)
-                )
-            else:
-                queryset = queryset.filter(
-                    Q(details__kind__isnull=True) | ~Q(details__kind__startswith="task_")
-                ).exclude(event_type__in=task_scoped_event_types)
-
-        if query.execution.since:
-            queryset = queryset.filter(created_at__gt=query.execution.since)
-        if query.created_range.start:
-            queryset = queryset.filter(created_at__gte=query.created_range.start)
-        if query.created_range.end:
-            queryset = queryset.filter(created_at__lte=query.created_range.end)
-
         paginator = ActivityPagination()
         page = paginator.paginate_queryset(queryset, request)
         serializer = TradingEventSerializer(page, many=True)
@@ -520,39 +436,12 @@ class TaskSubResourceMixin:
     )
     @action(detail=True, methods=["get"], throttle_classes=[TaskDataRateThrottle])
     def orders(self, request: Request, pk: str | None = None) -> Response:
-        from apps.trading.models.orders import Order
-
         task = self.get_object()  # type: ignore[attr-defined]
-        query = OrdersQueryParams.from_request(
-            request,
-            default_execution_id=task.execution_id,
-            default_page_size=TradePositionPagination.page_size,
-            max_page_size=TradePositionPagination.max_page_size,
+        queryset = TaskActivityQueryService().orders_queryset(
+            request=request,
+            task=task,
+            task_type_label=self.task_type_label,
         )
-        queryset = Order.objects.filter(
-            task_type=self.task_type_label,
-            task_id=task.pk,
-            execution_id=query.execution.execution_id,
-        ).order_by("-submitted_at")
-
-        if query.status:
-            queryset = queryset.filter(status=query.status)
-
-        if query.order_type:
-            queryset = queryset.filter(order_type=query.order_type)
-
-        if query.direction:
-            queryset = queryset.filter(direction=query.direction)
-
-        # Optional order_id prefix filter (e.g. first 8 chars of UUID).
-        if query.order_id:
-            queryset = queryset.annotate(
-                _id_str=Cast("id", output_field=models.CharField())
-            ).filter(_id_str__istartswith=query.order_id)
-
-        if query.execution.since:
-            queryset = queryset.filter(updated_at__gt=query.execution.since)
-
         paginator = TradePositionPagination()
         page = paginator.paginate_queryset(queryset, request)
         serializer = OrderSerializer(page, many=True)
