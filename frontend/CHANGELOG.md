@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.57.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.57.0...frontend-v1.57.1) (2026-04-25)
+
+
+### Refactoring
+
+* responsibility boundaries ([#608](https://github.com/yuyash/auto-forex-web-service/issues/608)) ([bf7d3bc](https://github.com/yuyash/auto-forex-web-service/commit/bf7d3bc9836546017884c41cc588dee45a2b2b25))
+
 ## [1.57.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.11...frontend-v1.57.0) (2026-04-25)
 
 
