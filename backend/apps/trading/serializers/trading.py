@@ -9,7 +9,7 @@ from apps.trading.enums import TradingMode
 from apps.trading.models import StrategyConfiguration, TradingTask
 from apps.trading.services.task_policy import (
     action_policy_for_task,
-    validate_task_update_fields,
+    task_update_validation_error,
 )
 
 logger = logging.getLogger(__name__)
@@ -323,14 +323,13 @@ class TradingTaskCreateSerializer(serializers.ModelSerializer):
         """Update trading task."""
         from apps.trading.services.task_audit import audit_task_update, changed_field_values
 
-        try:
-            validate_task_update_fields(
-                task=instance,
-                changed_fields=set(validated_data),
-                task_type="trading",
-            )
-        except ValueError as exc:
-            raise serializers.ValidationError(str(exc)) from exc
+        error = task_update_validation_error(
+            task=instance,
+            changed_fields=set(validated_data),
+            task_type="trading",
+        )
+        if error is not None:
+            raise serializers.ValidationError(error)
 
         changes = changed_field_values(instance, validated_data)
         if "hedging_enabled" in validated_data:

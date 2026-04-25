@@ -1,5 +1,11 @@
 """Unit tests for trading serializers backtest."""
 
+from unittest.mock import MagicMock
+
+import pytest
+from rest_framework import serializers
+
+from apps.trading.enums import TaskStatus
 from apps.trading.serializers.backtest import (
     BacktestTaskCreateSerializer,
     BacktestTaskListSerializer,
@@ -54,3 +60,13 @@ class TestBacktestTaskCreateSerializer:
         assert "max_tick_gap_hours" in fields
         assert "start_time" in fields
         assert "end_time" in fields
+
+    def test_update_validation_error_suppresses_exception_chain(self):
+        serializer = BacktestTaskCreateSerializer()
+        task = MagicMock()
+        task.status = TaskStatus.RUNNING
+
+        with pytest.raises(serializers.ValidationError) as exc_info:
+            serializer.update(task, {"name": "Updated"})
+
+        assert exc_info.value.__cause__ is None

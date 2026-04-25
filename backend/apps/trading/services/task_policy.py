@@ -115,21 +115,37 @@ def validate_task_update_fields(
     task_type: str,
 ) -> None:
     """Validate whether changed fields may be updated in the task's state."""
+    error = task_update_validation_error(
+        task=task,
+        changed_fields=changed_fields,
+        task_type=task_type,
+    )
+    if error is not None:
+        raise ValueError(error)
+
+
+def task_update_validation_error(
+    *,
+    task: Any,
+    changed_fields: set[str],
+    task_type: str,
+) -> str | None:
+    """Return a public validation error for an invalid task update."""
     policy = action_policy_for_task(task, task_type=task_type)
     status = _normalize_status(getattr(task, "status", None))
 
     if is_worker_owned_status(status):
-        raise ValueError(
-            "Cannot update a task while it is actively running. Stop or pause it first."
-        )
+        return "Cannot update a task while it is actively running. Stop or pause it first."
 
     execution_fields = changed_fields & EXECUTION_SETTING_FIELDS
     if execution_fields and not policy.can_edit_execution_settings:
         fields = ", ".join(sorted(execution_fields))
-        raise ValueError(
+        return (
             f"Cannot update execution settings ({fields}) while task is {status}. "
             "Stop the task or edit only name and description."
         )
+
+    return None
 
 
 def _normalize_status(status: str | TaskStatus | None) -> TaskStatus | None:

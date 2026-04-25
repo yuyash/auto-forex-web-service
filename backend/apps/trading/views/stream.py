@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from collections.abc import Iterator
 from typing import Any
@@ -18,6 +19,8 @@ from rest_framework.views import APIView
 from apps.trading.enums import TaskType
 from apps.trading.models import BacktestTask, TradingTask
 
+logger = logging.getLogger(__name__)
+
 
 def _sse(event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
@@ -31,53 +34,58 @@ class TaskEventStreamView(APIView):
 
     @extend_schema(exclude=True)
     def get(self, request: Request, task_type: str, task_id: UUID) -> StreamingHttpResponse:
+        task_type = self._normalize_task_type(task_type)
         task_model = self._task_model(task_type)
         task = task_model.objects.filter(pk=task_id, user=request.user.pk).first()
         if task is None:
             raise Http404("Task not found")
 
         response = StreamingHttpResponse(
-            self._event_stream(request, task_type=task_type, task_id=task_id),
+            self._event_stream(
+                request,
+                task_model=task_model,
+                task_id=task_id,
+            ),
             content_type="text/event-stream",
         )
         response["Cache-Control"] = "no-cache"
         response["X-Accel-Buffering"] = "no"
+        response["X-Content-Type-Options"] = "nosniff"
         return response
 
-    def _event_stream(self, request: Request, *, task_type: str, task_id: UUID) -> Iterator[str]:
-        task_model = self._task_model(task_type)
+    def _event_stream(
+        self,
+        request: Request,
+        *,
+        task_model: type[BacktestTask] | type[TradingTask],
+        task_id: UUID,
+    ) -> Iterator[str]:
         last_payload: dict[str, Any] | None = None
 
-        while True:
-            if getattr(request, "_streaming_aborted", False):
-                return
+        try:
+            while True:
+                if getattr(request, "_streaming_aborted", False):
+                    return
 
-            task = task_model.objects.filter(pk=task_id, user=request.user.pk).first()
-            if task is None:
-                yield _sse("deleted", {"id": str(task_id), "task_type": task_type})
-                return
+                task = task_model.objects.filter(pk=task_id, user=request.user.pk).first()
+                if task is None:
+                    return
 
-            payload = self._snapshot(task, task_type)
-            if payload != last_payload:
-                yield _sse("snapshot", payload)
-                last_payload = payload
-            else:
-                yield _sse(
-                    "heartbeat",
-                    {
-                        "id": str(task_id),
-                        "task_type": task_type,
-                        "timestamp": timezone.now().isoformat(),
-                    },
-                )
+                payload = self._snapshot(task)
+                if payload != last_payload:
+                    yield _sse("snapshot", payload)
+                    last_payload = payload
+                else:
+                    yield _sse("heartbeat", {"timestamp": timezone.now().isoformat()})
 
-            time.sleep(self.poll_interval_seconds)
+                time.sleep(self.poll_interval_seconds)
+        except Exception:
+            logger.exception("Task event stream aborted")
+            return
 
     @staticmethod
-    def _snapshot(task: BacktestTask | TradingTask, task_type: str) -> dict[str, Any]:
+    def _snapshot(task: BacktestTask | TradingTask) -> dict[str, Any]:
         return {
-            "id": str(task.pk),
-            "task_type": task_type,
             "status": task.status,
             "progress": getattr(task, "progress", None),
             "execution_id": str(task.execution_id) if task.execution_id else None,
@@ -93,4 +101,12 @@ class TaskEventStreamView(APIView):
             return BacktestTask
         if task_type == TaskType.TRADING:
             return TradingTask
+        raise Http404("Task type not found")
+
+    @staticmethod
+    def _normalize_task_type(task_type: str) -> str:
+        if task_type == "backtest":
+            return "backtest"
+        if task_type == "trading":
+            return "trading"
         raise Http404("Task type not found")
