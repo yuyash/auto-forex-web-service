@@ -12,6 +12,11 @@ from cryptography.fernet import Fernet
 from django.core.exceptions import ImproperlyConfigured
 
 
+def _csv_env(name: str, default: str = "") -> list[str]:
+    """Return a comma-separated environment variable as a clean list."""
+    return [value.strip() for value in os.getenv(name, default).split(",") if value.strip()]
+
+
 def build_runtime_environment(*, debug: bool) -> dict[str, Any]:
     """Return environment flags shared across settings sections."""
     settings_module = os.getenv("DJANGO_SETTINGS_MODULE", "")
@@ -146,16 +151,22 @@ def build_secret_settings(*, debug: bool) -> dict[str, Any]:
 
 def build_security_settings(*, debug: bool) -> dict[str, Any]:
     """Return Django security and CORS settings."""
+    default_cors_origins = "http://localhost:3000,http://127.0.0.1:3000"
+    cors_allowed_origins = _csv_env("CORS_ALLOWED_ORIGINS", default_cors_origins)
+    csrf_trusted_origins = _csv_env(
+        "CSRF_TRUSTED_ORIGINS",
+        ",".join(cors_allowed_origins),
+    )
+
     data: dict[str, Any] = {
         "CSP_DEFAULT_SRC": os.getenv("CSP_DEFAULT_SRC", "'self'"),
         "CSP_SCRIPT_SRC": os.getenv("CSP_SCRIPT_SRC", "'self'"),
         "CSP_STYLE_SRC": os.getenv("CSP_STYLE_SRC", "'self' 'unsafe-inline'"),
         "CSP_IMG_SRC": os.getenv("CSP_IMG_SRC", "'self' data:"),
         "CSP_CONNECT_SRC": os.getenv("CSP_CONNECT_SRC", "'self'"),
-        "CORS_ALLOWED_ORIGINS": os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(
-            ","
-        ),
+        "CORS_ALLOWED_ORIGINS": cors_allowed_origins,
         "CORS_ALLOW_CREDENTIALS": True,
+        "CSRF_TRUSTED_ORIGINS": csrf_trusted_origins,
     }
 
     if not debug:

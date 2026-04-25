@@ -245,6 +245,10 @@ const CHART_CARD_HEIGHT = 360;
 const LINE_CHART_FALLBACK_HEIGHT = CHART_CARD_HEIGHT - 52;
 const OHLC_KEY = '__ohlc__';
 const MIN_CHART_MEASURE_PX = 1;
+const LINE_CHART_LEFT_MARGIN = 8;
+const LINE_CHART_RIGHT_MARGIN = 8;
+const LINE_CHART_TOP_MARGIN = 4;
+const LINE_CHART_BOTTOM_MARGIN = 22;
 
 function FillLineChart({
   fallbackHeight,
@@ -666,10 +670,10 @@ export function TaskMetricsTab({
                   axisHighlight={{ x: 'line', y: 'none' }}
                   grid={{ vertical: true, horizontal: true }}
                   margin={{
-                    left: metricYAxisWidth,
-                    right: metricYAxisWidth,
-                    top: 8,
-                    bottom: 28,
+                    left: LINE_CHART_LEFT_MARGIN,
+                    right: LINE_CHART_RIGHT_MARGIN,
+                    top: LINE_CHART_TOP_MARGIN,
+                    bottom: LINE_CHART_BOTTOM_MARGIN,
                   }}
                   hideLegend
                   slotProps={{
