@@ -5,7 +5,22 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from apps.trading.enums import StrategyType
+from apps.trading.strategies.base import Strategy
 from apps.trading.strategies.registry import StrategyInfo, StrategyRegistry
+
+
+class MinimalStrategy(Strategy):
+    @staticmethod
+    def parse_config(strategy_config):
+        return dict(getattr(strategy_config, "config_dict", {}) or {})
+
+    @property
+    def strategy_type(self):
+        return StrategyType.CUSTOM
+
+    def on_tick(self, *, tick, state):
+        raise NotImplementedError
 
 
 class TestStrategyRegistry:
@@ -40,7 +55,7 @@ class TestStrategyRegistry:
         reg = StrategyRegistry()
         reg.register(
             identifier="test",
-            strategy_cls=MagicMock(),
+            strategy_cls=MinimalStrategy,
             config_schema={"prop": "val"},
             display_name="Test Strategy",
             description="A test",
@@ -49,6 +64,28 @@ class TestStrategyRegistry:
         assert "test" in info
         assert info["test"]["display_name"] == "Test Strategy"
         assert info["test"]["description"] == "A test"
+        assert info["test"]["capabilities"]["visualization"]["kind"] == "none"
+        assert info["test"]["capabilities"]["runtime"]["hedging"] is False
+
+    def test_default_extension_hooks_are_noops_for_minimal_strategy(self):
+        reg = StrategyRegistry()
+        reg.register(identifier="minimal", strategy_cls=MinimalStrategy)
+
+        assert (
+            reg.build_cycle_status_map(
+                identifier="minimal",
+                strategy_state={"cycles": [{"trade_cycle_id": "cycle-1", "status": "active"}]},
+            )
+            == {}
+        )
+        assert (
+            reg.build_cycle_grid_state_map(
+                identifier="minimal",
+                strategy_state={"cycles": [{"trade_cycle_id": "cycle-1"}]},
+            )
+            == {}
+        )
+        assert reg.supports_stateful_broker_reconciliation("minimal") is False
 
     def test_create_unknown_strategy_raises(self):
         reg = StrategyRegistry()

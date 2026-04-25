@@ -170,6 +170,27 @@ class Strategy(ABC):
         return False
 
     @classmethod
+    def capabilities(cls) -> dict[str, Any]:
+        """Return strategy capabilities consumed by generic services and clients."""
+        return {
+            "runtime": {
+                "hedging": False,
+            },
+            "visualization": {
+                "kind": "none",
+                "cycle_statuses": False,
+                "grid": False,
+            },
+            "events": {
+                "close_reason_labels": {},
+                "strategy_event_labels": {},
+            },
+            "resume": {
+                "stateful_broker_reconciliation": cls.supports_stateful_broker_reconciliation(),
+            },
+        }
+
+    @classmethod
     def reconcile_broker_positions(
         cls,
         *,
@@ -194,6 +215,16 @@ class Strategy(ABC):
         strategy_state: dict[str, Any] | None,
     ) -> dict[str, dict[str, Any]]:
         """Return cycle_id -> grid visualization state for strategies that support it."""
+        _ = strategy_state
+        return {}
+
+    @classmethod
+    def build_cycle_status_map(
+        cls,
+        *,
+        strategy_state: dict[str, Any] | None,
+    ) -> dict[str, str]:
+        """Return cycle_id -> status mappings for strategies that persist cycle state."""
         _ = strategy_state
         return {}
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 import {
   Box,
@@ -197,15 +197,6 @@ export default function TradingTaskForm({
     ? (accountDetail as Account)
     : selectedAccountFromList;
 
-  useEffect(() => {
-    if (selectedAccount?.hedging_enabled === false) {
-      setValue('hedging_enabled', false, {
-        shouldValidate: false,
-        shouldDirty: true,
-      });
-    }
-  }, [selectedAccount?.hedging_enabled, setValue]);
-
   const { strategies } = useStrategies();
 
   const { instruments } = useSupportedInstruments();
@@ -213,6 +204,29 @@ export default function TradingTaskForm({
   const { data: selectedConfig } = useConfiguration(
     selectedConfigId || undefined
   );
+  const selectedStrategy = useMemo(
+    () =>
+      selectedConfig
+        ? strategies.find(
+            (strategy) => strategy.id === selectedConfig.strategy_type
+          )
+        : undefined,
+    [selectedConfig, strategies]
+  );
+  const strategySupportsHedging =
+    selectedStrategy?.capabilities?.runtime?.hedging !== false;
+
+  useEffect(() => {
+    if (
+      selectedAccount?.hedging_enabled === false ||
+      !strategySupportsHedging
+    ) {
+      setValue('hedging_enabled', false, {
+        shouldValidate: false,
+        shouldDirty: true,
+      });
+    }
+  }, [selectedAccount?.hedging_enabled, setValue, strategySupportsHedging]);
 
   // Check if account already has an active task (only if valid account selected)
   const { data: existingTasks } = useTradingTasks(
@@ -291,7 +305,7 @@ export default function TradingTaskForm({
         instrument: completeData.instrument,
         dry_run: completeData.dry_run,
         hedging_enabled:
-          selectedAccount?.hedging_enabled === false
+          selectedAccount?.hedging_enabled === false || !strategySupportsHedging
             ? false
             : completeData.hedging_enabled,
         api_retry_max_attempts: completeData.api_retry_max_attempts,
@@ -592,45 +606,49 @@ export default function TradingTaskForm({
                 </Typography>
               </Grid>
 
-              <Grid size={{ xs: 12 }}>
-                <Controller
-                  name="hedging_enabled"
-                  control={control}
-                  render={({ field }) => (
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={field.value ?? true}
-                          onChange={field.onChange}
-                          disabled={selectedAccount?.hedging_enabled === false}
-                        />
-                      }
-                      label={t(
-                        'trading:form.hedgingEnabled',
-                        'Enable Hedging (simultaneous long/short positions)'
-                      )}
-                    />
-                  )}
-                />
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: 'block', ml: 4 }}
-                >
-                  {t(
-                    'trading:form.hedgingDescription',
-                    'When enabled, the strategy can hold both long and short positions simultaneously. Requires a hedging-enabled OANDA account.'
-                  )}
-                </Typography>
-                {selectedAccount?.hedging_enabled === false && (
-                  <Alert severity="warning" sx={{ mt: 2 }}>
-                    {t(
-                      'trading:form.hedgingUnsupported',
-                      'This OANDA account uses netting mode and does not support hedging. Hedging has been disabled for this task.'
+              {strategySupportsHedging ? (
+                <Grid size={{ xs: 12 }}>
+                  <Controller
+                    name="hedging_enabled"
+                    control={control}
+                    render={({ field }) => (
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={field.value ?? true}
+                            onChange={field.onChange}
+                            disabled={
+                              selectedAccount?.hedging_enabled === false
+                            }
+                          />
+                        }
+                        label={t(
+                          'trading:form.hedgingEnabled',
+                          'Enable Hedging (simultaneous long/short positions)'
+                        )}
+                      />
                     )}
-                  </Alert>
-                )}
-              </Grid>
+                  />
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: 'block', ml: 4 }}
+                  >
+                    {t(
+                      'trading:form.hedgingDescription',
+                      'When enabled, the strategy can hold both long and short positions simultaneously. Requires a hedging-enabled OANDA account.'
+                    )}
+                  </Typography>
+                  {selectedAccount?.hedging_enabled === false && (
+                    <Alert severity="warning" sx={{ mt: 2 }}>
+                      {t(
+                        'trading:form.hedgingUnsupported',
+                        'This OANDA account uses netting mode and does not support hedging. Hedging has been disabled for this task.'
+                      )}
+                    </Alert>
+                  )}
+                </Grid>
+              ) : null}
 
               <Grid size={{ xs: 12 }}>
                 <Typography

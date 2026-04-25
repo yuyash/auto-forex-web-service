@@ -484,6 +484,7 @@ export const BacktestTaskDetail: React.FC = () => {
               currentPrice={
                 polledTick?.price != null ? parseFloat(polledTick.price) : null
               }
+              strategyType={detailTask.strategy_type}
               pipSize={
                 detailTask.pip_size ? parseFloat(detailTask.pip_size) : null
               }

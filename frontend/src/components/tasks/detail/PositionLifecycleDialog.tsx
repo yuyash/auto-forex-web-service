@@ -39,6 +39,7 @@ interface PositionLifecycleDialogProps {
   initialPositionId?: string;
   positionData?: unknown | null;
   timezone?: string;
+  closeReasonLabels?: Record<string, string>;
 }
 
 type LifecycleEventKind =
@@ -197,9 +198,11 @@ const eventDotColor = (kind: LifecycleEventKind): string => {
 
 function closeReasonLabel(
   reason?: string | null,
-  t?: (key: string) => string
+  t?: (key: string) => string,
+  labels?: Record<string, string>
 ): string {
   if (!reason) return '-';
+  if (labels?.[reason]) return labels[reason];
   const mapping: Record<string, string> = {
     normal: 'tables.positions.lifecycle.closeReasons.normal',
     tp: 'tables.positions.lifecycle.closeReasons.normal',
@@ -248,7 +251,8 @@ const LifecycleEventRow: React.FC<{
   event: PositionLifecycleEvent;
   timezone?: string;
   instrument?: string;
-}> = ({ event, timezone = 'UTC', instrument }) => {
+  closeReasonLabels?: Record<string, string>;
+}> = ({ event, timezone = 'UTC', instrument, closeReasonLabels }) => {
   const { t, i18n } = useTranslation('common');
   const relatedLabel =
     event.kind === 'rebuilt'
@@ -353,7 +357,7 @@ const LifecycleEventRow: React.FC<{
           sx={{ mt: 1, display: 'block' }}
         >
           {t('tables.positions.lifecycle.fields.closeReason')}:{' '}
-          {closeReasonLabel(event.close_reason, t)}
+          {closeReasonLabel(event.close_reason, t, closeReasonLabels)}
         </Typography>
       ) : null}
       {event.related_position_id ? (
@@ -391,7 +395,8 @@ const LifecycleEventRow: React.FC<{
 const PositionCard: React.FC<{
   item: PositionLifecycleItem;
   timezone?: string;
-}> = ({ item, timezone = 'UTC' }) => {
+  closeReasonLabels?: Record<string, string>;
+}> = ({ item, timezone = 'UTC', closeReasonLabels }) => {
   const { t, i18n } = useTranslation('common');
   const summary = item.summary;
   const pnlValue = summary.realized_pnl ? Number(summary.realized_pnl) : null;
@@ -530,7 +535,11 @@ const PositionCard: React.FC<{
             />
             <LifecycleField
               label={t('tables.positions.lifecycle.fields.closeReason')}
-              value={closeReasonLabel(summary.close_reason, t)}
+              value={closeReasonLabel(
+                summary.close_reason,
+                t,
+                closeReasonLabels
+              )}
             />
           </Stack>
 
@@ -583,6 +592,7 @@ const PositionCard: React.FC<{
                 event={event}
                 timezone={timezone}
                 instrument={summary.instrument}
+                closeReasonLabels={closeReasonLabels}
               />
             ))}
           </Stack>
@@ -602,6 +612,7 @@ export const PositionLifecycleDialog: React.FC<
   executionRunId,
   initialPositionId,
   timezone,
+  closeReasonLabels,
 }) => {
   const { t } = useTranslation('common');
   const { user } = useAuth();
@@ -831,6 +842,7 @@ export const PositionLifecycleDialog: React.FC<
                   key={item.position_id}
                   item={item}
                   timezone={resolvedTimezone}
+                  closeReasonLabels={closeReasonLabels}
                 />
               ))}
             </Stack>

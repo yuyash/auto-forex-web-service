@@ -173,6 +173,7 @@ export function TaskStrategyTab({
   });
 
   const cycles = useMemo<StrategyCycle[]>(() => data?.cycles ?? [], [data]);
+  const supportsGridVisualization = data?.visualization?.grid !== false;
   const pnlCurrencyCode = useMemo(
     () => getPnlCurrencyCode(instrument),
     [instrument]
@@ -657,7 +658,8 @@ export function TaskStrategyTab({
                       {formatCyclePnl(cycle, pnlCurrencyCode).total}
                     </Typography>
                   </Typography>
-                  {cycle.grid_state &&
+                  {supportsGridVisualization &&
+                  cycle.grid_state &&
                   (cycle.status !== 'completed' ||
                     gridHasPositions(
                       sidebarExtendedGridStates.get(cycle.cycle_id) ??
@@ -839,7 +841,7 @@ export function TaskStrategyTab({
                   PnL: {formatCyclePnl(selectedCycle, pnlCurrencyCode).total}
                 </Typography>
               </Typography>
-              {selectedCycle.grid_state ? (
+              {supportsGridVisualization && selectedCycle.grid_state ? (
                 <Box sx={{ mb: 2 }}>
                   <StrategyGridIndicator
                     gridState={selectedCycleExtendedGridState}

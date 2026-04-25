@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from apps.trading.enums import Direction
+from apps.trading.services.strategy_cycles import _load_cycle_statuses
 from apps.trading.services.strategy_grid_state import build_cycle_grid_state_map
 from apps.trading.strategies.snowball.models import (
     Entry,
@@ -84,6 +85,30 @@ class TestBuildCycleGridStateMap:
         ]
         assert grid_state["layers"][0]["slots"][0]["position_id"] == "pos-1"
         assert grid_state["layers"][0]["slots"][1]["position_id"] == "sl-pos-1-1"
+
+
+class TestBuildCycleStatusMap:
+    def test_returns_empty_for_unsupported_strategy(self):
+        assert (
+            _load_cycle_statuses(
+                strategy_type="unknown",
+                strategy_state={"cycles": [{"trade_cycle_id": "cycle-1"}]},
+            )
+            == {}
+        )
+
+    def test_serializes_snowball_cycle_statuses(self):
+        cycle = SnowballCycle(
+            cycle_id=11,
+            direction=Direction.LONG,
+            trade_cycle_id="trade-cycle-1",
+        )
+        state = SnowballStrategyState(cycles=[cycle])
+
+        assert _load_cycle_statuses(
+            strategy_type="snowball",
+            strategy_state=state.to_dict(),
+        ) == {"trade-cycle-1": "active"}
 
 
 def _pending_rebuild(*, layer: int, slot: int) -> StopLossClosedEntry:

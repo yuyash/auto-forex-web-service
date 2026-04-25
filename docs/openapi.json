@@ -9411,11 +9411,15 @@
                         "type": "string",
                         "description": "Strategy description"
                     },
+                    "capabilities": {
+                        "description": "Strategy capabilities"
+                    },
                     "config_schema": {
                         "description": "Configuration schema"
                     }
                 },
                 "required": [
+                    "capabilities",
                     "class_name",
                     "config_schema",
                     "description",

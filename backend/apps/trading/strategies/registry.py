@@ -73,6 +73,7 @@ class StrategyRegistry:
                 "config_schema": dict(item.config_schema),
                 "display_name": item.display_name,
                 "description": item.description,
+                "capabilities": item.strategy_cls.capabilities(),
                 "strategy_class": getattr(
                     item.strategy_cls,
                     "__name__",
@@ -123,6 +124,21 @@ class StrategyRegistry:
         return strategy_info.strategy_cls.build_cycle_grid_state_map(
             strategy_state=strategy_state,
         )
+
+    def build_cycle_status_map(
+        self,
+        *,
+        identifier: str,
+        strategy_state: dict[str, Any] | None,
+    ) -> dict[str, str]:
+        strategy_info = self.get(identifier)
+        return strategy_info.strategy_cls.build_cycle_status_map(
+            strategy_state=strategy_state,
+        )
+
+    def capabilities(self, *, identifier: str) -> dict[str, Any]:
+        strategy_info = self.get(identifier)
+        return strategy_info.strategy_cls.capabilities()
 
     def validate_resume_parameter_compatibility(
         self,

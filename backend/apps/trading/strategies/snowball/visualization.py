@@ -31,6 +31,22 @@ def build_cycle_grid_state_map(
     return result
 
 
+def build_cycle_status_map(
+    *,
+    strategy_state: dict[str, Any] | None,
+) -> dict[str, str]:
+    """Return trade_cycle_id -> status mappings for Snowball cycles."""
+    if not isinstance(strategy_state, dict):
+        return {}
+
+    state = SnowballStrategyState.from_dict(strategy_state)
+    result: dict[str, str] = {}
+    for cycle in state.cycles:
+        if cycle.trade_cycle_id:
+            result[str(cycle.trade_cycle_id)] = str(cycle.status.value)
+    return result
+
+
 def _serialize_cycle_grid(cycle: Any) -> dict[str, Any]:
     layers: list[dict[str, Any]] = []
     counts = {

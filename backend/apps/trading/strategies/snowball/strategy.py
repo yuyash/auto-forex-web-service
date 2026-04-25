@@ -139,6 +139,40 @@ class SnowballStrategy(Strategy):
         return True
 
     @classmethod
+    def capabilities(cls) -> dict[str, Any]:
+        return {
+            "runtime": {
+                "hedging": True,
+            },
+            "visualization": {
+                "kind": "cycle_grid",
+                "cycle_statuses": True,
+                "grid": True,
+            },
+            "events": {
+                "close_reason_labels": {
+                    "tp": "Take profit",
+                    "close_position": "Manual close",
+                    "stop_loss": "Stop-loss protection",
+                    "shrink": "Shrink protection",
+                    "volatility_lock": "Volatility lock protection",
+                    "margin_protection": "Margin protection",
+                    "counter_tp": "Counter-trend take profit",
+                    "layer_initial_tp": "Layer initial take profit",
+                    "lock_hedge_neutralize": "Lock hedge neutralization",
+                },
+                "strategy_event_labels": {
+                    "snowball_locked": "Snowball locked",
+                    "snowball_unlocked": "Snowball unlocked",
+                    "snowball_shrink": "Snowball shrink",
+                },
+            },
+            "resume": {
+                "stateful_broker_reconciliation": True,
+            },
+        }
+
+    @classmethod
     def reconcile_broker_positions(
         cls,
         *,
@@ -167,6 +201,18 @@ class SnowballStrategy(Strategy):
         )
 
         return build_cycle_grid_state_map(strategy_state=strategy_state)
+
+    @classmethod
+    def build_cycle_status_map(
+        cls,
+        *,
+        strategy_state: dict[str, Any] | None,
+    ) -> dict[str, str]:
+        from apps.trading.strategies.snowball.visualization import (
+            build_cycle_status_map,
+        )
+
+        return build_cycle_status_map(strategy_state=strategy_state)
 
     @classmethod
     def validate_resume_parameter_compatibility(

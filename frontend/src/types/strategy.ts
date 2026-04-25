@@ -3,7 +3,28 @@ export interface Strategy {
   name: string;
   class_name: string;
   description: string;
+  capabilities?: StrategyCapabilities;
   config_schema: ConfigSchema;
+}
+
+export type StrategyVisualizationKind = 'none' | 'cycle_grid' | string;
+
+export interface StrategyCapabilities {
+  runtime?: {
+    hedging?: boolean;
+  };
+  visualization?: {
+    kind?: StrategyVisualizationKind;
+    cycle_statuses?: boolean;
+    grid?: boolean;
+  };
+  events?: {
+    close_reason_labels?: Record<string, string>;
+    strategy_event_labels?: Record<string, string>;
+  };
+  resume?: {
+    stateful_broker_reconciliation?: boolean;
+  };
 }
 
 export type JsonPrimitive = string | number | boolean | null;

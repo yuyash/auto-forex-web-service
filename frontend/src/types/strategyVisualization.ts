@@ -72,6 +72,11 @@ export interface StrategyCyclesSummary {
 
 export interface StrategyCyclesResponse {
   execution_id: string | null;
+  visualization?: {
+    kind?: 'none' | 'cycle_grid' | string;
+    cycle_statuses?: boolean;
+    grid?: boolean;
+  };
   cycles: StrategyCycle[];
   summary: StrategyCyclesSummary;
   last_tick_timestamp: string | null;

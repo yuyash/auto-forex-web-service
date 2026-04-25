@@ -393,6 +393,26 @@ export default function BacktestTaskForm({
   const configIdString = selectedConfigId || '';
 
   const { data: selectedConfig } = useConfiguration(configIdString);
+  const selectedStrategy = useMemo(
+    () =>
+      selectedConfig
+        ? strategies.find(
+            (strategy) => strategy.id === selectedConfig.strategy_type
+          )
+        : undefined,
+    [selectedConfig, strategies]
+  );
+  const strategySupportsHedging =
+    selectedStrategy?.capabilities?.runtime?.hedging !== false;
+
+  useEffect(() => {
+    if (!strategySupportsHedging) {
+      setValue('hedging_enabled', false, {
+        shouldValidate: false,
+        shouldDirty: true,
+      });
+    }
+  }, [setValue, strategySupportsHedging]);
 
   const watchedInstrument = watch('instrument');
   const watchedStartTime = watch('start_time');
@@ -552,7 +572,9 @@ export default function BacktestTaskForm({
       tick_granularity: completeData.tick_granularity,
       tick_window_value_mode: completeData.tick_window_value_mode,
       sell_at_completion: completeData.sell_at_completion,
-      hedging_enabled: completeData.hedging_enabled,
+      hedging_enabled: strategySupportsHedging
+        ? completeData.hedging_enabled
+        : false,
       drain_duration_hours: completeData.drain_duration_hours,
       market_idle_pre_close_minutes: completeData.market_idle_pre_close_minutes,
       market_idle_resume_delay_minutes:
@@ -976,36 +998,38 @@ export default function BacktestTaskForm({
                 />
               </Grid>
 
-              <Grid size={{ xs: 12 }}>
-                <Controller
-                  name="hedging_enabled"
-                  control={control}
-                  render={({ field }) => (
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={field.value ?? true}
-                          onChange={(e) => field.onChange(e.target.checked)}
-                        />
-                      }
-                      label={
-                        <Box>
-                          <Typography variant="body1">
-                            {t('backtest:form.hedgingEnabled')}
-                          </Typography>
-                          <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            sx={{ mt: 0.5 }}
-                          >
-                            {t('backtest:form.hedgingDescription')}
-                          </Typography>
-                        </Box>
-                      }
-                    />
-                  )}
-                />
-              </Grid>
+              {strategySupportsHedging ? (
+                <Grid size={{ xs: 12 }}>
+                  <Controller
+                    name="hedging_enabled"
+                    control={control}
+                    render={({ field }) => (
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={field.value ?? true}
+                            onChange={(e) => field.onChange(e.target.checked)}
+                          />
+                        }
+                        label={
+                          <Box>
+                            <Typography variant="body1">
+                              {t('backtest:form.hedgingEnabled')}
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ mt: 0.5 }}
+                            >
+                              {t('backtest:form.hedgingDescription')}
+                            </Typography>
+                          </Box>
+                        }
+                      />
+                    )}
+                  />
+                </Grid>
+              ) : null}
 
               <Grid size={{ xs: 12 }} sx={{ mt: 2 }}>
                 <Typography variant="subtitle1" fontWeight={600}>

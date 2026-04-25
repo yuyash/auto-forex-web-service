@@ -1,5 +1,6 @@
 import type { PaginatedApiResponse } from './pagination';
 import type { TaskActionPolicy } from '../../types/common';
+import type { StrategyCapabilities } from '../../types/strategy';
 
 export interface BackendExecutionMetrics {
   total_return?: string;
@@ -141,6 +142,7 @@ export interface BackendStrategyListResponse {
     name: string;
     class_name?: string;
     description: string;
+    capabilities?: StrategyCapabilities;
     config_schema: Record<string, unknown>;
   }>;
   count: number;

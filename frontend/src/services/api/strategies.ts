@@ -4,11 +4,13 @@ import type {
   BackendStrategyDefaultsResponse,
   BackendStrategyListResponse,
 } from './contracts';
+import type { StrategyCapabilities } from '../../types/strategy';
 
 export interface Strategy {
   id: string;
   name: string;
   description: string;
+  capabilities?: StrategyCapabilities;
   config_schema: Record<string, unknown>;
 }
 

@@ -9,7 +9,7 @@
  * View mode preference is persisted to localStorage.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Box,
@@ -53,6 +53,7 @@ import { TaskPositionFilterBar } from './TaskPositionFilterBar';
 import { TaskPositionModeViews } from './TaskPositionModeViews';
 import { useTaskPositionFilters } from './useTaskPositionFilters';
 import { useTaskPositionViewMode } from './useTaskPositionViewMode';
+import { useStrategies } from '../../../hooks/useStrategies';
 
 interface TaskPositionsTableProps {
   taskId: string | number;
@@ -61,6 +62,7 @@ interface TaskPositionsTableProps {
   enableRealTimeUpdates?: boolean;
   currentPrice?: number | null;
   pipSize?: number | null;
+  strategyType?: string;
 }
 
 export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
@@ -70,9 +72,17 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   enableRealTimeUpdates = false,
   currentPrice,
   pipSize,
+  strategyType,
 }) => {
   const { t } = useTranslation('common');
   const { user } = useAuth();
+  const { strategies } = useStrategies();
+  const strategyCloseReasonLabels = useMemo(
+    () =>
+      strategies.find((strategy) => strategy.id === strategyType)?.capabilities
+        ?.events?.close_reason_labels ?? {},
+    [strategies, strategyType]
+  );
 
   // --- View mode ---
   const { viewMode, handleViewModeChange } = useTaskPositionViewMode();
@@ -599,9 +609,11 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       };
 
       const i18nKey = closeReasonKeyMap[r.close_reason];
-      const label = i18nKey
-        ? t(`tables.positions.${i18nKey}`)
-        : r.close_reason.replace(/_/g, ' ');
+      const label =
+        strategyCloseReasonLabels[r.close_reason] ??
+        (i18nKey
+          ? t(`tables.positions.${i18nKey}`)
+          : r.close_reason.replace(/_/g, ' '));
 
       if (r.close_reason === 'normal') {
         return (
@@ -1717,6 +1729,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         executionRunId={executionRunId}
         initialPositionId={lifecyclePositionId}
         positionData={lifecyclePosition}
+        closeReasonLabels={strategyCloseReasonLabels}
       />
     </Box>
   );

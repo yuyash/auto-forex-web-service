@@ -46,6 +46,7 @@ class StrategyView(APIView):
                     "name": display_name,
                     "class_name": info.get("strategy_class", ""),
                     "description": (info.get("description") or "").strip(),
+                    "capabilities": info.get("capabilities", {}),
                     "config_schema": config_schema,
                 }
             )
