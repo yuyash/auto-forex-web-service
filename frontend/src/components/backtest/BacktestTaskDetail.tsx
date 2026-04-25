@@ -536,6 +536,7 @@ export const BacktestTaskDetail: React.FC = () => {
               taskType={TaskType.BACKTEST}
               executionRunId={activeExecutionId}
               enableRealTimeUpdates={enableRealtime}
+              strategyType={detailTask.strategy_type}
             />
           </LazyTabPanel>
         )}

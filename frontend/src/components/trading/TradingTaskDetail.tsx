@@ -476,6 +476,7 @@ export const TradingTaskDetail: React.FC = () => {
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
               enableRealTimeUpdates={enableRealtime}
+              strategyType={detailTask.strategy_type}
             />
           </LazyTabPanel>
         )}

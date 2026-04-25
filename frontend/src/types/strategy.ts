@@ -7,7 +7,11 @@ export interface Strategy {
   config_schema: ConfigSchema;
 }
 
-export type StrategyVisualizationKind = 'none' | 'cycle_grid' | string;
+export type StrategyVisualizationKind =
+  | 'none'
+  | 'timeline'
+  | 'cycle_grid'
+  | string;
 
 export interface StrategyCapabilities {
   runtime?: {

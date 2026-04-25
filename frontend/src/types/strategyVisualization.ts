@@ -73,7 +73,7 @@ export interface StrategyCyclesSummary {
 export interface StrategyCyclesResponse {
   execution_id: string | null;
   visualization?: {
-    kind?: 'none' | 'cycle_grid' | string;
+    kind?: 'none' | 'timeline' | 'cycle_grid' | string;
     cycle_statuses?: boolean;
     grid?: boolean;
   };

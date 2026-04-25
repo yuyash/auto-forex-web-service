@@ -128,7 +128,7 @@ export interface Trade {
   pnl: number;
   unrealized_pnl?: number;
   duration?: string;
-  // Floor strategy specific fields
+  // Layered strategy specific fields
   layer_number?: number;
   is_first_lot?: boolean;
   retracement_count?: number;

@@ -7,7 +7,8 @@ import pytest
 
 from apps.trading.enums import StrategyType
 from apps.trading.strategies.base import Strategy
-from apps.trading.strategies.registry import StrategyInfo, StrategyRegistry
+from apps.trading.strategies.registry import StrategyInfo, StrategyRegistry, registry
+from apps.trading.strategies.custom.strategy import CustomStrategy
 
 
 class MinimalStrategy(Strategy):
@@ -118,6 +119,13 @@ class TestStrategyRegistry:
         mock_cls.parse_config.assert_called_once_with(config)
         mock_cls.assert_called_once_with("USD_JPY", Decimal("0.01"), mock_parsed)
         assert result is mock_instance
+
+    def test_custom_strategy_skeleton_is_registered(self):
+        assert registry.is_registered("custom")
+        info = registry.get("custom")
+        assert info.strategy_cls is CustomStrategy
+        assert info.config_schema["display_name"] == "Custom Strategy"
+        assert registry.capabilities(identifier="custom")["visualization"]["kind"] == "none"
 
 
 class TestStrategyInfo:
