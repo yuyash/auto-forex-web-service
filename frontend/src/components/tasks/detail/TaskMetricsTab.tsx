@@ -18,7 +18,6 @@ import {
   Alert,
   CircularProgress,
   Typography,
-  Chip,
   Stack,
 } from '@mui/material';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
@@ -298,7 +297,15 @@ function FillLineChart({
         alignSelf: 'stretch',
         minWidth: 0,
         minHeight: 0,
+        '& > *': {
+          width: '100% !important',
+          height: '100% !important',
+        },
         '& > [class*="MuiChartsWrapper-root"]': {
+          width: '100% !important',
+          height: '100% !important',
+        },
+        '& svg.MuiChartsSurface-root': {
           width: '100% !important',
           height: '100% !important',
         },
@@ -316,7 +323,6 @@ export function TaskMetricsTab({
   isLoading,
   error,
   currency,
-  dataSource = 'unknown',
   resumeCursorTimestamp = null,
   consistencyWarnings = [],
   interval,
@@ -524,23 +530,17 @@ export function TaskMetricsTab({
         onRefresh={onRefresh}
         isLoading={isLoading}
       />
-      <Stack
-        direction={{ xs: 'column', sm: 'row' }}
-        spacing={1}
-        sx={{ mb: 1.5, alignItems: { sm: 'center' } }}
-      >
-        <Chip
-          size="small"
-          variant="outlined"
-          label={`Source: ${dataSource}`}
-          sx={{ width: 'fit-content' }}
-        />
-        {resumeCursorTimestamp ? (
+      {resumeCursorTimestamp ? (
+        <Stack
+          direction={{ xs: 'column', sm: 'row' }}
+          spacing={1}
+          sx={{ mb: 1.5, alignItems: { sm: 'center' } }}
+        >
           <Typography variant="caption" color="text.secondary">
             Resume cursor: {new Date(resumeCursorTimestamp).toLocaleString()}
           </Typography>
-        ) : null}
-      </Stack>
+        </Stack>
+      ) : null}
       {consistencyWarnings.length > 0 ? (
         <Alert severity="warning" sx={{ mb: 1.5 }}>
           {consistencyWarnings.length} continuity warning(s) detected after
