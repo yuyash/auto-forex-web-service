@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.56.8](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.7...frontend-v1.56.8) (2026-04-25)
+
+
+### Bug Fixes
+
+* **frontend:** reduce metrics chart axis padding ([#598](https://github.com/yuyash/auto-forex-web-service/issues/598)) ([56993f9](https://github.com/yuyash/auto-forex-web-service/commit/56993f9574b98ce5fb66161580e9b0c9845492ae))
+
 ## [1.56.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.6...frontend-v1.56.7) (2026-04-24)
 
 
