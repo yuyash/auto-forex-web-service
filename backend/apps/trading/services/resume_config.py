@@ -95,7 +95,7 @@ def validate_resume_configuration(*, task: Any, task_type: str) -> ResumeConfigA
         )
 
     parameter_changes = _diff_dict(previous_params, current_params)
-    _validate_snowball_layer_change(
+    _validate_strategy_resume_parameter_compatibility(
         strategy_type=current_strategy_type,
         previous_params=previous_params,
         current_params=current_params,
@@ -296,19 +296,21 @@ def _diff_dict(previous: dict[str, Any], current: dict[str, Any]) -> dict[str, d
     return diff
 
 
-def _validate_snowball_layer_change(
+def _validate_strategy_resume_parameter_compatibility(
     *,
     strategy_type: str | None,
     previous_params: dict[str, Any],
     current_params: dict[str, Any],
 ) -> None:
-    if strategy_type != "snowball":
+    if not strategy_type:
         return
-    from apps.trading.strategies.snowball.compatibility import (
-        validate_resume_parameter_compatibility,
-    )
+    from apps.trading.strategies.registry import registry
 
-    validate_resume_parameter_compatibility(
+    if not registry.is_registered(strategy_type):
+        return
+
+    registry.validate_resume_parameter_compatibility(
+        identifier=strategy_type,
         previous_params=previous_params,
         current_params=current_params,
     )

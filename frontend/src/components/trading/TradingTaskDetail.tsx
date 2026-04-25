@@ -430,6 +430,7 @@ export const TradingTaskDetail: React.FC = () => {
               currentPrice={
                 polledTick?.price != null ? parseFloat(polledTick.price) : null
               }
+              strategyType={detailTask.strategy_type}
               pipSize={
                 detailTask.pip_size ? parseFloat(detailTask.pip_size) : null
               }
@@ -475,6 +476,7 @@ export const TradingTaskDetail: React.FC = () => {
               taskType={TaskType.TRADING}
               executionRunId={activeExecutionId}
               enableRealTimeUpdates={enableRealtime}
+              strategyType={detailTask.strategy_type}
             />
           </LazyTabPanel>
         )}

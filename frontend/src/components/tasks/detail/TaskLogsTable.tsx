@@ -4,7 +4,7 @@
  * Displays task logs with server-side pagination.
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Box,
@@ -39,12 +39,14 @@ import {
   applyColumnConfig,
 } from '../../../hooks/useColumnConfig';
 import { buildCopyHandler } from '../../../utils/tableCopyUtils';
+import { useStrategies } from '../../../hooks/useStrategies';
 
 interface TaskLogsTableProps {
   taskId: string;
   taskType: TaskType;
   executionRunId?: string;
   enableRealTimeUpdates?: boolean;
+  strategyType?: string;
 }
 
 export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
@@ -52,6 +54,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
   taskType,
   executionRunId,
   enableRealTimeUpdates = false,
+  strategyType,
 }) => {
   const { t } = useTranslation('common');
   const theme = useTheme();
@@ -63,6 +66,13 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(100);
   const [isReloading, setIsReloading] = useState(false);
+  const { strategies } = useStrategies();
+  const strategyEventLabels = useMemo(
+    () =>
+      strategies.find((strategy) => strategy.id === strategyType)?.capabilities
+        ?.events?.strategy_event_labels ?? {},
+    [strategies, strategyType]
+  );
 
   const { components: availableComponents } = useTaskLogComponents({
     taskId,
@@ -164,6 +174,15 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     }
   };
 
+  const getStrategyEventLabel = useCallback(
+    (row: TaskLog): string | null => {
+      const eventType = String(row.details?.strategy_event_type ?? '').trim();
+      if (!eventType) return null;
+      return strategyEventLabels[eventType] ?? eventType.replace(/_/g, ' ');
+    },
+    [strategyEventLabels]
+  );
+
   const columns: Column<TaskLog>[] = [
     {
       id: 'timestamp',
@@ -195,20 +214,32 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
       label: t('tables.logs.message'),
       width: 500,
       minWidth: 400,
-      render: (row) => (
-        <Box
-          sx={{
-            display: 'block',
-            maxWidth: '100%',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            overflowWrap: 'anywhere',
-            fontFamily: 'monospace',
-          }}
-        >
-          {String(row.message ?? '')}
-        </Box>
-      ),
+      render: (row) => {
+        const strategyEventLabel = getStrategyEventLabel(row);
+        return (
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 0.75,
+              maxWidth: '100%',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              overflowWrap: 'anywhere',
+              fontFamily: 'monospace',
+            }}
+          >
+            {strategyEventLabel ? (
+              <Chip
+                label={strategyEventLabel}
+                size="small"
+                variant="outlined"
+                sx={{ justifySelf: 'start', fontFamily: 'inherit' }}
+              />
+            ) : null}
+            <span>{String(row.message ?? '')}</span>
+          </Box>
+        );
+      },
     },
   ];
 
@@ -229,7 +260,12 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
         r.timestamp ? new Date(r.timestamp as string).toLocaleString() : '-',
       level: (r) => (r.level as string) ?? '-',
       component: (r) => (r.component as string) ?? '-',
-      message: (r) => (r.message as string) ?? '-',
+      message: (r) => {
+        const strategyEventLabel = getStrategyEventLabel(r);
+        return [strategyEventLabel, (r.message as string) ?? '-']
+          .filter(Boolean)
+          .join(' | ');
+      },
     };
     const { headers, formatRow } = buildCopyHandler(
       visibleColumns,
@@ -237,7 +273,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
       logsMap
     );
     selection.copySelectedRows(headers, formatRow, pageRowIds);
-  }, [logs, selection, visibleColumns, pageRowIds]);
+  }, [getStrategyEventLabel, logs, pageRowIds, selection, visibleColumns]);
 
   const renderMobileCell = useCallback(
     (column: Column<TaskLog>, row: TaskLog) => {

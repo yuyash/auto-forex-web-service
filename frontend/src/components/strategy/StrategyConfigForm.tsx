@@ -74,6 +74,19 @@ const StrategyConfigForm = ({
     [i18n.language]
   );
 
+  const localizedEnumDescription = useCallback(
+    (prop: ConfigProperty, value: string): string | undefined => {
+      const langKey =
+        `enum_descriptions_${i18n.language}` as keyof ConfigProperty;
+      const langDescriptions = prop[langKey] as
+        | Record<string, string>
+        | undefined;
+      if (langDescriptions?.[value]) return langDescriptions[value];
+      return prop.enum_descriptions?.[value];
+    },
+    [i18n.language]
+  );
+
   const [validationErrors, setValidationErrors] = useState<ValidationErrors>(
     {}
   );
@@ -363,9 +376,6 @@ const StrategyConfigForm = ({
         config,
         fieldName
       );
-      const isProgressionField =
-        fieldName.includes('progression') || fieldName.includes('mode');
-      const isDirectionMethodField = fieldName === 'direction_method';
       const isNumericEnum = fieldSchema.enum.every(
         (opt) => typeof opt === 'number'
       );
@@ -376,15 +386,8 @@ const StrategyConfigForm = ({
             ? Number(value)
             : String(value);
 
-      // Get description for enum option based on field type
       const getOptionDescription = (option: string | number): string => {
-        if (isDirectionMethodField) {
-          return getDirectionMethodDescription(String(option));
-        }
-        if (isProgressionField) {
-          return getProgressionDescription(String(option));
-        }
-        return '';
+        return localizedEnumDescription(fieldSchema, String(option)) || '';
       };
 
       // Format numeric enum values (e.g., granularity seconds to readable names)
@@ -404,13 +407,9 @@ const StrategyConfigForm = ({
         return granularityNames[val] || String(val);
       };
 
-      const showOptionDescriptions =
-        isProgressionField || isDirectionMethodField;
-
       const enumOptions = (fieldSchema.enum || []).filter((option) => {
-        if (!isDirectionMethodField) return true;
-        // Hide unsupported OHLC-based options until the UI provides candle inputs.
-        return !String(option).startsWith('ohlc_');
+        const hidden = fieldSchema.hidden_enum_values ?? [];
+        return !hidden.map(String).includes(String(option));
       });
 
       return (
@@ -459,7 +458,7 @@ const StrategyConfigForm = ({
                       : (localizedEnumLabel(fieldSchema, String(option)) ??
                         formatEnumValue(String(option)))}
                   </Typography>
-                  {showOptionDescriptions && (
+                  {getOptionDescription(option) && (
                     <Typography
                       variant="caption"
                       color="text.secondary"
@@ -814,51 +813,6 @@ const StrategyConfigForm = ({
       .split('_')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
-  };
-
-  // Get description for progression modes
-  const getProgressionDescription = (mode: string): string => {
-    const descriptions: Record<string, string> = {
-      auto: 'Legacy Snowball stop-loss formula based on next interval and TP',
-      constant: 'Same value for every layer / retracement',
-      same: 'Reuse the absolute stop-loss price that closed the previous position',
-      manual:
-        'Use per-slot absolute pip distances from the rebuilt entry price',
-      additive: 'Increases by a fixed amount each time (e.g. 10 → 15 → 20)',
-      subtractive:
-        'Decreases by a fixed amount each time (e.g. 30 → 25 → 20, min 0)',
-      multiplicative: 'Doubles each time (e.g. 10 → 20 → 40)',
-      divisive: 'Halves each time (e.g. 40 → 20 → 10)',
-      inverse: 'Halves each time (e.g. 1.0 → 0.5 → 0.25)',
-      independent:
-        'Re-evaluate direction from recent candle data for each new layer',
-      inherit: 'Use the same direction as the previous layer',
-    };
-    return descriptions[mode] || '';
-  };
-
-  // Get description for direction decision methods
-  const getDirectionMethodDescription = (method: string): string => {
-    const descriptions: Record<string, string> = {
-      // Tick-based methods
-      momentum:
-        'Analyzes price change over N ticks. Goes long if price increased, short if decreased. Simple and responsive to recent price action.',
-      sma_crossover:
-        'Uses two Simple Moving Averages on tick data. Goes long when fast SMA crosses above slow SMA, short when it crosses below. Good for trend following.',
-      ema_crossover:
-        'Uses two Exponential Moving Averages on tick data. Similar to SMA but gives more weight to recent prices. More responsive to price changes.',
-      price_vs_sma:
-        'Compares current price to a Simple Moving Average of ticks. Goes long when price is above SMA, short when below. Simple trend indicator.',
-      rsi: 'Uses Relative Strength Index on tick data. Goes long when RSI is oversold (below threshold), short when overbought (above threshold). Good for mean reversion.',
-      // OHLC-based methods (longer-term)
-      ohlc_sma_crossover:
-        'Uses SMA crossover on OHLC candles (hourly/daily). Better for longer-term trend following. Aggregates ticks into candles for smoother signals.',
-      ohlc_ema_crossover:
-        'Uses EMA crossover on OHLC candles (hourly/daily). Combines longer-term analysis with EMA responsiveness. Good for swing trading.',
-      ohlc_price_vs_sma:
-        'Compares current price to SMA of OHLC candle closes. Identifies if price is above/below longer-term average. Good for trend confirmation.',
-    };
-    return descriptions[method] || '';
   };
 
   // Check if there are any validation errors

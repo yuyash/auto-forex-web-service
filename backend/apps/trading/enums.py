@@ -98,7 +98,7 @@ class EventType(models.TextChoices):
     STATUS_CHANGED = "status_changed", "Status Changed"
     ERROR_OCCURRED = "error_occurred", "Error Occurred"
 
-    # Floor strategy events
+    # Layered strategy events
     INITIAL_ENTRY = "initial_entry", "Initial Entry"
     RETRACEMENT = "retracement", "Retracement"
     TAKE_PROFIT = "take_profit", "Take Profit"

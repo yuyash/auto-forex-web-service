@@ -59,6 +59,13 @@ from apps.trading.strategies.snowball.models import (
     SnowballStrategyState,
     StopLossClosedEntry,
 )
+from apps.trading.strategies.snowball.parameters import (
+    config_to_parameters,
+    default_parameters,
+    normalize_parameters,
+    parse_config,
+    validate_parameters,
+)
 from apps.trading.utils import format_money, quote_to_account_rate
 
 logger: Logger = getLogger(__name__)
@@ -100,24 +107,19 @@ class SnowballStrategy(Strategy):
 
     @staticmethod
     def parse_config(strategy_config: Any) -> SnowballStrategyConfig:
-        return SnowballStrategyConfig.from_dict(strategy_config.config_dict)
+        return parse_config(strategy_config)
 
     @staticmethod
     def _config_to_parameters(config: SnowballStrategyConfig) -> dict[str, Any]:
-        parameters = config.to_dict()
-        if not config.preserve_highest_retracement_enabled:
-            parameters.pop("preserve_highest_r_from", None)
-        return parameters
+        return config_to_parameters(config)
 
     @classmethod
     def normalize_parameters(cls, parameters: dict[str, Any]) -> dict[str, Any]:
-        config = SnowballStrategyConfig.from_dict(dict(parameters))
-        return cls._config_to_parameters(config)
+        return normalize_parameters(parameters)
 
     @classmethod
     def default_parameters(cls) -> dict[str, Any]:
-        config = SnowballStrategyConfig.from_dict({})
-        return cls._config_to_parameters(config)
+        return default_parameters()
 
     @classmethod
     def validate_parameters(
@@ -126,13 +128,114 @@ class SnowballStrategy(Strategy):
         parameters: dict[str, Any],
         config_schema: dict[str, Any] | None = None,
     ) -> None:
-        super().validate_parameters(parameters=parameters, config_schema=config_schema)
-        cfg = SnowballStrategyConfig.from_dict(parameters)
-        cfg.validate()
+        validate_parameters(parameters=parameters, config_schema=config_schema)
 
     @property
     def strategy_type(self) -> StrategyType:
         return StrategyType.SNOWBALL
+
+    @classmethod
+    def supports_stateful_broker_reconciliation(cls) -> bool:
+        return True
+
+    @classmethod
+    def capabilities(cls) -> dict[str, Any]:
+        return {
+            "runtime": {
+                "hedging": True,
+            },
+            "visualization": {
+                "kind": "cycle_grid",
+                "cycle_statuses": True,
+                "grid": True,
+            },
+            "events": {
+                "close_reason_labels": {
+                    "tp": "Take profit",
+                    "close_position": "Manual close",
+                    "stop_loss": "Stop-loss protection",
+                    "shrink": "Shrink protection",
+                    "volatility_lock": "Volatility lock protection",
+                    "margin_protection": "Margin protection",
+                    "counter_tp": "Counter-trend take profit",
+                    "layer_initial_tp": "Layer initial take profit",
+                    "lock_hedge_neutralize": "Lock hedge neutralization",
+                },
+                "strategy_event_labels": {
+                    "snowball_locked": "Snowball locked",
+                    "snowball_unlocked": "Snowball unlocked",
+                    "snowball_shrink": "Snowball shrink",
+                },
+            },
+            "resume": {
+                "stateful_broker_reconciliation": True,
+            },
+        }
+
+    @classmethod
+    def reconcile_broker_positions(
+        cls,
+        *,
+        state: ExecutionState,
+        open_positions: list[Any],
+        report: Any,
+    ) -> None:
+        from apps.trading.strategies.snowball.reconciliation import (
+            reconcile_broker_positions,
+        )
+
+        reconcile_broker_positions(
+            state=state,
+            open_positions=open_positions,
+            report=report,
+        )
+
+    @classmethod
+    def build_cycle_grid_state_map(
+        cls,
+        *,
+        strategy_state: dict[str, Any] | None,
+    ) -> dict[str, dict[str, Any]]:
+        from apps.trading.strategies.snowball.visualization import (
+            build_cycle_grid_state_map,
+        )
+
+        return build_cycle_grid_state_map(strategy_state=strategy_state)
+
+    @classmethod
+    def build_cycle_status_map(
+        cls,
+        *,
+        strategy_state: dict[str, Any] | None,
+    ) -> dict[str, str]:
+        from apps.trading.strategies.snowball.visualization import (
+            build_cycle_status_map,
+        )
+
+        return build_cycle_status_map(strategy_state=strategy_state)
+
+    @classmethod
+    def validate_resume_parameter_compatibility(
+        cls,
+        *,
+        previous_params: dict[str, Any],
+        current_params: dict[str, Any],
+    ) -> None:
+        from apps.trading.strategies.snowball.compatibility import (
+            validate_resume_parameter_compatibility,
+        )
+
+        validate_resume_parameter_compatibility(
+            previous_params=previous_params,
+            current_params=current_params,
+        )
+
+    def configure_runtime(self, *, account_currency: str, hedging_enabled: bool) -> None:
+        super().configure_runtime(
+            account_currency=account_currency,
+            hedging_enabled=hedging_enabled,
+        )
+        self._hedging_enabled = hedging_enabled
 
     # ------------------------------------------------------------------
     # Helpers

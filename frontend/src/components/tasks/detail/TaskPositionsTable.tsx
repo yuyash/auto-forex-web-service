@@ -9,7 +9,7 @@
  * View mode preference is persisted to localStorage.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Box,
@@ -47,27 +47,13 @@ import {
   buildCopyHandler,
   type CopyValueExtractors,
 } from '../../../utils/tableCopyUtils';
-import {
-  readRawStoredValue,
-  writeRawStoredValue,
-} from '../../../utils/persistentState';
 import { formatAppNumber } from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
 import { TaskPositionFilterBar } from './TaskPositionFilterBar';
 import { TaskPositionModeViews } from './TaskPositionModeViews';
 import { useTaskPositionFilters } from './useTaskPositionFilters';
-
-type ViewMode = 'all' | 'byDirection' | 'byStatus';
-
-const VIEW_MODE_STORAGE_KEY = 'positions_view_mode';
-
-function loadViewMode(): ViewMode {
-  const v = readRawStoredValue(VIEW_MODE_STORAGE_KEY);
-  if (v === 'all' || v === 'byDirection' || v === 'byStatus') {
-    return v;
-  }
-  return 'all';
-}
+import { useTaskPositionViewMode } from './useTaskPositionViewMode';
+import { useStrategies } from '../../../hooks/useStrategies';
 
 interface TaskPositionsTableProps {
   taskId: string | number;
@@ -76,6 +62,7 @@ interface TaskPositionsTableProps {
   enableRealTimeUpdates?: boolean;
   currentPrice?: number | null;
   pipSize?: number | null;
+  strategyType?: string;
 }
 
 export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
@@ -85,21 +72,20 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   enableRealTimeUpdates = false,
   currentPrice,
   pipSize,
+  strategyType,
 }) => {
   const { t } = useTranslation('common');
   const { user } = useAuth();
+  const { strategies } = useStrategies();
+  const strategyCloseReasonLabels = useMemo(
+    () =>
+      strategies.find((strategy) => strategy.id === strategyType)?.capabilities
+        ?.events?.close_reason_labels ?? {},
+    [strategies, strategyType]
+  );
 
   // --- View mode ---
-  const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
-  const handleViewModeChange = useCallback(
-    (_: React.MouseEvent<HTMLElement>, v: ViewMode | null) => {
-      if (v) {
-        setViewMode(v);
-        writeRawStoredValue(VIEW_MODE_STORAGE_KEY, v);
-      }
-    },
-    []
-  );
+  const { viewMode, handleViewModeChange } = useTaskPositionViewMode();
 
   // --- Pagination state (byStatus mode — 4 tables) ---
   const [closedLongPage, setClosedLongPage] = useState(0);
@@ -623,9 +609,11 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       };
 
       const i18nKey = closeReasonKeyMap[r.close_reason];
-      const label = i18nKey
-        ? t(`tables.positions.${i18nKey}`)
-        : r.close_reason.replace(/_/g, ' ');
+      const label =
+        strategyCloseReasonLabels[r.close_reason] ??
+        (i18nKey
+          ? t(`tables.positions.${i18nKey}`)
+          : r.close_reason.replace(/_/g, ' '));
 
       if (r.close_reason === 'normal') {
         return (
@@ -1741,6 +1729,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
         executionRunId={executionRunId}
         initialPositionId={lifecyclePositionId}
         positionData={lifecyclePosition}
+        closeReasonLabels={strategyCloseReasonLabels}
       />
     </Box>
   );

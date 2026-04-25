@@ -18,9 +18,13 @@ class TestStrategyView:
     @patch("apps.trading.strategies.registry.registry")
     def test_get_returns_strategies(self, mock_registry):
         mock_registry.get_all_strategies_info.return_value = {
-            "floor": {
-                "config_schema": {"display_name": "Floor Strategy"},
-                "description": "A floor strategy",
+            "custom": {
+                "config_schema": {"display_name": "Custom Strategy"},
+                "description": "A custom strategy",
+                "capabilities": {
+                    "runtime": {"hedging": False},
+                    "visualization": {"kind": "none", "grid": False},
+                },
             }
         }
         factory = APIRequestFactory()
@@ -33,7 +37,8 @@ class TestStrategyView:
         assert response.status_code == status.HTTP_200_OK
         assert response.data["count"] == 1
         assert len(response.data["strategies"]) == 1
-        assert response.data["strategies"][0]["id"] == "floor"
+        assert response.data["strategies"][0]["id"] == "custom"
+        assert response.data["strategies"][0]["capabilities"]["runtime"]["hedging"] is False
 
 
 class TestStrategyDefaultsView:

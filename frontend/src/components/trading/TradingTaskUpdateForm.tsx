@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -110,6 +110,7 @@ export default function TradingTaskUpdateForm({
     handleSubmit,
     watch,
     formState: { errors },
+    setValue,
   } = useForm<TradingTaskUpdateData>({
     resolver: zodResolver(
       tradingTaskUpdateSchema
@@ -135,6 +136,26 @@ export default function TradingTaskUpdateForm({
   // eslint-disable-next-line react-hooks/incompatible-library
   const selectedConfigId = watch('config_id');
   const { data: selectedConfig } = useConfiguration(selectedConfigId);
+  const selectedStrategy = useMemo(
+    () =>
+      selectedConfig
+        ? strategies.find(
+            (strategy) => strategy.id === selectedConfig.strategy_type
+          )
+        : undefined,
+    [selectedConfig, strategies]
+  );
+  const strategySupportsHedging =
+    selectedStrategy?.capabilities?.runtime?.hedging !== false;
+
+  useEffect(() => {
+    if (accountHedgingEnabled === false || !strategySupportsHedging) {
+      setValue('hedging_enabled', false, {
+        shouldValidate: false,
+        shouldDirty: true,
+      });
+    }
+  }, [accountHedgingEnabled, setValue, strategySupportsHedging]);
 
   const onSubmit = async (data: TradingTaskUpdateData) => {
     setSubmitError(null);
@@ -147,7 +168,9 @@ export default function TradingTaskUpdateForm({
           description: data.description,
           config: data.config_id,
           hedging_enabled:
-            accountHedgingEnabled === false ? false : data.hedging_enabled,
+            accountHedgingEnabled === false || !strategySupportsHedging
+              ? false
+              : data.hedging_enabled,
           api_retry_max_attempts: data.api_retry_max_attempts,
           api_retry_backoff_base_seconds: data.api_retry_backoff_base_seconds,
           api_retry_backoff_max_seconds: data.api_retry_backoff_max_seconds,
@@ -312,50 +335,54 @@ export default function TradingTaskUpdateForm({
           )}
         </Grid>
 
-        <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
-          {t('trading:form.hedgingEnabled', 'Hedging')}
-        </Typography>
-        <Grid container spacing={3}>
-          <Grid size={{ xs: 12 }}>
-            <Controller
-              name="hedging_enabled"
-              control={control}
-              render={({ field }) => (
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={field.value ?? true}
-                      onChange={field.onChange}
-                      disabled={accountHedgingEnabled === false}
+        {strategySupportsHedging ? (
+          <>
+            <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
+              {t('trading:form.hedgingEnabled', 'Hedging')}
+            </Typography>
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 12 }}>
+                <Controller
+                  name="hedging_enabled"
+                  control={control}
+                  render={({ field }) => (
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={field.value ?? true}
+                          onChange={field.onChange}
+                          disabled={accountHedgingEnabled === false}
+                        />
+                      }
+                      label={t(
+                        'trading:form.hedgingEnabled',
+                        'Enable Hedging (simultaneous long/short positions)'
+                      )}
                     />
-                  }
-                  label={t(
-                    'trading:form.hedgingEnabled',
-                    'Enable Hedging (simultaneous long/short positions)'
                   )}
                 />
-              )}
-            />
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ display: 'block', ml: 4 }}
-            >
-              {t(
-                'trading:form.hedgingDescription',
-                'When enabled, the strategy can hold both long and short positions simultaneously. Requires a hedging-enabled OANDA account.'
-              )}
-            </Typography>
-            {accountHedgingEnabled === false && (
-              <Alert severity="warning" sx={{ mt: 2 }}>
-                {t(
-                  'trading:form.hedgingUnsupported',
-                  'This OANDA account uses netting mode and does not support hedging. Hedging has been disabled for this task.'
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: 'block', ml: 4 }}
+                >
+                  {t(
+                    'trading:form.hedgingDescription',
+                    'When enabled, the strategy can hold both long and short positions simultaneously. Requires a hedging-enabled OANDA account.'
+                  )}
+                </Typography>
+                {accountHedgingEnabled === false && (
+                  <Alert severity="warning" sx={{ mt: 2 }}>
+                    {t(
+                      'trading:form.hedgingUnsupported',
+                      'This OANDA account uses netting mode and does not support hedging. Hedging has been disabled for this task.'
+                    )}
+                  </Alert>
                 )}
-              </Alert>
-            )}
-          </Grid>
-        </Grid>
+              </Grid>
+            </Grid>
+          </>
+        ) : null}
 
         <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
           {t('trading:form.advancedSettings', 'Advanced settings')}

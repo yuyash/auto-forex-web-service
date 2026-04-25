@@ -3,7 +3,32 @@ export interface Strategy {
   name: string;
   class_name: string;
   description: string;
+  capabilities?: StrategyCapabilities;
   config_schema: ConfigSchema;
+}
+
+export type StrategyVisualizationKind =
+  | 'none'
+  | 'timeline'
+  | 'cycle_grid'
+  | string;
+
+export interface StrategyCapabilities {
+  runtime?: {
+    hedging?: boolean;
+  };
+  visualization?: {
+    kind?: StrategyVisualizationKind;
+    cycle_statuses?: boolean;
+    grid?: boolean;
+  };
+  events?: {
+    close_reason_labels?: Record<string, string>;
+    strategy_event_labels?: Record<string, string>;
+  };
+  resume?: {
+    stateful_broker_reconciliation?: boolean;
+  };
 }
 
 export type JsonPrimitive = string | number | boolean | null;
@@ -53,6 +78,13 @@ export interface ConfigProperty {
   /** Localized enum labels: enum_labels, enum_labels_ja, etc. */
   enum_labels?: Record<string, string>;
   [localizedKey4: `enum_labels_${string}`]: Record<string, string> | undefined;
+  /** Localized enum descriptions: enum_descriptions, enum_descriptions_ja, etc. */
+  enum_descriptions?: Record<string, string>;
+  [localizedKey5: `enum_descriptions_${string}`]:
+    | Record<string, string>
+    | undefined;
+  /** Enum values to hide from the rendered selector while retaining schema validation. */
+  hidden_enum_values?: (string | number)[];
   /**
    * When true, the form should not pre-populate this field from schema/API
    * defaults until the user explicitly selects a value.

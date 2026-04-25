@@ -484,6 +484,7 @@ export const BacktestTaskDetail: React.FC = () => {
               currentPrice={
                 polledTick?.price != null ? parseFloat(polledTick.price) : null
               }
+              strategyType={detailTask.strategy_type}
               pipSize={
                 detailTask.pip_size ? parseFloat(detailTask.pip_size) : null
               }
@@ -535,6 +536,7 @@ export const BacktestTaskDetail: React.FC = () => {
               taskType={TaskType.BACKTEST}
               executionRunId={activeExecutionId}
               enableRealTimeUpdates={enableRealtime}
+              strategyType={detailTask.strategy_type}
             />
           </LazyTabPanel>
         )}

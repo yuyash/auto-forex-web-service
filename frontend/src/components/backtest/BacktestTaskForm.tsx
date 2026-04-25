@@ -26,6 +26,7 @@ import { ConfigurationSelector } from '../tasks/forms/ConfigurationSelector';
 import { DateRangePicker } from '../tasks/forms/DateRangePicker';
 import { BalanceInput } from '../tasks/forms/BalanceInput';
 import { InstrumentSelector } from '../tasks/forms/InstrumentSelector';
+import { TaskReviewErrors } from '../tasks/forms/TaskReviewErrors';
 import {
   backtestTaskSchema,
   type BacktestTaskSchemaOutput,
@@ -392,6 +393,26 @@ export default function BacktestTaskForm({
   const configIdString = selectedConfigId || '';
 
   const { data: selectedConfig } = useConfiguration(configIdString);
+  const selectedStrategy = useMemo(
+    () =>
+      selectedConfig
+        ? strategies.find(
+            (strategy) => strategy.id === selectedConfig.strategy_type
+          )
+        : undefined,
+    [selectedConfig, strategies]
+  );
+  const strategySupportsHedging =
+    selectedStrategy?.capabilities?.runtime?.hedging !== false;
+
+  useEffect(() => {
+    if (!strategySupportsHedging) {
+      setValue('hedging_enabled', false, {
+        shouldValidate: false,
+        shouldDirty: true,
+      });
+    }
+  }, [setValue, strategySupportsHedging]);
 
   const watchedInstrument = watch('instrument');
   const watchedStartTime = watch('start_time');
@@ -551,7 +572,9 @@ export default function BacktestTaskForm({
       tick_granularity: completeData.tick_granularity,
       tick_window_value_mode: completeData.tick_window_value_mode,
       sell_at_completion: completeData.sell_at_completion,
-      hedging_enabled: completeData.hedging_enabled,
+      hedging_enabled: strategySupportsHedging
+        ? completeData.hedging_enabled
+        : false,
       drain_duration_hours: completeData.drain_duration_hours,
       market_idle_pre_close_minutes: completeData.market_idle_pre_close_minutes,
       market_idle_resume_delay_minutes:
@@ -975,36 +998,38 @@ export default function BacktestTaskForm({
                 />
               </Grid>
 
-              <Grid size={{ xs: 12 }}>
-                <Controller
-                  name="hedging_enabled"
-                  control={control}
-                  render={({ field }) => (
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={field.value ?? true}
-                          onChange={(e) => field.onChange(e.target.checked)}
-                        />
-                      }
-                      label={
-                        <Box>
-                          <Typography variant="body1">
-                            {t('backtest:form.hedgingEnabled')}
-                          </Typography>
-                          <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            sx={{ mt: 0.5 }}
-                          >
-                            {t('backtest:form.hedgingDescription')}
-                          </Typography>
-                        </Box>
-                      }
-                    />
-                  )}
-                />
-              </Grid>
+              {strategySupportsHedging ? (
+                <Grid size={{ xs: 12 }}>
+                  <Controller
+                    name="hedging_enabled"
+                    control={control}
+                    render={({ field }) => (
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={field.value ?? true}
+                            onChange={(e) => field.onChange(e.target.checked)}
+                          />
+                        }
+                        label={
+                          <Box>
+                            <Typography variant="body1">
+                              {t('backtest:form.hedgingEnabled')}
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ mt: 0.5 }}
+                            >
+                              {t('backtest:form.hedgingDescription')}
+                            </Typography>
+                          </Box>
+                        }
+                      />
+                    )}
+                  />
+                </Grid>
+              ) : null}
 
               <Grid size={{ xs: 12 }} sx={{ mt: 2 }}>
                 <Typography variant="subtitle1" fontWeight={600}>
@@ -1361,7 +1386,6 @@ export default function BacktestTaskForm({
           hedging_enabled: formData.hedging_enabled as boolean | undefined,
         };
 
-        // Field name mapping for user-friendly error messages
         const fieldNameMapping: Record<string, string> = {
           config_id: 'Configuration',
           name: 'Task Name',
@@ -1386,38 +1410,12 @@ export default function BacktestTaskForm({
               {t('backtest:form.reviewBeforeSubmitting')}
             </Typography>
 
-            {/* Show validation errors on review step */}
-            {Object.keys(errors).length > 0 && (
-              <Alert severity="error" sx={{ mb: 3 }}>
-                <Typography variant="subtitle2" gutterBottom>
-                  Please fix the following errors before submitting:
-                </Typography>
-                {Object.entries(errors).map(([field, error]) => {
-                  const errorObj = error as { message?: string };
-                  const errorMessage =
-                    typeof error === 'object' && error !== null
-                      ? errorObj.message || JSON.stringify(error)
-                      : String(error);
-
-                  // Use friendly field name from mapping
-                  const friendlyFieldName =
-                    fieldNameMapping[field] ||
-                    field
-                      .replace(/_/g, ' ')
-                      .replace(/\b\w/g, (l) => l.toUpperCase());
-
-                  return (
-                    <Typography key={field} variant="body2">
-                      • <strong>{friendlyFieldName}:</strong> {errorMessage}
-                    </Typography>
-                  );
-                })}
-                <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
-                  Click "Back" to return to previous steps and correct these
-                  errors.
-                </Typography>
-              </Alert>
-            )}
+            <TaskReviewErrors
+              errors={errors}
+              fieldLabels={fieldNameMapping}
+              title="Please fix the following errors before submitting:"
+              correctionHint="Click Back to return to previous steps and correct these errors."
+            />
 
             <Paper sx={{ p: 3 }}>
               {selectedConfig ? (

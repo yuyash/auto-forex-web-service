@@ -230,6 +230,7 @@ class StrategyListSerializer(serializers.Serializer):  # pylint: disable=abstrac
     name = serializers.CharField(help_text="Strategy name")
     class_name = serializers.CharField(help_text="Strategy class name")
     description = serializers.CharField(help_text="Strategy description")
+    capabilities = serializers.JSONField(help_text="Strategy capabilities")
     config_schema = serializers.JSONField(help_text="Configuration schema")
 
 

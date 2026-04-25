@@ -278,8 +278,8 @@
     "stopping": "Stopping..."
   },
   "floorLog": {
-    "title": "Floor Strategy Execution Log",
-    "noEvents": "No floor strategy events available for this backtest.",
+    "title": "Strategy Execution Log",
+    "noEvents": "No strategy events available for this backtest.",
     "description": "Detailed execution log showing initial positions, layer additions, retracements, and take profits.",
     "totalPnl": "Total P&L:",
     "columns": {

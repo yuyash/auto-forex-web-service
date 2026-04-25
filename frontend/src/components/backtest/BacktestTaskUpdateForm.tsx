@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -197,6 +197,7 @@ export default function BacktestTaskUpdateForm({
     control,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<BacktestTaskUpdateData>({
     resolver: zodResolver(
@@ -217,6 +218,26 @@ export default function BacktestTaskUpdateForm({
   const configIdString = selectedConfigId || '';
 
   const { data: selectedConfig } = useConfiguration(configIdString);
+  const selectedStrategy = useMemo(
+    () =>
+      selectedConfig
+        ? strategies.find(
+            (strategy) => strategy.id === selectedConfig.strategy_type
+          )
+        : undefined,
+    [selectedConfig, strategies]
+  );
+  const strategySupportsHedging =
+    selectedStrategy?.capabilities?.runtime?.hedging !== false;
+
+  useEffect(() => {
+    if (!strategySupportsHedging) {
+      setValue('hedging_enabled', false, {
+        shouldValidate: false,
+        shouldDirty: true,
+      });
+    }
+  }, [setValue, strategySupportsHedging]);
   const initialTickGranularity = initialData.tick_granularity;
   const initialTickWindowValueMode = initialData.tick_window_value_mode;
   const selectedTickGranularity = watch('tick_granularity');
@@ -232,7 +253,15 @@ export default function BacktestTaskUpdateForm({
     try {
       await updateTask.mutate({
         id: taskId,
-        data: buildBacktestTaskUpdatePayload(data, { tracemalloc }),
+        data: buildBacktestTaskUpdatePayload(
+          {
+            ...data,
+            hedging_enabled: strategySupportsHedging
+              ? data.hedging_enabled
+              : false,
+          },
+          { tracemalloc }
+        ),
       });
 
       navigate('/backtest-tasks');
@@ -556,36 +585,38 @@ export default function BacktestTaskUpdateForm({
             />
           </Grid>
 
-          <Grid size={{ xs: 12 }}>
-            <Controller
-              name="hedging_enabled"
-              control={control}
-              render={({ field }) => (
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={field.value ?? true}
-                      onChange={(e) => field.onChange(e.target.checked)}
-                    />
-                  }
-                  label={
-                    <Box>
-                      <Typography variant="body1">
-                        {t('backtest:form.hedgingEnabled')}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ mt: 0.5 }}
-                      >
-                        {t('backtest:form.hedgingDescription')}
-                      </Typography>
-                    </Box>
-                  }
-                />
-              )}
-            />
-          </Grid>
+          {strategySupportsHedging ? (
+            <Grid size={{ xs: 12 }}>
+              <Controller
+                name="hedging_enabled"
+                control={control}
+                render={({ field }) => (
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={field.value ?? true}
+                        onChange={(e) => field.onChange(e.target.checked)}
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body1">
+                          {t('backtest:form.hedgingEnabled')}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ mt: 0.5 }}
+                        >
+                          {t('backtest:form.hedgingDescription')}
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                )}
+              />
+            </Grid>
+          ) : null}
 
           <Grid size={{ xs: 12 }}>
             <Controller

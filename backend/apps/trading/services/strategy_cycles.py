@@ -105,9 +105,14 @@ class StrategyCyclesService:
             if isinstance(execution_state.get("strategy_state"), dict)
             else None
         )
-        cycle_status_map = _load_cycle_statuses(strategy_state)
+        strategy_type = str(getattr(task.config, "strategy_type", "") or "")
+        strategy_capabilities = _load_strategy_capabilities(strategy_type)
+        cycle_status_map = _load_cycle_statuses(
+            strategy_type=strategy_type,
+            strategy_state=strategy_state,
+        )
         cycle_grid_state_map = build_cycle_grid_state_map(
-            strategy_type=str(getattr(task.config, "strategy_type", "")),
+            strategy_type=strategy_type,
             strategy_state=strategy_state,
         )
 
@@ -129,6 +134,7 @@ class StrategyCyclesService:
 
         return {
             "execution_id": str(execution_id),
+            "visualization": strategy_capabilities.get("visualization", {}),
             "cycles": cycles,
             "summary": _build_summary(cycles),
             "last_tick_timestamp": last_tick_ts,
@@ -168,26 +174,32 @@ def _resolve_last_tick_timestamp(execution_state: dict[str, Any]) -> str | None:
     return None
 
 
-def _load_cycle_statuses(strategy_state: dict[str, Any] | None) -> dict[str, str]:
-    """Load cycle statuses from the persisted strategy_state.
-
-    Returns a mapping of trade_cycle_id (UUID str) → status string
-    ("active", "pending", "completed").  Falls back to an empty dict
-    if the state is unavailable or cycles lack trade_cycle_id.
-    """
-    if not isinstance(strategy_state, dict):
+def _load_strategy_capabilities(strategy_type: str) -> dict[str, Any]:
+    if not strategy_type:
         return {}
+    from apps.trading.strategies.registry import registry
 
-    result: dict[str, str] = {}
-    for cycle_data in strategy_state.get("cycles", []):
-        tcid = cycle_data.get("trade_cycle_id")
-        if not tcid:
-            continue
-        status = cycle_data.get("status")
-        if status is None:
-            status = "completed" if cycle_data.get("completed", False) else "active"
-        result[str(tcid)] = str(status)
-    return result
+    if not registry.is_registered(strategy_type):
+        return {}
+    return registry.capabilities(identifier=strategy_type)
+
+
+def _load_cycle_statuses(
+    *,
+    strategy_type: str,
+    strategy_state: dict[str, Any] | None,
+) -> dict[str, str]:
+    """Load cycle statuses through the strategy extension point."""
+    if not strategy_type or not isinstance(strategy_state, dict):
+        return {}
+    from apps.trading.strategies.registry import registry
+
+    if not registry.is_registered(strategy_type):
+        return {}
+    return registry.build_cycle_status_map(
+        identifier=strategy_type,
+        strategy_state=strategy_state,
+    )
 
 
 def _load_metrics_for_trades(

@@ -164,6 +164,90 @@ class Strategy(ABC):
         """
         return state
 
+    @classmethod
+    def supports_stateful_broker_reconciliation(cls) -> bool:
+        """Return whether broker resume reconciliation can repair this strategy state."""
+        return False
+
+    @classmethod
+    def capabilities(cls) -> dict[str, Any]:
+        """Return strategy capabilities consumed by generic services and clients."""
+        return {
+            "runtime": {
+                "hedging": False,
+            },
+            "visualization": {
+                "kind": "none",
+                "cycle_statuses": False,
+                "grid": False,
+            },
+            "events": {
+                "close_reason_labels": {},
+                "strategy_event_labels": {},
+            },
+            "resume": {
+                "stateful_broker_reconciliation": cls.supports_stateful_broker_reconciliation(),
+            },
+        }
+
+    @classmethod
+    def reconcile_broker_positions(
+        cls,
+        *,
+        state: "ExecutionState",
+        open_positions: list[Any],
+        report: Any,
+    ) -> None:
+        """Apply reconciled broker positions to persisted strategy state.
+
+        Strategies with no stateful broker reconciliation support should leave
+        this as a no-op. The resume reconciler still blocks unsafe broker-side
+        changes for unsupported strategies.
+        """
+        _ = state
+        _ = open_positions
+        _ = report
+
+    @classmethod
+    def build_cycle_grid_state_map(
+        cls,
+        *,
+        strategy_state: dict[str, Any] | None,
+    ) -> dict[str, dict[str, Any]]:
+        """Return cycle_id -> grid visualization state for strategies that support it."""
+        _ = strategy_state
+        return {}
+
+    @classmethod
+    def build_cycle_status_map(
+        cls,
+        *,
+        strategy_state: dict[str, Any] | None,
+    ) -> dict[str, str]:
+        """Return cycle_id -> status mappings for strategies that persist cycle state."""
+        _ = strategy_state
+        return {}
+
+    @classmethod
+    def validate_resume_parameter_compatibility(
+        cls,
+        *,
+        previous_params: dict[str, Any],
+        current_params: dict[str, Any],
+    ) -> None:
+        """Validate parameter changes before a task resumes.
+
+        Default is no additional compatibility restriction beyond strategy type
+        and snapshot hashing performed by the resume config service.
+        """
+        _ = previous_params
+        _ = current_params
+
+    def configure_runtime(self, *, account_currency: str, hedging_enabled: bool) -> None:
+        """Receive task/account runtime options after construction."""
+        self.account_currency = account_currency
+        _ = hedging_enabled
+
     def on_start(self, *, state: ExecutionState) -> StrategyResult:
         """Called when strategy starts.
 

@@ -133,4 +133,7 @@ class TestTradingEngine:
 
         engine = TradingEngine("USD_JPY", Decimal("0.01"), config, account_currency="JPY")
         assert engine.account_currency == "JPY"
-        assert mock_strategy.account_currency == "JPY"
+        mock_strategy.configure_runtime.assert_called_once_with(
+            account_currency="JPY",
+            hedging_enabled=True,
+        )

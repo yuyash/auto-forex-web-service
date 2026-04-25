@@ -76,7 +76,9 @@ class Trade(models.Model):
         null=True,
         blank=True,
         db_index=True,
-        help_text="Layer index for Floor strategy-related trades (1-based: L1, L2, ...)",
+        help_text=(
+            "Strategy-specific layer index for layered strategy trades (1-based: L1, L2, ...)"
+        ),
     )
     retracement_count = models.IntegerField(
         null=True,

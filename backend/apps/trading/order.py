@@ -114,7 +114,7 @@ class OrderService:
             direction: Position direction (Direction.LONG or Direction.SHORT)
             take_profit: Optional take profit price
             stop_loss: Optional stop loss price
-            layer_index: Optional layer index for Floor strategy
+            layer_index: Optional strategy-specific layer index
             merge_with_existing: Whether to merge into existing same-direction position
             override_price: Optional price to use for dry-run open instead of latest tick data.
             tick_timestamp: Optional tick timestamp to use for position/order times instead of wall clock.
