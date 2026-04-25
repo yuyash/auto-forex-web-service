@@ -59,6 +59,13 @@ from apps.trading.strategies.snowball.models import (
     SnowballStrategyState,
     StopLossClosedEntry,
 )
+from apps.trading.strategies.snowball.parameters import (
+    config_to_parameters,
+    default_parameters,
+    normalize_parameters,
+    parse_config,
+    validate_parameters,
+)
 from apps.trading.utils import format_money, quote_to_account_rate
 
 logger: Logger = getLogger(__name__)
@@ -100,24 +107,19 @@ class SnowballStrategy(Strategy):
 
     @staticmethod
     def parse_config(strategy_config: Any) -> SnowballStrategyConfig:
-        return SnowballStrategyConfig.from_dict(strategy_config.config_dict)
+        return parse_config(strategy_config)
 
     @staticmethod
     def _config_to_parameters(config: SnowballStrategyConfig) -> dict[str, Any]:
-        parameters = config.to_dict()
-        if not config.preserve_highest_retracement_enabled:
-            parameters.pop("preserve_highest_r_from", None)
-        return parameters
+        return config_to_parameters(config)
 
     @classmethod
     def normalize_parameters(cls, parameters: dict[str, Any]) -> dict[str, Any]:
-        config = SnowballStrategyConfig.from_dict(dict(parameters))
-        return cls._config_to_parameters(config)
+        return normalize_parameters(parameters)
 
     @classmethod
     def default_parameters(cls) -> dict[str, Any]:
-        config = SnowballStrategyConfig.from_dict({})
-        return cls._config_to_parameters(config)
+        return default_parameters()
 
     @classmethod
     def validate_parameters(
@@ -126,9 +128,7 @@ class SnowballStrategy(Strategy):
         parameters: dict[str, Any],
         config_schema: dict[str, Any] | None = None,
     ) -> None:
-        super().validate_parameters(parameters=parameters, config_schema=config_schema)
-        cfg = SnowballStrategyConfig.from_dict(parameters)
-        cfg.validate()
+        validate_parameters(parameters=parameters, config_schema=config_schema)
 
     @property
     def strategy_type(self) -> StrategyType:

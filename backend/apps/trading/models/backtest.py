@@ -1,6 +1,5 @@
 """Backtest task model."""
 
-from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import uuid4
@@ -8,7 +7,7 @@ from uuid import uuid4
 from django.db import models
 
 from apps.trading.enums import DataSource, TaskStatus
-from apps.trading.models.base import UUIDModel
+from apps.trading.models.base import ExecutableTaskBehaviorMixin, UUIDModel
 
 
 class BacktestTaskManager(models.Manager["BacktestTask"]):
@@ -31,7 +30,7 @@ class BacktestTaskManager(models.Manager["BacktestTask"]):
         return self.filter(config=config)
 
 
-class BacktestTask(UUIDModel):
+class BacktestTask(ExecutableTaskBehaviorMixin, UUIDModel):
     """
     Persistent backtesting task with reusable configuration.
 
@@ -321,17 +320,6 @@ class BacktestTask(UUIDModel):
     def __str__(self) -> str:
         return f"{self.name} ({self.config.strategy_type})"
 
-    @property
-    def duration(self) -> timedelta | None:
-        """Calculate task execution duration.
-
-        Returns:
-            timedelta | None: Duration if both started_at and completed_at are set, None otherwise
-        """
-        if self.started_at and self.completed_at:
-            return self.completed_at - self.started_at
-        return None
-
     def validate_configuration(self) -> tuple[bool, str | None]:
         """Validate task configuration before execution."""
         if self.end_time <= self.start_time:
@@ -371,31 +359,3 @@ class BacktestTask(UUIDModel):
         return (
             self.status in (TaskStatus.PAUSED, TaskStatus.STOPPED) and self.execution_id is not None
         )
-
-    def delete(self, *args, **kwargs) -> tuple[int, dict[str, int]]:
-        """Delete the task.
-
-        Tasks in STOPPING state are allowed to be deleted since the user has already
-        requested a stop. The Celery task will be revoked before deletion.
-
-        Raises:
-            ValueError: If task is in STARTING or RUNNING state
-        """
-        if self.status in [TaskStatus.STARTING, TaskStatus.RUNNING]:
-            raise ValueError(
-                f"Cannot delete task in {self.status} state. Stop the task first before deleting."
-            )
-
-        # If task is stuck in STOPPING, revoke Celery task and clean up
-        # Use celery_task_id (the physical Celery job id) rather than
-        # execution_id (the logical run id).  They are separate since we
-        # rotate celery_task_id on resume while keeping execution_id stable.
-        # Fall back to execution_id for older rows that pre-date the
-        # celery_task_id field and may still have it set to NULL.
-        celery_id = self.celery_task_id or self.execution_id
-        if self.status == TaskStatus.STOPPING and celery_id:
-            from celery import current_app
-
-            current_app.control.revoke(str(celery_id), terminate=True, signal="SIGKILL")
-
-        return super().delete(*args, **kwargs)

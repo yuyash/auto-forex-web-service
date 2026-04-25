@@ -1,6 +1,5 @@
 """Trading task model."""
 
-from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import uuid4
@@ -9,7 +8,7 @@ from django.db import models
 
 from apps.market.models import OandaAccounts
 from apps.trading.enums import TaskStatus, TradingMode
-from apps.trading.models.base import UUIDModel
+from apps.trading.models.base import ExecutableTaskBehaviorMixin, UUIDModel
 
 
 class TradingTaskManager(models.Manager["TradingTask"]):
@@ -36,7 +35,7 @@ class TradingTaskManager(models.Manager["TradingTask"]):
         return self.filter(config=config)
 
 
-class TradingTask(UUIDModel):
+class TradingTask(ExecutableTaskBehaviorMixin, UUIDModel):
     """
     Persistent live trading task with reusable configuration.
 
@@ -292,17 +291,6 @@ class TradingTask(UUIDModel):
     def __str__(self) -> str:
         return f"{self.name} ({self.config.strategy_type}) - {self.oanda_account.account_id}"
 
-    @property
-    def duration(self) -> timedelta | None:
-        """Calculate task execution duration.
-
-        Returns:
-            timedelta | None: Duration if both started_at and completed_at are set, None otherwise
-        """
-        if self.started_at and self.completed_at:
-            return self.completed_at - self.started_at
-        return None
-
     def copy(self, new_name: str) -> "TradingTask":
         """
         Create a copy of this task with a new name.
@@ -341,34 +329,6 @@ class TradingTask(UUIDModel):
         )
 
         return new_task
-
-    def delete(self, *args, **kwargs) -> tuple[int, dict[str, int]]:
-        """Delete the task.
-
-        Tasks in STOPPING state are allowed to be deleted since the user has already
-        requested a stop. The Celery task will be revoked before deletion.
-
-        Raises:
-            ValueError: If task is in STARTING or RUNNING state
-        """
-        if self.status in [TaskStatus.STARTING, TaskStatus.RUNNING]:
-            raise ValueError(
-                f"Cannot delete task in {self.status} state. Stop the task first before deleting."
-            )
-
-        # If task is stuck in STOPPING, revoke Celery task and clean up
-        # Use celery_task_id (the physical Celery job id) rather than
-        # execution_id (the logical run id).  They are separate since we
-        # rotate celery_task_id on resume while keeping execution_id stable.
-        # Fall back to execution_id for older rows that pre-date the
-        # celery_task_id field and may still have it set to NULL.
-        celery_id = self.celery_task_id or self.execution_id
-        if self.status == TaskStatus.STOPPING and celery_id:
-            from celery import current_app
-
-            current_app.control.revoke(str(celery_id), terminate=True, signal="SIGKILL")
-
-        return super().delete(*args, **kwargs)
 
     def validate_configuration(self) -> tuple[bool, str | None]:
         """

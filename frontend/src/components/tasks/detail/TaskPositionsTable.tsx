@@ -47,27 +47,12 @@ import {
   buildCopyHandler,
   type CopyValueExtractors,
 } from '../../../utils/tableCopyUtils';
-import {
-  readRawStoredValue,
-  writeRawStoredValue,
-} from '../../../utils/persistentState';
 import { formatAppNumber } from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
 import { TaskPositionFilterBar } from './TaskPositionFilterBar';
 import { TaskPositionModeViews } from './TaskPositionModeViews';
 import { useTaskPositionFilters } from './useTaskPositionFilters';
-
-type ViewMode = 'all' | 'byDirection' | 'byStatus';
-
-const VIEW_MODE_STORAGE_KEY = 'positions_view_mode';
-
-function loadViewMode(): ViewMode {
-  const v = readRawStoredValue(VIEW_MODE_STORAGE_KEY);
-  if (v === 'all' || v === 'byDirection' || v === 'byStatus') {
-    return v;
-  }
-  return 'all';
-}
+import { useTaskPositionViewMode } from './useTaskPositionViewMode';
 
 interface TaskPositionsTableProps {
   taskId: string | number;
@@ -90,16 +75,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   const { user } = useAuth();
 
   // --- View mode ---
-  const [viewMode, setViewMode] = useState<ViewMode>(loadViewMode);
-  const handleViewModeChange = useCallback(
-    (_: React.MouseEvent<HTMLElement>, v: ViewMode | null) => {
-      if (v) {
-        setViewMode(v);
-        writeRawStoredValue(VIEW_MODE_STORAGE_KEY, v);
-      }
-    },
-    []
-  );
+  const { viewMode, handleViewModeChange } = useTaskPositionViewMode();
 
   // --- Pagination state (byStatus mode — 4 tables) ---
   const [closedLongPage, setClosedLongPage] = useState(0);

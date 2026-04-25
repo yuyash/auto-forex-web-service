@@ -30,11 +30,13 @@ from apps.trading.services.runtime_metrics import (
     config_int,
 )
 from apps.trading.services.unrealized_pnl import update_unrealized_pnl
+from apps.trading.tasks.diagnostics import ExecutionDiagnostics
 from apps.trading.tasks.execution_state_store import (
     ExecutionStateConflict,
     ExecutionStateStore,
 )
 from apps.trading.tasks.event_processor import TaskEventProcessor
+from apps.trading.tasks.market_idle import MarketIdleCoordinator
 from apps.trading.tasks.source import TickDataSource
 from apps.trading.tasks.state import StateManager
 from apps.trading.utils import format_money, quote_to_account_rate
@@ -161,9 +163,11 @@ class TaskExecutor:
         # --- Debug: memory profiling ---
         debug_opts = getattr(task, "debug_options", None) or {}
         self._tracemalloc_enabled = bool(debug_opts.get("tracemalloc"))
-        self._tracemalloc_started = False
-        self._mem_snapshot_count = 0
-        self._last_rss_mb = 0
+        self._diagnostics = ExecutionDiagnostics(
+            task=task,
+            tracemalloc_enabled=self._tracemalloc_enabled,
+        )
+        self._market_idle = MarketIdleCoordinator(task=task, task_type=self.task_type)
 
         logger.info(
             "TaskExecutor initialized: instrument=%s, pip_size=%s, initial_balance=%s",
@@ -411,7 +415,7 @@ class TaskExecutor:
             self._handle_execution_failure(e)
             raise
         finally:
-            if self._tracemalloc_started:
+            if self._diagnostics.tracemalloc_started:
                 self._stop_tracemalloc()
             self._cleanup_execution()
 
@@ -795,9 +799,7 @@ class TaskExecutor:
         Returns ``None`` for backtests that have not yet delivered a
         tick — callers should treat that as "skip the evaluation".
         """
-        if self.task_type == TaskType.TRADING:
-            return dj_timezone.now()
-        return loop.last_delivered_tick_timestamp or loop.state.last_tick_timestamp
+        return self._market_idle.clock(loop)
 
     def _market_session_config(self):
         """Build a MarketSessionConfig from the task's fields.
@@ -807,22 +809,7 @@ class TaskExecutor:
         per-task ``market_close_*`` fields so users can disable the
         weekly close or point it at a different weekday/hour pair.
         """
-        from apps.trading.services.market_schedule import (
-            DEFAULT_SESSION_CONFIG,
-            MarketSessionConfig,
-        )
-
-        if self.task_type != TaskType.BACKTEST:
-            return DEFAULT_SESSION_CONFIG
-
-        task = self.task
-        return MarketSessionConfig(
-            enabled=bool(getattr(task, "market_close_enabled", True)),
-            close_weekday=int(getattr(task, "market_close_weekday", 4) or 0),
-            close_hour_utc=int(getattr(task, "market_close_hour_utc", 21) or 0),
-            open_weekday=int(getattr(task, "market_open_weekday", 6) or 0),
-            open_hour_utc=int(getattr(task, "market_open_hour_utc", 21) or 0),
-        )
+        return self._market_idle.session_config()
 
     def _evaluate_market_idle(self, loop: ExecutionLoopState) -> None:
         """Flip the task between RUNNING and IDLE based on the market clock.
@@ -837,59 +824,7 @@ class TaskExecutor:
         when the task is in any state other than RUNNING/IDLE (so draining
         or stopping tasks are left alone).
         """
-        now = self._market_idle_clock(loop)
-        if now is None:
-            return
-
-        task = self.task
-        pre_close_minutes = int(getattr(task, "market_idle_pre_close_minutes", 0) or 0)
-        resume_delay_minutes = int(getattr(task, "market_idle_resume_delay_minutes", 0) or 0)
-        session_config = self._market_session_config()
-
-        # Backtests that have opted out of the whole feature — either by
-        # disabling the weekly close entirely, or by leaving both idle
-        # thresholds at zero while the replayed clock is in a normal
-        # trading window — can skip the DB refresh to keep the per-tick
-        # cost negligible.
-        if self.task_type == TaskType.BACKTEST:
-            if not session_config.enabled:
-                return
-            if (
-                pre_close_minutes == 0
-                and resume_delay_minutes == 0
-                and not is_forex_market_closed(now, config=session_config)
-            ):
-                return
-
-        from apps.trading.services.market_schedule import (
-            should_enter_pre_close_idle,
-            should_resume_from_idle,
-        )
-
-        task.refresh_from_db(fields=["status"])
-        if task.status not in (TaskStatus.RUNNING, TaskStatus.IDLE):
-            return
-
-        market_closed = is_forex_market_closed(now, config=session_config)
-        should_idle = market_closed or should_enter_pre_close_idle(
-            now=now,
-            pre_close_minutes=pre_close_minutes,
-            config=session_config,
-        )
-
-        if task.status == TaskStatus.RUNNING and should_idle:
-            self._enter_market_idle(loop, now=now, reason="market_closed_or_pre_close")
-            return
-
-        if task.status == TaskStatus.IDLE and not should_idle:
-            idle_marker = self._read_idle_marker(loop)
-            if should_resume_from_idle(
-                now=now,
-                idle_entered_at=idle_marker,
-                resume_delay_minutes=resume_delay_minutes,
-                config=session_config,
-            ):
-                self._exit_market_idle(loop)
+        self._market_idle.evaluate(loop)
 
     def _enter_market_idle(
         self,
@@ -898,34 +833,10 @@ class TaskExecutor:
         now: datetime,
         reason: str,
     ) -> None:
-        task = self.task
-        type(task).objects.filter(pk=task.pk, status=TaskStatus.RUNNING).update(
-            status=TaskStatus.IDLE,
-            updated_at=dj_timezone.now(),
-        )
-        task.refresh_from_db(fields=["status"])
-        logger.info(
-            "Task switched to IDLE - task_id=%s, task_type=%s, reason=%s, clock=%s",
-            task.pk,
-            self.task_type.value,
-            reason,
-            now.isoformat(),
-        )
-        self._record_idle_marker(loop, now)
+        self._market_idle.enter(loop, now=now, reason=reason)
 
     def _exit_market_idle(self, loop: ExecutionLoopState) -> None:
-        task = self.task
-        type(task).objects.filter(pk=task.pk, status=TaskStatus.IDLE).update(
-            status=TaskStatus.RUNNING,
-            updated_at=dj_timezone.now(),
-        )
-        task.refresh_from_db(fields=["status"])
-        logger.info(
-            "Task resumed from IDLE - task_id=%s, task_type=%s",
-            task.pk,
-            self.task_type.value,
-        )
-        self._record_idle_marker(loop, None)
+        self._market_idle.exit(loop)
 
     # Backwards-compatible wrappers so existing call sites keep working.
     def _maybe_enter_market_idle(self, loop: ExecutionLoopState) -> None:
@@ -936,30 +847,10 @@ class TaskExecutor:
 
     def _record_idle_marker(self, loop: ExecutionLoopState, entered_at: datetime | None) -> None:
         """Persist the idle-start timestamp into ExecutionState."""
-        strategy_state = (
-            loop.state.strategy_state if isinstance(loop.state.strategy_state, dict) else {}
-        )
-        if entered_at is None:
-            strategy_state.pop("_idle_entered_at", None)
-        else:
-            strategy_state["_idle_entered_at"] = entered_at.isoformat()
-        loop.state.strategy_state = strategy_state
-        try:
-            loop.state.save(update_fields=["strategy_state", "updated_at"])
-        except Exception:  # pragma: no cover - best effort persistence
-            logger.debug("Failed to persist idle marker", exc_info=True)
+        self._market_idle.record_marker(loop, entered_at)
 
     def _read_idle_marker(self, loop: ExecutionLoopState) -> datetime | None:
-        strategy_state = (
-            loop.state.strategy_state if isinstance(loop.state.strategy_state, dict) else {}
-        )
-        raw = strategy_state.get("_idle_entered_at")
-        if not raw:
-            return None
-        try:
-            return datetime.fromisoformat(str(raw))
-        except ValueError:
-            return None
+        return self._market_idle.read_marker(loop)
 
     def _should_stop_during_batch(self, loop: ExecutionLoopState, tick_idx: int) -> bool:
         """Check stop signal during long batch processing."""
@@ -1606,75 +1497,19 @@ class TaskExecutor:
     # ------------------------------------------------------------------
 
     def _start_tracemalloc(self) -> None:
-        import tracemalloc
-
-        if tracemalloc.is_tracing():
-            logger.info("[TRACEMALLOC] Already tracing, reusing")
-        else:
-            tracemalloc.start(25)
-        self._tracemalloc_started = True
-        logger.warning(
-            "[TRACEMALLOC] Enabled for task %s — expect CPU/memory overhead",
-            self.task.pk,
-        )
+        self._diagnostics.start_tracemalloc()
 
     def _stop_tracemalloc(self) -> None:
-        import tracemalloc
-
-        if tracemalloc.is_tracing():
-            self._log_tracemalloc_snapshot("final")
-            tracemalloc.stop()
-        self._tracemalloc_started = False
-        logger.info("[TRACEMALLOC] Stopped for task %s", self.task.pk)
+        self._diagnostics.stop_tracemalloc()
 
     def _check_memory(self, loop: ExecutionLoopState) -> None:
-        """Log RSS and take tracemalloc snapshot when memory grows."""
-        import resource
-
-        rss_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-        # macOS returns bytes, Linux returns KB
-        import sys
-
-        rss_mb = rss_kb // 1024 if sys.platform == "linux" else rss_kb // (1024 * 1024)
-
-        # Log RSS every 100 batches (~10k ticks)
-        if loop.batch_count % 100 == 0:
-            logger.info(
-                "[MEMORY] task=%s batch=%d ticks=%d rss=%dMB",
-                self.task.pk,
-                loop.batch_count,
-                loop.state.ticks_processed,
-                rss_mb,
-            )
-
-        # Take snapshot when RSS jumps by 500MB+ since last snapshot
-        if rss_mb - self._last_rss_mb >= 500:
-            self._mem_snapshot_count += 1
-            self._log_tracemalloc_snapshot(
-                f"rss_jump_{self._mem_snapshot_count}",
-            )
-            self._last_rss_mb = rss_mb
+        self._diagnostics.check_memory(
+            batch_count=loop.batch_count,
+            ticks_processed=loop.state.ticks_processed,
+        )
 
     def _log_tracemalloc_snapshot(self, label: str) -> None:
-        """Take a tracemalloc snapshot and log the top allocations."""
-        import tracemalloc
-
-        if not tracemalloc.is_tracing():
-            return
-
-        snapshot = tracemalloc.take_snapshot()
-        stats = snapshot.statistics("lineno")
-
-        current, peak = tracemalloc.get_traced_memory()
-        logger.warning(
-            "[TRACEMALLOC:%s] task=%s current=%.1fMB peak=%.1fMB",
-            label,
-            self.task.pk,
-            current / (1024 * 1024),
-            peak / (1024 * 1024),
-        )
-        for i, stat in enumerate(stats[:20]):
-            logger.warning("[TRACEMALLOC:%s] #%d %s", label, i + 1, stat)
+        self._diagnostics.log_tracemalloc_snapshot(label)
 
     def _finalize_execution(self, loop: ExecutionLoopState) -> None:
         """Run stop hook and persist final stop state."""
