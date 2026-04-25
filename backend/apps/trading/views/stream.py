@@ -67,6 +67,7 @@ class TaskEventStreamView(APIView):
         response = StreamingHttpResponse(
             self._event_stream(
                 request,
+                task_type=task_type,
                 task_model=task_model,
                 task_id=task_id,
             ),
@@ -81,6 +82,7 @@ class TaskEventStreamView(APIView):
         self,
         request: Request,
         *,
+        task_type: str,
         task_model: type[BacktestTask] | type[TradingTask],
         task_id: UUID,
     ) -> Iterator[str]:
@@ -93,14 +95,22 @@ class TaskEventStreamView(APIView):
 
                 task = task_model.objects.filter(pk=task_id, user=request.user.pk).first()
                 if task is None:
+                    yield _sse("deleted", {"id": str(task_id), "task_type": task_type})
                     return
 
-                payload = self._snapshot(task)
+                payload = self._snapshot(task, task_type)
                 if payload != last_payload:
                     yield _sse("snapshot", payload)
                     last_payload = payload
                 else:
-                    yield _sse("heartbeat", {"timestamp": timezone.now().isoformat()})
+                    yield _sse(
+                        "heartbeat",
+                        {
+                            "id": str(task_id),
+                            "task_type": task_type,
+                            "timestamp": timezone.now().isoformat(),
+                        },
+                    )
 
                 time.sleep(self.poll_interval_seconds)
         except Exception:
@@ -108,8 +118,10 @@ class TaskEventStreamView(APIView):
             return
 
     @staticmethod
-    def _snapshot(task: BacktestTask | TradingTask) -> dict[str, Any]:
+    def _snapshot(task: BacktestTask | TradingTask, task_type: str) -> dict[str, Any]:
         return {
+            "id": str(task.pk),
+            "task_type": task_type,
             "status": task.status,
             "progress": getattr(task, "progress", None),
             "execution_id": str(task.execution_id) if task.execution_id else None,

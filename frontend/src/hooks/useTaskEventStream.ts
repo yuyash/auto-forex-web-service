@@ -6,6 +6,8 @@ import { TaskType } from '../types/common';
 import { logger } from '../utils/logger';
 
 interface TaskSnapshot {
+  id?: string;
+  task_type?: TaskType;
   status?: string;
   progress?: number | null;
   execution_id?: string | null;
