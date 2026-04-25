@@ -79,29 +79,68 @@ export function matchesDependsOn(
   dependsOn: DependsOnCondition | undefined,
   schemaProperties?: Record<string, ConfigProperty>
 ): boolean {
+  return matchesDependsOnInternal(
+    params,
+    dependsOn,
+    schemaProperties,
+    new Set<string>()
+  );
+}
+
+function matchesDependsOnInternal(
+  params: Record<string, unknown>,
+  dependsOn: DependsOnCondition | undefined,
+  schemaProperties: Record<string, ConfigProperty> | undefined,
+  visitedFields: Set<string>
+): boolean {
   if (!dependsOn) return true;
 
   const matchesSingleCondition = (cond: DependsOnCondition): boolean => {
+    if (
+      !isDependencyFieldVisible(
+        cond.field,
+        params,
+        schemaProperties,
+        visitedFields
+      )
+    ) {
+      return false;
+    }
+
     const raw = resolveDependencyValue(params, schemaProperties, cond.field);
     if (!cond.values.some((expected) => conditionMatchesValue(raw, expected))) {
       return false;
     }
     if (!cond.and || cond.and.length === 0) return true;
-    return cond.and.every((andCond) => {
-      const rawCond = resolveDependencyValue(
-        params,
-        schemaProperties,
-        andCond.field
-      );
-      return andCond.values.some((expected) =>
-        conditionMatchesValue(rawCond, expected)
-      );
-    });
+    return cond.and.every((andCond) => matchesSingleCondition(andCond));
   };
 
   if (matchesSingleCondition(dependsOn)) return true;
   if (!dependsOn.or || dependsOn.or.length === 0) return false;
   return dependsOn.or.some((orCond) => matchesSingleCondition(orCond));
+}
+
+function isDependencyFieldVisible(
+  field: string,
+  params: Record<string, unknown>,
+  schemaProperties: Record<string, ConfigProperty> | undefined,
+  visitedFields: Set<string>
+): boolean {
+  const prop = schemaProperties?.[field];
+  if (!prop?.dependsOn) return true;
+
+  if (visitedFields.has(field)) {
+    return false;
+  }
+
+  const nextVisited = new Set(visitedFields);
+  nextVisited.add(field);
+  return matchesDependsOnInternal(
+    params,
+    prop.dependsOn,
+    schemaProperties,
+    nextVisited
+  );
 }
 
 /**
