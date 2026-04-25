@@ -43,6 +43,13 @@ from apps.trading.strategies.snowball.calculators import (
     stop_loss_pips,
 )
 from apps.trading.strategies.snowball.enums import CycleStatus, ProtectionLevel
+from apps.trading.strategies.snowball.grid_policy import (
+    grid_tp_bounds,
+    preceding_entry_bound,
+    propagate_pending_rebuild_tp,
+    upper_neighbor_tp_bound,
+    validate_grid_ordering,
+)
 from apps.trading.strategies.snowball.models import (
     Entry,
     Layer,
@@ -412,55 +419,9 @@ class SnowballStrategy(Strategy):
 
     def _validate_grid_ordering(self, cycle: SnowballCycle) -> None:
         """Ensure present slots preserve monotonic entry/TP ordering."""
-        present: list[tuple[int, int, Decimal, Decimal, str]] = []
-        for layer in cycle.grid.layers:
-            for slot in layer.slots:
-                if slot.entry is not None:
-                    present.append(
-                        (
-                            layer.layer_number,
-                            slot.index,
-                            slot.entry.entry_price,
-                            slot.entry.close_price,
-                            "open",
-                        )
-                    )
-                elif slot.pending_rebuild is not None:
-                    pending = slot.pending_rebuild
-                    present.append(
-                        (
-                            layer.layer_number,
-                            slot.index,
-                            pending.entry_price,
-                            pending.close_price,
-                            "pending_rebuild",
-                        )
-                    )
-
-        if len(present) < 2:
-            return
-
-        for prev, curr in zip(present, present[1:], strict=False):
-            if cycle.is_long:
-                entry_ok = prev[2] >= curr[2]
-                tp_ok = prev[3] >= curr[3]
-                expected = "descending"
-            else:
-                entry_ok = prev[2] <= curr[2]
-                tp_ok = prev[3] <= curr[3]
-                expected = "ascending"
-
-            if entry_ok and tp_ok:
-                continue
-
-            self._grid_order_violation = (
-                f"cycle_id={cycle.cycle_id}, direction={cycle.direction.value}, expected={expected}, "
-                f"prev=L{prev[0]}/R{prev[1]}({prev[4]}) entry={prev[2]:.5f} tp={prev[3]:.5f}, "
-                f"curr=L{curr[0]}/R{curr[1]}({curr[4]}) entry={curr[2]:.5f} tp={curr[3]:.5f}, "
-                f"entry_ok={entry_ok}, tp_ok={tp_ok}"
-            )
+        self._grid_order_violation = validate_grid_ordering(cycle)
+        if self._grid_order_violation:
             logger.error("Grid ordering violation detail: %s", self._grid_order_violation)
-            return
 
     def _upper_neighbor_tp_bound(
         self,
@@ -491,14 +452,7 @@ class SnowballStrategy(Strategy):
         direction and clamps accordingly.  ``None`` is returned when no
         prior present slot exists, in which case no bound applies.
         """
-        hard, soft = self._grid_tp_bounds(cycle, layer, slot_index)
-        if hard is None:
-            return soft
-        if soft is None:
-            return hard
-        if cycle.direction == Direction.LONG:
-            return hard if hard < soft else soft
-        return hard if hard > soft else soft
+        return upper_neighbor_tp_bound(cycle, layer, slot_index)
 
     def _grid_tp_bounds(
         self,
@@ -521,29 +475,7 @@ class SnowballStrategy(Strategy):
         the tightest floor (maximum observed TP).  ``None`` means no
         bound in that category.
         """
-        direction = cycle.direction
-        hard: Decimal | None = None
-        soft: Decimal | None = None
-
-        def _combine(existing: Decimal | None, candidate: Decimal) -> Decimal:
-            if existing is None:
-                return candidate
-            if direction == Direction.LONG:
-                return candidate if candidate < existing else existing
-            return candidate if candidate > existing else existing
-
-        for lyr in cycle.grid.layers:
-            if lyr.layer_number > layer.layer_number:
-                continue
-            for s in lyr.slots:
-                if lyr is layer and s.index >= slot_index:
-                    continue
-                if s.entry is not None:
-                    hard = _combine(hard, s.entry.close_price)
-                elif s.pending_rebuild is not None:
-                    soft = _combine(soft, s.pending_rebuild.close_price)
-
-        return hard, soft
+        return grid_tp_bounds(cycle, layer, slot_index)
 
     def _preceding_entry_bound(
         self,
@@ -560,26 +492,7 @@ class SnowballStrategy(Strategy):
         **maximum**.  Returns ``None`` when no preceding occupied slot
         exists.
         """
-        direction = cycle.direction
-        bound: Decimal | None = None
-
-        for lyr in cycle.grid.layers:
-            if lyr.layer_number > layer.layer_number:
-                continue
-            for s in lyr.slots:
-                if lyr is layer and s.index >= slot_index:
-                    continue
-                if s.entry is None:
-                    continue
-                ep = s.entry.entry_price
-                if bound is None:
-                    bound = ep
-                elif direction == Direction.LONG:
-                    bound = ep if ep < bound else bound
-                else:
-                    bound = ep if ep > bound else bound
-
-        return bound
+        return preceding_entry_bound(cycle, layer, slot_index)
 
     def _propagate_pending_rebuild_tp(
         self,
@@ -609,32 +522,7 @@ class SnowballStrategy(Strategy):
         tuples describing each adjustment performed, useful for logging
         and tests.
         """
-        direction = cycle.direction
-        adjusted: list[tuple[int, int, Decimal, Decimal]] = []
-
-        for lyr in cycle.grid.layers:
-            if lyr.layer_number > layer.layer_number:
-                continue
-            for s in lyr.slots:
-                if lyr is layer and s.index >= slot_index:
-                    continue
-                if s.pending_rebuild is None:
-                    continue
-                old_tp = s.pending_rebuild.close_price
-                if direction == Direction.LONG:
-                    # Descending expected: prev_tp >= curr_tp.  If the
-                    # pending TP is below the new rebuild TP, pull it
-                    # up so the pair stays ordered.
-                    if old_tp < new_tp:
-                        s.pending_rebuild.close_price = new_tp
-                        adjusted.append((lyr.layer_number, s.index, old_tp, new_tp))
-                else:
-                    # SHORT, ascending expected: prev_tp <= curr_tp.
-                    if old_tp > new_tp:
-                        s.pending_rebuild.close_price = new_tp
-                        adjusted.append((lyr.layer_number, s.index, old_tp, new_tp))
-
-        return adjusted
+        return propagate_pending_rebuild_tp(cycle, layer, slot_index, new_tp)
 
     # ------------------------------------------------------------------
     # Per-cycle tick processing

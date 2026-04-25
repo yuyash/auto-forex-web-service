@@ -6,10 +6,6 @@ used by both BacktestTaskViewSet and TradingTaskViewSet.
 
 from __future__ import annotations
 
-import json
-from decimal import Decimal
-from urllib.parse import urlencode
-
 from django.db import models
 from django.db.models import Q
 from django.db.models.functions import Cast
@@ -30,10 +26,15 @@ from apps.trading.serializers.events import (
     TradeSerializer,
     TradingEventSerializer,
 )
+from apps.trading.services.task_activity import TaskActivityQueryService
 from apps.trading.serializers.execution import TaskExecutionSerializer
 from apps.trading.serializers.summary import TaskSummarySerializer
 from apps.trading.serializers.task import TaskLogSerializer
 from apps.trading.serializers.trend_replay import TaskTrendReplaySerializer
+from apps.trading.services.task_metrics import (
+    paginated_envelope as _paginated_envelope,
+)
+from apps.trading.services.task_metrics import TaskMetricsQueryService
 from apps.trading.views.query_params import (
     ExecutionDetailQueryParams,
     ExecutionDetailQueryParamsSchemaSerializer,
@@ -45,72 +46,24 @@ from apps.trading.views.query_params import (
     LogComponentsQueryParamsSchemaSerializer,
     LogsQueryParams,
     LogsQueryParamsSchemaSerializer,
-    MetricsQueryParams,
     MetricsQueryParamsSchemaSerializer,
     OrdersQueryParams,
     OrdersQueryParamsSchemaSerializer,
     PositionLifecycleQueryParams,
     PositionLifecycleQueryParamsSchemaSerializer,
-    PositionQuery,
     PositionsQueryParamsSchemaSerializer,
     StrategyEventsQueryParams,
     StrategyEventsQueryParamsSchemaSerializer,
     SummaryQueryParams,
     SummaryQueryParamsSchemaSerializer,
-    TradesQueryParams,
     TradesQueryParamsSchemaSerializer,
     TrendReplayQueryParams,
     TrendReplayQueryParamsSchemaSerializer,
 )
 from apps.trading.views.pagination import (
     ActivityPagination,
-    MetricsPagination,
     TradePositionPagination,
 )
-
-
-def _ensure_dict(value) -> dict:
-    """Ensure a metrics value is a dict (handles double-encoded JSON strings)."""
-    if isinstance(value, dict):
-        return value
-    if isinstance(value, str):
-        try:
-            parsed = json.loads(value)
-            if isinstance(parsed, dict):
-                return parsed
-        except (json.JSONDecodeError, TypeError):
-            pass
-    return {}
-
-
-def _paginated_envelope(
-    request: Request,
-    results: list,
-    total: int,
-    page: int,
-    page_size: int,
-) -> dict:
-    """Build a standard paginated response envelope."""
-    import math
-
-    total_pages = math.ceil(total / page_size) if page_size else 1
-    base_url = request.build_absolute_uri(request.path)
-    params = request.query_params.copy()
-
-    def _build_url(p: int) -> str | None:
-        if p < 1 or p > total_pages:
-            return None
-        params["page"] = str(p)
-        params["page_size"] = str(page_size)
-        qs = urlencode(params, doseq=True)
-        return f"{base_url}?{qs}"
-
-    return {
-        "count": total,
-        "next": _build_url(page + 1),
-        "previous": _build_url(page - 1),
-        "results": results,
-    }
 
 
 class TaskSubResourceMixin:
@@ -151,164 +104,13 @@ class TaskSubResourceMixin:
         detail=True, methods=["get"], url_path="metrics", throttle_classes=[TaskDataRateThrottle]
     )
     def metrics(self, request: Request, pk: int | None = None) -> Response:
-        from apps.trading.models.metrics import Metrics
-        from apps.trading.models.metrics import ExecutionMetricAggregate
-        from apps.trading.models.state import ExecutionState
-
         task = self.get_object()  # type: ignore[attr-defined]
-        query = MetricsQueryParams.from_request(
-            request,
-            default_execution_id=task.execution_id,
-            default_page_size=MetricsPagination.page_size,
-            max_page_size=MetricsPagination.max_page_size,
+        payload = TaskMetricsQueryService().list_metrics(
+            request=request,
+            task=task,
+            task_type_label=self.task_type_label,
         )
-
-        queryset = Metrics.objects.filter(
-            task_type=self.task_type_label,
-            task_id=task.pk,
-            execution_id=query.execution.execution_id,
-        ).order_by("timestamp")
-        aggregate = (
-            ExecutionMetricAggregate.objects.filter(
-                task_type=self.task_type_label,
-                task_id=task.pk,
-                execution_id=query.execution.execution_id,
-            )
-            .only("continuity_warnings")
-            .first()
-        )
-        state = (
-            ExecutionState.objects.filter(
-                task_type=self.task_type_label,
-                task_id=task.pk,
-                execution_id=query.execution.execution_id,
-            )
-            .only("resume_cursor_timestamp")
-            .order_by("-updated_at")
-            .first()
-        )
-
-        def _attach_metadata(envelope: dict, data_source: str) -> Response:
-            envelope["data_source"] = data_source
-            envelope["resume_cursor_timestamp"] = (
-                state.resume_cursor_timestamp.isoformat()
-                if state and state.resume_cursor_timestamp
-                else None
-            )
-            envelope["consistency_warnings"] = (
-                aggregate.continuity_warnings
-                if aggregate and isinstance(aggregate.continuity_warnings, list)
-                else []
-            )
-            return Response(envelope)
-
-        if query.execution.since:
-            queryset = queryset.filter(timestamp__gt=query.execution.since)
-
-        if query.until:
-            queryset = queryset.filter(timestamp__lt=query.until)
-
-        interval = query.interval
-
-        if interval > 1:
-            from django.db import connection
-
-            if connection.vendor != "postgresql":
-                rows = list(queryset.values_list("timestamp", "metrics"))
-                bucketed: dict[int, tuple] = {}
-                interval_seconds = interval * 60
-                for ts, metrics in rows:
-                    bucket = int(ts.timestamp()) // interval_seconds
-                    bucketed[bucket] = (ts, metrics)
-
-                aggregated = [bucketed[key] for key in sorted(bucketed)]
-                total_count = len(aggregated)
-                page, page_size = (
-                    query.execution.pagination.page,
-                    query.execution.pagination.page_size,
-                )
-                start = (page - 1) * page_size
-                end = start + page_size
-                page_rows = aggregated[start:end]
-
-                data = [
-                    {"t": int(ts.timestamp()), "metrics": _ensure_dict(metrics)}
-                    for ts, metrics in page_rows
-                ]
-                envelope = _paginated_envelope(request, data, total_count, page, page_size)
-                return _attach_metadata(envelope, "db_window_last_python")
-
-            # Build a sub-query that buckets timestamps into N-minute windows
-            # and picks the last metrics JSON per window.
-            base_where = "task_type = %s AND task_id = %s"
-            where_params: list = [self.task_type_label, str(task.pk)]
-
-            if query.execution.execution_id is None:
-                base_where += " AND execution_id IS NULL"
-            else:
-                base_where += " AND execution_id = %s"
-                where_params.append(str(query.execution.execution_id))
-
-            if query.execution.since:
-                base_where += " AND timestamp > %s"
-                where_params.append(query.execution.since)
-            if query.until:
-                base_where += " AND timestamp < %s"
-                where_params.append(query.until)
-
-            interval_seconds = interval * 60
-            page, page_size = (
-                query.execution.pagination.page,
-                query.execution.pagination.page_size,
-            )
-            offset = (page - 1) * page_size
-
-            # base_where is assembled from fixed clauses; all user values use cursor params.
-            count_sql = (
-                "SELECT COUNT(*) "  # nosec B608
-                "FROM ("
-                "  SELECT FLOOR(EXTRACT(EPOCH FROM timestamp) / %s) AS bucket "
-                "  FROM metrics "
-                f"  WHERE {base_where} "
-                "  GROUP BY bucket"
-                ") sub"
-            )
-
-            sql = (
-                "SELECT DISTINCT ON (bucket) "  # nosec B608
-                "  timestamp, metrics "
-                "FROM ("
-                "  SELECT timestamp, metrics, "
-                "    FLOOR(EXTRACT(EPOCH FROM timestamp) / %s) AS bucket "
-                "  FROM metrics "
-                f"  WHERE {base_where}"
-                ") sub "
-                "ORDER BY bucket, timestamp DESC "
-                "LIMIT %s OFFSET %s"
-            )
-
-            with connection.cursor() as cursor:
-                cursor.execute(count_sql, [interval_seconds, *where_params])
-                total_count = int(cursor.fetchone()[0])
-                cursor.execute(sql, [interval_seconds, *where_params, page_size, offset])
-                rows = cursor.fetchall()
-
-            data = [{"t": int(ts.timestamp()), "metrics": _ensure_dict(m)} for ts, m in rows]
-            envelope = _paginated_envelope(request, data, total_count, page, page_size)
-            return _attach_metadata(envelope, "db_window_last")
-
-        # Default: interval=1, use ORM with cursor pagination
-        total_count = queryset.count()
-        page, page_size = (
-            query.execution.pagination.page,
-            query.execution.pagination.page_size,
-        )
-        start = (page - 1) * page_size
-        rows = queryset.values_list("timestamp", "metrics")[start : start + page_size]
-
-        data = [{"t": int(ts.timestamp()), "metrics": _ensure_dict(m)} for ts, m in rows]
-        envelope = _paginated_envelope(request, data, total_count, page, page_size)
-        return _attach_metadata(envelope, "db_raw")
+        return Response(payload)
 
     @extend_schema(
         tags=["Trading"],
@@ -335,68 +137,13 @@ class TaskSubResourceMixin:
         throttle_classes=[TaskDataRateThrottle],
     )
     def latest_metrics(self, request: Request, pk: int | None = None) -> Response:
-        from apps.trading.models.metrics import Metrics
-        from apps.trading.models.metrics import ExecutionMetricAggregate
-        from apps.trading.models.state import ExecutionState
-
         task = self.get_object()  # type: ignore[attr-defined]
-        query = MetricsQueryParams.from_request(
-            request,
-            default_execution_id=task.execution_id,
-            default_page_size=1,
-            max_page_size=1,
+        payload = TaskMetricsQueryService().latest_metric(
+            request=request,
+            task=task,
+            task_type_label=self.task_type_label,
         )
-
-        row = (
-            Metrics.objects.filter(
-                task_type=self.task_type_label,
-                task_id=task.pk,
-                execution_id=query.execution.execution_id,
-            )
-            .order_by("-timestamp")
-            .values_list("timestamp", "metrics")
-            .first()
-        )
-        aggregate = (
-            ExecutionMetricAggregate.objects.filter(
-                task_type=self.task_type_label,
-                task_id=task.pk,
-                execution_id=query.execution.execution_id,
-            )
-            .only("continuity_warnings")
-            .first()
-        )
-        state = (
-            ExecutionState.objects.filter(
-                task_type=self.task_type_label,
-                task_id=task.pk,
-                execution_id=query.execution.execution_id,
-            )
-            .only("resume_cursor_timestamp")
-            .order_by("-updated_at")
-            .first()
-        )
-
-        return Response(
-            {
-                "data_source": "db_latest",
-                "resume_cursor_timestamp": (
-                    state.resume_cursor_timestamp.isoformat()
-                    if state and state.resume_cursor_timestamp
-                    else None
-                ),
-                "consistency_warnings": (
-                    aggregate.continuity_warnings
-                    if aggregate and isinstance(aggregate.continuity_warnings, list)
-                    else []
-                ),
-                "result": (
-                    {"t": int(row[0].timestamp()), "metrics": _ensure_dict(row[1])}
-                    if row is not None
-                    else None
-                ),
-            }
-        )
+        return Response(payload)
 
     @extend_schema(
         tags=["Trading"],
@@ -614,102 +361,13 @@ class TaskSubResourceMixin:
     )
     @action(detail=True, methods=["get"], throttle_classes=[TaskDataRateThrottle])
     def trades(self, request: Request, pk: str | None = None) -> Response:
-        from apps.trading.models.trades import Trade
-
         task = self.get_object()  # type: ignore[attr-defined]
-        query = TradesQueryParams.from_request(
-            request,
-            default_execution_id=task.execution_id,
+        rows, total_count, page, page_size = TaskActivityQueryService().trades(
+            request=request,
+            task=task,
+            task_type_label=self.task_type_label,
         )
-        queryset = Trade.objects.filter(
-            task_type=self.task_type_label,
-            task_id=task.pk,
-            execution_id=query.execution.execution_id,
-        )
-        if query.direction:
-            if query.direction == "buy":
-                queryset = queryset.filter(direction="long")
-            elif query.direction == "sell":
-                queryset = queryset.filter(direction="short")
-            else:
-                queryset = queryset.filter(direction=query.direction)
-
-        if query.execution.since:
-            queryset = queryset.filter(updated_at__gt=query.execution.since)
-        if query.timestamp_range.start:
-            queryset = queryset.filter(timestamp__gte=query.timestamp_range.start)
-        if query.timestamp_range.end:
-            queryset = queryset.filter(timestamp__lte=query.timestamp_range.end)
-
-        # Optional cycle_id filter
-        if query.cycle_id:
-            queryset = queryset.filter(cycle_id=query.cycle_id)
-
-        # Optional trade_id prefix filter (e.g. first 8 chars of UUID).
-        if query.trade_id:
-            queryset = queryset.annotate(
-                _id_str=Cast("id", output_field=models.CharField())
-            ).filter(_id_str__istartswith=query.trade_id)
-
-        ordering = ("-timestamp", "-sequence_number")
-        if query.ordering == "asc":
-            ordering = ("timestamp", "sequence_number")
-        queryset = queryset.order_by(*ordering)
-
-        total_count = queryset.count()
-        page, page_size = (
-            query.execution.pagination.page,
-            query.execution.pagination.page_size,
-        )
-        start = (page - 1) * page_size
-        trades_qs = queryset.values(
-            "id",
-            "direction",
-            "units",
-            "instrument",
-            "price",
-            "execution_method",
-            "layer_index",
-            "retracement_count",
-            "description",
-            "timestamp",
-            "position_id",
-            "order_id",
-            "oanda_trade_id",
-            "cycle_id",
-            "replayed_at",
-            "updated_at",
-            "is_rebuild",
-            stop_loss_price=models.F("position__stop_loss_price"),
-            entry_price=models.F("position__entry_price"),
-        )[start : start + page_size]
-        normalized: list[dict] = []
-        for trade in trades_qs:
-            raw_direction = trade["direction"]
-            if raw_direction is None:
-                trade["direction"] = None
-            else:
-                side = str(raw_direction).lower()
-                trade["direction"] = (
-                    "buy" if side == "long" else "sell" if side == "short" else side
-                )
-            trade["pnl"] = None
-            if trade["execution_method"] not in {"open_position", "rebuild_position"}:
-                entry_price = trade.pop("entry_price", None)
-                if entry_price is not None and trade["price"] is not None:
-                    entry = Decimal(str(entry_price))
-                    exit_price = Decimal(str(trade["price"]))
-                    units = abs(int(trade["units"]))
-                    if trade["direction"] == "buy":
-                        trade["pnl"] = exit_price - entry
-                    elif trade["direction"] == "sell":
-                        trade["pnl"] = entry - exit_price
-                    if trade["pnl"] is not None:
-                        trade["pnl"] *= units
-            else:
-                trade.pop("entry_price", None)
-            normalized.append(trade)
-        serializer = TradeSerializer(normalized, many=True)
+        serializer = TradeSerializer(rows, many=True)
         return Response(_paginated_envelope(request, serializer.data, total_count, page, page_size))
 
     @extend_schema(
@@ -730,53 +388,12 @@ class TaskSubResourceMixin:
     )
     @action(detail=True, methods=["get"], throttle_classes=[TaskDataRateThrottle])
     def positions(self, request: Request, pk: str | None = None) -> Response:
-        from apps.trading.models.positions import Position
-
         task = self.get_object()  # type: ignore[attr-defined]
-        query = PositionQuery.from_request(
-            request,
-            default_execution_id=task.execution_id,
-            default_page_size=TradePositionPagination.page_size,
-            max_page_size=TradePositionPagination.max_page_size,
+        queryset, query = TaskActivityQueryService().positions_queryset(
+            request=request,
+            task=task,
+            task_type_label=self.task_type_label,
         )
-        queryset = (
-            Position.objects.filter(
-                task_type=self.task_type_label,
-                task_id=task.pk,
-                execution_id=query.execution.execution_id,
-            )
-            .prefetch_related("trades")
-            .order_by("-entry_time")
-        )
-
-        if query.position_status == "open":
-            queryset = queryset.filter(is_open=True)
-        elif query.position_status == "closed":
-            queryset = queryset.filter(is_open=False)
-
-        if query.direction:
-            queryset = queryset.filter(direction=query.direction)
-
-        if query.execution.since:
-            queryset = queryset.filter(updated_at__gt=query.execution.since)
-
-        if query.range.end:
-            queryset = queryset.filter(entry_time__lte=query.range.end)
-        if query.range.start:
-            queryset = queryset.filter(
-                Q(exit_time__isnull=True) | Q(exit_time__gte=query.range.start)
-            )
-
-        # Optional cycle_id filter — positions linked via trades
-        if query.cycle_id:
-            queryset = queryset.filter(trades__cycle_id=query.cycle_id).distinct()
-
-        # Optional position_id prefix filter (e.g. first 8 chars of UUID).
-        if query.position_id:
-            queryset = queryset.annotate(
-                _id_str=Cast("id", output_field=models.CharField())
-            ).filter(_id_str__istartswith=query.position_id)
-
         paginator = TradePositionPagination()
         page = paginator.paginate_queryset(queryset, request)
         serializer = PositionSerializer(

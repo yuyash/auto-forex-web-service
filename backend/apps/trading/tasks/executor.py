@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, List, cast
 
 from django.utils import timezone as dj_timezone
 
-from apps.trading.dataclasses import EventContext, EventExecutionResult, StrategyResult
+from apps.trading.dataclasses import EventContext, StrategyResult
 from apps.trading.engine import TradingEngine
 from apps.trading.enums import EventScope, EventType, TaskStatus, TaskType
 from apps.trading.events import StrategyEvent
@@ -34,6 +34,7 @@ from apps.trading.tasks.execution_state_store import (
     ExecutionStateConflict,
     ExecutionStateStore,
 )
+from apps.trading.tasks.event_processor import TaskEventProcessor
 from apps.trading.tasks.source import TickDataSource
 from apps.trading.tasks.state import StateManager
 from apps.trading.utils import format_money, quote_to_account_rate
@@ -129,6 +130,7 @@ class TaskExecutor:
             state_manager: State manager for Redis coordination
         """
         self.task: TradingTask | BacktestTask = task
+        self.logger = logger
         self.engine = engine
         self.data_source = data_source
         self.event_context = event_context
@@ -145,6 +147,7 @@ class TaskExecutor:
             order_service=order_service,
             instrument=self.instrument,
         )
+        self.event_processor = TaskEventProcessor(self)
 
         from apps.trading.services.metrics_aggregator import MetricsAggregator
 
@@ -251,105 +254,7 @@ class TaskExecutor:
         Args:
             events: List of TradingEvent instances that were saved
         """
-        for trading_event in events:
-            if getattr(trading_event, "is_processed", False):
-                continue
-
-            replay_classification = self._classify_replay_event(trading_event)
-            if replaying:
-                logger.warning(
-                    "Replaying event - task_id=%s, event_id=%s, event_type=%s, "
-                    "strategy_event_type=%s, classification=%s, position_id=%s",
-                    self.task.pk,
-                    trading_event.pk,
-                    trading_event.event_type,
-                    (
-                        trading_event.details.get("strategy_event_type")
-                        if isinstance(trading_event.details, dict)
-                        else None
-                    ),
-                    replay_classification,
-                    trading_event.position_id,
-                )
-
-            if self.task_type == TaskType.TRADING and self._event_already_applied(
-                trading_event=trading_event,
-                state=state,
-            ):
-                self._mark_event_processed(trading_event)
-                if replaying:
-                    logger.info(
-                        "Skipped replayed event already reflected in state - task_id=%s, "
-                        "event_id=%s, classification=%s",
-                        self.task.pk,
-                        trading_event.pk,
-                        replay_classification,
-                    )
-                continue
-
-            try:
-                execution_result: EventExecutionResult = (
-                    self.event_handler.handle_event_with_replay(
-                        trading_event,
-                        replaying=replaying,
-                    )
-                )
-                if execution_result.realized_pnl_delta != Decimal("0"):
-                    state.current_balance = (
-                        Decimal(str(state.current_balance)) + execution_result.realized_pnl_delta
-                    )
-                    self._runtime_metrics.record_position_closed(
-                        execution_result.realized_pnl_delta,
-                        realized_pnl_quote=execution_result.realized_pnl_delta_quote,
-                    )
-                if execution_result.entry_binding is not None:
-                    self._runtime_metrics.record_trade()
-                self.engine.apply_event_execution_result(
-                    state=state,
-                    execution_result=execution_result,
-                )
-                self._mark_event_processed(trading_event)
-
-                if replaying:
-                    logger.warning(
-                        "Replay applied - task_id=%s, event_id=%s, classification=%s, "
-                        "position_ids=%s, order_ids=%s, trade_ids=%s, "
-                        "broker_order_ids=%s, oanda_trade_ids=%s",
-                        self.task.pk,
-                        trading_event.pk,
-                        replay_classification,
-                        list(execution_result.position_ids),
-                        list(execution_result.order_ids),
-                        list(execution_result.trade_ids),
-                        list(execution_result.broker_order_ids),
-                        list(execution_result.oanda_trade_ids),
-                    )
-
-                # Trading resume requires state durability at event granularity.
-                if self.task_type == TaskType.TRADING:
-                    self.save_state(state)
-            except OrderServiceError as e:
-                logger.error(
-                    "Order execution failed for trading event %s: %s",
-                    trading_event.pk,
-                    e,
-                    exc_info=True,
-                )
-                self._mark_event_processing_error(trading_event, str(e))
-            except CycleResolutionError as e:
-                # Unrecoverable state corruption — record the error on the
-                # event and let the exception propagate to stop the task.
-                self._mark_event_processing_error(trading_event, str(e))
-                raise
-
-        self._refresh_open_positions_cache()
-
-        logger.debug(
-            "Processed %s events for trading task %s (open positions: %s)",
-            len(events),
-            self.task.pk,
-            len(self.event_handler.get_open_positions()),
-        )
+        self.event_processor.process(state, events, replaying=replaying)
 
     def load_state(self) -> ExecutionState:
         """Load execution state from ExecutionState model.

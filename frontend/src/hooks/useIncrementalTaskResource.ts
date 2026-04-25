@@ -27,6 +27,17 @@ interface UseIncrementalTaskResourceOptions<TApiItem, TItem> {
   getLatestCursor: (items: TItem[]) => string | null;
   getItemId: (item: TItem) => string | number;
   mapResults?: (results: TApiItem[]) => TItem[];
+  canUseIncrementalPolling?: boolean;
+  shouldRefetchIncremental?: (args: {
+    serverCount: number | undefined;
+    currentItems: TItem[];
+    incoming: TItem[];
+  }) => boolean;
+  mergeIncremental?: (args: {
+    currentItems: TItem[];
+    incoming: TItem[];
+    serverCount: number | undefined;
+  }) => TItem[];
 }
 
 interface UseIncrementalTaskResourceResult<TItem> {
@@ -56,6 +67,9 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
   getLatestCursor,
   getItemId,
   mapResults,
+  canUseIncrementalPolling = true,
+  shouldRefetchIncremental,
+  mergeIncremental,
 }: UseIncrementalTaskResourceOptions<
   TApiItem,
   TItem
@@ -75,6 +89,13 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
   const getLatestCursorRef = useRef(getLatestCursor);
   const getItemIdRef = useRef(getItemId);
   const mapResultsRef = useRef(mapResults);
+  const shouldRefetchIncrementalRef = useRef(shouldRefetchIncremental);
+  const mergeIncrementalRef = useRef(mergeIncremental);
+  const itemsRef = useRef(items);
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   useEffect(() => {
     buildParamsRef.current = buildParams;
@@ -92,6 +113,14 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
     mapResultsRef.current = mapResults;
   }, [mapResults]);
 
+  useEffect(() => {
+    shouldRefetchIncrementalRef.current = shouldRefetchIncremental;
+  }, [shouldRefetchIncremental]);
+
+  useEffect(() => {
+    mergeIncrementalRef.current = mergeIncremental;
+  }, [mergeIncremental]);
+
   if (paramsKey !== prevParamsKeyRef.current) {
     prevParamsKeyRef.current = paramsKey;
     sinceRef.current = null;
@@ -100,6 +129,7 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
 
   const fetchItems = useCallback(
     async (incremental = false) => {
+      const activeParamsKey = paramsKey;
       if (!taskId) {
         setItems([]);
         setTotalCount(0);
@@ -121,6 +151,10 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
       const requestId = ++latestRequestRef.current;
 
       try {
+        if (activeParamsKey !== prevParamsKeyRef.current) {
+          sinceRef.current = null;
+          hasInitialFetchRef.current = false;
+        }
         if (!incremental) {
           setIsLoading(true);
         }
@@ -129,7 +163,9 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
         const params = buildParamsRef.current();
         params.page = String(page);
         params.page_size = String(pageSize);
-        const effectiveSince = since ?? (incremental ? sinceRef.current : null);
+        const effectiveIncremental = incremental && canUseIncrementalPolling;
+        const effectiveSince =
+          since ?? (effectiveIncremental ? sinceRef.current : null);
         if (effectiveSince) {
           params.since = effectiveSince;
         }
@@ -148,8 +184,32 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
           ? mapResultsRef.current(data.results)
           : (data.results as unknown as TItem[]);
 
-        if (incremental && incoming.length > 0) {
+        if (
+          effectiveIncremental &&
+          shouldRefetchIncrementalRef.current?.({
+            serverCount: data.count,
+            currentItems: itemsRef.current,
+            incoming,
+          })
+        ) {
+          sinceRef.current = null;
+          hasInitialFetchRef.current = false;
+          setTimeout(() => {
+            void fetchItems(false);
+          }, 0);
+          return false;
+        }
+
+        if (effectiveIncremental && incoming.length > 0) {
           setItems((prev) => {
+            if (mergeIncrementalRef.current) {
+              return mergeIncrementalRef.current({
+                currentItems: prev,
+                incoming,
+                serverCount: data.count,
+              });
+            }
+
             const merged = new Map(
               prev.map((item) => [getItemIdRef.current(item), item])
             );
@@ -159,7 +219,7 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
             return Array.from(merged.values());
           });
           setTotalCount((prev) => data.count ?? prev);
-        } else if (!incremental) {
+        } else if (!effectiveIncremental) {
           setItems(incoming);
           setTotalCount(data.count ?? 0);
           setHasNext(Boolean(data.next));
@@ -207,22 +267,14 @@ export function useIncrementalTaskResource<TApiItem, TItem = TApiItem>({
       taskId,
       taskType,
       enabled,
+      canUseIncrementalPolling,
+      paramsKey,
     ]
   );
 
   useEffect(() => {
     void fetchItems(false);
   }, [fetchItems]);
-
-  // Re-fetch when paramsKey changes (e.g. cycleId filter applied).
-  // fetchItems itself may not change because buildParams is accessed
-  // via a ref, so we need a separate effect keyed on paramsKey.
-  useEffect(() => {
-    if (hasInitialFetchRef.current === false) {
-      void fetchItems(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paramsKey]);
 
   const pollingPolicy = usePollingPolicy({
     enabled: enableRealTimeUpdates,

@@ -26,6 +26,7 @@ from apps.market.enums import MarketEventSeverity, MarketEventType
 from apps.market.models import OandaAccounts, TickData
 from apps.market.services.compliance import ComplianceService, ComplianceViolationError
 from apps.market.services.events import MarketEventService
+from apps.market.services.oanda_transport import OandaOrderTransport
 
 logger: Logger = getLogger(name=__name__)
 
@@ -1457,65 +1458,19 @@ class OandaService:
     def _execute_with_retry(self, order_data: dict[str, Any]) -> Any:
         assert self.api is not None, "API client not initialized"
         assert self.account is not None, "Account not initialized"
-
-        last_error: str | None = None
-
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                response = self.api.order.create(self.account.account_id, order=order_data)
-
-                if response.status in (200, 201):
-                    return response
-
-                error_details = ""
-                if hasattr(response, "body") and response.body:
-                    error_details = f" - {response.body}"
-                elif hasattr(response, "raw_body"):
-                    error_details = f" - {response.raw_body}"
-
-                logger.warning(
-                    "Order submission attempt %s failed: status %s%s",
-                    attempt,
-                    response.status,
-                    error_details,
-                )
-                last_error = f"API returned status {response.status}{error_details}"
-
-                retryable_status = response.status == 429 or 500 <= int(response.status) <= 599
-                if not retryable_status:
-                    break
-
-            except Exception as exc:  # pylint: disable=broad-exception-caught
-                logger.warning("Order submission attempt %s failed: %s", attempt, exc)
-                last_error = str(exc)
-                retryable_exception = isinstance(exc, (ConnectionError, TimeoutError, OSError))
-                if not retryable_exception:
-                    break
-
-            if attempt < self.max_retries:
-                base_delay = min(self.retry_delay * (2 ** (attempt - 1)), self.max_retry_delay)
-                # Use secure random jitter to satisfy security scanning policy.
-                jitter = (secrets.randbelow(10_000) / 10_000) * (base_delay * 0.2)
-                time.sleep(base_delay + jitter)
-
-        error_msg = f"Order submission failed after {self.max_retries} attempts: {last_error}"
-        logger.error("Order submission failed after %s attempts: %s", self.max_retries, last_error)
-
-        self.event_service.log_trading_event(
-            event_type=MarketEventType.ORDER_FAILED,
-            description=f"Order submission failed after {self.max_retries} attempts",
-            severity=MarketEventSeverity.ERROR,
-            user=self.account.user,
+        transport = OandaOrderTransport(
+            api=self.api,
             account=self.account,
-            instrument=str(order_data.get("instrument") or "") or None,
-            details={
-                "order_data": order_data,
-                "error": last_error,
-                "attempts": self.max_retries,
-            },
+            event_service=self.event_service,
+            logger=logger,
+            max_retries=self.max_retries,
+            retry_delay=self.retry_delay,
+            max_retry_delay=self.max_retry_delay,
+            error_class=OandaAPIError,
+            sleep_func=time.sleep,
+            randbelow_func=secrets.randbelow,
         )
-
-        raise OandaAPIError(error_msg)
+        return transport.execute_order(order_data)
 
     def _format_position(
         self, instrument: str, direction: OrderDirection, pos_data: dict[str, Any]
