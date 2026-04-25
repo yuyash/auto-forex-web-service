@@ -102,6 +102,7 @@ def action_policy_for_task(task: Any, *, task_type: str) -> TaskActionPolicy:
             TaskStatus.STOPPED,
             TaskStatus.COMPLETED,
             TaskStatus.FAILED,
+            *(() if is_trading else (TaskStatus.PAUSED,)),
         },
         restart_required_for_execution_edits=status in TERMINAL_STATUSES,
     )
