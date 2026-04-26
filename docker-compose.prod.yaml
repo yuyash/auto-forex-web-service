@@ -81,6 +81,9 @@ services:
       # Secrets only - all other config comes from environment variables
       DB_PASSWORD: ${DB_PASSWORD:?Database password required}
       DB_APPLICATION_NAME: auto-forex-backend
+      # ASGI request handlers can otherwise retain many idle DB connections
+      # across long-lived streams and browser reconnects.
+      DB_CONN_MAX_AGE: ${DB_CONN_MAX_AGE:-0}
       SECRET_KEY: ${SECRET_KEY:?Django secret key required}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT secret key required}
       OANDA_TOKEN_ENCRYPTION_KEY: ${OANDA_TOKEN_ENCRYPTION_KEY:?OANDA token encryption key required}

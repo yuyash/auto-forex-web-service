@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import InvalidOperation
 from decimal import Decimal
 from logging import Logger, getLogger
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, List, cast
 
 from django.utils import timezone as dj_timezone
@@ -717,8 +718,24 @@ class TaskExecutor:
             self.task.pk,
         )
         for position in open_positions:
+            closed_units = abs(position.units)
+            override_price = None
+            tick_timestamp = None
+            if self.task_type == TaskType.BACKTEST:
+                tick_timestamp = loop.state.last_tick_timestamp
+                if position.direction == "long":
+                    override_price = loop.state.last_tick_bid
+                else:
+                    override_price = loop.state.last_tick_ask
+
             try:
-                self.order_service.close_position(position=position)
+                closed_position, realized_delta, _order = self.order_service.close_position(
+                    position=position,
+                    override_price=(
+                        Decimal(str(override_price)) if override_price is not None else None
+                    ),
+                    tick_timestamp=tick_timestamp,
+                )
             except OrderServiceError as exc:
                 logger.warning(
                     "sell_on_stop close failed - task_id=%s, position_id=%s, error=%s",
@@ -726,7 +743,42 @@ class TaskExecutor:
                     getattr(position, "pk", None),
                     exc,
                 )
+                continue
+
+            loop.state.current_balance = Decimal(str(loop.state.current_balance)) + realized_delta
+
+            exit_px = closed_position.exit_price or (
+                Decimal(str(override_price)) if override_price is not None else Decimal("0")
+            )
+            quote_delta = exit_px - Decimal(str(position.entry_price))
+            if position.direction == "short":
+                quote_delta = -quote_delta
+            self._runtime_metrics.record_position_closed(
+                realized_delta,
+                realized_pnl_quote=quote_delta * Decimal(str(closed_units)),
+            )
+
         self._refresh_open_positions_cache()
+        self._record_final_stop_metrics(loop)
+
+    def _record_final_stop_metrics(self, loop: ExecutionLoopState) -> None:
+        """Refresh the final metrics snapshot after stop-time position closes."""
+        if (
+            loop.state.last_tick_timestamp is None
+            or loop.state.last_tick_bid is None
+            or loop.state.last_tick_ask is None
+            or loop.state.last_tick_price is None
+        ):
+            return
+
+        tick = SimpleNamespace(
+            timestamp=loop.state.last_tick_timestamp,
+            bid=loop.state.last_tick_bid,
+            ask=loop.state.last_tick_ask,
+            mid=loop.state.last_tick_price,
+        )
+        self._update_common_metrics(loop.state, tick)
+        self._buffer_tick_metrics(loop.state, tick)
 
     def _record_drain_marker(self, loop: ExecutionLoopState, started_at: datetime | None) -> None:
         strategy_state = (
@@ -990,21 +1042,13 @@ class TaskExecutor:
                 result.stop_reason,
                 loop.state.ticks_processed,
             )
+            self._record_processed_tick(loop, tick)
             loop.stopped_early = True
             loop.stop_reason = result.stop_reason
             loop.is_error = result.is_error
             return True
 
-        tick_timestamp = self._coerce_tick_timestamp(tick.timestamp)
-        loop.state.ticks_processed += 1
-        loop.state.last_tick_timestamp = tick_timestamp
-        loop.state.resume_cursor_timestamp = tick_timestamp
-        loop.state.last_tick_price = tick.mid
-        loop.state.last_tick_bid = tick.bid
-        loop.state.last_tick_ask = tick.ask
-        loop.last_delivered_tick_timestamp = tick_timestamp
-        self._update_common_metrics(loop.state, tick)
-        self._buffer_tick_metrics(loop.state, tick)
+        self._record_processed_tick(loop, tick)
         return False
 
     @staticmethod
@@ -1440,6 +1484,19 @@ class TaskExecutor:
         if not metrics:
             return
         self._metrics_aggregator.record(self._coerce_tick_timestamp(tick.timestamp), metrics)
+
+    def _record_processed_tick(self, loop: ExecutionLoopState, tick) -> None:
+        """Persist tick progress and metrics after strategy processing."""
+        tick_timestamp = self._coerce_tick_timestamp(tick.timestamp)
+        loop.state.ticks_processed += 1
+        loop.state.last_tick_timestamp = tick_timestamp
+        loop.state.resume_cursor_timestamp = tick_timestamp
+        loop.state.last_tick_price = tick.mid
+        loop.state.last_tick_bid = tick.bid
+        loop.state.last_tick_ask = tick.ask
+        loop.last_delivered_tick_timestamp = tick_timestamp
+        self._update_common_metrics(loop.state, tick)
+        self._buffer_tick_metrics(loop.state, tick)
 
     def _persist_batch_progress(self, loop: ExecutionLoopState) -> None:
         """Persist state/metrics and emit periodic telemetry."""

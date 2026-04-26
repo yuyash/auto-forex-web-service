@@ -1054,6 +1054,61 @@ class TestCommonRuntimeMetrics:
         assert "current_atr" in metrics
 
     @patch("apps.trading.tasks.executor.EventHandler")
+    def test_process_single_tick_records_stop_tick_metrics(self, mock_handler):
+        from apps.trading.dataclasses.result import StrategyResult
+        from apps.trading.models import BacktestTask
+        from apps.trading.tasks.executor import ExecutionLoopState, TaskExecutor
+
+        task = MagicMock(spec=BacktestTask)
+        task.pk = uuid4()
+        task.instrument = "USD_JPY"
+        task.pip_size = Decimal("0.01")
+        task.initial_balance = Decimal("100000")
+        task.account_currency = "JPY"
+        task.config.config_dict = {}
+        task.execution_id = uuid4()
+
+        engine = MagicMock()
+        executor = TaskExecutor(
+            task=task,
+            engine=engine,
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=MagicMock(),
+            state_manager=MagicMock(),
+        )
+
+        state = MagicMock()
+        state.ticks_processed = 41
+        state.current_balance = Decimal("100000")
+        state.strategy_state = {}
+
+        tick = SimpleNamespace(
+            timestamp=datetime(2022, 8, 23, 13, 49, tzinfo=UTC),
+            mid=Decimal("136.9025"),
+            bid=Decimal("136.899"),
+            ask=Decimal("136.906"),
+        )
+        engine.on_tick.return_value = StrategyResult(
+            state=state,
+            should_stop=True,
+            stop_reason="Emergency stop",
+            is_error=True,
+        )
+
+        with patch.object(executor, "save_events", return_value=[]):
+            loop = ExecutionLoopState(state=state)
+            should_stop = executor._process_single_tick(loop, tick)
+
+        assert should_stop is True
+        assert state.ticks_processed == 42
+        assert state.last_tick_timestamp == tick.timestamp
+        assert state.last_tick_bid == tick.bid
+        assert state.last_tick_ask == tick.ask
+        assert state.last_tick_price == tick.mid
+        assert state.strategy_state["metrics"]["ticks_processed"] == "42"
+
+    @patch("apps.trading.tasks.executor.EventHandler")
     def test_restore_metric_counters_prefers_persisted_metrics(self, mock_handler):
         from apps.trading.models import BacktestTask
         from apps.trading.tasks.executor import TaskExecutor
@@ -1210,6 +1265,90 @@ class TestHandleEmptyBatch:
         should_stop = executor._handle_empty_batch(loop)
 
         assert should_stop is True
+
+
+class TestSellOnStop:
+    """Tests for sell-on-stop finalisation behavior."""
+
+    @patch("apps.trading.tasks.executor.EventHandler")
+    def test_backtest_sell_on_stop_uses_last_tick_prices_and_updates_balance(self, mock_handler):
+        from apps.trading.models import BacktestTask
+        from apps.trading.tasks.executor import ExecutionLoopState, TaskExecutor
+
+        task = MagicMock(spec=BacktestTask)
+        task.pk = uuid4()
+        task.instrument = "USD_JPY"
+        task.pip_size = Decimal("0.01")
+        task.initial_balance = Decimal("10000")
+        task.account_currency = "USD"
+        task.config.config_dict = {}
+        task.execution_id = uuid4()
+        task.sell_on_stop = True
+
+        long_position = SimpleNamespace(
+            id=uuid4(),
+            direction="long",
+            units=1000,
+            entry_price=Decimal("135.000"),
+        )
+        short_position = SimpleNamespace(
+            id=uuid4(),
+            direction="short",
+            units=2000,
+            entry_price=Decimal("138.000"),
+        )
+        closed_long = SimpleNamespace(exit_price=Decimal("136.899"))
+        closed_short = SimpleNamespace(exit_price=Decimal("136.906"))
+
+        order_service = MagicMock()
+        order_service.get_open_positions.side_effect = [[long_position, short_position], []]
+        order_service.close_position.side_effect = [
+            (closed_long, Decimal("13.87"), MagicMock()),
+            (closed_short, Decimal("15.98"), MagicMock()),
+        ]
+
+        executor = TaskExecutor(
+            task=task,
+            engine=MagicMock(),
+            data_source=MagicMock(),
+            event_context=MagicMock(),
+            order_service=order_service,
+            state_manager=MagicMock(),
+        )
+        executor._runtime_metrics = MagicMock()
+        executor._record_final_stop_metrics = MagicMock()
+
+        state = SimpleNamespace(
+            current_balance=Decimal("10000"),
+            last_tick_timestamp=datetime(2022, 8, 23, 13, 48, tzinfo=UTC),
+            last_tick_bid=Decimal("136.899"),
+            last_tick_ask=Decimal("136.906"),
+            last_tick_price=Decimal("136.9025"),
+        )
+        loop = ExecutionLoopState(state=state)
+
+        executor._close_all_positions_on_stop_if_requested(loop)
+
+        assert order_service.close_position.call_args_list[0].kwargs == {
+            "position": long_position,
+            "override_price": Decimal("136.899"),
+            "tick_timestamp": state.last_tick_timestamp,
+        }
+        assert order_service.close_position.call_args_list[1].kwargs == {
+            "position": short_position,
+            "override_price": Decimal("136.906"),
+            "tick_timestamp": state.last_tick_timestamp,
+        }
+        assert loop.state.current_balance == Decimal("10029.85")
+        executor._runtime_metrics.record_position_closed.assert_any_call(
+            Decimal("13.87"),
+            realized_pnl_quote=Decimal("1899.000"),
+        )
+        executor._runtime_metrics.record_position_closed.assert_any_call(
+            Decimal("15.98"),
+            realized_pnl_quote=Decimal("2188.000"),
+        )
+        executor._record_final_stop_metrics.assert_called_once_with(loop)
 
 
 class TestSuspiciousTickGapDetection:

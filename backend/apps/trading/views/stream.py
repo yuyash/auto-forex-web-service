@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-import time
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 from typing import Any
 from uuid import UUID
 
+from asgiref.sync import sync_to_async
+from django.db import connections
 from django.http import Http404, StreamingHttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
@@ -17,10 +19,12 @@ from rest_framework.renderers import BaseRenderer
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
-from apps.trading.enums import TaskType
+from apps.trading.enums import TaskStatus, TaskType
 from apps.trading.models import BacktestTask, TradingTask
 
 logger = logging.getLogger(__name__)
+
+TERMINAL_STATUSES = {TaskStatus.STOPPED, TaskStatus.COMPLETED, TaskStatus.FAILED}
 
 
 def _sse(event: str, data: dict[str, Any]) -> str:
@@ -60,16 +64,20 @@ class TaskEventStreamView(APIView):
     def get(self, request: Request, task_type: str, task_id: UUID) -> StreamingHttpResponse:
         task_type = self._normalize_task_type(task_type)
         task_model = self._task_model(task_type)
-        task = task_model.objects.filter(pk=task_id, user=request.user.pk).first()
-        if task is None:
+        user_id = request.user.pk
+        try:
+            exists = task_model.objects.filter(pk=task_id, user=user_id).exists()
+        finally:
+            connections.close_all()
+        if not exists:
             raise Http404("Task not found")
 
         response = StreamingHttpResponse(
             self._event_stream(
-                request,
                 task_type=task_type,
                 task_model=task_model,
                 task_id=task_id,
+                user_id=user_id,
             ),
             content_type="text/event-stream",
         )
@@ -78,27 +86,28 @@ class TaskEventStreamView(APIView):
         response["X-Content-Type-Options"] = "nosniff"
         return response
 
-    def _event_stream(
+    async def _event_stream(
         self,
-        request: Request,
         *,
         task_type: str,
         task_model: type[BacktestTask] | type[TradingTask],
         task_id: UUID,
-    ) -> Iterator[str]:
+        user_id: int,
+    ) -> AsyncIterator[str]:
         last_payload: dict[str, Any] | None = None
 
         try:
             while True:
-                if getattr(request, "_streaming_aborted", False):
-                    return
-
-                task = task_model.objects.filter(pk=task_id, user=request.user.pk).first()
-                if task is None:
+                payload = await self._fetch_snapshot(
+                    task_model=task_model,
+                    task_id=task_id,
+                    user_id=user_id,
+                    task_type=task_type,
+                )
+                if payload is None:
                     yield _sse("deleted", {"id": str(task_id), "task_type": task_type})
                     return
 
-                payload = self._snapshot(task, task_type)
                 if payload != last_payload:
                     yield _sse("snapshot", payload)
                     last_payload = payload
@@ -112,10 +121,60 @@ class TaskEventStreamView(APIView):
                         },
                     )
 
-                time.sleep(self.poll_interval_seconds)
+                if payload["status"] in TERMINAL_STATUSES:
+                    return
+
+                await asyncio.sleep(self.poll_interval_seconds)
+        except asyncio.CancelledError:
+            raise
         except Exception:
             logger.exception("Task event stream aborted")
             return
+
+    @classmethod
+    async def _fetch_snapshot(
+        cls,
+        *,
+        task_model: type[BacktestTask] | type[TradingTask],
+        task_id: UUID,
+        user_id: int,
+        task_type: str,
+    ) -> dict[str, Any] | None:
+        return await sync_to_async(cls._fetch_snapshot_sync, thread_sensitive=False)(
+            task_model=task_model,
+            task_id=task_id,
+            user_id=user_id,
+            task_type=task_type,
+        )
+
+    @staticmethod
+    def _fetch_snapshot_sync(
+        *,
+        task_model: type[BacktestTask] | type[TradingTask],
+        task_id: UUID,
+        user_id: int,
+        task_type: str,
+    ) -> dict[str, Any] | None:
+        try:
+            task = (
+                task_model.objects.only(
+                    "id",
+                    "status",
+                    "progress",
+                    "execution_id",
+                    "started_at",
+                    "completed_at",
+                    "error_message",
+                    "updated_at",
+                )
+                .filter(pk=task_id, user=user_id)
+                .first()
+            )
+            if task is None:
+                return None
+            return TaskEventStreamView._snapshot(task, task_type)
+        finally:
+            connections.close_all()
 
     @staticmethod
     def _snapshot(task: BacktestTask | TradingTask, task_type: str) -> dict[str, Any]:
