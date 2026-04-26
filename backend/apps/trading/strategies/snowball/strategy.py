@@ -607,14 +607,6 @@ class SnowballStrategy(Strategy):
     ) -> list[tuple[int, int, Decimal, Decimal]]:
         """Extend preceding pending_rebuild TPs to stay monotonic with ``new_tp``.
 
-        When a rebuild has absorbed an inflated ``rebuild_price_offset``
-        (typically caused by a stop-loss that filled far past the
-        intended SL price — common with aggregated-bar data), its new
-        TP can end up extended past the TPs of earlier pending_rebuild
-        slots that still hold their original snapshots.  Left alone,
-        that flips the grid ordering and trips
-        :meth:`_validate_grid_ordering`.
-
         This routine walks all preceding pending_rebuild slots (earlier
         layers plus earlier indices in the same layer) and, for each
         whose snapshot TP would violate monotonicity against ``new_tp``,
@@ -1873,12 +1865,9 @@ class SnowballStrategy(Strategy):
             # can continue the chain.
             entry.lifecycle_stop_loss_count += 1
 
-            # Accumulate the deterministic price-unit drift between the
-            # original entry price and this SL exit price so the rebuild
-            # can tighten its TP by the same amount.  We always record
-            # this drift; whether the rebuild actually uses it to shift
-            # the TP is controlled by ``rebuild_price_adjustment_enabled``
-            # at rebuild time.
+            # Keep the historical offset field populated for old state
+            # snapshots and diagnostics. Rebuild TP calculation no longer
+            # uses it; rebuilt positions inherit their original TP.
             sl_price_drift = abs(exit_price - entry.entry_price)
             rebuild_price_offset = entry.rebuild_price_offset + sl_price_drift
             entry.rebuild_price_offset = rebuild_price_offset
@@ -1952,7 +1941,7 @@ class SnowballStrategy(Strategy):
                     continue
 
                 # Determine the rebuild trigger price: original entry
-                # optionally tightened in the favourable direction by
+                # optionally shifted in the favourable direction by
                 # ``rebuild_entry_price_buffer_pips`` when the adjustment
                 # feature is enabled.
                 if apply_adjustment and entry_buffer_price > 0:
@@ -2008,105 +1997,84 @@ class SnowballStrategy(Strategy):
                 if not hit:
                     continue
 
-                # Compute the rebuild's take-profit so the slot's
-                # lifecycle P/L can be fully recovered on TP.  Conceptually:
-                #
-                # The rebuild's profit on close (per unit) equals
-                # ``|entry - new_close_price|`` (in quote-currency price
-                # units).  The realised SL loss per unit accumulated on
-                # this slot equals ``rebuild_price_offset`` (sum of
-                # ``|sl_exit - entry|`` across all prior stop-losses).
-                #
-                # To keep the original TP whenever it already covers the
-                # loss, and to extend it only when it doesn't, we use the
-                # larger of the two distances.  The exit buffer is then
-                # added on top in the favourable direction.  If the
-                # feature is disabled, we fall back to the original TP.
-                if apply_adjustment:
-                    original_profit_distance = abs(pending.close_price - pending.entry_price)
-                    required_profit_distance = (
-                        max(original_profit_distance, pending.rebuild_price_offset)
-                        + exit_buffer_price
-                    )
+                # Rebuilt positions inherit the original planned TP. The
+                # only allowed TP movement is the explicit rebuild exit
+                # buffer and any clamping/propagation needed to preserve
+                # grid ordering.
+                adjusted_close_price = pending.close_price
+                if apply_adjustment and exit_buffer_price > 0:
                     if pending.direction == Direction.LONG:
-                        adjusted_close_price = pending.entry_price + required_profit_distance
+                        adjusted_close_price += exit_buffer_price
                     else:
-                        adjusted_close_price = pending.entry_price - required_profit_distance
+                        adjusted_close_price -= exit_buffer_price
 
-                    # Preserve the monotonic grid ordering that
-                    # ``_validate_grid_ordering`` enforces.  The grid is
-                    # traversed layer-by-layer (L1, L2, …) and then
-                    # slot-by-slot within each layer, so the rebuilt
-                    # slot must respect every present slot in all
-                    # earlier layers as well as earlier slots in the
-                    # same layer.
-                    #
-                    # We distinguish two classes of predecessor bound:
-                    #
-                    # - **hard** — bounds from ``occupied`` slots.
-                    #   Their TP is already live on an open position
-                    #   and cannot be changed, so the rebuild TP is
-                    #   clamped against them.  Loss recovery beyond
-                    #   the hard bound is sacrificed; stability wins.
-                    #
-                    # - **soft** — bounds from ``pending_rebuild``
-                    #   slots.  Their TP is a snapshot that will be
-                    #   re-materialised when the slot itself rebuilds,
-                    #   so we can push those snapshot TPs outward to
-                    #   match the current rebuild and avoid clamping.
-                    #   This keeps as much of the loss-recovery budget
-                    #   as the hard bound allows.
-                    hard_bound, _soft_bound = self._grid_tp_bounds(cycle, layer, slot.index)
-                    if hard_bound is not None:
-                        if pending.direction == Direction.LONG:
-                            if adjusted_close_price > hard_bound:
-                                logger.info(
-                                    "Rebuild TP clamped to upper neighbor: "
-                                    "L%d/R%d, pending_tp=%.5f, computed_adj=%.5f, clamped_to=%.5f",
-                                    pending.layer_number,
-                                    pending.retracement_count,
-                                    pending.close_price,
-                                    adjusted_close_price,
-                                    hard_bound,
-                                )
-                                adjusted_close_price = hard_bound
-                        else:
-                            if adjusted_close_price < hard_bound:
-                                logger.info(
-                                    "Rebuild TP clamped to upper neighbor: "
-                                    "L%d/R%d, pending_tp=%.5f, computed_adj=%.5f, clamped_to=%.5f",
-                                    pending.layer_number,
-                                    pending.retracement_count,
-                                    pending.close_price,
-                                    adjusted_close_price,
-                                    hard_bound,
-                                )
-                                adjusted_close_price = hard_bound
+                # Preserve the monotonic grid ordering that
+                # ``_validate_grid_ordering`` enforces.  The grid is
+                # traversed layer-by-layer (L1, L2, …) and then
+                # slot-by-slot within each layer, so the rebuilt slot
+                # must respect every present slot in all earlier layers
+                # as well as earlier slots in the same layer.
+                #
+                # We distinguish two classes of predecessor bound:
+                #
+                # - **hard** — bounds from ``occupied`` slots. Their TP
+                #   is already live on an open position and cannot be
+                #   changed, so the rebuild TP is clamped against them.
+                #
+                # - **soft** — bounds from ``pending_rebuild`` slots.
+                #   Their TP is a snapshot that will be re-materialised
+                #   when the slot itself rebuilds, so we can push those
+                #   snapshot TPs outward to match the current rebuild
+                #   and avoid clamping.
+                hard_bound, _soft_bound = self._grid_tp_bounds(cycle, layer, slot.index)
+                if hard_bound is not None:
+                    if pending.direction == Direction.LONG:
+                        if adjusted_close_price > hard_bound:
+                            logger.info(
+                                "Rebuild TP clamped to upper neighbor: "
+                                "L%d/R%d, pending_tp=%.5f, computed_adj=%.5f, clamped_to=%.5f",
+                                pending.layer_number,
+                                pending.retracement_count,
+                                pending.close_price,
+                                adjusted_close_price,
+                                hard_bound,
+                            )
+                            adjusted_close_price = hard_bound
+                    else:
+                        if adjusted_close_price < hard_bound:
+                            logger.info(
+                                "Rebuild TP clamped to upper neighbor: "
+                                "L%d/R%d, pending_tp=%.5f, computed_adj=%.5f, clamped_to=%.5f",
+                                pending.layer_number,
+                                pending.retracement_count,
+                                pending.close_price,
+                                adjusted_close_price,
+                                hard_bound,
+                            )
+                            adjusted_close_price = hard_bound
 
-                    # Now that ``adjusted_close_price`` respects the hard
-                    # bound, extend any earlier pending_rebuild snapshot
-                    # TPs that would otherwise violate monotonicity
-                    # against it.  Those slots will be rebuilt later and
-                    # can absorb the extension without affecting any
-                    # live position.
-                    propagated = self._propagate_pending_rebuild_tp(
-                        cycle, layer, slot.index, adjusted_close_price
+                # Now that ``adjusted_close_price`` respects hard
+                # occupied-position bounds, extend any earlier
+                # pending_rebuild snapshot TPs that would otherwise
+                # violate monotonicity against it. Those slots will be
+                # rebuilt later and can absorb the adjustment without
+                # affecting any live position.
+                propagated = self._propagate_pending_rebuild_tp(
+                    cycle, layer, slot.index, adjusted_close_price
+                )
+                for lno, sidx, old_tp, new_tp in propagated:
+                    logger.info(
+                        "Pending-rebuild TP extended to preserve ordering: "
+                        "L%d/R%d, old_tp=%.5f, new_tp=%.5f "
+                        "(triggered by L%d/R%d rebuild @ TP=%.5f)",
+                        lno,
+                        sidx,
+                        old_tp,
+                        new_tp,
+                        pending.layer_number,
+                        pending.retracement_count,
+                        adjusted_close_price,
                     )
-                    for lno, sidx, old_tp, new_tp in propagated:
-                        logger.info(
-                            "Pending-rebuild TP extended to preserve ordering: "
-                            "L%d/R%d, old_tp=%.5f, new_tp=%.5f "
-                            "(triggered by L%d/R%d rebuild @ TP=%.5f)",
-                            lno,
-                            sidx,
-                            old_tp,
-                            new_tp,
-                            pending.layer_number,
-                            pending.retracement_count,
-                            adjusted_close_price,
-                        )
-                else:
-                    adjusted_close_price = pending.close_price
 
                 # Rebuild the position with the adjusted parameters
                 entry = Entry.open(
@@ -2129,10 +2097,10 @@ class SnowballStrategy(Strategy):
                 entry.validation_status = "pass"
                 entry.is_rebuild = True
 
-                # Carry forward the slot's running lifecycle P/L, SL
-                # count and accumulated price offset so any future
-                # stop-loss → rebuild chain on this slot can keep
-                # compounding the TP tightening.
+                # Carry forward the slot's running lifecycle P/L and SL
+                # count. ``rebuild_price_offset`` is retained only for
+                # backwards-compatible state serialisation/diagnostics;
+                # rebuild TP calculation inherits the original TP.
                 entry.lifecycle_realized_pnl = pending.lifecycle_realized_pnl
                 entry.lifecycle_stop_loss_count = pending.lifecycle_stop_loss_count
                 entry.rebuild_price_offset = pending.rebuild_price_offset
@@ -2142,8 +2110,8 @@ class SnowballStrategy(Strategy):
                 slot.complete_rebuild(entry)
 
                 adjustment_note = ""
-                if apply_adjustment and (
-                    adjusted_close_price != pending.close_price or entry_buffer_price > 0
+                if adjusted_close_price != pending.close_price or (
+                    apply_adjustment and entry_buffer_price > 0
                 ):
                     adjustment_note = (
                         f", adj: entry {pending.entry_price:.5f}→{trigger_price:.5f}"

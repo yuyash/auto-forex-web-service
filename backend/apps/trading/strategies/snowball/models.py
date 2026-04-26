@@ -136,19 +136,16 @@ class SnowballStrategyConfig:
     reseed_on_grid_exhausted: bool
 
     # Rebuild price adjustment: when a stop-loss fires and the position
-    # is later rebuilt, the realised SL loss is the deterministic gap
-    # between the original entry price and the SL exit price (including
-    # the bid/ask spread).  When ``rebuild_price_adjustment_enabled`` is
-    # true, the rebuild's take-profit is tightened by that deterministic
-    # gap so the rebuild's profit offsets the prior SL loss instead of
-    # leaving the slot's lifecycle P/L negative.  Two optional buffers
-    # (in pips) add extra margin against unavoidable slippage:
+    # is later rebuilt, the rebuilt position inherits the original TP.
+    # When ``rebuild_price_adjustment_enabled`` is true, two optional
+    # buffers (in pips) can shift the rebuild trigger/TP slightly in the
+    # favourable direction while grid-ordering constraints remain
+    # enforced:
     # - ``rebuild_entry_price_buffer_pips``: shifts the rebuild trigger
     #   price in the favourable direction (requires a slightly better
     #   entry than the original).
-    # - ``rebuild_exit_price_buffer_pips``: shifts the rebuild TP in the
-    #   favourable direction on top of the loss offset, closing slightly
-    #   earlier than strictly break-even.
+    # - ``rebuild_exit_price_buffer_pips``: shifts the inherited rebuild
+    #   TP in the favourable direction.
     rebuild_price_adjustment_enabled: bool
     rebuild_entry_price_buffer_pips: Decimal
     rebuild_exit_price_buffer_pips: Decimal
@@ -429,9 +426,9 @@ class Entry:
     lifecycle_realized_pnl: Decimal = field(default_factory=lambda: Decimal("0"))
     lifecycle_stop_loss_count: int = 0
 
-    # Deterministic price-unit offset carried across rebuilds so the next
-    # stop-loss → rebuild chain can continue tightening the TP.  See
-    # ``StopLossClosedEntry.rebuild_price_offset``.
+    # Legacy diagnostic field retained across rebuilds for state
+    # compatibility. Rebuild TP calculation inherits the original TP and
+    # does not use this value.
     rebuild_price_offset: Decimal = field(default_factory=lambda: Decimal("0"))
 
     @classmethod
@@ -787,13 +784,10 @@ class StopLossClosedEntry:
     lifecycle_realized_pnl: Decimal = field(default_factory=lambda: Decimal("0"))
     lifecycle_stop_loss_count: int = 0
 
-    # Deterministic (non-slippage) price drift accumulated by stop-loss
-    # closes on this slot, expressed in quote-currency price units and
-    # always positive.  This is the sum of ``|sl_exit_price -
-    # original_entry_price|`` over every SL in the slot's lifecycle and
-    # is used to tighten the rebuild's take-profit so the rebuild close
-    # offsets the prior SL loss.  Zero when the rebuild adjustment
-    # feature is disabled or no SL has fired yet.
+    # Legacy diagnostic field retained for state compatibility. Older
+    # runs used this to widen rebuild TP after stop-losses; current
+    # rebuilds inherit ``close_price`` and only adjust TP for explicit
+    # buffer/grid-ordering constraints.
     rebuild_price_offset: Decimal = field(default_factory=lambda: Decimal("0"))
 
     def to_dict(self) -> dict[str, Any]:
