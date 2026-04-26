@@ -466,10 +466,10 @@ class RedisStreamTickDataSource(TickDataSource):
         )
 
         # Trigger publisher after the client is ready.  The publisher is
-        # responsible for creating the consumer group via XGROUP CREATE
-        # MKSTREAM, and for clearing any stale stream entries before its
-        # first ``XADD`` (see ``BacktestTickPublisherRunner.run``), so the
-        # subscriber does not need to do any cleanup of its own.  In
+        # responsible for creating a fresh consumer group via XGROUP CREATE
+        # MKSTREAM before its first ``XADD`` (see
+        # ``BacktestTickPublisherRunner.run``), so the subscriber does not
+        # need to do any cleanup of its own.  In
         # Celery eager mode (used by some tests) ``apply_async`` runs
         # synchronously, so run the trigger in a background thread to
         # avoid deadlocking.

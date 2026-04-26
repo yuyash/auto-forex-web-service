@@ -68,13 +68,27 @@ class StrategyCyclesService:
             )
 
         rows = list(qs.values(*value_fields))
+        execution_state = _load_execution_state_snapshot(
+            task_type=task_type,
+            task_id=str(task.pk),
+            execution_id=str(execution_id),
+        )
+        strategy_state = (
+            execution_state.get("strategy_state")
+            if isinstance(execution_state.get("strategy_state"), dict)
+            else None
+        )
+        strategy_type = str(getattr(task.config, "strategy_type", "") or "")
+        strategy_capabilities = _load_strategy_capabilities(strategy_type)
 
         if not rows:
             return {
                 "execution_id": str(execution_id),
+                "visualization": strategy_capabilities.get("visualization", {}),
+                "strategy_state": _public_strategy_state(strategy_type, strategy_state),
                 "cycles": [],
                 "summary": _empty_summary(),
-                "last_tick_timestamp": None,
+                "last_tick_timestamp": _resolve_last_tick_timestamp(execution_state),
             }
 
         # Look up metrics (volatility, margin) at each trade timestamp
@@ -95,18 +109,6 @@ class StrategyCyclesService:
 
         unrealized_pnl_by_position = _load_unrealized_pnl_map(rows)
 
-        execution_state = _load_execution_state_snapshot(
-            task_type=task_type,
-            task_id=str(task.pk),
-            execution_id=str(execution_id),
-        )
-        strategy_state = (
-            execution_state.get("strategy_state")
-            if isinstance(execution_state.get("strategy_state"), dict)
-            else None
-        )
-        strategy_type = str(getattr(task.config, "strategy_type", "") or "")
-        strategy_capabilities = _load_strategy_capabilities(strategy_type)
         cycle_status_map = _load_cycle_statuses(
             strategy_type=strategy_type,
             strategy_state=strategy_state,
@@ -135,6 +137,7 @@ class StrategyCyclesService:
         return {
             "execution_id": str(execution_id),
             "visualization": strategy_capabilities.get("visualization", {}),
+            "strategy_state": _public_strategy_state(strategy_type, strategy_state),
             "cycles": cycles,
             "summary": _build_summary(cycles),
             "last_tick_timestamp": last_tick_ts,
@@ -160,6 +163,29 @@ def _load_execution_state_snapshot(
         .first()
     )
     return row or {}
+
+
+def _public_strategy_state(
+    strategy_type: str,
+    strategy_state: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Expose visualization-safe strategy state for non-grid strategy pages."""
+    if strategy_type != "adaptive_net" or not isinstance(strategy_state, dict):
+        return None
+    allowed_keys = {
+        "current_net_units",
+        "target_net_units",
+        "open_units",
+        "open_direction",
+        "open_position_id",
+        "latest_decision",
+        "metric_signals",
+        "last_price",
+        "last_spread_pips",
+        "last_fill_price",
+        "previous_net_units",
+    }
+    return {key: strategy_state.get(key) for key in allowed_keys if key in strategy_state}
 
 
 def _resolve_last_tick_timestamp(execution_state: dict[str, Any]) -> str | None:

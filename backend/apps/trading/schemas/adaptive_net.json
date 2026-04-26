@@ -1,0 +1,171 @@
+{
+  "display_name": "Adaptive Net Strategy",
+  "type": "object",
+  "description": "US-compatible net-position strategy that combines pluggable metrics into a target net exposure.",
+  "properties": {
+    "base_units": {
+      "type": "integer",
+      "title": "Base Units",
+      "title_ja": "基本ユニット数",
+      "description": "Unit granularity used when rounding target and order quantities.",
+      "description_ja": "目標数量と注文数量を丸める単位。",
+      "default": 1000,
+      "minimum": 1,
+      "group": "Position Sizing",
+      "group_ja": "建玉サイズ"
+    },
+    "max_net_units": {
+      "type": "integer",
+      "title": "Max Net Units",
+      "title_ja": "最大ネットユニット数",
+      "description": "Maximum absolute net exposure for this strategy.",
+      "description_ja": "この戦略が保有できる最大ネット建玉数量。",
+      "default": 10000,
+      "minimum": 1,
+      "group": "Position Sizing",
+      "group_ja": "建玉サイズ"
+    },
+    "min_order_units": {
+      "type": "integer",
+      "title": "Minimum Order Units",
+      "title_ja": "最小注文ユニット数",
+      "description": "Ignore rebalance deltas smaller than this amount.",
+      "description_ja": "この数量未満のリバランス差分は発注しません。",
+      "default": 1000,
+      "minimum": 1,
+      "group": "Position Sizing",
+      "group_ja": "建玉サイズ"
+    },
+    "lookback_ticks": {
+      "type": "integer",
+      "title": "Max Lookback Ticks",
+      "title_ja": "最大参照ティック数",
+      "description": "Maximum number of recent mid prices retained for metric evaluation. The time window is applied first when configured.",
+      "description_ja": "メトリクス評価に保持する直近ミッド価格の最大件数。時間窓が設定されている場合は時間窓を先に適用します。",
+      "default": 500,
+      "minimum": 20,
+      "maximum": 500,
+      "group": "Signal Window",
+      "group_ja": "シグナル期間"
+    },
+    "rebalance_interval_ticks": {
+      "type": "integer",
+      "title": "Rebalance Interval",
+      "title_ja": "リバランス間隔",
+      "description": "Minimum tick interval between net-position decisions.",
+      "description_ja": "ネット建玉判断を行う最小ティック間隔。",
+      "default": 10,
+      "minimum": 1,
+      "maximum": 1000,
+      "group": "Signal Window",
+      "group_ja": "シグナル期間"
+    },
+    "lookback_window_seconds": {
+      "type": "integer",
+      "title": "Lookback Window Seconds",
+      "title_ja": "参照期間（秒）",
+      "description": "Time window of recent prices used for metric evaluation. Set to 0 to rely only on Max Lookback Ticks.",
+      "description_ja": "メトリクス評価に使う直近価格の時間窓。0にすると最大参照ティック数のみを使います。",
+      "default": 900,
+      "minimum": 0,
+      "maximum": 86400,
+      "group": "Signal Window",
+      "group_ja": "シグナル期間"
+    },
+    "rebalance_interval_seconds": {
+      "type": "integer",
+      "title": "Rebalance Interval Seconds",
+      "title_ja": "リバランス間隔（秒）",
+      "description": "Minimum elapsed wall-clock market time between net-position decisions. Set to 0 to rely only on Rebalance Interval ticks.",
+      "description_ja": "ネット建玉判断を行う最小マーケット経過時間。0にするとリバランス間隔のティック数のみを使います。",
+      "default": 60,
+      "minimum": 0,
+      "maximum": 86400,
+      "group": "Signal Window",
+      "group_ja": "シグナル期間"
+    },
+    "trend_weight": {
+      "type": "number",
+      "title": "Trend Momentum Weight",
+      "title_ja": "トレンド・モメンタム重み",
+      "default": 0.25,
+      "minimum": 0,
+      "maximum": 1,
+      "group": "Metric Weights",
+      "group_ja": "メトリクス重み"
+    },
+    "mean_reversion_weight": {
+      "type": "number",
+      "title": "Mean Reversion Weight",
+      "title_ja": "平均回帰重み",
+      "default": 0.2,
+      "minimum": 0,
+      "maximum": 1,
+      "group": "Metric Weights",
+      "group_ja": "メトリクス重み"
+    },
+    "regime_weight": {
+      "type": "number",
+      "title": "Regime Weight",
+      "title_ja": "レジーム重み",
+      "default": 0.2,
+      "minimum": 0,
+      "maximum": 1,
+      "group": "Metric Weights",
+      "group_ja": "メトリクス重み"
+    },
+    "risk_weight": {
+      "type": "number",
+      "title": "Risk Condition Weight",
+      "title_ja": "リスク状態重み",
+      "default": 0.2,
+      "minimum": 0,
+      "maximum": 1,
+      "group": "Metric Weights",
+      "group_ja": "メトリクス重み"
+    },
+    "inventory_weight": {
+      "type": "number",
+      "title": "Inventory Exposure Weight",
+      "title_ja": "保有量リスク重み",
+      "default": 0.15,
+      "minimum": 0,
+      "maximum": 1,
+      "group": "Metric Weights",
+      "group_ja": "メトリクス重み"
+    },
+    "timesfm_weight": {
+      "type": "number",
+      "title": "TimesFM Overlay Weight",
+      "title_ja": "TimesFM補助重み",
+      "description": "Reserved weight for an optional TimesFM forecast metric. It remains neutral until a forecast provider is connected.",
+      "description_ja": "任意のTimesFM予測メトリクス用の重み。予測プロバイダ接続までは中立です。",
+      "default": 0,
+      "minimum": 0,
+      "maximum": 1,
+      "group": "Metric Weights",
+      "group_ja": "メトリクス重み"
+    },
+    "max_spread_pips": {
+      "type": "number",
+      "title": "Max Spread Pips",
+      "title_ja": "最大スプレッドpips",
+      "default": 3,
+      "minimum": 0,
+      "group": "Risk Limits",
+      "group_ja": "リスク制限"
+    },
+    "high_volatility_ratio": {
+      "type": "number",
+      "title": "High Volatility Ratio",
+      "title_ja": "高ボラティリティ倍率",
+      "description": "Current volatility above this multiple of baseline reduces exposure.",
+      "description_ja": "現在ボラティリティが基準のこの倍率を超えると建玉を縮小します。",
+      "default": 1.8,
+      "minimum": 1,
+      "group": "Risk Limits",
+      "group_ja": "リスク制限"
+    }
+  },
+  "additionalProperties": false
+}

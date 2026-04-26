@@ -178,6 +178,116 @@ class TestSnowballOnTickInit:
         assert ss_after_second.next_entry_id >= entry_count
 
 
+class TestSnowballCycleTp:
+    def test_rebuilt_r0_waits_for_adjusted_close_price(self):
+        strategy = _strategy({"m_pips": "15"})
+        state = SnowballStrategyState()
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        layer = Layer.create(1, 3, 1000, 2)
+        rebuilt_r0 = Entry(
+            entry_id=1,
+            step=1,
+            direction=Direction.LONG,
+            entry_price=Decimal("141.774"),
+            close_price=Decimal("143.391"),
+            units=1500,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="initial",
+            layer_number=1,
+            retracement_count=0,
+            is_rebuild=True,
+            lifecycle_realized_pnl=Decimal("-2425.5"),
+            lifecycle_stop_loss_count=2,
+        )
+        layer.slot_at(0).fill(rebuilt_r0)
+        cycle.add_layer(layer)
+        state.cycles.append(cycle)
+
+        tick = _make_tick(datetime(2026, 1, 1, tzinfo=UTC), "141.954", "141.956")
+
+        events = strategy._process_cycle_tp(state, tick, cycle)
+
+        assert events == []
+        assert layer.slot_at(0).entry is rebuilt_r0
+
+    def test_rebuilt_r0_closes_at_adjusted_close_price(self):
+        strategy = _strategy({"m_pips": "15"})
+        state = SnowballStrategyState()
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        layer = Layer.create(1, 3, 1000, 2)
+        rebuilt_r0 = Entry(
+            entry_id=1,
+            step=1,
+            direction=Direction.LONG,
+            entry_price=Decimal("141.774"),
+            close_price=Decimal("143.391"),
+            units=1500,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="initial",
+            layer_number=1,
+            retracement_count=0,
+            is_rebuild=True,
+            lifecycle_realized_pnl=Decimal("-2425.5"),
+            lifecycle_stop_loss_count=2,
+        )
+        layer.slot_at(0).fill(rebuilt_r0)
+        cycle.add_layer(layer)
+        state.cycles.append(cycle)
+
+        tick = _make_tick(datetime(2026, 1, 1, tzinfo=UTC), "143.391", "143.393")
+
+        events = strategy._process_cycle_tp(state, tick, cycle)
+
+        assert len(events) == 2
+        assert events[0].event_type == EventType.CLOSE_POSITION
+        assert events[0].exit_price == Decimal("143.391")
+
+    def test_head_tp_waits_when_counter_target_is_not_hit(self):
+        strategy = _strategy({"m_pips": "15"})
+        state = SnowballStrategyState()
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        layer = Layer.create(1, 3, 1000, 2)
+        rebuilt_r0 = Entry(
+            entry_id=1,
+            step=1,
+            direction=Direction.LONG,
+            entry_price=Decimal("141.774"),
+            close_price=Decimal("143.391"),
+            units=1500,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="initial",
+            layer_number=1,
+            retracement_count=0,
+            is_rebuild=True,
+            lifecycle_realized_pnl=Decimal("-2425.5"),
+            lifecycle_stop_loss_count=2,
+        )
+        counter = Entry(
+            entry_id=2,
+            step=2,
+            direction=Direction.LONG,
+            entry_price=Decimal("141.500"),
+            close_price=Decimal("143.500"),
+            units=3000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="counter",
+            layer_number=1,
+            retracement_count=1,
+        )
+        layer.slot_at(0).fill(rebuilt_r0)
+        layer.slot_at(1).fill(counter)
+        cycle.add_layer(layer)
+        state.cycles.append(cycle)
+
+        tick = _make_tick(datetime(2026, 1, 1, tzinfo=UTC), "143.391", "143.393")
+
+        events = strategy._process_cycle_tp(state, tick, cycle)
+
+        assert events == []
+        assert layer.slot_at(0).entry is rebuilt_r0
+        assert layer.slot_at(1).entry is counter
+
+
 class TestSnowballStopLossProtectionThreshold:
     def _make_cycle_with_entries(self) -> tuple[SnowballStrategyState, SnowballCycle, Entry, Entry]:
         ss = SnowballStrategyState()

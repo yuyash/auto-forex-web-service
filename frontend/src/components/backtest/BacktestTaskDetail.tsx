@@ -462,6 +462,7 @@ export const BacktestTaskDetail: React.FC = () => {
             <TaskStrategyTab
               taskId={taskId}
               taskType={TaskType.BACKTEST}
+              strategyType={detailTask.strategy_type}
               instrument={detailTask.instrument}
               executionRunId={activeExecutionId}
               enableRealTimeUpdates={enableRealtime}
@@ -503,6 +504,7 @@ export const BacktestTaskDetail: React.FC = () => {
               taskType={TaskType.BACKTEST}
               executionRunId={activeExecutionId}
               enableRealTimeUpdates={enableRealtime}
+              strategyType={detailTask.strategy_type}
               pipSize={
                 detailTask.pip_size ? parseFloat(detailTask.pip_size) : null
               }
@@ -631,6 +633,7 @@ export const BacktestTaskDetail: React.FC = () => {
           }
           onConfirm={async () => {
             const { type, taskId: actionTaskId } = pendingAction;
+            cancelAction();
             try {
               if (type === 'start') {
                 const updatedTask = await startTask.mutate(actionTaskId);
@@ -661,11 +664,9 @@ export const BacktestTaskDetail: React.FC = () => {
                   TaskStatus.FAILED,
                 ]);
               }
-              cancelAction();
               await refreshTask();
             } catch (error) {
               showError(formatTaskActionError(error, 'Failed to update task'));
-              cancelAction();
             }
           }}
         />

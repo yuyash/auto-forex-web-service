@@ -314,6 +314,8 @@ class EventHandler:
         self, trading_event: TradingEvent, *, replaying: bool
     ) -> EventExecutionResult:
         strategy_event = StrategyEvent.from_dict(trading_event.details)
+        if isinstance(trading_event.details, dict) and trading_event.details.get("strategy_type"):
+            strategy_event.strategy_type = str(trading_event.details["strategy_type"])
         self._current_sequence_number = getattr(trading_event, "sequence_number", 0) or 0
         self._current_replay_mode = replaying
         self._affected_refs = self._new_affected_refs()
@@ -568,12 +570,13 @@ class EventHandler:
             OrderServiceError: If order execution fails
         """
         direction = Direction(event.direction)
+        merge_with_existing = str(getattr(event, "strategy_type", "") or "") == "adaptive_net"
         position, order = self.order_service.open_position(
             instrument=self.instrument,
             units=event.units,
             direction=direction,
             layer_index=event.layer_number,
-            merge_with_existing=False,
+            merge_with_existing=merge_with_existing,
             override_price=event.price if event.price else None,
             tick_timestamp=event.timestamp,
             retracement_count=event.retracement_count,

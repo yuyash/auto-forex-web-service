@@ -35,6 +35,7 @@ import type {
 } from '../../../../types/strategyVisualization';
 import { StrategyGroupChart } from './StrategyGroupChart';
 import { StrategyGridIndicator } from './StrategyGridIndicator';
+import { AdaptiveNetStrategyPanel } from './AdaptiveNetStrategyPanel';
 import { PositionLifecycleDialog } from '../PositionLifecycleDialog';
 import {
   buildDisplayGridState,
@@ -51,6 +52,7 @@ import { formatDateTimeInTimezone } from '../../../../utils/timezone';
 export interface TaskStrategyTabProps {
   taskId: string | number;
   taskType: TaskType;
+  strategyType?: string;
   instrument?: string;
   executionRunId?: string;
   enableRealTimeUpdates?: boolean;
@@ -129,6 +131,7 @@ function formatCyclePnl(
 export function TaskStrategyTab({
   taskId,
   taskType,
+  strategyType,
   instrument,
   executionRunId,
   timezone = 'UTC',
@@ -365,6 +368,29 @@ export function TaskStrategyTab({
     return (
       <Box sx={{ p: 3 }}>
         <Alert severity="error">{error.message}</Alert>
+      </Box>
+    );
+  }
+
+  if (
+    strategyType === 'adaptive_net' ||
+    data?.visualization?.kind === 'adaptive_net'
+  ) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <AdaptiveNetStrategyPanel
+          state={data?.strategy_state ?? null}
+          cycles={cycles}
+          summary={
+            data?.summary ?? {
+              cycle_count: 0,
+              active_count: 0,
+              pending_count: 0,
+              completed_count: 0,
+              total_trades: 0,
+            }
+          }
+        />
       </Box>
     );
   }

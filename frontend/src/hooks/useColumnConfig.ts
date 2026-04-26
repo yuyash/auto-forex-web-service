@@ -5,7 +5,7 @@
  * Each table has its own storage key.
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { z } from 'zod';
 import type { Column } from '../components/common/DataTable';
 import {
@@ -99,6 +99,13 @@ export function useColumnConfig(
   const [columns, setColumns] = useState<ColumnItem[]>(() =>
     loadConfig(storageKey, defaultColumns)
   );
+
+  useEffect(() => {
+    setColumns(loadConfig(storageKey, defaultColumns));
+    // Reload only when the table identity changes. Several callers build
+    // defaultColumns inline, so including it would reset user edits every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
 
   const updateColumns = useCallback(
     (newColumns: ColumnItem[]) => {

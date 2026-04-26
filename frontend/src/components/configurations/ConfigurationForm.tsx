@@ -170,6 +170,11 @@ const ConfigurationForm = ({
   const selectedStrategy = useMemo(() => {
     return strategies.find((s) => s.id === selectedStrategyType);
   }, [strategies, selectedStrategyType]);
+  const selectableStrategies = useMemo(() => {
+    return strategies.filter(
+      (strategy) => strategy.id !== 'custom' || initialStrategyType === 'custom'
+    );
+  }, [initialStrategyType, strategies]);
   const { data: strategyDefaults } = useStrategyDefaults(
     selectedStrategyType || undefined,
     { enabled: Boolean(selectedStrategyType) }
@@ -525,7 +530,7 @@ const ConfigurationForm = ({
                         </Box>
                       </MenuItem>
                     ) : (
-                      strategies.map((strategy) => (
+                      selectableStrategies.map((strategy) => (
                         <MenuItem key={strategy.id} value={strategy.id}>
                           <Box>
                             <Typography variant="body2">

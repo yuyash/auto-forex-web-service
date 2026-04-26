@@ -19,9 +19,41 @@
         "DEBUG": "true",
         "DJANGO_SETTINGS_MODULE": "config.settings",
         "DB_HOST": "localhost",
+        "DB_APPLICATION_NAME": "auto-forex-vscode-backend",
         "REDIS_HOST": "localhost",
         "REDIS_PORT": "6379",
         "REDIS_DB": "0"
+      }
+    },
+    {
+      "name": "Celery: default worker",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "celery",
+      "args": [
+        "-A",
+        "config",
+        "worker",
+        "-l",
+        "info",
+        "-Q",
+        "default",
+        "--pool=solo",
+        "-n",
+        "default_worker@%h"
+      ],
+      "justMyCode": true,
+      "console": "internalConsole",
+      "cwd": "${workspaceFolder}/backend",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "DJANGO_SETTINGS_MODULE": "config.settings",
+        "DB_HOST": "localhost",
+        "DB_APPLICATION_NAME": "auto-forex-vscode-celery-default",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379",
+        "REDIS_DB": "0",
+        "OBJC_DISABLE_INITIALIZE_FORK_SAFETY": "YES"
       }
     },
     {
@@ -48,6 +80,7 @@
       "env": {
         "DJANGO_SETTINGS_MODULE": "config.settings",
         "DB_HOST": "localhost",
+        "DB_APPLICATION_NAME": "auto-forex-vscode-celery-trading",
         "REDIS_HOST": "localhost",
         "REDIS_PORT": "6379",
         "REDIS_DB": "0",
@@ -79,6 +112,7 @@
         "DJANGO_SETTINGS_MODULE": "config.settings",
         "CELERY_START_MARKET_TICK_SUPERVISOR": "1",
         "DB_HOST": "localhost",
+        "DB_APPLICATION_NAME": "auto-forex-vscode-celery-market",
         "REDIS_HOST": "localhost",
         "REDIS_PORT": "6379",
         "REDIS_DB": "0",
@@ -110,6 +144,7 @@
       "env": {
         "DJANGO_SETTINGS_MODULE": "config.settings",
         "DB_HOST": "localhost",
+        "DB_APPLICATION_NAME": "auto-forex-vscode-celery-backtest",
         "REDIS_HOST": "localhost",
         "REDIS_PORT": "6379",
         "REDIS_DB": "0",
@@ -141,6 +176,7 @@
       "env": {
         "DJANGO_SETTINGS_MODULE": "config.settings",
         "DB_HOST": "localhost",
+        "DB_APPLICATION_NAME": "auto-forex-vscode-celery-backtest-publisher",
         "REDIS_HOST": "localhost",
         "REDIS_PORT": "6379",
         "REDIS_DB": "0",
@@ -159,7 +195,7 @@
         "-l",
         "info",
         "-Q",
-        "system,default",
+        "system",
         "--pool=solo",
         "-n",
         "system_worker@%h"
@@ -170,8 +206,9 @@
       "envFile": "${workspaceFolder}/.env",
       "env": {
         "DJANGO_SETTINGS_MODULE": "config.settings",
-        "CELERY_START_MARKET_TICK_SUPERVISOR": "1",
+        "CELERY_ENABLE_STARTUP_RECOVERY": "1",
         "DB_HOST": "localhost",
+        "DB_APPLICATION_NAME": "auto-forex-vscode-celery-system",
         "REDIS_HOST": "localhost",
         "REDIS_PORT": "6379",
         "REDIS_DB": "0",
@@ -199,6 +236,7 @@
       "env": {
         "DJANGO_SETTINGS_MODULE": "config.settings",
         "DB_HOST": "localhost",
+        "DB_APPLICATION_NAME": "auto-forex-vscode-celery-beat",
         "REDIS_HOST": "localhost",
         "REDIS_PORT": "6379",
         "REDIS_DB": "0",
@@ -229,6 +267,7 @@
         "Django: runserver",
         "Celery: beat",
         "Celery: system worker",
+        "Celery: default worker",
         "Celery: trading worker",
         "Celery: backtest worker",
         "Celery: backtest publisher",

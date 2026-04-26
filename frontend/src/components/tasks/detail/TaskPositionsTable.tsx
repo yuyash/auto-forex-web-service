@@ -876,6 +876,8 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   const [openColConfigOpen, setOpenColConfigOpen] = useState(false);
   const [dirColConfigOpen, setDirColConfigOpen] = useState(false);
   const [allColConfigOpen, setAllColConfigOpen] = useState(false);
+  const isSnowballStrategy = strategyType === 'snowball';
+  const snowballOnlyColumnIds = ['layer_index', 'retracement_count'];
 
   const closedColDefaults = columnsToDefaults(closedCols('long')).map((c) =>
     [
@@ -884,6 +886,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       'is_rebuild',
       'oanda_trade_id',
       'replayed_at',
+      ...(!isSnowballStrategy ? snowballOnlyColumnIds : []),
     ].includes(c.id)
       ? { ...c, visible: false }
       : c
@@ -895,6 +898,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       'is_rebuild',
       'oanda_trade_id',
       'replayed_at',
+      ...(!isSnowballStrategy ? snowballOnlyColumnIds : []),
     ].includes(c.id)
       ? { ...c, visible: false }
       : c
@@ -906,6 +910,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       'is_rebuild',
       'oanda_trade_id',
       'replayed_at',
+      ...(!isSnowballStrategy ? snowballOnlyColumnIds : []),
     ].includes(c.id)
       ? { ...c, visible: false }
       : c
@@ -917,6 +922,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       'is_rebuild',
       'oanda_trade_id',
       'replayed_at',
+      ...(!isSnowballStrategy ? snowballOnlyColumnIds : []),
     ].includes(c.id)
       ? { ...c, visible: false }
       : c
@@ -926,22 +932,34 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     columns: closedColConfig,
     updateColumns: updateClosedCols,
     resetToDefaults: resetClosedCols,
-  } = useColumnConfig('positions_closed', closedColDefaults);
+  } = useColumnConfig(
+    isSnowballStrategy ? 'positions_closed' : 'positions_closed_generic',
+    closedColDefaults
+  );
   const {
     columns: openColConfig,
     updateColumns: updateOpenCols,
     resetToDefaults: resetOpenCols,
-  } = useColumnConfig('positions_open', openColDefaults);
+  } = useColumnConfig(
+    isSnowballStrategy ? 'positions_open' : 'positions_open_generic',
+    openColDefaults
+  );
   const {
     columns: dirColConfig,
     updateColumns: updateDirCols,
     resetToDefaults: resetDirCols,
-  } = useColumnConfig('positions_dir', dirColDefaults);
+  } = useColumnConfig(
+    isSnowballStrategy ? 'positions_dir' : 'positions_dir_generic',
+    dirColDefaults
+  );
   const {
     columns: allColConfig,
     updateColumns: updateAllCols,
     resetToDefaults: resetAllCols,
-  } = useColumnConfig('positions_all', allColDefaults);
+  } = useColumnConfig(
+    isSnowballStrategy ? 'positions_all' : 'positions_all_generic',
+    allColDefaults
+  );
 
   const filteredClosedCols = (dir: 'long' | 'short') =>
     applyColumnConfig(closedCols(dir), closedColConfig);

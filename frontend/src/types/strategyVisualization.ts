@@ -77,7 +77,48 @@ export interface StrategyCyclesResponse {
     cycle_statuses?: boolean;
     grid?: boolean;
   };
+  strategy_state?: AdaptiveNetStrategyState | null;
   cycles: StrategyCycle[];
   summary: StrategyCyclesSummary;
   last_tick_timestamp: string | null;
+}
+
+export interface AdaptiveNetMetricSignal {
+  name: string;
+  direction_score: string;
+  confidence: string;
+  size_multiplier: string;
+  reason?: string;
+}
+
+export interface AdaptiveNetDecision {
+  target_net_units: number;
+  order_units: number;
+  probability_long: string;
+  probability_short: string;
+  edge: string;
+  confidence: string;
+  risk_multiplier: string;
+  metric_signals: AdaptiveNetMetricSignal[];
+  reason?: string;
+}
+
+export interface AdaptiveNetStrategyState {
+  current_net_units?: number;
+  target_net_units?: number;
+  open_units?: number;
+  open_direction?: string;
+  open_position_id?: string | null;
+  latest_decision?: AdaptiveNetDecision | null;
+  metric_signals?: AdaptiveNetMetricSignal[];
+  last_price?: string;
+  last_spread_pips?: string;
+  last_fill_price?: string | null;
+  previous_net_units?: number;
+  lookback_points?: number;
+  window_seconds?: number;
+  window_started_at?: string | null;
+  last_rebalance_at?: string | null;
+  rebalance_tick_delta?: number;
+  rebalance_elapsed_seconds?: number | null;
 }

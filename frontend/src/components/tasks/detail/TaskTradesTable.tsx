@@ -50,6 +50,7 @@ interface TaskTradesTableProps {
   executionRunId?: string;
   enableRealTimeUpdates?: boolean;
   pipSize?: number | null;
+  strategyType?: string;
 }
 
 export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
@@ -57,6 +58,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
   taskType,
   executionRunId,
   enableRealTimeUpdates = false,
+  strategyType,
 }) => {
   const { t } = useTranslation('common');
   const { user } = useAuth();
@@ -346,6 +348,8 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
 
   // Column config
   const [colConfigOpen, setColConfigOpen] = useState(false);
+  const isSnowballStrategy = strategyType === 'snowball';
+  const snowballOnlyColumnIds = ['layer_index', 'retracement_count'];
   const defaultColItems = columnsToDefaults(columns).map((c) =>
     [
       'stop_loss_price',
@@ -353,6 +357,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
       'replayed_at',
       'order_id',
       'oanda_trade_id',
+      ...(!isSnowballStrategy ? snowballOnlyColumnIds : []),
     ].includes(c.id)
       ? { ...c, visible: false }
       : c
@@ -361,7 +366,10 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
     columns: colConfig,
     updateColumns,
     resetToDefaults,
-  } = useColumnConfig('task_trades', defaultColItems);
+  } = useColumnConfig(
+    isSnowballStrategy ? 'task_trades' : 'task_trades_generic',
+    defaultColItems
+  );
   const visibleColumns = applyColumnConfig(columns, colConfig);
 
   const handleCopy = useCallback(() => {

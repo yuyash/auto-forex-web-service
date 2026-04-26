@@ -13,6 +13,7 @@ from django.http import Http404, StreamingHttpResponse
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.renderers import BaseRenderer
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
@@ -26,10 +27,33 @@ def _sse(event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
 
 
+class ServerSentEventRenderer(BaseRenderer):
+    """Renderer used only for DRF content negotiation on SSE endpoints."""
+
+    media_type = "text/event-stream"
+    format = "event-stream"
+    charset = "utf-8"
+
+    def render(
+        self,
+        data: Any,
+        accepted_media_type: str | None = None,
+        renderer_context: dict[str, Any] | None = None,
+    ) -> bytes:
+        _ = accepted_media_type
+        _ = renderer_context
+        if data is None:
+            return b""
+        if isinstance(data, bytes):
+            return data
+        return str(data).encode(self.charset)
+
+
 class TaskEventStreamView(APIView):
     """Stream lightweight task status snapshots over Server-Sent Events."""
 
     permission_classes = [IsAuthenticated]
+    renderer_classes = [ServerSentEventRenderer]
     poll_interval_seconds = 3
 
     @extend_schema(exclude=True)
