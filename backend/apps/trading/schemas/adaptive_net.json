@@ -254,6 +254,54 @@
       "group": "Metric Weights",
       "group_ja": "メトリクス重み"
     },
+    "min_decision_confidence": {
+      "type": "number",
+      "title": "Minimum Decision Confidence",
+      "title_ja": "最小デシジョン信頼度",
+      "description": "Hold the current exposure unless the confidence-adjusted signal exceeds this threshold.",
+      "description_ja": "信頼度調整後のシグナルがこの閾値を超えない限り、現在の建玉を維持します。",
+      "default": 0.2,
+      "minimum": 0,
+      "maximum": 1,
+      "group": "Decision Risk Controls",
+      "group_ja": "デシジョンリスク制御"
+    },
+    "no_trade_edge_threshold": {
+      "type": "number",
+      "title": "No-Trade Edge Threshold",
+      "title_ja": "取引停止エッジ閾値",
+      "description": "Hold when absolute directional edge is below this value. This acts as a cost buffer against churn.",
+      "description_ja": "方向エッジの絶対値がこの値未満の場合は建玉を維持します。往復取引を抑えるコストバッファとして機能します。",
+      "default": 0.12,
+      "minimum": 0,
+      "maximum": 1,
+      "group": "Decision Risk Controls",
+      "group_ja": "デシジョンリスク制御"
+    },
+    "reversal_edge_threshold": {
+      "type": "number",
+      "title": "Reversal Edge Threshold",
+      "title_ja": "反転エッジ閾値",
+      "description": "Require at least this much opposite edge before reversing an existing net position.",
+      "description_ja": "既存ネット建玉を反転するには、反対方向のエッジが少なくともこの値を超える必要があります。",
+      "default": 0.28,
+      "minimum": 0,
+      "maximum": 1,
+      "group": "Decision Risk Controls",
+      "group_ja": "デシジョンリスク制御"
+    },
+    "max_position_change_fraction": {
+      "type": "number",
+      "title": "Max Position Change Fraction",
+      "title_ja": "最大建玉変更率",
+      "description": "Maximum fraction of Max Net Units that one decision may change. Lower values reduce overtrading and sudden reversals.",
+      "description_ja": "1回のデシジョンで変更できる最大数量を最大ネットユニット数に対する割合で指定します。小さいほど過剰取引と急反転を抑えます。",
+      "default": 0.5,
+      "minimum": 0.01,
+      "maximum": 1,
+      "group": "Decision Risk Controls",
+      "group_ja": "デシジョンリスク制御"
+    },
     "max_spread_pips": {
       "type": "number",
       "title": "Max Spread Pips",

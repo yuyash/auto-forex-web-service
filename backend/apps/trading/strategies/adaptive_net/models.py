@@ -29,6 +29,10 @@ DEFAULTS = {
     "risk_weight": "0.20",
     "inventory_weight": "0.15",
     "timesfm_weight": "0",
+    "min_decision_confidence": "0.20",
+    "no_trade_edge_threshold": "0.12",
+    "reversal_edge_threshold": "0.28",
+    "max_position_change_fraction": "0.50",
     "max_spread_pips": "3",
     "high_volatility_ratio": "1.8",
 }
@@ -75,6 +79,10 @@ class AdaptiveNetConfig:
     risk_weight: Decimal = Decimal("0.20")
     inventory_weight: Decimal = Decimal("0.15")
     timesfm_weight: Decimal = Decimal("0")
+    min_decision_confidence: Decimal = Decimal("0.20")
+    no_trade_edge_threshold: Decimal = Decimal("0.12")
+    reversal_edge_threshold: Decimal = Decimal("0.28")
+    max_position_change_fraction: Decimal = Decimal("0.50")
     max_spread_pips: Decimal = Decimal("3")
     high_volatility_ratio: Decimal = Decimal("1.8")
 
@@ -155,6 +163,19 @@ class AdaptiveNetConfig:
                 data.get("inventory_weight"), DEFAULTS["inventory_weight"]
             ),
             timesfm_weight=decimal_from(data.get("timesfm_weight"), DEFAULTS["timesfm_weight"]),
+            min_decision_confidence=decimal_from(
+                data.get("min_decision_confidence"), DEFAULTS["min_decision_confidence"]
+            ),
+            no_trade_edge_threshold=decimal_from(
+                data.get("no_trade_edge_threshold"), DEFAULTS["no_trade_edge_threshold"]
+            ),
+            reversal_edge_threshold=decimal_from(
+                data.get("reversal_edge_threshold"), DEFAULTS["reversal_edge_threshold"]
+            ),
+            max_position_change_fraction=decimal_from(
+                data.get("max_position_change_fraction"),
+                DEFAULTS["max_position_change_fraction"],
+            ),
             max_spread_pips=decimal_from(data.get("max_spread_pips"), DEFAULTS["max_spread_pips"]),
             high_volatility_ratio=decimal_from(
                 data.get("high_volatility_ratio"), DEFAULTS["high_volatility_ratio"]
@@ -186,6 +207,10 @@ class AdaptiveNetConfig:
             "risk_weight": str(self.risk_weight),
             "inventory_weight": str(self.inventory_weight),
             "timesfm_weight": str(self.timesfm_weight),
+            "min_decision_confidence": str(self.min_decision_confidence),
+            "no_trade_edge_threshold": str(self.no_trade_edge_threshold),
+            "reversal_edge_threshold": str(self.reversal_edge_threshold),
+            "max_position_change_fraction": str(self.max_position_change_fraction),
             "max_spread_pips": str(self.max_spread_pips),
             "high_volatility_ratio": str(self.high_volatility_ratio),
         }
