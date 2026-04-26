@@ -180,6 +180,7 @@ def _public_strategy_state(
         "open_position_id",
         "latest_decision",
         "metric_signals",
+        "decision_history",
         "last_price",
         "last_spread_pips",
         "last_fill_price",

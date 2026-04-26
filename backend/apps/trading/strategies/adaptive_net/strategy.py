@@ -157,6 +157,13 @@ class AdaptiveNetStrategy(Strategy):
         strategy_state["latest_decision"] = decision.to_dict()
         strategy_state["metric_signals"] = [signal.to_dict() for signal in metric_signals]
         strategy_state["target_net_units"] = decision.target_net_units
+        strategy_state["decision_history"] = _append_decision_history(
+            strategy_state.get("decision_history"),
+            timestamp=tick.timestamp,
+            current_net_units=current_net_units,
+            decision=decision.to_dict(),
+            metric_signals=strategy_state["metric_signals"],
+        )
 
         signal_event = GenericStrategyEvent(
             event_type=EventType.STRATEGY_SIGNAL,
@@ -306,7 +313,45 @@ def _initial_state(raw: Any) -> dict[str, Any]:
     state.setdefault("next_entry_id", 1)
     state.setdefault("metric_signals", [])
     state.setdefault("latest_decision", None)
+    state.setdefault("decision_history", [])
     return state
+
+
+def _append_decision_history(
+    raw_history: Any,
+    *,
+    timestamp: datetime,
+    current_net_units: int,
+    decision: dict[str, Any],
+    metric_signals: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    history = raw_history if isinstance(raw_history, list) else []
+    target_net_units = int(decision.get("target_net_units") or current_net_units)
+    order_units = int(decision.get("order_units") or target_net_units - current_net_units)
+    point = {
+        "timestamp": timestamp.isoformat(),
+        "current_net_units": current_net_units,
+        "target_net_units": target_net_units,
+        "order_units": order_units,
+        "action": _decision_action(current_net_units, target_net_units, order_units),
+        "edge": str(decision.get("edge", "0")),
+        "confidence": str(decision.get("confidence", "0")),
+        "probability_long": str(decision.get("probability_long", "0.5")),
+        "probability_short": str(decision.get("probability_short", "0.5")),
+        "risk_multiplier": str(decision.get("risk_multiplier", "1")),
+        "metric_signals": metric_signals,
+    }
+    return [*history, point][-200:]
+
+
+def _decision_action(current_net: int, target_net: int, order_units: int) -> str:
+    if order_units == 0:
+        return "hold"
+    if current_net != 0 and target_net != 0 and _sign(current_net) != _sign(target_net):
+        return "reverse"
+    if abs(target_net) > abs(current_net):
+        return "increase"
+    return "reduce"
 
 
 def _price_points(strategy_state: dict[str, Any]) -> list[dict[str, str]]:
