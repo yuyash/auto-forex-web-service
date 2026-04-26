@@ -345,12 +345,23 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
         sx={{
           mb: 2,
           display: 'flex',
-          gap: 1.5,
-          alignItems: 'center',
+          gap: 1,
+          alignItems: { xs: 'stretch', sm: 'center' },
           flexWrap: 'wrap',
+          p: { xs: 1.25, sm: 0 },
+          border: { xs: 1, sm: 0 },
+          borderColor: 'divider',
+          borderRadius: { xs: 1, sm: 0 },
+          bgcolor: { xs: 'background.paper', sm: 'transparent' },
         }}
       >
-        <FormControl sx={{ minWidth: { xs: 140, sm: 200 } }} size="small">
+        <FormControl
+          sx={{
+            flex: { xs: '1 1 100%', sm: '0 1 200px' },
+            minWidth: 0,
+          }}
+          size="small"
+        >
           <InputLabel>{t('tables.logs.levelFilter')}</InputLabel>
           <Select
             multiple
@@ -379,9 +390,9 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
         </FormControl>
         <FormControl
           sx={{
-            minWidth: { xs: 160, sm: 250 },
+            flex: { xs: '1 1 100%', sm: '0 1 320px' },
+            minWidth: 0,
             maxWidth: { xs: '100%', sm: 350 },
-            flex: { xs: 1, sm: 'none' },
           }}
           size="small"
         >
@@ -425,9 +436,17 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
           }}
           fromLabel={t('tables.logs.timestampFrom')}
           toLabel={t('tables.logs.timestampTo')}
+          sx={{ flex: { xs: '1 1 100%', md: '0 0 auto' } }}
         />
         {auditComponents.length > 0 && (
-          <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 0.75,
+              flex: { xs: '1 1 100%', sm: '0 1 auto' },
+              flexWrap: 'wrap',
+            }}
+          >
             {auditComponents.map((component) => {
               const selected = componentFilter.includes(component);
               return (

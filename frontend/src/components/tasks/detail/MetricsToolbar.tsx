@@ -7,7 +7,6 @@ import {
   Box,
   ToggleButton,
   ToggleButtonGroup,
-  TextField,
   IconButton,
   Tooltip,
   Collapse,
@@ -17,6 +16,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { useTranslation } from 'react-i18next';
+import { DateRangeFilter } from '../../common/DateRangeFilter';
 
 const INTERVAL_OPTIONS = [
   { value: 0, label: 'Auto' },
@@ -59,9 +59,14 @@ export function MetricsToolbar({
       <Box
         sx={{
           display: 'flex',
-          alignItems: 'center',
+          alignItems: { xs: 'stretch', sm: 'center' },
           gap: 1,
           flexWrap: 'wrap',
+          p: { xs: 1.25, sm: 0 },
+          border: { xs: 1, sm: 0 },
+          borderColor: 'divider',
+          borderRadius: { xs: 1, sm: 0 },
+          bgcolor: { xs: 'background.paper', sm: 'transparent' },
         }}
       >
         <ToggleButtonGroup
@@ -72,76 +77,105 @@ export function MetricsToolbar({
           }}
           size="small"
           aria-label="Granularity"
+          sx={{
+            flex: { xs: '1 1 100%', sm: '0 1 auto' },
+            display: 'flex',
+            minWidth: 0,
+            '& .MuiToggleButtonGroup-grouped': {
+              flex: { xs: 1, sm: '0 0 auto' },
+              minWidth: 0,
+            },
+          }}
         >
           {INTERVAL_OPTIONS.map((opt) => (
             <ToggleButton
               key={opt.value}
               value={opt.value}
-              sx={{ px: 1.5, py: 0.25, fontSize: '0.75rem' }}
+              sx={{
+                px: { xs: 0.75, sm: 1.5 },
+                py: 0.25,
+                fontSize: '0.75rem',
+                whiteSpace: 'nowrap',
+              }}
             >
               {opt.label}
             </ToggleButton>
           ))}
         </ToggleButtonGroup>
 
-        <Tooltip title="Time range filter">
-          <IconButton
-            size="small"
-            onClick={() => setShowRange((v) => !v)}
-            color={showRange ? 'primary' : 'default'}
-          >
-            <FilterListIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-
-        <Tooltip title="Refresh">
-          <span>
-            <IconButton size="small" onClick={onRefresh} disabled={isLoading}>
-              <RefreshIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
-
-        {onConfigureCharts ? (
-          <Tooltip title={t('metrics.configureCharts', 'Chart settings')}>
-            <IconButton size="small" onClick={onConfigureCharts}>
-              <SettingsIcon fontSize="small" />
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 0.5,
+            alignItems: 'center',
+            justifyContent: { xs: 'flex-end', sm: 'flex-start' },
+            flex: { xs: '1 1 100%', sm: '0 0 auto' },
+          }}
+        >
+          <Tooltip title="Time range filter">
+            <IconButton
+              size="small"
+              onClick={() => setShowRange((v) => !v)}
+              color={showRange ? 'primary' : 'default'}
+            >
+              <FilterListIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-        ) : null}
+
+          <Tooltip title={t('metrics.refreshAllCharts', 'Refresh all charts')}>
+            <span>
+              <IconButton
+                size="small"
+                onClick={() => {
+                  void onRefresh();
+                }}
+                disabled={isLoading}
+                aria-label={t('metrics.refreshAllCharts', 'Refresh all charts')}
+              >
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+
+          {onConfigureCharts ? (
+            <Tooltip title={t('metrics.configureCharts', 'Chart settings')}>
+              <IconButton size="small" onClick={onConfigureCharts}>
+                <SettingsIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          ) : null}
+        </Box>
       </Box>
 
       <Collapse in={showRange}>
         <Box
           sx={{
             display: 'flex',
-            alignItems: 'center',
-            gap: 1.5,
+            alignItems: { xs: 'stretch', sm: 'center' },
+            gap: 1,
             mt: 1,
             flexWrap: 'wrap',
+            p: { xs: 1.25, sm: 0 },
+            border: { xs: 1, sm: 0 },
+            borderColor: 'divider',
+            borderRadius: { xs: 1, sm: 0 },
+            bgcolor: { xs: 'background.paper', sm: 'transparent' },
           }}
         >
-          <TextField
-            label="From"
-            type="datetime-local"
-            size="small"
-            value={since}
-            onChange={(e) => onSinceChange(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
-            sx={{ width: 220 }}
-          />
-          <TextField
-            label="To"
-            type="datetime-local"
-            size="small"
-            value={until}
-            onChange={(e) => onUntilChange(e.target.value)}
-            slotProps={{ inputLabel: { shrink: true } }}
-            sx={{ width: 220 }}
+          <DateRangeFilter
+            from={since}
+            to={until}
+            onFromChange={onSinceChange}
+            onToChange={onUntilChange}
+            fromLabel="From"
+            toLabel="To"
+            sx={{ flex: { xs: '1 1 100%', md: '0 0 auto' } }}
+            fieldSx={{ width: { xs: '100%', sm: 220 } }}
           />
           {(since || until) && (
             <Button
               size="small"
+              sx={{ alignSelf: { xs: 'stretch', sm: 'center' } }}
               onClick={() => {
                 onSinceChange('');
                 onUntilChange('');

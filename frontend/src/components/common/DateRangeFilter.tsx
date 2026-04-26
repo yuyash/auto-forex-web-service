@@ -5,7 +5,7 @@
  * wraps gracefully on mobile.
  */
 
-import { Box, TextField } from '@mui/material';
+import { Box, TextField, type SxProps, type Theme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 
 export interface DateRangeFilterProps {
@@ -15,6 +15,8 @@ export interface DateRangeFilterProps {
   onToChange: (value: string) => void;
   fromLabel?: string;
   toLabel?: string;
+  sx?: SxProps<Theme>;
+  fieldSx?: SxProps<Theme>;
 }
 
 export function DateRangeFilter({
@@ -24,17 +26,27 @@ export function DateRangeFilter({
   onToChange,
   fromLabel,
   toLabel,
+  sx,
+  fieldSx,
 }: DateRangeFilterProps) {
   const { t } = useTranslation('common');
+  const rootSx = Array.isArray(sx) ? sx : [sx];
+  const inputSx = Array.isArray(fieldSx) ? fieldSx : [fieldSx];
 
   return (
     <Box
-      sx={{
-        display: 'flex',
-        gap: 1,
-        flexWrap: 'wrap',
-        alignItems: 'center',
-      }}
+      sx={[
+        {
+          display: { xs: 'grid', sm: 'flex' },
+          gridTemplateColumns: { xs: '1fr', sm: 'unset' },
+          gap: 1,
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          width: { xs: '100%', sm: 'auto' },
+          minWidth: 0,
+        },
+        ...rootSx,
+      ]}
     >
       <TextField
         label={fromLabel ?? t('filters.dateFrom')}
@@ -43,7 +55,13 @@ export function DateRangeFilter({
         value={from}
         onChange={(e) => onFromChange(e.target.value)}
         slotProps={{ inputLabel: { shrink: true } }}
-        sx={{ minWidth: { xs: 160, sm: 200 } }}
+        sx={[
+          {
+            minWidth: 0,
+            width: { xs: '100%', sm: 200 },
+          },
+          ...inputSx,
+        ]}
       />
       <TextField
         label={toLabel ?? t('filters.dateTo')}
@@ -52,7 +70,13 @@ export function DateRangeFilter({
         value={to}
         onChange={(e) => onToChange(e.target.value)}
         slotProps={{ inputLabel: { shrink: true } }}
-        sx={{ minWidth: { xs: 160, sm: 200 } }}
+        sx={[
+          {
+            minWidth: 0,
+            width: { xs: '100%', sm: 200 },
+          },
+          ...inputSx,
+        ]}
       />
     </Box>
   );

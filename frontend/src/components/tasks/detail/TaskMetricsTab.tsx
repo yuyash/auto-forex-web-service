@@ -41,7 +41,7 @@ interface TaskMetricsTabProps {
   onIntervalChange: (interval: number) => void;
   onSinceChange: (since: string) => void;
   onUntilChange: (until: string) => void;
-  onRefresh: () => void;
+  onRefresh: () => void | Promise<void>;
   /** Instrument identifier for the OHLC chart (e.g. "USD_JPY") */
   instrument?: string;
   /** ISO start time for the OHLC chart range */
@@ -344,9 +344,9 @@ export function TaskMetricsTab({
 
   const hasOhlc = !!(instrument && startTime);
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = useCallback(async () => {
     setOhlcRefreshToken((value) => value + 1);
-    void onRefresh();
+    await onRefresh();
   }, [onRefresh]);
 
   // Determine which metrics actually have data
@@ -567,8 +567,8 @@ export function TaskMetricsTab({
   return (
     <Box
       sx={{
-        px: layoutTokens.pagePadding,
-        py: { xs: 1, sm: 1.5 },
+        px: { xs: 0, sm: 2, md: 3 },
+        py: { xs: 0.5, sm: 1.5 },
         minWidth: 0,
         width: '100%',
         maxWidth: { xs: '100%', xl: 1920 },
@@ -594,7 +594,7 @@ export function TaskMetricsTab({
       ) : null}
       <Grid
         container
-        spacing={layoutTokens.sectionGap}
+        spacing={{ xs: 1, sm: layoutTokens.sectionGap.sm }}
         justifyContent="center"
         alignItems="stretch"
         sx={{ mt: 0, minWidth: 0, width: '100%' }}
