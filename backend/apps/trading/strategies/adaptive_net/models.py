@@ -13,6 +13,16 @@ DEFAULTS = {
     "rebalance_interval_ticks": 10,
     "lookback_window_seconds": 900,
     "rebalance_interval_seconds": 60,
+    "metric_publish_interval_ticks": 10,
+    "metric_publish_interval_seconds": 60,
+    "decision_interval_metric_publishes": 1,
+    "decision_interval_seconds": 0,
+    "enable_regime_metric": True,
+    "enable_trend_momentum_metric": True,
+    "enable_mean_reversion_metric": True,
+    "enable_risk_condition_metric": True,
+    "enable_inventory_exposure_metric": True,
+    "enable_timesfm_forecast_metric": False,
     "trend_weight": "0.25",
     "mean_reversion_weight": "0.20",
     "regime_weight": "0.20",
@@ -30,6 +40,16 @@ def decimal_from(value: Any, default: Any) -> Decimal:
     return Decimal(str(value))
 
 
+def bool_from(value: Any, default: Any) -> bool:
+    if value is None or value == "":
+        return bool(default)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass(frozen=True, slots=True)
 class AdaptiveNetConfig:
     base_units: int = 1000
@@ -39,6 +59,16 @@ class AdaptiveNetConfig:
     rebalance_interval_ticks: int = 10
     lookback_window_seconds: int = 900
     rebalance_interval_seconds: int = 60
+    metric_publish_interval_ticks: int = 10
+    metric_publish_interval_seconds: int = 60
+    decision_interval_metric_publishes: int = 1
+    decision_interval_seconds: int = 0
+    enable_regime_metric: bool = True
+    enable_trend_momentum_metric: bool = True
+    enable_mean_reversion_metric: bool = True
+    enable_risk_condition_metric: bool = True
+    enable_inventory_exposure_metric: bool = True
+    enable_timesfm_forecast_metric: bool = False
     trend_weight: Decimal = Decimal("0.25")
     mean_reversion_weight: Decimal = Decimal("0.20")
     regime_weight: Decimal = Decimal("0.20")
@@ -63,6 +93,57 @@ class AdaptiveNetConfig:
             ),
             rebalance_interval_seconds=int(
                 data.get("rebalance_interval_seconds", DEFAULTS["rebalance_interval_seconds"])
+            ),
+            metric_publish_interval_ticks=int(
+                data.get(
+                    "metric_publish_interval_ticks",
+                    data.get(
+                        "rebalance_interval_ticks",
+                        DEFAULTS["metric_publish_interval_ticks"],
+                    ),
+                )
+            ),
+            metric_publish_interval_seconds=int(
+                data.get(
+                    "metric_publish_interval_seconds",
+                    data.get(
+                        "rebalance_interval_seconds",
+                        DEFAULTS["metric_publish_interval_seconds"],
+                    ),
+                )
+            ),
+            decision_interval_metric_publishes=int(
+                data.get(
+                    "decision_interval_metric_publishes",
+                    DEFAULTS["decision_interval_metric_publishes"],
+                )
+            ),
+            decision_interval_seconds=int(
+                data.get("decision_interval_seconds", DEFAULTS["decision_interval_seconds"])
+            ),
+            enable_regime_metric=bool_from(
+                data.get("enable_regime_metric"),
+                DEFAULTS["enable_regime_metric"],
+            ),
+            enable_trend_momentum_metric=bool_from(
+                data.get("enable_trend_momentum_metric"),
+                DEFAULTS["enable_trend_momentum_metric"],
+            ),
+            enable_mean_reversion_metric=bool_from(
+                data.get("enable_mean_reversion_metric"),
+                DEFAULTS["enable_mean_reversion_metric"],
+            ),
+            enable_risk_condition_metric=bool_from(
+                data.get("enable_risk_condition_metric"),
+                DEFAULTS["enable_risk_condition_metric"],
+            ),
+            enable_inventory_exposure_metric=bool_from(
+                data.get("enable_inventory_exposure_metric"),
+                DEFAULTS["enable_inventory_exposure_metric"],
+            ),
+            enable_timesfm_forecast_metric=bool_from(
+                data.get("enable_timesfm_forecast_metric"),
+                DEFAULTS["enable_timesfm_forecast_metric"],
             ),
             trend_weight=decimal_from(data.get("trend_weight"), DEFAULTS["trend_weight"]),
             mean_reversion_weight=decimal_from(
@@ -89,6 +170,16 @@ class AdaptiveNetConfig:
             "rebalance_interval_ticks": self.rebalance_interval_ticks,
             "lookback_window_seconds": self.lookback_window_seconds,
             "rebalance_interval_seconds": self.rebalance_interval_seconds,
+            "metric_publish_interval_ticks": self.metric_publish_interval_ticks,
+            "metric_publish_interval_seconds": self.metric_publish_interval_seconds,
+            "decision_interval_metric_publishes": self.decision_interval_metric_publishes,
+            "decision_interval_seconds": self.decision_interval_seconds,
+            "enable_regime_metric": self.enable_regime_metric,
+            "enable_trend_momentum_metric": self.enable_trend_momentum_metric,
+            "enable_mean_reversion_metric": self.enable_mean_reversion_metric,
+            "enable_risk_condition_metric": self.enable_risk_condition_metric,
+            "enable_inventory_exposure_metric": self.enable_inventory_exposure_metric,
+            "enable_timesfm_forecast_metric": self.enable_timesfm_forecast_metric,
             "trend_weight": str(self.trend_weight),
             "mean_reversion_weight": str(self.mean_reversion_weight),
             "regime_weight": str(self.regime_weight),

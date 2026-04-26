@@ -8,8 +8,12 @@ from apps.trading.dataclasses import EventExecutionResult, StrategyResult, Tick
 from apps.trading.enums import EventType, StrategyType
 from apps.trading.events import ClosePositionEvent, GenericStrategyEvent, OpenPositionEvent
 from apps.trading.models.state import ExecutionState
-from apps.trading.strategies.adaptive_net.metrics import default_metrics
-from apps.trading.strategies.adaptive_net.models import AdaptiveNetConfig, MetricContext
+from apps.trading.strategies.adaptive_net.metrics import enabled_metrics
+from apps.trading.strategies.adaptive_net.models import (
+    AdaptiveNetConfig,
+    MetricContext,
+    MetricSignal,
+)
 from apps.trading.strategies.adaptive_net.sizing import build_decision
 from apps.trading.strategies.base import Strategy
 from apps.trading.strategies.registry import register_strategy
@@ -47,6 +51,10 @@ class AdaptiveNetStrategy(Strategy):
             "rebalance_interval_ticks",
             "lookback_window_seconds",
             "rebalance_interval_seconds",
+            "metric_publish_interval_ticks",
+            "metric_publish_interval_seconds",
+            "decision_interval_metric_publishes",
+            "decision_interval_seconds",
         }
         for key in integer_fields:
             normalized[key] = int(normalized[key])
@@ -118,32 +126,23 @@ class AdaptiveNetStrategy(Strategy):
             return StrategyResult.from_state(state)
 
         ticks_processed = int(state.ticks_processed or 0)
-        last_rebalance_tick = int(strategy_state.get("last_rebalance_tick", -(10**9)))
-        tick_delta = ticks_processed - last_rebalance_tick
-        elapsed_seconds = _elapsed_since(strategy_state.get("last_rebalance_at"), tick.timestamp)
-        if not _should_rebalance(
-            tick_delta=tick_delta,
-            elapsed_seconds=elapsed_seconds,
-            interval_ticks=self.config.rebalance_interval_ticks,
-            interval_seconds=self.config.rebalance_interval_seconds,
+        current_net_units = int(strategy_state.get("current_net_units", 0) or 0)
+        metric_signals = self._published_metric_signals(
+            tick=tick,
+            strategy_state=strategy_state,
+            prices=prices,
+            current_net_units=current_net_units,
+            ticks_processed=ticks_processed,
+        )
+        state.strategy_state = strategy_state
+
+        if not _should_make_decision(
+            strategy_state=strategy_state,
+            current_timestamp=tick.timestamp,
+            config=self.config,
         ):
             return StrategyResult.from_state(state)
 
-        current_net_units = int(strategy_state.get("current_net_units", 0) or 0)
-        context = MetricContext(
-            prices=tuple(prices),
-            bid=tick.bid,
-            ask=tick.ask,
-            mid=tick.mid,
-            pip_size=self.pip_size,
-            current_net_units=current_net_units,
-            max_net_units=self.config.max_net_units,
-            config=self.config,
-        )
-        metric_signals = [
-            metric.evaluate(context)
-            for metric in default_metrics(include_timesfm=self.config.timesfm_weight > 0)
-        ]
         decision = build_decision(
             config=self.config,
             current_net_units=current_net_units,
@@ -152,18 +151,44 @@ class AdaptiveNetStrategy(Strategy):
 
         strategy_state["last_rebalance_tick"] = ticks_processed
         strategy_state["last_rebalance_at"] = tick.timestamp.isoformat()
-        strategy_state["rebalance_tick_delta"] = tick_delta
-        strategy_state["rebalance_elapsed_seconds"] = elapsed_seconds
+        strategy_state["rebalance_tick_delta"] = None
+        strategy_state["rebalance_elapsed_seconds"] = None
         strategy_state["latest_decision"] = decision.to_dict()
         strategy_state["metric_signals"] = [signal.to_dict() for signal in metric_signals]
         strategy_state["target_net_units"] = decision.target_net_units
+        strategy_state["last_decision_metric_publish_count"] = int(
+            strategy_state.get("metric_publish_count", 0) or 0
+        )
+        strategy_state["last_decision_at"] = tick.timestamp.isoformat()
+        position_transition = _position_transition_snapshot(
+            tick=tick,
+            current_net_units=current_net_units,
+            decision=decision.to_dict(),
+            strategy_state=strategy_state,
+        )
         strategy_state["decision_history"] = _append_decision_history(
             strategy_state.get("decision_history"),
             timestamp=tick.timestamp,
             current_net_units=current_net_units,
             decision=decision.to_dict(),
             metric_signals=strategy_state["metric_signals"],
+            position_transition=position_transition,
         )
+        metrics = (
+            dict(strategy_state.get("metrics", {}))
+            if isinstance(strategy_state.get("metrics"), dict)
+            else {}
+        )
+        metrics.update(
+            _decision_snapshot(
+                tick=tick,
+                decision=decision.to_dict(),
+                position_transition=position_transition,
+                strategy_state=strategy_state,
+            )
+        )
+        strategy_state["metrics"] = metrics
+        strategy_state["pending_position_transition"] = position_transition
 
         signal_event = GenericStrategyEvent(
             event_type=EventType.STRATEGY_SIGNAL,
@@ -179,6 +204,60 @@ class AdaptiveNetStrategy(Strategy):
         events.extend(self._build_rebalance_events(tick=tick, strategy_state=strategy_state))
         state.strategy_state = strategy_state
         return StrategyResult(state=state, events=events)
+
+    def _published_metric_signals(
+        self,
+        *,
+        tick: Tick,
+        strategy_state: dict[str, Any],
+        prices: list[Decimal],
+        current_net_units: int,
+        ticks_processed: int,
+    ) -> list[MetricSignal]:
+        last_publish_tick = int(strategy_state.get("last_metric_publish_tick", -(10**9)))
+        tick_delta = ticks_processed - last_publish_tick
+        elapsed_seconds = _elapsed_since(
+            strategy_state.get("last_metric_publish_at"), tick.timestamp
+        )
+        published = _metric_signals_from_state(strategy_state.get("published_metric_signals"))
+        if published and not _should_rebalance(
+            tick_delta=tick_delta,
+            elapsed_seconds=elapsed_seconds,
+            interval_ticks=self.config.metric_publish_interval_ticks,
+            interval_seconds=self.config.metric_publish_interval_seconds,
+        ):
+            return published
+
+        context = MetricContext(
+            prices=tuple(prices),
+            bid=tick.bid,
+            ask=tick.ask,
+            mid=tick.mid,
+            pip_size=self.pip_size,
+            current_net_units=current_net_units,
+            max_net_units=self.config.max_net_units,
+            config=self.config,
+        )
+        signals = [metric.evaluate(context) for metric in enabled_metrics(self.config)]
+        signal_dicts = [signal.to_dict() for signal in signals]
+        strategy_state["last_metric_publish_tick"] = ticks_processed
+        strategy_state["last_metric_publish_at"] = tick.timestamp.isoformat()
+        strategy_state["metric_publish_tick_delta"] = tick_delta
+        strategy_state["metric_publish_elapsed_seconds"] = elapsed_seconds
+        strategy_state["published_metric_signals"] = signal_dicts
+        strategy_state["published_metric_names"] = [signal.name for signal in signals]
+        strategy_state["metric_publish_count"] = (
+            int(strategy_state.get("metric_publish_count", 0) or 0) + 1
+        )
+
+        metrics = (
+            dict(strategy_state.get("metrics", {}))
+            if isinstance(strategy_state.get("metrics"), dict)
+            else {}
+        )
+        metrics.update(_metric_snapshot(tick=tick, signals=signals, strategy_state=strategy_state))
+        strategy_state["metrics"] = metrics
+        return signals
 
     def _build_rebalance_events(
         self,
@@ -223,6 +302,13 @@ class AdaptiveNetStrategy(Strategy):
         if target_net == 0:
             strategy_state["open_position_id"] = None
             strategy_state["open_entry_id"] = None
+        transition = strategy_state.get("pending_position_transition")
+        if isinstance(transition, dict):
+            strategy_state["open_average_entry_price"] = transition.get(
+                "position_after_avg_entry_price"
+            )
+            strategy_state["latest_position_transition"] = transition
+            strategy_state["pending_position_transition"] = None
         return events
 
     def _open_event(
@@ -289,9 +375,15 @@ class AdaptiveNetStrategy(Strategy):
                 if execution_result.entry_binding.fill_price is not None
                 else None
             )
+            if execution_result.entry_binding.fill_price is not None:
+                strategy_state.setdefault(
+                    "open_average_entry_price",
+                    str(execution_result.entry_binding.fill_price),
+                )
         if not strategy_state.get("open_units"):
             strategy_state["open_position_id"] = None
             strategy_state["open_entry_id"] = None
+            strategy_state["open_average_entry_price"] = None
         state.strategy_state = strategy_state
 
     def on_start(self, *, state: ExecutionState) -> StrategyResult:
@@ -308,11 +400,16 @@ def _initial_state(raw: Any) -> dict[str, Any]:
     state.setdefault("target_net_units", 0)
     state.setdefault("open_units", 0)
     state.setdefault("open_direction", "")
+    state.setdefault("open_average_entry_price", None)
     state.setdefault("open_position_id", None)
     state.setdefault("open_entry_id", None)
     state.setdefault("next_entry_id", 1)
     state.setdefault("metric_signals", [])
+    state.setdefault("published_metric_signals", [])
+    state.setdefault("published_metric_names", [])
+    state.setdefault("metric_publish_count", 0)
     state.setdefault("latest_decision", None)
+    state.setdefault("latest_position_transition", None)
     state.setdefault("decision_history", [])
     return state
 
@@ -324,6 +421,7 @@ def _append_decision_history(
     current_net_units: int,
     decision: dict[str, Any],
     metric_signals: list[dict[str, Any]],
+    position_transition: dict[str, Any],
 ) -> list[dict[str, Any]]:
     history = raw_history if isinstance(raw_history, list) else []
     target_net_units = int(decision.get("target_net_units") or current_net_units)
@@ -339,6 +437,7 @@ def _append_decision_history(
         "probability_long": str(decision.get("probability_long", "0.5")),
         "probability_short": str(decision.get("probability_short", "0.5")),
         "risk_multiplier": str(decision.get("risk_multiplier", "1")),
+        "position_transition": position_transition,
         "metric_signals": metric_signals,
     }
     return [*history, point][-200:]
@@ -427,6 +526,177 @@ def _elapsed_since(value: Any, current_timestamp: datetime) -> int | None:
     except ValueError:
         return None
     return max(0, int((current_timestamp - previous).total_seconds()))
+
+
+def _should_make_decision(
+    *,
+    strategy_state: dict[str, Any],
+    current_timestamp: datetime,
+    config: AdaptiveNetConfig,
+) -> bool:
+    publish_count = int(strategy_state.get("metric_publish_count", 0) or 0)
+    last_decision_publish_count = int(
+        strategy_state.get("last_decision_metric_publish_count", -(10**9))
+    )
+    publish_delta = publish_count - last_decision_publish_count
+    if (
+        config.decision_interval_metric_publishes > 0
+        and publish_delta < config.decision_interval_metric_publishes
+    ):
+        return False
+    elapsed_seconds = _elapsed_since(strategy_state.get("last_decision_at"), current_timestamp)
+    if config.decision_interval_seconds > 0 and elapsed_seconds is not None:
+        return elapsed_seconds >= config.decision_interval_seconds
+    return True
+
+
+def _metric_signals_from_state(value: Any) -> list[MetricSignal]:
+    if not isinstance(value, list):
+        return []
+    signals: list[MetricSignal] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        if not name:
+            continue
+        signals.append(
+            MetricSignal(
+                name=name,
+                direction_score=Decimal(str(item.get("direction_score", "0") or "0")),
+                confidence=Decimal(str(item.get("confidence", "0") or "0")),
+                size_multiplier=Decimal(str(item.get("size_multiplier", "1") or "1")),
+                reason=str(item.get("reason") or ""),
+            )
+        )
+    return signals
+
+
+def _to_decimal_or_none(value: Any) -> Decimal | None:
+    if value in (None, ""):
+        return None
+    try:
+        return Decimal(str(value))
+    except Exception:  # nosec B110
+        return None
+
+
+def _position_transition_snapshot(
+    *,
+    tick: Tick,
+    current_net_units: int,
+    decision: dict[str, Any],
+    strategy_state: dict[str, Any],
+) -> dict[str, Any]:
+    target_net_units = int(decision.get("target_net_units") or current_net_units)
+    order_units = int(decision.get("order_units") or target_net_units - current_net_units)
+    order_direction = "buy" if order_units > 0 else "sell" if order_units < 0 else "hold"
+    fill_price = tick.ask if order_units > 0 else tick.bid if order_units < 0 else tick.mid
+    before_avg = _to_decimal_or_none(strategy_state.get("open_average_entry_price"))
+    after_avg = _next_average_entry_price(
+        before_units=current_net_units,
+        before_avg=before_avg,
+        after_units=target_net_units,
+        order_units=order_units,
+        fill_price=fill_price,
+    )
+    return {
+        "timestamp": tick.timestamp.isoformat(),
+        "order_direction": order_direction,
+        "order_units": order_units,
+        "order_abs_units": abs(order_units),
+        "order_price": str(fill_price),
+        "position_before_net_units": current_net_units,
+        "position_before_abs_units": abs(current_net_units),
+        "position_before_avg_entry_price": str(before_avg) if before_avg is not None else None,
+        "position_after_net_units": target_net_units,
+        "position_after_abs_units": abs(target_net_units),
+        "position_after_avg_entry_price": str(after_avg) if after_avg is not None else None,
+        "position_delta_net_units": target_net_units - current_net_units,
+        "position_delta_abs_units": abs(target_net_units) - abs(current_net_units),
+        "action": _decision_action(current_net_units, target_net_units, order_units),
+    }
+
+
+def _next_average_entry_price(
+    *,
+    before_units: int,
+    before_avg: Decimal | None,
+    after_units: int,
+    order_units: int,
+    fill_price: Decimal,
+) -> Decimal | None:
+    if after_units == 0:
+        return None
+    if order_units == 0:
+        return before_avg
+    if before_units == 0 or _sign(before_units) != _sign(after_units):
+        return fill_price
+    if abs(after_units) <= abs(before_units):
+        return before_avg
+    before_abs = Decimal(abs(before_units))
+    added_abs = Decimal(abs(order_units))
+    if before_avg is None:
+        return fill_price
+    return ((before_avg * before_abs) + (fill_price * added_abs)) / (before_abs + added_abs)
+
+
+def _metric_snapshot(
+    *,
+    tick: Tick,
+    signals: list[MetricSignal],
+    strategy_state: dict[str, Any],
+) -> dict[str, Any]:
+    snapshot: dict[str, Any] = {
+        "adaptive_net_metric_published_at": tick.timestamp.isoformat(),
+        "adaptive_net_metric_publish_tick": strategy_state.get("last_metric_publish_tick"),
+        "adaptive_net_metric_names": [signal.name for signal in signals],
+        "adaptive_net_metric_signals": [signal.to_dict() for signal in signals],
+    }
+    for signal in signals:
+        prefix = f"adaptive_net_{signal.name}"
+        snapshot[f"{prefix}_direction_score"] = str(signal.direction_score)
+        snapshot[f"{prefix}_confidence"] = str(signal.confidence)
+        snapshot[f"{prefix}_size_multiplier"] = str(signal.size_multiplier)
+        snapshot[f"{prefix}_reason"] = signal.reason
+    return snapshot
+
+
+def _decision_snapshot(
+    *,
+    tick: Tick,
+    decision: dict[str, Any],
+    position_transition: dict[str, Any],
+    strategy_state: dict[str, Any],
+) -> dict[str, Any]:
+    snapshot: dict[str, Any] = {
+        "adaptive_net_decision_published_at": tick.timestamp.isoformat(),
+        "adaptive_net_decision_metric_publish_count": strategy_state.get("metric_publish_count"),
+        "adaptive_net_decision_edge": str(decision.get("edge", "0")),
+        "adaptive_net_decision_confidence": str(decision.get("confidence", "0")),
+        "adaptive_net_decision_probability_long": str(decision.get("probability_long", "0.5")),
+        "adaptive_net_decision_probability_short": str(decision.get("probability_short", "0.5")),
+        "adaptive_net_decision_risk_multiplier": str(decision.get("risk_multiplier", "1")),
+        "adaptive_net_decision_target_net_units": int(decision.get("target_net_units") or 0),
+        "adaptive_net_decision_order_units": int(decision.get("order_units") or 0),
+        "adaptive_net_position_before_net_units": position_transition["position_before_net_units"],
+        "adaptive_net_position_before_abs_units": position_transition["position_before_abs_units"],
+        "adaptive_net_position_after_net_units": position_transition["position_after_net_units"],
+        "adaptive_net_position_after_abs_units": position_transition["position_after_abs_units"],
+        "adaptive_net_position_delta_net_units": position_transition["position_delta_net_units"],
+        "adaptive_net_position_delta_abs_units": position_transition["position_delta_abs_units"],
+        "adaptive_net_order_abs_units": position_transition["order_abs_units"],
+        "adaptive_net_order_price": position_transition["order_price"],
+        "adaptive_net_order_direction": position_transition["order_direction"],
+        "adaptive_net_position_transition": position_transition,
+    }
+    before_avg = position_transition.get("position_before_avg_entry_price")
+    after_avg = position_transition.get("position_after_avg_entry_price")
+    if before_avg is not None:
+        snapshot["adaptive_net_position_before_avg_entry_price"] = before_avg
+    if after_avg is not None:
+        snapshot["adaptive_net_position_after_avg_entry_price"] = after_avg
+    return snapshot
 
 
 def _should_rebalance(

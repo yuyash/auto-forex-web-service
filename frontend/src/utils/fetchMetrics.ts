@@ -9,7 +9,7 @@ export interface MetricPoint {
   /** Unix timestamp (seconds) */
   t: number;
   /** Strategy-specific metrics JSON */
-  metrics: Record<string, number | string | null>;
+  metrics: Record<string, unknown>;
 }
 
 export interface MetricsPage {
@@ -36,13 +36,13 @@ function buildTaskPrefix(taskType: TaskType): string {
 }
 
 function normalizeMetricPoint(point: Partial<MetricPoint>): MetricPoint {
-  let metrics: Record<string, number | string | null> = {};
+  let metrics: Record<string, unknown> = {};
   if (typeof point.metrics === 'string') {
     try {
       const parsed = JSON.parse(point.metrics);
       metrics =
         parsed && typeof parsed === 'object'
-          ? (parsed as Record<string, number | string | null>)
+          ? (parsed as Record<string, unknown>)
           : {};
     } catch {
       metrics = {};

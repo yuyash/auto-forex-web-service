@@ -30,6 +30,13 @@ def ensure_metrics_dict(value: Any) -> dict:
     return {}
 
 
+def filter_metrics(metrics: dict, metric_keys: tuple[str, ...]) -> dict:
+    """Return only requested metric keys when a metrics key filter is present."""
+    if not metric_keys:
+        return metrics
+    return {key: metrics[key] for key in metric_keys if key in metrics}
+
+
 def paginated_envelope(
     request: Request,
     results: list,
@@ -96,6 +103,7 @@ class TaskMetricsQueryService:
                     interval=interval,
                     page=page,
                     page_size=page_size,
+                    metric_keys=query.metric_keys,
                 )
                 return self._attach_metadata(envelope, metadata, "db_window_last_python")
 
@@ -113,7 +121,13 @@ class TaskMetricsQueryService:
         total_count = queryset.count()
         start = (page - 1) * page_size
         rows = queryset.values_list("timestamp", "metrics")[start : start + page_size]
-        data = [{"t": int(ts.timestamp()), "metrics": ensure_metrics_dict(m)} for ts, m in rows]
+        data = [
+            {
+                "t": int(ts.timestamp()),
+                "metrics": filter_metrics(ensure_metrics_dict(m), query.metric_keys),
+            }
+            for ts, m in rows
+        ]
         envelope = paginated_envelope(request, data, total_count, page, page_size)
         return self._attach_metadata(envelope, metadata, "db_raw")
 
@@ -134,16 +148,51 @@ class TaskMetricsQueryService:
             .values_list("timestamp", "metrics")
             .first()
         )
+        state_row = (
+            ExecutionState.objects.filter(
+                task_type=task_type_label,
+                task_id=task.pk,
+                execution_id=query.execution.execution_id,
+            )
+            .order_by("-updated_at")
+            .values_list("resume_cursor_timestamp", "last_tick_timestamp", "strategy_state")
+            .first()
+        )
         metadata = self._metadata(
             task=task,
             task_type_label=task_type_label,
             execution_id=query.execution.execution_id,
         )
+        if state_row is not None:
+            state_ts = state_row[0] or state_row[1]
+            strategy_state = state_row[2] if isinstance(state_row[2], dict) else {}
+            state_metrics = (
+                strategy_state.get("metrics") if isinstance(strategy_state, dict) else None
+            )
+            row_ts = row[0] if row is not None else None
+            if (
+                state_ts is not None
+                and isinstance(state_metrics, dict)
+                and (row_ts is None or state_ts >= row_ts)
+            ):
+                return {
+                    "data_source": "state_latest",
+                    **metadata,
+                    "result": {
+                        "t": int(state_ts.timestamp()),
+                        "metrics": filter_metrics(
+                            ensure_metrics_dict(state_metrics), query.metric_keys
+                        ),
+                    },
+                }
         return {
             "data_source": "db_latest",
             **metadata,
             "result": (
-                {"t": int(row[0].timestamp()), "metrics": ensure_metrics_dict(row[1])}
+                {
+                    "t": int(row[0].timestamp()),
+                    "metrics": filter_metrics(ensure_metrics_dict(row[1]), query.metric_keys),
+                }
                 if row is not None
                 else None
             ),
@@ -197,6 +246,7 @@ class TaskMetricsQueryService:
         interval: int,
         page: int,
         page_size: int,
+        metric_keys: tuple[str, ...],
     ) -> dict:
         rows = list(queryset.values_list("timestamp", "metrics"))
         bucketed: dict[int, tuple] = {}
@@ -210,7 +260,11 @@ class TaskMetricsQueryService:
         start = (page - 1) * page_size
         page_rows = aggregated[start : start + page_size]
         data = [
-            {"t": int(ts.timestamp()), "metrics": ensure_metrics_dict(m)} for ts, m in page_rows
+            {
+                "t": int(ts.timestamp()),
+                "metrics": filter_metrics(ensure_metrics_dict(m), metric_keys),
+            }
+            for ts, m in page_rows
         ]
         return paginated_envelope(request, data, total_count, page, page_size)
 
@@ -271,5 +325,11 @@ class TaskMetricsQueryService:
             cursor.execute(sql, [interval_seconds, *where_params, page_size, offset])
             rows = cursor.fetchall()
 
-        data = [{"t": int(ts.timestamp()), "metrics": ensure_metrics_dict(m)} for ts, m in rows]
+        data = [
+            {
+                "t": int(ts.timestamp()),
+                "metrics": filter_metrics(ensure_metrics_dict(m), query.metric_keys),
+            }
+            for ts, m in rows
+        ]
         return paginated_envelope(request, data, total_count, page, page_size)
