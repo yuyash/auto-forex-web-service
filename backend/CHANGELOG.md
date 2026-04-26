@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.45.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.45.0...backend-v1.45.1) (2026-04-26)
+
+
+### Bug Fixes
+
+* **trading:** stabilize backtest execution ([#616](https://github.com/yuyash/auto-forex-web-service/issues/616)) ([8ace3af](https://github.com/yuyash/auto-forex-web-service/commit/8ace3afe182b33b05bdb1bed65f0e383153cd81b))
+
 ## [1.45.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.44.0...backend-v1.45.0) (2026-04-26)
 
 
