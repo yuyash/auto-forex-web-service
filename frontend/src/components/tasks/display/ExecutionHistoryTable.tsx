@@ -21,6 +21,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Paper,
   TextField,
 } from '@mui/material';
 import {
@@ -78,6 +79,9 @@ export function ExecutionHistoryTable({
   const [notesDialogOpen, setNotesDialogOpen] = useState(false);
   const [notesTarget, setNotesTarget] = useState<TaskExecution | null>(null);
   const [notesValue, setNotesValue] = useState('');
+  const [revisionTarget, setRevisionTarget] = useState<TaskExecution | null>(
+    null
+  );
 
   // URL-driven comparison: ?compare=id1,id2,...
   const compareParam = searchParams.get('compare');
@@ -207,6 +211,11 @@ export function ExecutionHistoryTable({
                 label={count}
                 size="small"
                 variant={count ? 'filled' : 'outlined'}
+                clickable
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setRevisionTarget(row);
+                }}
               />
             </Tooltip>
           );
@@ -712,6 +721,74 @@ export function ExecutionHistoryTable({
             }}
           >
             {t('actions.ok')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={revisionTarget !== null}
+        onClose={() => setRevisionTarget(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Config revisions</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Execution {revisionTarget?.execution_number} segment{' '}
+            {revisionTarget?.segment_index ?? 1}
+          </Typography>
+          <Box sx={{ display: 'grid', gap: 1.5 }}>
+            <Typography variant="body2">
+              Current hash:{' '}
+              <Box component="span" sx={{ fontFamily: 'monospace' }}>
+                {revisionTarget?.strategy_config?.config_hash ?? '-'}
+              </Box>
+            </Typography>
+            <Typography variant="body2">
+              Strategy:{' '}
+              {revisionTarget?.strategy_config?.current?.name ??
+                revisionTarget?.strategy_config?.name ??
+                '-'}
+            </Typography>
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Revision history
+              </Typography>
+              {revisionTarget?.strategy_config?.revisions?.length ? (
+                revisionTarget.strategy_config.revisions.map(
+                  (revision, index) => (
+                    <Paper
+                      key={`${revision.from_hash ?? index}-${revision.to_hash ?? index}`}
+                      variant="outlined"
+                      sx={{ p: 1.5, mb: 1 }}
+                    >
+                      <Typography
+                        variant="body2"
+                        sx={{ fontFamily: 'monospace' }}
+                      >
+                        {String(revision.from_hash ?? '-')} {'->'}{' '}
+                        {String(revision.to_hash ?? '-')}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Changed fields:{' '}
+                        {Array.isArray(revision.changed_fields)
+                          ? revision.changed_fields.join(', ')
+                          : '-'}
+                      </Typography>
+                    </Paper>
+                  )
+                )
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  No config revisions recorded for this execution.
+                </Typography>
+              )}
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRevisionTarget(null)}>
+            {t('actions.close', 'Close')}
           </Button>
         </DialogActions>
       </Dialog>

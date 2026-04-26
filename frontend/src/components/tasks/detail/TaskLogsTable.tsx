@@ -128,6 +128,9 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     setComponentFilter(value);
     setPage(0);
   };
+  const auditComponents = availableComponents.filter((component) =>
+    ['task.audit', 'config.audit'].includes(component)
+  );
 
   // Reset page when executionRunId changes
   const [prevExecutionRunId, setPrevExecutionRunId] = useState(executionRunId);
@@ -423,6 +426,27 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
           fromLabel={t('tables.logs.timestampFrom')}
           toLabel={t('tables.logs.timestampTo')}
         />
+        {auditComponents.length > 0 && (
+          <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+            {auditComponents.map((component) => {
+              const selected = componentFilter.includes(component);
+              return (
+                <Chip
+                  key={component}
+                  label={
+                    component === 'config.audit' ? 'Config edits' : 'Task edits'
+                  }
+                  color={selected ? 'primary' : 'default'}
+                  variant={selected ? 'filled' : 'outlined'}
+                  onClick={() => {
+                    setComponentFilter(selected ? [] : [component]);
+                    setPage(0);
+                  }}
+                />
+              );
+            })}
+          </Box>
+        )}
       </Box>
 
       {isMobile ? (

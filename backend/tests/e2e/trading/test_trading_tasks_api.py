@@ -62,6 +62,8 @@ class TestTradingTasks:
         resp = authenticated_client.get(f"/api/trading/tasks/trading/{task_id}/")
         assert resp.status_code == 200
         assert resp.data["id"] == task_id
+        assert resp.data["action_policy"]["can_start"] is True
+        assert resp.data["action_policy"]["can_edit_metadata"] is True
 
     def test_delete_trading_task(self, authenticated_client, oanda_account, strategy_config):
         task_id = _create_task(
@@ -109,6 +111,7 @@ class TestTradingTasks:
         resp = authenticated_client.get("/api/trading/tasks/trading/", {"status": "created"})
         assert resp.status_code == 200
         assert all(t["status"] == "created" for t in resp.data["results"])
+        assert all("action_policy" in t for t in resp.data["results"])
 
     def test_list_search(self, authenticated_client, oanda_account, strategy_config):
         """Verify search filter finds tasks by name."""

@@ -86,6 +86,26 @@ class TestGetSerializerClass:
         assert cls.__name__ == "BacktestTaskSerializer"
 
 
+class TestResumeValidationPayload:
+    """Tests for structured resume validation responses."""
+
+    def test_resume_config_error_payload_is_structured(self):
+        exc = TaskValidationError("blocked")
+        exc.resume_config_error = {
+            "code": "resume_task_fields_changed",
+            "restart_required": True,
+            "blocked_fields": ["pip_size"],
+            "safe_fields": ["commission_per_trade"],
+        }
+
+        payload = BacktestTaskViewSet._resume_validation_payload(exc)
+
+        assert payload["error_code"] == "resume_task_fields_changed"
+        assert payload["restart_required"] is True
+        assert payload["blocked_fields"] == ["pip_size"]
+        assert payload["safe_fields"] == ["commission_per_trade"]
+
+
 class TestGetQueryset:
     """Tests for get_queryset."""
 

@@ -2,73 +2,63 @@
 
 ## [1.57.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.57.1...frontend-v1.57.2) (2026-04-26)
 
-
 ### Bug Fixes
 
-* snowball rebuild tp and cycle accounting ([#610](https://github.com/yuyash/auto-forex-web-service/issues/610)) ([9d73872](https://github.com/yuyash/auto-forex-web-service/commit/9d73872642251d27ce5cab1968f0a8fd28dda278))
+- snowball rebuild tp and cycle accounting ([#610](https://github.com/yuyash/auto-forex-web-service/issues/610)) ([9d73872](https://github.com/yuyash/auto-forex-web-service/commit/9d73872642251d27ce5cab1968f0a8fd28dda278))
 
 ## [1.57.1](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.57.0...frontend-v1.57.1) (2026-04-25)
 
-
 ### Refactoring
 
-* responsibility boundaries ([#608](https://github.com/yuyash/auto-forex-web-service/issues/608)) ([bf7d3bc](https://github.com/yuyash/auto-forex-web-service/commit/bf7d3bc9836546017884c41cc588dee45a2b2b25))
+- responsibility boundaries ([#608](https://github.com/yuyash/auto-forex-web-service/issues/608)) ([bf7d3bc](https://github.com/yuyash/auto-forex-web-service/commit/bf7d3bc9836546017884c41cc588dee45a2b2b25))
 
 ## [1.57.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.11...frontend-v1.57.0) (2026-04-25)
 
-
 ### Features
 
-* security observability updates ([#606](https://github.com/yuyash/auto-forex-web-service/issues/606)) ([55dfa3c](https://github.com/yuyash/auto-forex-web-service/commit/55dfa3cd6975581af25fc5a8fc329adf3348c7a5))
+- security observability updates ([#606](https://github.com/yuyash/auto-forex-web-service/issues/606)) ([55dfa3c](https://github.com/yuyash/auto-forex-web-service/commit/55dfa3cd6975581af25fc5a8fc329adf3348c7a5))
 
 ## [1.56.11](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.10...frontend-v1.56.11) (2026-04-25)
 
-
 ### Bug Fixes
 
-* **frontend:** expand metrics charts ([#604](https://github.com/yuyash/auto-forex-web-service/issues/604)) ([2b2b728](https://github.com/yuyash/auto-forex-web-service/commit/2b2b72869ea8bb98b07915d31882ba93152d725d))
+- **frontend:** expand metrics charts ([#604](https://github.com/yuyash/auto-forex-web-service/issues/604)) ([2b2b728](https://github.com/yuyash/auto-forex-web-service/commit/2b2b72869ea8bb98b07915d31882ba93152d725d))
 
 ## [1.56.10](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.9...frontend-v1.56.10) (2026-04-25)
 
-
 ### Bug Fixes
 
-* metrics chart surface height ([#602](https://github.com/yuyash/auto-forex-web-service/issues/602)) ([bc5f1a0](https://github.com/yuyash/auto-forex-web-service/commit/bc5f1a00842bbef29b60fd530477900a8b7683bf))
+- metrics chart surface height ([#602](https://github.com/yuyash/auto-forex-web-service/issues/602)) ([bc5f1a0](https://github.com/yuyash/auto-forex-web-service/commit/bc5f1a00842bbef29b60fd530477900a8b7683bf))
 
 ## [1.56.9](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.8...frontend-v1.56.9) (2026-04-25)
 
-
 ### Bug Fixes
 
-* **frontend:** fill metrics chart surface ([#600](https://github.com/yuyash/auto-forex-web-service/issues/600)) ([a566d0a](https://github.com/yuyash/auto-forex-web-service/commit/a566d0af8df867b2d0940d1b15d8c7736789505d))
+- **frontend:** fill metrics chart surface ([#600](https://github.com/yuyash/auto-forex-web-service/issues/600)) ([a566d0a](https://github.com/yuyash/auto-forex-web-service/commit/a566d0af8df867b2d0940d1b15d8c7736789505d))
 
 ## [1.56.8](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.7...frontend-v1.56.8) (2026-04-25)
 
-
 ### Bug Fixes
 
-* **frontend:** reduce metrics chart axis padding ([#598](https://github.com/yuyash/auto-forex-web-service/issues/598)) ([56993f9](https://github.com/yuyash/auto-forex-web-service/commit/56993f9574b98ce5fb66161580e9b0c9845492ae))
+- **frontend:** reduce metrics chart axis padding ([#598](https://github.com/yuyash/auto-forex-web-service/issues/598)) ([56993f9](https://github.com/yuyash/auto-forex-web-service/commit/56993f9574b98ce5fb66161580e9b0c9845492ae))
 
 ## [1.56.7](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.6...frontend-v1.56.7) (2026-04-24)
 
-
 ### Bug Fixes
 
-* **frontend:** improve task detail layout coverage ([#596](https://github.com/yuyash/auto-forex-web-service/issues/596)) ([7c841d5](https://github.com/yuyash/auto-forex-web-service/commit/7c841d51dd83ee4bdb442a5e2f6ecab430245180))
+- **frontend:** improve task detail layout coverage ([#596](https://github.com/yuyash/auto-forex-web-service/issues/596)) ([7c841d5](https://github.com/yuyash/auto-forex-web-service/commit/7c841d51dd83ee4bdb442a5e2f6ecab430245180))
 
 ## [1.56.6](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.5...frontend-v1.56.6) (2026-04-24)
 
-
 ### Bug Fixes
 
-* improve task detail and dashboard UI ([#593](https://github.com/yuyash/auto-forex-web-service/issues/593)) ([12a88ba](https://github.com/yuyash/auto-forex-web-service/commit/12a88ba5d1ffa2f65349e323c7d45e9d4778ed33))
+- improve task detail and dashboard UI ([#593](https://github.com/yuyash/auto-forex-web-service/issues/593)) ([12a88ba](https://github.com/yuyash/auto-forex-web-service/commit/12a88ba5d1ffa2f65349e323c7d45e9d4778ed33))
 
 ## [1.56.5](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.4...frontend-v1.56.5) (2026-04-24)
 
-
 ### Refactoring
 
-* codebase quality pass ([#590](https://github.com/yuyash/auto-forex-web-service/issues/590)) ([6046edd](https://github.com/yuyash/auto-forex-web-service/commit/6046edd32a3763f56feed0fb81f140c3406f18ba))
+- codebase quality pass ([#590](https://github.com/yuyash/auto-forex-web-service/issues/590)) ([6046edd](https://github.com/yuyash/auto-forex-web-service/commit/6046edd32a3763f56feed0fb81f140c3406f18ba))
 
 ## [1.56.4](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.56.3...frontend-v1.56.4) (2026-04-23)
 

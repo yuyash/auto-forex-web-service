@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from logging import Logger
+from typing import Any
 from uuid import UUID, uuid4
 
 from celery.result import AsyncResult
@@ -43,6 +44,15 @@ class TaskServiceError(Exception):
 
 class TaskValidationError(TaskServiceError, ValueError):
     """Raised when a task request fails domain validation."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        resume_config_error: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.resume_config_error = resume_config_error
 
 
 class TaskConflictError(TaskServiceError, ValueError):

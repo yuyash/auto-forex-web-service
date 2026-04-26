@@ -33,6 +33,7 @@ def test_get_uses_normalized_task_type_and_disables_sniffing():
     task_model_for.assert_called_once_with(TaskType.BACKTEST.value)
     event_stream.assert_called_once_with(
         request,
+        task_type=TaskType.BACKTEST.value,
         task_model=task_model,
         task_id=task_id,
     )
@@ -47,6 +48,7 @@ def test_event_stream_swallows_runtime_errors():
 
     stream = TaskEventStreamView()._event_stream(
         request,
+        task_type=TaskType.BACKTEST.value,
         task_model=task_model,
         task_id=uuid4(),
     )

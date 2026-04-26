@@ -44,6 +44,8 @@ class TestBacktestTasks:
         resp = authenticated_client.get(f"/api/trading/tasks/backtest/{task_id}/")
         assert resp.status_code == 200
         assert resp.data["id"] == task_id
+        assert resp.data["action_policy"]["can_start"] is True
+        assert resp.data["action_policy"]["can_edit_metadata"] is True
 
     def test_delete_backtest_task(self, authenticated_client, strategy_config):
         task_id = _create_backtest(authenticated_client, strategy_config.id, "E2E Backtest Delete")
@@ -71,6 +73,7 @@ class TestBacktestTasks:
         resp = authenticated_client.get("/api/trading/tasks/backtest/", {"status": "created"})
         assert resp.status_code == 200
         assert all(t["status"] == "created" for t in resp.data["results"])
+        assert all("action_policy" in t for t in resp.data["results"])
 
     def test_list_search(self, authenticated_client, strategy_config):
         """Verify search filter finds tasks by name."""

@@ -368,8 +368,17 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         return api_error("Task cannot be resumed due to a conflict", code="resume_conflict")
 
     @staticmethod
-    def _resume_validation_payload() -> dict[str, Any]:
+    def _resume_validation_payload(exc: TaskValidationError | None = None) -> dict[str, Any]:
         """Return the fixed 400 payload for a resume validation failure."""
+        config_error = getattr(exc, "resume_config_error", None)
+        if isinstance(config_error, dict):
+            return api_error(
+                "Resume requires a restart because configuration changed incompatibly",
+                code=str(config_error.get("code") or "resume_config_incompatible"),
+                restart_required=bool(config_error.get("restart_required", True)),
+                blocked_fields=list(config_error.get("blocked_fields") or []),
+                safe_fields=list(config_error.get("safe_fields") or []),
+            )
         return api_error(
             "Invalid resume request for current task state",
             code="invalid_resume_state",
@@ -390,13 +399,13 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
                 self._resume_conflict_payload(),
                 status=status.HTTP_409_CONFLICT,
             )
-        except TaskValidationError:
+        except TaskValidationError as exc:
             logger.exception(
                 "Resume validation failed",
                 extra={"task_id": str(task.pk)},
             )
             return Response(
-                self._resume_validation_payload(),
+                self._resume_validation_payload(exc),
                 status=status.HTTP_400_BAD_REQUEST,
             )
         except Exception:

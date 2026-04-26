@@ -37,6 +37,34 @@ RESUME_MONITORED_PARAMETER_KEYS = (
 )
 
 
+class ResumeConfigurationError(ValueError):
+    """Structured validation error for resume-incompatible configuration edits."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str,
+        blocked_fields: list[str] | None = None,
+        safe_fields: list[str] | None = None,
+        restart_required: bool = True,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.blocked_fields = blocked_fields or []
+        self.safe_fields = safe_fields or sorted(RESUME_SAFE_TASK_FIELDS)
+        self.restart_required = restart_required
+
+    def as_payload(self) -> dict[str, Any]:
+        """Return API-safe structured error metadata."""
+        return {
+            "code": self.code,
+            "blocked_fields": self.blocked_fields,
+            "safe_fields": self.safe_fields,
+            "restart_required": self.restart_required,
+        }
+
+
 @dataclass(frozen=True)
 class ResumeConfigAudit:
     """Resume config comparison result."""
@@ -81,17 +109,21 @@ def validate_resume_configuration(*, task: Any, task_type: str) -> ResumeConfigA
     previous_strategy_type = previous_strategy_config.get("strategy_type")
     current_strategy_type = current_strategy_config.get("strategy_type")
     if previous_strategy_type and previous_strategy_type != current_strategy_type:
-        raise ValueError(
-            "Cannot resume with a different strategy type. Create a new task execution instead."
+        raise ResumeConfigurationError(
+            "Cannot resume with a different strategy type. Create a new task execution instead.",
+            code="resume_strategy_type_changed",
+            blocked_fields=["strategy_type"],
         )
 
     task_changes = _diff_dict(previous_task_config, current_task_config)
     blocked_task_fields = sorted(set(task_changes) - RESUME_SAFE_TASK_FIELDS)
     if blocked_task_fields:
         fields = ", ".join(blocked_task_fields)
-        raise ValueError(
+        raise ResumeConfigurationError(
             f"Cannot resume after changing task execution fields ({fields}). "
-            "Restart the task to apply those changes."
+            "Restart the task to apply those changes.",
+            code="resume_task_fields_changed",
+            blocked_fields=blocked_task_fields,
         )
 
     parameter_changes = _diff_dict(previous_params, current_params)

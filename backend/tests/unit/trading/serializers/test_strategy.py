@@ -12,6 +12,7 @@ from apps.trading.serializers.strategy import (
     StrategyConfigSerializer,
     StrategyListSerializer,
 )
+from tests.integration.factories import StrategyConfigurationFactory
 
 
 class TestStrategyConfigDetailSerializer:
@@ -116,6 +117,20 @@ class TestStrategyConfigCreateSerializer:
         assert updated is instance
         assert instance.parameters == {"foo": "bar"}
         instance.save.assert_called_once()
+
+    @pytest.mark.django_db
+    def test_update_records_db_backed_name_and_description_changes(self):
+        config = StrategyConfigurationFactory(name="Original", description="Old")
+        serializer = StrategyConfigCreateSerializer()
+
+        updated = serializer.update(
+            config,
+            {"name": "Updated", "description": "New"},
+        )
+
+        updated.refresh_from_db()
+        assert updated.name == "Updated"
+        assert updated.description == "New"
 
     @patch("apps.trading.strategies.registry.registry")
     def test_validate_hides_internal_value_error_details(self, mock_registry):
