@@ -74,7 +74,7 @@ describe('configurationMutationCache', () => {
     );
   });
 
-  it('removes deleted configs from list, detail, and linked-task caches', () => {
+  it('removes deleted configs from list, detail, and linked-task caches', async () => {
     const listKey = queryKeys.configurations.list();
     const detailKey = queryKeys.configurations.detail('config-1');
     const tasksKey = queryKeys.configurations.tasks('config-1');
@@ -85,7 +85,7 @@ describe('configurationMutationCache', () => {
     queryClient.setQueryData(detailKey, buildConfig());
     queryClient.setQueryData(tasksKey, [{ id: 'task-1' }]);
 
-    removeConfigurationCaches('config-1');
+    await removeConfigurationCaches('config-1');
 
     expect(
       queryClient.getQueryData<PaginatedResponse<StrategyConfig>>(listKey)

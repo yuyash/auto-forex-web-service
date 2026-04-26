@@ -25,6 +25,9 @@ export interface AppSettings {
   // Data refresh
   healthCheckIntervalSeconds: number;
   taskPollingIntervalSeconds: number;
+
+  // Layout
+  constrainContentWidth: boolean;
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -38,6 +41,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   sessionTimeoutMinutes: 30,
   healthCheckIntervalSeconds: 30,
   taskPollingIntervalSeconds: 10,
+  constrainContentWidth: true,
 };
 
 export const APP_SETTINGS_STORAGE_KEY = 'app_settings';
@@ -54,6 +58,7 @@ export const appSettingsSchema = z.object({
   sessionTimeoutMinutes: z.number(),
   healthCheckIntervalSeconds: z.number(),
   taskPollingIntervalSeconds: z.number(),
+  constrainContentWidth: z.boolean().optional(),
 });
 
 export function readAppSettings(): AppSettings {

@@ -270,7 +270,7 @@ describe('taskMutationCache', () => {
     ).toEqual(['Alpha', 'Zulu']);
   });
 
-  it('removes detail and derived caches when a task is removed', () => {
+  it('removes detail and derived caches when a task is removed', async () => {
     const detailKey = queryKeys.tradingTasks.detail('task-1');
     const summaryKey = queryKeys.taskResources.summary(
       TaskType.TRADING,
@@ -279,7 +279,7 @@ describe('taskMutationCache', () => {
     queryClient.setQueryData<TradingTask | null>(detailKey, buildTradingTask());
     queryClient.setQueryData(summaryKey, { status: TaskStatus.RUNNING });
 
-    removeTaskCaches('trading', 'task-1');
+    await removeTaskCaches('trading', 'task-1');
 
     expect(queryClient.getQueryData(detailKey)).toBeUndefined();
     expect(queryClient.getQueryData(summaryKey)).toBeUndefined();

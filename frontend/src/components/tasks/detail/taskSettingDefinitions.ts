@@ -22,6 +22,25 @@ function formatPipSize(value: TaskSettingValue): string {
   });
 }
 
+function formatWeekday(t: TFunction) {
+  const weekdays = [
+    { key: 'monday', label: 'Monday' },
+    { key: 'tuesday', label: 'Tuesday' },
+    { key: 'wednesday', label: 'Wednesday' },
+    { key: 'thursday', label: 'Thursday' },
+    { key: 'friday', label: 'Friday' },
+    { key: 'saturday', label: 'Saturday' },
+    { key: 'sunday', label: 'Sunday' },
+  ] as const;
+
+  return (value: TaskSettingValue): string => {
+    if (value === null || value === undefined || value === '') return '-';
+    const weekday = weekdays[Number(value)];
+    if (!weekday) return String(value);
+    return t(`backtest:form.weekdays.${weekday.key}`, weekday.label);
+  };
+}
+
 function formatInitialBalance(
   value: TaskSettingValue,
   source: Record<string, unknown>,
@@ -45,8 +64,14 @@ export function buildBacktestTaskSettingDefinitions(
   language?: string
 ): Array<TaskSettingDefinition<Record<string, unknown>>> {
   const formatBoolean = formatBooleanWithTranslation(t);
+  const formatWeekdayValue = formatWeekday(t);
 
   return [
+    { key: 'id', label: t('common:labels.taskId', 'Task ID') },
+    {
+      key: 'execution_id',
+      label: t('common:labels.executionId', 'Execution ID'),
+    },
     { key: 'name', label: t('common:labels.name') },
     { key: 'description', label: t('common:labels.description') },
     { key: 'config_name', label: t('common:labels.strategyConfiguration') },
@@ -126,6 +151,7 @@ export function buildBacktestTaskSettingDefinitions(
     {
       key: 'market_close_weekday',
       label: t('backtest:form.marketCloseWeekday', 'Market close weekday'),
+      format: formatWeekdayValue,
     },
     {
       key: 'market_close_hour_utc',
@@ -134,6 +160,7 @@ export function buildBacktestTaskSettingDefinitions(
     {
       key: 'market_open_weekday',
       label: t('backtest:form.marketOpenWeekday', 'Market open weekday'),
+      format: formatWeekdayValue,
     },
     {
       key: 'market_open_hour_utc',
@@ -146,10 +173,6 @@ export function buildBacktestTaskSettingDefinitions(
         'Max tick gap before fail (hours)'
       ),
     },
-    {
-      key: 'execution_id',
-      label: t('common:labels.executionId', 'Execution ID'),
-    },
     { key: 'debug_options', label: t('common:debug.title') },
   ];
 }
@@ -160,6 +183,11 @@ export function buildTradingTaskSettingDefinitions(
   const formatBoolean = formatBooleanWithTranslation(t);
 
   return [
+    { key: 'id', label: t('common:labels.taskId', 'Task ID') },
+    {
+      key: 'execution_id',
+      label: t('common:labels.executionId', 'Execution ID'),
+    },
     { key: 'name', label: t('common:labels.name') },
     { key: 'description', label: t('common:labels.description') },
     { key: 'config_name', label: t('common:labels.strategyConfiguration') },
@@ -225,10 +253,6 @@ export function buildTradingTaskSettingDefinitions(
         'trading:form.marketIdleResumeDelayMinutes',
         'Market resume delay (minutes)'
       ),
-    },
-    {
-      key: 'execution_id',
-      label: t('common:labels.executionId', 'Execution ID'),
     },
     { key: 'debug_options', label: t('common:debug.title') },
   ];

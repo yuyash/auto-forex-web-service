@@ -80,7 +80,9 @@
     "newTask": "新規タスク",
     "createTask": "タスクを作成",
     "updateTask": "タスクを更新",
-    "backToCurrent": "現在の実行に戻る"
+    "backToCurrent": "現在の実行に戻る",
+    "enableWidthLimit": "横幅制限を有効化",
+    "disableWidthLimit": "横幅制限を無効化"
   },
   "status": {
     "active": "アクティブ",
@@ -112,7 +114,9 @@
     "configuration": "設定構成",
     "strategyType": "戦略タイプ",
     "strategyConfiguration": "戦略設定",
+    "accountCurrency": "口座通貨",
     "oandaAccount": "OANDAアカウント",
+    "hedgingEnabled": "両建て有効",
     "sellOnStop": "停止時に売却",
     "dryRun": "ドライラン",
     "yes": "はい",
@@ -662,6 +666,13 @@
   "metrics": {
     "title": "メトリクス",
     "noData": "この実行のメトリクスデータはありません。",
+    "configureCharts": "チャート設定",
+    "chartOrderTitle": "チャートの順序",
+    "chartOrderDescription": "ドラッグまたは矢印ボタンでチャートの表示順序を変更できます。",
+    "resetChartOrder": "順序をリセット",
+    "moveChartUp": "チャートを上に移動",
+    "moveChartDown": "チャートを下に移動",
+    "ohlcChart": "OHLCチャート",
     "current_balance": "残高",
     "total_pnl": "合計損益",
     "total_pnl_quote": "合計損益（円）",

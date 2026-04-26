@@ -12,14 +12,7 @@ import {
   useState,
   type ComponentProps,
 } from 'react';
-import {
-  Box,
-  Grid,
-  Alert,
-  CircularProgress,
-  Typography,
-  Stack,
-} from '@mui/material';
+import { Box, Grid, Alert, CircularProgress, Typography } from '@mui/material';
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import { LineChart } from '@mui/x-charts/LineChart';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +20,10 @@ import type { MetricPoint } from '../../../utils/fetchMetrics';
 import { MetricsToolbar } from './MetricsToolbar';
 import { MetricsOhlcChart } from './MetricsOhlcChart';
 import { ChartPanel } from './ChartPanel';
+import {
+  MetricsChartOrderDialog,
+  type MetricsChartOrderItem,
+} from './MetricsChartOrderDialog';
 import { useMetricsOrder } from '../../../hooks/useMetricsOrder';
 import { layoutTokens, spacingTokens } from '../../../theme/density';
 
@@ -327,7 +324,6 @@ export function TaskMetricsTab({
   isLoading,
   error,
   currency,
-  resumeCursorTimestamp = null,
   consistencyWarnings = [],
   interval,
   since,
@@ -343,8 +339,15 @@ export function TaskMetricsTab({
   currentTickPrice,
 }: TaskMetricsTabProps) {
   const { t } = useTranslation('common');
+  const [ohlcRefreshToken, setOhlcRefreshToken] = useState(0);
+  const [orderDialogOpen, setOrderDialogOpen] = useState(false);
 
   const hasOhlc = !!(instrument && startTime);
+
+  const handleRefresh = useCallback(() => {
+    setOhlcRefreshToken((value) => value + 1);
+    void onRefresh();
+  }, [onRefresh]);
 
   // Determine which metrics actually have data
   const availableMetrics = useMemo(() => {
@@ -368,7 +371,8 @@ export function TaskMetricsTab({
     return keys;
   }, [availableMetrics, hasOhlc]);
 
-  const { orderedKeys, moveItem } = useMetricsOrder(allChartKeys);
+  const { orderedKeys, moveItem, setOrder, resetOrder } =
+    useMetricsOrder(allChartKeys);
 
   // Map metric key → metric config for quick lookup
   const metricsMap = useMemo(() => {
@@ -449,18 +453,37 @@ export function TaskMetricsTab({
 
   // --- Drag-and-drop reorder state ---
   const dragKeyRef = useRef<string | null>(null);
+  const lastDragTargetRef = useRef<string | null>(null);
   const [dragKey, setDragKey] = useState<string | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
 
   const handleDragStart = useCallback((e: React.DragEvent, key: string) => {
     dragKeyRef.current = key;
+    lastDragTargetRef.current = null;
     setDragKey(key);
+    setDragOverKey(null);
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', key);
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  }, []);
+  const handleDragOver = useCallback(
+    (e: React.DragEvent, targetKey: string) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      setDragOverKey(targetKey);
+
+      const sourceKey = dragKeyRef.current;
+      if (
+        sourceKey &&
+        sourceKey !== targetKey &&
+        lastDragTargetRef.current !== targetKey
+      ) {
+        moveItem(sourceKey, targetKey);
+        lastDragTargetRef.current = targetKey;
+      }
+    },
+    [moveItem]
+  );
 
   const handleDrop = useCallback(
     (e: React.DragEvent, targetKey: string) => {
@@ -470,15 +493,43 @@ export function TaskMetricsTab({
         moveItem(sourceKey, targetKey);
       }
       dragKeyRef.current = null;
+      lastDragTargetRef.current = null;
       setDragKey(null);
+      setDragOverKey(null);
     },
     [moveItem]
   );
 
   const handleDragEnd = useCallback(() => {
     dragKeyRef.current = null;
+    lastDragTargetRef.current = null;
     setDragKey(null);
+    setDragOverKey(null);
   }, []);
+
+  const chartOrderItems = useMemo<MetricsChartOrderItem[]>(() => {
+    const items: MetricsChartOrderItem[] = [];
+    for (const key of orderedKeys) {
+      if (key === OHLC_KEY) {
+        items.push({
+          key,
+          label: instrument ?? t('metrics.ohlcChart', 'OHLC chart'),
+          color: '#26a69a',
+        });
+        continue;
+      }
+      const metric = metricsMap.get(key);
+      if (!metric) continue;
+      items.push({
+        key,
+        label: t(`metrics.${metric.key}`, {
+          defaultValue: metric.key.replace(/_/g, ' '),
+        }),
+        color: metric.color,
+      });
+    }
+    return items;
+  }, [instrument, metricsMap, orderedKeys, t]);
 
   if (isLoading && data.length === 0) {
     return (
@@ -531,20 +582,10 @@ export function TaskMetricsTab({
         onIntervalChange={onIntervalChange}
         onSinceChange={onSinceChange}
         onUntilChange={onUntilChange}
-        onRefresh={onRefresh}
+        onRefresh={handleRefresh}
+        onConfigureCharts={() => setOrderDialogOpen(true)}
         isLoading={isLoading}
       />
-      {resumeCursorTimestamp ? (
-        <Stack
-          direction={{ xs: 'column', sm: 'row' }}
-          spacing={1}
-          sx={{ mb: 1.5, alignItems: { sm: 'center' } }}
-        >
-          <Typography variant="caption" color="text.secondary">
-            Resume cursor: {new Date(resumeCursorTimestamp).toLocaleString()}
-          </Typography>
-        </Stack>
-      ) : null}
       {consistencyWarnings.length > 0 ? (
         <Alert severity="warning" sx={{ mb: 1.5 }}>
           {consistencyWarnings.length} continuity warning(s) detected after
@@ -567,13 +608,26 @@ export function TaskMetricsTab({
                 size={{ xs: 12, lg: 6 }}
                 draggable
                 onDragStart={(e) => handleDragStart(e, OHLC_KEY)}
-                onDragOver={handleDragOver}
+                onDragOver={(e) => handleDragOver(e, OHLC_KEY)}
                 onDrop={(e) => handleDrop(e, OHLC_KEY)}
                 onDragEnd={handleDragEnd}
                 sx={{
                   opacity: dragKey === OHLC_KEY ? 0.4 : 1,
                   cursor: 'grab',
                   minWidth: 0,
+                  transition:
+                    'opacity 120ms ease, transform 120ms ease, outline-color 120ms ease',
+                  transform:
+                    dragOverKey === OHLC_KEY && dragKey !== OHLC_KEY
+                      ? 'translateY(-2px)'
+                      : 'none',
+                  outline: '2px solid',
+                  outlineColor:
+                    dragOverKey === OHLC_KEY && dragKey !== OHLC_KEY
+                      ? 'primary.main'
+                      : 'transparent',
+                  outlineOffset: 3,
+                  borderRadius: 1,
                 }}
               >
                 <MetricsOhlcChart
@@ -583,6 +637,7 @@ export function TaskMetricsTab({
                   cardHeight={CHART_CARD_HEIGHT}
                   currentTickTimestamp={currentTickTimestamp}
                   currentTickPrice={currentTickPrice}
+                  refreshToken={ohlcRefreshToken}
                 />
               </Grid>
             );
@@ -604,13 +659,26 @@ export function TaskMetricsTab({
               size={{ xs: 12, lg: 6 }}
               draggable
               onDragStart={(e) => handleDragStart(e, m.key)}
-              onDragOver={handleDragOver}
+              onDragOver={(e) => handleDragOver(e, m.key)}
               onDrop={(e) => handleDrop(e, m.key)}
               onDragEnd={handleDragEnd}
               sx={{
                 opacity: dragKey === m.key ? 0.4 : 1,
                 cursor: 'grab',
                 minWidth: 0,
+                transition:
+                  'opacity 120ms ease, transform 120ms ease, outline-color 120ms ease',
+                transform:
+                  dragOverKey === m.key && dragKey !== m.key
+                    ? 'translateY(-2px)'
+                    : 'none',
+                outline: '2px solid',
+                outlineColor:
+                  dragOverKey === m.key && dragKey !== m.key
+                    ? 'primary.main'
+                    : 'transparent',
+                outlineOffset: 3,
+                borderRadius: 1,
               }}
             >
               <ChartPanel
@@ -687,6 +755,18 @@ export function TaskMetricsTab({
           );
         })}
       </Grid>
+      <MetricsChartOrderDialog
+        key={
+          orderDialogOpen
+            ? `open-${chartOrderItems.map((item) => item.key).join('|')}`
+            : 'closed'
+        }
+        open={orderDialogOpen}
+        items={chartOrderItems}
+        onClose={() => setOrderDialogOpen(false)}
+        onSave={setOrder}
+        onReset={resetOrder}
+      />
     </Box>
   );
 }

@@ -8,12 +8,17 @@ import Sidebar from './Sidebar';
 import SkipLinks from '../common/SkipLinks';
 import GlobalKeyboardShortcuts from '../common/GlobalKeyboardShortcuts';
 import { DRAWER_WIDTH } from './constants';
+import { useAppSettings } from '../../hooks/useAppSettings';
+import { useActiveScreenRefetch } from '../../hooks/useActiveScreenRefetch';
+import { layoutTokens } from '../../theme/density';
 
 const AppLayout = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm')); // < 600px
   const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md')); // 600px - 900px
+  const { settings, updateSetting } = useAppSettings();
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  useActiveScreenRefetch();
 
   const handleDrawerToggle = () => {
     setMobileDrawerOpen(!mobileDrawerOpen);
@@ -38,7 +43,16 @@ const AppLayout = () => {
           overflow: 'hidden',
         }}
       >
-        <AppHeader onMenuClick={handleDrawerToggle} />
+        <AppHeader
+          onMenuClick={handleDrawerToggle}
+          constrainContentWidth={settings.constrainContentWidth}
+          onToggleContentWidth={() =>
+            updateSetting(
+              'constrainContentWidth',
+              !settings.constrainContentWidth
+            )
+          }
+        />
         <Box
           sx={{
             display: 'flex',
@@ -68,6 +82,9 @@ const AppLayout = () => {
               marginTop: '32px', // Space for AppBar
               marginBottom: isMobile ? '8px' : 0, // Space for bottom nav on mobile
               width: showSidebar ? `calc(100% - ${DRAWER_WIDTH}px)` : '100%',
+              '--app-content-max-width': settings.constrainContentWidth
+                ? `${layoutTokens.contentMaxWidth}px`
+                : 'none',
               '&:focus': {
                 outline: 'none',
               },

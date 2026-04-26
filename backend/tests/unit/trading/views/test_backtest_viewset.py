@@ -14,6 +14,7 @@ from apps.trading.enums import TaskStatus
 from apps.trading.services.task_capacity import TaskAdmissionDecision, QueueCapacitySnapshot
 from apps.trading.tasks.service import TaskCapacityError, TaskSubmissionError, TaskValidationError
 from apps.trading.views.backtest import BacktestTaskViewSet
+from apps.trading.views.throttles import TaskDataRateThrottle
 
 factory = APIRequestFactory()
 
@@ -59,6 +60,10 @@ def _drf_get(query=""):
 
 class TestGetSerializerClass:
     """Tests for get_serializer_class."""
+
+    def test_uses_task_data_throttle_scope(self):
+        assert BacktestTaskViewSet.throttle_classes == [TaskDataRateThrottle]
+        assert TaskDataRateThrottle.scope == "task_data"
 
     def test_returns_create_serializer_for_create(self):
         vs = _build_viewset(action="create")

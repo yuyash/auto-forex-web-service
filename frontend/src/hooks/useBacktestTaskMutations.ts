@@ -91,7 +91,7 @@ export function useStopBacktestTask(options?: {
         // the task running in DRAINING state; everything else
         // transitions to STOPPING → STOPPED.
         const nextStatus = variables.mode === 'drain' ? 'draining' : 'stopping';
-        patchTaskStatusCache('backtest', variables.id, nextStatus);
+        await patchTaskStatusCache('backtest', variables.id, nextStatus);
         await invalidateTaskDerivedCaches('backtest', variables.id);
         options?.onSuccess?.(data);
       },

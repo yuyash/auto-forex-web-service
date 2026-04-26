@@ -314,7 +314,7 @@ export default function BacktestTaskUpdateForm({
   };
 
   return (
-    <Box>
+    <Box component="form" onSubmit={handleSubmit(onSubmit)}>
       <Paper sx={{ p: 3, mb: 3, bgcolor: 'action.hover' }}>
         <Typography variant="h6" gutterBottom>
           {t('common:labels.taskDetails', 'Task details')}
@@ -355,669 +355,662 @@ export default function BacktestTaskUpdateForm({
         </Grid>
       </Paper>
 
-      <form onSubmit={handleSubmit(onSubmit)}>
-        {submitError && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {submitError}
-          </Alert>
-        )}
-        {restartRequiredForExecutionEdits && (
-          <Alert
-            severity={showRestartRequiredGuard ? 'warning' : 'info'}
-            sx={{ mb: 3 }}
-          >
-            {t(
-              'backtest:form.restartRequiredForExecutionEdits',
-              'Execution setting changes apply to the next restart. Name and description changes apply immediately.'
-            )}
-          </Alert>
-        )}
-
-        <Typography variant="h6" gutterBottom>
-          {t('common:labels.configuration')}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          {t('backtest:form.chooseStrategyConfig')}
-        </Typography>
-
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid size={{ xs: 12 }}>
-            <Controller
-              name="config_id"
-              control={control}
-              render={({ field }) => (
-                <ConfigurationSelector
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={errors.config_id?.message}
-                  helperText={errors.config_id?.message}
-                />
-              )}
-            />
-          </Grid>
-
-          {selectedConfig && (
-            <Grid size={{ xs: 12 }}>
-              <Alert severity="info">
-                <Typography variant="subtitle2" gutterBottom>
-                  {t('trading:form.configurationPreview')}
-                </Typography>
-                <Typography variant="body2">
-                  <strong>{t('trading:form.type')}:</strong>{' '}
-                  {getStrategyDisplayName(
-                    strategies,
-                    selectedConfig.strategy_type
-                  )}
-                </Typography>
-                <Typography variant="body2">
-                  <strong>{t('common:labels.description')}:</strong>{' '}
-                  {selectedConfig.description ||
-                    t('trading:form.noDescription')}
-                </Typography>
-              </Alert>
-            </Grid>
+      {submitError && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {submitError}
+        </Alert>
+      )}
+      {restartRequiredForExecutionEdits && (
+        <Alert
+          severity={showRestartRequiredGuard ? 'warning' : 'info'}
+          sx={{ mb: 3 }}
+        >
+          {t(
+            'backtest:form.restartRequiredForExecutionEdits',
+            'Execution setting changes apply to the next restart. Name and description changes apply immediately.'
           )}
+        </Alert>
+      )}
+
+      <Typography variant="h6" gutterBottom>
+        {t('common:labels.configuration')}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        {t('backtest:form.chooseStrategyConfig')}
+      </Typography>
+
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid size={{ xs: 12 }}>
+          <Controller
+            name="config_id"
+            control={control}
+            render={({ field }) => (
+              <ConfigurationSelector
+                value={field.value}
+                onChange={field.onChange}
+                error={errors.config_id?.message}
+                helperText={errors.config_id?.message}
+              />
+            )}
+          />
         </Grid>
 
-        <Typography variant="h6" gutterBottom>
-          {t('backtest:form.backtestParameters')}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          {t('backtest:form.updateParameters')}
-        </Typography>
-
-        {replaySettingsChanged && (
-          <Alert severity="warning" sx={{ mb: 3 }}>
-            {t('backtest:form.replaySettingsRestartNotice')}
-          </Alert>
+        {selectedConfig && (
+          <Grid size={{ xs: 12 }}>
+            <Alert severity="info">
+              <Typography variant="subtitle2" gutterBottom>
+                {t('trading:form.configurationPreview')}
+              </Typography>
+              <Typography variant="body2">
+                <strong>{t('trading:form.type')}:</strong>{' '}
+                {getStrategyDisplayName(
+                  strategies,
+                  selectedConfig.strategy_type
+                )}
+              </Typography>
+              <Typography variant="body2">
+                <strong>{t('common:labels.description')}:</strong>{' '}
+                {selectedConfig.description || t('trading:form.noDescription')}
+              </Typography>
+            </Alert>
+          </Grid>
         )}
+      </Grid>
 
-        <Grid container spacing={3}>
+      <Typography variant="h6" gutterBottom>
+        {t('backtest:form.backtestParameters')}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        {t('backtest:form.updateParameters')}
+      </Typography>
+
+      {replaySettingsChanged && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {t('backtest:form.replaySettingsRestartNotice')}
+        </Alert>
+      )}
+
+      <Grid container spacing={3}>
+        <Grid size={{ xs: 12 }}>
+          <Controller
+            name="start_time"
+            control={control}
+            render={({ field: startField }) => (
+              <Controller
+                name="end_time"
+                control={control}
+                render={({ field: endField }) => (
+                  <DateRangePicker
+                    startDate={startField.value}
+                    endDate={endField.value}
+                    onStartDateChange={startField.onChange}
+                    onEndDateChange={endField.onChange}
+                    maxDate={new Date()}
+                    required
+                    helperText={t('backtest:form.dateRangeHelperText')}
+                    timezone={timezone}
+                  />
+                )}
+              />
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12 }}>
+          <Controller
+            name="instrument"
+            control={control}
+            render={({ field }) => (
+              <InstrumentSelector
+                value={field.value}
+                onChange={field.onChange}
+                error={errors.instrument?.message}
+                helperText={errors.instrument?.message as string}
+              />
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Controller
+            name="initial_balance"
+            control={control}
+            render={({ field }) => (
+              <BalanceInput
+                value={field.value}
+                onChange={field.onChange}
+                label={t('backtest:detail.initialBalance')}
+                currency="USD"
+                error={errors.initial_balance?.message}
+                helperText={errors.initial_balance?.message}
+              />
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Controller
+            name="commission_per_trade"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                fullWidth
+                label={t('backtest:form.commissionPerTrade')}
+                type="number"
+                inputProps={{ min: 0, step: 0.01 }}
+                error={!!errors.commission_per_trade}
+                helperText={errors.commission_per_trade?.message}
+              />
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Controller
+            name="pip_size"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                fullWidth
+                label={t('backtest:form.pipSizeOptional')}
+                type="number"
+                inputProps={{ min: 0, step: 0.00001 }}
+                error={!!errors.pip_size}
+                helperText={
+                  errors.pip_size?.message ||
+                  t('backtest:form.pipSizeHelperText')
+                }
+              />
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Controller
+            name="tick_granularity"
+            control={control}
+            render={({ field }) => (
+              <FormControl fullWidth error={!!errors.tick_granularity}>
+                <InputLabel id="backtest-update-tick-granularity-label">
+                  {t('backtest:form.tickGranularity')}
+                </InputLabel>
+                <Select
+                  {...field}
+                  labelId="backtest-update-tick-granularity-label"
+                  label={t('backtest:form.tickGranularity')}
+                >
+                  {[
+                    'tick',
+                    '1s',
+                    '10s',
+                    '15s',
+                    '30s',
+                    '1m',
+                    '5m',
+                    '15m',
+                    '30m',
+                    '1h',
+                  ].map((option) => (
+                    <MenuItem key={option} value={option}>
+                      {t(`backtest:form.tickGranularityOptions.${option}`)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Controller
+            name="tick_window_value_mode"
+            control={control}
+            render={({ field }) => (
+              <FormControl fullWidth error={!!errors.tick_window_value_mode}>
+                <InputLabel id="backtest-update-tick-window-value-mode-label">
+                  {t('backtest:form.tickWindowValueMode')}
+                </InputLabel>
+                <Select
+                  {...field}
+                  labelId="backtest-update-tick-window-value-mode-label"
+                  label={t('backtest:form.tickWindowValueMode')}
+                >
+                  {['first', 'last', 'average', 'median'].map((option) => (
+                    <MenuItem key={option} value={option}>
+                      {t(`backtest:form.tickWindowValueModeOptions.${option}`)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+          />
+        </Grid>
+
+        {strategySupportsHedging ? (
           <Grid size={{ xs: 12 }}>
             <Controller
-              name="start_time"
+              name="hedging_enabled"
               control={control}
-              render={({ field: startField }) => (
-                <Controller
-                  name="end_time"
-                  control={control}
-                  render={({ field: endField }) => (
-                    <DateRangePicker
-                      startDate={startField.value}
-                      endDate={endField.value}
-                      onStartDateChange={startField.onChange}
-                      onEndDateChange={endField.onChange}
-                      maxDate={new Date()}
-                      required
-                      helperText={t('backtest:form.dateRangeHelperText')}
-                      timezone={timezone}
+              render={({ field }) => (
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={field.value ?? true}
+                      onChange={(e) => field.onChange(e.target.checked)}
                     />
-                  )}
-                />
-              )}
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12 }}>
-            <Controller
-              name="instrument"
-              control={control}
-              render={({ field }) => (
-                <InstrumentSelector
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={errors.instrument?.message}
-                  helperText={errors.instrument?.message as string}
-                />
-              )}
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Controller
-              name="initial_balance"
-              control={control}
-              render={({ field }) => (
-                <BalanceInput
-                  value={field.value}
-                  onChange={field.onChange}
-                  label={t('backtest:detail.initialBalance')}
-                  currency="USD"
-                  error={errors.initial_balance?.message}
-                  helperText={errors.initial_balance?.message}
-                />
-              )}
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Controller
-              name="commission_per_trade"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  fullWidth
-                  label={t('backtest:form.commissionPerTrade')}
-                  type="number"
-                  inputProps={{ min: 0, step: 0.01 }}
-                  error={!!errors.commission_per_trade}
-                  helperText={errors.commission_per_trade?.message}
-                />
-              )}
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Controller
-              name="pip_size"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  fullWidth
-                  label={t('backtest:form.pipSizeOptional')}
-                  type="number"
-                  inputProps={{ min: 0, step: 0.00001 }}
-                  error={!!errors.pip_size}
-                  helperText={
-                    errors.pip_size?.message ||
-                    t('backtest:form.pipSizeHelperText')
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body1">
+                        {t('backtest:form.hedgingEnabled')}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mt: 0.5 }}
+                      >
+                        {t('backtest:form.hedgingDescription')}
+                      </Typography>
+                    </Box>
                   }
                 />
               )}
             />
           </Grid>
+        ) : null}
 
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Controller
-              name="tick_granularity"
-              control={control}
-              render={({ field }) => (
-                <FormControl fullWidth error={!!errors.tick_granularity}>
-                  <InputLabel id="backtest-update-tick-granularity-label">
-                    {t('backtest:form.tickGranularity')}
-                  </InputLabel>
-                  <Select
-                    {...field}
-                    labelId="backtest-update-tick-granularity-label"
-                    label={t('backtest:form.tickGranularity')}
-                  >
-                    {[
-                      'tick',
-                      '1s',
-                      '10s',
-                      '15s',
-                      '30s',
-                      '1m',
-                      '5m',
-                      '15m',
-                      '30m',
-                      '1h',
-                    ].map((option) => (
-                      <MenuItem key={option} value={option}>
-                        {t(`backtest:form.tickGranularityOptions.${option}`)}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              )}
-            />
-          </Grid>
+        <Grid size={{ xs: 12 }}>
+          <Controller
+            name="sell_at_completion"
+            control={control}
+            render={({ field }) => (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={field.value || false}
+                    onChange={(e) => field.onChange(e.target.checked)}
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body1">
+                      {t('backtest:form.closePositionsAtCompletion')}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mt: 0.5 }}
+                    >
+                      {t('backtest:form.closePositionsDescription')}
+                    </Typography>
+                  </Box>
+                }
+              />
+            )}
+          />
+        </Grid>
 
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Controller
-              name="tick_window_value_mode"
-              control={control}
-              render={({ field }) => (
-                <FormControl fullWidth error={!!errors.tick_window_value_mode}>
-                  <InputLabel id="backtest-update-tick-window-value-mode-label">
-                    {t('backtest:form.tickWindowValueMode')}
-                  </InputLabel>
-                  <Select
-                    {...field}
-                    labelId="backtest-update-tick-window-value-mode-label"
-                    label={t('backtest:form.tickWindowValueMode')}
-                  >
-                    {['first', 'last', 'average', 'median'].map((option) => (
-                      <MenuItem key={option} value={option}>
-                        {t(
-                          `backtest:form.tickWindowValueModeOptions.${option}`
-                        )}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              )}
-            />
-          </Grid>
+        <Grid size={{ xs: 12 }} sx={{ mt: 2 }}>
+          <Typography variant="subtitle1" fontWeight={600}>
+            {t('backtest:form.advancedSettings', 'Advanced settings')}
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: 'block', mb: 2 }}
+          >
+            {t(
+              'backtest:form.advancedSettingsDescription',
+              'Drain-on-stop and market-close idling behaviour. Market-idle thresholds are evaluated against the replayed tick timestamps, not wall-clock time.'
+            )}
+          </Typography>
+        </Grid>
 
-          {strategySupportsHedging ? (
-            <Grid size={{ xs: 12 }}>
+        <Grid size={{ xs: 12, sm: 4 }}>
+          <Controller
+            name="drain_duration_hours"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                value={field.value ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  field.onChange(val === '' ? undefined : Number(val));
+                }}
+                fullWidth
+                type="number"
+                label={t(
+                  'backtest:form.drainDurationHours',
+                  'Drain duration (hours)'
+                )}
+                helperText={
+                  errors.drain_duration_hours?.message ||
+                  t(
+                    'backtest:form.drainDurationHoursHelp',
+                    'Maximum hours to keep draining before giving up. 0 = wait forever for breakeven.'
+                  )
+                }
+                error={!!errors.drain_duration_hours}
+                inputProps={{ min: 0, step: 1 }}
+              />
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 4 }}>
+          <Controller
+            name="market_idle_pre_close_minutes"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                value={field.value ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  field.onChange(val === '' ? undefined : Number(val));
+                }}
+                fullWidth
+                type="number"
+                label={t(
+                  'backtest:form.marketIdlePreCloseMinutes',
+                  'Idle before market close (min)'
+                )}
+                helperText={
+                  errors.market_idle_pre_close_minutes?.message ||
+                  t(
+                    'backtest:form.marketIdlePreCloseMinutesHelp',
+                    'Switch to IDLE this many minutes before the weekly forex close. Evaluated against the replayed tick timestamp. 0 disables.'
+                  )
+                }
+                error={!!errors.market_idle_pre_close_minutes}
+                inputProps={{ min: 0, max: 720, step: 1 }}
+              />
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 4 }}>
+          <Controller
+            name="market_idle_resume_delay_minutes"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                value={field.value ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  field.onChange(val === '' ? undefined : Number(val));
+                }}
+                fullWidth
+                type="number"
+                label={t(
+                  'backtest:form.marketIdleResumeDelayMinutes',
+                  'Resume delay after open (min)'
+                )}
+                helperText={
+                  errors.market_idle_resume_delay_minutes?.message ||
+                  t(
+                    'backtest:form.marketIdleResumeDelayMinutesHelp',
+                    'Wait this many minutes (replayed clock) after the market reopens before resuming trading.'
+                  )
+                }
+                error={!!errors.market_idle_resume_delay_minutes}
+                inputProps={{ min: 0, max: 720, step: 1 }}
+              />
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 4 }}>
+          <Controller
+            name="max_tick_gap_hours"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                value={field.value ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  field.onChange(val === '' ? undefined : Number(val));
+                }}
+                fullWidth
+                type="number"
+                label={t(
+                  'backtest:form.maxTickGapHours',
+                  'Max tick gap before fail (hours)'
+                )}
+                helperText={
+                  errors.max_tick_gap_hours?.message ||
+                  t(
+                    'backtest:form.maxTickGapHoursHelp',
+                    'Fail the backtest if replayed ticks jump forward by more than this many hours. Default: 120 (5 days).'
+                  )
+                }
+                error={!!errors.max_tick_gap_hours}
+                inputProps={{ min: 1, step: 1 }}
+              />
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12 }} sx={{ mt: 1 }}>
+          <Controller
+            name="market_close_enabled"
+            control={control}
+            render={({ field }) => (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={field.value ?? false}
+                    onChange={(e) => field.onChange(e.target.checked)}
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body1">
+                      {t(
+                        'backtest:form.marketCloseEnabled',
+                        'Apply weekly market close'
+                      )}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mt: 0.5 }}
+                    >
+                      {t(
+                        'backtest:form.marketCloseEnabledDescription',
+                        'When disabled, the backtest never treats any replayed time as market-closed and the idle thresholds above have no effect.'
+                      )}
+                    </Typography>
+                  </Box>
+                }
+              />
+            )}
+          />
+        </Grid>
+
+        {watchedMarketCloseEnabled && (
+          <>
+            <Grid size={{ xs: 12, sm: 3 }}>
               <Controller
-                name="hedging_enabled"
+                name="market_close_weekday"
                 control={control}
                 render={({ field }) => (
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={field.value ?? true}
-                        onChange={(e) => field.onChange(e.target.checked)}
-                      />
+                  <FormControl fullWidth error={!!errors.market_close_weekday}>
+                    <InputLabel id="backtest-update-market-close-weekday-label">
+                      {t(
+                        'backtest:form.marketCloseWeekday',
+                        'Close weekday (UTC)'
+                      )}
+                    </InputLabel>
+                    <Select
+                      labelId="backtest-update-market-close-weekday-label"
+                      label={t(
+                        'backtest:form.marketCloseWeekday',
+                        'Close weekday (UTC)'
+                      )}
+                      value={field.value ?? 4}
+                      onChange={(e) => field.onChange(Number(e.target.value))}
+                    >
+                      {weekdayOptions.map((opt) => (
+                        <MenuItem key={opt.value} value={opt.value}>
+                          {t(`backtest:form.weekdays.${opt.key}`, opt.label)}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )}
+              />
+            </Grid>
+
+            <Grid size={{ xs: 12, sm: 3 }}>
+              <Controller
+                name="market_close_hour_utc"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      field.onChange(val === '' ? undefined : Number(val));
+                    }}
+                    fullWidth
+                    type="number"
+                    label={t(
+                      'backtest:form.marketCloseHourUtc',
+                      'Close hour (UTC)'
+                    )}
+                    helperText={
+                      errors.market_close_hour_utc?.message ||
+                      t(
+                        'backtest:form.marketCloseHourUtcHelp',
+                        'Hour of day at which the market closes (0–23 UTC).'
+                      )
                     }
-                    label={
-                      <Box>
-                        <Typography variant="body1">
-                          {t('backtest:form.hedgingEnabled')}
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          sx={{ mt: 0.5 }}
-                        >
-                          {t('backtest:form.hedgingDescription')}
-                        </Typography>
-                      </Box>
-                    }
+                    error={!!errors.market_close_hour_utc}
+                    inputProps={{ min: 0, max: 23, step: 1 }}
                   />
                 )}
               />
             </Grid>
-          ) : null}
 
-          <Grid size={{ xs: 12 }}>
-            <Controller
-              name="sell_at_completion"
-              control={control}
-              render={({ field }) => (
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={field.value || false}
-                      onChange={(e) => field.onChange(e.target.checked)}
-                    />
-                  }
-                  label={
-                    <Box>
-                      <Typography variant="body1">
-                        {t('backtest:form.closePositionsAtCompletion')}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ mt: 0.5 }}
-                      >
-                        {t('backtest:form.closePositionsDescription')}
-                      </Typography>
-                    </Box>
-                  }
-                />
-              )}
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12 }} sx={{ mt: 2 }}>
-            <Typography variant="subtitle1" fontWeight={600}>
-              {t('backtest:form.advancedSettings', 'Advanced settings')}
-            </Typography>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ display: 'block', mb: 2 }}
-            >
-              {t(
-                'backtest:form.advancedSettingsDescription',
-                'Drain-on-stop and market-close idling behaviour. Market-idle thresholds are evaluated against the replayed tick timestamps, not wall-clock time.'
-              )}
-            </Typography>
-          </Grid>
-
-          <Grid size={{ xs: 12, sm: 4 }}>
-            <Controller
-              name="drain_duration_hours"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    field.onChange(val === '' ? undefined : Number(val));
-                  }}
-                  fullWidth
-                  type="number"
-                  label={t(
-                    'backtest:form.drainDurationHours',
-                    'Drain duration (hours)'
-                  )}
-                  helperText={
-                    errors.drain_duration_hours?.message ||
-                    t(
-                      'backtest:form.drainDurationHoursHelp',
-                      'Maximum hours to keep draining before giving up. 0 = wait forever for breakeven.'
-                    )
-                  }
-                  error={!!errors.drain_duration_hours}
-                  inputProps={{ min: 0, step: 1 }}
-                />
-              )}
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12, sm: 4 }}>
-            <Controller
-              name="market_idle_pre_close_minutes"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    field.onChange(val === '' ? undefined : Number(val));
-                  }}
-                  fullWidth
-                  type="number"
-                  label={t(
-                    'backtest:form.marketIdlePreCloseMinutes',
-                    'Idle before market close (min)'
-                  )}
-                  helperText={
-                    errors.market_idle_pre_close_minutes?.message ||
-                    t(
-                      'backtest:form.marketIdlePreCloseMinutesHelp',
-                      'Switch to IDLE this many minutes before the weekly forex close. Evaluated against the replayed tick timestamp. 0 disables.'
-                    )
-                  }
-                  error={!!errors.market_idle_pre_close_minutes}
-                  inputProps={{ min: 0, max: 720, step: 1 }}
-                />
-              )}
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12, sm: 4 }}>
-            <Controller
-              name="market_idle_resume_delay_minutes"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    field.onChange(val === '' ? undefined : Number(val));
-                  }}
-                  fullWidth
-                  type="number"
-                  label={t(
-                    'backtest:form.marketIdleResumeDelayMinutes',
-                    'Resume delay after open (min)'
-                  )}
-                  helperText={
-                    errors.market_idle_resume_delay_minutes?.message ||
-                    t(
-                      'backtest:form.marketIdleResumeDelayMinutesHelp',
-                      'Wait this many minutes (replayed clock) after the market reopens before resuming trading.'
-                    )
-                  }
-                  error={!!errors.market_idle_resume_delay_minutes}
-                  inputProps={{ min: 0, max: 720, step: 1 }}
-                />
-              )}
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12, sm: 4 }}>
-            <Controller
-              name="max_tick_gap_hours"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    field.onChange(val === '' ? undefined : Number(val));
-                  }}
-                  fullWidth
-                  type="number"
-                  label={t(
-                    'backtest:form.maxTickGapHours',
-                    'Max tick gap before fail (hours)'
-                  )}
-                  helperText={
-                    errors.max_tick_gap_hours?.message ||
-                    t(
-                      'backtest:form.maxTickGapHoursHelp',
-                      'Fail the backtest if replayed ticks jump forward by more than this many hours. Default: 120 (5 days).'
-                    )
-                  }
-                  error={!!errors.max_tick_gap_hours}
-                  inputProps={{ min: 1, step: 1 }}
-                />
-              )}
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12 }} sx={{ mt: 1 }}>
-            <Controller
-              name="market_close_enabled"
-              control={control}
-              render={({ field }) => (
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={field.value ?? false}
-                      onChange={(e) => field.onChange(e.target.checked)}
-                    />
-                  }
-                  label={
-                    <Box>
-                      <Typography variant="body1">
-                        {t(
-                          'backtest:form.marketCloseEnabled',
-                          'Apply weekly market close'
-                        )}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ mt: 0.5 }}
-                      >
-                        {t(
-                          'backtest:form.marketCloseEnabledDescription',
-                          'When disabled, the backtest never treats any replayed time as market-closed and the idle thresholds above have no effect.'
-                        )}
-                      </Typography>
-                    </Box>
-                  }
-                />
-              )}
-            />
-          </Grid>
-
-          {watchedMarketCloseEnabled && (
-            <>
-              <Grid size={{ xs: 12, sm: 3 }}>
-                <Controller
-                  name="market_close_weekday"
-                  control={control}
-                  render={({ field }) => (
-                    <FormControl
-                      fullWidth
-                      error={!!errors.market_close_weekday}
+            <Grid size={{ xs: 12, sm: 3 }}>
+              <Controller
+                name="market_open_weekday"
+                control={control}
+                render={({ field }) => (
+                  <FormControl fullWidth error={!!errors.market_open_weekday}>
+                    <InputLabel id="backtest-update-market-open-weekday-label">
+                      {t(
+                        'backtest:form.marketOpenWeekday',
+                        'Open weekday (UTC)'
+                      )}
+                    </InputLabel>
+                    <Select
+                      labelId="backtest-update-market-open-weekday-label"
+                      label={t(
+                        'backtest:form.marketOpenWeekday',
+                        'Open weekday (UTC)'
+                      )}
+                      value={field.value ?? 6}
+                      onChange={(e) => field.onChange(Number(e.target.value))}
                     >
-                      <InputLabel id="backtest-update-market-close-weekday-label">
-                        {t(
-                          'backtest:form.marketCloseWeekday',
-                          'Close weekday (UTC)'
-                        )}
-                      </InputLabel>
-                      <Select
-                        labelId="backtest-update-market-close-weekday-label"
-                        label={t(
-                          'backtest:form.marketCloseWeekday',
-                          'Close weekday (UTC)'
-                        )}
-                        value={field.value ?? 4}
-                        onChange={(e) => field.onChange(Number(e.target.value))}
-                      >
-                        {weekdayOptions.map((opt) => (
-                          <MenuItem key={opt.value} value={opt.value}>
-                            {t(`backtest:form.weekdays.${opt.key}`, opt.label)}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  )}
-                />
-              </Grid>
+                      {weekdayOptions.map((opt) => (
+                        <MenuItem key={opt.value} value={opt.value}>
+                          {t(`backtest:form.weekdays.${opt.key}`, opt.label)}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )}
+              />
+            </Grid>
 
-              <Grid size={{ xs: 12, sm: 3 }}>
-                <Controller
-                  name="market_close_hour_utc"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField
-                      {...field}
-                      value={field.value ?? ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        field.onChange(val === '' ? undefined : Number(val));
-                      }}
-                      fullWidth
-                      type="number"
-                      label={t(
-                        'backtest:form.marketCloseHourUtc',
-                        'Close hour (UTC)'
-                      )}
-                      helperText={
-                        errors.market_close_hour_utc?.message ||
-                        t(
-                          'backtest:form.marketCloseHourUtcHelp',
-                          'Hour of day at which the market closes (0–23 UTC).'
-                        )
-                      }
-                      error={!!errors.market_close_hour_utc}
-                      inputProps={{ min: 0, max: 23, step: 1 }}
-                    />
-                  )}
-                />
-              </Grid>
+            <Grid size={{ xs: 12, sm: 3 }}>
+              <Controller
+                name="market_open_hour_utc"
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      field.onChange(val === '' ? undefined : Number(val));
+                    }}
+                    fullWidth
+                    type="number"
+                    label={t(
+                      'backtest:form.marketOpenHourUtc',
+                      'Open hour (UTC)'
+                    )}
+                    helperText={
+                      errors.market_open_hour_utc?.message ||
+                      t(
+                        'backtest:form.marketOpenHourUtcHelp',
+                        'Hour of day at which the market reopens (0–23 UTC).'
+                      )
+                    }
+                    error={!!errors.market_open_hour_utc}
+                    inputProps={{ min: 0, max: 23, step: 1 }}
+                  />
+                )}
+              />
+            </Grid>
+          </>
+        )}
 
-              <Grid size={{ xs: 12, sm: 3 }}>
-                <Controller
-                  name="market_open_weekday"
-                  control={control}
-                  render={({ field }) => (
-                    <FormControl fullWidth error={!!errors.market_open_weekday}>
-                      <InputLabel id="backtest-update-market-open-weekday-label">
-                        {t(
-                          'backtest:form.marketOpenWeekday',
-                          'Open weekday (UTC)'
-                        )}
-                      </InputLabel>
-                      <Select
-                        labelId="backtest-update-market-open-weekday-label"
-                        label={t(
-                          'backtest:form.marketOpenWeekday',
-                          'Open weekday (UTC)'
-                        )}
-                        value={field.value ?? 6}
-                        onChange={(e) => field.onChange(Number(e.target.value))}
-                      >
-                        {weekdayOptions.map((opt) => (
-                          <MenuItem key={opt.value} value={opt.value}>
-                            {t(`backtest:form.weekdays.${opt.key}`, opt.label)}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  )}
-                />
-              </Grid>
-
-              <Grid size={{ xs: 12, sm: 3 }}>
-                <Controller
-                  name="market_open_hour_utc"
-                  control={control}
-                  render={({ field }) => (
-                    <TextField
-                      {...field}
-                      value={field.value ?? ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        field.onChange(val === '' ? undefined : Number(val));
-                      }}
-                      fullWidth
-                      type="number"
-                      label={t(
-                        'backtest:form.marketOpenHourUtc',
-                        'Open hour (UTC)'
-                      )}
-                      helperText={
-                        errors.market_open_hour_utc?.message ||
-                        t(
-                          'backtest:form.marketOpenHourUtcHelp',
-                          'Hour of day at which the market reopens (0–23 UTC).'
-                        )
-                      }
-                      error={!!errors.market_open_hour_utc}
-                      inputProps={{ min: 0, max: 23, step: 1 }}
-                    />
-                  )}
-                />
-              </Grid>
-            </>
-          )}
-
-          <Grid size={{ xs: 12 }}>
-            <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
-              {t('common:debug.title')}
-            </Typography>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={tracemalloc}
-                  onChange={(e) => setTracemalloc(e.target.checked)}
-                />
-              }
-              label={
-                <Box>
-                  <Typography variant="body1">
-                    {t('common:debug.tracemalloc')}
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mt: 0.5 }}
-                  >
-                    {t('common:debug.tracemallocDescription')}
-                  </Typography>
-                </Box>
-              }
-            />
-          </Grid>
+        <Grid size={{ xs: 12 }}>
+          <Typography variant="h6" gutterBottom sx={{ mt: 2 }}>
+            {t('common:debug.title')}
+          </Typography>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={tracemalloc}
+                onChange={(e) => setTracemalloc(e.target.checked)}
+              />
+            }
+            label={
+              <Box>
+                <Typography variant="body1">
+                  {t('common:debug.tracemalloc')}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 0.5 }}
+                >
+                  {t('common:debug.tracemallocDescription')}
+                </Typography>
+              </Box>
+            }
+          />
         </Grid>
+      </Grid>
 
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
-          <Button
-            variant="outlined"
-            onClick={() => navigate('/backtest-tasks')}
-          >
-            {t('common:actions.cancel')}
-          </Button>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
+        <Button
+          type="button"
+          variant="outlined"
+          onClick={() => navigate('/backtest-tasks')}
+        >
+          {t('common:actions.cancel')}
+        </Button>
 
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={updateTask.isLoading}
-          >
-            {t('common:actions.updateTask')}
-          </Button>
-        </Box>
-      </form>
+        <Button
+          type="submit"
+          variant="contained"
+          disabled={updateTask.isLoading}
+        >
+          {t('common:actions.updateTask')}
+        </Button>
+      </Box>
     </Box>
   );
 }

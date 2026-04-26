@@ -27,10 +27,13 @@ from typing import Any
 
 import pytest
 
-from apps.trading.enums import EventType
+from apps.trading.enums import Direction, EventType
+from apps.trading.strategies.snowball.enums import CycleStatus
 from apps.trading.strategies.snowball.models import (
+    Layer,
     SnowballStrategyConfig,
     SnowballStrategyState,
+    StopLossClosedEntry,
 )
 from apps.trading.strategies.snowball.strategy import SnowballStrategy
 
@@ -105,6 +108,26 @@ def _strategy(
         params.update(overrides)
     config = SnowballStrategyConfig.from_dict(params)
     return SnowballStrategy("USD_JPY", PIP, config)
+
+
+def _pending_snapshot_for_slot(
+    *,
+    cycle_id: int,
+    layer_number: int,
+    retracement_count: int,
+    entry_price: Decimal,
+) -> StopLossClosedEntry:
+    return StopLossClosedEntry(
+        entry_price=entry_price,
+        close_price=entry_price + Decimal("0.50"),
+        units=1000,
+        direction=Direction.LONG,
+        role="initial" if retracement_count == 0 else "counter",
+        layer_number=layer_number,
+        retracement_count=retracement_count,
+        step=retracement_count + 1,
+        cycle_id=cycle_id,
+    )
 
 
 class TickRunner:
@@ -511,12 +534,12 @@ class TestSnowballStopLossRebuild:
                     )
 
     def test_sl_slot_preserves_r_number_progression(self):
-        """After SL on R1, the next available slot should skip R1 (pending rebuild).
+        """Pending rebuild slots should not be reused as available slots.
 
-        When R1 has pending_rebuild, counter adds should still proceed to
-        higher R-numbers.  The next available slot may be R2 or higher
-        depending on whether counter adds already filled R2 during the
-        same adverse move that triggered the SL.
+        When a slot has pending_rebuild, counter adds should proceed only
+        to a later available slot.  Depending on the tick sequence, the
+        pending slot can be R0 (cycle is pending-only and waits for reseed
+        or rebuild) or a later retracement.
         """
         runner = TickRunner(stop_loss=True)
         runner.tick(START_PRICE)
@@ -532,17 +555,17 @@ class TestSnowballStopLossRebuild:
             layer = cycle.grid.current_layer
             if layer is None:
                 continue
-            r1 = layer.slot_at(1)
-            if r1 is not None and r1.is_pending_rebuild:
+            pending_slots = [slot for slot in layer.slots if slot.is_pending_rebuild]
+            for pending_slot in pending_slots:
                 found_pending = True
-                # R1 is pending rebuild — next available should be R2 or higher
                 next_slot = layer.next_available_counter_slot()
                 if next_slot is not None:
-                    assert next_slot.index >= 2, (
-                        f"Expected next available slot to be R2+, got R{next_slot.index}"
+                    assert next_slot.index > pending_slot.index, (
+                        f"Expected next available slot after R{pending_slot.index}, "
+                        f"got R{next_slot.index}"
                     )
         # At least one cycle should have had a pending rebuild
-        assert found_pending, "Expected at least one SL-closed R1 slot"
+        assert found_pending, "Expected at least one SL-closed slot"
 
     def test_cycle_pending_when_all_sl_closed(self):
         """Cycle should be PENDING when all positions are SL-closed.
@@ -566,6 +589,121 @@ class TestSnowballStopLossRebuild:
                     f"Cycle {cycle.cycle_id} has pending rebuilds and no open "
                     f"entries but status is {cycle.status.value}"
                 )
+
+
+class TestSnowballCycleReseedOptions:
+    """Verify opt-in cycle reseeding from pending and saturated grids."""
+
+    @pytest.mark.parametrize("stop_loss", [False, True], ids=["no_sl", "sl"])
+    def test_reseed_on_all_pending_starts_new_cycle(self, stop_loss: bool) -> None:
+        runner = TickRunner(
+            stop_loss=stop_loss,
+            overrides={
+                "reseed_on_all_pending": True,
+                "reseed_on_grid_exhausted": False,
+            },
+        )
+        runner.tick(START_PRICE)
+
+        ss = runner.ss
+        long_cycle = next(c for c in ss.cycles if c.direction == Direction.LONG)
+        slot = long_cycle.grid.layers[0].slot_at(0)
+        assert slot is not None and slot.entry is not None
+        slot.pending_rebuild = _pending_snapshot_for_slot(
+            cycle_id=long_cycle.cycle_id,
+            layer_number=1,
+            retracement_count=0,
+            entry_price=slot.entry.entry_price,
+        )
+        slot.entry = None
+        runner.state.strategy_state = ss.to_dict()
+
+        result = runner.tick(START_PRICE - Decimal("1.00"))
+
+        runner.assert_no_error(result)
+        long_cycles = runner.long_cycles()
+        assert any(c.cycle_id == long_cycle.cycle_id and c.is_pending for c in long_cycles)
+        assert sum(1 for c in long_cycles if c.is_active) == 1
+        assert len(long_cycles) == 2
+
+    @pytest.mark.parametrize("stop_loss", [False, True], ids=["no_sl", "sl"])
+    def test_reseed_on_grid_exhausted_starts_new_cycle_after_all_layers_pending(
+        self, stop_loss: bool
+    ) -> None:
+        runner = TickRunner(
+            stop_loss=stop_loss,
+            overrides={
+                "r_max": 1,
+                "f_max": 2,
+                "manual_intervals": ["20"],
+                "reseed_on_all_pending": False,
+                "reseed_on_grid_exhausted": True,
+            },
+        )
+        runner.tick(START_PRICE)
+
+        ss = runner.ss
+        long_cycle = next(c for c in ss.cycles if c.direction == Direction.LONG)
+        long_cycle.grid.layers.append(
+            Layer.create(2, runner.strategy.config.r_max, runner.strategy.config.base_units, 0)
+        )
+        for layer in long_cycle.grid.layers:
+            for slot in layer.slots:
+                slot.entry = None
+                slot.pending_rebuild = _pending_snapshot_for_slot(
+                    cycle_id=long_cycle.cycle_id,
+                    layer_number=layer.layer_number,
+                    retracement_count=slot.index,
+                    entry_price=START_PRICE - Decimal(layer.layer_number + slot.index) / 100,
+                )
+        runner.state.strategy_state = ss.to_dict()
+
+        result = runner.tick(START_PRICE - Decimal("1.00"))
+
+        runner.assert_no_error(result)
+        long_cycles = runner.long_cycles()
+        assert any(
+            c.cycle_id == long_cycle.cycle_id
+            and c.status == CycleStatus.PENDING
+            and c.is_grid_exhausted(runner.strategy.config.f_max)
+            for c in long_cycles
+        )
+        assert sum(1 for c in long_cycles if c.is_active) == 1
+        assert len(long_cycles) == 2
+
+    def test_reseed_on_grid_exhausted_waits_until_all_configured_layers_exist(self) -> None:
+        runner = TickRunner(
+            stop_loss=False,
+            overrides={
+                "r_max": 1,
+                "f_max": 2,
+                "manual_intervals": ["20"],
+                "reseed_on_all_pending": False,
+                "reseed_on_grid_exhausted": True,
+            },
+        )
+        runner.tick(START_PRICE)
+
+        ss = runner.ss
+        long_cycle = next(c for c in ss.cycles if c.direction == Direction.LONG)
+        for layer in long_cycle.grid.layers:
+            for slot in layer.slots:
+                slot.entry = None
+                slot.pending_rebuild = _pending_snapshot_for_slot(
+                    cycle_id=long_cycle.cycle_id,
+                    layer_number=layer.layer_number,
+                    retracement_count=slot.index,
+                    entry_price=START_PRICE - Decimal(slot.index) / 100,
+                )
+        runner.state.strategy_state = ss.to_dict()
+
+        result = runner.tick(START_PRICE - Decimal("1.00"))
+
+        runner.assert_no_error(result)
+        long_cycles = runner.long_cycles()
+        assert len(long_cycles) == 1
+        assert long_cycles[0].status == CycleStatus.PENDING
+        assert not long_cycles[0].is_grid_exhausted(runner.strategy.config.f_max)
 
 
 class TestSnowballTPOrdering:

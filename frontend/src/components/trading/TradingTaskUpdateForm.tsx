@@ -231,7 +231,7 @@ export default function TradingTaskUpdateForm({
   };
 
   return (
-    <Box>
+    <Box component="form" onSubmit={handleSubmit(onSubmit)}>
       <Paper sx={{ p: 3, mb: 3, bgcolor: 'action.hover' }}>
         <Typography variant="h6" gutterBottom>
           {t('common:labels.taskDetails', 'Task details')}
@@ -278,362 +278,359 @@ export default function TradingTaskUpdateForm({
         </Grid>
       </Paper>
 
-      <form onSubmit={handleSubmit(onSubmit)}>
-        {submitError && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            {submitError}
-          </Alert>
-        )}
-        {restartRequiredForExecutionEdits && (
-          <Alert
-            severity={showRestartRequiredGuard ? 'warning' : 'info'}
-            sx={{ mb: 3 }}
-          >
-            {t(
-              'trading:updateForm.restartRequiredForExecutionEdits',
-              'Execution setting changes apply to the next restart. Name and description changes apply immediately.'
-            )}
-          </Alert>
-        )}
-
-        <Typography variant="h6" gutterBottom>
-          {t('common:labels.configuration')}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          {t('trading:updateForm.updateStrategyConfig')}
-        </Typography>
-
-        <Grid container spacing={3}>
-          <Grid size={{ xs: 12 }}>
-            <Controller
-              name="config_id"
-              control={control}
-              render={({ field }) => (
-                <ConfigurationSelector
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={errors.config_id?.message}
-                  helperText={errors.config_id?.message}
-                />
-              )}
-            />
-          </Grid>
-
-          {selectedConfig && (
-            <Grid size={{ xs: 12 }}>
-              <Alert severity="info">
-                <Typography variant="subtitle2" gutterBottom>
-                  {t('trading:form.configurationPreview')}
-                </Typography>
-                <Typography variant="body2">
-                  <strong>{t('trading:form.type')}:</strong>{' '}
-                  {getStrategyDisplayName(
-                    strategies,
-                    selectedConfig.strategy_type
-                  )}
-                </Typography>
-                <Typography variant="body2">
-                  <strong>{t('common:labels.description')}:</strong>{' '}
-                  {selectedConfig.description ||
-                    t('trading:form.noDescription')}
-                </Typography>
-              </Alert>
-            </Grid>
-          )}
-        </Grid>
-
-        {strategySupportsHedging ? (
-          <>
-            <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
-              {t('trading:form.hedgingEnabled', 'Hedging')}
-            </Typography>
-            <Grid container spacing={3}>
-              <Grid size={{ xs: 12 }}>
-                <Controller
-                  name="hedging_enabled"
-                  control={control}
-                  render={({ field }) => (
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={field.value ?? true}
-                          onChange={field.onChange}
-                          disabled={accountHedgingEnabled === false}
-                        />
-                      }
-                      label={t(
-                        'trading:form.hedgingEnabled',
-                        'Enable Hedging (simultaneous long/short positions)'
-                      )}
-                    />
-                  )}
-                />
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ display: 'block', ml: 4 }}
-                >
-                  {t(
-                    'trading:form.hedgingDescription',
-                    'When enabled, the strategy can hold both long and short positions simultaneously. Requires a hedging-enabled OANDA account.'
-                  )}
-                </Typography>
-                {accountHedgingEnabled === false && (
-                  <Alert severity="warning" sx={{ mt: 2 }}>
-                    {t(
-                      'trading:form.hedgingUnsupported',
-                      'This OANDA account uses netting mode and does not support hedging. Hedging has been disabled for this task.'
-                    )}
-                  </Alert>
-                )}
-              </Grid>
-            </Grid>
-          </>
-        ) : null}
-
-        <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
-          {t('trading:form.advancedSettings', 'Advanced settings')}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      {submitError && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {submitError}
+        </Alert>
+      )}
+      {restartRequiredForExecutionEdits && (
+        <Alert
+          severity={showRestartRequiredGuard ? 'warning' : 'info'}
+          sx={{ mb: 3 }}
+        >
           {t(
-            'trading:form.advancedSettingsDescription',
-            'Fine-tune broker retry behaviour, drain-on-stop, and market-close idling. Defaults work well for most tasks.'
+            'trading:updateForm.restartRequiredForExecutionEdits',
+            'Execution setting changes apply to the next restart. Name and description changes apply immediately.'
           )}
-        </Typography>
-        <Grid container spacing={3}>
-          <Grid size={{ xs: 12, sm: 4 }}>
-            <Controller
-              name="api_retry_max_attempts"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    field.onChange(val === '' ? undefined : Number(val));
-                  }}
-                  fullWidth
-                  type="number"
-                  label={t(
-                    'trading:form.apiRetryMaxAttempts',
-                    'OANDA retry attempts'
-                  )}
-                  helperText={
-                    errors.api_retry_max_attempts?.message ||
-                    t(
-                      'trading:form.apiRetryMaxAttemptsHelp',
-                      'Max retries for broker API calls before failing the task. Default: 50.'
-                    )
-                  }
-                  error={!!errors.api_retry_max_attempts}
-                  inputProps={{ min: 1, max: 1000, step: 1 }}
-                />
-              )}
-            />
-          </Grid>
+        </Alert>
+      )}
 
-          <Grid size={{ xs: 12, sm: 4 }}>
-            <Controller
-              name="api_retry_backoff_base_seconds"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    field.onChange(val === '' ? undefined : Number(val));
-                  }}
-                  fullWidth
-                  type="number"
-                  label={t(
-                    'trading:form.apiRetryBaseSeconds',
-                    'Retry backoff base (s)'
-                  )}
-                  helperText={
-                    errors.api_retry_backoff_base_seconds?.message ||
-                    t(
-                      'trading:form.apiRetryBaseSecondsHelp',
-                      'Initial wait between retries. Doubled on each attempt.'
-                    )
-                  }
-                  error={!!errors.api_retry_backoff_base_seconds}
-                  inputProps={{ min: 0, step: 0.5 }}
-                />
-              )}
-            />
-          </Grid>
+      <Typography variant="h6" gutterBottom>
+        {t('common:labels.configuration')}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        {t('trading:updateForm.updateStrategyConfig')}
+      </Typography>
 
-          <Grid size={{ xs: 12, sm: 4 }}>
-            <Controller
-              name="api_retry_backoff_max_seconds"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    field.onChange(val === '' ? undefined : Number(val));
-                  }}
-                  fullWidth
-                  type="number"
-                  label={t(
-                    'trading:form.apiRetryMaxSeconds',
-                    'Retry backoff max (s)'
-                  )}
-                  helperText={
-                    errors.api_retry_backoff_max_seconds?.message ||
-                    t(
-                      'trading:form.apiRetryMaxSecondsHelp',
-                      'Upper bound on the wait between retries.'
-                    )
-                  }
-                  error={!!errors.api_retry_backoff_max_seconds}
-                  inputProps={{ min: 0, step: 1 }}
-                />
-              )}
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12, sm: 4 }}>
-            <Controller
-              name="drain_duration_hours"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    field.onChange(val === '' ? undefined : Number(val));
-                  }}
-                  fullWidth
-                  type="number"
-                  label={t(
-                    'trading:form.drainDurationHours',
-                    'Drain duration (hours)'
-                  )}
-                  helperText={
-                    errors.drain_duration_hours?.message ||
-                    t(
-                      'trading:form.drainDurationHoursHelp',
-                      'Maximum hours to keep draining before giving up. 0 = wait forever for breakeven.'
-                    )
-                  }
-                  error={!!errors.drain_duration_hours}
-                  inputProps={{ min: 0, step: 1 }}
-                />
-              )}
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12, sm: 4 }}>
-            <Controller
-              name="market_idle_pre_close_minutes"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    field.onChange(val === '' ? undefined : Number(val));
-                  }}
-                  fullWidth
-                  type="number"
-                  label={t(
-                    'trading:form.marketIdlePreCloseMinutes',
-                    'Idle before market close (min)'
-                  )}
-                  helperText={
-                    errors.market_idle_pre_close_minutes?.message ||
-                    t(
-                      'trading:form.marketIdlePreCloseMinutesHelp',
-                      'Switch to IDLE this many minutes before the weekly forex close. 0 disables.'
-                    )
-                  }
-                  error={!!errors.market_idle_pre_close_minutes}
-                  inputProps={{ min: 0, max: 720, step: 1 }}
-                />
-              )}
-            />
-          </Grid>
-
-          <Grid size={{ xs: 12, sm: 4 }}>
-            <Controller
-              name="market_idle_resume_delay_minutes"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  value={field.value ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    field.onChange(val === '' ? undefined : Number(val));
-                  }}
-                  fullWidth
-                  type="number"
-                  label={t(
-                    'trading:form.marketIdleResumeDelayMinutes',
-                    'Resume delay after open (min)'
-                  )}
-                  helperText={
-                    errors.market_idle_resume_delay_minutes?.message ||
-                    t(
-                      'trading:form.marketIdleResumeDelayMinutesHelp',
-                      'Wait this many minutes after the market reopens before resuming trading.'
-                    )
-                  }
-                  error={!!errors.market_idle_resume_delay_minutes}
-                  inputProps={{ min: 0, max: 720, step: 1 }}
-                />
-              )}
-            />
-          </Grid>
+      <Grid container spacing={3}>
+        <Grid size={{ xs: 12 }}>
+          <Controller
+            name="config_id"
+            control={control}
+            render={({ field }) => (
+              <ConfigurationSelector
+                value={field.value}
+                onChange={field.onChange}
+                error={errors.config_id?.message}
+                helperText={errors.config_id?.message}
+              />
+            )}
+          />
         </Grid>
 
-        <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
-          {t('common:debug.title')}
-        </Typography>
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={tracemalloc}
-              onChange={(e) => setTracemalloc(e.target.checked)}
-            />
-          }
-          label={
-            <Box>
-              <Typography variant="body1">
-                {t('common:debug.tracemalloc')}
+        {selectedConfig && (
+          <Grid size={{ xs: 12 }}>
+            <Alert severity="info">
+              <Typography variant="subtitle2" gutterBottom>
+                {t('trading:form.configurationPreview')}
               </Typography>
+              <Typography variant="body2">
+                <strong>{t('trading:form.type')}:</strong>{' '}
+                {getStrategyDisplayName(
+                  strategies,
+                  selectedConfig.strategy_type
+                )}
+              </Typography>
+              <Typography variant="body2">
+                <strong>{t('common:labels.description')}:</strong>{' '}
+                {selectedConfig.description || t('trading:form.noDescription')}
+              </Typography>
+            </Alert>
+          </Grid>
+        )}
+      </Grid>
+
+      {strategySupportsHedging ? (
+        <>
+          <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
+            {t('trading:form.hedgingEnabled', 'Hedging')}
+          </Typography>
+          <Grid container spacing={3}>
+            <Grid size={{ xs: 12 }}>
+              <Controller
+                name="hedging_enabled"
+                control={control}
+                render={({ field }) => (
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={field.value ?? true}
+                        onChange={field.onChange}
+                        disabled={accountHedgingEnabled === false}
+                      />
+                    }
+                    label={t(
+                      'trading:form.hedgingEnabled',
+                      'Enable Hedging (simultaneous long/short positions)'
+                    )}
+                  />
+                )}
+              />
               <Typography
-                variant="body2"
+                variant="caption"
                 color="text.secondary"
-                sx={{ mt: 0.5 }}
+                sx={{ display: 'block', ml: 4 }}
               >
-                {t('common:debug.tracemallocDescription')}
+                {t(
+                  'trading:form.hedgingDescription',
+                  'When enabled, the strategy can hold both long and short positions simultaneously. Requires a hedging-enabled OANDA account.'
+                )}
               </Typography>
-            </Box>
-          }
-        />
+              {accountHedgingEnabled === false && (
+                <Alert severity="warning" sx={{ mt: 2 }}>
+                  {t(
+                    'trading:form.hedgingUnsupported',
+                    'This OANDA account uses netting mode and does not support hedging. Hedging has been disabled for this task.'
+                  )}
+                </Alert>
+              )}
+            </Grid>
+          </Grid>
+        </>
+      ) : null}
 
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
-          <Button variant="outlined" onClick={() => navigate('/trading-tasks')}>
-            {t('common:actions.cancel')}
-          </Button>
+      <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
+        {t('trading:form.advancedSettings', 'Advanced settings')}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+        {t(
+          'trading:form.advancedSettingsDescription',
+          'Fine-tune broker retry behaviour, drain-on-stop, and market-close idling. Defaults work well for most tasks.'
+        )}
+      </Typography>
+      <Grid container spacing={3}>
+        <Grid size={{ xs: 12, sm: 4 }}>
+          <Controller
+            name="api_retry_max_attempts"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                value={field.value ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  field.onChange(val === '' ? undefined : Number(val));
+                }}
+                fullWidth
+                type="number"
+                label={t(
+                  'trading:form.apiRetryMaxAttempts',
+                  'OANDA retry attempts'
+                )}
+                helperText={
+                  errors.api_retry_max_attempts?.message ||
+                  t(
+                    'trading:form.apiRetryMaxAttemptsHelp',
+                    'Max retries for broker API calls before failing the task. Default: 50.'
+                  )
+                }
+                error={!!errors.api_retry_max_attempts}
+                inputProps={{ min: 1, max: 1000, step: 1 }}
+              />
+            )}
+          />
+        </Grid>
 
-          <Button
-            type="submit"
-            variant="contained"
-            disabled={updateTask.isLoading}
-          >
-            {t('common:actions.updateTask')}
-          </Button>
-        </Box>
-      </form>
+        <Grid size={{ xs: 12, sm: 4 }}>
+          <Controller
+            name="api_retry_backoff_base_seconds"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                value={field.value ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  field.onChange(val === '' ? undefined : Number(val));
+                }}
+                fullWidth
+                type="number"
+                label={t(
+                  'trading:form.apiRetryBaseSeconds',
+                  'Retry backoff base (s)'
+                )}
+                helperText={
+                  errors.api_retry_backoff_base_seconds?.message ||
+                  t(
+                    'trading:form.apiRetryBaseSecondsHelp',
+                    'Initial wait between retries. Doubled on each attempt.'
+                  )
+                }
+                error={!!errors.api_retry_backoff_base_seconds}
+                inputProps={{ min: 0, step: 0.5 }}
+              />
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 4 }}>
+          <Controller
+            name="api_retry_backoff_max_seconds"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                value={field.value ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  field.onChange(val === '' ? undefined : Number(val));
+                }}
+                fullWidth
+                type="number"
+                label={t(
+                  'trading:form.apiRetryMaxSeconds',
+                  'Retry backoff max (s)'
+                )}
+                helperText={
+                  errors.api_retry_backoff_max_seconds?.message ||
+                  t(
+                    'trading:form.apiRetryMaxSecondsHelp',
+                    'Upper bound on the wait between retries.'
+                  )
+                }
+                error={!!errors.api_retry_backoff_max_seconds}
+                inputProps={{ min: 0, step: 1 }}
+              />
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 4 }}>
+          <Controller
+            name="drain_duration_hours"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                value={field.value ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  field.onChange(val === '' ? undefined : Number(val));
+                }}
+                fullWidth
+                type="number"
+                label={t(
+                  'trading:form.drainDurationHours',
+                  'Drain duration (hours)'
+                )}
+                helperText={
+                  errors.drain_duration_hours?.message ||
+                  t(
+                    'trading:form.drainDurationHoursHelp',
+                    'Maximum hours to keep draining before giving up. 0 = wait forever for breakeven.'
+                  )
+                }
+                error={!!errors.drain_duration_hours}
+                inputProps={{ min: 0, step: 1 }}
+              />
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 4 }}>
+          <Controller
+            name="market_idle_pre_close_minutes"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                value={field.value ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  field.onChange(val === '' ? undefined : Number(val));
+                }}
+                fullWidth
+                type="number"
+                label={t(
+                  'trading:form.marketIdlePreCloseMinutes',
+                  'Idle before market close (min)'
+                )}
+                helperText={
+                  errors.market_idle_pre_close_minutes?.message ||
+                  t(
+                    'trading:form.marketIdlePreCloseMinutesHelp',
+                    'Switch to IDLE this many minutes before the weekly forex close. 0 disables.'
+                  )
+                }
+                error={!!errors.market_idle_pre_close_minutes}
+                inputProps={{ min: 0, max: 720, step: 1 }}
+              />
+            )}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 4 }}>
+          <Controller
+            name="market_idle_resume_delay_minutes"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                value={field.value ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  field.onChange(val === '' ? undefined : Number(val));
+                }}
+                fullWidth
+                type="number"
+                label={t(
+                  'trading:form.marketIdleResumeDelayMinutes',
+                  'Resume delay after open (min)'
+                )}
+                helperText={
+                  errors.market_idle_resume_delay_minutes?.message ||
+                  t(
+                    'trading:form.marketIdleResumeDelayMinutesHelp',
+                    'Wait this many minutes after the market reopens before resuming trading.'
+                  )
+                }
+                error={!!errors.market_idle_resume_delay_minutes}
+                inputProps={{ min: 0, max: 720, step: 1 }}
+              />
+            )}
+          />
+        </Grid>
+      </Grid>
+
+      <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
+        {t('common:debug.title')}
+      </Typography>
+      <FormControlLabel
+        control={
+          <Checkbox
+            checked={tracemalloc}
+            onChange={(e) => setTracemalloc(e.target.checked)}
+          />
+        }
+        label={
+          <Box>
+            <Typography variant="body1">
+              {t('common:debug.tracemalloc')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              {t('common:debug.tracemallocDescription')}
+            </Typography>
+          </Box>
+        }
+      />
+
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
+        <Button
+          type="button"
+          variant="outlined"
+          onClick={() => navigate('/trading-tasks')}
+        >
+          {t('common:actions.cancel')}
+        </Button>
+
+        <Button
+          type="submit"
+          variant="contained"
+          disabled={updateTask.isLoading}
+        >
+          {t('common:actions.updateTask')}
+        </Button>
+      </Box>
     </Box>
   );
 }

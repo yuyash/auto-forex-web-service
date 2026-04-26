@@ -2236,6 +2236,18 @@ class SnowballStrategy(Strategy):
 
         # --- Per-cycle processing ---
         for cycle in list(ss.active_cycles()):
+            if cycle.grid.is_empty() and cycle.grid.has_pending_rebuilds():
+                # Pending-only cycles can rebuild or be re-seeded, but
+                # must not originate fresh counter entries from stale
+                # pending snapshots.
+                cycle.status = CycleStatus.PENDING
+                sl_rebuild_events = self._process_stop_loss_rebuilds(ss, tick, cycle)
+                events.extend(sl_rebuild_events)
+                if cycle.grid.is_empty():
+                    self._validate_grid_ordering(cycle)
+                    continue
+                cycle.status = CycleStatus.ACTIVE
+
             counter_close_events = self._process_cycle_counter_closes(ss, tick, cycle)
             events.extend(counter_close_events)
 

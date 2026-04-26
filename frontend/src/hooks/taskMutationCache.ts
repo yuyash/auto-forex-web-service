@@ -155,9 +155,13 @@ export function upsertTaskCaches<T extends TaskEntity>(
   void queryClient.invalidateQueries({ queryKey: keys.lists });
 }
 
-export function removeTaskCaches(taskKind: TaskKind, taskId: string): void {
+export async function removeTaskCaches(
+  taskKind: TaskKind,
+  taskId: string
+): Promise<void> {
   const keys = getTaskKeys(taskKind);
   const derivedKeys = getTaskDerivedKeys(taskKind, taskId);
+  await queryClient.cancelQueries({ queryKey: keys.lists });
   queryClient.removeQueries({ queryKey: keys.detail(taskId) });
   queryClient.removeQueries({ queryKey: keys.executions(taskId) });
   queryClient.removeQueries({ queryKey: derivedKeys.summaries });
@@ -166,14 +170,17 @@ export function removeTaskCaches(taskKind: TaskKind, taskId: string): void {
   removeFromListQueries<PaginatedResponse<TaskEntity>>(keys.lists, (cached) =>
     removePaginatedEntity(cached, taskId)
   );
-  void queryClient.invalidateQueries({ queryKey: keys.lists });
+  await queryClient.invalidateQueries({
+    queryKey: keys.lists,
+    refetchType: 'active',
+  });
 }
 
-export function patchTaskStatusCache(
+export async function patchTaskStatusCache(
   taskKind: TaskKind,
   taskId: string,
   status: string
-): void {
+): Promise<void> {
   const keys = getTaskKeys(taskKind);
   queryClient.setQueryData<TaskEntity | undefined>(
     keys.detail(taskId),
@@ -207,7 +214,16 @@ export function patchTaskStatusCache(
     taskKind === 'backtest' ? TaskType.BACKTEST : TaskType.TRADING,
     status
   );
-  void queryClient.invalidateQueries({ queryKey: keys.lists });
+  await Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: keys.detail(taskId),
+      refetchType: 'active',
+    }),
+    queryClient.invalidateQueries({
+      queryKey: keys.lists,
+      refetchType: 'active',
+    }),
+  ]);
 }
 
 export async function invalidateTaskDerivedCaches(

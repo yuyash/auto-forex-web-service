@@ -10,7 +10,7 @@ export const taskDetailLayout = {
     minHeight: 0,
     overflow: 'hidden',
     width: '100%',
-    maxWidth: layoutTokens.contentMaxWidth,
+    maxWidth: `var(--app-content-max-width, ${layoutTokens.contentMaxWidth}px)`,
     mx: 'auto',
   },
   tabPaper: {

@@ -59,10 +59,29 @@ export function useMetricsOrder(availableKeys: string[]) {
     [orderedKeys, persist]
   );
 
+  const setOrder = useCallback(
+    (keys: string[]) => {
+      const available = new Set(availableKeys);
+      const next: string[] = [];
+      for (const key of keys) {
+        if (available.has(key) && !next.includes(key)) {
+          next.push(key);
+        }
+      }
+      for (const key of availableKeys) {
+        if (!next.includes(key)) {
+          next.push(key);
+        }
+      }
+      persist(next);
+    },
+    [availableKeys, persist]
+  );
+
   const resetOrder = useCallback(() => {
     setSavedOrder(null);
     removeStoredValue(STORAGE_KEY);
   }, []);
 
-  return { orderedKeys, moveItem, resetOrder };
+  return { orderedKeys, moveItem, setOrder, resetOrder };
 }

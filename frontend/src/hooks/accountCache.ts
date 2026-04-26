@@ -31,10 +31,15 @@ export function upsertAccountCaches(account: Account): void {
   );
 }
 
-export function removeAccountCaches(accountId: number): void {
+export async function removeAccountCaches(accountId: number): Promise<void> {
+  await queryClient.cancelQueries({ queryKey: queryKeys.accounts.lists() });
   queryClient.removeQueries({ queryKey: queryKeys.accounts.detail(accountId) });
   removeFromListQueries<Account[]>(
     queryKeys.accounts.lists(),
     (cached) => cached?.filter((entry) => entry.id !== accountId) ?? cached
   );
+  await queryClient.invalidateQueries({
+    queryKey: queryKeys.accounts.lists(),
+    refetchType: 'active',
+  });
 }
