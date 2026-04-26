@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.45.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.44.0...backend-v1.45.0) (2026-04-26)
+
+
+### Features
+
+* **adaptive-net:** chart normalized strategy signals ([#614](https://github.com/yuyash/auto-forex-web-service/issues/614)) ([7b5a355](https://github.com/yuyash/auto-forex-web-service/commit/7b5a35504710faf497855478815f952e22d8b60b))
+
 ## [1.44.0](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.43.2...backend-v1.44.0) (2026-04-26)
 
 

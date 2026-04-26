@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.59.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.58.0...frontend-v1.59.0) (2026-04-26)
+
+
+### Features
+
+* **adaptive-net:** chart normalized strategy signals ([#614](https://github.com/yuyash/auto-forex-web-service/issues/614)) ([7b5a355](https://github.com/yuyash/auto-forex-web-service/commit/7b5a35504710faf497855478815f952e22d8b60b))
+
 ## [1.58.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.57.2...frontend-v1.58.0) (2026-04-26)
 
 
