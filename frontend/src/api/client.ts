@@ -179,11 +179,14 @@ export function transformApiError(error: unknown): TransformedApiError {
  * Check if an error is retryable
  */
 function isRetryableError(error: TransformedApiError): boolean {
+  if (error.statusCode === 429) {
+    return false;
+  }
+
   return (
     error.type === ApiErrorType.NETWORK_ERROR ||
     error.type === ApiErrorType.SERVER_ERROR ||
-    (error.statusCode !== undefined &&
-      (error.statusCode === 429 || error.statusCode >= 500))
+    (error.statusCode !== undefined && error.statusCode >= 500)
   );
 }
 

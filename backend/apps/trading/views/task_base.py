@@ -24,6 +24,7 @@ from apps.trading.tasks.service import (
 )
 from apps.trading.views.errors import api_error
 from apps.trading.views.mixins import TaskSubResourceMixin
+from apps.trading.views.throttles import TaskDataRateThrottle
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
     """
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [TaskDataRateThrottle]
     detail_serializer_class = None
     list_serializer_class = None
     create_serializer_class = None
