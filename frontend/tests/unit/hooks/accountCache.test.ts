@@ -45,7 +45,7 @@ describe('accountCache', () => {
     );
   });
 
-  it('removes deleted accounts from cached lists and detail cache', () => {
+  it('removes deleted accounts from cached lists and detail cache', async () => {
     const listKey = queryKeys.accounts.list();
     const detailKey = queryKeys.accounts.detail(1);
     queryClient.setQueryData<Account[]>(listKey, [
@@ -54,7 +54,7 @@ describe('accountCache', () => {
     ]);
     queryClient.setQueryData<Account>(detailKey, buildAccount());
 
-    removeAccountCaches(1);
+    await removeAccountCaches(1);
 
     expect(queryClient.getQueryData<Account[]>(listKey)).toEqual([
       expect.objectContaining({ id: 2 }),

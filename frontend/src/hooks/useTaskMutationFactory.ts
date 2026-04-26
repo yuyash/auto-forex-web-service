@@ -39,15 +39,14 @@ interface TaskLifecycleApi<TTask extends TaskEntity> {
 // ---- helpers -------------------------------------------------------------
 
 /** Standard onSuccess: upsert + patch derived + invalidate. */
-function standardSuccess<TTask extends TaskEntity>(
+async function standardSuccess<TTask extends TaskEntity>(
   kind: TaskKind,
   data: TTask,
   cb?: (d: TTask) => void
-) {
+): Promise<void> {
   upsertTaskCaches(kind, data);
   patchTaskDerivedCaches(kind, data);
-  // fire-and-forget invalidation
-  void invalidateTaskDerivedCaches(kind, data.id);
+  await invalidateTaskDerivedCaches(kind, data.id);
   cb?.(data);
 }
 
@@ -60,7 +59,7 @@ export function createStartHook<TTask extends TaskEntity>(
   return function useStartTask(options?: MutationOptions<TTask>) {
     return useWrappedMutation((id: string) => api.start(id), {
       onSuccess: async (data) => {
-        standardSuccess(kind, data, options?.onSuccess);
+        await standardSuccess(kind, data, options?.onSuccess);
       },
       onError: (error) => options?.onError?.(error),
     });
@@ -74,7 +73,7 @@ export function createPauseHook<TTask extends TaskEntity>(
   return function usePauseTask(options?: MutationOptions<TTask>) {
     return useWrappedMutation((id: string) => api.pause(id), {
       onSuccess: async (data) => {
-        standardSuccess(kind, data, options?.onSuccess);
+        await standardSuccess(kind, data, options?.onSuccess);
       },
       onError: (error) => options?.onError?.(error),
     });
@@ -88,9 +87,7 @@ export function createResumeHook<TTask extends TaskEntity>(
   return function useResumeTask(options?: MutationOptions<TTask>) {
     return useWrappedMutation((id: string) => api.resume(id), {
       onSuccess: async (data) => {
-        upsertTaskCaches(kind, data);
-        void invalidateTaskDerivedCaches(kind, data.id);
-        options?.onSuccess?.(data);
+        await standardSuccess(kind, data, options?.onSuccess);
       },
       onError: (error) => options?.onError?.(error),
     });
@@ -104,9 +101,7 @@ export function createRestartHook<TTask extends TaskEntity>(
   return function useRestartTask(options?: MutationOptions<TTask>) {
     return useWrappedMutation((id: string) => api.restart(id), {
       onSuccess: async (data) => {
-        upsertTaskCaches(kind, data);
-        void invalidateTaskDerivedCaches(kind, data.id);
-        options?.onSuccess?.(data);
+        await standardSuccess(kind, data, options?.onSuccess);
       },
       onError: (error) => options?.onError?.(error),
     });
@@ -120,7 +115,7 @@ export function createDeleteHook<TTask extends TaskEntity>(
   return function useDeleteTask(options?: MutationOptions<void>) {
     return useWrappedMutation((id: string) => api.delete(id), {
       onSuccess: async (_, id) => {
-        removeTaskCaches(kind, id);
+        await removeTaskCaches(kind, id);
         removeTaskListEntry(kind, id);
         options?.onSuccess?.();
       },
@@ -139,7 +134,7 @@ export function createCopyHook<TTask extends TaskEntity>(
         api.copy(variables.id, variables.data),
       {
         onSuccess: async (data) => {
-          standardSuccess(kind, data, options?.onSuccess);
+          await standardSuccess(kind, data, options?.onSuccess);
         },
         onError: (error) => options?.onError?.(error),
       }

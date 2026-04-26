@@ -15,6 +15,8 @@ import {
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import SettingsIcon from '@mui/icons-material/Settings';
+import { useTranslation } from 'react-i18next';
 
 const INTERVAL_OPTIONS = [
   { value: 0, label: 'Auto' },
@@ -33,7 +35,8 @@ export interface MetricsToolbarProps {
   onIntervalChange: (interval: number) => void;
   onSinceChange: (since: string) => void;
   onUntilChange: (until: string) => void;
-  onRefresh: () => void;
+  onRefresh: () => void | Promise<void>;
+  onConfigureCharts?: () => void;
   isLoading?: boolean;
 }
 
@@ -45,8 +48,10 @@ export function MetricsToolbar({
   onSinceChange,
   onUntilChange,
   onRefresh,
+  onConfigureCharts,
   isLoading,
 }: MetricsToolbarProps) {
+  const { t } = useTranslation('common');
   const [showRange, setShowRange] = useState(!!since || !!until);
 
   return (
@@ -96,6 +101,14 @@ export function MetricsToolbar({
             </IconButton>
           </span>
         </Tooltip>
+
+        {onConfigureCharts ? (
+          <Tooltip title={t('metrics.configureCharts', 'Chart settings')}>
+            <IconButton size="small" onClick={onConfigureCharts}>
+              <SettingsIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        ) : null}
       </Box>
 
       <Collapse in={showRange}>

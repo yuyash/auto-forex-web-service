@@ -50,6 +50,8 @@ interface MetricsOhlcChartProps {
   currentTickTimestamp?: string | null;
   /** Current tick price for the sequence position line */
   currentTickPrice?: number | null;
+  /** Incrementing token used by the parent toolbar to force a reload. */
+  refreshToken?: number;
 }
 
 const GRANULARITY_OPTIONS = [
@@ -81,29 +83,20 @@ export function MetricsOhlcChart({
   cardHeight,
   currentTickTimestamp,
   currentTickPrice,
+  refreshToken,
 }: MetricsOhlcChartProps) {
   const theme = useTheme();
   const { t } = useTranslation('common');
   const isDark = theme.palette.mode === 'dark';
   const containerRef = useRef<HTMLDivElement>(null);
-  const headerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
   const seqLineRef = useRef<SequencePositionLine | null>(null);
-  const [chartHeight, setChartHeight] = useState(200);
+  const lastRefreshTokenRef = useRef(refreshToken);
   const [liveEndTime, setLiveEndTime] = useState(
     () => endTime ?? new Date().toISOString()
   );
-
-  // Compute chart canvas height to fill the card minus header and padding
-  useEffect(() => {
-    if (!cardHeight || !headerRef.current) return;
-    const headerH = headerRef.current.offsetHeight;
-    // Paper padding: p=1.5 = 12px top + 12px bottom = 24px, mb:0.5 = 4px
-    const available = cardHeight - 24 - headerH - 4;
-    setChartHeight(Math.max(100, available));
-  }, [cardHeight]);
 
   useEffect(() => {
     if (endTime) {
@@ -194,9 +187,11 @@ export function MetricsOhlcChart({
     if (!chartRef.current) {
       const container = containerRef.current;
       const { upColor, downColor } = getCandleColors();
+      const initialWidth = Math.max(1, Math.floor(container.clientWidth));
+      const initialHeight = Math.max(100, Math.floor(container.clientHeight));
       const chart = createChart(container, {
-        height: chartHeight,
-        width: container.clientWidth,
+        height: initialHeight,
+        width: initialWidth,
         layout: {
           background: { color: isDark ? '#131722' : '#ffffff' },
           textColor: isDark ? '#d1d4dc' : '#334155',
@@ -243,9 +238,11 @@ export function MetricsOhlcChart({
       seqLineRef.current = seqLine;
 
       const observer = new ResizeObserver(() => {
-        const w = container.clientWidth;
-        const h = container.clientHeight;
-        if (w > 0 && h > 0) chart.applyOptions({ width: w, height: h });
+        const w = Math.floor(container.clientWidth);
+        const h = Math.floor(container.clientHeight);
+        if (w > 0 && h > 0) {
+          chart.applyOptions({ width: w, height: h });
+        }
       });
       observer.observe(container);
       observerRef.current = observer;
@@ -269,7 +266,7 @@ export function MetricsOhlcChart({
     } else {
       chartRef.current?.timeScale().fitContent();
     }
-  }, [candles, chartHeight, isDark, paddedRange, timezone]);
+  }, [candles, isDark, paddedRange, timezone]);
 
   const handleResetZoom = useCallback(() => {
     if (paddedRange && chartRef.current) {
@@ -300,6 +297,14 @@ export function MetricsOhlcChart({
     }
     void replaceWithCountWindow();
   }, [destroyChart, endTime, replaceWithCountWindow]);
+
+  useEffect(() => {
+    if (refreshToken == null || refreshToken === lastRefreshTokenRef.current) {
+      return;
+    }
+    lastRefreshTokenRef.current = refreshToken;
+    handleReload();
+  }, [handleReload, refreshToken]);
 
   const displayInstrument = instrument.replace('_', '/');
 
@@ -368,7 +373,6 @@ export function MetricsOhlcChart({
       }}
     >
       <Box
-        ref={headerRef}
         sx={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -420,7 +424,11 @@ export function MetricsOhlcChart({
       </Box>
       <Box
         ref={containerRef}
-        sx={{ width: '100%', height: chartHeight, minHeight: 0 }}
+        sx={{
+          width: '100%',
+          flex: 1,
+          minHeight: 0,
+        }}
       />
     </Paper>
   );

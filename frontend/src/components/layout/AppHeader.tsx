@@ -9,6 +9,7 @@ import {
   Divider,
   ListItemIcon,
   ListItemText,
+  Tooltip,
   useTheme,
   useMediaQuery,
   Button,
@@ -22,6 +23,8 @@ import {
   Assignment as BacktestTaskIcon,
   PlayCircleOutline as TradingTaskIcon,
   AccountBalance as AccountBalanceIcon,
+  Fullscreen as FullWidthIcon,
+  FullscreenExit as ConstrainedWidthIcon,
 } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -30,9 +33,15 @@ import Typography from '@mui/material/Typography';
 
 interface AppHeaderProps {
   onMenuClick?: () => void;
+  constrainContentWidth: boolean;
+  onToggleContentWidth: () => void;
 }
 
-const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
+const AppHeader = ({
+  onMenuClick,
+  constrainContentWidth,
+  onToggleContentWidth,
+}: AppHeaderProps) => {
   const { t } = useTranslation('common');
   const { logout, user } = useAuth();
   const navigate = useNavigate();
@@ -154,6 +163,31 @@ const AppHeader = ({ onMenuClick }: AppHeaderProps) => {
             flexShrink: 0,
           }}
         >
+          <Tooltip
+            title={
+              constrainContentWidth
+                ? t('actions.disableWidthLimit', 'Disable width limit')
+                : t('actions.enableWidthLimit', 'Enable width limit')
+            }
+          >
+            <IconButton
+              aria-label={
+                constrainContentWidth
+                  ? t('actions.disableWidthLimit', 'Disable width limit')
+                  : t('actions.enableWidthLimit', 'Enable width limit')
+              }
+              onClick={onToggleContentWidth}
+              color="inherit"
+              sx={{ p: { xs: 0.5, sm: 1 } }}
+            >
+              {constrainContentWidth ? (
+                <FullWidthIcon />
+              ) : (
+                <ConstrainedWidthIcon />
+              )}
+            </IconButton>
+          </Tooltip>
+
           {/* User Menu */}
           <IconButton
             edge="end"

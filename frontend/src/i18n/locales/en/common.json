@@ -80,7 +80,9 @@
     "newTask": "New Task",
     "createTask": "Create Task",
     "updateTask": "Update Task",
-    "backToCurrent": "Back to Current"
+    "backToCurrent": "Back to Current",
+    "enableWidthLimit": "Enable width limit",
+    "disableWidthLimit": "Disable width limit"
   },
   "status": {
     "active": "Active",
@@ -112,7 +114,9 @@
     "configuration": "Configuration",
     "strategyType": "Strategy Type",
     "strategyConfiguration": "Strategy Configuration",
+    "accountCurrency": "Account Currency",
     "oandaAccount": "OANDA Account",
+    "hedgingEnabled": "Hedging Enabled",
     "sellOnStop": "Sell on Stop",
     "dryRun": "Dry Run",
     "yes": "Yes",
@@ -662,6 +666,13 @@
   "metrics": {
     "title": "Metrics",
     "noData": "No metrics data available for this execution.",
+    "configureCharts": "Chart settings",
+    "chartOrderTitle": "Chart order",
+    "chartOrderDescription": "Drag charts or use the arrow buttons to change their display order.",
+    "resetChartOrder": "Reset order",
+    "moveChartUp": "Move chart up",
+    "moveChartDown": "Move chart down",
+    "ohlcChart": "OHLC chart",
     "current_balance": "Balance",
     "total_pnl": "Total PnL",
     "total_pnl_quote": "Total PnL (Quote)",

@@ -42,7 +42,7 @@ export function useDeleteAccount(options?: {
 }) {
   return useWrappedMutation((id: number) => accountsApi.delete(id), {
     onSuccess: async (_, id) => {
-      removeAccountCaches(id);
+      await removeAccountCaches(id);
       options?.onSuccess?.();
     },
     onError: (error) => options?.onError?.(error),

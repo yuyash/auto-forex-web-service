@@ -124,7 +124,7 @@ export function useStopTradingTask(options?: {
       ),
     {
       onSuccess: async (data, variables) => {
-        patchTaskStatusCache('trading', variables.id, 'stopping');
+        await patchTaskStatusCache('trading', variables.id, 'stopping');
         await invalidateTaskDerivedCaches('trading', variables.id);
         options?.onSuccess?.(data);
       },

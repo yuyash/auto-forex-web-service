@@ -52,7 +52,7 @@ export function useDeleteConfiguration(options?: {
 }) {
   return useWrappedMutation((id: string) => configurationsApi.delete(id), {
     onSuccess: async (_, id) => {
-      removeConfigurationCaches(id);
+      await removeConfigurationCaches(id);
       options?.onSuccess?.();
     },
     onError: (error) => options?.onError?.(error),

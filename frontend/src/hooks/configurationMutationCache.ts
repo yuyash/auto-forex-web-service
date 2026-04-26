@@ -46,15 +46,19 @@ export function upsertConfigurationCaches(config: StrategyConfig): void {
   });
 }
 
-export function removeConfigurationCaches(id: string): void {
+export async function removeConfigurationCaches(id: string): Promise<void> {
+  await queryClient.cancelQueries({
+    queryKey: queryKeys.configurations.lists(),
+  });
   queryClient.removeQueries({ queryKey: queryKeys.configurations.detail(id) });
   queryClient.removeQueries({ queryKey: queryKeys.configurations.tasks(id) });
   removeFromListQueries<PaginatedResponse<StrategyConfig>>(
     queryKeys.configurations.lists(),
     (cached) => removePaginatedEntity(cached, id)
   );
-  void queryClient.invalidateQueries({
+  await queryClient.invalidateQueries({
     queryKey: queryKeys.configurations.lists(),
+    refetchType: 'active',
   });
 }
 

@@ -11,7 +11,7 @@ export default function PageContainer({ sx, ...props }: ContainerProps) {
       sx={[
         {
           width: '100%',
-          maxWidth: layoutTokens.contentMaxWidth,
+          maxWidth: `var(--app-content-max-width, ${layoutTokens.contentMaxWidth}px)`,
           mx: 'auto',
           px: layoutTokens.pagePadding,
         },
