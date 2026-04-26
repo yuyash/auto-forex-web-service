@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.45.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.45.1...backend-v1.45.2) (2026-04-26)
+
+
+### Refactoring
+
+* task polling throttle fix ([#618](https://github.com/yuyash/auto-forex-web-service/issues/618)) ([98c823d](https://github.com/yuyash/auto-forex-web-service/commit/98c823d31c6137c753858afcd372606d0148b75e))
+
 ## [1.45.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.45.0...backend-v1.45.1) (2026-04-26)
 
 
