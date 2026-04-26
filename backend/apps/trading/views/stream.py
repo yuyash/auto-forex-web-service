@@ -118,8 +118,10 @@ class TaskEventStreamView(APIView):
             return
 
     @staticmethod
-    def _snapshot(task: BacktestTask | TradingTask) -> dict[str, Any]:
+    def _snapshot(task: BacktestTask | TradingTask, task_type: str) -> dict[str, Any]:
         return {
+            "id": str(task.pk),
+            "task_type": task_type,
             "status": task.status,
             "progress": getattr(task, "progress", None),
             "execution_id": str(task.execution_id) if task.execution_id else None,
