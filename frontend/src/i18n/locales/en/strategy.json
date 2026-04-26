@@ -100,17 +100,25 @@
       "shortProbability": "Short {{value}}",
       "riskMultiplier": "Risk x{{value}}",
       "directionalEdge": "Directional Edge",
-      "decisionConfidence": "Decision Confidence"
+      "decisionConfidence": "Decision Confidence",
+      "directionalEdgeHelp": "Directional edge is the normalized long-vs-short advantage: -1 is strong short, 0 is neutral, and +1 is strong long."
     },
     "metrics": {
-      "title": "Raw Metrics",
-      "description": "Raw metric data before the final decision. Score is direction, confidence is weighting strength, and size multiplier gates exposure.",
+      "title": "Metrics",
+      "description": "Normalized strategy metrics used by the decision engine. Direction score is [-1, +1], confidence is [0, 1], and size multiplier is [0, 1].",
       "count": "{{count}} metrics",
       "window": "{{count}} ticks / {{duration}}",
       "warmingUp": "Metrics are warming up.",
       "score": "score {{value}}",
       "confidence": "conf {{value}}",
       "sizeMultiplier": "size x{{value}}"
+    },
+    "charts": {
+      "noHistory": "Time-series data will appear after at least two rebalance decisions.",
+      "metricScores": "Normalized metric direction scores",
+      "metricConfidence": "Metric confidence",
+      "prediction": "Directional edge and confidence",
+      "decision": "Net exposure and order size"
     },
     "metricNames": {
       "regime": "Regime",

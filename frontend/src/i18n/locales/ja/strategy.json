@@ -100,17 +100,25 @@
       "shortProbability": "ショート {{value}}",
       "riskMultiplier": "リスク x{{value}}",
       "directionalEdge": "方向エッジ",
-      "decisionConfidence": "判断信頼度"
+      "decisionConfidence": "判断信頼度",
+      "directionalEdgeHelp": "方向エッジはロング優位性とショート優位性の差を正規化した値です。-1 は強いショート、0 は中立、+1 は強いロングを示します。"
     },
     "metrics": {
-      "title": "Raw Metrics",
-      "description": "判断前のメトリクス生データです。スコアは方向、信頼度は重み付けの強さ、サイズ倍率は建玉量の抑制度を示します。",
+      "title": "メトリクス",
+      "description": "判断エンジンが使用する正規化済みメトリクスです。方向スコアは [-1, +1]、信頼度は [0, 1]、サイズ倍率は [0, 1] です。",
       "count": "{{count}} 件のメトリクス",
       "window": "{{count}} ticks / {{duration}}",
       "warmingUp": "メトリクスはウォームアップ中です。",
       "score": "スコア {{value}}",
       "confidence": "信頼度 {{value}}",
       "sizeMultiplier": "サイズ x{{value}}"
+    },
+    "charts": {
+      "noHistory": "2回以上のリバランス判断後に時系列データが表示されます。",
+      "metricScores": "正規化メトリクス方向スコア",
+      "metricConfidence": "メトリクス信頼度",
+      "prediction": "方向エッジと判断信頼度",
+      "decision": "ネット建玉と注文量"
     },
     "metricNames": {
       "regime": "レジーム",
@@ -129,7 +137,7 @@
       "timesfm_forecast": "TimesFM予測プロバイダ接続までは中立のプレースホルダーです。"
     },
     "decision": {
-      "title": "Rebalance Decision",
+      "title": "リバランス判断",
       "description": "予測結果を現在ネット建玉と比較し、最終的な目標方向と注文量を決めます。",
       "elapsed": "前回判断から",
       "ticks": "{{count}} ticks",

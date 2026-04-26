@@ -8,12 +8,14 @@ import {
   Typography,
   alpha,
 } from '@mui/material';
+import { LineChart } from '@mui/x-charts/LineChart';
 import type { ReactNode } from 'react';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import type {
   AdaptiveNetMetricSignal,
+  AdaptiveNetDecisionHistoryPoint,
   AdaptiveNetStrategyState,
   StrategyCycle,
   StrategyCyclesSummary,
@@ -89,6 +91,34 @@ function metricTone(score: number): 'success' | 'error' | 'default' {
   return 'default';
 }
 
+function buildFallbackHistory(
+  decision: AdaptiveNetStrategyState['latest_decision'],
+  metrics: AdaptiveNetMetricSignal[],
+  currentNet: number,
+  targetNet: number,
+  orderUnits: number,
+  action: string
+): AdaptiveNetDecisionHistoryPoint[] {
+  if (!decision) return [];
+  return [
+    {
+      timestamp: new Date().toISOString(),
+      current_net_units: currentNet,
+      target_net_units: targetNet,
+      order_units: orderUnits,
+      action,
+      edge: decision.edge,
+      confidence: decision.confidence,
+      probability_long: decision.probability_long,
+      probability_short: decision.probability_short,
+      risk_multiplier: decision.risk_multiplier,
+      metric_signals: decision.metric_signals?.length
+        ? decision.metric_signals
+        : metrics,
+    },
+  ];
+}
+
 export function AdaptiveNetStrategyPanel({
   state,
   cycles,
@@ -101,6 +131,17 @@ export function AdaptiveNetStrategyPanel({
   const targetNet = decision?.target_net_units ?? state?.target_net_units ?? 0;
   const orderUnits = decision?.order_units ?? targetNet - currentNet;
   const action = decisionAction(currentNet, targetNet, orderUnits);
+  const history =
+    state?.decision_history && state.decision_history.length > 0
+      ? state.decision_history
+      : buildFallbackHistory(
+          decision,
+          metrics,
+          currentNet,
+          targetNet,
+          orderUnits,
+          action
+        );
   void cycles;
   void summary;
   const directionLabel = (units?: number): string => {
@@ -149,6 +190,7 @@ export function AdaptiveNetStrategyPanel({
               </Typography>
             )}
           </Box>
+          <MetricHistoryCharts history={history} />
         </Stack>
       </Paper>
 
@@ -165,6 +207,9 @@ export function AdaptiveNetStrategyPanel({
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {t('adaptiveNet.prediction.description')}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {t('adaptiveNet.prediction.directionalEdgeHelp')}
               </Typography>
             </Box>
             <Stack direction="row" spacing={1} flexWrap="wrap">
@@ -210,6 +255,7 @@ export function AdaptiveNetStrategyPanel({
               absolute
             />
           </Box>
+          <PredictionHistoryChart history={history} />
         </Stack>
       </Paper>
 
@@ -284,9 +330,194 @@ export function AdaptiveNetStrategyPanel({
               icon={<SwapHorizIcon fontSize="small" />}
             />
           </Box>
+          <DecisionHistoryChart history={history} />
         </Stack>
       </Paper>
     </Stack>
+  );
+}
+
+function formatHistoryTime(value: string): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+  return date.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function chartIndexes(history: AdaptiveNetDecisionHistoryPoint[]): number[] {
+  return history.map((_, index) => index);
+}
+
+function NoHistoryFallback() {
+  const { t } = useTranslation('strategy');
+  return (
+    <Typography variant="body2" color="text.secondary">
+      {t('adaptiveNet.charts.noHistory')}
+    </Typography>
+  );
+}
+
+function MetricHistoryCharts({
+  history,
+}: {
+  history: AdaptiveNetDecisionHistoryPoint[];
+}) {
+  const { t } = useTranslation('strategy');
+  if (history.length < 2) return <NoHistoryFallback />;
+
+  const metricNames = Array.from(
+    new Set(
+      history.flatMap((point) =>
+        (point.metric_signals ?? []).map((metric) => metric.name)
+      )
+    )
+  );
+  const indexes = chartIndexes(history);
+
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' },
+        gap: 2,
+      }}
+    >
+      <HistoryLineChart
+        title={t('adaptiveNet.charts.metricScores')}
+        history={history}
+        indexes={indexes}
+        min={-1}
+        max={1}
+        series={metricNames.map((name) => ({
+          label: t(`adaptiveNet.metricNames.${name}`, name.replace(/_/g, ' ')),
+          data: history.map((point) =>
+            toNumber(
+              point.metric_signals.find((metric) => metric.name === name)
+                ?.direction_score
+            )
+          ),
+        }))}
+      />
+      <HistoryLineChart
+        title={t('adaptiveNet.charts.metricConfidence')}
+        history={history}
+        indexes={indexes}
+        min={0}
+        max={1}
+        series={metricNames.map((name) => ({
+          label: t(`adaptiveNet.metricNames.${name}`, name.replace(/_/g, ' ')),
+          data: history.map((point) =>
+            toNumber(
+              point.metric_signals.find((metric) => metric.name === name)
+                ?.confidence
+            )
+          ),
+        }))}
+      />
+    </Box>
+  );
+}
+
+function PredictionHistoryChart({
+  history,
+}: {
+  history: AdaptiveNetDecisionHistoryPoint[];
+}) {
+  const { t } = useTranslation('strategy');
+  if (history.length < 2) return <NoHistoryFallback />;
+  const indexes = chartIndexes(history);
+  return (
+    <HistoryLineChart
+      title={t('adaptiveNet.charts.prediction')}
+      history={history}
+      indexes={indexes}
+      min={-1}
+      max={1}
+      series={[
+        {
+          label: t('adaptiveNet.prediction.directionalEdge'),
+          data: history.map((point) => toNumber(point.edge)),
+        },
+        {
+          label: t('adaptiveNet.prediction.decisionConfidence'),
+          data: history.map((point) => toNumber(point.confidence)),
+        },
+      ]}
+    />
+  );
+}
+
+function DecisionHistoryChart({
+  history,
+}: {
+  history: AdaptiveNetDecisionHistoryPoint[];
+}) {
+  const { t } = useTranslation('strategy');
+  if (history.length < 2) return <NoHistoryFallback />;
+  const indexes = chartIndexes(history);
+  return (
+    <HistoryLineChart
+      title={t('adaptiveNet.charts.decision')}
+      history={history}
+      indexes={indexes}
+      series={[
+        {
+          label: t('adaptiveNet.summary.currentNet'),
+          data: history.map((point) => Number(point.current_net_units ?? 0)),
+        },
+        {
+          label: t('adaptiveNet.summary.targetNet'),
+          data: history.map((point) => Number(point.target_net_units ?? 0)),
+        },
+        {
+          label: t('adaptiveNet.summary.nextOrder'),
+          data: history.map((point) => Number(point.order_units ?? 0)),
+        },
+      ]}
+    />
+  );
+}
+
+function HistoryLineChart({
+  title,
+  history,
+  indexes,
+  series,
+  min,
+  max,
+}: {
+  title: string;
+  history: AdaptiveNetDecisionHistoryPoint[];
+  indexes: number[];
+  series: Array<{ label: string; data: number[] }>;
+  min?: number;
+  max?: number;
+}) {
+  return (
+    <Box sx={{ minWidth: 0 }}>
+      <Typography variant="subtitle2" sx={{ mb: 1 }}>
+        {title}
+      </Typography>
+      <LineChart
+        height={220}
+        xAxis={[
+          {
+            data: indexes,
+            valueFormatter: (value: number) =>
+              formatHistoryTime(history[Number(value)]?.timestamp ?? ''),
+          },
+        ]}
+        yAxis={[{ min, max }]}
+        series={series.map((item) => ({
+          ...item,
+          showMark: false,
+        }))}
+        margin={{ top: 24, right: 16, bottom: 24, left: 48 }}
+      />
+    </Box>
   );
 }
 

@@ -103,6 +103,20 @@ export interface AdaptiveNetDecision {
   reason?: string;
 }
 
+export interface AdaptiveNetDecisionHistoryPoint {
+  timestamp: string;
+  current_net_units: number;
+  target_net_units: number;
+  order_units: number;
+  action: 'hold' | 'increase' | 'reduce' | 'reverse' | string;
+  edge: string;
+  confidence: string;
+  probability_long: string;
+  probability_short: string;
+  risk_multiplier: string;
+  metric_signals: AdaptiveNetMetricSignal[];
+}
+
 export interface AdaptiveNetStrategyState {
   current_net_units?: number;
   target_net_units?: number;
@@ -111,6 +125,7 @@ export interface AdaptiveNetStrategyState {
   open_position_id?: string | null;
   latest_decision?: AdaptiveNetDecision | null;
   metric_signals?: AdaptiveNetMetricSignal[];
+  decision_history?: AdaptiveNetDecisionHistoryPoint[];
   last_price?: string;
   last_spread_pips?: string;
   last_fill_price?: string | null;
