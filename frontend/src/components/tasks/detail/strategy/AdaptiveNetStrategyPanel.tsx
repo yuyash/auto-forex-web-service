@@ -12,7 +12,6 @@ import type { ReactNode } from 'react';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
-import TimelineIcon from '@mui/icons-material/Timeline';
 import type {
   AdaptiveNetMetricSignal,
   AdaptiveNetStrategyState,
@@ -48,6 +47,16 @@ function formatUnits(value?: number): string {
   });
 }
 
+function formatDuration(seconds?: number | null): string {
+  if (seconds == null || !Number.isFinite(seconds)) return '-';
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.round(seconds % 60);
+  return remainingSeconds > 0
+    ? `${minutes}m ${remainingSeconds}s`
+    : `${minutes}m`;
+}
+
 function directionIcon(units?: number) {
   if (!units) return <SwapHorizIcon fontSize="small" />;
   return units > 0 ? (
@@ -55,6 +64,23 @@ function directionIcon(units?: number) {
   ) : (
     <TrendingDownIcon fontSize="small" />
   );
+}
+
+function decisionAction(
+  currentNet: number,
+  targetNet: number,
+  orderUnits: number
+) {
+  if (orderUnits === 0) return 'hold';
+  if (
+    currentNet !== 0 &&
+    Math.sign(currentNet) !== Math.sign(targetNet) &&
+    targetNet !== 0
+  ) {
+    return 'reverse';
+  }
+  if (Math.abs(targetNet) > Math.abs(currentNet)) return 'increase';
+  return 'reduce';
 }
 
 function metricTone(score: number): 'success' | 'error' | 'default' {
@@ -74,11 +100,9 @@ export function AdaptiveNetStrategyPanel({
   const currentNet = state?.current_net_units ?? 0;
   const targetNet = decision?.target_net_units ?? state?.target_net_units ?? 0;
   const orderUnits = decision?.order_units ?? targetNet - currentNet;
-  const activeTrades = cycles
-    .flatMap((cycle) => cycle.trades)
-    .filter((trade) => trade.execution_method === 'open_position')
-    .slice(-6)
-    .reverse();
+  const action = decisionAction(currentNet, targetNet, orderUnits);
+  void cycles;
+  void summary;
   const directionLabel = (units?: number): string => {
     if (!units) return t('adaptiveNet.directions.flat');
     return units > 0
@@ -90,50 +114,43 @@ export function AdaptiveNetStrategyPanel({
     <Stack spacing={2}>
       {!state && <Alert severity="info">{t('adaptiveNet.noState')}</Alert>}
 
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: {
-            xs: '1fr',
-            md: 'repeat(4, minmax(0, 1fr))',
-          },
-          gap: 1.5,
-        }}
-      >
-        <SummaryTile
-          label={t('adaptiveNet.summary.currentNet')}
-          value={formatUnits(currentNet)}
-          caption={directionLabel(currentNet)}
-          icon={directionIcon(currentNet)}
-        />
-        <SummaryTile
-          label={t('adaptiveNet.summary.targetNet')}
-          value={formatUnits(targetNet)}
-          caption={directionLabel(targetNet)}
-          icon={<TimelineIcon fontSize="small" />}
-        />
-        <SummaryTile
-          label={t('adaptiveNet.summary.nextOrder')}
-          value={formatUnits(orderUnits)}
-          caption={
-            orderUnits === 0
-              ? t('adaptiveNet.summary.noRebalance')
-              : t('adaptiveNet.summary.deltaToTarget')
-          }
-          icon={<SwapHorizIcon fontSize="small" />}
-        />
-        <SummaryTile
-          label={t('adaptiveNet.summary.openPosition')}
-          value={formatAppNumber(state?.open_units ?? 0, {
-            maximumFractionDigits: 0,
-          })}
-          caption={
-            state?.open_position_id?.slice(0, 8) ??
-            t('adaptiveNet.summary.noPosition')
-          }
-          icon={directionIcon(currentNet)}
-        />
-      </Box>
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Stack spacing={1.5}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            justifyContent="space-between"
+            spacing={1}
+          >
+            <Box>
+              <Typography variant="h6">
+                {t('adaptiveNet.metrics.title')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {t('adaptiveNet.metrics.description')}
+              </Typography>
+            </Box>
+            <Chip
+              size="small"
+              label={t('adaptiveNet.metrics.window', {
+                count: state?.lookback_points ?? 0,
+                duration: formatDuration(state?.window_seconds),
+              })}
+              variant="outlined"
+            />
+          </Stack>
+
+          <Box sx={{ display: 'grid', gap: 1 }}>
+            {metrics.map((metric) => (
+              <MetricRow key={metric.name} metric={metric} />
+            ))}
+            {metrics.length === 0 && (
+              <Typography variant="body2" color="text.secondary">
+                {t('adaptiveNet.metrics.warmingUp')}
+              </Typography>
+            )}
+          </Box>
+        </Stack>
+      </Paper>
 
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Stack spacing={1.5}>
@@ -205,120 +222,68 @@ export function AdaptiveNetStrategyPanel({
           >
             <Box>
               <Typography variant="h6">
-                {t('adaptiveNet.metrics.title')}
+                {t('adaptiveNet.decision.title')}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                {t('adaptiveNet.metrics.description')}
+                {t('adaptiveNet.decision.description')}
               </Typography>
             </Box>
             <Chip
               size="small"
-              label={t('adaptiveNet.metrics.count', { count: metrics.length })}
-              variant="outlined"
+              color={
+                action === 'increase'
+                  ? 'success'
+                  : action === 'reduce'
+                    ? 'warning'
+                    : action === 'reverse'
+                      ? 'error'
+                      : 'default'
+              }
+              label={t(`adaptiveNet.decision.actions.${action}`)}
             />
-          </Stack>
-
-          <Box sx={{ display: 'grid', gap: 1 }}>
-            {metrics.map((metric) => (
-              <MetricRow key={metric.name} metric={metric} />
-            ))}
-            {metrics.length === 0 && (
-              <Typography variant="body2" color="text.secondary">
-                {t('adaptiveNet.metrics.warmingUp')}
-              </Typography>
-            )}
-          </Box>
-        </Stack>
-      </Paper>
-
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Stack spacing={1.5}>
-          <Stack
-            direction={{ xs: 'column', sm: 'row' }}
-            justifyContent="space-between"
-            spacing={1}
-          >
-            <Box>
-              <Typography variant="h6">
-                {t('adaptiveNet.mechanism.title')}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {t('adaptiveNet.mechanism.description')}
-              </Typography>
-            </Box>
-            <Stack direction="row" spacing={1}>
-              <Chip
-                size="small"
-                label={t('adaptiveNet.mechanism.tradeCount', {
-                  count: summary.total_trades,
-                })}
-              />
-              <Chip
-                size="small"
-                label={t('adaptiveNet.mechanism.activeCount', {
-                  count: summary.active_count,
-                })}
-              />
-            </Stack>
           </Stack>
 
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
-              gap: 1,
+              gridTemplateColumns: {
+                xs: '1fr',
+                md: 'repeat(4, minmax(0, 1fr))',
+              },
+              gap: 1.5,
             }}
           >
-            <MechanismStep
-              title={t('adaptiveNet.mechanism.steps.predict.title')}
-              body={t('adaptiveNet.mechanism.steps.predict.body')}
+            <SummaryTile
+              label={t('adaptiveNet.summary.currentNet')}
+              value={formatUnits(currentNet)}
+              caption={directionLabel(currentNet)}
+              icon={directionIcon(currentNet)}
             />
-            <MechanismStep
-              title={t('adaptiveNet.mechanism.steps.size.title')}
-              body={t('adaptiveNet.mechanism.steps.size.body')}
+            <SummaryTile
+              label={t('adaptiveNet.summary.targetNet')}
+              value={formatUnits(targetNet)}
+              caption={directionLabel(targetNet)}
+              icon={directionIcon(targetNet)}
             />
-            <MechanismStep
-              title={t('adaptiveNet.mechanism.steps.rebalance.title')}
-              body={t('adaptiveNet.mechanism.steps.rebalance.body')}
+            <SummaryTile
+              label={t('adaptiveNet.summary.nextOrder')}
+              value={formatUnits(orderUnits)}
+              caption={
+                orderUnits === 0
+                  ? t('adaptiveNet.summary.noRebalance')
+                  : t('adaptiveNet.summary.deltaToTarget')
+              }
+              icon={<SwapHorizIcon fontSize="small" />}
+            />
+            <SummaryTile
+              label={t('adaptiveNet.decision.elapsed')}
+              value={formatDuration(state?.rebalance_elapsed_seconds)}
+              caption={t('adaptiveNet.decision.ticks', {
+                count: state?.rebalance_tick_delta ?? 0,
+              })}
+              icon={<SwapHorizIcon fontSize="small" />}
             />
           </Box>
-
-          {activeTrades.length > 0 && (
-            <Box sx={{ display: 'grid', gap: 0.75 }}>
-              <Typography variant="subtitle2">
-                {t('adaptiveNet.recentOpens.title')}
-              </Typography>
-              {activeTrades.map((trade) => (
-                <Stack
-                  key={trade.id}
-                  direction="row"
-                  spacing={1}
-                  alignItems="center"
-                  justifyContent="space-between"
-                  sx={{
-                    py: 0.75,
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                  }}
-                >
-                  <Chip
-                    size="small"
-                    color={trade.direction === 'buy' ? 'success' : 'error'}
-                    label={trade.direction ?? '-'}
-                  />
-                  <Typography variant="body2" sx={{ flex: 1 }}>
-                    {formatAppNumber(trade.units, { maximumFractionDigits: 0 })}{' '}
-                    {t('adaptiveNet.recentOpens.unitsAt', {
-                      price: trade.price,
-                    })}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {trade.position_id?.slice(0, 8) ?? '-'}
-                  </Typography>
-                </Stack>
-              ))}
-            </Box>
-          )}
         </Stack>
       </Paper>
     </Stack>
@@ -455,25 +420,6 @@ function MetricRow({ metric }: { metric: AdaptiveNetMetricSignal }) {
         </Stack>
       </Stack>
     </Paper>
-  );
-}
-
-function MechanismStep({ title, body }: { title: string; body: string }) {
-  return (
-    <Box
-      sx={{
-        border: '1px solid',
-        borderColor: 'divider',
-        borderRadius: 1,
-        p: 1.25,
-        minHeight: 112,
-      }}
-    >
-      <Typography variant="subtitle2">{title}</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-        {body}
-      </Typography>
-    </Box>
   );
 }
 

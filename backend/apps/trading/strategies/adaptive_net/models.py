@@ -9,8 +9,10 @@ DEFAULTS = {
     "base_units": 1000,
     "max_net_units": 10000,
     "min_order_units": 1000,
-    "lookback_ticks": 80,
+    "lookback_ticks": 500,
     "rebalance_interval_ticks": 10,
+    "lookback_window_seconds": 900,
+    "rebalance_interval_seconds": 60,
     "trend_weight": "0.25",
     "mean_reversion_weight": "0.20",
     "regime_weight": "0.20",
@@ -33,8 +35,10 @@ class AdaptiveNetConfig:
     base_units: int = 1000
     max_net_units: int = 10000
     min_order_units: int = 1000
-    lookback_ticks: int = 80
+    lookback_ticks: int = 500
     rebalance_interval_ticks: int = 10
+    lookback_window_seconds: int = 900
+    rebalance_interval_seconds: int = 60
     trend_weight: Decimal = Decimal("0.25")
     mean_reversion_weight: Decimal = Decimal("0.20")
     regime_weight: Decimal = Decimal("0.20")
@@ -53,6 +57,12 @@ class AdaptiveNetConfig:
             lookback_ticks=int(data.get("lookback_ticks", DEFAULTS["lookback_ticks"])),
             rebalance_interval_ticks=int(
                 data.get("rebalance_interval_ticks", DEFAULTS["rebalance_interval_ticks"])
+            ),
+            lookback_window_seconds=int(
+                data.get("lookback_window_seconds", DEFAULTS["lookback_window_seconds"])
+            ),
+            rebalance_interval_seconds=int(
+                data.get("rebalance_interval_seconds", DEFAULTS["rebalance_interval_seconds"])
             ),
             trend_weight=decimal_from(data.get("trend_weight"), DEFAULTS["trend_weight"]),
             mean_reversion_weight=decimal_from(
@@ -77,6 +87,8 @@ class AdaptiveNetConfig:
             "min_order_units": self.min_order_units,
             "lookback_ticks": self.lookback_ticks,
             "rebalance_interval_ticks": self.rebalance_interval_ticks,
+            "lookback_window_seconds": self.lookback_window_seconds,
+            "rebalance_interval_seconds": self.rebalance_interval_seconds,
             "trend_weight": str(self.trend_weight),
             "mean_reversion_weight": str(self.mean_reversion_weight),
             "regime_weight": str(self.regime_weight),

@@ -103,9 +103,10 @@
       "decisionConfidence": "Decision Confidence"
     },
     "metrics": {
-      "title": "Metric Contributions",
-      "description": "Each metric is an independent signal plugin; none places orders directly.",
+      "title": "Raw Metrics",
+      "description": "Raw metric data before the final decision. Score is direction, confidence is weighting strength, and size multiplier gates exposure.",
       "count": "{{count}} metrics",
+      "window": "{{count}} ticks / {{duration}}",
       "warmingUp": "Metrics are warming up.",
       "score": "score {{value}}",
       "confidence": "conf {{value}}",
@@ -127,29 +128,17 @@
       "inventory_exposure": "Existing net exposure penalizes adding in the same direction.",
       "timesfm_forecast": "Neutral placeholder until a TimesFM forecast provider is connected."
     },
-    "mechanism": {
-      "title": "Position Mechanism",
-      "description": "Orders are the delta between current and target net units.",
-      "tradeCount": "{{count}} trades",
-      "activeCount": "{{count}} active",
-      "steps": {
-        "predict": {
-          "title": "1. Predict",
-          "body": "Regime, trend, reversion, risk, inventory, and optional forecast metrics produce a probability-weighted edge."
-        },
-        "size": {
-          "title": "2. Size",
-          "body": "The edge is risk-gated and rounded into a target net unit count."
-        },
-        "rebalance": {
-          "title": "3. Rebalance",
-          "body": "The executor opens, reduces, or reverses only the difference from current net exposure."
-        }
+    "decision": {
+      "title": "Rebalance Decision",
+      "description": "Compares the prediction with current net exposure and resolves the final direction and order size.",
+      "elapsed": "Since Decision",
+      "ticks": "{{count}} ticks",
+      "actions": {
+        "hold": "Hold",
+        "increase": "Increase",
+        "reduce": "Reduce",
+        "reverse": "Reverse"
       }
-    },
-    "recentOpens": {
-      "title": "Recent Opens",
-      "unitsAt": "units @ {{price}}"
     }
   }
 }

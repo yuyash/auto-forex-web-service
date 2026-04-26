@@ -103,9 +103,10 @@
       "decisionConfidence": "判断信頼度"
     },
     "metrics": {
-      "title": "メトリクス寄与",
-      "description": "各メトリクスは独立したシグナルプラグインです。メトリクス自体は注文を出しません。",
+      "title": "Raw Metrics",
+      "description": "判断前のメトリクス生データです。スコアは方向、信頼度は重み付けの強さ、サイズ倍率は建玉量の抑制度を示します。",
       "count": "{{count}} 件のメトリクス",
+      "window": "{{count}} ticks / {{duration}}",
       "warmingUp": "メトリクスはウォームアップ中です。",
       "score": "スコア {{value}}",
       "confidence": "信頼度 {{value}}",
@@ -127,29 +128,17 @@
       "inventory_exposure": "既存のネット建玉が同方向への追加を抑制します。",
       "timesfm_forecast": "TimesFM予測プロバイダ接続までは中立のプレースホルダーです。"
     },
-    "mechanism": {
-      "title": "建玉・決済メカニズム",
-      "description": "注文数量は、現在ネット建玉と目標ネット建玉の差分です。",
-      "tradeCount": "{{count}} 件の取引",
-      "activeCount": "アクティブ {{count}} 件",
-      "steps": {
-        "predict": {
-          "title": "1. 予測",
-          "body": "レジーム、トレンド、平均回帰、リスク、保有量、任意の予測メトリクスから確率加重エッジを作ります。"
-        },
-        "size": {
-          "title": "2. サイズ決定",
-          "body": "エッジをリスクで制御し、目標ネットユニット数に丸めます。"
-        },
-        "rebalance": {
-          "title": "3. リバランス",
-          "body": "現在のネット建玉との差分だけを新規建玉、縮小、または反転として実行します。"
-        }
+    "decision": {
+      "title": "Rebalance Decision",
+      "description": "予測結果を現在ネット建玉と比較し、最終的な目標方向と注文量を決めます。",
+      "elapsed": "前回判断から",
+      "ticks": "{{count}} ticks",
+      "actions": {
+        "hold": "維持",
+        "increase": "追加",
+        "reduce": "縮小",
+        "reverse": "反転"
       }
-    },
-    "recentOpens": {
-      "title": "直近の建玉",
-      "unitsAt": "ユニット @ {{price}}"
     }
   }
 }

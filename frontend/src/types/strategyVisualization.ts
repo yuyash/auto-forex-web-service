@@ -115,4 +115,10 @@ export interface AdaptiveNetStrategyState {
   last_spread_pips?: string;
   last_fill_price?: string | null;
   previous_net_units?: number;
+  lookback_points?: number;
+  window_seconds?: number;
+  window_started_at?: string | null;
+  last_rebalance_at?: string | null;
+  rebalance_tick_delta?: number;
+  rebalance_elapsed_seconds?: number | null;
 }

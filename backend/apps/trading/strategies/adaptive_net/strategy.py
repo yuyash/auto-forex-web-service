@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -45,6 +45,8 @@ class AdaptiveNetStrategy(Strategy):
             "min_order_units",
             "lookback_ticks",
             "rebalance_interval_ticks",
+            "lookback_window_seconds",
+            "rebalance_interval_seconds",
         }
         for key in integer_fields:
             normalized[key] = int(normalized[key])
@@ -85,10 +87,27 @@ class AdaptiveNetStrategy(Strategy):
         state.last_tick_timestamp = tick.timestamp
 
         strategy_state = _initial_state(state.strategy_state)
-        prices = [Decimal(str(price)) for price in strategy_state.get("price_history", [])]
-        prices.append(tick.mid)
-        prices = prices[-self.config.lookback_ticks :]
+        price_points = _price_points(strategy_state)
+        price_points.append(
+            {
+                "timestamp": tick.timestamp.isoformat(),
+                "price": str(tick.mid),
+            }
+        )
+        price_points = _trim_price_points(
+            price_points,
+            current_timestamp=tick.timestamp,
+            lookback_ticks=self.config.lookback_ticks,
+            lookback_window_seconds=self.config.lookback_window_seconds,
+        )
+        prices = [Decimal(str(point["price"])) for point in price_points]
+        window_started_at = price_points[0]["timestamp"] if price_points else None
+        window_seconds = _window_seconds(price_points)
+        strategy_state["price_points"] = price_points
         strategy_state["price_history"] = [str(price) for price in prices]
+        strategy_state["lookback_points"] = len(price_points)
+        strategy_state["window_started_at"] = window_started_at
+        strategy_state["window_seconds"] = window_seconds
         strategy_state["last_price"] = str(tick.mid)
         strategy_state["last_spread_pips"] = str(
             (tick.ask - tick.bid) / self.pip_size if self.pip_size > 0 else Decimal("0")
@@ -100,7 +119,14 @@ class AdaptiveNetStrategy(Strategy):
 
         ticks_processed = int(state.ticks_processed or 0)
         last_rebalance_tick = int(strategy_state.get("last_rebalance_tick", -(10**9)))
-        if ticks_processed - last_rebalance_tick < self.config.rebalance_interval_ticks:
+        tick_delta = ticks_processed - last_rebalance_tick
+        elapsed_seconds = _elapsed_since(strategy_state.get("last_rebalance_at"), tick.timestamp)
+        if not _should_rebalance(
+            tick_delta=tick_delta,
+            elapsed_seconds=elapsed_seconds,
+            interval_ticks=self.config.rebalance_interval_ticks,
+            interval_seconds=self.config.rebalance_interval_seconds,
+        ):
             return StrategyResult.from_state(state)
 
         current_net_units = int(strategy_state.get("current_net_units", 0) or 0)
@@ -125,6 +151,9 @@ class AdaptiveNetStrategy(Strategy):
         )
 
         strategy_state["last_rebalance_tick"] = ticks_processed
+        strategy_state["last_rebalance_at"] = tick.timestamp.isoformat()
+        strategy_state["rebalance_tick_delta"] = tick_delta
+        strategy_state["rebalance_elapsed_seconds"] = elapsed_seconds
         strategy_state["latest_decision"] = decision.to_dict()
         strategy_state["metric_signals"] = [signal.to_dict() for signal in metric_signals]
         strategy_state["target_net_units"] = decision.target_net_units
@@ -267,6 +296,7 @@ class AdaptiveNetStrategy(Strategy):
 def _initial_state(raw: Any) -> dict[str, Any]:
     state = dict(raw or {}) if isinstance(raw, dict) else {}
     state.setdefault("price_history", [])
+    state.setdefault("price_points", [])
     state.setdefault("current_net_units", 0)
     state.setdefault("target_net_units", 0)
     state.setdefault("open_units", 0)
@@ -277,6 +307,95 @@ def _initial_state(raw: Any) -> dict[str, Any]:
     state.setdefault("metric_signals", [])
     state.setdefault("latest_decision", None)
     return state
+
+
+def _price_points(strategy_state: dict[str, Any]) -> list[dict[str, str]]:
+    points = strategy_state.get("price_points")
+    if isinstance(points, list):
+        normalized: list[dict[str, str]] = []
+        for point in points:
+            if not isinstance(point, dict):
+                continue
+            timestamp = point.get("timestamp")
+            price = point.get("price")
+            if timestamp and price is not None:
+                normalized.append({"timestamp": str(timestamp), "price": str(price)})
+        if normalized:
+            return normalized
+
+    legacy_prices = strategy_state.get("price_history")
+    if not isinstance(legacy_prices, list):
+        return []
+    return [
+        {"timestamp": "", "price": str(price)}
+        for price in legacy_prices
+        if price is not None and str(price) != ""
+    ]
+
+
+def _trim_price_points(
+    points: list[dict[str, str]],
+    *,
+    current_timestamp: datetime,
+    lookback_ticks: int,
+    lookback_window_seconds: int,
+) -> list[dict[str, str]]:
+    trimmed = points
+    if lookback_window_seconds > 0:
+        cutoff = current_timestamp - timedelta(seconds=lookback_window_seconds)
+        trimmed = [
+            point
+            for point in trimmed
+            if not point.get("timestamp") or _parse_datetime(point["timestamp"]) >= cutoff
+        ]
+    if lookback_ticks > 0:
+        trimmed = trimmed[-lookback_ticks:]
+    return trimmed
+
+
+def _parse_datetime(value: Any) -> datetime:
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _window_seconds(points: list[dict[str, str]]) -> int:
+    if len(points) < 2:
+        return 0
+    try:
+        start = _parse_datetime(points[0]["timestamp"])
+        end = _parse_datetime(points[-1]["timestamp"])
+    except (KeyError, ValueError):
+        return 0
+    return max(0, int((end - start).total_seconds()))
+
+
+def _elapsed_since(value: Any, current_timestamp: datetime) -> int | None:
+    if not value:
+        return None
+    try:
+        previous = _parse_datetime(value)
+    except ValueError:
+        return None
+    return max(0, int((current_timestamp - previous).total_seconds()))
+
+
+def _should_rebalance(
+    *,
+    tick_delta: int,
+    elapsed_seconds: int | None,
+    interval_ticks: int,
+    interval_seconds: int,
+) -> bool:
+    if interval_ticks > 0 and tick_delta < interval_ticks:
+        return False
+    if interval_seconds > 0 and elapsed_seconds is not None:
+        return elapsed_seconds >= interval_seconds
+    return True
 
 
 def _sign(value: int) -> int:
