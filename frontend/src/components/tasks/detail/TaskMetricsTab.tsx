@@ -58,7 +58,7 @@ interface TaskMetricsTabProps {
 const CHART_METRICS: {
   key: string;
   color: string;
-  format?: 'pct' | 'int' | 'currency' | 'price';
+  format?: 'pct' | 'int' | 'currency';
 }[] = [
   { key: 'current_balance', color: '#1976d2', format: 'currency' },
   { key: 'total_pnl', color: '#2e7d32', format: 'currency' },
@@ -73,79 +73,10 @@ const CHART_METRICS: {
   { key: 'winning_trades', color: '#2e7d32', format: 'int' },
   { key: 'losing_trades', color: '#c62828', format: 'int' },
   { key: 'ticks_processed', color: '#546e7a', format: 'int' },
-  { key: 'adaptive_net_decision_edge', color: '#6d4c41' },
-  { key: 'adaptive_net_decision_confidence', color: '#00897b', format: 'pct' },
-  {
-    key: 'adaptive_net_decision_probability_long',
-    color: '#2e7d32',
-    format: 'pct',
-  },
-  {
-    key: 'adaptive_net_decision_probability_short',
-    color: '#c62828',
-    format: 'pct',
-  },
-  {
-    key: 'adaptive_net_decision_risk_multiplier',
-    color: '#ef6c00',
-    format: 'pct',
-  },
-  {
-    key: 'adaptive_net_decision_target_net_units',
-    color: '#1565c0',
-    format: 'int',
-  },
-  { key: 'adaptive_net_decision_order_units', color: '#ad1457', format: 'int' },
-  {
-    key: 'adaptive_net_position_before_net_units',
-    color: '#78909c',
-    format: 'int',
-  },
-  {
-    key: 'adaptive_net_position_after_net_units',
-    color: '#3949ab',
-    format: 'int',
-  },
-  {
-    key: 'adaptive_net_position_delta_net_units',
-    color: '#8e24aa',
-    format: 'int',
-  },
-  {
-    key: 'adaptive_net_position_after_abs_units',
-    color: '#0277bd',
-    format: 'int',
-  },
-  { key: 'adaptive_net_order_abs_units', color: '#d81b60', format: 'int' },
-  { key: 'adaptive_net_order_price', color: '#5d4037', format: 'price' },
-  {
-    key: 'adaptive_net_position_after_avg_entry_price',
-    color: '#00796b',
-    format: 'price',
-  },
-  { key: 'adaptive_net_regime_direction_score', color: '#5e35b1' },
-  { key: 'adaptive_net_trend_momentum_direction_score', color: '#1e88e5' },
-  { key: 'adaptive_net_mean_reversion_direction_score', color: '#f4511e' },
-  {
-    key: 'adaptive_net_risk_condition_confidence',
-    color: '#00838f',
-    format: 'pct',
-  },
-  {
-    key: 'adaptive_net_inventory_exposure_direction_score',
-    color: '#7cb342',
-  },
 ];
 
 /** Keys whose raw value is a ratio (0–1) that must be multiplied by 100 for display */
-const RATIO_KEYS = new Set([
-  'margin_ratio',
-  'adaptive_net_decision_confidence',
-  'adaptive_net_decision_probability_long',
-  'adaptive_net_decision_probability_short',
-  'adaptive_net_decision_risk_multiplier',
-  'adaptive_net_risk_condition_confidence',
-]);
+const RATIO_KEYS = new Set(['margin_ratio']);
 
 /**
  * Compute a short date/time label appropriate for the data's time span
@@ -276,14 +207,10 @@ const MIN_Y_AXIS_WIDTH = 34;
  * Avoid fixed two-decimal labels; they consume too much horizontal space in
  * small chart cards and do not add useful precision for trend reading.
  */
-function formatYLabel(
-  v: number,
-  format?: 'pct' | 'int' | 'currency' | 'price'
-): string {
+function formatYLabel(v: number, format?: 'pct' | 'int' | 'currency'): string {
   if (format === 'pct') return `${v.toFixed(1)}%`;
   if (format === 'currency') return v.toFixed(0);
   if (format === 'int') return Math.round(v).toLocaleString();
-  if (format === 'price') return v.toFixed(3);
   return v.toFixed(1);
 }
 
@@ -634,7 +561,6 @@ export function TaskMetricsTab({
     if (format === 'pct') return `${val.toFixed(1)}%`;
     if (format === 'int') return Math.round(val).toLocaleString();
     if (format === 'currency') return `${val.toFixed(0)}${currencySuffix}`;
-    if (format === 'price') return val.toFixed(5);
     return val.toFixed(1);
   };
 

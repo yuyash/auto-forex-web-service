@@ -108,6 +108,7 @@
       "description": "判断エンジンが使用する正規化済みメトリクスです。方向スコアは [-1, +1]、信頼度は [0, 1]、サイズ倍率は [0, 1] です。",
       "count": "{{count}} 件のメトリクス",
       "window": "{{count}} ticks / {{duration}}",
+      "publishCount": "メトリクス公開 {{count}} 回",
       "warmingUp": "メトリクスはウォームアップ中です。",
       "score": "スコア {{value}}",
       "confidence": "信頼度 {{value}}",
@@ -140,6 +141,7 @@
       "title": "リバランス判断",
       "description": "予測結果を現在ネット建玉と比較し、最終的な目標方向と注文量を決めます。",
       "elapsed": "前回判断から",
+      "direction": "注文方向",
       "ticks": "{{count}} ticks",
       "actions": {
         "hold": "維持",
@@ -147,6 +149,19 @@
         "reduce": "縮小",
         "reverse": "反転"
       }
+    },
+    "orderDirections": {
+      "buy": "買い",
+      "sell": "売り",
+      "hold": "維持"
+    },
+    "position": {
+      "deltaNet": "ネット建玉差分",
+      "absoluteNet": "絶対ネット建玉",
+      "averageEntry": "平均取得価格",
+      "beforeAfterNet": "{{before}} → {{after}}",
+      "deltaAbs": "絶対差分 {{value}}",
+      "beforeAverageEntry": "変更前 {{value}}"
     }
   }
 }

@@ -49,6 +49,12 @@ function formatUnits(value?: number): string {
   });
 }
 
+function formatUnsignedUnits(value?: number): string {
+  return formatAppNumber(value ?? 0, {
+    maximumFractionDigits: 0,
+  });
+}
+
 function formatDuration(seconds?: number | null): string {
   if (seconds == null || !Number.isFinite(seconds)) return '-';
   if (seconds < 60) return `${Math.round(seconds)}s`;
@@ -126,11 +132,17 @@ export function AdaptiveNetStrategyPanel({
 }: AdaptiveNetStrategyPanelProps) {
   const { t } = useTranslation('strategy');
   const decision = state?.latest_decision ?? null;
-  const metrics = decision?.metric_signals ?? state?.metric_signals ?? [];
+  const metrics =
+    state?.published_metric_signals ??
+    decision?.metric_signals ??
+    state?.metric_signals ??
+    [];
   const currentNet = state?.current_net_units ?? 0;
   const targetNet = decision?.target_net_units ?? state?.target_net_units ?? 0;
   const orderUnits = decision?.order_units ?? targetNet - currentNet;
-  const action = decisionAction(currentNet, targetNet, orderUnits);
+  const transition = state?.latest_position_transition ?? null;
+  const action =
+    transition?.action ?? decisionAction(currentNet, targetNet, orderUnits);
   const history =
     state?.decision_history && state.decision_history.length > 0
       ? state.decision_history
@@ -322,10 +334,66 @@ export function AdaptiveNetStrategyPanel({
               icon={<SwapHorizIcon fontSize="small" />}
             />
             <SummaryTile
+              label={t('adaptiveNet.decision.direction')}
+              value={t(
+                `adaptiveNet.orderDirections.${transition?.order_direction ?? 'hold'}`
+              )}
+              caption={transition?.order_price ?? '-'}
+              icon={<SwapHorizIcon fontSize="small" />}
+            />
+          </Box>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                md: 'repeat(4, minmax(0, 1fr))',
+              },
+              gap: 1.5,
+            }}
+          >
+            <SummaryTile
+              label={t('adaptiveNet.position.deltaNet')}
+              value={formatUnits(
+                transition?.position_delta_net_units ?? orderUnits
+              )}
+              caption={t('adaptiveNet.position.beforeAfterNet', {
+                before: formatUnits(
+                  transition?.position_before_net_units ?? currentNet
+                ),
+                after: formatUnits(
+                  transition?.position_after_net_units ?? targetNet
+                ),
+              })}
+              icon={<SwapHorizIcon fontSize="small" />}
+            />
+            <SummaryTile
+              label={t('adaptiveNet.position.absoluteNet')}
+              value={formatUnsignedUnits(
+                transition?.position_after_abs_units ?? Math.abs(targetNet)
+              )}
+              caption={t('adaptiveNet.position.deltaAbs', {
+                value: formatUnits(transition?.position_delta_abs_units ?? 0),
+              })}
+              icon={directionIcon(targetNet)}
+            />
+            <SummaryTile
+              label={t('adaptiveNet.position.averageEntry')}
+              value={transition?.position_after_avg_entry_price ?? '-'}
+              caption={t('adaptiveNet.position.beforeAverageEntry', {
+                value: transition?.position_before_avg_entry_price ?? '-',
+              })}
+              icon={<SwapHorizIcon fontSize="small" />}
+            />
+            <SummaryTile
               label={t('adaptiveNet.decision.elapsed')}
-              value={formatDuration(state?.rebalance_elapsed_seconds)}
-              caption={t('adaptiveNet.decision.ticks', {
-                count: state?.rebalance_tick_delta ?? 0,
+              value={
+                state?.last_decision_at
+                  ? formatHistoryTime(state.last_decision_at)
+                  : '-'
+              }
+              caption={t('adaptiveNet.metrics.publishCount', {
+                count: state?.metric_publish_count ?? 0,
               })}
               icon={<SwapHorizIcon fontSize="small" />}
             />
