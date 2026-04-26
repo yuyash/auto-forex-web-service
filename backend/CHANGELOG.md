@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.43.2](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.43.1...backend-v1.43.2) (2026-04-26)
+
+
+### Bug Fixes
+
+* snowball rebuild tp and cycle accounting ([#610](https://github.com/yuyash/auto-forex-web-service/issues/610)) ([9d73872](https://github.com/yuyash/auto-forex-web-service/commit/9d73872642251d27ce5cab1968f0a8fd28dda278))
+
 ## [1.43.1](https://github.com/yuyash/auto-forex-web-service/compare/backend-v1.43.0...backend-v1.43.1) (2026-04-25)
 
 
