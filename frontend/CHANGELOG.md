@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.58.0](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.57.2...frontend-v1.58.0) (2026-04-26)
+
+
+### Features
+
+* security observability updates ([#612](https://github.com/yuyash/auto-forex-web-service/issues/612)) ([c545e5c](https://github.com/yuyash/auto-forex-web-service/commit/c545e5c401c29b411c87489817b52da0352d9235))
+
 ## [1.57.2](https://github.com/yuyash/auto-forex-web-service/compare/frontend-v1.57.1...frontend-v1.57.2) (2026-04-26)
 
 ### Bug Fixes
