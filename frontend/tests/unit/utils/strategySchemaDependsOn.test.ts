@@ -182,10 +182,34 @@ describe('matchesDependsOn', () => {
 describe('isParameterVisible', () => {
   const schemaProps: Record<string, ConfigProperty> = {
     stop_loss_enabled: { type: 'boolean', default: false },
+    rebuild_take_profit_mode: {
+      type: 'string',
+      default: 'same',
+      dependsOn: { field: 'stop_loss_enabled', values: [true] },
+    },
     rebuild_price_adjustment_enabled: {
       type: 'boolean',
       default: true,
-      dependsOn: { field: 'stop_loss_enabled', values: [true] },
+      dependsOn: {
+        field: 'rebuild_take_profit_mode',
+        values: ['same'],
+        and: [{ field: 'stop_loss_enabled', values: [true] }],
+      },
+    },
+    grid_order_validation_enabled: {
+      type: 'boolean',
+      default: true,
+      dependsOn: {
+        field: 'rebuild_take_profit_mode',
+        values: [
+          'same',
+          'constant',
+          'additive',
+          'subtractive',
+          'multiplicative',
+          'divisive',
+        ],
+      },
     },
     rebuild_exit_price_buffer_pips: {
       type: 'number',
@@ -220,6 +244,29 @@ describe('isParameterVisible', () => {
         schemaProps
       )
     ).toBe(true);
+  });
+
+  it('hides rebuild price adjustment and grid validation for manual rebuild TP', () => {
+    expect(
+      isParameterVisible(
+        'rebuild_price_adjustment_enabled',
+        {
+          stop_loss_enabled: true,
+          rebuild_take_profit_mode: 'manual',
+        },
+        schemaProps
+      )
+    ).toBe(false);
+    expect(
+      isParameterVisible(
+        'grid_order_validation_enabled',
+        {
+          stop_loss_enabled: true,
+          rebuild_take_profit_mode: 'manual',
+        },
+        schemaProps
+      )
+    ).toBe(false);
   });
 
   it('cascades visibility through nested dependsOn chains', () => {

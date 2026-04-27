@@ -46,6 +46,31 @@ def test_validate_grid_ordering_reports_violation_detail():
     assert "entry_ok=False" in detail
 
 
+def test_validate_grid_ordering_can_ignore_take_profit_ordering():
+    cycle, layer = _cycle_with_layer(Direction.LONG)
+    layer.slot_at(0).fill(_entry(entry_id=1, entry_price="150.00", close_price="150.50"))
+    layer.slot_at(1).fill(
+        _entry(entry_id=2, entry_price="149.50", close_price="150.60", retracement_count=1)
+    )
+
+    assert validate_grid_ordering(cycle) is not None
+    assert validate_grid_ordering(cycle, check_take_profit=False) is None
+
+
+def test_validate_grid_ordering_still_reports_entry_violation_when_tp_ignored():
+    cycle, layer = _cycle_with_layer(Direction.LONG)
+    layer.slot_at(0).fill(_entry(entry_id=1, entry_price="150.00", close_price="150.50"))
+    layer.slot_at(1).fill(
+        _entry(entry_id=2, entry_price="150.10", close_price="150.40", retracement_count=1)
+    )
+
+    detail = validate_grid_ordering(cycle, check_take_profit=False)
+
+    assert detail is not None
+    assert "entry_ok=False" in detail
+    assert "check_take_profit=False" in detail
+
+
 def test_tp_and_entry_bounds_use_preceding_slots_only():
     cycle, layer = _cycle_with_layer(Direction.LONG)
     layer.slot_at(0).fill(_entry(entry_id=1, entry_price="150.00", close_price="150.50"))

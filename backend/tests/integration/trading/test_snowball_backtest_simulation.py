@@ -13,6 +13,7 @@ import pytest
 from apps.trading.dataclasses import Tick
 from apps.trading.engine import TradingEngine
 from apps.trading.models import ExecutionState, Position, Trade, TradingEvent
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.tasks.executor import BacktestExecutor
 from apps.trading.tasks.source import TickDataSource
 from tests.integration.factories import (
@@ -104,7 +105,7 @@ def _run_snowball_backtest(
     config = StrategyConfigurationFactory(
         user=user,
         strategy_type="snowball",
-        parameters=parameters,
+        parameters=_snowball_parameters(**parameters),
     )
     task = BacktestTaskFactory(
         user=user,
@@ -136,6 +137,12 @@ def _run_snowball_backtest(
         execution_id=task.execution_id,
     )
     return task, state
+
+
+def _snowball_parameters(**overrides: Any) -> dict[str, Any]:
+    parameters = SnowballStrategyConfig.from_dict({}).to_dict()
+    parameters.update(overrides)
+    return parameters
 
 
 def _execute_existing_backtest_task(
@@ -323,7 +330,7 @@ class TestSnowballBacktestSimulation:
         config = StrategyConfigurationFactory(
             user=user,
             strategy_type="snowball",
-            parameters=parameters,
+            parameters=_snowball_parameters(**parameters),
         )
         resumed_task = BacktestTaskFactory(
             user=user,

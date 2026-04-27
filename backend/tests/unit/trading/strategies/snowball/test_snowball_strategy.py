@@ -21,11 +21,13 @@ from apps.trading.events import (
     GenericStrategyEvent,
     OpenPositionEvent,
 )
+from apps.trading.strategies.snowball import protection as snowball_protection_module
+from apps.trading.strategies.snowball import strategy as snowball_strategy_module
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.models import (
     Entry,
     Layer,
     SnowballCycle,
-    SnowballStrategyConfig,
     SnowballStrategyState,
 )
 from apps.trading.strategies.snowball.strategy import SnowballStrategy
@@ -402,6 +404,67 @@ class TestCounterCloses:
         # Should close the counter entry
         assert any(e.close_reason == "counter_tp" for e in closes)
 
+    def test_counter_tp_closes_all_hit_counters_in_one_tick(self):
+        s = _strategy(counter_tp_mode="fixed", counter_tp_pips="10")
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        layer = Layer.create(1, 7, 1000)
+        layer.slot_at(0).fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("150.00"),
+                close_price=Decimal("150.50"),
+                units=1000,
+                opened_at=T0,
+                role="initial",
+                layer_number=1,
+                retracement_count=0,
+            )
+        )
+        layer.slot_at(1).fill(
+            Entry(
+                entry_id=2,
+                step=2,
+                direction=Direction.LONG,
+                entry_price=Decimal("149.80"),
+                close_price=Decimal("150.10"),
+                units=2000,
+                opened_at=T0,
+                role="counter",
+                layer_number=1,
+                retracement_count=1,
+            )
+        )
+        layer.slot_at(2).fill(
+            Entry(
+                entry_id=3,
+                step=3,
+                direction=Direction.LONG,
+                entry_price=Decimal("149.70"),
+                close_price=Decimal("150.15"),
+                units=3000,
+                opened_at=T0,
+                role="counter",
+                layer_number=1,
+                retracement_count=2,
+            )
+        )
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+
+        events = s._process_cycle_counter_closes(
+            ss,
+            _tick(T0 + timedelta(minutes=1), "150.20", "150.22"),
+            cycle,
+        )
+
+        closes = [e for e in events if isinstance(e, ClosePositionEvent)]
+        assert [e.entry_id for e in closes] == [3, 2]
+        assert layer.slot_at(1).entry is None
+        assert layer.slot_at(2).entry is None
+
     def test_non_primary_layer_r0_close_removes_empty_layer(self):
         from apps.trading.strategies.snowball.models import (
             SnowballCycle,
@@ -582,7 +645,7 @@ class TestExecutionFillSync:
 
 
 class TestShrinkMode:
-    def test_shrink_closes_from_front(self):
+    def test_shrink_closes_from_front(self, monkeypatch):
         """Shrink should close the oldest position (L0/R0) first."""
         s = _strategy(shrink_enabled=True, m_th="70", lock_enabled=False)
         state = DummyState(current_balance=Decimal("1000000"))
@@ -597,11 +660,27 @@ class TestShrinkMode:
             "close_price": "151.50",
             "units": 1000,
             "opened_at": T0.isoformat(),
+            "role": "counter",
+            "layer_number": 1,
+            "retracement_count": 1,
+            "root_entry_id": 1,
+            "parent_entry_id": 1,
+            "position_id": None,
+            "expected_interval_pips": None,
+            "actual_interval_pips": None,
+            "expected_tp_pips": None,
+            "validation_status": "",
+            "stop_loss_price": None,
+            "is_rebuild": False,
+            "lifecycle_realized_pnl": "0",
+            "lifecycle_stop_loss_count": 0,
         }
         layers = state.strategy_state["cycles"][0]["grid"]["layers"]
         layers[0]["slots"][1]["entry"] = counter_entry
 
-        s._margin_ratio = lambda _state, _ss: Decimal("75")  # type: ignore[method-assign]
+        ratios = iter([Decimal("75"), Decimal("40")])
+        monkeypatch.setattr(snowball_strategy_module, "margin_ratio", lambda **_: next(ratios))
+        monkeypatch.setattr(snowball_protection_module, "margin_ratio", lambda **_: Decimal("40"))
         result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"), state=state)
         closes = _close_events(result)
         assert len(closes) >= 1
@@ -665,7 +744,7 @@ class TestShrinkMode:
         assert cycle.initial_entry.entry_id == 2
         assert cycle.initial_entry.retracement_count == 1
 
-    def test_shrink_preserves_existing_counter_tp(self):
+    def test_shrink_preserves_existing_counter_tp(self, monkeypatch):
         """Shrink must not rewrite surviving counter TPs."""
         s = _strategy(shrink_enabled=True, m_th="70", lock_enabled=False)
         ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
@@ -703,7 +782,9 @@ class TestShrinkMode:
         ss.cycles.append(cycle)
 
         state = DummyState(strategy_state=ss.to_dict(), current_balance=Decimal("100"))
-        s._margin_ratio = lambda _state, _ss: Decimal("75")  # type: ignore[method-assign]
+        ratios = iter([Decimal("75"), Decimal("40")])
+        monkeypatch.setattr(snowball_strategy_module, "margin_ratio", lambda **_: next(ratios))
+        monkeypatch.setattr(snowball_protection_module, "margin_ratio", lambda **_: Decimal("40"))
 
         result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "145.00", "145.02"), state=state)
 
@@ -725,13 +806,17 @@ class TestShrinkMode:
 
 
 class TestLockMode:
-    def test_lock_opens_hedge_and_blocks_trading(self):
+    def test_lock_opens_hedge_and_blocks_trading(self, monkeypatch):
         s = _strategy(lock_enabled=True, n_th="85", shrink_enabled=False)
         state = DummyState(current_balance=Decimal("1000000"))
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
         state.ticks_processed += 1
 
-        s._margin_ratio = lambda _state, _ss: Decimal("90")  # type: ignore[method-assign]
+        monkeypatch.setattr(
+            snowball_strategy_module,
+            "margin_ratio",
+            lambda **_: Decimal("90"),
+        )
         result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"), state=state)
         assert any(
             isinstance(e, GenericStrategyEvent)
@@ -740,19 +825,42 @@ class TestLockMode:
             for e in result.events
         )
 
-    def test_locked_state_blocks_normal_trading(self):
+    def test_locked_state_blocks_normal_trading(self, monkeypatch):
         s = _strategy(lock_enabled=True, n_th="85", shrink_enabled=False)
         state = DummyState(current_balance=Decimal("1000000"))
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
         state.ticks_processed += 1
 
-        s._margin_ratio = lambda _state, _ss: Decimal("90")  # type: ignore[method-assign]
+        monkeypatch.setattr(
+            snowball_strategy_module,
+            "margin_ratio",
+            lambda **_: Decimal("90"),
+        )
         s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"), state=state)
         state.ticks_processed += 1
 
         result = s.on_tick(tick=_tick(T0 + timedelta(seconds=120), "150.00", "150.02"), state=state)
         opens = _open_events(result)
         assert len(opens) == 0
+
+    def test_new_lock_allows_same_tick_take_profit(self, monkeypatch):
+        s = _strategy(lock_enabled=True, n_th="85", shrink_enabled=False)
+        state = DummyState(current_balance=Decimal("1000000"))
+        s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
+        state.ticks_processed += 1
+        monkeypatch.setattr(
+            snowball_strategy_module,
+            "margin_ratio",
+            lambda **_: Decimal("90"),
+        )
+
+        result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.60", "150.62"), state=state)
+
+        assert _signal_events(result, "snowball_locked")
+        assert any(e.close_reason == "tp" for e in _close_events(result))
+        assert _open_events(result) == []
+        persisted = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        assert persisted.protection_level.value == "locked"
 
 
 # ==================================================================
@@ -761,7 +869,7 @@ class TestLockMode:
 
 
 class TestEmergencyStop:
-    def test_emergency_stop_at_95_percent(self):
+    def test_emergency_stop_at_95_percent(self, monkeypatch):
         s = _strategy(
             lock_enabled=True,
             n_th="85",
@@ -772,7 +880,11 @@ class TestEmergencyStop:
         s.on_tick(tick=_tick(T0, "150.00", "150.02"), state=state)
         state.ticks_processed += 1
 
-        s._margin_ratio = lambda _state, _ss: Decimal("96")  # type: ignore[method-assign]
+        monkeypatch.setattr(
+            snowball_strategy_module,
+            "margin_ratio",
+            lambda **_: Decimal("96"),
+        )
         result = s.on_tick(tick=_tick(T0 + timedelta(seconds=60), "150.00", "150.02"), state=state)
         assert result.should_stop is True
         assert "Emergency stop" in (result.stop_reason or "")

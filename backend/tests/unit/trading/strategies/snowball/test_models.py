@@ -7,14 +7,13 @@ import pytest
 
 from apps.trading.enums import Direction
 from apps.trading.strategies.snowball.enums import ProtectionLevel
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.models import (
-    BasketEntry,
     Entry,
     Layer,
     PositionGrid,
     Slot,
     SnowballCycle,
-    SnowballStrategyConfig,
     SnowballStrategyState,
 )
 
@@ -58,6 +57,8 @@ class TestSnowballStrategyConfig:
         assert cfg.disable_loss_cut_after_rebuild is False
         assert cfg.rebuild_stop_loss_mode == "same"
         assert cfg.rebuild_stop_loss_manual_pips == []
+        assert cfg.rebuild_take_profit_mode == "same"
+        assert cfg.rebuild_take_profit_manual_pips == []
         assert cfg.grid_order_validation_enabled is True
         assert cfg.preserve_highest_retracement_enabled is False
         assert cfg.preserve_highest_r_from == 0
@@ -77,6 +78,23 @@ class TestSnowballStrategyConfig:
         assert cfg.r_max == 5
         assert len(cfg.manual_intervals) == 5
 
+    def test_from_dict_parses_string_booleans(self):
+        cfg = SnowballStrategyConfig.from_dict(
+            {
+                "shrink_enabled": "false",
+                "lock_enabled": "true",
+                "stop_loss_enabled": "false",
+                "rebuild_enabled": "0",
+                "emergency_enabled": "yes",
+            }
+        )
+
+        assert cfg.shrink_enabled is False
+        assert cfg.lock_enabled is True
+        assert cfg.stop_loss_enabled is False
+        assert cfg.rebuild_enabled is False
+        assert cfg.emergency_enabled is True
+
     def test_to_dict_roundtrip(self):
         cfg = SnowballStrategyConfig.from_dict(
             {
@@ -84,7 +102,10 @@ class TestSnowballStrategyConfig:
                 "disable_loss_cut_after_rebuild": True,
                 "rebuild_stop_loss_mode": "manual",
                 "rebuild_stop_loss_manual_pips": ["11", "12", "13", "14", "15", "16"],
-                "grid_order_validation_enabled": False,
+                "rebuild_take_profit_mode": "manual",
+                "rebuild_take_profit_manual_pips": ["21", "22", "23", "24", "25", "26"],
+                "rebuild_price_adjustment_enabled": True,
+                "grid_order_validation_enabled": True,
                 "preserve_highest_retracement_enabled": True,
                 "preserve_highest_r_from": 3,
             }
@@ -103,7 +124,17 @@ class TestSnowballStrategyConfig:
             Decimal("15"),
             Decimal("16"),
         ]
-        assert cfg2.grid_order_validation_enabled is False
+        assert cfg2.rebuild_take_profit_mode == "manual"
+        assert cfg2.rebuild_take_profit_manual_pips == [
+            Decimal("21"),
+            Decimal("22"),
+            Decimal("23"),
+            Decimal("24"),
+            Decimal("25"),
+            Decimal("26"),
+        ]
+        assert cfg2.rebuild_price_adjustment_enabled is False
+        assert cfg2.grid_order_validation_enabled is True
         assert cfg2.preserve_highest_retracement_enabled is True
         assert cfg2.preserve_highest_r_from == 3
 
@@ -146,6 +177,38 @@ class TestSnowballStrategyConfig:
                 }
             ).validate()
 
+    def test_validate_rebuild_manual_take_profit_requires_all_slots(self):
+        with pytest.raises(ValueError, match="rebuild_take_profit_manual_pips"):
+            SnowballStrategyConfig.from_dict(
+                {
+                    "r_max": 5,
+                    "rebuild_take_profit_mode": "manual",
+                    "rebuild_take_profit_manual_pips": ["10", "11", "12"],
+                }
+            ).validate()
+
+    def test_rebuild_manual_take_profit_disables_price_adjustment_only(self):
+        cfg = SnowballStrategyConfig.from_dict(
+            {
+                "rebuild_take_profit_mode": "manual",
+                "rebuild_take_profit_manual_pips": [
+                    "10",
+                    "11",
+                    "12",
+                    "13",
+                    "14",
+                    "15",
+                    "16",
+                    "17",
+                ],
+                "rebuild_price_adjustment_enabled": True,
+                "grid_order_validation_enabled": True,
+            }
+        )
+
+        assert cfg.rebuild_price_adjustment_enabled is False
+        assert cfg.grid_order_validation_enabled is True
+
     def test_validate_rejects_preserve_highest_r_from_above_r_max(self):
         with pytest.raises(ValueError, match="preserve_highest_r_from"):
             SnowballStrategyConfig.from_dict(
@@ -170,9 +233,9 @@ class TestSnowballStrategyConfig:
         assert cfg.preserve_highest_r_from == 0
 
 
-class TestBasketEntry:
+class TestEntry:
     def test_to_dict_roundtrip(self):
-        entry = BasketEntry(
+        entry = Entry(
             entry_id=1,
             step=2,
             direction=Direction.LONG,
@@ -183,7 +246,7 @@ class TestBasketEntry:
             role="initial",
         )
         d = entry.to_dict()
-        restored = BasketEntry.from_dict(d)
+        restored = Entry.from_dict(d)
         assert restored.entry_id == 1
         assert restored.direction == Direction.LONG
         assert restored.units == 1000
@@ -463,9 +526,8 @@ class TestSnowballCycle:
         assert restored.initial_entry.entry_id == 1
         assert len(restored.grid.all_entries()) == 2
 
-    def test_legacy_format_migration(self):
-        """Old format with initial_entry + layers should be migrated."""
-        legacy = {
+    def test_cycle_from_dict_requires_grid_state(self):
+        stale_state = {
             "cycle_id": 1,
             "direction": "long",
             "initial_entry": {
@@ -505,12 +567,9 @@ class TestSnowballCycle:
                 }
             ],
         }
-        cycle = SnowballCycle.from_dict(legacy)
-        assert cycle.initial_entry is not None
-        assert cycle.initial_entry.entry_id == 1
-        assert cycle.initial_entry.layer_number == 0  # migrated from 1 to 0
-        entries = cycle.grid.all_entries()
-        assert len(entries) == 2
+
+        with pytest.raises(KeyError, match="grid"):
+            SnowballCycle.from_dict(stale_state)
 
 
 class TestSnowballStrategyState:

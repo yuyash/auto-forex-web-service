@@ -5,11 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from apps.trading.strategies.base import Strategy
-from apps.trading.strategies.snowball.models import SnowballStrategyConfig
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 
 
 def parse_config(strategy_config: Any) -> SnowballStrategyConfig:
-    return SnowballStrategyConfig.from_dict(strategy_config.config_dict)
+    return SnowballStrategyConfig.strict_from_dict(strategy_config.config_dict)
 
 
 def config_to_parameters(config: SnowballStrategyConfig) -> dict[str, Any]:

@@ -5,20 +5,27 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.enums import Direction, EventType, StrategyType
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.models import (
     Entry,
     Layer,
     SnowballCycle,
-    SnowballStrategyConfig,
     SnowballStrategyState,
+    Slot,
     StopLossClosedEntry,
 )
+from apps.trading.strategies.snowball.pricing import (
+    rebuild_take_profit_price,
+    sync_weighted_average_counter_take_profits,
+)
+from apps.trading.strategies.snowball.reconciliation import reconcile_broker_positions
 from apps.trading.strategies.snowball.strategy import SnowballStrategy
 
 # ---------------------------------------------------------------------------
@@ -95,6 +102,7 @@ class TestSnowballStrategyClassMethods:
         assert result["base_units"] == 2000
         assert result["disable_loss_cut_after_rebuild"] is False
         assert result["rebuild_stop_loss_mode"] == "same"
+        assert result["rebuild_take_profit_mode"] == "same"
         assert result["grid_order_validation_enabled"] is True
         assert result["preserve_highest_retracement_enabled"] is False
         assert result["stop_loss_mode"] == "auto"
@@ -107,6 +115,7 @@ class TestSnowballStrategyClassMethods:
         assert "m_pips" in defaults
         assert "disable_loss_cut_after_rebuild" in defaults
         assert "rebuild_stop_loss_mode" in defaults
+        assert "rebuild_take_profit_mode" in defaults
         assert "grid_order_validation_enabled" in defaults
         assert "preserve_highest_retracement_enabled" in defaults
         assert defaults["stop_loss_mode"] == "auto"
@@ -399,7 +408,7 @@ class TestSnowballStopLossProtectionThreshold:
 
 
 class TestSnowballStopLossModes:
-    def test_auto_mode_preserves_legacy_counter_stop_loss_formula(self):
+    def test_auto_mode_uses_interval_based_counter_stop_loss_formula(self):
         s = _strategy(
             {
                 "stop_loss_enabled": True,
@@ -550,6 +559,239 @@ class TestSnowballRebuildStopLossModes:
         assert entry.stop_loss_price == Decimal("154.58")
 
 
+class TestSnowballRebuildTakeProfitModes:
+    def _make_pending_rebuild(
+        self,
+        *,
+        direction: Direction = Direction.LONG,
+        retracement_count: int = 1,
+    ) -> StopLossClosedEntry:
+        return StopLossClosedEntry(
+            entry_price=Decimal("154.70"),
+            close_price=Decimal("155.00") if direction == Direction.LONG else Decimal("154.40"),
+            units=2000,
+            direction=direction,
+            role="counter",
+            layer_number=1,
+            retracement_count=retracement_count,
+            step=2,
+            cycle_id=1,
+        )
+
+    def test_same_mode_reuses_pending_take_profit_price(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "rebuild_take_profit_mode": "same",
+            }
+        )
+
+        tp = rebuild_take_profit_price(
+            pending=self._make_pending_rebuild(),
+            entry_price=Decimal("154.70"),
+            pip_size=s.pip_size,
+            config=s.config,
+        )
+
+        assert tp == Decimal("155.00")
+
+    def test_manual_mode_applies_absolute_pips_from_rebuild_entry(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "rebuild_take_profit_mode": "manual",
+                "rebuild_take_profit_manual_pips": [
+                    "8",
+                    "12",
+                    "16",
+                    "20",
+                    "24",
+                    "28",
+                    "32",
+                    "36",
+                ],
+            }
+        )
+
+        long_tp = rebuild_take_profit_price(
+            pending=self._make_pending_rebuild(direction=Direction.LONG),
+            entry_price=Decimal("154.70"),
+            pip_size=s.pip_size,
+            config=s.config,
+        )
+        short_tp = rebuild_take_profit_price(
+            pending=self._make_pending_rebuild(direction=Direction.SHORT),
+            entry_price=Decimal("154.70"),
+            pip_size=s.pip_size,
+            config=s.config,
+        )
+
+        assert long_tp == Decimal("154.82")
+        assert short_tp == Decimal("154.58")
+
+    def test_manual_take_profit_mode_skips_grid_order_validation(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "rebuild_take_profit_mode": "manual",
+                "rebuild_take_profit_manual_pips": [
+                    "8",
+                    "12",
+                    "16",
+                    "20",
+                    "24",
+                    "28",
+                    "32",
+                    "36",
+                ],
+            }
+        )
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        layer = Layer(
+            layer_number=1,
+            slots=[Slot(index=0), Slot(index=1)],
+            base_units=1000,
+            refill_up_to=2,
+        )
+        layer.slot_at(0).fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("155.00"),
+                close_price=Decimal("155.50"),
+                units=1000,
+                opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+                role="initial",
+            )
+        )
+        layer.slot_at(1).fill(
+            Entry(
+                entry_id=2,
+                step=2,
+                direction=Direction.LONG,
+                entry_price=Decimal("154.00"),
+                close_price=Decimal("155.60"),
+                units=2000,
+                opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+                role="counter",
+                retracement_count=1,
+            )
+        )
+        cycle.grid.layers.append(layer)
+
+        s._validate_grid_ordering(cycle)
+
+        assert s._grid_order_violation is None
+
+
+class TestSnowballPricingHelpers:
+    def test_weighted_average_sync_updates_all_counter_take_profits(self):
+        layer = Layer.create(1, 3, 1000)
+        layer.slot_at(0).fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("150.00"),
+                close_price=Decimal("150.50"),
+                units=1000,
+                opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+                role="initial",
+            )
+        )
+        layer.slot_at(1).fill(
+            Entry(
+                entry_id=2,
+                step=2,
+                direction=Direction.LONG,
+                entry_price=Decimal("149.70"),
+                close_price=Decimal("150.00"),
+                units=2000,
+                opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+                role="counter",
+                retracement_count=1,
+            )
+        )
+        layer.slot_at(2).fill(
+            Entry(
+                entry_id=3,
+                step=3,
+                direction=Direction.LONG,
+                entry_price=Decimal("149.40"),
+                close_price=Decimal("149.80"),
+                units=3000,
+                opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+                role="counter",
+                retracement_count=2,
+            )
+        )
+
+        close_price = sync_weighted_average_counter_take_profits(layer)
+
+        assert close_price == Decimal("149.600")
+        assert layer.slot_at(0).entry.close_price == Decimal("150.50")
+        assert layer.slot_at(1).entry.close_price == Decimal("149.600")
+        assert layer.slot_at(2).entry.close_price == Decimal("149.600")
+
+
+class TestSnowballReconciliation:
+    def test_reconcile_syncs_fill_price_and_dependent_prices(self):
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        layer = Layer.create(1, 7, 1000)
+        entry = Entry(
+            entry_id=1,
+            step=1,
+            direction=Direction.LONG,
+            entry_price=Decimal("150.00"),
+            close_price=Decimal("150.50"),
+            units=1000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="initial",
+            layer_number=1,
+            retracement_count=0,
+            position_id="pos-1",
+            stop_loss_price=Decimal("149.50"),
+        )
+        layer.slot_at(0).fill(entry)
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+        state = DummyState(strategy_state=ss.to_dict())
+        report = SimpleNamespace(
+            removed_open_entries=0,
+            relinked_open_entries=0,
+            synthesized_open_entries=0,
+            blockers=[],
+        )
+        position = SimpleNamespace(
+            id="pos-1",
+            direction="long",
+            units=1000,
+            entry_price=Decimal("150.02"),
+            layer_index=1,
+            retracement_count=0,
+            entry_time=None,
+            unrealized_pnl=Decimal("0"),
+        )
+        strategy_config = SimpleNamespace(
+            config_dict=SnowballStrategyConfig.from_dict({"counter_tp_mode": "fixed"}).to_dict()
+        )
+
+        reconcile_broker_positions(
+            state=state,
+            open_positions=[position],
+            report=report,
+            strategy_config=strategy_config,
+        )
+
+        updated = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        updated_entry = updated.cycles[0].grid.layers[0].slot_at(0).entry
+        assert updated_entry.entry_price == Decimal("150.02")
+        assert updated_entry.close_price == Decimal("150.52")
+        assert updated_entry.stop_loss_price == Decimal("149.52")
+
+
 # ===================================================================
 # Stop-loss rebuild toggle (rebuild_enabled / complete_cycle_when_empty)
 # ===================================================================
@@ -561,7 +803,7 @@ class TestSnowballRebuildDisabled:
     The key invariant is: when a stop-loss fires under this mode, the
     slot is sealed (``slot.close(refillable=False)``), not converted
     into a ``pending_rebuild`` snapshot.  The cycle's
-    ``_process_stop_loss_rebuilds`` pass is a no-op.
+    ``_process_stop_loss_rebuilds`` pass returns no events.
     """
 
     def _make_cycle_with_two_entries(
@@ -630,7 +872,7 @@ class TestSnowballRebuildDisabled:
         """Even if a pending_rebuild somehow existed, the rebuild pass
         does nothing when the feature is off — no events, no state
         changes.  Guards against accidental re-enable by state
-        deserialization of an older run.
+        deserialization of a persisted run.
         """
         from apps.trading.strategies.snowball.models import StopLossClosedEntry
 

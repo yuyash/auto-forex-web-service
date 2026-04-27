@@ -10,7 +10,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from apps.trading.strategies.snowball.models import SnowballStrategyConfig
+    from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 
 
 def round_to_step(value: Decimal, step: Decimal) -> Decimal:
@@ -121,8 +121,8 @@ def stop_loss_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
     its parameters from dedicated ``stop_loss_*`` config fields, so the
     SL distance can be tuned independently of the counter-trend
     averaging interval (e.g. a tighter SL on a wider grid).  ``auto``
-    is handled by the strategy layer because legacy Snowball stop-loss
-    placement depended on both the next interval and the slot TP.
+    is handled by the strategy layer because interval-based stop-loss
+    placement depends on both the next interval and the slot TP.
     """
     return _progression_pips(
         k=k,
@@ -133,6 +133,26 @@ def stop_loss_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
         gamma=cfg.stop_loss_pips_gamma,
         r_max=cfg.r_max,
         manual_values=cfg.stop_loss_manual_pips,
+        round_step=cfg.round_step_pips,
+    )
+
+
+def rebuild_take_profit_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
+    """Return the rebuilt-position take-profit distance for the *k*-th slot.
+
+    ``k`` is 1-based: R0 uses ``k=1``, R1 uses ``k=2``, and so on.
+    ``same`` is handled by the strategy layer because that mode reuses
+    the pending rebuild snapshot's absolute TP price.
+    """
+    return _progression_pips(
+        k=k,
+        mode=cfg.rebuild_take_profit_mode,
+        head=cfg.rebuild_take_profit_pips_head,
+        tail=cfg.rebuild_take_profit_pips_tail,
+        flat_steps=cfg.rebuild_take_profit_pips_flat_steps,
+        gamma=cfg.rebuild_take_profit_pips_gamma,
+        r_max=cfg.r_max,
+        manual_values=cfg.rebuild_take_profit_manual_pips,
         round_step=cfg.round_step_pips,
     )
 

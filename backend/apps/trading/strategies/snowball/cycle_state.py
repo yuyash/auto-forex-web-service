@@ -1,0 +1,341 @@
+"""Cycle and runtime state models for Snowball strategy."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from decimal import Decimal
+from typing import Any
+
+from apps.trading.enums import Direction
+from apps.trading.strategies.snowball.entries import Entry
+from apps.trading.strategies.snowball.enums import CycleStatus, ProtectionLevel
+from apps.trading.strategies.snowball.grid_models import Layer, PositionGrid
+from apps.trading.strategies.snowball.state_parsing import (
+    optional_decimal,
+    optional_str,
+    require,
+    require_dict,
+    require_list,
+    strict_bool,
+    strict_decimal,
+    strict_int,
+)
+
+# ---------------------------------------------------------------------------
+# Cycle
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class SnowballCycle:
+    """A single trading cycle: from first entry through to close.
+
+    All positions live in ``grid``.  The cycle head is determined
+    dynamically via ``grid.head_entry()``.
+    """
+
+    cycle_id: int
+    direction: Direction
+    grid: PositionGrid = field(default_factory=PositionGrid)
+    hedge_entries: list[Entry] = field(default_factory=list)
+    counter_close_count: int = 0
+    status: CycleStatus = CycleStatus.ACTIVE
+    trade_cycle_id: str | None = None
+
+    # Realised P/L accumulated over every close that happened within this
+    # cycle.  Used for end-of-cycle sanity logging (a completed cycle is
+    # expected to finish non-negative).  Denominated in account currency.
+    realized_pnl: Decimal = field(default_factory=lambda: Decimal("0"))
+
+    # -- Status convenience --
+
+    @property
+    def completed(self) -> bool:
+        return self.status == CycleStatus.COMPLETED
+
+    @completed.setter
+    def completed(self, value: bool) -> None:
+        self.status = CycleStatus.COMPLETED if value else CycleStatus.ACTIVE
+
+    @property
+    def is_active(self) -> bool:
+        return self.status == CycleStatus.ACTIVE
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status == CycleStatus.PENDING
+
+    @property
+    def is_fully_pending(self) -> bool:
+        """True if the cycle is PENDING and every slot is awaiting rebuild.
+
+        .. note:: This property cannot check ``f_max`` — use
+           :meth:`is_grid_exhausted` when the config is available.
+        """
+        return self.is_pending and self.grid.is_fully_pending(f_max=0)
+
+    def is_grid_exhausted(self, f_max: int) -> bool:
+        """True if the cycle is PENDING and the grid is fully saturated.
+
+        All ``f_max`` layers must exist and every slot in every
+        layer must be in pending-rebuild state.
+        """
+        return self.is_pending and self.grid.is_fully_pending(f_max=f_max)
+
+    # -- Convenience --
+
+    @property
+    def current_layer(self) -> Layer | None:
+        return self.grid.current_layer
+
+    @property
+    def layer_count(self) -> int:
+        return self.grid.layer_count
+
+    @property
+    def is_long(self) -> bool:
+        return self.direction == Direction.LONG
+
+    @property
+    def is_short(self) -> bool:
+        return self.direction == Direction.SHORT
+
+    @property
+    def initial_entry(self) -> Entry | None:
+        """Dynamic cycle head — the oldest surviving position."""
+        return self.grid.head_entry()
+
+    def effective_head(self) -> tuple[Decimal | None, int | None]:
+        """Return (entry_price, entry_id) for the cycle head.
+
+        Falls back to the R0 pending-rebuild snapshot when no live entry
+        exists, so callers can still compute adverse distance and loss
+        checks even after all positions have been stop-loss closed.
+        """
+        head = self.initial_entry
+        if head is not None:
+            return head.entry_price, head.entry_id
+        layer = self.current_layer
+        if layer is None:
+            return None, None
+        r0 = layer.slot_at(0)
+        if r0 is not None and r0.pending_rebuild is not None:
+            return r0.pending_rebuild.entry_price, r0.pending_rebuild.root_entry_id
+        return None, None
+
+    def add_layer(self, layer: Layer) -> None:
+        self.grid.add_layer(layer)
+
+    def find_layer(self, layer_number: int) -> Layer | None:
+        return self.grid.find_layer(layer_number)
+
+    def all_entries(self) -> list[Entry]:
+        entries = self.grid.all_entries()
+        entries.extend(self.hedge_entries)
+        return entries
+
+    def counter_non_hedge(self) -> list[Entry]:
+        head = self.grid.head_entry()
+        entries: list[Entry] = []
+        for e in self.grid.all_entries():
+            if head is not None and e.entry_id == head.entry_id:
+                continue
+            if not e.is_hedge:
+                entries.append(e)
+        return entries
+
+    @property
+    def counter_entries(self) -> list[Entry]:
+        return self.counter_non_hedge()
+
+    @property
+    def layers(self) -> list[Layer]:
+        return self.grid.layers
+
+    def initial_for_layer(self, layer_number: int) -> Entry | None:
+        layer = self.grid.find_layer(layer_number)
+        if layer is None:
+            return None
+        r0 = layer.slot_at(0)
+        return r0.entry if r0 is not None else None
+
+    def remove_entry(self, entry_id: int) -> None:
+        self.grid.remove_entry(entry_id)
+        self.hedge_entries = [e for e in self.hedge_entries if e.entry_id != entry_id]
+
+    # -- Compat properties --
+
+    @property
+    def layer_index(self) -> int:
+        return self.grid.layer_count - 1 if self.grid.layer_count > 0 else 0
+
+    @property
+    def layer_retracement_count(self) -> int:
+        layer = self.grid.current_layer
+        return len(layer.occupied_slots()) if layer else 0
+
+    @property
+    def layer_initial_entries(self) -> dict[int, Entry]:
+        result: dict[int, Entry] = {}
+        for layer in self.grid.layers:
+            r0 = layer.slot_at(0)
+            if r0 is not None and r0.entry is not None:
+                result[layer.layer_number] = r0.entry
+        return result
+
+    # -- Serialisation --
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "cycle_id": self.cycle_id,
+            "direction": self.direction.value,
+            "grid": self.grid.to_dict(),
+            "hedge_entries": [e.to_dict() for e in self.hedge_entries],
+            "counter_close_count": self.counter_close_count,
+            "status": self.status.value,
+            "trade_cycle_id": self.trade_cycle_id,
+            "realized_pnl": str(self.realized_pnl),
+        }
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> "SnowballCycle":
+        data = require_dict(data, field_name="cycle")
+        raw_direction = require(data, "direction")
+        direction = (
+            raw_direction
+            if isinstance(raw_direction, Direction)
+            else Direction(str(raw_direction).strip().lower())
+        )
+
+        grid = PositionGrid.from_dict(require(data, "grid"))
+
+        raw_status = require(data, "status")
+        status = CycleStatus(str(raw_status).strip().lower())
+
+        return SnowballCycle(
+            cycle_id=strict_int(require(data, "cycle_id"), field_name="cycle_id"),
+            direction=direction,
+            grid=grid,
+            hedge_entries=[
+                Entry.from_dict(e)
+                for e in require_list(require(data, "hedge_entries"), field_name="hedge_entries")
+            ],
+            counter_close_count=strict_int(
+                require(data, "counter_close_count"),
+                field_name="counter_close_count",
+            ),
+            status=status,
+            trade_cycle_id=optional_str(data, "trade_cycle_id"),
+            realized_pnl=strict_decimal(require(data, "realized_pnl"), field_name="realized_pnl"),
+        )
+
+
+# ---------------------------------------------------------------------------
+# State
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class SnowballStrategyState:
+    """Mutable runtime state for Snowball strategy."""
+
+    protection_level: ProtectionLevel = ProtectionLevel.NORMAL
+    initialised: bool = False
+    cycles: list[SnowballCycle] = field(default_factory=list)
+    next_entry_id: int = 1
+
+    # Lock state
+    lock_hedge_ids: list[int] = field(default_factory=list)
+    lock_entered_at: str | None = None
+    cooldown_until: str | None = None
+
+    # Price tracking
+    last_bid: Decimal | None = None
+    last_ask: Decimal | None = None
+    last_mid: Decimal | None = None
+    account_balance: Decimal = Decimal("0")
+    account_nav: Decimal = Decimal("0")
+
+    metrics: dict[str, str | int | float] = field(default_factory=dict)
+
+    def allocate_id(self) -> int:
+        eid = self.next_entry_id
+        self.next_entry_id += 1
+        return eid
+
+    def active_cycles(self) -> list[SnowballCycle]:
+        return [c for c in self.cycles if not c.completed]
+
+    def tradable_cycles(self) -> list[SnowballCycle]:
+        """Return only cycles that are actively trading (not pending or completed)."""
+        return [c for c in self.cycles if c.is_active]
+
+    def all_entries(self) -> list[Entry]:
+        entries: list[Entry] = []
+        for c in self.active_cycles():
+            entries.extend(c.all_entries())
+        return entries
+
+    def find_cycle(self, cycle_id: int) -> SnowballCycle | None:
+        for c in self.cycles:
+            if c.cycle_id == cycle_id:
+                return c
+        return None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "protection_level": self.protection_level.value,
+            "initialised": self.initialised,
+            "cycles": [c.to_dict() for c in self.cycles],
+            "next_entry_id": self.next_entry_id,
+            "lock_hedge_ids": list(self.lock_hedge_ids),
+            "lock_entered_at": self.lock_entered_at,
+            "cooldown_until": self.cooldown_until,
+            "last_bid": str(self.last_bid) if self.last_bid is not None else None,
+            "last_ask": str(self.last_ask) if self.last_ask is not None else None,
+            "last_mid": str(self.last_mid) if self.last_mid is not None else None,
+            "account_balance": str(self.account_balance),
+            "account_nav": str(self.account_nav),
+            "metrics": dict(self.metrics),
+        }
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> "SnowballStrategyState":
+        data = require_dict(data, field_name="strategy_state")
+        raw_cycles = require_list(require(data, "cycles"), field_name="cycles")
+        cycles = [SnowballCycle.from_dict(c) for c in raw_cycles]
+        raw_metrics = require(data, "metrics")
+        if not isinstance(raw_metrics, dict):
+            raise ValueError("Snowball state field metrics must be an object")
+
+        return SnowballStrategyState(
+            protection_level=ProtectionLevel(require(data, "protection_level")),
+            initialised=strict_bool(require(data, "initialised"), field_name="initialised"),
+            cycles=cycles,
+            next_entry_id=max(
+                1, strict_int(require(data, "next_entry_id"), field_name="next_entry_id")
+            ),
+            lock_hedge_ids=[
+                strict_int(i, field_name="lock_hedge_ids")
+                for i in require_list(require(data, "lock_hedge_ids"), field_name="lock_hedge_ids")
+            ],
+            lock_entered_at=optional_str(data, "lock_entered_at"),
+            cooldown_until=optional_str(data, "cooldown_until"),
+            last_bid=optional_decimal(data, "last_bid"),
+            last_ask=optional_decimal(data, "last_ask"),
+            last_mid=optional_decimal(data, "last_mid"),
+            account_balance=strict_decimal(
+                require(data, "account_balance"),
+                field_name="account_balance",
+            ),
+            account_nav=strict_decimal(require(data, "account_nav"), field_name="account_nav"),
+            metrics=dict(raw_metrics),
+        )
+
+    @classmethod
+    def from_strategy_state(cls, raw: dict[str, Any] | None) -> "SnowballStrategyState":
+        if raw is None or raw == {}:
+            return cls()
+        if not isinstance(raw, dict):
+            raise ValueError("Snowball strategy_state must be an object")
+        return cls.from_dict(raw)
