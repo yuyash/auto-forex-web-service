@@ -39,6 +39,7 @@ import { useTranslation } from 'react-i18next';
 import { useTaskStrategyEvents } from '../../../../hooks/useTaskStrategyEvents';
 import {
   StrategyGroupChart,
+  type StrategyPriceBand,
   type StrategyPriceLine,
 } from './StrategyGroupChart';
 import { formatDateTimeInTimezone } from '../../../../utils/timezone';
@@ -438,6 +439,55 @@ function inferPipSize(state?: NetGridStrategyState | null): number {
   return 0.01;
 }
 
+function buildNetGridPriceBands(
+  state: NetGridStrategyState | null | undefined,
+  currentNet: number,
+  t: (key: string) => string
+): StrategyPriceBand[] {
+  if (!state || currentNet === 0) return [];
+  const average = numericPrice(state.average_entry_price);
+  const nextAdd = numericPrice(state.next_grid_price);
+  const takeProfit = numericPrice(state.net_take_profit_price);
+  const trailing = numericPrice(state.profit_trailing_stop_price);
+  const risk = numericPrice(state.risk_exit_price);
+  const current = numericPrice(currentDisplayPrice(state));
+  const bands: StrategyPriceBand[] = [];
+  const addOuter = risk ?? current;
+  if (nextAdd != null && addOuter != null && nextAdd !== addOuter) {
+    bands.push({
+      from: nextAdd,
+      to: addOuter,
+      title: t('netGrid.chartBands.addZone'),
+      color: 'rgba(211, 47, 47, 0.12)',
+    });
+  }
+  if (average != null && takeProfit != null && average !== takeProfit) {
+    bands.push({
+      from: average,
+      to: takeProfit,
+      title: t('netGrid.chartBands.recoveryZone'),
+      color: 'rgba(46, 125, 50, 0.10)',
+    });
+  }
+  if (trailing != null && takeProfit != null && trailing !== takeProfit) {
+    bands.push({
+      from: trailing,
+      to: takeProfit,
+      title: t('netGrid.chartBands.trailingZone'),
+      color: 'rgba(0, 137, 123, 0.12)',
+    });
+  }
+  if (risk != null && nextAdd != null && risk !== nextAdd) {
+    bands.push({
+      from: risk,
+      to: nextAdd,
+      title: t('netGrid.chartBands.riskZone'),
+      color: 'rgba(97, 97, 97, 0.10)',
+    });
+  }
+  return bands;
+}
+
 export function NetGridStrategyPanel({
   state,
   instrument,
@@ -585,6 +635,10 @@ export function NetGridStrategyPanel({
     }
     return true;
   });
+  const priceBands = useMemo(
+    () => buildNetGridPriceBands(state, currentNet, t),
+    [currentNet, state, t]
+  );
   const toggleOverlay = (key: keyof typeof visibleOverlays) => {
     setVisibleOverlays((current) => ({ ...current, [key]: !current[key] }));
   };
@@ -689,6 +743,7 @@ export function NetGridStrategyPanel({
                 executionRunId={executionRunId}
                 lastTickTimestamp={lastTickTimestamp}
                 priceLines={priceLines}
+                priceBands={priceBands}
                 selectedTradeIds={selectedTradeIds}
                 focusedTradeId={selectedLedgerId}
                 onMarkerClick={setSelectedLedgerId}
@@ -741,6 +796,26 @@ export function NetGridStrategyPanel({
                   label={t('netGrid.chart.syncMarkers')}
                   active={visibleOverlays.sync}
                   onClick={() => toggleOverlay('sync')}
+                />
+                <LegendChip
+                  color="rgba(211, 47, 47, 0.45)"
+                  label={t('netGrid.chartBands.addZone')}
+                  active
+                />
+                <LegendChip
+                  color="rgba(46, 125, 50, 0.45)"
+                  label={t('netGrid.chartBands.recoveryZone')}
+                  active
+                />
+                <LegendChip
+                  color="rgba(0, 137, 123, 0.45)"
+                  label={t('netGrid.chartBands.trailingZone')}
+                  active
+                />
+                <LegendChip
+                  color="rgba(97, 97, 97, 0.45)"
+                  label={t('netGrid.chartBands.riskZone')}
+                  active
                 />
               </Stack>
             </>

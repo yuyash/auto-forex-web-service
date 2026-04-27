@@ -56,6 +56,7 @@ interface StrategyGroupChartProps {
   focusedTradeId?: string | null;
   onMarkerClick?: (tradeId: string) => void;
   priceLines?: StrategyPriceLine[];
+  priceBands?: StrategyPriceBand[];
 }
 
 export interface StrategyPriceLine {
@@ -63,6 +64,18 @@ export interface StrategyPriceLine {
   title: string;
   color: string;
   lineStyle?: LineStyle;
+}
+
+export interface StrategyPriceBand {
+  from: number;
+  to: number;
+  title: string;
+  color: string;
+}
+
+interface RenderedPriceBand extends StrategyPriceBand {
+  top: number;
+  height: number;
 }
 
 const GRANULARITY_OPTIONS = [
@@ -187,6 +200,7 @@ export function StrategyGroupChart({
   focusedTradeId,
   onMarkerClick,
   priceLines = [],
+  priceBands = [],
 }: StrategyGroupChartProps) {
   const theme = useTheme();
   const { t } = useTranslation('strategy');
@@ -202,6 +216,9 @@ export function StrategyGroupChart({
     ReturnType<ISeriesApi<'Candlestick'>['createPriceLine']>[]
   >([]);
   const [chartInstance, setChartInstance] = useState<IChartApi | null>(null);
+  const [renderedPriceBands, setRenderedPriceBands] = useState<
+    RenderedPriceBand[]
+  >([]);
   const shouldApplyRangeRef = useRef(true);
   const rangeLoadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousInstrumentRef = useRef(instrument);
@@ -357,8 +374,31 @@ export function StrategyGroupChart({
     seriesRef.current = null;
     markersRef.current = null;
     priceLinesRef.current = [];
+    setRenderedPriceBands([]);
     setChartInstance(null);
   }, []);
+
+  const refreshPriceBands = useCallback(() => {
+    const series = seriesRef.current;
+    if (!series) {
+      setRenderedPriceBands([]);
+      return;
+    }
+    const nextBands: RenderedPriceBand[] = [];
+    for (const band of priceBands) {
+      if (!Number.isFinite(band.from) || !Number.isFinite(band.to)) continue;
+      const topPrice = Math.max(band.from, band.to);
+      const bottomPrice = Math.min(band.from, band.to);
+      const top = series.priceToCoordinate(topPrice);
+      const bottom = series.priceToCoordinate(bottomPrice);
+      if (top == null || bottom == null) continue;
+      const y1 = Math.min(top, bottom);
+      const y2 = Math.max(top, bottom);
+      if (!Number.isFinite(y1) || !Number.isFinite(y2) || y2 <= y1) continue;
+      nextBands.push({ ...band, top: y1, height: y2 - y1 });
+    }
+    setRenderedPriceBands(nextBands);
+  }, [priceBands]);
 
   useEffect(() => {
     destroyChart();
@@ -422,6 +462,7 @@ export function StrategyGroupChart({
         const to = Number(range.to);
         if (Number.isFinite(from) && Number.isFinite(to) && to > from) {
           currentVisibleRangeRef.current = { from, to };
+          refreshPriceBands();
           if (granularityRef.current === 'AUTO') {
             setAutoGranularityValue(
               autoGranularity(secToIso(from), secToIso(to))
@@ -461,7 +502,10 @@ export function StrategyGroupChart({
 
       const observer = new ResizeObserver(() => {
         const w = container.clientWidth;
-        if (w > 0) chart.applyOptions({ width: w });
+        if (w > 0) {
+          chart.applyOptions({ width: w });
+          refreshPriceBands();
+        }
       });
       observer.observe(container);
       observerRef.current = observer;
@@ -485,13 +529,16 @@ export function StrategyGroupChart({
       });
       if (created) priceLinesRef.current.push(created);
     }
+    refreshPriceBands();
 
     if (shouldApplyRangeRef.current && paddedRange && chartRef.current) {
       chartRef.current.timeScale().setVisibleRange(paddedRange);
       shouldApplyRangeRef.current = false;
+      refreshPriceBands();
     } else if (shouldApplyRangeRef.current) {
       chartRef.current?.timeScale().fitContent();
       shouldApplyRangeRef.current = false;
+      refreshPriceBands();
     }
   }, [
     validCandles,
@@ -502,8 +549,10 @@ export function StrategyGroupChart({
     timezone,
     onMarkerClick,
     priceLines,
+    priceBands,
     effectiveGranularity,
     ensureRange,
+    refreshPriceBands,
   ]);
 
   useMetricsOverlay({
@@ -773,7 +822,31 @@ export function StrategyGroupChart({
           </IconButton>
         </Tooltip>
       </Box>
-      <Box ref={containerRef} sx={{ width: '100%', height }} />
+      <Box sx={{ position: 'relative', width: '100%', height }}>
+        <Box ref={containerRef} sx={{ width: '100%', height }} />
+        {renderedPriceBands.map((band) => (
+          <Tooltip
+            key={`${band.title}-${band.from}-${band.to}`}
+            title={band.title}
+          >
+            <Box
+              sx={{
+                position: 'absolute',
+                left: 0,
+                right: 64,
+                top: band.top,
+                height: band.height,
+                bgcolor: band.color,
+                borderTop: '1px solid',
+                borderBottom: '1px solid',
+                borderColor: band.color,
+                pointerEvents: 'auto',
+                zIndex: 1,
+              }}
+            />
+          </Tooltip>
+        ))}
+      </Box>
       {isInitialLoading && (
         <Box
           sx={{

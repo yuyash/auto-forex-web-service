@@ -328,6 +328,12 @@
       "fillMarkers": "Fills",
       "syncMarkers": "Broker Sync"
     },
+    "chartBands": {
+      "addZone": "Add zone",
+      "recoveryZone": "Recovery zone",
+      "trailingZone": "Trailing protection",
+      "riskZone": "Risk zone"
+    },
     "regime": {
       "ok": "OK",
       "blocked_high_volatility": "High volatility blocked",

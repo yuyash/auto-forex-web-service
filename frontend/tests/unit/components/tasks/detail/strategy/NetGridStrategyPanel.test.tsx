@@ -139,6 +139,10 @@ describe('NetGridStrategyPanel', () => {
     expect(screen.getByText('Risk-exit price')).toBeInTheDocument();
     expect(screen.getByText('Risk Exit')).toBeInTheDocument();
     expect(screen.getByText('Trail')).toBeInTheDocument();
+    expect(screen.getByText('Add zone')).toBeInTheDocument();
+    expect(screen.getByText('Recovery zone')).toBeInTheDocument();
+    expect(screen.getByText('Trailing protection')).toBeInTheDocument();
+    expect(screen.getByText('Risk zone')).toBeInTheDocument();
     expect(screen.getAllByText('Counter-trend blocked').length).toBeGreaterThan(
       0
     );

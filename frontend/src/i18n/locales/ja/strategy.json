@@ -328,6 +328,12 @@
       "fillMarkers": "約定",
       "syncMarkers": "ブローカー同期"
     },
+    "chartBands": {
+      "addZone": "追加ゾーン",
+      "recoveryZone": "回復ゾーン",
+      "trailingZone": "トレーリング保護",
+      "riskZone": "リスクゾーン"
+    },
     "regime": {
       "ok": "正常",
       "blocked_high_volatility": "高ボラ停止",
