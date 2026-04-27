@@ -8,7 +8,7 @@ from apps.trading.enums import Direction
 from apps.trading.strategies.snowball.models import Layer, SnowballCycle
 
 
-def validate_grid_ordering(cycle: SnowballCycle) -> str | None:
+def validate_grid_ordering(cycle: SnowballCycle, *, check_take_profit: bool = True) -> str | None:
     """Return a violation detail when present slots are not monotonic."""
     present: list[tuple[int, int, Decimal, Decimal, str]] = []
     for layer in cycle.grid.layers:
@@ -48,7 +48,7 @@ def validate_grid_ordering(cycle: SnowballCycle) -> str | None:
             tp_ok = prev[3] <= curr[3]
             expected = "ascending"
 
-        if entry_ok and tp_ok:
+        if entry_ok and (tp_ok or not check_take_profit):
             continue
 
         return (
@@ -58,7 +58,7 @@ def validate_grid_ordering(cycle: SnowballCycle) -> str | None:
             f"entry={prev[2]:.5f} tp={prev[3]:.5f}, "
             f"curr=L{curr[0]}/R{curr[1]}({curr[4]}) "
             f"entry={curr[2]:.5f} tp={curr[3]:.5f}, "
-            f"entry_ok={entry_ok}, tp_ok={tp_ok}"
+            f"entry_ok={entry_ok}, tp_ok={tp_ok}, check_take_profit={check_take_profit}"
         )
 
     return None

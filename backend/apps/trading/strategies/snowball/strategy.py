@@ -39,7 +39,6 @@ from apps.trading.strategies.registry import register_strategy
 from apps.trading.strategies.snowball.calculators import (
     counter_interval_pips,
     counter_tp_pips,
-    rebuild_take_profit_pips,
     round_to_step,
     stop_loss_pips,
 )
@@ -66,6 +65,10 @@ from apps.trading.strategies.snowball.parameters import (
     normalize_parameters,
     parse_config,
     validate_parameters,
+)
+from apps.trading.strategies.snowball.pricing import (
+    rebuild_take_profit_price,
+    sync_weighted_average_counter_take_profits,
 )
 from apps.trading.utils import format_money, quote_to_account_rate
 
@@ -524,10 +527,10 @@ class SnowballStrategy(Strategy):
 
     def _validate_grid_ordering(self, cycle: SnowballCycle) -> None:
         """Ensure present slots preserve monotonic entry/TP ordering."""
-        if self.config.rebuild_take_profit_mode == "manual":
-            self._grid_order_violation = None
-            return
-        self._grid_order_violation = validate_grid_ordering(cycle)
+        self._grid_order_violation = validate_grid_ordering(
+            cycle,
+            check_take_profit=self.config.rebuild_take_profit_mode != "manual",
+        )
         if self._grid_order_violation:
             logger.error("Grid ordering violation detail: %s", self._grid_order_violation)
 
@@ -1764,13 +1767,8 @@ class SnowballStrategy(Strategy):
             return
 
         if self.config.rebuild_stop_loss_mode == "same":
-            # Reuse the absolute stop-loss price that closed the prior slot lifecycle.
             if pending.stop_loss_price is not None:
                 entry.stop_loss_price = pending.stop_loss_price
-                return
-            # Backward-compatible fallback for older pending snapshots that
-            # were serialized before stop_loss_price was persisted.
-            self._assign_configured_stop_loss(entry, pending.retracement_count + 1)
             return
 
         values = self.config.rebuild_stop_loss_manual_pips
@@ -1780,21 +1778,6 @@ class SnowballStrategy(Strategy):
         sl_pips = round_to_step(values[idx], self.config.round_step_pips)
         if sl_pips > 0:
             self._assign_stop_loss(entry, sl_pips)
-
-    def _rebuild_take_profit_price(
-        self,
-        *,
-        pending: StopLossClosedEntry,
-        entry_price: Decimal,
-    ) -> Decimal:
-        """Return the TP price for a rebuilt entry."""
-        if self.config.rebuild_take_profit_mode == "same":
-            return pending.close_price
-
-        tp_pips = rebuild_take_profit_pips(pending.retracement_count + 1, self.config)
-        if pending.direction == Direction.LONG:
-            return entry_price + tp_pips * self.pip_size
-        return entry_price - tp_pips * self.pip_size
 
     def _is_stop_loss_temporarily_protected(self, layer: Layer, entry: Entry) -> bool:
         """Return True when the layer's highest live R should ignore stop-loss.
@@ -1884,13 +1867,6 @@ class SnowballStrategy(Strategy):
             # can continue the chain.
             entry.lifecycle_stop_loss_count += 1
 
-            # Keep the historical offset field populated for old state
-            # snapshots and diagnostics. Rebuild TP calculation no longer
-            # uses it; rebuilt positions inherit their original TP.
-            sl_price_drift = abs(exit_price - entry.entry_price)
-            rebuild_price_offset = entry.rebuild_price_offset + sl_price_drift
-            entry.rebuild_price_offset = rebuild_price_offset
-
             if self.config.rebuild_enabled:
                 sl_snapshot = StopLossClosedEntry(
                     entry_price=entry.entry_price,
@@ -1908,7 +1884,6 @@ class SnowballStrategy(Strategy):
                     stop_loss_price=entry.stop_loss_price,
                     lifecycle_realized_pnl=entry.lifecycle_realized_pnl,
                     lifecycle_stop_loss_count=entry.lifecycle_stop_loss_count,
-                    rebuild_price_offset=rebuild_price_offset,
                 )
                 slot.close_for_stop_loss(sl_snapshot)
             else:
@@ -2022,9 +1997,11 @@ class SnowballStrategy(Strategy):
                 # TP. If a rebuild TP mode is selected, derive a fresh TP
                 # from the rebuilt entry price and keep price adjustment
                 # disabled for this rebuild.
-                adjusted_close_price = self._rebuild_take_profit_price(
+                adjusted_close_price = rebuild_take_profit_price(
                     pending=pending,
                     entry_price=trigger_price,
+                    pip_size=self.pip_size,
+                    config=self.config,
                 )
                 if apply_adjustment and exit_buffer_price > 0:
                     if pending.direction == Direction.LONG:
@@ -2121,13 +2098,9 @@ class SnowballStrategy(Strategy):
                 entry.validation_status = "pass"
                 entry.is_rebuild = True
 
-                # Carry forward the slot's running lifecycle P/L and SL
-                # count. ``rebuild_price_offset`` is retained only for
-                # backwards-compatible state serialisation/diagnostics;
-                # rebuild TP calculation inherits the original TP.
+                # Carry forward the slot's running lifecycle P/L and SL count.
                 entry.lifecycle_realized_pnl = pending.lifecycle_realized_pnl
                 entry.lifecycle_stop_loss_count = pending.lifecycle_stop_loss_count
-                entry.rebuild_price_offset = pending.rebuild_price_offset
 
                 self._assign_rebuild_stop_loss(entry, pending)
 
@@ -2314,7 +2287,10 @@ class SnowballStrategy(Strategy):
                     events.extend(add_events)
 
             self._validate_grid_ordering(cycle)
-            if self._grid_order_violation and self.config.grid_order_validation_enabled:
+            if self._grid_order_violation and (
+                self.config.grid_order_validation_enabled
+                or self.config.rebuild_take_profit_mode == "manual"
+            ):
                 state.strategy_state = ss.to_dict()
                 return StrategyResult(
                     state=state,
@@ -2494,9 +2470,7 @@ class SnowballStrategy(Strategy):
             and entry.role == "counter"
             and self.config.counter_tp_mode == "weighted_avg"
         ):
-            weighted = layer.current_weighted_avg_close_price()
-            if weighted is not None:
-                entry.close_price = weighted[0]
+            sync_weighted_average_counter_take_profits(layer)
             return
 
         entry.close_price += delta

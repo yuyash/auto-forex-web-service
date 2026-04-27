@@ -1095,7 +1095,6 @@ class TestSnowballRebuildTpGridClamp:
             retracement_count=2,
             step=3,
             cycle_id=1,
-            rebuild_price_offset=Decimal("0.0056"),
         )
         return layer
 
@@ -1115,8 +1114,8 @@ class TestSnowballRebuildTpGridClamp:
         # R0 has no predecessor at all.
         assert s._upper_neighbor_tp_bound(cycle, layer, slot_index=0) is None
 
-    def test_rebuild_keeps_original_tp_and_does_not_use_loss_offset(self):
-        """A large rebuild_price_offset must not widen the inherited TP."""
+    def test_rebuild_keeps_original_tp(self):
+        """A rebuild must inherit the pending TP."""
         from apps.trading.strategies.snowball.models import (
             Direction,
             SnowballCycle,
@@ -1125,9 +1124,7 @@ class TestSnowballRebuildTpGridClamp:
 
         s = _strategy(stop_loss=True)
         layer = self._build_layer_with_grid(s)
-
-        # Attach an R3 pending rebuild with a huge legacy offset. The
-        # rebuilt TP must still inherit close_price=130.691.
+        # The rebuilt TP must inherit close_price=130.691.
         r3 = layer.slots[3]
         r3.pending_rebuild = StopLossClosedEntry(
             entry_price=Decimal("130.415"),
@@ -1139,7 +1136,6 @@ class TestSnowballRebuildTpGridClamp:
             retracement_count=3,
             step=4,
             cycle_id=1,
-            rebuild_price_offset=Decimal("0.478"),
         )
 
         cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
@@ -1199,7 +1195,6 @@ class TestSnowballRebuildTpGridClamp:
             retracement_count=3,
             step=4,
             cycle_id=1,
-            rebuild_price_offset=Decimal("0"),
         )
 
         cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
@@ -1223,8 +1218,6 @@ class TestSnowballRebuildTpGridClamp:
 
         s = _strategy(stop_loss=True)
         layer = self._build_layer_with_grid(s)
-
-        # A legacy offset must not affect the inherited TP.
         r3 = layer.slots[3]
         r3.pending_rebuild = StopLossClosedEntry(
             entry_price=Decimal("130.415"),
@@ -1236,7 +1229,6 @@ class TestSnowballRebuildTpGridClamp:
             retracement_count=3,
             step=4,
             cycle_id=1,
-            rebuild_price_offset=Decimal("0.010"),
         )
 
         cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
@@ -1339,7 +1331,6 @@ class TestSnowballRebuildCrossLayerTpOrdering:
             retracement_count=0,
             step=1,
             cycle_id=1,
-            rebuild_price_offset=Decimal("0.978"),
         )
 
         # Tick where the ask touches L2/R0's trigger price (131.177).
@@ -1407,7 +1398,6 @@ class TestSnowballRebuildCrossLayerTpOrdering:
             retracement_count=0,
             step=1,
             cycle_id=1,
-            rebuild_price_offset=Decimal("0.978"),
         )
 
         tick = _make_tick(datetime(2026, 1, 1, 9, tzinfo=UTC), Decimal("131.167"))

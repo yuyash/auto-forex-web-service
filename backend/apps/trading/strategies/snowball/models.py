@@ -195,10 +195,14 @@ class SnowballStrategyConfig:
         n_pips_gamma = _parse_decimal(raw.get("n_pips_gamma", "1.4"), "1.4")
         interval_mode = _parse_str(raw.get("interval_mode"), "constant")
         rebuild_take_profit_mode = _parse_str(raw.get("rebuild_take_profit_mode"), "same")
-        rebuild_price_adjustment_enabled = bool(raw.get("rebuild_price_adjustment_enabled", True))
+        rebuild_price_adjustment_enabled = _parse_bool(
+            raw.get("rebuild_price_adjustment_enabled", True), True
+        )
         if rebuild_take_profit_mode != "same":
             rebuild_price_adjustment_enabled = False
-        grid_order_validation_enabled = bool(raw.get("grid_order_validation_enabled", True))
+        grid_order_validation_enabled = _parse_bool(
+            raw.get("grid_order_validation_enabled", True), True
+        )
         if rebuild_take_profit_mode == "manual":
             grid_order_validation_enabled = False
 
@@ -229,14 +233,16 @@ class SnowballStrategyConfig:
             counter_tp_step_amount=_parse_decimal(raw.get("counter_tp_step_amount", "2.5"), "2.5"),
             counter_tp_multiplier=_parse_decimal(raw.get("counter_tp_multiplier", "1.2"), "1.2"),
             round_step_pips=_parse_decimal(raw.get("round_step_pips", "0.1"), "0.1"),
-            shrink_enabled=bool(raw.get("shrink_enabled", False)),
+            shrink_enabled=_parse_bool(raw.get("shrink_enabled", False), False),
             m_th=_parse_decimal(raw.get("m_th", "70"), "70"),
             m1_th=_parse_decimal(raw.get("m1_th", "50"), "50"),
-            lock_enabled=bool(raw.get("lock_enabled", False)),
+            lock_enabled=_parse_bool(raw.get("lock_enabled", False), False),
             n_th=_parse_decimal(raw.get("n_th", "85"), "85"),
             cooldown_sec=_parse_int(raw.get("cooldown_sec", 300), 300),
-            stop_loss_enabled=bool(raw.get("stop_loss_enabled", False)),
-            disable_loss_cut_after_rebuild=bool(raw.get("disable_loss_cut_after_rebuild", False)),
+            stop_loss_enabled=_parse_bool(raw.get("stop_loss_enabled", False), False),
+            disable_loss_cut_after_rebuild=_parse_bool(
+                raw.get("disable_loss_cut_after_rebuild", False), False
+            ),
             rebuild_stop_loss_mode=_parse_str(raw.get("rebuild_stop_loss_mode"), "same"),
             rebuild_stop_loss_manual_pips=rebuild_stop_loss_manual_pips,
             rebuild_take_profit_mode=rebuild_take_profit_mode,
@@ -254,21 +260,23 @@ class SnowballStrategyConfig:
             ),
             rebuild_take_profit_manual_pips=rebuild_take_profit_manual_pips,
             grid_order_validation_enabled=grid_order_validation_enabled,
-            preserve_highest_retracement_enabled=bool(
-                raw.get("preserve_highest_retracement_enabled", False)
+            preserve_highest_retracement_enabled=_parse_bool(
+                raw.get("preserve_highest_retracement_enabled", False), False
             ),
             preserve_highest_r_from=(
                 _parse_int(raw.get("preserve_highest_r_from", 1), 1)
-                if bool(raw.get("preserve_highest_retracement_enabled", False))
+                if _parse_bool(raw.get("preserve_highest_retracement_enabled", False), False)
                 else 0
             ),
-            rebuild_enabled=bool(raw.get("rebuild_enabled", True)),
-            complete_cycle_when_empty=bool(raw.get("complete_cycle_when_empty", False)),
-            emergency_enabled=bool(raw.get("emergency_enabled", True)),
+            rebuild_enabled=_parse_bool(raw.get("rebuild_enabled", True), True),
+            complete_cycle_when_empty=_parse_bool(
+                raw.get("complete_cycle_when_empty", False), False
+            ),
+            emergency_enabled=_parse_bool(raw.get("emergency_enabled", True), True),
             emergency_threshold=_parse_decimal(raw.get("emergency_threshold", "95"), "95"),
             pip_size=_parse_decimal(raw.get("pip_size", "0.01"), "0.01"),
-            reseed_on_all_pending=bool(raw.get("reseed_on_all_pending", False)),
-            reseed_on_grid_exhausted=bool(raw.get("reseed_on_grid_exhausted", False)),
+            reseed_on_all_pending=_parse_bool(raw.get("reseed_on_all_pending", False), False),
+            reseed_on_grid_exhausted=_parse_bool(raw.get("reseed_on_grid_exhausted", False), False),
             rebuild_price_adjustment_enabled=rebuild_price_adjustment_enabled,
             rebuild_entry_price_buffer_pips=_parse_decimal(
                 raw.get("rebuild_entry_price_buffer_pips", "0"), "0"
@@ -503,11 +511,6 @@ class Entry:
     # via ``StopLossClosedEntry``.  Denominated in account currency.
     lifecycle_realized_pnl: Decimal = field(default_factory=lambda: Decimal("0"))
     lifecycle_stop_loss_count: int = 0
-
-    # Legacy diagnostic field retained across rebuilds for state
-    # compatibility. Rebuild TP calculation inherits the original TP and
-    # does not use this value.
-    rebuild_price_offset: Decimal = field(default_factory=lambda: Decimal("0"))
 
     @classmethod
     def open(
@@ -751,7 +754,6 @@ class Entry:
             "is_rebuild": self.is_rebuild,
             "lifecycle_realized_pnl": str(self.lifecycle_realized_pnl),
             "lifecycle_stop_loss_count": self.lifecycle_stop_loss_count,
-            "rebuild_price_offset": str(self.rebuild_price_offset),
         }
 
     @staticmethod
@@ -820,7 +822,6 @@ class Entry:
             is_rebuild=bool(d.get("is_rebuild", False)),
             lifecycle_realized_pnl=_parse_decimal(d.get("lifecycle_realized_pnl", "0"), "0"),
             lifecycle_stop_loss_count=_parse_int(d.get("lifecycle_stop_loss_count", 0), 0),
-            rebuild_price_offset=_parse_decimal(d.get("rebuild_price_offset", "0"), "0"),
         )
 
 
@@ -862,12 +863,6 @@ class StopLossClosedEntry:
     lifecycle_realized_pnl: Decimal = field(default_factory=lambda: Decimal("0"))
     lifecycle_stop_loss_count: int = 0
 
-    # Legacy diagnostic field retained for state compatibility. Older
-    # runs used this to widen rebuild TP after stop-losses; current
-    # rebuilds inherit ``close_price`` and only adjust TP for explicit
-    # buffer/grid-ordering constraints.
-    rebuild_price_offset: Decimal = field(default_factory=lambda: Decimal("0"))
-
     def to_dict(self) -> dict[str, Any]:
         result = {
             "entry_price": str(self.entry_price),
@@ -883,7 +878,6 @@ class StopLossClosedEntry:
             "cycle_id": self.cycle_id,
             "lifecycle_realized_pnl": str(self.lifecycle_realized_pnl),
             "lifecycle_stop_loss_count": self.lifecycle_stop_loss_count,
-            "rebuild_price_offset": str(self.rebuild_price_offset),
         }
         if self.position_id is not None:
             result["position_id"] = self.position_id
@@ -923,7 +917,6 @@ class StopLossClosedEntry:
             ),
             lifecycle_realized_pnl=_parse_decimal(d.get("lifecycle_realized_pnl", "0"), "0"),
             lifecycle_stop_loss_count=_parse_int(d.get("lifecycle_stop_loss_count", 0), 0),
-            rebuild_price_offset=_parse_decimal(d.get("rebuild_price_offset", "0"), "0"),
         )
 
 
@@ -1521,7 +1514,7 @@ class SnowballCycle:
     # expected to finish non-negative).  Denominated in account currency.
     realized_pnl: Decimal = field(default_factory=lambda: Decimal("0"))
 
-    # -- Backward-compatible property --
+    # -- Status convenience --
 
     @property
     def completed(self) -> bool:
@@ -1666,7 +1659,6 @@ class SnowballCycle:
             "grid": self.grid.to_dict(),
             "hedge_entries": [e.to_dict() for e in self.hedge_entries],
             "counter_close_count": self.counter_close_count,
-            "completed": self.completed,
             "status": self.status.value,
             "trade_cycle_id": self.trade_cycle_id,
             "realized_pnl": str(self.realized_pnl),
@@ -1681,28 +1673,10 @@ class SnowballCycle:
             else Direction(str(raw_direction).strip().lower())
         )
 
-        # Support both new "grid" format and legacy "initial_entry" + "layers" format
-        if "grid" in data:
-            grid = PositionGrid.from_dict(data["grid"])
-        else:
-            grid = _migrate_legacy_cycle(data)
+        grid = PositionGrid.from_dict(data["grid"])
 
-        # Resolve status: prefer explicit "status" key, fall back to legacy
-        # "completed" boolean for backward compatibility.
         raw_status = data.get("status")
-        if raw_status is not None:
-            try:
-                status = CycleStatus(str(raw_status).strip().lower())
-            except ValueError:
-                status = (
-                    CycleStatus.COMPLETED
-                    if bool(data.get("completed", False))
-                    else CycleStatus.ACTIVE
-                )
-        else:
-            status = (
-                CycleStatus.COMPLETED if bool(data.get("completed", False)) else CycleStatus.ACTIVE
-            )
+        status = CycleStatus(str(raw_status).strip().lower())
 
         return SnowballCycle(
             cycle_id=_parse_int(data.get("cycle_id", 0), 0),
@@ -1714,60 +1688,6 @@ class SnowballCycle:
             trade_cycle_id=data.get("trade_cycle_id"),
             realized_pnl=_parse_decimal(data.get("realized_pnl", "0"), "0"),
         )
-
-
-def _migrate_legacy_cycle(data: dict[str, Any]) -> PositionGrid:
-    """Convert old initial_entry + layers format to unified grid.
-
-    Legacy format:
-    - ``initial_entry``: dict (the L1/R0 entry, stored separately)
-    - ``layers``: list of layers where L1 has slots R1…R(r_max) and
-      L2+ have ``initial_entry`` + slots R1…R(r_max)
-
-    New format:
-    - All entries live in slots.  L0 has R0 (cycle initial) + R1…R(r_max).
-      L1+ have R0 (layer initial) + R1…R(r_max).
-    """
-    raw_initial = data.get("initial_entry", {})
-    raw_layers = data.get("layers", [])
-
-    layers: list[Layer] = []
-    for ld in raw_layers:
-        old_layer_num = _parse_int(ld.get("layer_number", 1), 1)
-        new_layer_num = old_layer_num - 1  # 1-based → 0-based
-
-        old_slots = [Slot.from_dict(s) for s in ld.get("slots", [])]
-        # Re-index old 1-based slots to new 1-based (they stay the same)
-        new_slots: list[Slot] = []
-
-        # R0 slot: layer initial (or cycle initial for L0)
-        r0_entry: Entry | None = None
-        if new_layer_num == 0 and raw_initial:
-            r0_entry = Entry.from_dict(raw_initial)
-            r0_entry.layer_number = 0
-            r0_entry.retracement_count = 0
-        elif ld.get("initial_entry"):
-            r0_entry = Entry.from_dict(ld["initial_entry"])
-            r0_entry.layer_number = new_layer_num
-            r0_entry.retracement_count = 0
-
-        new_slots.append(Slot(index=0, entry=r0_entry))
-
-        for old_slot in old_slots:
-            if old_slot.entry is not None:
-                old_slot.entry.layer_number = new_layer_num
-            new_slots.append(old_slot)
-
-        layers.append(
-            Layer(
-                layer_number=new_layer_num,
-                slots=new_slots,
-                base_units=_parse_int(ld.get("base_units", 1000), 1000),
-                refill_up_to=_parse_int(ld.get("refill_up_to", 2), 2),
-            )
-        )
-
-    return PositionGrid(layers=layers)
 
 
 # ---------------------------------------------------------------------------
@@ -1797,9 +1717,6 @@ class SnowballStrategyState:
     account_nav: Decimal = Decimal("0")
 
     metrics: dict[str, str | int | float] = field(default_factory=dict)
-
-    # Stop-loss: positions closed by SL awaiting rebuild when price returns
-    stop_loss_pending_rebuilds: list[StopLossClosedEntry] = field(default_factory=list)
 
     def allocate_id(self) -> int:
         eid = self.next_entry_id
@@ -1840,7 +1757,6 @@ class SnowballStrategyState:
             "account_balance": str(self.account_balance),
             "account_nav": str(self.account_nav),
             "metrics": dict(self.metrics),
-            "stop_loss_pending_rebuilds": [r.to_dict() for r in self.stop_loss_pending_rebuilds],
         }
 
     @staticmethod
@@ -1867,10 +1783,6 @@ class SnowballStrategyState:
             account_balance=_parse_decimal(data.get("account_balance", "0"), "0"),
             account_nav=_parse_decimal(data.get("account_nav", "0"), "0"),
             metrics=dict(data.get("metrics", {})) if isinstance(data.get("metrics"), dict) else {},
-            stop_loss_pending_rebuilds=[
-                StopLossClosedEntry.from_dict(r)
-                for r in (data.get("stop_loss_pending_rebuilds") or [])
-            ],
         )
 
     @classmethod
@@ -1901,3 +1813,19 @@ def _parse_int(value: object, default: int) -> int:
 
 def _parse_str(value: object, default: str) -> str:
     return str(value).strip().lower() if value is not None else default
+
+
+def _parse_bool(value: object, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int | float):
+        return value != 0
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "off", ""}:
+            return False
+    return default

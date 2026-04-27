@@ -20,6 +20,10 @@ from apps.trading.strategies.snowball.models import (
     Slot,
     StopLossClosedEntry,
 )
+from apps.trading.strategies.snowball.pricing import (
+    rebuild_take_profit_price,
+    sync_weighted_average_counter_take_profits,
+)
 from apps.trading.strategies.snowball.strategy import SnowballStrategy
 
 # ---------------------------------------------------------------------------
@@ -580,9 +584,11 @@ class TestSnowballRebuildTakeProfitModes:
             }
         )
 
-        tp = s._rebuild_take_profit_price(
+        tp = rebuild_take_profit_price(
             pending=self._make_pending_rebuild(),
             entry_price=Decimal("154.70"),
+            pip_size=s.pip_size,
+            config=s.config,
         )
 
         assert tp == Decimal("155.00")
@@ -605,13 +611,17 @@ class TestSnowballRebuildTakeProfitModes:
             }
         )
 
-        long_tp = s._rebuild_take_profit_price(
+        long_tp = rebuild_take_profit_price(
             pending=self._make_pending_rebuild(direction=Direction.LONG),
             entry_price=Decimal("154.70"),
+            pip_size=s.pip_size,
+            config=s.config,
         )
-        short_tp = s._rebuild_take_profit_price(
+        short_tp = rebuild_take_profit_price(
             pending=self._make_pending_rebuild(direction=Direction.SHORT),
             entry_price=Decimal("154.70"),
+            pip_size=s.pip_size,
+            config=s.config,
         )
 
         assert long_tp == Decimal("154.82")
@@ -671,6 +681,56 @@ class TestSnowballRebuildTakeProfitModes:
         s._validate_grid_ordering(cycle)
 
         assert s._grid_order_violation is None
+
+
+class TestSnowballPricingHelpers:
+    def test_weighted_average_sync_updates_all_counter_take_profits(self):
+        layer = Layer.create(1, 3, 1000)
+        layer.slot_at(0).fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("150.00"),
+                close_price=Decimal("150.50"),
+                units=1000,
+                opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+                role="initial",
+            )
+        )
+        layer.slot_at(1).fill(
+            Entry(
+                entry_id=2,
+                step=2,
+                direction=Direction.LONG,
+                entry_price=Decimal("149.70"),
+                close_price=Decimal("150.00"),
+                units=2000,
+                opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+                role="counter",
+                retracement_count=1,
+            )
+        )
+        layer.slot_at(2).fill(
+            Entry(
+                entry_id=3,
+                step=3,
+                direction=Direction.LONG,
+                entry_price=Decimal("149.40"),
+                close_price=Decimal("149.80"),
+                units=3000,
+                opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+                role="counter",
+                retracement_count=2,
+            )
+        )
+
+        close_price = sync_weighted_average_counter_take_profits(layer)
+
+        assert close_price == Decimal("149.600")
+        assert layer.slot_at(0).entry.close_price == Decimal("150.50")
+        assert layer.slot_at(1).entry.close_price == Decimal("149.600")
+        assert layer.slot_at(2).entry.close_price == Decimal("149.600")
 
 
 # ===================================================================

@@ -79,6 +79,23 @@ class TestSnowballStrategyConfig:
         assert cfg.r_max == 5
         assert len(cfg.manual_intervals) == 5
 
+    def test_from_dict_parses_string_booleans(self):
+        cfg = SnowballStrategyConfig.from_dict(
+            {
+                "shrink_enabled": "false",
+                "lock_enabled": "true",
+                "stop_loss_enabled": "false",
+                "rebuild_enabled": "0",
+                "emergency_enabled": "yes",
+            }
+        )
+
+        assert cfg.shrink_enabled is False
+        assert cfg.lock_enabled is True
+        assert cfg.stop_loss_enabled is False
+        assert cfg.rebuild_enabled is False
+        assert cfg.emergency_enabled is True
+
     def test_to_dict_roundtrip(self):
         cfg = SnowballStrategyConfig.from_dict(
             {
@@ -510,9 +527,8 @@ class TestSnowballCycle:
         assert restored.initial_entry.entry_id == 1
         assert len(restored.grid.all_entries()) == 2
 
-    def test_legacy_format_migration(self):
-        """Old format with initial_entry + layers should be migrated."""
-        legacy = {
+    def test_cycle_from_dict_requires_grid_state(self):
+        stale_state = {
             "cycle_id": 1,
             "direction": "long",
             "initial_entry": {
@@ -552,12 +568,9 @@ class TestSnowballCycle:
                 }
             ],
         }
-        cycle = SnowballCycle.from_dict(legacy)
-        assert cycle.initial_entry is not None
-        assert cycle.initial_entry.entry_id == 1
-        assert cycle.initial_entry.layer_number == 0  # migrated from 1 to 0
-        entries = cycle.grid.all_entries()
-        assert len(entries) == 2
+
+        with pytest.raises(KeyError, match="grid"):
+            SnowballCycle.from_dict(stale_state)
 
 
 class TestSnowballStrategyState:
