@@ -287,14 +287,18 @@ export function createTaskStrategyEventsQuery(
   taskType: TaskType,
   executionRunId?: string,
   cycleId?: string,
-  options?: { enabled?: boolean }
+  options?: {
+    enabled?: boolean;
+    params?: Record<string, string | number | undefined>;
+  }
 ): UseQueryOptions<StrategyCyclesResponse | null> {
   return {
     queryKey: queryKeys.taskResources.strategyEvents(
       taskType,
       String(taskId),
       executionRunId,
-      cycleId
+      cycleId,
+      options?.params
     ),
     enabled: Boolean(taskId) && options?.enabled !== false,
     staleTime: 0,
@@ -311,6 +315,7 @@ export function createTaskStrategyEventsQuery(
           {
             ...(executionRunId ? { execution_id: executionRunId } : {}),
             ...(cycleId ? { cycle_id: cycleId } : {}),
+            ...(options?.params ?? {}),
           }
         );
       } catch (err) {

@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 import { NetGridStrategyPanel } from '../../../../../../src/components/tasks/detail/strategy/NetGridStrategyPanel';
 import type { NetGridStrategyState } from '../../../../../../src/types/strategyVisualization';
@@ -53,9 +54,16 @@ const state: NetGridStrategyState = {
   ],
 };
 
-describe('NetGridStrategyPanel', () => {
-  it('renders risk preview, risk line toggle, and localized ledger labels', () => {
-    render(
+function renderPanel() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
       <NetGridStrategyPanel
         state={state}
         instrument="USD_JPY"
@@ -64,7 +72,13 @@ describe('NetGridStrategyPanel', () => {
         executionRunId="run-1"
         lastTickTimestamp="2026-01-01T00:01:00Z"
       />
-    );
+    </QueryClientProvider>
+  );
+}
+
+describe('NetGridStrategyPanel', () => {
+  it('renders risk preview, risk line toggle, and localized ledger labels', () => {
+    renderPanel();
 
     expect(screen.getByText('Next Decision Preview')).toBeInTheDocument();
     expect(screen.getByText('Risk-exit price')).toBeInTheDocument();
@@ -72,6 +86,13 @@ describe('NetGridStrategyPanel', () => {
     expect(screen.getByText('Counter-trend blocked')).toBeInTheDocument();
     expect(screen.getByText('Add exposure')).toBeInTheDocument();
     expect(screen.getByText('Grid interval hit')).toBeInTheDocument();
+    expect(screen.getAllByText('Timestamp').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Direction').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Order Price').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Close Price').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('149.9 JPY')).toHaveLength(2);
+    expect(screen.getByText('LONG')).toBeInTheDocument();
+    expect(screen.getByText('LONG 2,000')).toBeInTheDocument();
     expect(screen.getByText('Unrealized loss')).toBeInTheDocument();
   });
 });

@@ -25,6 +25,9 @@ class StrategyCyclesService:
         execution_id: UUID | str | None,
         cycle_id: str | None = None,
         include_trades: bool | None = None,
+        ledger_page: int = 1,
+        ledger_page_size: int = 25,
+        ledger_ordering: str = "-timestamp",
     ) -> dict[str, Any]:
         from apps.trading.models.trades import Trade
 
@@ -86,6 +89,13 @@ class StrategyCyclesService:
                 "execution_id": str(execution_id),
                 "visualization": strategy_capabilities.get("visualization", {}),
                 "strategy_state": _public_strategy_state(strategy_type, strategy_state),
+                "net_grid_ledger": _build_net_grid_ledger_page(
+                    strategy_type=strategy_type,
+                    strategy_state=strategy_state,
+                    page=ledger_page,
+                    page_size=ledger_page_size,
+                    ordering=ledger_ordering,
+                ),
                 "cycles": [],
                 "summary": _empty_summary(),
                 "last_tick_timestamp": _resolve_last_tick_timestamp(execution_state),
@@ -138,10 +148,73 @@ class StrategyCyclesService:
             "execution_id": str(execution_id),
             "visualization": strategy_capabilities.get("visualization", {}),
             "strategy_state": _public_strategy_state(strategy_type, strategy_state),
+            "net_grid_ledger": _build_net_grid_ledger_page(
+                strategy_type=strategy_type,
+                strategy_state=strategy_state,
+                page=ledger_page,
+                page_size=ledger_page_size,
+                ordering=ledger_ordering,
+            ),
             "cycles": cycles,
             "summary": _build_summary(cycles),
             "last_tick_timestamp": last_tick_ts,
         }
+
+
+def _build_net_grid_ledger_page(
+    *,
+    strategy_type: str,
+    strategy_state: dict[str, Any] | None,
+    page: int,
+    page_size: int,
+    ordering: str,
+) -> dict[str, Any] | None:
+    if strategy_type != "net_grid" or not isinstance(strategy_state, dict):
+        return None
+    rows = strategy_state.get("grid_ledger")
+    if not isinstance(rows, list):
+        rows = []
+    safe_page = max(1, int(page or 1))
+    safe_page_size = min(max(1, int(page_size or 25)), 200)
+    reverse = ordering.startswith("-")
+    field = ordering[1:] if reverse else ordering
+    allowed_fields = {
+        "timestamp",
+        "action",
+        "reason",
+        "units_delta",
+        "filled_price",
+        "net_units_after",
+        "realized_pnl",
+    }
+    if field not in allowed_fields:
+        field = "timestamp"
+        reverse = True
+
+    def sort_key(row: Any) -> tuple[bool, Any]:
+        value = row.get(field) if isinstance(row, dict) else None
+        if field in {"units_delta", "filled_price", "net_units_after", "realized_pnl"}:
+            try:
+                value = Decimal(str(value))
+            except Exception:  # noqa: BLE001
+                value = None
+        return (value is None, value)
+
+    sorted_rows = sorted(
+        [row for row in rows if isinstance(row, dict)],
+        key=sort_key,
+        reverse=reverse,
+    )
+    total = len(sorted_rows)
+    start = (safe_page - 1) * safe_page_size
+    end = start + safe_page_size
+    return {
+        "count": total,
+        "page": safe_page,
+        "page_size": safe_page_size,
+        "ordering": f"-{field}" if reverse else field,
+        "results": sorted_rows[start:end],
+    }
 
 
 def _load_execution_state_snapshot(

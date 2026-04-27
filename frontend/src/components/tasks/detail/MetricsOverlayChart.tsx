@@ -47,21 +47,33 @@ export interface UseMetricsOverlayOptions {
 function metricVal(p: MetricPoint, key: string): number | null {
   const v = p.metrics[key];
   if (v === null || v === undefined) return null;
-  return typeof v === 'string' ? parseFloat(v) : (v as number);
+  const numeric = typeof v === 'string' ? parseFloat(v) : (v as number);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function cleanMetricPoints(points: MetricPoint[]): MetricPoint[] {
+  return points.filter((point) => Number.isFinite(point.t));
 }
 
 function resampleSnapshots(
   snapshots: MetricPoint[],
   candleTimestamps: number[]
 ): MetricPoint[] {
-  if (snapshots.length === 0 || candleTimestamps.length === 0) return [];
-  const lastSnapshotTime = snapshots[snapshots.length - 1].t;
+  const validSnapshots = cleanMetricPoints(snapshots);
+  const validCandleTimestamps = candleTimestamps.filter(Number.isFinite);
+  if (validSnapshots.length === 0 || validCandleTimestamps.length === 0)
+    return [];
+  const lastSnapshotTime = validSnapshots[validSnapshots.length - 1].t;
   const result: MetricPoint[] = [];
   let si = 0;
-  for (const ct of candleTimestamps) {
+  for (const ct of validCandleTimestamps) {
     if (ct > lastSnapshotTime) break;
-    while (si < snapshots.length - 1 && snapshots[si + 1].t <= ct) si++;
-    if (snapshots[si].t <= ct) result.push({ ...snapshots[si], t: ct });
+    while (si < validSnapshots.length - 1 && validSnapshots[si + 1].t <= ct) {
+      si++;
+    }
+    if (validSnapshots[si].t <= ct) {
+      result.push({ ...validSnapshots[si], t: ct });
+    }
   }
   return result;
 }
@@ -126,11 +138,13 @@ function mergeSnapshots(
   existing: MetricPoint[],
   incoming: MetricPoint[]
 ): MetricPoint[] {
-  if (incoming.length === 0) return existing;
-  if (existing.length === 0) return incoming;
+  const validExisting = cleanMetricPoints(existing);
+  const validIncoming = cleanMetricPoints(incoming);
+  if (validIncoming.length === 0) return validExisting;
+  if (validExisting.length === 0) return validIncoming;
   const map = new Map<number, MetricPoint>();
-  for (const p of existing) map.set(p.t, p);
-  for (const p of incoming) map.set(p.t, p);
+  for (const p of validExisting) map.set(p.t, p);
+  for (const p of validIncoming) map.set(p.t, p);
   return Array.from(map.values()).sort((a, b) => a.t - b.t);
 }
 
@@ -189,7 +203,7 @@ export function useMetricsOverlay({
                 })
               ).results;
         return {
-          results,
+          results: cleanMetricPoints(results),
           fetched: { from: bufFrom, to: bufTo },
         };
       } catch (error) {
@@ -229,8 +243,10 @@ export function useMetricsOverlay({
       return;
     }
     let cancelled = false;
-    const from = candleTimestamps[0];
-    const to = candleTimestamps[candleTimestamps.length - 1];
+    const validCandleTimestamps = candleTimestamps.filter(Number.isFinite);
+    if (validCandleTimestamps.length === 0) return;
+    const from = validCandleTimestamps[0];
+    const to = validCandleTimestamps[validCandleTimestamps.length - 1];
     fetchWindow(from, to)
       .then(({ results, fetched }) => {
         if (!cancelled && results.length > 0) {
@@ -254,8 +270,9 @@ export function useMetricsOverlay({
     const handler = () => {
       const tr = chart.timeScale().getVisibleRange();
       if (!tr) return;
-      const from = tr.from as number,
-        to = tr.to as number;
+      const from = Number(tr.from);
+      const to = Number(tr.to);
+      if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return;
       if (isCovered(from, to)) return;
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
@@ -347,14 +364,15 @@ export function useMetricsOverlay({
   useEffect(() => {
     const s = seriesRef.current;
     if (!s || !chart || attachedToChart.current !== chart) return;
+    const validCandleTimestamps = candleTimestamps?.filter(Number.isFinite);
     const boundedCandleTimestamps =
       tickSec !== null && enableRealTimeUpdates && candleTimestamps
-        ? candleTimestamps.filter((time) => time <= tickSec)
-        : candleTimestamps;
+        ? validCandleTimestamps?.filter((time) => time <= tickSec)
+        : validCandleTimestamps;
     const boundedSnapshots =
       tickSec !== null && enableRealTimeUpdates
-        ? snapshots.filter((point) => point.t <= tickSec)
-        : snapshots;
+        ? cleanMetricPoints(snapshots).filter((point) => point.t <= tickSec)
+        : cleanMetricPoints(snapshots);
     const hasCandles =
       boundedCandleTimestamps != null && boundedCandleTimestamps.length > 0;
     if (!snapshots.length && !hasCandles) return;
@@ -374,6 +392,7 @@ export function useMetricsOverlay({
           if (extra.length > 0) extended = [...aligned, ...extra];
         }
       }
+      extended = cleanMetricPoints(extended);
     }
     try {
       s.mr.setData(

@@ -1,6 +1,9 @@
 """Unit tests for strategy visualization response shaping."""
 
-from apps.trading.services.strategy_cycles import _public_strategy_state
+from apps.trading.services.strategy_cycles import (
+    _build_net_grid_ledger_page,
+    _public_strategy_state,
+)
 
 
 def test_public_net_grid_state_includes_operational_fields():
@@ -44,3 +47,57 @@ def test_public_net_grid_state_includes_operational_fields():
 
 def test_public_snowball_state_is_not_exposed_as_net_grid_state():
     assert _public_strategy_state("snowball", {"cycles": []}) is None
+
+
+def test_net_grid_ledger_page_sorts_and_paginates():
+    state = {
+        "grid_ledger": [
+            {
+                "timestamp": "2026-01-01T00:00:00Z",
+                "action": "open",
+                "filled_price": "150.000",
+                "realized_pnl": None,
+            },
+            {
+                "timestamp": "2026-01-01T00:02:00Z",
+                "action": "take_profit",
+                "filled_price": "150.300",
+                "realized_pnl": "300",
+            },
+            {
+                "timestamp": "2026-01-01T00:01:00Z",
+                "action": "add",
+                "filled_price": "149.800",
+                "realized_pnl": None,
+            },
+        ]
+    }
+
+    page = _build_net_grid_ledger_page(
+        strategy_type="net_grid",
+        strategy_state=state,
+        page=1,
+        page_size=2,
+        ordering="-timestamp",
+    )
+
+    assert page == {
+        "count": 3,
+        "page": 1,
+        "page_size": 2,
+        "ordering": "-timestamp",
+        "results": [
+            state["grid_ledger"][1],
+            state["grid_ledger"][2],
+        ],
+    }
+
+    second_page = _build_net_grid_ledger_page(
+        strategy_type="net_grid",
+        strategy_state=state,
+        page=2,
+        page_size=2,
+        ordering="-timestamp",
+    )
+
+    assert second_page["results"] == [state["grid_ledger"][0]]

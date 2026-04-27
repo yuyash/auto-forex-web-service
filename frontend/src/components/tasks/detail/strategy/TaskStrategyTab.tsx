@@ -410,6 +410,7 @@ export function TaskStrategyTab({
           taskType={taskType}
           executionRunId={executionRunId}
           lastTickTimestamp={data?.last_tick_timestamp ?? null}
+          timezone={timezone}
         />
       </Box>
     );

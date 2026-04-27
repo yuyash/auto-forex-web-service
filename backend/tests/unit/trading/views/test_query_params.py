@@ -157,7 +157,9 @@ def test_position_query_parses_filters_and_overlap_range():
 
 def test_strategy_events_query_params_uses_default_execution_id():
     default_execution_id = uuid4()
-    request = _request("?root_entry_id=42")
+    request = _request(
+        "?root_entry_id=42&ledger_page=3&ledger_page_size=50&ledger_ordering=-realized_pnl"
+    )
 
     query = StrategyEventsQueryParams.from_request(
         request,
@@ -166,6 +168,9 @@ def test_strategy_events_query_params_uses_default_execution_id():
 
     assert query.execution_id == default_execution_id
     assert query.root_entry_id == 42
+    assert query.ledger_page == 3
+    assert query.ledger_page_size == 50
+    assert query.ledger_ordering == "-realized_pnl"
 
 
 def test_log_components_query_params_uses_default_execution_id():

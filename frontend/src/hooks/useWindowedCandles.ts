@@ -48,6 +48,10 @@ interface UseWindowedCandlesResult {
   fetchOlder: () => Promise<number>;
   fetchNewer: () => Promise<number>;
   refreshTail: () => Promise<number>;
+  replaceWithRange: (
+    range: TimeRange,
+    options?: { preserveOnEmpty?: boolean }
+  ) => Promise<number>;
   replaceWithCountWindow: (count?: number) => Promise<number>;
 }
 
@@ -70,6 +74,7 @@ const GRANULARITY_SECONDS: Record<string, number> = {
   W: 604800,
   M: 2592000,
 };
+const MAX_CANDLES_PER_REQUEST = 5000;
 
 function getGranularitySeconds(granularity: Granularity | string): number {
   return GRANULARITY_SECONDS[String(granularity)] ?? 60;
@@ -230,6 +235,8 @@ export function useWindowedCandles({
   const loadedRangesRef = useRef<TimeRange[]>([]);
   const dataRangesRef = useRef<TimeRange[]>([]);
   const inFlightKeysRef = useRef<Set<string>>(new Set());
+  const hardResetKeyRef = useRef<string | null>(null);
+  const initialRequestSeqRef = useRef(0);
   const bounds = useMemo(
     () => ({
       from: isoToSec(startTime) ?? undefined,
@@ -245,6 +252,17 @@ export function useWindowedCandles({
   const granularitySeconds = useMemo(
     () => getGranularitySeconds(granularity),
     [granularity]
+  );
+  const hardResetKey = useMemo(
+    () =>
+      [
+        instrument,
+        accountId ?? '',
+        granularity,
+        startTime ?? '',
+        initialLoadMode,
+      ].join('|'),
+    [accountId, granularity, initialLoadMode, instrument, startTime]
   );
 
   useEffect(() => {
@@ -277,12 +295,33 @@ export function useWindowedCandles({
   );
 
   const requestCandleRange = useCallback(
-    async (range: TimeRange) =>
-      requestCandles({
-        from_time: new Date(range.from * 1000).toISOString(),
-        to_time: new Date(range.to * 1000).toISOString(),
-      }),
-    [requestCandles]
+    async (range: TimeRange) => {
+      const estimatedCandles =
+        Math.ceil(Math.max(0, range.to - range.from) / granularitySeconds) + 1;
+      if (estimatedCandles <= MAX_CANDLES_PER_REQUEST) {
+        return requestCandles({
+          from_time: new Date(range.from * 1000).toISOString(),
+          to_time: new Date(range.to * 1000).toISOString(),
+        });
+      }
+
+      const chunks: WindowedCandle[] = [];
+      const maxSpanSeconds =
+        Math.max(1, MAX_CANDLES_PER_REQUEST - 1) * granularitySeconds;
+      let cursor = range.from;
+      while (cursor < range.to) {
+        const chunkTo = Math.min(range.to, cursor + maxSpanSeconds);
+        const chunk = await requestCandles({
+          from_time: new Date(cursor * 1000).toISOString(),
+          to_time: new Date(chunkTo * 1000).toISOString(),
+        });
+        chunks.push(...chunk);
+        if (chunkTo >= range.to) break;
+        cursor = chunkTo;
+      }
+      return mergeCandles([], chunks);
+    },
+    [granularitySeconds, requestCandles]
   );
 
   const setRequestError = useCallback((err: unknown, fallback: string) => {
@@ -438,6 +477,7 @@ export function useWindowedCandles({
 
   const replaceWithCountWindow = useCallback(
     async (count = initialCount) => {
+      const hadCandles = candlesRef.current.length > 0;
       setIsInitialLoading(true);
       setError(null);
       setErrorCode(null);
@@ -453,11 +493,13 @@ export function useWindowedCandles({
         );
         const result = await requestRangeOrBridgeGap(targetRange);
         const nextCandles = result.candles;
-        setCandles(nextCandles);
+        if (nextCandles.length > 0 || !hadCandles) {
+          setCandles(nextCandles);
+        }
         if (nextCandles.length > 0) {
           setLoadedRanges(mergeRanges([result.handledRange]));
           setDataRanges(mergeRanges(result.dataRanges));
-        } else {
+        } else if (!hadCandles) {
           setLoadedRanges([]);
           setDataRanges([]);
         }
@@ -477,6 +519,45 @@ export function useWindowedCandles({
       requestRangeOrBridgeGap,
       setRequestError,
     ]
+  );
+
+  const replaceWithRange = useCallback(
+    async (range: TimeRange, options?: { preserveOnEmpty?: boolean }) => {
+      if (!isFiniteRange(range)) return 0;
+      const preserveOnEmpty = options?.preserveOnEmpty ?? false;
+      setIsInitialLoading(true);
+      setError(null);
+      setErrorCode(null);
+      try {
+        const requestBounds = buildRequestBounds(bounds, granularity);
+        const targetRange = clampRange(
+          alignRangeToGranularity(range, granularity),
+          requestBounds
+        );
+        if (!isFiniteRange(targetRange) || targetRange.to < targetRange.from) {
+          return 0;
+        }
+        const result = await requestRangeOrBridgeGap(targetRange);
+        const nextCandles = result.candles;
+        if (nextCandles.length > 0 || !preserveOnEmpty) {
+          setCandles(nextCandles);
+        }
+        if (nextCandles.length > 0) {
+          setLoadedRanges(mergeRanges([result.handledRange]));
+          setDataRanges(mergeRanges(result.dataRanges));
+        } else if (!preserveOnEmpty) {
+          setLoadedRanges([]);
+          setDataRanges([]);
+        }
+        return nextCandles.length;
+      } catch (err) {
+        setRequestError(err, 'Failed to load candles');
+        return 0;
+      } finally {
+        setIsInitialLoading(false);
+      }
+    },
+    [bounds, granularity, requestRangeOrBridgeGap, setRequestError]
   );
 
   const fetchOlder = useCallback(async () => {
@@ -600,12 +681,18 @@ export function useWindowedCandles({
   ]);
 
   useEffect(() => {
-    candlesRef.current = [];
-    loadedRangesRef.current = [];
-    dataRangesRef.current = [];
-    setCandles([]);
-    setLoadedRanges([]);
-    setDataRanges([]);
+    const shouldHardReset = hardResetKeyRef.current !== hardResetKey;
+    const requestSeq = initialRequestSeqRef.current + 1;
+    initialRequestSeqRef.current = requestSeq;
+    hardResetKeyRef.current = hardResetKey;
+    if (shouldHardReset) {
+      candlesRef.current = [];
+      loadedRangesRef.current = [];
+      dataRangesRef.current = [];
+      setCandles([]);
+      setLoadedRanges([]);
+      setDataRanges([]);
+    }
     setError(null);
     setErrorCode(null);
     if (initialFocusTimeRef.current != null) {
@@ -627,13 +714,21 @@ export function useWindowedCandles({
       void (async () => {
         try {
           const result = await requestRangeOrBridgeGap(clampedFocusedRange);
-          setCandles(result.candles);
-          setLoadedRanges(mergeRanges([result.handledRange]));
-          setDataRanges(mergeRanges(result.dataRanges));
+          if (initialRequestSeqRef.current !== requestSeq) return;
+          if (result.candles.length > 0 || shouldHardReset) {
+            setCandles(result.candles);
+          }
+          if (result.candles.length > 0) {
+            setLoadedRanges(mergeRanges([result.handledRange]));
+            setDataRanges(mergeRanges(result.dataRanges));
+          }
         } catch (err) {
+          if (initialRequestSeqRef.current !== requestSeq) return;
           setRequestError(err, 'Failed to load candles');
         } finally {
-          setIsInitialLoading(false);
+          if (initialRequestSeqRef.current === requestSeq) {
+            setIsInitialLoading(false);
+          }
         }
       })();
       return;
@@ -669,14 +764,22 @@ export function useWindowedCandles({
               requestBounds
             );
             const result = await requestRangeOrBridgeGap(initialRange);
-            setCandles(result.candles);
-            const initialLoadedRanges: TimeRange[] = [result.handledRange];
-            setLoadedRanges(mergeRanges(initialLoadedRanges));
-            setDataRanges(mergeRanges(result.dataRanges));
+            if (initialRequestSeqRef.current !== requestSeq) return;
+            if (result.candles.length > 0 || shouldHardReset) {
+              setCandles(result.candles);
+            }
+            if (result.candles.length > 0) {
+              const initialLoadedRanges: TimeRange[] = [result.handledRange];
+              setLoadedRanges(mergeRanges(initialLoadedRanges));
+              setDataRanges(mergeRanges(result.dataRanges));
+            }
           } catch (err) {
+            if (initialRequestSeqRef.current !== requestSeq) return;
             setRequestError(err, 'Failed to load candles');
           } finally {
-            setIsInitialLoading(false);
+            if (initialRequestSeqRef.current === requestSeq) {
+              setIsInitialLoading(false);
+            }
           }
         })();
         return;
@@ -687,6 +790,7 @@ export function useWindowedCandles({
     bounds,
     edgeCount,
     endTime,
+    hardResetKey,
     initialCount,
     initialLoadMode,
     instrument,
@@ -719,6 +823,7 @@ export function useWindowedCandles({
     fetchOlder,
     fetchNewer,
     refreshTail,
+    replaceWithRange,
     replaceWithCountWindow,
   };
 }

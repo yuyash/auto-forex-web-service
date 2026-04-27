@@ -13,6 +13,7 @@ interface UseTaskStrategyEventsOptions {
   enabled?: boolean;
   enableRealTimeUpdates?: boolean;
   refreshInterval?: number;
+  params?: Record<string, string | number | undefined>;
 }
 
 interface UseTaskStrategyEventsResult {
@@ -30,6 +31,7 @@ export function useTaskStrategyEvents({
   enabled = true,
   enableRealTimeUpdates = false,
   refreshInterval = 10_000,
+  params,
 }: UseTaskStrategyEventsOptions): UseTaskStrategyEventsResult {
   const pollingPolicy = usePollingPolicy({
     enabled: enabled && enableRealTimeUpdates && Boolean(taskId),
@@ -45,6 +47,7 @@ export function useTaskStrategyEvents({
   const resource = usePolledTaskResource(
     createTaskStrategyEventsQuery(taskId, taskType, executionRunId, cycleId, {
       enabled,
+      params,
     }),
     refresh,
     {

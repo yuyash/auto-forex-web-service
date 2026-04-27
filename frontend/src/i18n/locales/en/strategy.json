@@ -13,6 +13,14 @@
     "pause": "Pause Strategy",
     "resume": "Resume Strategy"
   },
+  "chartControls": {
+    "relative": "Relative",
+    "absolute": "Absolute",
+    "apply": "Apply",
+    "applyRange": "Apply time range",
+    "reloadRange": "Reload visible range",
+    "latestRange": "Show latest range"
+  },
   "types": {
     "snowball": "Snowball Strategy",
     "adaptive_net": "Adaptive Net Strategy",
@@ -177,8 +185,7 @@
       "netShort": "Net Short"
     },
     "summary": {
-      "title": "Net Grid Position",
-      "description": "Broker-compatible net exposure and the current grid state.",
+      "title": "Metrics",
       "currentNet": "Current Net",
       "averageEntry": "Average Entry",
       "step": "Grid Step",
@@ -196,13 +203,19 @@
       "lastBackfilledTransaction": "Backfilled Transaction",
       "brokerSyncStatus": "OANDA Sync",
       "brokerSyncedAt": "Synced At",
+      "metricNetUnits": "Net Units",
+      "metricCumulativePnl": "Cumulative Realized PnL",
+      "metricTime": "Time",
+      "metricTrendEmpty": "The time-series chart appears after at least two history entries.",
       "backfilledFills": "{{count}} backfilled fills",
       "openTrades": "{{count}} broker trades",
       "pendingOrders": "{{count}} pending orders"
     },
     "chart": {
-      "title": "Execution Chart",
-      "description": "OHLC price action with grid fills as markers and net-position levels as price lines.",
+      "title": "Chart",
+      "show": "Show execution chart",
+      "hide": "Hide execution chart",
+      "toggle": "Toggle execution chart",
       "averageEntry": "Avg",
       "takeProfit": "TP",
       "lastGrid": "Grid",
@@ -230,19 +243,53 @@
       "riskExitPrice": "Risk-exit price"
     },
     "alerts": {
-      "syncWarning": "OANDA reconciliation completed with warnings. Review the broker audit fields before trusting the run.",
+      "syncWarning": "OANDA reconciliation completed with warnings. Review the broker state before trusting the run.",
       "syncBlocked": "OANDA reconciliation is blocked. Review open broker state before placing further orders."
     },
     "latestDecision": "{{action}} by {{units}} units ({{reason}})",
+    "decisionActions": {
+      "hold": "Hold",
+      "add": "Add",
+      "take_profit": "Take profit",
+      "risk_exit": "Risk exit"
+    },
     "ledger": {
       "title": "Grid Ledger",
-      "description": "Fill-based net-position changes used for analysis and reconciliation.",
       "empty": "No ledger entries yet.",
+      "timestamp": "Timestamp",
       "action": "Action",
       "unitsDelta": "Units Delta",
+      "orderDirection": "Direction",
       "fill": "Fill",
+      "orderPrice": "Order Price",
+      "closePrice": "Close Price",
       "netAfter": "Net After",
       "pnl": "P&L",
+      "columns": {
+        "timestamp": "Timestamp",
+        "action": "Action",
+        "unitsDelta": "Units Delta",
+        "orderDirection": "Direction",
+        "fill": "Fill",
+        "orderPrice": "Order Price",
+        "closePrice": "Close Price",
+        "netAfter": "Net After",
+        "pnl": "P&L"
+      },
+      "ordering": {
+        "desc_timestamp": "Timestamp newest first",
+        "timestamp": "Timestamp oldest first",
+        "desc_action": "Action descending",
+        "action": "Action ascending",
+        "desc_units_delta": "Units high to low",
+        "units_delta": "Units low to high",
+        "desc_filled_price": "Price high to low",
+        "filled_price": "Price low to high",
+        "desc_net_units_after": "Net after high to low",
+        "net_units_after": "Net after low to high",
+        "desc_realized_pnl": "P&L high to low",
+        "realized_pnl": "P&L low to high"
+      },
       "actions": {
         "open": "Initial entry",
         "add": "Add exposure",
@@ -255,6 +302,7 @@
         "initial_entry": "Initial entry",
         "initial_entry_auto_trend": "Auto trend entry",
         "grid_interval_hit": "Grid interval hit",
+        "max_steps": "Maximum grid steps reached",
         "average_price_take_profit": "Average take profit",
         "max_loss": "Max loss",
         "max_adverse_pips": "Max adverse move",
@@ -266,16 +314,6 @@
         "broker_transaction_history": "Broker transaction history",
         "broker_reconciliation": "Broker reconciliation"
       }
-    },
-    "audit": {
-      "title": "Broker Audit",
-      "description": "OANDA transaction/order/trade IDs captured from reconciliation and transaction-history backfill.",
-      "empty": "No broker audit records yet.",
-      "action": "Action",
-      "transaction": "Transaction ID",
-      "order": "Order ID",
-      "trade": "Trade ID",
-      "units": "Units"
     }
   }
 }

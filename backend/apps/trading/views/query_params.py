@@ -203,6 +203,39 @@ ROOT_ENTRY_ID_SPEC = QueryFieldSpec(
     kind="int",
     help_text="Optional root entry group filter.",
 )
+LEDGER_PAGE_SPEC = QueryFieldSpec(
+    name="ledger_page",
+    kind="int",
+    default=1,
+    help_text="Net grid ledger page number (1-based).",
+)
+LEDGER_PAGE_SIZE_SPEC = QueryFieldSpec(
+    name="ledger_page_size",
+    kind="int",
+    default=25,
+    max_value=200,
+    help_text="Net grid ledger rows per page. Default 25, maximum 200.",
+)
+LEDGER_ORDERING_SPEC = QueryFieldSpec(
+    name="ledger_ordering",
+    kind="choice",
+    default="-timestamp",
+    choices=(
+        "-timestamp",
+        "timestamp",
+        "-action",
+        "action",
+        "-units_delta",
+        "units_delta",
+        "-filled_price",
+        "filled_price",
+        "-net_units_after",
+        "net_units_after",
+        "-realized_pnl",
+        "realized_pnl",
+    ),
+    help_text="Net grid ledger ordering field. Prefix with '-' for descending.",
+)
 UNTIL_SPEC = QueryFieldSpec(
     name="until",
     kind="datetime",
@@ -572,7 +605,13 @@ QUERY_GROUP_SPECS = {
     ),
     "strategy_events": QueryGroupSpec(
         name="StrategyEventsQueryParamsSchemaSerializer",
-        specs=(EXECUTION_ID_SPEC, ROOT_ENTRY_ID_SPEC),
+        specs=(
+            EXECUTION_ID_SPEC,
+            ROOT_ENTRY_ID_SPEC,
+            LEDGER_PAGE_SPEC,
+            LEDGER_PAGE_SIZE_SPEC,
+            LEDGER_ORDERING_SPEC,
+        ),
         description="OpenAPI serializer for strategy event visualization parameters.",
         base=QueryParamsSerializer,
     ),
@@ -1168,6 +1207,9 @@ class LogComponentsQueryParams:
 class StrategyEventsQueryParams:
     execution_id: UUID | None
     root_entry_id: int | None
+    ledger_page: int
+    ledger_page_size: int
+    ledger_ordering: str
 
     @classmethod
     def from_request(
@@ -1181,6 +1223,9 @@ class StrategyEventsQueryParams:
         return cls(
             execution_id=cast(UUID | None, parsed["execution_id"]) or default_execution_id,
             root_entry_id=root_entry_id,
+            ledger_page=cast(int, parsed["ledger_page"]),
+            ledger_page_size=cast(int, parsed["ledger_page_size"]),
+            ledger_ordering=cast(str, parsed["ledger_ordering"]) or "-timestamp",
         )
 
 

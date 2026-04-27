@@ -78,6 +78,13 @@ export interface StrategyCyclesResponse {
     grid?: boolean;
   };
   strategy_state?: AdaptiveNetStrategyState | NetGridStrategyState | null;
+  net_grid_ledger?: {
+    count: number;
+    page: number;
+    page_size: number;
+    ordering: string;
+    results: NetGridLedgerEntry[];
+  } | null;
   cycles: StrategyCycle[];
   summary: StrategyCyclesSummary;
   last_tick_timestamp: string | null;

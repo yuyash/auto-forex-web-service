@@ -13,6 +13,14 @@
     "pause": "戦略を一時停止",
     "resume": "戦略を再開"
   },
+  "chartControls": {
+    "relative": "相対",
+    "absolute": "絶対",
+    "apply": "適用",
+    "applyRange": "時間範囲を適用",
+    "reloadRange": "表示範囲を再読み込み",
+    "latestRange": "最新範囲を表示"
+  },
   "types": {
     "snowball": "スノーボール戦略",
     "adaptive_net": "アダプティブ・ネット戦略",
@@ -177,8 +185,7 @@
       "netShort": "ネットショート"
     },
     "summary": {
-      "title": "ネットグリッド建玉",
-      "description": "ブローカー制約に対応したネット建玉と現在のグリッド状態です。",
+      "title": "メトリクス",
       "currentNet": "現在ネット建玉",
       "averageEntry": "平均建値",
       "step": "グリッド段数",
@@ -196,13 +203,19 @@
       "lastBackfilledTransaction": "反映済み取引ID",
       "brokerSyncStatus": "OANDA同期状態",
       "brokerSyncedAt": "同期日時",
+      "metricNetUnits": "ネット建玉",
+      "metricCumulativePnl": "累積実現損益",
+      "metricTime": "時刻",
+      "metricTrendEmpty": "履歴が2件以上になると時系列チャートが表示されます。",
       "backfilledFills": "バックフィル約定 {{count}} 件",
       "openTrades": "ブローカー建玉 {{count}} 件",
       "pendingOrders": "未約定注文 {{count}} 件"
     },
     "chart": {
-      "title": "約定チャート",
-      "description": "OHLC上にグリッド約定マーカーとネット建玉の基準価格ラインを表示します。",
+      "title": "チャート",
+      "show": "約定チャートを表示",
+      "hide": "約定チャートを非表示",
+      "toggle": "約定チャートの表示切替",
       "averageEntry": "平均",
       "takeProfit": "利確",
       "lastGrid": "Grid",
@@ -230,19 +243,53 @@
       "riskExitPrice": "リスク決済価格"
     },
     "alerts": {
-      "syncWarning": "OANDA同期に警告があります。実行を信頼する前にブローカー監査情報を確認してください。",
+      "syncWarning": "OANDA同期に警告があります。実行を信頼する前にブローカー側の状態を確認してください。",
       "syncBlocked": "OANDA同期がブロックされています。追加注文の前にブローカー側の建玉状態を確認してください。"
     },
     "latestDecision": "{{action}} / {{units}} units（{{reason}}）",
+    "decisionActions": {
+      "hold": "維持",
+      "add": "追加",
+      "take_profit": "利確",
+      "risk_exit": "リスク決済"
+    },
     "ledger": {
-      "title": "Grid Ledger",
-      "description": "分析と同期に使用する実約定ベースのネット建玉変更履歴です。",
+      "title": "履歴",
       "empty": "台帳エントリはまだありません。",
+      "timestamp": "日時",
       "action": "アクション",
       "unitsDelta": "数量差分",
+      "orderDirection": "方向",
       "fill": "約定価格",
+      "orderPrice": "注文価格",
+      "closePrice": "決済価格",
       "netAfter": "変更後ネット",
       "pnl": "損益",
+      "columns": {
+        "timestamp": "日時",
+        "action": "アクション",
+        "unitsDelta": "数量差分",
+        "orderDirection": "方向",
+        "fill": "約定価格",
+        "orderPrice": "注文価格",
+        "closePrice": "決済価格",
+        "netAfter": "変更後ネット",
+        "pnl": "損益"
+      },
+      "ordering": {
+        "desc_timestamp": "日時 新しい順",
+        "timestamp": "日時 古い順",
+        "desc_action": "アクション 降順",
+        "action": "アクション 昇順",
+        "desc_units_delta": "数量 大きい順",
+        "units_delta": "数量 小さい順",
+        "desc_filled_price": "価格 高い順",
+        "filled_price": "価格 低い順",
+        "desc_net_units_after": "変更後ネット 大きい順",
+        "net_units_after": "変更後ネット 小さい順",
+        "desc_realized_pnl": "損益 高い順",
+        "realized_pnl": "損益 低い順"
+      },
       "actions": {
         "open": "初回建玉",
         "add": "追加",
@@ -255,6 +302,7 @@
         "initial_entry": "初回建玉",
         "initial_entry_auto_trend": "自動トレンド建玉",
         "grid_interval_hit": "グリッド到達",
+        "max_steps": "最大グリッド段数に到達",
         "average_price_take_profit": "平均建値利確",
         "max_loss": "最大損失",
         "max_adverse_pips": "最大逆行幅",
@@ -266,16 +314,6 @@
         "broker_transaction_history": "ブローカー取引履歴",
         "broker_reconciliation": "ブローカー照合"
       }
-    },
-    "audit": {
-      "title": "ブローカー監査",
-      "description": "照合と取引履歴バックフィルで取得した OANDA transaction / order / trade ID です。",
-      "empty": "ブローカー監査レコードはまだありません。",
-      "action": "アクション",
-      "transaction": "Transaction ID",
-      "order": "Order ID",
-      "trade": "Trade ID",
-      "units": "数量"
     }
   }
 }

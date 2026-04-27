@@ -256,6 +256,9 @@ class TaskSubResourceMixin:
             task_type=self.task_type_label,
             execution_id=query.execution_id,
             cycle_id=cycle_id,
+            ledger_page=query.ledger_page,
+            ledger_page_size=query.ledger_page_size,
+            ledger_ordering=query.ledger_ordering,
         )
         return Response(response)
 

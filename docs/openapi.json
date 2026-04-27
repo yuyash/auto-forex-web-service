@@ -3550,6 +3550,48 @@
                     },
                     {
                         "in": "query",
+                        "name": "ledger_ordering",
+                        "schema": {
+                            "enum": [
+                                "-timestamp",
+                                "timestamp",
+                                "-action",
+                                "action",
+                                "-units_delta",
+                                "units_delta",
+                                "-filled_price",
+                                "filled_price",
+                                "-net_units_after",
+                                "net_units_after",
+                                "-realized_pnl",
+                                "realized_pnl"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "Net grid ledger ordering field. Prefix with '-' for descending.\n\n* `-timestamp` - -timestamp\n* `timestamp` - timestamp\n* `-action` - -action\n* `action` - action\n* `-units_delta` - -units_delta\n* `units_delta` - units_delta\n* `-filled_price` - -filled_price\n* `filled_price` - filled_price\n* `-net_units_after` - -net_units_after\n* `net_units_after` - net_units_after\n* `-realized_pnl` - -realized_pnl\n* `realized_pnl` - realized_pnl"
+                    },
+                    {
+                        "in": "query",
+                        "name": "ledger_page",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Net grid ledger page number (1-based)."
+                    },
+                    {
+                        "in": "query",
+                        "name": "ledger_page_size",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 200,
+                            "minimum": 1
+                        },
+                        "description": "Net grid ledger rows per page. Default 25, maximum 200."
+                    },
+                    {
+                        "in": "query",
                         "name": "root_entry_id",
                         "schema": {
                             "type": "integer",
@@ -5451,6 +5493,48 @@
                             "description": "Unique identifier for this record"
                         },
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "ledger_ordering",
+                        "schema": {
+                            "enum": [
+                                "-timestamp",
+                                "timestamp",
+                                "-action",
+                                "action",
+                                "-units_delta",
+                                "units_delta",
+                                "-filled_price",
+                                "filled_price",
+                                "-net_units_after",
+                                "net_units_after",
+                                "-realized_pnl",
+                                "realized_pnl"
+                            ],
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "description": "Net grid ledger ordering field. Prefix with '-' for descending.\n\n* `-timestamp` - -timestamp\n* `timestamp` - timestamp\n* `-action` - -action\n* `action` - action\n* `-units_delta` - -units_delta\n* `units_delta` - units_delta\n* `-filled_price` - -filled_price\n* `filled_price` - filled_price\n* `-net_units_after` - -net_units_after\n* `net_units_after` - net_units_after\n* `-realized_pnl` - -realized_pnl\n* `realized_pnl` - realized_pnl"
+                    },
+                    {
+                        "in": "query",
+                        "name": "ledger_page",
+                        "schema": {
+                            "type": "integer",
+                            "minimum": 1
+                        },
+                        "description": "Net grid ledger page number (1-based)."
+                    },
+                    {
+                        "in": "query",
+                        "name": "ledger_page_size",
+                        "schema": {
+                            "type": "integer",
+                            "maximum": 200,
+                            "minimum": 1
+                        },
+                        "description": "Net grid ledger rows per page. Default 25, maximum 200."
                     },
                     {
                         "in": "query",
