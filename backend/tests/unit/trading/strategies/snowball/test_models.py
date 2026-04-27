@@ -7,14 +7,13 @@ import pytest
 
 from apps.trading.enums import Direction
 from apps.trading.strategies.snowball.enums import ProtectionLevel
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.models import (
-    BasketEntry,
     Entry,
     Layer,
     PositionGrid,
     Slot,
     SnowballCycle,
-    SnowballStrategyConfig,
     SnowballStrategyState,
 )
 
@@ -234,9 +233,9 @@ class TestSnowballStrategyConfig:
         assert cfg.preserve_highest_r_from == 0
 
 
-class TestBasketEntry:
+class TestEntry:
     def test_to_dict_roundtrip(self):
-        entry = BasketEntry(
+        entry = Entry(
             entry_id=1,
             step=2,
             direction=Direction.LONG,
@@ -247,7 +246,7 @@ class TestBasketEntry:
             role="initial",
         )
         d = entry.to_dict()
-        restored = BasketEntry.from_dict(d)
+        restored = Entry.from_dict(d)
         assert restored.entry_id == 1
         assert restored.direction == Direction.LONG
         assert restored.units == 1000

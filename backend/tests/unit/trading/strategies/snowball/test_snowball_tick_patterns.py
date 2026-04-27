@@ -28,10 +28,10 @@ from typing import Any
 import pytest
 
 from apps.trading.enums import Direction, EventType
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.enums import CycleStatus
 from apps.trading.strategies.snowball.models import (
     Layer,
-    SnowballStrategyConfig,
     SnowballStrategyState,
     StopLossClosedEntry,
 )

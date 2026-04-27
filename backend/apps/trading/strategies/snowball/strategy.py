@@ -27,10 +27,9 @@ from typing import Any
 
 from apps.trading.dataclasses import EventExecutionResult, StrategyResult
 from apps.trading.dataclasses.tick import Tick
-from apps.trading.enums import Direction, EventType, StrategyType
+from apps.trading.enums import Direction, StrategyType
 from apps.trading.events import (
     ClosePositionEvent,
-    GenericStrategyEvent,
     StrategyEvent,
 )
 from apps.trading.models.state import ExecutionState
@@ -43,6 +42,11 @@ from apps.trading.strategies.snowball.calculators import (
     stop_loss_pips,
 )
 from apps.trading.strategies.snowball.enums import CycleStatus, ProtectionLevel
+from apps.trading.strategies.snowball.events import (
+    entry_close_event,
+    entry_open_event,
+    entry_rebuild_event,
+)
 from apps.trading.strategies.snowball.grid_policy import (
     grid_tp_bounds,
     preceding_entry_bound,
@@ -50,12 +54,12 @@ from apps.trading.strategies.snowball.grid_policy import (
     upper_neighbor_tp_bound,
     validate_grid_ordering,
 )
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.models import (
     Entry,
     Layer,
     Slot,
     SnowballCycle,
-    SnowballStrategyConfig,
     SnowballStrategyState,
     StopLossClosedEntry,
 )
@@ -69,6 +73,13 @@ from apps.trading.strategies.snowball.parameters import (
 from apps.trading.strategies.snowball.pricing import (
     rebuild_take_profit_price,
     sync_weighted_average_counter_take_profits,
+)
+from apps.trading.strategies.snowball.protection import (
+    handle_emergency,
+    handle_lock,
+    handle_lock_release,
+    handle_shrink,
+    margin_ratio,
 )
 from apps.trading.utils import format_money, quote_to_account_rate
 
@@ -245,26 +256,6 @@ class SnowballStrategy(Strategy):
     # Helpers
     # ------------------------------------------------------------------
 
-    def _margin_ratio(self, state: ExecutionState, ss: SnowballStrategyState) -> Decimal:
-        nav = ss.account_nav
-        if nav <= 0:
-            return Decimal("0")
-        all_entries = ss.all_entries()
-        if not all_entries:
-            return Decimal("0")
-        long_units = sum(abs(e.units) for e in all_entries if e.is_long)
-        short_units = sum(abs(e.units) for e in all_entries if e.is_short)
-        total_units = max(long_units, short_units)
-        if total_units == 0:
-            return Decimal("0")
-        mid = ss.last_mid or Decimal("0")
-        if mid <= 0:
-            return Decimal("0")
-        conv = quote_to_account_rate(self.instrument, mid, self.account_currency)
-        margin_rate = Decimal("0.04")
-        required = mid * Decimal(str(total_units)) * margin_rate * conv
-        return (required / nav) * Decimal("100")
-
     def _close_entry(
         self,
         tick: Tick,
@@ -292,7 +283,8 @@ class SnowballStrategy(Strategy):
            lifecycle total so the eventual rebuild-close comparison is
            apples-to-apples.
         """
-        event = entry.to_close_event(
+        event = entry_close_event(
+            entry,
             tick,
             instrument=self.instrument,
             pip_size=self.pip_size,
@@ -394,7 +386,8 @@ class SnowballStrategy(Strategy):
         if cfg.stop_loss_enabled:
             self._assign_configured_stop_loss(entry, 1)
 
-        evt = entry.to_open_event(
+        evt = entry_open_event(
+            entry,
             timestamp=tick.timestamp,
             planned_exit_price_formula=formula,
             description=(
@@ -808,7 +801,7 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        """Close counter entries from the back (newest first), one per tick.
+        """Close counter entries from the back (newest first).
 
         Any entry whose close_price (counter TP) is reached gets closed,
         regardless of whether it is currently the dynamic head.  The only
@@ -821,91 +814,68 @@ class SnowballStrategy(Strategy):
         if cycle.completed:
             return []
 
-        # Walk layers from newest to oldest — close highest occupied counter slot
-        for layer in reversed(cycle.grid.layers):
-            highest = layer.highest_occupied_slot()
-            if highest is None or highest.entry is None:
-                continue
+        events: list[StrategyEvent] = []
+        while True:
+            closed_this_pass = False
+            for layer in reversed(list(cycle.grid.layers)):
+                highest = layer.highest_occupied_slot()
+                if highest is None or highest.entry is None:
+                    continue
 
-            entry = highest.entry
+                entry = highest.entry
 
-            # Skip L1/R0 — it closes via _process_cycle_tp (cycle TP).
-            if entry.layer_number == 1 and entry.retracement_count == 0:
-                continue
+                # Skip L1/R0 — it closes via _process_cycle_tp (cycle TP).
+                if entry.layer_number == 1 and entry.retracement_count == 0:
+                    continue
 
-            if entry.close_price <= 0:
-                continue
+                if not self._entry_take_profit_hit(entry, tick):
+                    continue
 
-            hit = False
-            if entry.is_long and tick.bid >= entry.close_price:
-                hit = True
-            elif entry.is_short and tick.ask <= entry.close_price:
-                hit = True
-            if not hit:
-                continue
+                exit_price = entry.exit_price(tick)
+                pips_gained = abs(exit_price - entry.entry_price) / self.pip_size
 
-            exit_price = entry.exit_price(tick)
-            pips_gained = abs(exit_price - entry.entry_price) / self.pip_size
-
-            logger.info(
-                "Counter TP (%s): L%s/R%s, +%.1f pips",
-                entry.direction.value.upper(),
-                entry.layer_number,
-                entry.retracement_count,
-                pips_gained,
-            )
-            layer.close_slot(highest.index)
-            cycle.counter_close_count += 1
-
-            # When a higher-layer R0 is the only live slot left, it can be
-            # selected directly by the generic back-to-front TP close above.
-            # Remove that now-empty layer immediately; otherwise the next
-            # counter add sees the stale empty layer as current and resumes at
-            # R1, leaving an impossible-looking "hole" at R0.
-            if layer.layer_number > 1 and highest.index == 0 and not layer.has_open_entries():
-                cycle.grid.layers.remove(layer)
-
-            events: list[StrategyEvent] = [
-                self._close_entry(
-                    tick,
-                    entry,
-                    description=(
-                        f"Counter TP ({entry.direction.value.upper()}) | "
-                        f"L{entry.layer_number}/R{entry.retracement_count}, "
-                        f"entry={entry.entry_price:.3f}, "
-                        f"exit={exit_price:.3f}, +{pips_gained:.1f} pips"
-                    ),
-                    close_reason="counter_tp",
-                    actual_tp_pips=pips_gained,
-                    validation_status="pass",
-                    cycle=cycle,
+                logger.info(
+                    "Counter TP (%s): L%s/R%s, +%.1f pips",
+                    entry.direction.value.upper(),
+                    entry.layer_number,
+                    entry.retracement_count,
+                    pips_gained,
                 )
-            ]
+                layer.close_slot(highest.index)
+                cycle.counter_close_count += 1
+                events.append(
+                    self._close_entry(
+                        tick,
+                        entry,
+                        description=(
+                            f"Counter TP ({entry.direction.value.upper()}) | "
+                            f"L{entry.layer_number}/R{entry.retracement_count}, "
+                            f"entry={entry.entry_price:.3f}, "
+                            f"exit={exit_price:.3f}, +{pips_gained:.1f} pips"
+                        ),
+                        close_reason="counter_tp",
+                        actual_tp_pips=pips_gained,
+                        validation_status="pass",
+                        cycle=cycle,
+                    )
+                )
 
-            # If this was the last counter slot in a non-L1 layer and R0 is
-            # the only remaining entry, check if R0's TP is also hit.
-            # If so, close R0 and remove the layer.
-            if layer.layer_number > 1:
-                remaining = layer.occupied_slots()
-                if len(remaining) == 1 and remaining[0].index == 0:
-                    r0_entry = remaining[0].entry
-                    if r0_entry is not None and r0_entry.close_price > 0:
-                        r0_hit = False
-                        if r0_entry.is_long and tick.bid >= r0_entry.close_price:
-                            r0_hit = True
-                        elif r0_entry.is_short and tick.ask <= r0_entry.close_price:
-                            r0_hit = True
-                        if r0_hit:
+                # If this was the last counter slot in a non-L1 layer and R0
+                # is also at TP, close it and remove the layer immediately.
+                if layer.layer_number > 1:
+                    remaining = layer.occupied_slots()
+                    if len(remaining) == 1 and remaining[0].index == 0:
+                        r0_entry = remaining[0].entry
+                        if r0_entry is not None and self._entry_take_profit_hit(r0_entry, tick):
                             r0_exit = r0_entry.exit_price(tick)
                             r0_pips = abs(r0_exit - r0_entry.entry_price) / self.pip_size
                             logger.info(
-                                "Layer initial TP (%s): L%s, +%.1f pips — removing layer",
+                                "Layer initial TP (%s): L%s, +%.1f pips; removing layer",
                                 r0_entry.direction.value.upper(),
                                 layer.layer_number,
                                 r0_pips,
                             )
                             layer.close_slot(0, refillable=False)
-                            cycle.grid.layers.remove(layer)
                             events.append(
                                 self._close_entry(
                                     tick,
@@ -921,10 +891,22 @@ class SnowballStrategy(Strategy):
                                     cycle=cycle,
                                 )
                             )
+                    if not layer.has_open_entries():
+                        cycle.grid.layers.remove(layer)
 
-            return events
+                closed_this_pass = True
+                break
 
-        return []
+            if not closed_this_pass:
+                return events
+
+    @staticmethod
+    def _entry_take_profit_hit(entry: Entry, tick: Tick) -> bool:
+        if entry.close_price <= 0:
+            return False
+        if entry.is_long:
+            return tick.bid >= entry.close_price
+        return tick.ask <= entry.close_price
 
     def _process_cycle_counter_adds(
         self,
@@ -1186,7 +1168,8 @@ class SnowballStrategy(Strategy):
             adverse,
         )
 
-        evt = entry.to_open_event(
+        evt = entry_open_event(
+            entry,
             timestamp=tick.timestamp,
             planned_exit_price_formula=formula,
             description=self._format_counter_add_description(
@@ -1374,7 +1357,8 @@ class SnowballStrategy(Strategy):
             close_price,
         )
 
-        evt = layer_entry.to_open_event(
+        evt = entry_open_event(
+            layer_entry,
             timestamp=tick.timestamp,
             planned_exit_price_formula=formula,
             description=(
@@ -1393,281 +1377,6 @@ class SnowballStrategy(Strategy):
         slot0.fill(layer_entry)
 
         return [evt]
-
-    # ------------------------------------------------------------------
-    # Protection
-    # ------------------------------------------------------------------
-
-    def _handle_emergency(
-        self,
-        ss: SnowballStrategyState,
-        tick: Tick,
-        ratio: Decimal,
-        unrealized: Decimal,
-    ) -> tuple[list[StrategyEvent], str] | None:
-        if not self.config.emergency_enabled:
-            return None
-        threshold = self.config.emergency_threshold
-        if ratio < threshold:
-            return None
-        ss.protection_level = ProtectionLevel.EMERGENCY
-        all_entries = ss.all_entries()
-        logger.critical(
-            "EMERGENCY STOP: margin ratio %.1f%% >= %s%% | NAV=%s, entries=%d",
-            ratio,
-            threshold,
-            format_money(ss.account_nav),
-            len(all_entries),
-        )
-        event = GenericStrategyEvent(
-            event_type=EventType.STRATEGY_STOPPED,
-            timestamp=tick.timestamp,
-            data={
-                "kind": "emergency_stop",
-                "ratio": str(ratio),
-                "threshold": str(threshold),
-            },
-        )
-        event.strategy_type = "snowball"
-        event.validation_status = "fail"
-        return [event], (f"Emergency stop: margin ratio {ratio:.1f}% >= threshold {threshold}%")
-
-    def _handle_lock(
-        self,
-        ss: SnowballStrategyState,
-        tick: Tick,
-        ratio: Decimal,
-    ) -> list[StrategyEvent] | None:
-        cfg = self.config
-        if not cfg.lock_enabled or ratio < cfg.n_th:
-            return None
-        if ss.protection_level == ProtectionLevel.LOCKED:
-            return None
-
-        ss.protection_level = ProtectionLevel.LOCKED
-        ss.lock_entered_at = tick.timestamp.isoformat()
-        events: list[StrategyEvent] = []
-
-        all_entries = ss.all_entries()
-        long_units = sum(e.units for e in all_entries if e.is_long)
-        short_units = sum(e.units for e in all_entries if e.is_short)
-        net = long_units - short_units
-
-        logger.warning(
-            "LOCK MODE entered: margin ratio %.1f%% >= n_th=%.1f%%",
-            ratio,
-            cfg.n_th,
-        )
-
-        if net != 0:
-            hedge_dir = Direction.SHORT if net > 0 else Direction.LONG
-            hedge_units = abs(net)
-            hedge_entry = Entry.open(
-                state=ss,
-                tick=tick,
-                direction=hedge_dir,
-                units=hedge_units,
-                step=0,
-                close_price=Decimal("0"),
-                role="hedge",
-                layer_number=0,
-                retracement_count=0,
-            )
-            active = ss.active_cycles()
-            if active:
-                active[0].hedge_entries.append(hedge_entry)
-            ss.lock_hedge_ids.append(hedge_entry.entry_id)
-
-            open_evt = hedge_entry.to_open_event(
-                timestamp=tick.timestamp,
-                description=(
-                    f"Lock hedge ({hedge_dir.value.upper()}) | "
-                    f"[PROTECTION] units={hedge_units}, net={net}, ratio={ratio:.1f}%"
-                ),
-            )
-            open_evt.basket = "hedge"
-            open_evt.close_reason = "lock_hedge_open"
-            open_evt.validation_status = "not_applicable"
-            open_evt.step = 0
-            events.append(open_evt)
-
-        status_evt = GenericStrategyEvent(
-            event_type=EventType.STATUS_CHANGED,
-            timestamp=tick.timestamp,
-            data={"kind": "snowball_locked", "ratio": str(ratio)},
-        )
-        status_evt.strategy_type = "snowball"
-        status_evt.close_reason = "lock_entered"
-        events.append(status_evt)
-        return events
-
-    def _handle_lock_release(
-        self,
-        ss: SnowballStrategyState,
-        tick: Tick,
-        ratio: Decimal,
-    ) -> list[StrategyEvent]:
-        if ss.protection_level != ProtectionLevel.LOCKED:
-            return []
-        cfg = self.config
-        unlock_ok = ratio < cfg.m_th - Decimal("5")
-        if ss.cooldown_until:
-            from datetime import datetime
-
-            cd = datetime.fromisoformat(ss.cooldown_until)
-            if tick.timestamp < cd:
-                unlock_ok = False
-        if not unlock_ok:
-            return []
-
-        events: list[StrategyEvent] = []
-        for hid in list(ss.lock_hedge_ids):
-            for cycle in ss.cycles:
-                for e in list(cycle.hedge_entries):
-                    if e.entry_id == hid:
-                        events.append(
-                            self._close_entry(
-                                tick,
-                                e,
-                                description=f"[PROTECTION] Lock hedge unwound | ratio={ratio:.1f}%",
-                                close_reason="lock_hedge_neutralize",
-                                validation_status="not_applicable",
-                                cycle=cycle,
-                            )
-                        )
-                        cycle.hedge_entries.remove(e)
-        ss.lock_hedge_ids = []
-        ss.lock_entered_at = None
-        ss.cooldown_until = None
-        ss.protection_level = (
-            ProtectionLevel.SHRINK if ratio >= cfg.m_th else ProtectionLevel.NORMAL
-        )
-        unlock_evt = GenericStrategyEvent(
-            event_type=EventType.STATUS_CHANGED,
-            timestamp=tick.timestamp,
-            data={"kind": "snowball_unlocked", "ratio": str(ratio)},
-        )
-        unlock_evt.strategy_type = "snowball"
-        unlock_evt.close_reason = "lock_released"
-        events.append(unlock_evt)
-        return events
-
-    def _handle_shrink(
-        self,
-        ss: SnowballStrategyState,
-        tick: Tick,
-        ratio: Decimal,
-    ) -> list[StrategyEvent] | None:
-        """Shrink: close positions from the front (oldest first) until ratio < m1_th."""
-        cfg = self.config
-        if not cfg.shrink_enabled or ratio < cfg.m_th:
-            return None
-
-        events: list[StrategyEvent] = []
-        if ss.protection_level != ProtectionLevel.SHRINK:
-            ss.protection_level = ProtectionLevel.SHRINK
-            shrink_evt = GenericStrategyEvent(
-                event_type=EventType.STATUS_CHANGED,
-                timestamp=tick.timestamp,
-                data={"kind": "snowball_shrink", "ratio": str(ratio)},
-            )
-            shrink_evt.strategy_type = "snowball"
-            shrink_evt.close_reason = "shrink_entered"
-            events.append(shrink_evt)
-
-        closed_count = 0
-        while ratio >= cfg.m1_th:
-            entry, cycle = self._pick_shrink_target(ss, tick)
-            if entry is None or cycle is None:
-                logger.error(
-                    "SHRINK EXHAUSTED: all positions closed but margin ratio "
-                    "%.1f%% still above m1_th=%.1f%%. Failing task.",
-                    ratio,
-                    cfg.m1_th,
-                )
-                self._close_order_violation = (
-                    f"Shrink exhausted: ratio={ratio:.1f}%, m1_th={cfg.m1_th}%, "
-                    f"no more positions to close"
-                )
-                break
-
-            events.append(
-                self._close_entry(
-                    tick,
-                    entry,
-                    description=(
-                        f"[PROTECTION] Shrink: L{entry.layer_number}/R{entry.retracement_count} | "
-                        f"ratio={ratio:.1f}%, target={cfg.m1_th}%"
-                    ),
-                    close_reason="shrink",
-                    validation_status="warn",
-                    margin_ratio=ratio / Decimal("100"),
-                    cycle=cycle,
-                )
-            )
-            cycle.remove_entry(entry.entry_id)
-            closed_count += 1
-
-            # Approximate margin ratio after close
-            conv = quote_to_account_rate(self.instrument, tick.mid, self.account_currency)
-            margin_rate = Decimal("0.04")
-            released_margin = tick.mid * Decimal(str(abs(entry.units))) * margin_rate * conv
-            nav = ss.account_nav
-            if nav > 0:
-                ratio = ratio - (released_margin / nav) * Decimal("100")
-
-        if closed_count > 0:
-            logger.warning(
-                "SHRINK completed: closed %d position(s), ratio now ~%.1f%%",
-                closed_count,
-                ratio,
-            )
-
-            # Mark any cycles emptied by shrink as completed.
-            # Shrink also clears any pending rebuilds — if we're shrinking,
-            # we don't want to rebuild stopped-out positions.
-            for cycle in ss.active_cycles():
-                if cycle.grid.is_empty():
-                    # Clear pending rebuilds on the grid
-                    for layer in cycle.grid.layers:
-                        for slot in layer.slots:
-                            slot.pending_rebuild = None
-                    cycle.status = CycleStatus.COMPLETED
-                    if cycle.realized_pnl < 0:
-                        logger.warning(
-                            "Cycle %d (%s) closed by shrink with negative realised P/L: %s",
-                            cycle.cycle_id,
-                            cycle.direction.value.upper(),
-                            cycle.realized_pnl,
-                        )
-
-        if ratio < cfg.m1_th:
-            ss.protection_level = ProtectionLevel.NORMAL
-        return events
-
-    def _pick_shrink_target(
-        self,
-        ss: SnowballStrategyState,
-        tick: Tick,
-    ) -> tuple[Entry | None, SnowballCycle | None]:
-        """Pick the next position to close during shrink.
-
-        Alternates between active cycles, starting with the one whose
-        candidate has the largest unrealised loss.
-        Within a cycle: oldest position first (front of grid).
-        """
-        candidates: list[tuple[Entry, SnowballCycle, Decimal]] = []
-        for cycle in ss.active_cycles():
-            entry = cycle.grid.front_entry()
-            if entry is not None:
-                loss = entry.unrealised_loss_pips(tick.mid, self.pip_size)
-                candidates.append((entry, cycle, loss))
-
-        if not candidates:
-            return None, None
-
-        candidates.sort(key=lambda c: c[2], reverse=True)
-        return candidates[0][0], candidates[0][1]
 
     # ------------------------------------------------------------------
     # Stop-loss protection
@@ -1706,12 +1415,7 @@ class SnowballStrategy(Strategy):
         entry: Entry,
         next_interval_pips: Decimal,
     ) -> None:
-        """Apply the legacy Snowball stop-loss formula.
-
-        This preserves the pre-``stop_loss_mode`` behaviour, where the
-        SL was derived from the hypothetical next entry price and the
-        current slot TP rather than a dedicated fixed pip distance.
-        """
+        """Apply interval-based stop-loss placement."""
         tp_pips = abs(entry.close_price - entry.entry_price) / self.pip_size
         if entry.is_long:
             next_entry_price = entry.entry_price - next_interval_pips * self.pip_size
@@ -2126,7 +1830,8 @@ class SnowballStrategy(Strategy):
                     adjustment_note,
                 )
 
-                evt = entry.to_rebuild_event(
+                evt = entry_rebuild_event(
+                    entry,
                     timestamp=tick.timestamp,
                     original_position_id=pending.position_id,
                     description=(
@@ -2182,11 +1887,16 @@ class SnowballStrategy(Strategy):
             ss.account_nav = ss.account_balance
 
         events: list[StrategyEvent] = []
-        ratio = self._margin_ratio(state, ss)
+        ratio = margin_ratio(
+            state=state,
+            ss=ss,
+            instrument=self.instrument,
+            account_currency=self.account_currency,
+        )
         ss.metrics["margin_ratio"] = str(ratio / Decimal("100"))
 
         # --- Emergency ---
-        emergency = self._handle_emergency(ss, tick, ratio, unrealized)
+        emergency = handle_emergency(strategy=self, ss=ss, tick=tick, ratio=ratio)
         if emergency is not None:
             emergency_events, stop_reason = emergency
             state.strategy_state = ss.to_dict()
@@ -2199,25 +1909,32 @@ class SnowballStrategy(Strategy):
             )
 
         # --- Lock enter ---
-        lock_events = self._handle_lock(ss, tick, ratio)
+        lock_events = handle_lock(strategy=self, ss=ss, tick=tick, ratio=ratio)
         if lock_events is not None:
-            state.strategy_state = ss.to_dict()
-            return StrategyResult(state=state, events=lock_events)
+            events.extend(lock_events)
 
         # --- Lock release ---
-        if ss.protection_level == ProtectionLevel.LOCKED:
-            release_events = self._handle_lock_release(ss, tick, ratio)
+        if lock_events is None and ss.protection_level == ProtectionLevel.LOCKED:
+            release_events = handle_lock_release(strategy=self, ss=ss, tick=tick, ratio=ratio)
             state.strategy_state = ss.to_dict()
             return StrategyResult(state=state, events=release_events)
 
         # --- Shrink ---
-        shrink_events = self._handle_shrink(ss, tick, ratio)
+        shrink_events = None
+        if lock_events is None:
+            shrink_events = handle_shrink(
+                strategy=self,
+                state=state,
+                ss=ss,
+                tick=tick,
+                ratio=ratio,
+            )
         if shrink_events is not None:
             state.strategy_state = ss.to_dict()
             return StrategyResult(state=state, events=shrink_events)
 
         # Back to normal
-        if ss.protection_level != ProtectionLevel.NORMAL:
+        if lock_events is None and ss.protection_level != ProtectionLevel.NORMAL:
             ss.protection_level = ProtectionLevel.NORMAL
 
         # --- Initialisation ---

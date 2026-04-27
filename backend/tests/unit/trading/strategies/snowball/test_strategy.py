@@ -11,11 +11,11 @@ import pytest
 
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.enums import Direction, EventType, StrategyType
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.models import (
     Entry,
     Layer,
     SnowballCycle,
-    SnowballStrategyConfig,
     SnowballStrategyState,
     Slot,
     StopLossClosedEntry,
@@ -406,7 +406,7 @@ class TestSnowballStopLossProtectionThreshold:
 
 
 class TestSnowballStopLossModes:
-    def test_auto_mode_preserves_legacy_counter_stop_loss_formula(self):
+    def test_auto_mode_uses_interval_based_counter_stop_loss_formula(self):
         s = _strategy(
             {
                 "stop_loss_enabled": True,

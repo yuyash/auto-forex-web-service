@@ -6,9 +6,9 @@ from decimal import Decimal
 
 from apps.trading.enums import Direction
 from apps.trading.strategies.snowball.calculators import rebuild_take_profit_pips
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.models import (
     Layer,
-    SnowballStrategyConfig,
     StopLossClosedEntry,
 )
 

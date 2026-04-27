@@ -10,7 +10,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from apps.trading.strategies.snowball.models import SnowballStrategyConfig
+    from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 
 
 def round_to_step(value: Decimal, step: Decimal) -> Decimal:
@@ -121,8 +121,8 @@ def stop_loss_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
     its parameters from dedicated ``stop_loss_*`` config fields, so the
     SL distance can be tuned independently of the counter-trend
     averaging interval (e.g. a tighter SL on a wider grid).  ``auto``
-    is handled by the strategy layer because legacy Snowball stop-loss
-    placement depended on both the next interval and the slot TP.
+    is handled by the strategy layer because interval-based stop-loss
+    placement depends on both the next interval and the slot TP.
     """
     return _progression_pips(
         k=k,

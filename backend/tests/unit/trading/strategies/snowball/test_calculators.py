@@ -9,7 +9,7 @@ from apps.trading.strategies.snowball.calculators import (
     round_to_step,
     stop_loss_pips,
 )
-from apps.trading.strategies.snowball.models import SnowballStrategyConfig
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 
 
 def _cfg(**overrides) -> SnowballStrategyConfig:
