@@ -385,3 +385,147 @@ def test_average_price_take_profit_closes_net_position() -> None:
     assert strategy_state["current_net_units"] == 0
     assert strategy_state["average_entry_price"] is None
     assert strategy_state["grid_ledger"][-1]["action"] == "take_profit"
+
+
+def test_grid_widening_expands_next_add_distance_by_depth() -> None:
+    strategy = NetGridStrategy(
+        "USD_JPY",
+        Decimal("0.01"),
+        NetGridConfig(
+            grid_interval_pips=Decimal("10"),
+            grid_widening_factor=Decimal("0.5"),
+            cooldown_ticks=0,
+        ),
+    )
+    state = _state()
+    first = strategy.on_tick(tick=_tick(0, "150.000"), state=state)
+    first_open = next(event for event in first.events if isinstance(event, OpenPositionEvent))
+    _apply_open(strategy, first.state, first_open)
+
+    first.state.ticks_processed = 1
+    result = strategy.on_tick(tick=_tick(1, "149.890"), state=first.state)
+    add_event = next(event for event in result.events if isinstance(event, OpenPositionEvent))
+    _apply_open(strategy, result.state, add_event)
+
+    strategy_state = result.state.strategy_state
+    assert strategy_state["step"] == 1
+    assert strategy_state["effective_next_grid_distance_pips"] == "15.0"
+    assert strategy_state["next_grid_price"] == "149.741"
+
+
+def test_drawdown_budget_caps_next_add_units() -> None:
+    strategy = NetGridStrategy(
+        "USD_JPY",
+        Decimal("0.01"),
+        NetGridConfig(
+            grid_interval_pips=Decimal("5"),
+            max_adverse_pips=Decimal("20"),
+            drawdown_budget_quote=Decimal("300"),
+            cooldown_ticks=0,
+        ),
+    )
+    state = _state()
+    first = strategy.on_tick(tick=_tick(0, "150.000"), state=state)
+    first_open = next(event for event in first.events if isinstance(event, OpenPositionEvent))
+    _apply_open(strategy, first.state, first_open)
+
+    first.state.ticks_processed = 1
+    result = strategy.on_tick(tick=_tick(1, "149.940"), state=first.state)
+    add_event = next(event for event in result.events if isinstance(event, OpenPositionEvent))
+
+    assert add_event.units == 500
+    assert result.state.strategy_state["latest_decision"]["reason"] == "grid_interval_hit"
+
+
+def test_partial_derisk_closes_fraction_after_recovery() -> None:
+    strategy = NetGridStrategy(
+        "USD_JPY",
+        Decimal("0.01"),
+        NetGridConfig(
+            grid_interval_pips=Decimal("10"),
+            cooldown_ticks=0,
+            partial_derisk_enabled=True,
+            partial_derisk_min_step=1,
+            partial_derisk_profit_pips=Decimal("1"),
+            partial_derisk_fraction=Decimal("0.5"),
+            take_profit_pips=Decimal("20"),
+        ),
+    )
+    state = _state()
+    first = strategy.on_tick(tick=_tick(0, "150.000"), state=state)
+    first_open = next(event for event in first.events if isinstance(event, OpenPositionEvent))
+    _apply_open(strategy, first.state, first_open)
+
+    first.state.ticks_processed = 1
+    add = strategy.on_tick(tick=_tick(1, "149.890"), state=first.state)
+    add_event = next(event for event in add.events if isinstance(event, OpenPositionEvent))
+    _apply_open(strategy, add.state, add_event)
+
+    add.state.ticks_processed = 2
+    result = strategy.on_tick(tick=_tick(2, "149.980"), state=add.state)
+    close_event = next(event for event in result.events if isinstance(event, ClosePositionEvent))
+
+    assert close_event.close_reason == "net_grid_take_profit"
+    assert close_event.units == 1000
+    assert result.state.strategy_state["latest_decision"]["reason"] == "partial_derisk_recovery"
+
+
+def test_profit_protection_trails_recovery_instead_of_fixed_take_profit() -> None:
+    strategy = NetGridStrategy(
+        "USD_JPY",
+        Decimal("0.01"),
+        NetGridConfig(
+            cooldown_ticks=0,
+            profit_protection_enabled=True,
+            profit_protection_activation_pips=Decimal("5"),
+            profit_protection_trailing_pips=Decimal("2"),
+            take_profit_pips=Decimal("5"),
+        ),
+    )
+    state = _state()
+    first = strategy.on_tick(tick=_tick(0, "150.000"), state=state)
+    first_open = next(event for event in first.events if isinstance(event, OpenPositionEvent))
+    _apply_open(strategy, first.state, first_open)
+
+    first.state.ticks_processed = 1
+    armed = strategy.on_tick(tick=_tick(1, "150.061"), state=first.state)
+    assert not any(isinstance(event, ClosePositionEvent) for event in armed.events)
+    assert armed.state.strategy_state["profit_protection_active"] is True
+
+    armed.state.ticks_processed = 2
+    result = strategy.on_tick(tick=_tick(2, "150.041"), state=armed.state)
+    close_event = next(event for event in result.events if isinstance(event, ClosePositionEvent))
+
+    assert close_event.close_reason == "net_grid_take_profit"
+    assert result.state.strategy_state["latest_decision"]["reason"] == "trailing_profit_protection"
+
+
+def test_persistent_adverse_trend_exits_after_configured_depth() -> None:
+    strategy = NetGridStrategy(
+        "USD_JPY",
+        Decimal("0.01"),
+        NetGridConfig(
+            grid_interval_pips=Decimal("10"),
+            cooldown_ticks=0,
+            adverse_trend_exit_enabled=True,
+            adverse_trend_exit_pips=Decimal("0.1"),
+            adverse_trend_exit_ticks=1,
+            adverse_trend_exit_min_step=1,
+        ),
+    )
+    state = _state()
+    first = strategy.on_tick(tick=_tick(0, "150.000"), state=state)
+    first_open = next(event for event in first.events if isinstance(event, OpenPositionEvent))
+    _apply_open(strategy, first.state, first_open)
+
+    first.state.ticks_processed = 1
+    add = strategy.on_tick(tick=_tick(1, "149.890"), state=first.state)
+    add_event = next(event for event in add.events if isinstance(event, OpenPositionEvent))
+    _apply_open(strategy, add.state, add_event)
+
+    add.state.ticks_processed = 2
+    result = strategy.on_tick(tick=_tick(2, "149.700"), state=add.state)
+    close_event = next(event for event in result.events if isinstance(event, ClosePositionEvent))
+
+    assert close_event.close_reason == "net_grid_risk_exit"
+    assert result.state.strategy_state["latest_decision"]["reason"] == "persistent_adverse_trend"

@@ -22,17 +22,27 @@ const state: NetGridStrategyState = {
   next_grid_price: '149.700',
   risk_exit_price: '148.100',
   take_profit_remaining_pips: '10',
+  current_favorable_pips: '3',
+  profit_protection_active: true,
+  profit_peak_pips: '6',
+  profit_trailing_stop_price: '150.140',
   current_atr_pips: '5',
   trend_score_pips: '1.5',
+  auto_direction_required_trend_pips: '2',
   effective_grid_interval_pips: '20',
+  effective_next_grid_distance_pips: '24',
   effective_take_profit_pips: '8',
   effective_order_size_multiplier: '0.5',
+  adverse_trend_status: 'exit_armed',
+  adverse_trend_ticks: 2,
   current_adverse_pips: '25',
   current_unrealized_pnl: '-12.5',
   next_order_units: 500,
   max_net_units: 10000,
   max_adverse_pips: '200',
   max_loss: '100',
+  drawdown_budget_quote: '250',
+  projected_loss_after_next_add: '200',
   regime_status: 'blocked_counter_trend',
   step: 2,
   step_usage: '0.4',
@@ -83,7 +93,10 @@ describe('NetGridStrategyPanel', () => {
     expect(screen.getByText('Next Decision Preview')).toBeInTheDocument();
     expect(screen.getByText('Risk-exit price')).toBeInTheDocument();
     expect(screen.getByText('Risk Exit')).toBeInTheDocument();
+    expect(screen.getByText('Trail')).toBeInTheDocument();
     expect(screen.getByText('Counter-trend blocked')).toBeInTheDocument();
+    expect(screen.getByText('Trailing active')).toBeInTheDocument();
+    expect(screen.getByText('Exit armed')).toBeInTheDocument();
     expect(screen.getByText('Add exposure')).toBeInTheDocument();
     expect(screen.getByText('Grid interval hit')).toBeInTheDocument();
     expect(screen.getAllByText('Timestamp').length).toBeGreaterThan(0);
@@ -94,5 +107,7 @@ describe('NetGridStrategyPanel', () => {
     expect(screen.getByText('LONG')).toBeInTheDocument();
     expect(screen.getByText('LONG 2,000')).toBeInTheDocument();
     expect(screen.getByText('Unrealized loss')).toBeInTheDocument();
+    expect(screen.getAllByText('Projected drawdown').length).toBeGreaterThan(0);
+    expect(screen.getByText('Next grid distance')).toBeInTheDocument();
   });
 });

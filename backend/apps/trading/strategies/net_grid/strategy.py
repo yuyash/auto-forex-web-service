@@ -245,6 +245,14 @@ class NetGridStrategy(Strategy):
                 adverse_pips=adverse_pips,
             )
         step = int(strategy_state.get("step", 0) or 0)
+        trend_exit = _adverse_trend_exit_decision(
+            config=cfg,
+            strategy_state=strategy_state,
+            current_net=current_net,
+            step=step,
+        )
+        if trend_exit:
+            return trend_exit
         if (
             cfg.max_adverse_after_full_grid_pips > 0
             and step >= cfg.max_steps
@@ -266,7 +274,45 @@ class NetGridStrategy(Strategy):
                     current_net=current_net,
                     elapsed_full_grid_ticks=elapsed_full_grid_ticks,
                 )
-        if _take_profit_hit(
+        if (
+            _take_profit_hit(
+                side=side,
+                average_price=avg,
+                exit_price=exit_price,
+                take_profit_distance=_partial_derisk_activation_pips(strategy_state, cfg)
+                * self.pip_size,
+            )
+            and cfg.partial_derisk_enabled
+        ):
+            partial_units = _partial_derisk_units(strategy_state, cfg, current_net, step)
+            if partial_units >= cfg.min_order_units:
+                signed_delta = -partial_units if current_net > 0 else partial_units
+                return {
+                    "action": "partial_derisk",
+                    "reason": "partial_derisk_recovery",
+                    "target_net_units": current_net + signed_delta,
+                    "units_delta": signed_delta,
+                    "step_after": step,
+                    "favorable_pips": str(
+                        _favorable_pips(
+                            side=side,
+                            average_price=avg,
+                            exit_price=exit_price,
+                            pip_size=self.pip_size,
+                        )
+                    ),
+                }
+        profit_protection = _profit_protection_decision(
+            config=cfg,
+            strategy_state=strategy_state,
+            current_net=current_net,
+            average_price=avg,
+            exit_price=exit_price,
+            pip_size=self.pip_size,
+        )
+        if profit_protection:
+            return profit_protection
+        if not cfg.profit_protection_enabled and _take_profit_hit(
             side=side,
             average_price=avg,
             exit_price=exit_price,
@@ -286,7 +332,7 @@ class NetGridStrategy(Strategy):
             return _hold(regime_hold)
 
         last_grid_price = _decimal_or_none(strategy_state.get("last_grid_price")) or avg
-        grid_distance = _effective_grid_interval_pips(strategy_state, cfg) * self.pip_size
+        grid_distance = _effective_grid_distance_pips(strategy_state, cfg, step + 1) * self.pip_size
         add_hit = (
             tick.bid <= last_grid_price - grid_distance
             if current_net > 0
@@ -299,8 +345,17 @@ class NetGridStrategy(Strategy):
         add_units = _apply_volatility_size_multiplier(add_units, strategy_state, cfg)
         room = cfg.max_net_units - abs(current_net)
         add_units = min(add_units, max(0, room))
+        add_units = _apply_drawdown_budget_units(
+            add_units=add_units,
+            before_net=current_net,
+            before_avg=avg,
+            fill_price=tick.ask if current_net > 0 else tick.bid,
+            side=side,
+            config=cfg,
+            pip_size=self.pip_size,
+        )
         if add_units < cfg.min_order_units:
-            return _hold("min_order_or_max_net")
+            return _hold("min_order_or_risk_budget")
         signed_delta = add_units if current_net > 0 else -add_units
         return {
             "action": "add",
@@ -340,7 +395,11 @@ class NetGridStrategy(Strategy):
 
         current_net = int(strategy_state.get("current_net_units", 0) or 0)
         direction = "long" if current_net > 0 else "short"
-        reason = "net_grid_take_profit" if action == "take_profit" else "net_grid_risk_exit"
+        reason = (
+            "net_grid_take_profit"
+            if action in {"take_profit", "partial_derisk"}
+            else "net_grid_risk_exit"
+        )
         event = ClosePositionEvent(
             event_type=EventType.CLOSE_POSITION,
             timestamp=tick.timestamp,
@@ -410,6 +469,8 @@ class NetGridStrategy(Strategy):
         strategy_state["last_order_tick"] = int(strategy_state.get("ticks_processed", 0) or 0)
         strategy_state["last_order_at"] = pending.get("created_at")
         strategy_state["step"] = int(pending.get("step_after", strategy_state.get("step", 0)) or 0)
+        if action == "partial_derisk":
+            strategy_state["partial_derisk_done"] = True
         if strategy_state["step"] >= self.config.max_steps:
             if strategy_state.get("full_grid_reached_tick") is None:
                 strategy_state["full_grid_reached_tick"] = strategy_state["last_order_tick"]
@@ -423,6 +484,11 @@ class NetGridStrategy(Strategy):
             strategy_state["anchor_price"] = None
             strategy_state["last_grid_price"] = None
             strategy_state["full_grid_reached_tick"] = None
+            strategy_state["partial_derisk_done"] = False
+            strategy_state["profit_protection_active"] = False
+            strategy_state["profit_peak_pips"] = None
+            strategy_state["profit_trailing_stop_price"] = None
+            strategy_state["adverse_trend_ticks"] = 0
 
         strategy_state["grid_ledger"] = _append_ledger(
             strategy_state.get("grid_ledger"),
@@ -464,16 +530,26 @@ def _initial_state(raw: Any) -> dict[str, Any]:
     state.setdefault("net_take_profit_price", None)
     state.setdefault("next_grid_price", None)
     state.setdefault("take_profit_remaining_pips", None)
+    state.setdefault("profit_protection_active", False)
+    state.setdefault("profit_peak_pips", None)
+    state.setdefault("profit_trailing_stop_price", None)
+    state.setdefault("partial_derisk_done", False)
     state.setdefault("current_atr_pips", None)
     state.setdefault("effective_grid_interval_pips", None)
+    state.setdefault("effective_next_grid_distance_pips", None)
     state.setdefault("effective_take_profit_pips", None)
     state.setdefault("effective_order_size_multiplier", "1")
     state.setdefault("fast_ema_price", None)
     state.setdefault("slow_ema_price", None)
     state.setdefault("trend_score_pips", None)
     state.setdefault("regime_status", "ok")
+    state.setdefault("adverse_trend_ticks", 0)
+    state.setdefault("adverse_trend_status", "ok")
     state.setdefault("risk_exit_price", None)
+    state.setdefault("drawdown_budget_quote", None)
+    state.setdefault("projected_loss_after_next_add", None)
     state.setdefault("current_adverse_pips", None)
+    state.setdefault("current_favorable_pips", None)
     state.setdefault("current_unrealized_pnl", None)
     state.setdefault("next_order_units", None)
     state.setdefault("full_grid_reached_tick", None)
@@ -519,6 +595,12 @@ def _validate_config_relationships(config: NetGridConfig) -> None:
         )
     if config.take_profit_min_pips > config.take_profit_max_pips:
         raise ValueError("take_profit_min_pips must be less than or equal to take_profit_max_pips")
+    if config.partial_derisk_fraction <= 0 or config.partial_derisk_fraction >= 1:
+        raise ValueError("partial_derisk_fraction must be greater than 0 and less than 1")
+    if config.grid_widening_factor < 0:
+        raise ValueError("grid_widening_factor must be greater than or equal to 0")
+    if config.auto_trend_atr_multiplier < 0:
+        raise ValueError("auto_trend_atr_multiplier must be greater than or equal to 0")
     if (
         config.max_adverse_after_full_grid_pips > 0
         and config.max_adverse_pips > 0
@@ -585,19 +667,24 @@ def _initial_entry_direction(
     if len(samples) < AUTO_DIRECTION_MIN_SAMPLES:
         return None
     trend_score = _decimal_or_none(strategy_state.get("trend_score_pips"))
+    min_trend_pips = config.auto_min_trend_pips
+    atr = _decimal_or_none(strategy_state.get("current_atr_pips"))
+    if config.auto_trend_atr_multiplier > 0 and atr is not None and atr > 0:
+        min_trend_pips = max(min_trend_pips, atr * config.auto_trend_atr_multiplier)
+    strategy_state["auto_direction_required_trend_pips"] = str(min_trend_pips)
     if trend_score is not None:
-        if trend_score >= config.auto_min_trend_pips:
+        if trend_score >= min_trend_pips:
             return "long"
-        if trend_score <= -config.auto_min_trend_pips:
+        if trend_score <= -min_trend_pips:
             return "short"
     first = Decimal(samples[0])
     last = Decimal(samples[-1])
     if pip_size <= 0:
         return "flat"
     raw_trend_pips = (last - first) / pip_size
-    if raw_trend_pips >= config.auto_min_trend_pips:
+    if raw_trend_pips >= min_trend_pips:
         return "long"
-    if raw_trend_pips <= -config.auto_min_trend_pips:
+    if raw_trend_pips <= -min_trend_pips:
         return "short"
     return "flat"
 
@@ -684,6 +771,19 @@ def _effective_grid_interval_pips(
     )
 
 
+def _effective_grid_distance_pips(
+    strategy_state: dict[str, Any],
+    config: NetGridConfig,
+    step: int,
+) -> Decimal:
+    interval = _effective_grid_interval_pips(strategy_state, config)
+    widening = max(Decimal("0"), config.grid_widening_factor)
+    if widening <= 0:
+        return interval
+    depth = max(0, step - 1)
+    return interval * (Decimal("1") + widening * Decimal(str(depth)))
+
+
 def _effective_take_profit_pips(
     strategy_state: dict[str, Any],
     config: NetGridConfig,
@@ -762,6 +862,132 @@ def _effective_order_size_multiplier(
     return max(floor, threshold / atr)
 
 
+def _profit_protection_activation_pips(
+    strategy_state: dict[str, Any],
+    config: NetGridConfig,
+) -> Decimal:
+    if config.profit_protection_enabled and config.profit_protection_activation_pips > 0:
+        return config.profit_protection_activation_pips
+    return _effective_take_profit_pips(strategy_state, config)
+
+
+def _partial_derisk_activation_pips(
+    strategy_state: dict[str, Any],
+    config: NetGridConfig,
+) -> Decimal:
+    if config.partial_derisk_enabled and config.partial_derisk_profit_pips > 0:
+        return config.partial_derisk_profit_pips
+    return _effective_take_profit_pips(strategy_state, config)
+
+
+def _profit_protection_decision(
+    *,
+    config: NetGridConfig,
+    strategy_state: dict[str, Any],
+    current_net: int,
+    average_price: Decimal,
+    exit_price: Decimal,
+    pip_size: Decimal,
+) -> dict[str, Any] | None:
+    if not config.profit_protection_enabled:
+        strategy_state["profit_protection_active"] = False
+        strategy_state["profit_peak_pips"] = None
+        strategy_state["profit_trailing_stop_price"] = None
+        return None
+    side = _sign(current_net)
+    favorable = _favorable_pips(
+        side=side,
+        average_price=average_price,
+        exit_price=exit_price,
+        pip_size=pip_size,
+    )
+    activation = _profit_protection_activation_pips(strategy_state, config)
+    trailing = (
+        config.profit_protection_trailing_pips
+        if config.profit_protection_trailing_pips > 0
+        else _effective_take_profit_pips(strategy_state, config)
+    )
+    active = bool(strategy_state.get("profit_protection_active"))
+    peak = _decimal_or_none(strategy_state.get("profit_peak_pips")) or Decimal("0")
+    if favorable >= activation:
+        active = True
+        peak = max(peak, favorable)
+    strategy_state["profit_protection_active"] = active
+    strategy_state["profit_peak_pips"] = str(peak) if active else None
+    if not active:
+        strategy_state["profit_trailing_stop_price"] = None
+        return None
+    stop_pips = max(Decimal("0"), peak - trailing)
+    stop_price = (
+        average_price + stop_pips * pip_size
+        if current_net > 0
+        else average_price - stop_pips * pip_size
+    )
+    strategy_state["profit_trailing_stop_price"] = str(stop_price)
+    if favorable <= stop_pips:
+        return _close_decision(
+            action="take_profit",
+            reason="trailing_profit_protection",
+            current_net=current_net,
+            favorable_pips=favorable,
+            profit_peak_pips=peak,
+        )
+    return None
+
+
+def _partial_derisk_units(
+    strategy_state: dict[str, Any],
+    config: NetGridConfig,
+    current_net: int,
+    step: int,
+) -> int:
+    if (
+        not config.partial_derisk_enabled
+        or bool(strategy_state.get("partial_derisk_done"))
+        or step < config.partial_derisk_min_step
+    ):
+        return 0
+    fraction = min(max(config.partial_derisk_fraction, Decimal("0")), Decimal("1"))
+    return int(Decimal(str(abs(current_net))) * fraction)
+
+
+def _adverse_trend_exit_decision(
+    *,
+    config: NetGridConfig,
+    strategy_state: dict[str, Any],
+    current_net: int,
+    step: int,
+) -> dict[str, Any] | None:
+    if (
+        not config.adverse_trend_exit_enabled
+        or config.adverse_trend_exit_pips <= 0
+        or config.adverse_trend_exit_ticks <= 0
+        or step < config.adverse_trend_exit_min_step
+    ):
+        strategy_state["adverse_trend_ticks"] = 0
+        strategy_state["adverse_trend_status"] = "ok"
+        return None
+    trend_score = _decimal_or_none(strategy_state.get("trend_score_pips"))
+    side = _sign(current_net)
+    adverse = trend_score is not None and (
+        (side > 0 and trend_score <= -config.adverse_trend_exit_pips)
+        or (side < 0 and trend_score >= config.adverse_trend_exit_pips)
+    )
+    ticks = int(strategy_state.get("adverse_trend_ticks", 0) or 0)
+    ticks = ticks + 1 if adverse else 0
+    strategy_state["adverse_trend_ticks"] = ticks
+    strategy_state["adverse_trend_status"] = "exit_armed" if adverse else "ok"
+    if ticks >= config.adverse_trend_exit_ticks:
+        return _close_decision(
+            action="risk_exit",
+            reason="persistent_adverse_trend",
+            current_net=current_net,
+            adverse_trend_ticks=ticks,
+            trend_score_pips=trend_score or Decimal("0"),
+        )
+    return None
+
+
 def _update_derived_levels(
     strategy_state: dict[str, Any],
     config: NetGridConfig,
@@ -771,6 +997,7 @@ def _update_derived_levels(
     strategy_state["max_net_units"] = config.max_net_units
     strategy_state["max_adverse_pips"] = str(config.max_adverse_pips)
     strategy_state["max_loss"] = str(config.max_loss)
+    strategy_state["drawdown_budget_quote"] = str(config.drawdown_budget_quote)
     strategy_state["effective_order_size_multiplier"] = str(
         _effective_order_size_multiplier(strategy_state, config)
     )
@@ -782,9 +1009,12 @@ def _update_derived_levels(
         strategy_state["take_profit_remaining_pips"] = None
         strategy_state["risk_exit_price"] = None
         strategy_state["current_adverse_pips"] = None
+        strategy_state["current_favorable_pips"] = None
         strategy_state["current_unrealized_pnl"] = None
         strategy_state["next_order_units"] = None
         strategy_state["step_usage"] = "0"
+        strategy_state["effective_next_grid_distance_pips"] = None
+        strategy_state["projected_loss_after_next_add"] = None
         return
     distance = _effective_take_profit_pips(strategy_state, config) * pip_size
     take_profit = avg + distance if current_net > 0 else avg - distance
@@ -806,20 +1036,45 @@ def _update_derived_levels(
     last_grid_price = _decimal_or_none(strategy_state.get("last_grid_price")) or avg
     room = config.max_net_units - abs(current_net)
     if step < config.max_steps and room >= config.min_order_units:
-        grid_distance = _effective_grid_interval_pips(strategy_state, config) * pip_size
+        next_grid_distance_pips = _effective_grid_distance_pips(strategy_state, config, step + 1)
+        strategy_state["effective_next_grid_distance_pips"] = str(next_grid_distance_pips)
+        grid_distance = next_grid_distance_pips * pip_size
         next_grid = (
             last_grid_price - grid_distance if current_net > 0 else last_grid_price + grid_distance
         )
         strategy_state["next_grid_price"] = str(next_grid)
-        strategy_state["next_order_units"] = min(
+        planned_units = min(
             _apply_volatility_size_multiplier(
                 _step_units(config, step + 1), strategy_state, config
             ),
             max(0, room),
         )
+        strategy_state["next_order_units"] = _apply_drawdown_budget_units(
+            add_units=planned_units,
+            before_net=current_net,
+            before_avg=avg,
+            fill_price=next_grid,
+            side=_sign(current_net),
+            config=config,
+            pip_size=pip_size,
+        )
+        projected = _projected_loss_at_stop(
+            before_net=current_net,
+            before_avg=avg,
+            signed_delta=strategy_state["next_order_units"]
+            if current_net > 0
+            else -strategy_state["next_order_units"],
+            fill_price=next_grid,
+            side=_sign(current_net),
+            config=config,
+            pip_size=pip_size,
+        )
+        strategy_state["projected_loss_after_next_add"] = str(projected) if projected else None
     else:
         strategy_state["next_grid_price"] = None
         strategy_state["next_order_units"] = None
+        strategy_state["effective_next_grid_distance_pips"] = None
+        strategy_state["projected_loss_after_next_add"] = None
 
     exit_price = (
         _decimal_or_none(strategy_state.get("last_bid"))
@@ -848,6 +1103,13 @@ def _update_derived_levels(
             exit_price=exit_price,
         )
     )
+    favorable_pips = _favorable_pips(
+        side=side,
+        average_price=avg,
+        exit_price=exit_price,
+        pip_size=pip_size,
+    )
+    strategy_state["current_favorable_pips"] = str(favorable_pips)
     remaining = (
         (take_profit - exit_price) / pip_size
         if current_net > 0
@@ -890,6 +1152,20 @@ def _adverse_pips(
     return max(Decimal("0"), (exit_price - average_price) / pip_size)
 
 
+def _favorable_pips(
+    *,
+    side: int,
+    average_price: Decimal,
+    exit_price: Decimal,
+    pip_size: Decimal,
+) -> Decimal:
+    if pip_size <= 0:
+        return Decimal("0")
+    if side > 0:
+        return max(Decimal("0"), (exit_price - average_price) / pip_size)
+    return max(Decimal("0"), (average_price - exit_price) / pip_size)
+
+
 def _quote_pnl(
     *,
     side: int,
@@ -901,6 +1177,66 @@ def _quote_pnl(
     if side < 0:
         delta = -delta
     return delta * Decimal(str(units))
+
+
+def _apply_drawdown_budget_units(
+    *,
+    add_units: int,
+    before_net: int,
+    before_avg: Decimal,
+    fill_price: Decimal,
+    side: int,
+    config: NetGridConfig,
+    pip_size: Decimal,
+) -> int:
+    if add_units <= 0 or config.drawdown_budget_quote <= 0 or config.max_adverse_pips <= 0:
+        return add_units
+    low = 0
+    high = add_units
+    allowed = 0
+    while low <= high:
+        units = (low + high) // 2
+        projected = _projected_loss_at_stop(
+            before_net=before_net,
+            before_avg=before_avg,
+            signed_delta=units if side > 0 else -units,
+            fill_price=fill_price,
+            side=side,
+            config=config,
+            pip_size=pip_size,
+        )
+        if projected <= config.drawdown_budget_quote:
+            allowed = units
+            low = units + 1
+        else:
+            high = units - 1
+    return allowed
+
+
+def _projected_loss_at_stop(
+    *,
+    before_net: int,
+    before_avg: Decimal,
+    signed_delta: int,
+    fill_price: Decimal,
+    side: int,
+    config: NetGridConfig,
+    pip_size: Decimal,
+) -> Decimal:
+    after_avg = _average_after_increase(before_net, before_avg, signed_delta, fill_price)
+    after_units = abs(before_net + signed_delta)
+    stop_price = (
+        after_avg - config.max_adverse_pips * pip_size
+        if side > 0
+        else after_avg + config.max_adverse_pips * pip_size
+    )
+    pnl = _quote_pnl(
+        side=side,
+        units=after_units,
+        average_price=after_avg,
+        exit_price=stop_price,
+    )
+    return abs(min(pnl, Decimal("0")))
 
 
 def _take_profit_hit(

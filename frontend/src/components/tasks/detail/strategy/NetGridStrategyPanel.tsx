@@ -257,6 +257,7 @@ function buildMetricPoints(
 function isClosingLedgerEntry(entry: NetGridLedgerEntry): boolean {
   return (
     entry.action === 'take_profit' ||
+    entry.action === 'partial_derisk' ||
     entry.action === 'risk_exit' ||
     Math.abs(entry.net_units_after ?? 0) < Math.abs(entry.net_units_before ?? 0)
   );
@@ -352,6 +353,7 @@ export function NetGridStrategyPanel({
     sync: true,
     averageEntry: true,
     takeProfit: true,
+    trailingStop: true,
     lastGrid: true,
     nextGrid: true,
     riskExit: true,
@@ -433,6 +435,12 @@ export function NetGridStrategyPanel({
       lineStyle: LineStyle.Dashed,
     },
     {
+      price: numericPrice(state?.profit_trailing_stop_price) ?? Number.NaN,
+      title: t('netGrid.chart.trailingStop'),
+      color: '#00897b',
+      lineStyle: LineStyle.Dashed,
+    },
+    {
       price: numericPrice(state?.last_grid_price) ?? Number.NaN,
       title: t('netGrid.chart.lastGrid'),
       color: '#f57c00',
@@ -456,6 +464,9 @@ export function NetGridStrategyPanel({
     }
     if (line.title === t('netGrid.chart.takeProfit')) {
       return visibleOverlays.takeProfit;
+    }
+    if (line.title === t('netGrid.chart.trailingStop')) {
+      return visibleOverlays.trailingStop;
     }
     if (line.title === t('netGrid.chart.lastGrid')) {
       return visibleOverlays.lastGrid;
@@ -590,6 +601,12 @@ export function NetGridStrategyPanel({
                   onClick={() => toggleOverlay('takeProfit')}
                 />
                 <LegendChip
+                  color="#00897b"
+                  label={t('netGrid.chart.trailingStop')}
+                  active={visibleOverlays.trailingStop}
+                  onClick={() => toggleOverlay('trailingStop')}
+                />
+                <LegendChip
                   color="#f57c00"
                   label={t('netGrid.chart.lastGrid')}
                   active={visibleOverlays.lastGrid}
@@ -697,6 +714,10 @@ export function NetGridStrategyPanel({
               value={formatPips(state?.effective_grid_interval_pips)}
             />
             <SummaryItem
+              label={t('netGrid.summary.nextGridDistance')}
+              value={formatPips(state?.effective_next_grid_distance_pips)}
+            />
+            <SummaryItem
               label={t('netGrid.summary.takeProfitPrice')}
               value={formatPrice(state?.net_take_profit_price)}
             />
@@ -707,6 +728,26 @@ export function NetGridStrategyPanel({
             <SummaryItem
               label={t('netGrid.summary.takeProfitRemaining')}
               value={formatPips(state?.take_profit_remaining_pips)}
+            />
+            <SummaryItem
+              label={t('netGrid.summary.favorableMove')}
+              value={formatPips(state?.current_favorable_pips)}
+            />
+            <SummaryItem
+              label={t('netGrid.summary.profitProtection')}
+              value={
+                state?.profit_protection_active
+                  ? t('netGrid.profitProtection.active')
+                  : t('netGrid.profitProtection.inactive')
+              }
+            />
+            <SummaryItem
+              label={t('netGrid.summary.profitPeak')}
+              value={formatPips(state?.profit_peak_pips)}
+            />
+            <SummaryItem
+              label={t('netGrid.summary.trailingStop')}
+              value={formatPrice(state?.profit_trailing_stop_price)}
             />
             <SummaryItem
               label={t('netGrid.summary.nextGridPrice')}
@@ -721,6 +762,10 @@ export function NetGridStrategyPanel({
               value={formatPips(state?.trend_score_pips)}
             />
             <SummaryItem
+              label={t('netGrid.summary.autoTrendRequired')}
+              value={formatPips(state?.auto_direction_required_trend_pips)}
+            />
+            <SummaryItem
               label={t('netGrid.summary.sizeMultiplier')}
               value={formatPercent(state?.effective_order_size_multiplier)}
             />
@@ -733,6 +778,21 @@ export function NetGridStrategyPanel({
                     })
                   : '-'
               }
+            />
+            <SummaryItem
+              label={t('netGrid.summary.adverseTrend')}
+              value={t(
+                `netGrid.adverseTrend.${state?.adverse_trend_status ?? 'ok'}`,
+                {
+                  defaultValue: state?.adverse_trend_status ?? '-',
+                }
+              )}
+            />
+            <SummaryItem
+              label={t('netGrid.summary.adverseTrendTicks')}
+              value={formatAppNumber(state?.adverse_trend_ticks ?? 0, {
+                maximumFractionDigits: 0,
+              })}
             />
             <SummaryItem
               label={t('netGrid.summary.lastBackfilledTransaction')}
@@ -807,6 +867,17 @@ export function NetGridStrategyPanel({
                 })
               }
             />
+            <RiskProgress
+              label={t('netGrid.risk.projectedDrawdown')}
+              value={Number(state?.projected_loss_after_next_add ?? 0)}
+              max={Number(state?.drawdown_budget_quote ?? 0) || null}
+              formatter={(value) =>
+                formatAppNumber(value, {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 2,
+                })
+              }
+            />
           </Box>
 
           <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
@@ -838,12 +909,27 @@ export function NetGridStrategyPanel({
                   }
                 />
                 <SummaryItem
+                  label={t('netGrid.preview.nextGridDistance')}
+                  value={formatPips(state?.effective_next_grid_distance_pips)}
+                />
+                <SummaryItem
                   label={t('netGrid.preview.takeProfitPrice')}
                   value={formatPrice(state?.net_take_profit_price)}
                 />
                 <SummaryItem
+                  label={t('netGrid.preview.trailingStop')}
+                  value={formatPrice(state?.profit_trailing_stop_price)}
+                />
+                <SummaryItem
                   label={t('netGrid.preview.riskExitPrice')}
                   value={formatPrice(state?.risk_exit_price)}
+                />
+                <SummaryItem
+                  label={t('netGrid.preview.projectedDrawdown')}
+                  value={formatSignedAmountWithCurrency(
+                    state?.projected_loss_after_next_add,
+                    quoteCurrencyCode
+                  )}
                 />
               </Box>
             </Stack>

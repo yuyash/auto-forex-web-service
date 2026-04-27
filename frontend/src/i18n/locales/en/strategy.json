@@ -192,14 +192,22 @@
       "stepValue": "{{step}} / {{max}} ({{usage}})",
       "lastGridPrice": "Last Grid Price",
       "effectiveGridInterval": "Active Grid Interval",
+      "nextGridDistance": "Next Grid Distance",
       "takeProfitPrice": "Net Take Profit",
       "effectiveTakeProfit": "Active Take Profit",
       "takeProfitRemaining": "Pips to Take Profit",
+      "favorableMove": "Favorable Move",
+      "profitProtection": "Profit Protection",
+      "profitPeak": "Best Recovery",
+      "trailingStop": "Trailing Stop",
       "nextGridPrice": "Next Add Price",
       "currentAtr": "Tick ATR",
       "trendScore": "Trend Score",
+      "autoTrendRequired": "Required Auto Trend",
       "sizeMultiplier": "Size Multiplier",
       "regimeStatus": "Regime",
+      "adverseTrend": "Adverse Trend",
+      "adverseTrendTicks": "Adverse Trend Ticks",
       "lastBackfilledTransaction": "Backfilled Transaction",
       "brokerSyncStatus": "OANDA Sync",
       "brokerSyncedAt": "Synced At",
@@ -218,6 +226,7 @@
       "toggle": "Toggle execution chart",
       "averageEntry": "Avg",
       "takeProfit": "TP",
+      "trailingStop": "Trail",
       "lastGrid": "Grid",
       "nextGrid": "Next Add",
       "riskExit": "Risk Exit",
@@ -229,18 +238,30 @@
       "blocked_high_volatility": "High volatility blocked",
       "blocked_counter_trend": "Counter-trend blocked"
     },
+    "profitProtection": {
+      "active": "Trailing active",
+      "inactive": "Inactive"
+    },
+    "adverseTrend": {
+      "ok": "OK",
+      "exit_armed": "Exit armed"
+    },
     "risk": {
       "netExposure": "Net exposure",
       "gridSteps": "Grid steps",
       "adverseMove": "Adverse move",
-      "unrealizedLoss": "Unrealized loss"
+      "unrealizedLoss": "Unrealized loss",
+      "projectedDrawdown": "Projected drawdown"
     },
     "preview": {
       "title": "Next Decision Preview",
       "nextAddPrice": "Next add price",
       "nextOrderUnits": "Next order units",
+      "nextGridDistance": "Next grid distance",
       "takeProfitPrice": "Take-profit price",
-      "riskExitPrice": "Risk-exit price"
+      "trailingStop": "Trailing stop",
+      "riskExitPrice": "Risk-exit price",
+      "projectedDrawdown": "Projected drawdown"
     },
     "alerts": {
       "syncWarning": "OANDA reconciliation completed with warnings. Review the broker state before trusting the run.",
@@ -251,6 +272,7 @@
       "hold": "Hold",
       "add": "Add",
       "take_profit": "Take profit",
+      "partial_derisk": "Partial de-risk",
       "risk_exit": "Risk exit"
     },
     "ledger": {
@@ -294,6 +316,7 @@
         "open": "Initial entry",
         "add": "Add exposure",
         "take_profit": "Take profit",
+        "partial_derisk": "Partial de-risk",
         "risk_exit": "Risk exit",
         "broker_backfill": "Broker backfill",
         "broker_reconciliation": "Broker reconciliation"
@@ -304,8 +327,12 @@
         "grid_interval_hit": "Grid interval hit",
         "max_steps": "Maximum grid steps reached",
         "average_price_take_profit": "Average take profit",
+        "trailing_profit_protection": "Trailing profit protection",
+        "partial_derisk_recovery": "Recovery partial de-risk",
         "max_loss": "Max loss",
         "max_adverse_pips": "Max adverse move",
+        "persistent_adverse_trend": "Persistent adverse trend",
+        "min_order_or_risk_budget": "Minimum order or risk budget",
         "max_adverse_after_full_grid_pips": "Full-grid adverse move",
         "max_full_grid_ticks": "Full-grid hold timeout"
       },
