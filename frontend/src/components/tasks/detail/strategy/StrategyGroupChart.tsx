@@ -61,8 +61,9 @@ export interface StrategyPriceLine {
 const GRANULARITY_OPTIONS = ['M1', 'M5', 'M15', 'H1', 'H4', 'D'] as const;
 
 function autoGranularity(startTime: string, endTime: string): string {
-  const startSec = Math.floor(new Date(startTime).getTime() / 1000);
-  const endSec = Math.floor(new Date(endTime).getTime() / 1000);
+  const startSec = isoToSec(startTime);
+  const endSec = isoToSec(endTime);
+  if (startSec == null || endSec == null) return 'M1';
   const span = Math.max(60, endSec - startSec);
   if (span > 30 * 86400) return 'D';
   if (span > 7 * 86400) return 'H4';
@@ -70,6 +71,28 @@ function autoGranularity(startTime: string, endTime: string): string {
   if (span > 12 * 3600) return 'M15';
   if (span > 4 * 3600) return 'M5';
   return 'M1';
+}
+
+function isoToSec(value?: string | null): number | null {
+  if (!value) return null;
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
+}
+
+function isValidCandle(candle: {
+  time?: unknown;
+  open?: unknown;
+  high?: unknown;
+  low?: unknown;
+  close?: unknown;
+}): candle is CandlestickData<Time> {
+  return (
+    Number.isFinite(candle.time) &&
+    Number.isFinite(candle.open) &&
+    Number.isFinite(candle.high) &&
+    Number.isFinite(candle.low) &&
+    Number.isFinite(candle.close)
+  );
 }
 
 export function StrategyGroupChart({
@@ -108,7 +131,18 @@ export function StrategyGroupChart({
   const builtMarkersRef = useRef<ReturnType<typeof buildCycleMarkers>>([]);
 
   const fallbackEnd = lastTickTimestamp ?? new Date().toISOString();
-  const effectiveEndTime = endTime ?? fallbackEnd;
+  const effectiveEndTime = isoToSec(endTime) == null ? fallbackEnd : endTime;
+  const validCandles = useMemo(
+    () =>
+      candles.filter(isValidCandle).map((c) => ({
+        time: c.time as Time,
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close,
+      })),
+    [candles]
+  );
 
   const defaultGranularity = useMemo(
     () => (startTime ? autoGranularity(startTime, effectiveEndTime) : 'M1'),
@@ -147,26 +181,30 @@ export function StrategyGroupChart({
       edgeCount: fullRangeEdgeCount,
     });
 
-  const candleTimes = useMemo(() => candles.map((c) => c.time), [candles]);
+  const candleTimes = useMemo(
+    () => validCandles.map((c) => Number(c.time)),
+    [validCandles]
+  );
   const markers = useMemo(() => {
     const built = buildCycleMarkers(
       trades,
-      candleTimes as number[],
+      candleTimes,
       selectedTradeIds,
       markersVisible
-    );
+    ).filter((marker) => Number.isFinite(Number(marker.time)));
     builtMarkersRef.current = built;
     return built;
   }, [trades, candleTimes, selectedTradeIds, markersVisible]);
 
   const paddedRange = useMemo(() => {
-    if (!startTime || candles.length === 0) return null;
-    const startSec = Math.floor(new Date(startTime).getTime() / 1000);
-    const endSec = Math.floor(new Date(effectiveEndTime).getTime() / 1000);
+    if (!startTime || validCandles.length === 0) return null;
+    const startSec = isoToSec(startTime);
+    const endSec = isoToSec(effectiveEndTime);
+    if (startSec == null || endSec == null || endSec <= startSec) return null;
     const span = endSec - startSec;
     const pad = Math.max(60, Math.floor(span * 0.1));
     return { from: (startSec - pad) as Time, to: (endSec + pad) as Time };
-  }, [startTime, effectiveEndTime, candles]);
+  }, [startTime, effectiveEndTime, validCandles]);
 
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -190,7 +228,7 @@ export function StrategyGroupChart({
   }, [destroyChart]);
 
   useEffect(() => {
-    if (!containerRef.current || candles.length === 0) return;
+    if (!containerRef.current || validCandles.length === 0) return;
 
     if (!chartRef.current) {
       const container = containerRef.current;
@@ -269,18 +307,7 @@ export function StrategyGroupChart({
       observerRef.current = observer;
     }
 
-    seriesRef.current?.setData(
-      candles.map(
-        (c) =>
-          ({
-            time: c.time as Time,
-            open: c.open,
-            high: c.high,
-            low: c.low,
-            close: c.close,
-          }) as CandlestickData<Time>
-      )
-    );
+    seriesRef.current?.setData(validCandles);
     markersRef.current?.setMarkers(markers);
     for (const line of priceLinesRef.current) {
       seriesRef.current?.removePriceLine(line);
@@ -305,7 +332,7 @@ export function StrategyGroupChart({
       chartRef.current?.timeScale().fitContent();
     }
   }, [
-    candles,
+    validCandles,
     markers,
     height,
     isDark,
@@ -320,7 +347,7 @@ export function StrategyGroupChart({
     taskType: taskType ?? ('' as TaskType),
     executionRunId,
     chart: chartInstance,
-    candleTimestamps: candleTimes as number[],
+    candleTimestamps: candleTimes,
   });
 
   const handleResetZoom = useCallback(() => {
@@ -369,7 +396,7 @@ export function StrategyGroupChart({
     return <Alert severity="warning">{error}</Alert>;
   }
 
-  if (candles.length === 0) {
+  if (validCandles.length === 0) {
     return <Alert severity="info">No chart data available</Alert>;
   }
 

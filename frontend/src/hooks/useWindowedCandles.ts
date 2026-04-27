@@ -124,7 +124,12 @@ function parseCandles(raw: unknown): WindowedCandle[] {
     const high = Number(rec.high);
     const low = Number(rec.low);
     const close = Number(rec.close);
-    if ([open, high, low, close].some((value) => Number.isNaN(value))) continue;
+    if (
+      [rec.open, rec.high, rec.low, rec.close].some((value) => value == null) ||
+      [open, high, low, close].some((value) => !Number.isFinite(value))
+    ) {
+      continue;
+    }
     const volume = rec.volume != null ? Number(rec.volume) : undefined;
     byTime.set(ts, {
       time: ts,
