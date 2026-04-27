@@ -181,9 +181,15 @@
       "step": "Grid Step",
       "stepValue": "{{step}} / {{max}} ({{usage}})",
       "lastGridPrice": "Last Grid Price",
+      "effectiveGridInterval": "Active Grid Interval",
       "takeProfitPrice": "Net Take Profit",
+      "effectiveTakeProfit": "Active Take Profit",
       "takeProfitRemaining": "Pips to Take Profit",
       "nextGridPrice": "Next Add Price",
+      "currentAtr": "Tick ATR",
+      "trendScore": "Trend Score",
+      "sizeMultiplier": "Size Multiplier",
+      "regimeStatus": "Regime",
       "lastBackfilledTransaction": "Backfilled Transaction",
       "brokerSyncStatus": "OANDA Sync",
       "brokerSyncedAt": "Synced At",
@@ -198,8 +204,27 @@
       "takeProfit": "TP",
       "lastGrid": "Grid",
       "nextGrid": "Next Add",
+      "riskExit": "Risk Exit",
       "fillMarkers": "Fills",
       "syncMarkers": "Broker Sync"
+    },
+    "regime": {
+      "ok": "OK",
+      "blocked_high_volatility": "High volatility blocked",
+      "blocked_counter_trend": "Counter-trend blocked"
+    },
+    "risk": {
+      "netExposure": "Net exposure",
+      "gridSteps": "Grid steps",
+      "adverseMove": "Adverse move",
+      "unrealizedLoss": "Unrealized loss"
+    },
+    "preview": {
+      "title": "Next Decision Preview",
+      "nextAddPrice": "Next add price",
+      "nextOrderUnits": "Next order units",
+      "takeProfitPrice": "Take-profit price",
+      "riskExitPrice": "Risk-exit price"
     },
     "alerts": {
       "syncWarning": "OANDA reconciliation completed with warnings. Review the broker audit fields before trusting the run.",
@@ -214,7 +239,30 @@
       "unitsDelta": "Units Delta",
       "fill": "Fill",
       "netAfter": "Net After",
-      "pnl": "P&L"
+      "pnl": "P&L",
+      "actions": {
+        "open": "Initial entry",
+        "add": "Add exposure",
+        "take_profit": "Take profit",
+        "risk_exit": "Risk exit",
+        "broker_backfill": "Broker backfill",
+        "broker_reconciliation": "Broker reconciliation"
+      },
+      "reasons": {
+        "initial_entry": "Initial entry",
+        "initial_entry_auto_trend": "Auto trend entry",
+        "grid_interval_hit": "Grid interval hit",
+        "average_price_take_profit": "Average take profit",
+        "max_loss": "Max loss",
+        "max_adverse_pips": "Max adverse move",
+        "max_adverse_after_full_grid_pips": "Full-grid adverse move",
+        "max_full_grid_ticks": "Full-grid hold timeout"
+      },
+      "sources": {
+        "event_execution": "Event execution",
+        "broker_transaction_history": "Broker transaction history",
+        "broker_reconciliation": "Broker reconciliation"
+      }
     },
     "audit": {
       "title": "Broker Audit",

@@ -4,6 +4,7 @@ import {
   Box,
   Chip,
   Divider,
+  LinearProgress,
   Paper,
   Stack,
   Table,
@@ -169,6 +170,7 @@ export function NetGridStrategyPanel({
     takeProfit: true,
     lastGrid: true,
     nextGrid: true,
+    riskExit: true,
   });
   const currentNet = state?.current_net_units ?? 0;
   const latestDecision = state?.latest_decision;
@@ -228,6 +230,12 @@ export function NetGridStrategyPanel({
       color: '#d32f2f',
       lineStyle: LineStyle.Dashed,
     },
+    {
+      price: numericPrice(state?.risk_exit_price) ?? Number.NaN,
+      title: t('netGrid.chart.riskExit'),
+      color: '#616161',
+      lineStyle: LineStyle.Dashed,
+    },
   ].filter((line) => {
     if (line.title === t('netGrid.chart.averageEntry')) {
       return visibleOverlays.averageEntry;
@@ -240,6 +248,9 @@ export function NetGridStrategyPanel({
     }
     if (line.title === t('netGrid.chart.nextGrid')) {
       return visibleOverlays.nextGrid;
+    }
+    if (line.title === t('netGrid.chart.riskExit')) {
+      return visibleOverlays.riskExit;
     }
     return true;
   });
@@ -315,8 +326,16 @@ export function NetGridStrategyPanel({
               value={formatPrice(state?.last_grid_price)}
             />
             <SummaryItem
+              label={t('netGrid.summary.effectiveGridInterval')}
+              value={formatPips(state?.effective_grid_interval_pips)}
+            />
+            <SummaryItem
               label={t('netGrid.summary.takeProfitPrice')}
               value={formatPrice(state?.net_take_profit_price)}
+            />
+            <SummaryItem
+              label={t('netGrid.summary.effectiveTakeProfit')}
+              value={formatPips(state?.effective_take_profit_pips)}
             />
             <SummaryItem
               label={t('netGrid.summary.takeProfitRemaining')}
@@ -325,6 +344,28 @@ export function NetGridStrategyPanel({
             <SummaryItem
               label={t('netGrid.summary.nextGridPrice')}
               value={formatPrice(state?.next_grid_price)}
+            />
+            <SummaryItem
+              label={t('netGrid.summary.currentAtr')}
+              value={formatPips(state?.current_atr_pips)}
+            />
+            <SummaryItem
+              label={t('netGrid.summary.trendScore')}
+              value={formatPips(state?.trend_score_pips)}
+            />
+            <SummaryItem
+              label={t('netGrid.summary.sizeMultiplier')}
+              value={formatPercent(state?.effective_order_size_multiplier)}
+            />
+            <SummaryItem
+              label={t('netGrid.summary.regimeStatus')}
+              value={
+                state?.regime_status
+                  ? t(`netGrid.regime.${state.regime_status}`, {
+                      defaultValue: state.regime_status,
+                    })
+                  : '-'
+              }
             />
             <SummaryItem
               label={t('netGrid.summary.lastBackfilledTransaction')}
@@ -340,6 +381,97 @@ export function NetGridStrategyPanel({
               label={t('netGrid.summary.brokerSyncedAt')}
               value={state?.broker_reconciled_at ?? '-'}
             />
+          </Box>
+
+          <Divider />
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                md: 'repeat(4, minmax(0, 1fr))',
+              },
+              gap: 1.5,
+            }}
+          >
+            <RiskProgress
+              label={t('netGrid.risk.netExposure')}
+              value={Math.abs(currentNet)}
+              max={state?.max_net_units ?? null}
+              formatter={(value) =>
+                formatAppNumber(value, { maximumFractionDigits: 0 })
+              }
+            />
+            <RiskProgress
+              label={t('netGrid.risk.gridSteps')}
+              value={state?.step ?? 0}
+              max={state?.max_steps ?? null}
+              formatter={(value) =>
+                formatAppNumber(value, { maximumFractionDigits: 0 })
+              }
+            />
+            <RiskProgress
+              label={t('netGrid.risk.adverseMove')}
+              value={Number(state?.current_adverse_pips ?? 0)}
+              max={Number(state?.max_adverse_pips ?? 0) || null}
+              formatter={(value) =>
+                formatAppNumber(value, {
+                  minimumFractionDigits: 1,
+                  maximumFractionDigits: 1,
+                })
+              }
+            />
+            <RiskProgress
+              label={t('netGrid.risk.unrealizedLoss')}
+              value={Math.max(0, -Number(state?.current_unrealized_pnl ?? 0))}
+              max={Number(state?.max_loss ?? 0) || null}
+              formatter={(value) =>
+                formatAppNumber(value, {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 2,
+                })
+              }
+            />
+          </Box>
+
+          <Box sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}>
+            <Stack spacing={1}>
+              <Typography variant="subtitle2">
+                {t('netGrid.preview.title')}
+              </Typography>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: {
+                    xs: '1fr',
+                    sm: 'repeat(2, minmax(0, 1fr))',
+                    md: 'repeat(4, minmax(0, 1fr))',
+                  },
+                  gap: 1,
+                }}
+              >
+                <SummaryItem
+                  label={t('netGrid.preview.nextAddPrice')}
+                  value={formatPrice(state?.next_grid_price)}
+                />
+                <SummaryItem
+                  label={t('netGrid.preview.nextOrderUnits')}
+                  value={
+                    state?.next_order_units == null
+                      ? '-'
+                      : formatUnits(state.next_order_units)
+                  }
+                />
+                <SummaryItem
+                  label={t('netGrid.preview.takeProfitPrice')}
+                  value={formatPrice(state?.net_take_profit_price)}
+                />
+                <SummaryItem
+                  label={t('netGrid.preview.riskExitPrice')}
+                  value={formatPrice(state?.risk_exit_price)}
+                />
+              </Box>
+            </Stack>
           </Box>
 
           <Divider />
@@ -434,6 +566,12 @@ export function NetGridStrategyPanel({
                 onClick={() => toggleOverlay('nextGrid')}
               />
               <LegendChip
+                color="#616161"
+                label={t('netGrid.chart.riskExit')}
+                active={visibleOverlays.riskExit}
+                onClick={() => toggleOverlay('riskExit')}
+              />
+              <LegendChip
                 color="#26a69a"
                 label={t('netGrid.chart.fillMarkers')}
                 active={visibleOverlays.fills}
@@ -500,13 +638,26 @@ export function NetGridStrategyPanel({
                         <TableCell>
                           <Stack spacing={0.25}>
                             <Typography variant="body2">
-                              {entry.action}
+                              {t(`netGrid.ledger.actions.${entry.action}`, {
+                                defaultValue: entry.action,
+                              })}
                             </Typography>
                             <Typography
                               variant="caption"
                               color="text.secondary"
                             >
-                              {entry.reason ?? entry.source ?? '-'}
+                              {entry.reason
+                                ? t(`netGrid.ledger.reasons.${entry.reason}`, {
+                                    defaultValue: entry.reason,
+                                  })
+                                : entry.source
+                                  ? t(
+                                      `netGrid.ledger.sources.${entry.source}`,
+                                      {
+                                        defaultValue: entry.source,
+                                      }
+                                    )
+                                  : '-'}
                             </Typography>
                           </Stack>
                         </TableCell>
@@ -564,7 +715,9 @@ export function NetGridStrategyPanel({
                       <TableCell>
                         <Stack spacing={0.25}>
                           <Typography variant="body2">
-                            {entry.action}
+                            {t(`netGrid.ledger.actions.${entry.action}`, {
+                              defaultValue: entry.action,
+                            })}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
                             {entry.timestamp ?? '-'}
@@ -620,6 +773,40 @@ function LegendChip({
         />
       }
     />
+  );
+}
+
+function RiskProgress({
+  label,
+  value,
+  max,
+  formatter,
+}: {
+  label: string;
+  value: number;
+  max?: number | null;
+  formatter: (value: number) => string;
+}) {
+  const ratio = max && max > 0 ? Math.min(Math.max(value / max, 0), 1) : 0;
+  return (
+    <Box sx={{ minWidth: 0 }}>
+      <Stack direction="row" justifyContent="space-between" spacing={1}>
+        <Typography variant="caption" color="text.secondary">
+          {label}
+        </Typography>
+        <Typography variant="caption">
+          {max && max > 0
+            ? `${formatter(value)} / ${formatter(max)}`
+            : formatter(value)}
+        </Typography>
+      </Stack>
+      <LinearProgress
+        variant="determinate"
+        value={ratio * 100}
+        color={ratio >= 0.9 ? 'error' : ratio >= 0.7 ? 'warning' : 'primary'}
+        sx={{ mt: 0.75, height: 6, borderRadius: 1 }}
+      />
+    </Box>
   );
 }
 

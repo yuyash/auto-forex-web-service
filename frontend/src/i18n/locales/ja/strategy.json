@@ -181,9 +181,15 @@
       "step": "グリッド段数",
       "stepValue": "{{step}} / {{max}}（{{usage}}）",
       "lastGridPrice": "直近グリッド価格",
+      "effectiveGridInterval": "有効グリッド間隔",
       "takeProfitPrice": "ネット利確価格",
+      "effectiveTakeProfit": "有効利確幅",
       "takeProfitRemaining": "利確までのpips",
       "nextGridPrice": "次回追加価格",
+      "currentAtr": "ティックATR",
+      "trendScore": "トレンドスコア",
+      "sizeMultiplier": "サイズ倍率",
+      "regimeStatus": "レジーム",
       "lastBackfilledTransaction": "反映済み取引ID",
       "brokerSyncStatus": "OANDA同期状態",
       "brokerSyncedAt": "同期日時",
@@ -198,8 +204,27 @@
       "takeProfit": "利確",
       "lastGrid": "Grid",
       "nextGrid": "次回追加",
+      "riskExit": "リスク決済",
       "fillMarkers": "約定",
       "syncMarkers": "ブローカー同期"
+    },
+    "regime": {
+      "ok": "正常",
+      "blocked_high_volatility": "高ボラ停止",
+      "blocked_counter_trend": "逆トレンド停止"
+    },
+    "risk": {
+      "netExposure": "ネット建玉",
+      "gridSteps": "グリッド段数",
+      "adverseMove": "逆行幅",
+      "unrealizedLoss": "含み損"
+    },
+    "preview": {
+      "title": "次回判断プレビュー",
+      "nextAddPrice": "次回追加価格",
+      "nextOrderUnits": "次回注文数量",
+      "takeProfitPrice": "利確価格",
+      "riskExitPrice": "リスク決済価格"
     },
     "alerts": {
       "syncWarning": "OANDA同期に警告があります。実行を信頼する前にブローカー監査情報を確認してください。",
@@ -214,7 +239,30 @@
       "unitsDelta": "数量差分",
       "fill": "約定価格",
       "netAfter": "変更後ネット",
-      "pnl": "損益"
+      "pnl": "損益",
+      "actions": {
+        "open": "初回建玉",
+        "add": "追加",
+        "take_profit": "利確",
+        "risk_exit": "リスク決済",
+        "broker_backfill": "ブローカーバックフィル",
+        "broker_reconciliation": "ブローカー照合"
+      },
+      "reasons": {
+        "initial_entry": "初回建玉",
+        "initial_entry_auto_trend": "自動トレンド建玉",
+        "grid_interval_hit": "グリッド到達",
+        "average_price_take_profit": "平均建値利確",
+        "max_loss": "最大損失",
+        "max_adverse_pips": "最大逆行幅",
+        "max_adverse_after_full_grid_pips": "最大段到達後の逆行幅",
+        "max_full_grid_ticks": "最大段到達後の保持期限"
+      },
+      "sources": {
+        "event_execution": "イベント執行",
+        "broker_transaction_history": "ブローカー取引履歴",
+        "broker_reconciliation": "ブローカー照合"
+      }
     },
     "audit": {
       "title": "ブローカー監査",

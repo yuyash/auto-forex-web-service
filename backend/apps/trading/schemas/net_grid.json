@@ -7,18 +7,56 @@
       "type": "string",
       "title": "Direction Mode",
       "title_ja": "方向モード",
-      "description": "Trading direction for the grid. The MVP supports one-sided net grids.",
-      "description_ja": "グリッドの取引方向。初期版は片方向ネットグリッドをサポートします。",
-      "enum": ["long_only", "short_only"],
+      "description": "Trading direction for the grid.",
+      "description_ja": "グリッドの取引方向。",
+      "enum": ["long_only", "short_only", "auto"],
       "enum_labels": {
         "long_only": "Long Only",
-        "short_only": "Short Only"
+        "short_only": "Short Only",
+        "auto": "Auto"
       },
       "enum_labels_ja": {
         "long_only": "ロングのみ",
-        "short_only": "ショートのみ"
+        "short_only": "ショートのみ",
+        "auto": "自動"
       },
       "default": "long_only",
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
+    },
+    "auto_fast_ema_ticks": {
+      "type": "integer",
+      "title": "Auto Direction Fast EMA (ticks)",
+      "title_ja": "自動方向・短期EMA（ティック）",
+      "description": "Fast EMA period used when Direction Mode is Auto.",
+      "description_ja": "方向モードが自動の場合に使う短期EMA期間。",
+      "default": 5,
+      "minimum": 2,
+      "dependsOn": { "field": "direction_mode", "values": ["auto"] },
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
+    },
+    "auto_slow_ema_ticks": {
+      "type": "integer",
+      "title": "Auto Direction Slow EMA (ticks)",
+      "title_ja": "自動方向・長期EMA（ティック）",
+      "description": "Slow EMA period used when Direction Mode is Auto.",
+      "description_ja": "方向モードが自動の場合に使う長期EMA期間。",
+      "default": 20,
+      "minimum": 3,
+      "dependsOn": { "field": "direction_mode", "values": ["auto"] },
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
+    },
+    "auto_min_trend_pips": {
+      "type": "number",
+      "title": "Auto Direction Minimum Trend (pips)",
+      "title_ja": "自動方向・最小トレンド（pips）",
+      "description": "Minimum EMA trend score required before the first auto entry.",
+      "description_ja": "自動初回建玉に必要な最小EMAトレンドスコア。",
+      "default": 1,
+      "minimum": 0,
+      "dependsOn": { "field": "direction_mode", "values": ["auto"] },
       "group": "Core Parameters",
       "group_ja": "コアパラメータ"
     },
@@ -70,10 +108,65 @@
       "type": "number",
       "title": "Grid Interval (pips)",
       "title_ja": "グリッド間隔（pips）",
-      "description": "Adverse price distance required before adding the next grid step.",
-      "description_ja": "次の段を追加するために必要な逆行幅。",
+      "description": "Fixed adverse price distance required before adding the next grid step.",
+      "description_ja": "固定モードで次の段を追加するために必要な逆行幅。",
       "default": 30,
       "minimum": 0.1,
+      "group": "Grid",
+      "group_ja": "グリッド"
+    },
+    "grid_spacing_mode": {
+      "type": "string",
+      "title": "Grid Spacing Mode",
+      "title_ja": "グリッド間隔モード",
+      "description": "Use a fixed grid interval or adapt it from recent tick volatility.",
+      "description_ja": "固定グリッド間隔を使うか、直近ティックのボラティリティから動的に調整します。",
+      "enum": ["fixed", "atr"],
+      "enum_labels": {
+        "fixed": "Fixed",
+        "atr": "ATR Adaptive"
+      },
+      "enum_labels_ja": {
+        "fixed": "固定",
+        "atr": "ATR連動"
+      },
+      "default": "fixed",
+      "group": "Grid",
+      "group_ja": "グリッド"
+    },
+    "grid_atr_multiplier": {
+      "type": "number",
+      "title": "Grid ATR Multiplier",
+      "title_ja": "グリッドATR倍率",
+      "description": "Multiplier applied to recent tick ATR when Grid Spacing Mode is ATR Adaptive.",
+      "description_ja": "グリッド間隔モードがATR連動の場合に、直近ティックATRへ掛ける倍率。",
+      "default": 1.5,
+      "minimum": 0.1,
+      "dependsOn": { "field": "grid_spacing_mode", "values": ["atr"] },
+      "group": "Grid",
+      "group_ja": "グリッド"
+    },
+    "grid_min_interval_pips": {
+      "type": "number",
+      "title": "Minimum Adaptive Grid Interval (pips)",
+      "title_ja": "動的グリッド最小間隔（pips）",
+      "description": "Lower bound for ATR-derived grid interval.",
+      "description_ja": "ATRから算出したグリッド間隔の下限。",
+      "default": 5,
+      "minimum": 0.1,
+      "dependsOn": { "field": "grid_spacing_mode", "values": ["atr"] },
+      "group": "Grid",
+      "group_ja": "グリッド"
+    },
+    "grid_max_interval_pips": {
+      "type": "number",
+      "title": "Maximum Adaptive Grid Interval (pips)",
+      "title_ja": "動的グリッド最大間隔（pips）",
+      "description": "Upper bound for ATR-derived grid interval.",
+      "description_ja": "ATRから算出したグリッド間隔の上限。",
+      "default": 100,
+      "minimum": 0.1,
+      "dependsOn": { "field": "grid_spacing_mode", "values": ["atr"] },
       "group": "Grid",
       "group_ja": "グリッド"
     },
@@ -81,12 +174,78 @@
       "type": "number",
       "title": "Take Profit From Average (pips)",
       "title_ja": "平均建値からの利確幅（pips）",
-      "description": "Close the full net position when price moves this far beyond the average entry.",
-      "description_ja": "価格が平均建値からこの幅だけ有利に動いたらネット建玉を全決済します。",
+      "description": "Fixed distance from average entry used to close the full net position.",
+      "description_ja": "固定モードでネット建玉を全決済する平均建値からの距離。",
       "default": 10,
       "minimum": 0.1,
       "group": "Exit",
       "group_ja": "決済"
+    },
+    "take_profit_mode": {
+      "type": "string",
+      "title": "Take Profit Mode",
+      "title_ja": "利確幅モード",
+      "description": "Use a fixed take-profit distance or adapt it from recent tick volatility.",
+      "description_ja": "固定利確幅を使うか、直近ティックのボラティリティから動的に調整します。",
+      "enum": ["fixed", "atr"],
+      "enum_labels": {
+        "fixed": "Fixed",
+        "atr": "ATR Adaptive"
+      },
+      "enum_labels_ja": {
+        "fixed": "固定",
+        "atr": "ATR連動"
+      },
+      "default": "fixed",
+      "group": "Exit",
+      "group_ja": "決済"
+    },
+    "take_profit_atr_multiplier": {
+      "type": "number",
+      "title": "Take Profit ATR Multiplier",
+      "title_ja": "利確ATR倍率",
+      "description": "Multiplier applied to recent tick ATR when Take Profit Mode is ATR Adaptive.",
+      "description_ja": "利確幅モードがATR連動の場合に、直近ティックATRへ掛ける倍率。",
+      "default": 0.5,
+      "minimum": 0.1,
+      "dependsOn": { "field": "take_profit_mode", "values": ["atr"] },
+      "group": "Exit",
+      "group_ja": "決済"
+    },
+    "take_profit_min_pips": {
+      "type": "number",
+      "title": "Minimum Adaptive Take Profit (pips)",
+      "title_ja": "動的利確最小幅（pips）",
+      "description": "Lower bound for ATR-derived take-profit distance.",
+      "description_ja": "ATRから算出した利確幅の下限。",
+      "default": 2,
+      "minimum": 0.1,
+      "dependsOn": { "field": "take_profit_mode", "values": ["atr"] },
+      "group": "Exit",
+      "group_ja": "決済"
+    },
+    "take_profit_max_pips": {
+      "type": "number",
+      "title": "Maximum Adaptive Take Profit (pips)",
+      "title_ja": "動的利確最大幅（pips）",
+      "description": "Upper bound for ATR-derived take-profit distance.",
+      "description_ja": "ATRから算出した利確幅の上限。",
+      "default": 50,
+      "minimum": 0.1,
+      "dependsOn": { "field": "take_profit_mode", "values": ["atr"] },
+      "group": "Exit",
+      "group_ja": "決済"
+    },
+    "atr_period_ticks": {
+      "type": "integer",
+      "title": "ATR Period (ticks)",
+      "title_ja": "ATR期間（ティック）",
+      "description": "Number of recent tick-to-tick moves used for adaptive grid and take-profit distances.",
+      "description_ja": "動的グリッド間隔と利確幅に使う直近ティック間変動の件数。",
+      "default": 20,
+      "minimum": 2,
+      "group": "Volatility Adaptation",
+      "group_ja": "ボラティリティ調整"
     },
     "sizing_mode": {
       "type": "string",
@@ -133,6 +292,50 @@
       "group": "Position Sizing",
       "group_ja": "建玉サイズ"
     },
+    "volatility_size_mode": {
+      "type": "string",
+      "title": "Volatility Size Mode",
+      "title_ja": "ボラティリティサイズモード",
+      "description": "Optionally reduce add-step size when tick ATR exceeds a threshold.",
+      "description_ja": "ティックATRがしきい値を超えた場合に追加段サイズを縮小します。",
+      "enum": ["fixed", "atr"],
+      "enum_labels": {
+        "fixed": "Fixed",
+        "atr": "ATR Reduce"
+      },
+      "enum_labels_ja": {
+        "fixed": "固定",
+        "atr": "ATR縮小"
+      },
+      "default": "fixed",
+      "group": "Position Sizing",
+      "group_ja": "建玉サイズ"
+    },
+    "volatility_size_atr_threshold_pips": {
+      "type": "number",
+      "title": "Size Reduction ATR Threshold (pips)",
+      "title_ja": "サイズ縮小ATRしきい値（pips）",
+      "description": "ATR level above which add-step size is reduced.",
+      "description_ja": "追加段サイズを縮小し始めるATR水準。",
+      "default": 20,
+      "minimum": 0.1,
+      "dependsOn": { "field": "volatility_size_mode", "values": ["atr"] },
+      "group": "Position Sizing",
+      "group_ja": "建玉サイズ"
+    },
+    "volatility_size_min_multiplier": {
+      "type": "number",
+      "title": "Minimum Size Multiplier",
+      "title_ja": "最小サイズ倍率",
+      "description": "Lower bound for ATR-based size reduction.",
+      "description_ja": "ATR連動サイズ縮小の下限倍率。",
+      "default": 0.5,
+      "minimum": 0.01,
+      "maximum": 1,
+      "dependsOn": { "field": "volatility_size_mode", "values": ["atr"] },
+      "group": "Position Sizing",
+      "group_ja": "建玉サイズ"
+    },
     "max_spread_pips": {
       "type": "number",
       "title": "Max Spread (pips)",
@@ -173,6 +376,73 @@
       "description": "Minimum processed ticks between orders.",
       "description_ja": "注文間に空ける最小処理ティック数。",
       "default": 1,
+      "minimum": 0,
+      "group": "Risk Limits",
+      "group_ja": "リスク制限"
+    },
+    "cooldown_seconds": {
+      "type": "integer",
+      "title": "Cooldown Seconds",
+      "title_ja": "クールダウン（秒）",
+      "description": "Minimum wall-clock seconds between orders. Set to 0 to disable.",
+      "description_ja": "注文間に空ける最小秒数。0で無効化します。",
+      "default": 0,
+      "minimum": 0,
+      "group": "Risk Limits",
+      "group_ja": "リスク制限"
+    },
+    "regime_filter_enabled": {
+      "type": "boolean",
+      "title": "Enable Regime Filter",
+      "title_ja": "レジームフィルタを有効化",
+      "description": "Pause new entries and add steps in high-volatility or counter-trend regimes.",
+      "description_ja": "高ボラティリティまたは逆トレンド局面で新規建玉と追加段を停止します。",
+      "default": false,
+      "group": "Risk Limits",
+      "group_ja": "リスク制限"
+    },
+    "regime_max_atr_pips": {
+      "type": "number",
+      "title": "Regime Max ATR (pips)",
+      "title_ja": "レジーム最大ATR（pips）",
+      "description": "Pause new entries and add steps when tick ATR exceeds this value. Set to 0 to disable.",
+      "description_ja": "ティックATRがこの値を超えた場合に新規建玉と追加段を停止します。0で無効化します。",
+      "default": 0,
+      "minimum": 0,
+      "dependsOn": { "field": "regime_filter_enabled", "values": [true] },
+      "group": "Risk Limits",
+      "group_ja": "リスク制限"
+    },
+    "regime_trend_guard_pips": {
+      "type": "number",
+      "title": "Regime Counter-Trend Guard (pips)",
+      "title_ja": "逆トレンド停止幅（pips）",
+      "description": "Pause add steps when EMA trend score moves against the open net position by this amount. Set to 0 to disable.",
+      "description_ja": "EMAトレンドスコアが保有ネット建玉に対してこの幅だけ逆行した場合に追加段を停止します。0で無効化します。",
+      "default": 0,
+      "minimum": 0,
+      "dependsOn": { "field": "regime_filter_enabled", "values": [true] },
+      "group": "Risk Limits",
+      "group_ja": "リスク制限"
+    },
+    "max_full_grid_ticks": {
+      "type": "integer",
+      "title": "Max Full-Grid Hold (ticks)",
+      "title_ja": "最大段到達後の最大保持（ティック）",
+      "description": "Close the net position when max grid steps have been reached for this many processed ticks. Set to 0 to disable.",
+      "description_ja": "最大段数到達後、この処理ティック数だけ経過したらネット建玉を決済します。0で無効化します。",
+      "default": 0,
+      "minimum": 0,
+      "group": "Risk Limits",
+      "group_ja": "リスク制限"
+    },
+    "max_adverse_after_full_grid_pips": {
+      "type": "number",
+      "title": "Max Adverse After Full Grid (pips)",
+      "title_ja": "最大段到達後の最大逆行幅（pips）",
+      "description": "Close the net position when adverse movement reaches this value after max grid steps. Set to 0 to disable.",
+      "description_ja": "最大段数到達後、逆行幅がこの値に達したらネット建玉を決済します。0で無効化します。",
+      "default": 0,
       "minimum": 0,
       "group": "Risk Limits",
       "group_ja": "リスク制限"
