@@ -49,6 +49,35 @@ const state: NetGridStrategyState = {
   max_steps: 5,
   started_at: '2026-01-01T00:00:00Z',
   last_tick_at: '2026-01-01T00:01:00Z',
+  last_mid: '150.130',
+  decision_history: [
+    {
+      timestamp: '2026-01-01T00:00:10Z',
+      action: 'hold',
+      reason: 'inside_grid',
+      units_delta: 0,
+    },
+    {
+      timestamp: '2026-01-01T00:00:30Z',
+      action: 'add',
+      reason: 'grid_interval_hit',
+      units_delta: 1000,
+    },
+  ],
+  trend_relation_history: [
+    {
+      timestamp: '2026-01-01T00:00:10Z',
+      trend_score_pips: '-1',
+      net_units: 1000,
+      relation: 'counter',
+    },
+    {
+      timestamp: '2026-01-01T00:00:30Z',
+      trend_score_pips: '3',
+      net_units: 2000,
+      relation: 'aligned',
+    },
+  ],
   grid_ledger: [
     {
       timestamp: '2026-01-01T00:00:30Z',
@@ -100,12 +129,21 @@ describe('NetGridStrategyPanel', () => {
       )
     ).toBeInTheDocument();
     expect(screen.getByText('Add Logic')).toBeInTheDocument();
+    expect(screen.getByText('Decision Details')).toBeInTheDocument();
+    expect(screen.getByText('Decision Timeline')).toBeInTheDocument();
+    expect(screen.getByText('Scenario Preview')).toBeInTheDocument();
+    expect(screen.getByText('Trend vs Position History')).toBeInTheDocument();
+    expect(screen.getByText('Active Blockers')).toBeInTheDocument();
+    expect(screen.getByText('Level')).toBeInTheDocument();
+    expect(screen.getByText('Current market reference.')).toBeInTheDocument();
     expect(screen.getByText('Risk-exit price')).toBeInTheDocument();
     expect(screen.getByText('Risk Exit')).toBeInTheDocument();
     expect(screen.getByText('Trail')).toBeInTheDocument();
-    expect(screen.getByText('Counter-trend blocked')).toBeInTheDocument();
+    expect(screen.getAllByText('Counter-trend blocked').length).toBeGreaterThan(
+      0
+    );
     expect(screen.getByText('Trailing active')).toBeInTheDocument();
-    expect(screen.getByText('Exit armed')).toBeInTheDocument();
+    expect(screen.getAllByText('Exit armed').length).toBeGreaterThan(0);
     expect(screen.getByText('Add exposure')).toBeInTheDocument();
     expect(screen.getByText('Grid interval hit')).toBeInTheDocument();
     expect(screen.getAllByText('Timestamp').length).toBeGreaterThan(0);

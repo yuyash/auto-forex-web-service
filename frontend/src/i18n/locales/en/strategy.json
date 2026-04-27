@@ -222,6 +222,63 @@
         "trailingStop": "Trail"
       }
     },
+    "understanding": {
+      "title": "Decision Details"
+    },
+    "decisionTimeline": {
+      "title": "Decision Timeline",
+      "empty": "Recent strategy decisions will appear after ticks are processed."
+    },
+    "scenarioPreview": {
+      "title": "Scenario Preview",
+      "move": "{{move}} pips",
+      "decisions": {
+        "waitTrend": "Wait for trend",
+        "unknown": "Need price data",
+        "riskExit": "Risk exit",
+        "add": "Add exposure",
+        "trailingStop": "Trailing stop",
+        "takeProfit": "Take profit",
+        "hold": "Hold"
+      }
+    },
+    "levelLadder": {
+      "level": "Level",
+      "price": "Price",
+      "distance": "Distance",
+      "intentColumn": "Intent",
+      "current": "Current",
+      "nextAdd": "Next add",
+      "average": "Average",
+      "takeProfit": "Take profit",
+      "trailingStop": "Trailing stop",
+      "riskExit": "Risk exit",
+      "intent": {
+        "current": "Current market reference.",
+        "nextAdd": "Adds exposure if price moves adversely into this level.",
+        "average": "Net recovery center.",
+        "takeProfit": "Full close objective.",
+        "trailingStop": "Protected profit pullback level.",
+        "riskExit": "Hard protection level."
+      }
+    },
+    "blockers": {
+      "title": "Active Blockers",
+      "none": "No active blocker. The strategy is waiting for the next price condition.",
+      "generic": "{{reason}}",
+      "cooldown": "Order cooldown is active.",
+      "cooldown_seconds": "Time-based cooldown is active.",
+      "spread_guard": "Spread is too wide for a new order.",
+      "regime_high_volatility": "High-volatility regime guard is blocking orders.",
+      "regime_counter_trend": "Counter-trend regime guard is blocking adds.",
+      "inside_grid": "Price is still inside the current grid interval.",
+      "max_steps": "Maximum grid depth has been reached.",
+      "min_order_or_risk_budget": "Next order is blocked by minimum size or drawdown budget."
+    },
+    "trendHistory": {
+      "title": "Trend vs Position History",
+      "empty": "Trend relation history will appear after ticks are processed."
+    },
     "summary": {
       "title": "Metrics",
       "currentNet": "Current Net",

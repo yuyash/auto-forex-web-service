@@ -139,6 +139,12 @@ class NetGridStrategy(Strategy):
 
         signal = self._decide(tick=tick, state=state, strategy_state=strategy_state)
         strategy_state["latest_decision"] = signal
+        _append_decision_history(
+            strategy_state=strategy_state,
+            tick=tick,
+            decision=signal,
+        )
+        _append_trend_relation_history(strategy_state)
         if signal["action"] == "hold":
             events.append(_signal_event(tick, signal))
             state.strategy_state = strategy_state
@@ -563,6 +569,8 @@ def _initial_state(raw: Any) -> dict[str, Any]:
     state.setdefault("grid_ledger", [])
     state.setdefault("auto_direction_window", [])
     state.setdefault("latest_decision", None)
+    state.setdefault("decision_history", [])
+    state.setdefault("trend_relation_history", [])
     state.setdefault("latest_position_transition", None)
     state.setdefault("pending_execution", None)
     return state
@@ -584,6 +592,43 @@ def _signal_event(tick: Tick, decision: dict[str, Any]) -> GenericStrategyEvent:
 
 def _hold(reason: str, **extra: Any) -> dict[str, Any]:
     return {"action": "hold", "reason": reason, "target_net_units": None, "units_delta": 0, **extra}
+
+
+def _append_decision_history(
+    *,
+    strategy_state: dict[str, Any],
+    tick: Tick,
+    decision: dict[str, Any],
+) -> None:
+    raw_history = strategy_state.get("decision_history")
+    history: list[Any] = raw_history if isinstance(raw_history, list) else []
+    entry = {
+        "timestamp": tick.timestamp.isoformat(),
+        "action": decision.get("action"),
+        "reason": decision.get("reason"),
+        "units_delta": decision.get("units_delta", 0),
+        "target_net_units": decision.get("target_net_units"),
+        "step_after": decision.get("step_after"),
+    }
+    strategy_state["decision_history"] = [*history, entry][-50:]
+
+
+def _append_trend_relation_history(strategy_state: dict[str, Any]) -> None:
+    raw_history = strategy_state.get("trend_relation_history")
+    history: list[Any] = raw_history if isinstance(raw_history, list) else []
+    trend = _decimal_or_none(strategy_state.get("trend_score_pips")) or Decimal("0")
+    current_net = int(strategy_state.get("current_net_units", 0) or 0)
+    side = _sign(current_net)
+    relation = "neutral"
+    if side != 0 and trend != 0:
+        relation = "aligned" if (side > 0 and trend > 0) or (side < 0 and trend < 0) else "counter"
+    entry = {
+        "timestamp": strategy_state.get("last_tick_at"),
+        "trend_score_pips": str(trend),
+        "net_units": current_net,
+        "relation": relation,
+    }
+    strategy_state["trend_relation_history"] = [*history, entry][-80:]
 
 
 def _validate_config_relationships(config: NetGridConfig) -> None:

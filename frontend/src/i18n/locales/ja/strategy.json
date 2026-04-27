@@ -222,6 +222,63 @@
         "trailingStop": "トレール"
       }
     },
+    "understanding": {
+      "title": "判断詳細"
+    },
+    "decisionTimeline": {
+      "title": "判断タイムライン",
+      "empty": "ティック処理後に直近の戦略判断が表示されます。"
+    },
+    "scenarioPreview": {
+      "title": "シナリオプレビュー",
+      "move": "{{move}} pips",
+      "decisions": {
+        "waitTrend": "トレンド待ち",
+        "unknown": "価格データ待ち",
+        "riskExit": "リスク決済",
+        "add": "追加",
+        "trailingStop": "トレーリング停止",
+        "takeProfit": "利確",
+        "hold": "維持"
+      }
+    },
+    "levelLadder": {
+      "level": "レベル",
+      "price": "価格",
+      "distance": "距離",
+      "intentColumn": "意図",
+      "current": "現在",
+      "nextAdd": "次回追加",
+      "average": "平均",
+      "takeProfit": "利確",
+      "trailingStop": "トレーリング停止",
+      "riskExit": "リスク決済",
+      "intent": {
+        "current": "現在の市場基準値。",
+        "nextAdd": "価格が逆行してこの水準に入ると建玉を追加します。",
+        "average": "ネット建玉の回復中心。",
+        "takeProfit": "全決済目標。",
+        "trailingStop": "利益保護の押し戻し水準。",
+        "riskExit": "ハード保護水準。"
+      }
+    },
+    "blockers": {
+      "title": "有効なブロッカー",
+      "none": "有効なブロッカーはありません。次の価格条件を待っています。",
+      "generic": "{{reason}}",
+      "cooldown": "注文クールダウン中です。",
+      "cooldown_seconds": "時間ベースのクールダウン中です。",
+      "spread_guard": "スプレッドが広すぎるため新規注文を止めています。",
+      "regime_high_volatility": "高ボラティリティのレジームガードが注文を止めています。",
+      "regime_counter_trend": "逆トレンドのレジームガードが追加を止めています。",
+      "inside_grid": "価格はまだ現在のグリッド間隔内です。",
+      "max_steps": "最大グリッド段数に到達しています。",
+      "min_order_or_risk_budget": "最小注文数量またはドローダウン予算により次回注文を止めています。"
+    },
+    "trendHistory": {
+      "title": "トレンドと建玉の履歴",
+      "empty": "ティック処理後にトレンド関係の履歴が表示されます。"
+    },
     "summary": {
       "title": "メトリクス",
       "currentNet": "現在ネット建玉",

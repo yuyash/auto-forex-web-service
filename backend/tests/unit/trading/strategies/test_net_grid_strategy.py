@@ -67,6 +67,12 @@ def test_initial_tick_opens_one_sided_net_position_and_records_ledger() -> None:
     assert strategy_state["average_entry_price"] == str(open_event.price)
     assert strategy_state["grid_ledger"][-1]["action"] == "open"
     assert strategy_state["grid_ledger"][-1]["source"] == "event_execution"
+    assert strategy_state["decision_history"][-1]["action"] == "open"
+    assert strategy_state["trend_relation_history"][-1]["relation"] in {
+        "aligned",
+        "counter",
+        "neutral",
+    }
 
 
 def test_validate_parameters_rejects_invalid_ema_relationship() -> None:

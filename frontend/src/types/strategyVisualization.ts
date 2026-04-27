@@ -117,12 +117,20 @@ export interface NetGridLedgerEntry {
 }
 
 export interface NetGridDecision {
+  timestamp?: string | null;
   action: string;
   reason: string;
   target_net_units?: number | null;
   units_delta: number;
   step_after?: number;
   [key: string]: unknown;
+}
+
+export interface NetGridTrendRelationPoint {
+  timestamp?: string | null;
+  trend_score_pips?: string | null;
+  net_units?: number | null;
+  relation?: 'aligned' | 'counter' | 'neutral' | string | null;
 }
 
 export interface NetGridStrategyState {
@@ -172,6 +180,8 @@ export interface NetGridStrategyState {
   next_entry_id?: number;
   grid_ledger?: NetGridLedgerEntry[];
   latest_decision?: NetGridDecision | null;
+  decision_history?: NetGridDecision[];
+  trend_relation_history?: NetGridTrendRelationPoint[];
   latest_position_transition?: NetGridLedgerEntry | null;
   pending_execution?: NetGridDecision | null;
   last_bid?: string | null;

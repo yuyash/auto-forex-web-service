@@ -14,6 +14,7 @@ import {
   TableBody,
   TableCell,
   TableHead,
+  TableContainer,
   TablePagination,
   TableRow,
   Tooltip,
@@ -395,6 +396,48 @@ function levelPercent(value: number, min: number, max: number): number {
   return Math.min(Math.max(((value - min) / (max - min)) * 100, 0), 100);
 }
 
+function scenarioDecision(
+  state: NetGridStrategyState | null | undefined,
+  currentNet: number,
+  movePips: number
+): string {
+  if (!state || currentNet === 0) return 'waitTrend';
+  const current = numericPrice(currentDisplayPrice(state));
+  if (current == null) return 'unknown';
+  const pipSize = inferPipSize(state);
+  const simulated = current + movePips * pipSize;
+  const nextAdd = numericPrice(state.next_grid_price);
+  const takeProfit = numericPrice(state.net_take_profit_price);
+  const trailing = numericPrice(state.profit_trailing_stop_price);
+  const risk = numericPrice(state.risk_exit_price);
+  if (currentNet > 0) {
+    if (risk != null && simulated <= risk) return 'riskExit';
+    if (nextAdd != null && simulated <= nextAdd) return 'add';
+    if (trailing != null && simulated <= trailing) return 'trailingStop';
+    if (takeProfit != null && simulated >= takeProfit) return 'takeProfit';
+  } else {
+    if (risk != null && simulated >= risk) return 'riskExit';
+    if (nextAdd != null && simulated >= nextAdd) return 'add';
+    if (trailing != null && simulated >= trailing) return 'trailingStop';
+    if (takeProfit != null && simulated <= takeProfit) return 'takeProfit';
+  }
+  return 'hold';
+}
+
+function inferPipSize(state?: NetGridStrategyState | null): number {
+  const current = numericPrice(currentDisplayPrice(state));
+  const average = numericPrice(state?.average_entry_price);
+  const favorable = Math.abs(
+    numericStateValue(state?.current_favorable_pips) ?? 0
+  );
+  const adverse = Math.abs(numericStateValue(state?.current_adverse_pips) ?? 0);
+  const pips = favorable > 0 ? favorable : adverse;
+  if (current != null && average != null && pips > 0) {
+    return Math.abs(current - average) / pips;
+  }
+  return 0.01;
+}
+
 export function NetGridStrategyPanel({
   state,
   instrument,
@@ -722,6 +765,13 @@ export function NetGridStrategyPanel({
         currentNet={currentNet}
         quoteCurrencyCode={quoteCurrencyCode}
         latestDecision={latestDecision}
+      />
+
+      <StrategyUnderstandingPanel
+        state={state}
+        currentNet={currentNet}
+        quoteCurrencyCode={quoteCurrencyCode}
+        timezone={timezone}
       />
 
       <Paper variant="outlined" sx={{ p: 2 }}>
@@ -1593,6 +1643,344 @@ function LogicStep({ label, value }: { label: string; value: string }) {
       <Typography variant="body2" sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>
         {value}
       </Typography>
+    </Box>
+  );
+}
+
+function StrategyUnderstandingPanel({
+  state,
+  currentNet,
+  quoteCurrencyCode,
+  timezone,
+}: {
+  state?: NetGridStrategyState | null;
+  currentNet: number;
+  quoteCurrencyCode: string | null;
+  timezone: string;
+}) {
+  const { t } = useTranslation('strategy');
+  const decisionHistory = [...(state?.decision_history ?? [])]
+    .slice(-10)
+    .reverse();
+  const scenarioMoves = [-20, -10, 10, 20];
+  const ladderRows = [
+    {
+      key: 'current',
+      label: t('netGrid.levelLadder.current'),
+      price: currentDisplayPrice(state),
+      intent: t('netGrid.levelLadder.intent.current'),
+    },
+    {
+      key: 'nextAdd',
+      label: t('netGrid.levelLadder.nextAdd'),
+      price: state?.next_grid_price,
+      intent: t('netGrid.levelLadder.intent.nextAdd'),
+    },
+    {
+      key: 'average',
+      label: t('netGrid.levelLadder.average'),
+      price: state?.average_entry_price,
+      intent: t('netGrid.levelLadder.intent.average'),
+    },
+    {
+      key: 'takeProfit',
+      label: t('netGrid.levelLadder.takeProfit'),
+      price: state?.net_take_profit_price,
+      intent: t('netGrid.levelLadder.intent.takeProfit'),
+    },
+    {
+      key: 'trailingStop',
+      label: t('netGrid.levelLadder.trailingStop'),
+      price: state?.profit_trailing_stop_price,
+      intent: t('netGrid.levelLadder.intent.trailingStop'),
+    },
+    {
+      key: 'riskExit',
+      label: t('netGrid.levelLadder.riskExit'),
+      price: state?.risk_exit_price,
+      intent: t('netGrid.levelLadder.intent.riskExit'),
+    },
+  ].filter((row) => row.price);
+  const currentPrice = numericPrice(currentDisplayPrice(state));
+  const pipSize = inferPipSize(state);
+  const blockers = [
+    state?.latest_decision?.action === 'hold'
+      ? t(`netGrid.blockers.${state.latest_decision.reason}`, {
+          defaultValue: t('netGrid.blockers.generic', {
+            reason: state.latest_decision.reason,
+          }),
+        })
+      : null,
+    state?.regime_status && state.regime_status !== 'ok'
+      ? t(`netGrid.regime.${state.regime_status}`, {
+          defaultValue: state.regime_status,
+        })
+      : null,
+    state?.adverse_trend_status && state.adverse_trend_status !== 'ok'
+      ? t(`netGrid.adverseTrend.${state.adverse_trend_status}`, {
+          defaultValue: state.adverse_trend_status,
+        })
+      : null,
+  ].filter(Boolean);
+
+  return (
+    <Paper variant="outlined" sx={{ p: 2 }}>
+      <Stack spacing={1.5}>
+        <Typography variant="h6">{t('netGrid.understanding.title')}</Typography>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              lg: 'repeat(2, minmax(0, 1fr))',
+            },
+            gap: 1.5,
+          }}
+        >
+          <Box
+            sx={{
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+              p: 1.5,
+            }}
+          >
+            <Stack spacing={1}>
+              <Typography variant="subtitle2">
+                {t('netGrid.decisionTimeline.title')}
+              </Typography>
+              {decisionHistory.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  {t('netGrid.decisionTimeline.empty')}
+                </Typography>
+              ) : (
+                <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap' }}>
+                  {decisionHistory.map((decision, index) => (
+                    <Tooltip
+                      key={`${decision.timestamp ?? index}-${decision.action}-${index}`}
+                      title={`${formatTimestamp(decision.timestamp, timezone)} - ${t(
+                        `netGrid.ledger.reasons.${decision.reason}`,
+                        { defaultValue: decision.reason }
+                      )}`}
+                    >
+                      <Chip
+                        size="small"
+                        variant={index === 0 ? 'filled' : 'outlined'}
+                        color={
+                          decision.action === 'risk_exit'
+                            ? 'error'
+                            : decision.action === 'add'
+                              ? 'warning'
+                              : decision.action === 'take_profit' ||
+                                  decision.action === 'partial_derisk'
+                                ? 'success'
+                                : 'default'
+                        }
+                        label={t(`netGrid.decisionActions.${decision.action}`, {
+                          defaultValue: decision.action,
+                        })}
+                      />
+                    </Tooltip>
+                  ))}
+                </Stack>
+              )}
+            </Stack>
+          </Box>
+
+          <Box
+            sx={{
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+              p: 1.5,
+            }}
+          >
+            <Stack spacing={1}>
+              <Typography variant="subtitle2">
+                {t('netGrid.scenarioPreview.title')}
+              </Typography>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                  gap: 1,
+                }}
+              >
+                {scenarioMoves.map((move) => {
+                  const decision = scenarioDecision(state, currentNet, move);
+                  return (
+                    <SummaryItem
+                      key={move}
+                      label={t('netGrid.scenarioPreview.move', {
+                        move: formatPips(String(move)),
+                      })}
+                      value={t(`netGrid.scenarioPreview.decisions.${decision}`)}
+                    />
+                  );
+                })}
+              </Box>
+            </Stack>
+          </Box>
+        </Box>
+
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              lg: 'minmax(0, 1.2fr) minmax(0, 0.8fr)',
+            },
+            gap: 1.5,
+          }}
+        >
+          <Box
+            sx={{
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+              overflow: 'hidden',
+            }}
+          >
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t('netGrid.levelLadder.level')}</TableCell>
+                    <TableCell align="right">
+                      {t('netGrid.levelLadder.price')}
+                    </TableCell>
+                    <TableCell align="right">
+                      {t('netGrid.levelLadder.distance')}
+                    </TableCell>
+                    <TableCell>
+                      {t('netGrid.levelLadder.intentColumn')}
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {ladderRows.map((row) => {
+                    const price = numericPrice(row.price);
+                    const distance =
+                      currentPrice != null && price != null && pipSize > 0
+                        ? (price - currentPrice) / pipSize
+                        : null;
+                    return (
+                      <TableRow key={row.key}>
+                        <TableCell>{row.label}</TableCell>
+                        <TableCell align="right">
+                          {appendCurrencyUnit(
+                            formatPrice(row.price),
+                            quoteCurrencyCode
+                          )}
+                        </TableCell>
+                        <TableCell align="right">
+                          {distance == null
+                            ? '-'
+                            : formatPips(String(distance))}
+                        </TableCell>
+                        <TableCell>{row.intent}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+
+          <Stack spacing={1.5}>
+            <Box
+              sx={{
+                border: '1px solid',
+                borderColor: 'divider',
+                borderRadius: 1,
+                p: 1.5,
+              }}
+            >
+              <Stack spacing={1}>
+                <Typography variant="subtitle2">
+                  {t('netGrid.blockers.title')}
+                </Typography>
+                {blockers.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    {t('netGrid.blockers.none')}
+                  </Typography>
+                ) : (
+                  <Stack spacing={0.75}>
+                    {blockers.map((blocker, index) => (
+                      <Alert key={`${blocker}-${index}`} severity="warning">
+                        {blocker}
+                      </Alert>
+                    ))}
+                  </Stack>
+                )}
+              </Stack>
+            </Box>
+            <TrendRelationSparkline state={state} />
+          </Stack>
+        </Box>
+      </Stack>
+    </Paper>
+  );
+}
+
+function TrendRelationSparkline({
+  state,
+}: {
+  state?: NetGridStrategyState | null;
+}) {
+  const { t } = useTranslation('strategy');
+  const points = [...(state?.trend_relation_history ?? [])].slice(-24);
+  return (
+    <Box
+      sx={{
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 1,
+        p: 1.5,
+      }}
+    >
+      <Stack spacing={1}>
+        <Typography variant="subtitle2">
+          {t('netGrid.trendHistory.title')}
+        </Typography>
+        {points.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            {t('netGrid.trendHistory.empty')}
+          </Typography>
+        ) : (
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'flex-end' }}>
+            {points.map((point, index) => {
+              const relation = point.relation ?? 'neutral';
+              const trend = Math.min(
+                Math.abs(numericStateValue(point.trend_score_pips) ?? 0),
+                20
+              );
+              return (
+                <Tooltip
+                  key={`${point.timestamp ?? index}-${index}`}
+                  title={t(`netGrid.logic.trendRelation.${relation}`, {
+                    defaultValue: relation,
+                  })}
+                >
+                  <Box
+                    sx={{
+                      width: 8,
+                      height: Math.max(8, 8 + trend * 2),
+                      borderRadius: 0.75,
+                      bgcolor:
+                        relation === 'aligned'
+                          ? 'success.main'
+                          : relation === 'counter'
+                            ? 'warning.main'
+                            : 'text.disabled',
+                    }}
+                  />
+                </Tooltip>
+              );
+            })}
+          </Stack>
+        )}
+      </Stack>
     </Box>
   );
 }
