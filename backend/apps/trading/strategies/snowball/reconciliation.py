@@ -191,9 +191,7 @@ def _match_position_for_entry(
     entry_retracement = int(getattr(entry, "retracement_count", 0) or 0)
     entry_direction = str(getattr(entry, "direction", "") or "").lower()
     entry_units = abs(int(getattr(entry, "units", 0) or 0))
-    entry_price = _strict_decimal(getattr(entry, "entry_price", None), field_name="entry_price")
-
-    candidates: list[tuple[Position, Decimal]] = []
+    candidates: list[Position] = []
 
     for candidate in open_positions:
         candidate_id = str(candidate.id)
@@ -210,17 +208,13 @@ def _match_position_for_entry(
         if entry_units > 0 and abs(int(candidate.units)) != entry_units:
             continue
 
-        diff = abs(
-            _strict_decimal(candidate.entry_price, field_name="position.entry_price") - entry_price
-        )
-        candidates.append((candidate, diff))
+        candidates.append(candidate)
 
     if not candidates:
         return PositionMatch(position=None)
-    candidates.sort(key=lambda item: item[1])
-    if len(candidates) > 1 and candidates[0][1] == candidates[1][1]:
+    if len(candidates) > 1:
         return PositionMatch(position=None, ambiguous=True)
-    return PositionMatch(position=candidates[0][0])
+    return PositionMatch(position=candidates[0])
 
 
 def _strict_decimal(value: Any, *, field_name: str) -> Decimal:

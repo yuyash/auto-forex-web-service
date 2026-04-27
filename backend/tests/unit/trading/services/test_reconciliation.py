@@ -601,6 +601,72 @@ class TestSnowballReconciliation:
         assert report.relinked_open_entries == 1
         assert report.has_blockers is False
 
+    def test_sync_snowball_state_blocks_ambiguous_structural_relinks(self):
+        task = MagicMock()
+        task.pk = uuid4()
+        task.instrument = "EUR_USD"
+        task.oanda_account = MagicMock()
+        task.execution_id = uuid4()
+        config = MagicMock()
+        config.strategy_type = "snowball"
+        config.config_dict = SnowballStrategyConfig.from_dict({}).to_dict()
+        task.config = config
+
+        state = MagicMock()
+        entry = Entry(
+            entry_id=1,
+            step=1,
+            direction=Direction.LONG,
+            entry_price=Decimal("1.10000"),
+            close_price=Decimal("1.10500"),
+            units=1000,
+            opened_at=dj_timezone.now(),
+            role="initial",
+            layer_number=1,
+            retracement_count=0,
+        )
+        cycle = SnowballCycle(
+            cycle_id=1,
+            direction=Direction.LONG,
+            grid=PositionGrid(
+                layers=[
+                    Layer(
+                        layer_number=1,
+                        slots=[Slot(index=0, entry=entry)],
+                    )
+                ]
+            ),
+        )
+        state.strategy_state = SnowballStrategyState(initialised=True, cycles=[cycle]).to_dict()
+        state.current_balance = Decimal("10000")
+
+        reconciler = _make_reconciler(task=task, state=state)
+        positions = [
+            _make_position(
+                id=uuid4(),
+                direction=Direction.LONG,
+                units=1000,
+                entry_price=Decimal("1.10010"),
+                layer_index=1,
+                retracement_count=0,
+            ),
+            _make_position(
+                id=uuid4(),
+                direction=Direction.LONG,
+                units=1000,
+                entry_price=Decimal("1.10020"),
+                layer_index=1,
+                retracement_count=0,
+            ),
+        ]
+
+        report = ReconciliationReport()
+        reconciler._sync_strategy_state_with_positions(positions, report)
+
+        assert report.has_blockers is True
+        assert report.relinked_open_entries == 0
+        assert "matches multiple broker positions" in " ".join(report.blockers)
+
     def test_sync_snowball_state_blocks_unmatched_open_positions(self):
         task = MagicMock()
         task.pk = uuid4()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from logging import getLogger
+from collections.abc import Callable
 from typing import Protocol
 
 from apps.trading.dataclasses.tick import Tick
@@ -38,8 +39,6 @@ logger = getLogger(__name__)
 class StopLossFlowStrategy(Protocol):
     config: SnowballStrategyConfig
     pip_size: Decimal
-
-    def _close_entry(self, *args, **kwargs): ...
 
 
 def assign_stop_loss(
@@ -158,6 +157,8 @@ def process_stop_loss_closes(
     ss: SnowballStrategyState,
     tick: Tick,
     cycle: SnowballCycle,
+    *,
+    close_entry: Callable[..., StrategyEvent],
 ) -> list[StrategyEvent]:
     """Close entries whose stop-loss price has been hit."""
     if not strategy.config.stop_loss_enabled:
@@ -195,7 +196,7 @@ def process_stop_loss_closes(
             pips_lost,
         )
 
-        close_event = strategy._close_entry(
+        close_event = close_entry(
             tick,
             entry,
             description=(

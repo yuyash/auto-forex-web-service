@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from logging import getLogger
+from collections.abc import Callable
 from typing import Protocol
 
 from apps.trading.dataclasses.tick import Tick
@@ -31,23 +32,14 @@ class CounterFlowStrategy(Protocol):
     config: SnowballStrategyConfig
     pip_size: Decimal
 
-    def _close_entry(self, *args, **kwargs): ...
-
-    def _open_layer_initial(
-        self,
-        ss: SnowballStrategyState,
-        tick: Tick,
-        cycle: SnowballCycle,
-    ) -> list[StrategyEvent]: ...
-
-    def _assign_configured_stop_loss(self, entry: Entry, slot_number: int) -> None: ...
-
 
 def process_cycle_counter_closes(
     strategy: CounterFlowStrategy,
     ss: SnowballStrategyState,
     tick: Tick,
     cycle: SnowballCycle,
+    *,
+    close_entry: Callable[..., StrategyEvent],
 ) -> list[StrategyEvent]:
     """Close counter entries from the back (newest first)."""
     if cycle.completed:
@@ -80,7 +72,7 @@ def process_cycle_counter_closes(
             layer.close_slot(highest.index)
             cycle.counter_close_count += 1
             events.append(
-                strategy._close_entry(
+                close_entry(
                     tick,
                     entry,
                     description=(
@@ -97,7 +89,14 @@ def process_cycle_counter_closes(
             )
 
             if layer.layer_number > 1:
-                _close_layer_initial_if_ready(strategy, tick, cycle, layer, events)
+                _close_layer_initial_if_ready(
+                    strategy,
+                    tick,
+                    cycle,
+                    layer,
+                    events,
+                    close_entry=close_entry,
+                )
                 if not layer.has_open_entries():
                     cycle.grid.layers.remove(layer)
 
@@ -114,6 +113,8 @@ def _close_layer_initial_if_ready(
     cycle: SnowballCycle,
     layer: Layer,
     events: list[StrategyEvent],
+    *,
+    close_entry: Callable[..., StrategyEvent],
 ) -> None:
     remaining = layer.occupied_slots()
     if len(remaining) != 1 or remaining[0].index != 0:
@@ -132,7 +133,7 @@ def _close_layer_initial_if_ready(
     )
     layer.close_slot(0, refillable=False)
     events.append(
-        strategy._close_entry(
+        close_entry(
             tick,
             r0_entry,
             description=(
@@ -161,6 +162,12 @@ def process_cycle_counter_adds(
     ss: SnowballStrategyState,
     tick: Tick,
     cycle: SnowballCycle,
+    *,
+    open_layer_initial: Callable[
+        [SnowballStrategyState, Tick, SnowballCycle],
+        list[StrategyEvent],
+    ],
+    assign_configured_stop_loss: Callable[[Entry, int], None],
 ) -> list[StrategyEvent]:
     """Add a new counter entry if adverse distance threshold is met."""
     if cycle.completed:
@@ -206,7 +213,7 @@ def process_cycle_counter_adds(
             return []
         if not _new_layer_interval_hit(strategy, tick, cycle, layer):
             return []
-        return strategy._open_layer_initial(ss, tick, cycle)
+        return open_layer_initial(ss, tick, cycle)
 
     slot = layer.next_available_counter_slot()
     if slot is None or not head_losing():
@@ -237,6 +244,7 @@ def process_cycle_counter_adds(
         interval,
         head,
         head_entry_id,
+        assign_configured_stop_loss=assign_configured_stop_loss,
     )
 
 
@@ -322,6 +330,8 @@ def _open_counter_entry(
     interval: Decimal,
     head: Entry | None,
     head_entry_id: int | None,
+    *,
+    assign_configured_stop_loss: Callable[[Entry, int], None],
 ) -> list[StrategyEvent]:
     cfg = strategy.config
     direction = cycle.direction
@@ -370,7 +380,7 @@ def _open_counter_entry(
     entry.validation_status = "pass"
 
     if cfg.stop_loss_enabled:
-        strategy._assign_configured_stop_loss(entry, slot.index + 1)
+        assign_configured_stop_loss(entry, slot.index + 1)
 
     logger.info(
         "Counter add (%s) in cycle %d: L%d/R%d, units=%d, adverse=%.1f pips",

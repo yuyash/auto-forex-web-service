@@ -17,6 +17,7 @@ from rest_framework.test import APIClient
 
 from apps.market.models import OandaAccounts
 from apps.trading.models import StrategyConfiguration
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from tests.e2e.helpers import (
     E2E_PASSWORD,
     OANDA_ACCOUNT_ID,
@@ -105,18 +106,20 @@ def oanda_account(test_user, db):
 @pytest.fixture
 def strategy_config(test_user, db):
     """Create a snowball strategy configuration for USD_JPY."""
+    parameters = SnowballStrategyConfig.from_dict({}).to_dict()
+    parameters.update(
+        {
+            "base_units": 1000,
+            "m_pips": 50,
+            "r_max": 5,
+            "f_max": 3,
+        }
+    )
     return StrategyConfiguration.objects.create(
         user=test_user,
         name="E2E Snowball Strategy",
         strategy_type="snowball",
-        parameters={
-            "instrument": "USD_JPY",
-            "base_units": 1000,
-            "m_pips": 50,
-            "n_pips": 30,
-            "r_max": 5,
-            "f_max": 3,
-        },
+        parameters=parameters,
     )
 
 

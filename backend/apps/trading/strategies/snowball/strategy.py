@@ -35,13 +35,18 @@ from apps.trading.events import (
 from apps.trading.models.state import ExecutionState
 from apps.trading.strategies.base import Strategy
 from apps.trading.strategies.registry import register_strategy
+from apps.trading.strategies.snowball.accounting import update_account_metrics
 from apps.trading.strategies.snowball.counter_flow import (
     entry_take_profit_hit,
     format_counter_add_description,
     process_cycle_counter_adds,
     process_cycle_counter_closes,
 )
-from apps.trading.strategies.snowball.enums import CycleStatus, ProtectionLevel
+from apps.trading.strategies.snowball.cycle_orchestrator import (
+    process_active_cycles,
+    reseed_missing_directions,
+)
+from apps.trading.strategies.snowball.enums import ProtectionLevel
 from apps.trading.strategies.snowball.events import (
     entry_close_event,
     entry_open_event,
@@ -83,9 +88,15 @@ from apps.trading.strategies.snowball.stop_loss_flow import (
     process_stop_loss_closes,
     process_stop_loss_rebuilds,
 )
-from apps.trading.utils import format_money, quote_to_account_rate
+from apps.trading.utils import format_money
 
 logger: Logger = getLogger(__name__)
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    return int(value)
 
 
 @register_strategy(
@@ -232,6 +243,23 @@ class SnowballStrategy(Strategy):
         )
 
         return build_cycle_status_map(strategy_state=strategy_state)
+
+    @classmethod
+    def validate_resume_parameter_compatibility(
+        cls,
+        *,
+        previous_params: dict[str, Any],
+        current_params: dict[str, Any],
+    ) -> None:
+        previous_r_max = _optional_int(previous_params.get("r_max"))
+        current_r_max = _optional_int(current_params.get("r_max"))
+        if previous_r_max is None or current_r_max is None:
+            return
+        if current_r_max < previous_r_max:
+            raise ValueError(
+                "Cannot resume Snowball after decreasing r_max. "
+                "Restart the task to apply a smaller grid."
+            )
 
     def configure_runtime(self, *, account_currency: str, hedging_enabled: bool) -> None:
         super().configure_runtime(
@@ -696,7 +724,13 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        return process_cycle_counter_closes(self, ss, tick, cycle)
+        return process_cycle_counter_closes(
+            self,
+            ss,
+            tick,
+            cycle,
+            close_entry=self._close_entry,
+        )
 
     @staticmethod
     def _entry_take_profit_hit(entry: Entry, tick: Tick) -> bool:
@@ -708,7 +742,14 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        return process_cycle_counter_adds(self, ss, tick, cycle)
+        return process_cycle_counter_adds(
+            self,
+            ss,
+            tick,
+            cycle,
+            open_layer_initial=self._open_layer_initial,
+            assign_configured_stop_loss=self._assign_configured_stop_loss,
+        )
 
     @staticmethod
     def _format_counter_add_description(
@@ -926,7 +967,13 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        return process_stop_loss_closes(self, ss, tick, cycle)
+        return process_stop_loss_closes(
+            self,
+            ss,
+            tick,
+            cycle,
+            close_entry=self._close_entry,
+        )
 
     def _process_stop_loss_rebuilds(
         self,
@@ -949,28 +996,15 @@ class SnowballStrategy(Strategy):
         ss.last_ask = tick.ask
         ss.last_mid = tick.mid
 
-        # Update NAV
-        if state.current_balance:
-            ss.account_balance = Decimal(str(state.current_balance))
-        unrealized = Decimal("0")
-        conv = quote_to_account_rate(self.instrument, tick.mid, self.account_currency)
-        for entry in ss.all_entries():
-            if entry.is_long:
-                unrealized += (tick.bid - entry.entry_price) * Decimal(str(entry.units)) * conv
-            else:
-                unrealized += (entry.entry_price - tick.ask) * Decimal(str(entry.units)) * conv
-        ss.account_nav = ss.account_balance + unrealized
-        if ss.account_nav <= 0:
-            ss.account_nav = ss.account_balance
-
         events: list[StrategyEvent] = []
-        ratio = margin_ratio(
+        ratio = update_account_metrics(
             state=state,
             ss=ss,
+            tick=tick,
             instrument=self.instrument,
             account_currency=self.account_currency,
+            margin_ratio_func=margin_ratio,
         )
-        ss.metrics["margin_ratio"] = str(ratio / Decimal("100"))
 
         # --- Emergency ---
         emergency = handle_emergency(strategy=self, ss=ss, tick=tick, ratio=ratio)
@@ -1044,171 +1078,31 @@ class SnowballStrategy(Strategy):
             state.strategy_state = ss.to_dict()
             return StrategyResult(state=state, events=events)
 
-        # --- Per-cycle processing ---
-        for cycle in list(ss.active_cycles()):
-            if cycle.grid.is_empty() and cycle.grid.has_pending_rebuilds():
-                # Pending-only cycles can rebuild or be re-seeded, but
-                # must not originate fresh counter entries from stale
-                # pending snapshots.
-                cycle.status = CycleStatus.PENDING
-                if allow_new_positions:
-                    sl_rebuild_events = self._process_stop_loss_rebuilds(ss, tick, cycle)
-                    events.extend(sl_rebuild_events)
-                if cycle.grid.is_empty():
-                    self._validate_grid_ordering(cycle)
-                    continue
-                cycle.status = CycleStatus.ACTIVE
-
-            counter_close_events = self._process_cycle_counter_closes(ss, tick, cycle)
-            events.extend(counter_close_events)
-
-            events.extend(
-                self._process_cycle_tp(
-                    ss,
-                    tick,
-                    cycle,
-                    allow_reentry=allow_new_positions,
-                )
+        cycle_result = process_active_cycles(
+            self,
+            ss,
+            tick,
+            allow_new_positions=allow_new_positions,
+        )
+        events.extend(cycle_result.events)
+        if cycle_result.stop_reason:
+            state.strategy_state = ss.to_dict()
+            return StrategyResult(
+                state=state,
+                events=events,
+                should_stop=True,
+                stop_reason=cycle_result.stop_reason,
+                is_error=cycle_result.is_error,
             )
 
-            if self._close_order_violation:
-                state.strategy_state = ss.to_dict()
-                return StrategyResult(
-                    state=state,
-                    events=events,
-                    should_stop=True,
-                    stop_reason=f"Close order violation: {self._close_order_violation}",
-                    is_error=True,
-                )
-
-            # --- Stop-loss closes ---
-            sl_close_events = self._process_stop_loss_closes(ss, tick, cycle)
-            events.extend(sl_close_events)
-
-            # --- Stop-loss rebuilds ---
-            if allow_new_positions:
-                sl_rebuild_events = self._process_stop_loss_rebuilds(ss, tick, cycle)
-                events.extend(sl_rebuild_events)
-
-            if allow_new_positions and not counter_close_events:
-                # Apply counter adds repeatedly within the same tick.
-                # A single adverse move can cross multiple retracement
-                # thresholds or even layer boundaries (for example when a
-                # stop-loss hit sets the reference past the next counter
-                # target).  Looping here closes that gap instead of waiting
-                # for later ticks — during fast moves those follow-up ticks
-                # often print retraces that would cancel the trigger.
-                #
-                # The loop is bounded by (f_max * (r_max + 1)) as a hard
-                # safety rail against unexpected fixed points.
-                max_iterations = max(1, self.config.f_max * (self.config.r_max + 1))
-                for _ in range(max_iterations):
-                    add_events = self._process_cycle_counter_adds(ss, tick, cycle)
-                    if not add_events:
-                        break
-                    events.extend(add_events)
-
-            self._validate_grid_ordering(cycle)
-            if self._grid_order_violation and self.config.grid_order_validation_enabled:
-                state.strategy_state = ss.to_dict()
-                return StrategyResult(
-                    state=state,
-                    events=events,
-                    should_stop=True,
-                    stop_reason=f"Grid ordering violation: {self._grid_order_violation}",
-                    is_error=True,
-                )
-            if self._grid_order_violation:
-                logger.error(
-                    "Grid ordering violation ignored because grid_order_validation_enabled=false: %s",
-                    self._grid_order_violation,
-                )
-                self._grid_order_violation = None
-
-            # --- Cycle status update ---
-            # ACTIVE:    at least one open (live) entry exists.
-            # PENDING:   no open entries, but at least one pending rebuild.
-            # COMPLETED: no open entries and no pending rebuilds.
-            if cycle.is_active or cycle.is_pending:
-                has_open = not cycle.grid.is_empty()
-                has_pending = cycle.grid.has_pending_rebuilds()
-                if has_open:
-                    if cycle.is_pending:
-                        cycle.status = CycleStatus.ACTIVE
-                elif has_pending:
-                    if cycle.is_active:
-                        cycle.status = CycleStatus.PENDING
-                else:
-                    cycle.status = CycleStatus.COMPLETED
-                    if cycle.realized_pnl < 0:
-                        logger.warning(
-                            "Cycle %d (%s) completed with negative realised P/L: %s",
-                            cycle.cycle_id,
-                            cycle.direction.value.upper(),
-                            cycle.realized_pnl,
-                        )
-
-        # --- Re-seed directions that have no tradable cycle ---
-        # A direction needs a new cycle when:
-        # 1. All cycles for that direction are COMPLETED, or
-        # 2. reseed_on_all_pending is enabled and all remaining cycles
-        #    are PENDING (no open positions, only pending rebuilds), or
-        # 3. reseed_on_grid_exhausted is enabled and all remaining cycles
-        #    have every slot in pending-rebuild state (grid fully saturated).
-        active = ss.active_cycles()  # non-completed cycles
-        for direction in (Direction.LONG, Direction.SHORT):
-            if not allow_new_positions:
-                break
-            if not self._hedging_enabled and direction == Direction.SHORT:
-                continue
-            dir_cycles = [c for c in active if c.direction == direction]
-            if not dir_cycles:
-                # No active or pending cycles — all completed.  When
-                # stop-loss is on but rebuilds are off, this is the
-                # normal state reached after every live slot has been
-                # stopped out or taken profit.  Only re-seed in that
-                # regime when the user opted in via
-                # ``complete_cycle_when_empty`` — otherwise the strategy
-                # stays idle for this direction so the operator can
-                # inspect the final cycle without the loop spawning
-                # another one immediately.
-                if (
-                    self.config.stop_loss_enabled
-                    and not self.config.rebuild_enabled
-                    and not self.config.complete_cycle_when_empty
-                ):
-                    logger.debug(
-                        "No active %s cycle but auto re-seed disabled — "
-                        "staying idle (stop_loss_enabled, rebuild_enabled=False, "
-                        "complete_cycle_when_empty=False)",
-                        direction.value.upper(),
-                    )
-                    continue
-                logger.info(
-                    "No active %s cycle — creating new cycle",
-                    direction.value.upper(),
-                )
-                new_events, _ = self._create_cycle(ss, tick, direction)
-                events.extend(new_events)
-            elif self.config.reseed_on_all_pending and all(c.is_pending for c in dir_cycles):
-                # All cycles for this direction are PENDING (only pending
-                # rebuilds, no open positions).  Start a fresh cycle.
-                logger.info(
-                    "All %s cycles pending — creating new cycle (reseed_on_all_pending)",
-                    direction.value.upper(),
-                )
-                new_events, _ = self._create_cycle(ss, tick, direction)
-                events.extend(new_events)
-            elif self.config.reseed_on_grid_exhausted and all(
-                c.is_grid_exhausted(self.config.f_max) for c in dir_cycles
-            ):
-                # All cycles have every slot in pending-rebuild state.
-                logger.info(
-                    "All %s cycle grids exhausted — creating new cycle (reseed_on_grid_exhausted)",
-                    direction.value.upper(),
-                )
-                new_events, _ = self._create_cycle(ss, tick, direction)
-                events.extend(new_events)
+        events.extend(
+            reseed_missing_directions(
+                self,
+                ss,
+                tick,
+                allow_new_positions=allow_new_positions,
+            )
+        )
 
         state.strategy_state = ss.to_dict()
         return StrategyResult(state=state, events=events)
