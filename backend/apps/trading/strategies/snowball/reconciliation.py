@@ -7,7 +7,9 @@ from typing import Any
 
 from apps.trading.enums import Direction
 from apps.trading.models import Position
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.models import SnowballStrategyState
+from apps.trading.strategies.snowball.pricing import sync_entry_fill_price
 
 
 def reconcile_broker_positions(
@@ -15,9 +17,11 @@ def reconcile_broker_positions(
     state: Any,
     open_positions: list[Position],
     report: Any,
+    strategy_config: Any | None = None,
 ) -> None:
     """Reconcile persisted Snowball entries against broker-backed positions."""
     snowball_state = SnowballStrategyState.from_strategy_state(state.strategy_state)
+    config = _parse_config(strategy_config)
     by_id = {str(position.id): position for position in open_positions}
     assigned_ids: set[str] = set()
 
@@ -45,7 +49,13 @@ def reconcile_broker_positions(
                     )
                     continue
 
-                _apply_position_to_entry(entry=entry, position=matched, report=report)
+                _apply_position_to_entry(
+                    entry=entry,
+                    layer=layer,
+                    position=matched,
+                    report=report,
+                    config=config,
+                )
                 assigned_ids.add(str(matched.id))
 
         for entry in cycle.hedge_entries:
@@ -64,7 +74,13 @@ def reconcile_broker_positions(
                 )
                 continue
 
-            _apply_position_to_entry(entry=entry, position=matched, report=report)
+            _apply_position_to_entry(
+                entry=entry,
+                layer=None,
+                position=matched,
+                report=report,
+                config=config,
+            )
             assigned_ids.add(str(matched.id))
 
     unmatched_positions = [
@@ -89,8 +105,10 @@ def reconcile_broker_positions(
 def _apply_position_to_entry(
     *,
     entry: Any,
+    layer: Any,
     position: Position,
     report: Any,
+    config: SnowballStrategyConfig,
 ) -> None:
     position_id = str(position.id)
     if entry.position_id != position_id:
@@ -99,7 +117,12 @@ def _apply_position_to_entry(
 
     entry.direction = Direction(str(position.direction).lower())
     entry.units = abs(int(position.units))
-    entry.entry_price = _safe_decimal(position.entry_price)
+    sync_entry_fill_price(
+        entry=entry,
+        layer=layer,
+        fill_price=_safe_decimal(position.entry_price),
+        counter_tp_mode=config.counter_tp_mode,
+    )
     entry.layer_number = int(position.layer_index or entry.layer_number or 1)
     entry.retracement_count = int(position.retracement_count or entry.retracement_count or 0)
     if position.entry_time is not None:
@@ -157,3 +180,9 @@ def _safe_decimal(value: Any, default: str = "0") -> Decimal:
         return Decimal(str(value))
     except Exception:  # nosec B110
         return Decimal(default)
+
+
+def _parse_config(strategy_config: Any | None) -> SnowballStrategyConfig:
+    if strategy_config is None:
+        return SnowballStrategyConfig.from_dict({})
+    return SnowballStrategyConfig.from_dict(getattr(strategy_config, "config_dict", {}) or {})

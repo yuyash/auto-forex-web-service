@@ -106,12 +106,14 @@ class StrategyRegistry:
         state: Any,
         open_positions: list[Any],
         report: Any,
+        strategy_config: Any | None = None,
     ) -> None:
         strategy_info = self.get(identifier)
         strategy_info.strategy_cls.reconcile_broker_positions(
             state=state,
             open_positions=open_positions,
             report=report,
+            strategy_config=strategy_config,
         )
 
     def build_cycle_grid_state_map(

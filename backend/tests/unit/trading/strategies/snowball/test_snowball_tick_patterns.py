@@ -797,7 +797,7 @@ class TestCounterAddLoopWithinTick:
         assert r1 is not None and r1.is_occupied, "R1 should be open after -25 pips"
 
         # One big tick that (a) triggers R1's stop-loss and (b) moves far
-        # past R2's planned entry price.  Under the old implementation
+        # past R2's planned entry price.  A previous implementation
         # R1 would SL and the next counter would be deferred to the next
         # tick; the new loop places R2 on this same tick.
         runner.tick(START_PRICE - Decimal("1.30"))

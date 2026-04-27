@@ -197,6 +197,7 @@ class Strategy(ABC):
         state: "ExecutionState",
         open_positions: list[Any],
         report: Any,
+        strategy_config: Any | None = None,
     ) -> None:
         """Apply reconciled broker positions to persisted strategy state.
 
@@ -207,6 +208,7 @@ class Strategy(ABC):
         _ = state
         _ = open_positions
         _ = report
+        _ = strategy_config
 
     @classmethod
     def build_cycle_grid_state_map(

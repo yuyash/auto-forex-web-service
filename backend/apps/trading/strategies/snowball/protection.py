@@ -5,18 +5,29 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from logging import getLogger
-from typing import Any
+from typing import Protocol
 
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.enums import Direction, EventType
-from apps.trading.events import GenericStrategyEvent, StrategyEvent
+from apps.trading.events import ClosePositionEvent, GenericStrategyEvent, StrategyEvent
 from apps.trading.models.state import ExecutionState
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.enums import CycleStatus, ProtectionLevel
 from apps.trading.strategies.snowball.events import entry_open_event
 from apps.trading.strategies.snowball.models import Entry, SnowballCycle, SnowballStrategyState
 from apps.trading.utils import format_money, quote_to_account_rate
 
 logger = getLogger(__name__)
+
+
+class ProtectionStrategy(Protocol):
+    config: SnowballStrategyConfig
+    instrument: str
+    account_currency: str
+    pip_size: Decimal
+    _close_order_violation: str | None
+
+    def _close_entry(self, *args, **kwargs) -> ClosePositionEvent: ...
 
 
 def margin_ratio(
@@ -47,7 +58,7 @@ def margin_ratio(
 
 def handle_emergency(
     *,
-    strategy: Any,
+    strategy: ProtectionStrategy,
     ss: SnowballStrategyState,
     tick: Tick,
     ratio: Decimal,
@@ -78,7 +89,7 @@ def handle_emergency(
 
 def handle_lock(
     *,
-    strategy: Any,
+    strategy: ProtectionStrategy,
     ss: SnowballStrategyState,
     tick: Tick,
     ratio: Decimal,
@@ -149,7 +160,7 @@ def handle_lock(
 
 def handle_lock_release(
     *,
-    strategy: Any,
+    strategy: ProtectionStrategy,
     ss: SnowballStrategyState,
     tick: Tick,
     ratio: Decimal,
@@ -198,7 +209,7 @@ def handle_lock_release(
 
 def handle_shrink(
     *,
-    strategy: Any,
+    strategy: ProtectionStrategy,
     state: ExecutionState,
     ss: SnowballStrategyState,
     tick: Tick,

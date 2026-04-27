@@ -71,8 +71,10 @@ from apps.trading.strategies.snowball.parameters import (
     validate_parameters,
 )
 from apps.trading.strategies.snowball.pricing import (
+    layer_initial_close_price,
     rebuild_take_profit_price,
-    sync_weighted_average_counter_take_profits,
+    sync_entry_fill_price,
+    weighted_avg_close_price,
 )
 from apps.trading.strategies.snowball.protection import (
     handle_emergency,
@@ -194,6 +196,7 @@ class SnowballStrategy(Strategy):
         state: ExecutionState,
         open_positions: list[Any],
         report: Any,
+        strategy_config: Any | None = None,
     ) -> None:
         from apps.trading.strategies.snowball.reconciliation import (
             reconcile_broker_positions,
@@ -203,6 +206,7 @@ class SnowballStrategy(Strategy):
             state=state,
             open_positions=open_positions,
             report=report,
+            strategy_config=strategy_config,
         )
 
     @classmethod
@@ -228,22 +232,6 @@ class SnowballStrategy(Strategy):
         )
 
         return build_cycle_status_map(strategy_state=strategy_state)
-
-    @classmethod
-    def validate_resume_parameter_compatibility(
-        cls,
-        *,
-        previous_params: dict[str, Any],
-        current_params: dict[str, Any],
-    ) -> None:
-        from apps.trading.strategies.snowball.compatibility import (
-            validate_resume_parameter_compatibility,
-        )
-
-        validate_resume_parameter_compatibility(
-            previous_params=previous_params,
-            current_params=current_params,
-        )
 
     def configure_runtime(self, *, account_currency: str, hedging_enabled: bool) -> None:
         super().configure_runtime(
@@ -411,6 +399,8 @@ class SnowballStrategy(Strategy):
         ss: SnowballStrategyState,
         tick: Tick,
         cycle: SnowballCycle,
+        *,
+        allow_reentry: bool = True,
     ) -> list[StrategyEvent]:
         """Close the cycle's R0 (TP hit) and create a new cycle.
 
@@ -471,6 +461,14 @@ class SnowballStrategy(Strategy):
         # cycle, causing exponential proliferation.  The re-seed logic
         # at the end of on_tick will create exactly one new cycle when
         # the direction has zero active/pending cycles.
+        if not allow_reentry:
+            logger.info(
+                "TP (%s) cycle %d — skipping re-entry while new opens are blocked",
+                direction.value.upper(),
+                cycle.cycle_id,
+            )
+            return events
+
         has_other_active = any(
             c.is_active and c.cycle_id != cycle.cycle_id and c.direction == direction
             for c in ss.active_cycles()
@@ -520,6 +518,9 @@ class SnowballStrategy(Strategy):
 
     def _validate_grid_ordering(self, cycle: SnowballCycle) -> None:
         """Ensure present slots preserve monotonic entry/TP ordering."""
+        if not self.config.grid_order_validation_enabled:
+            self._grid_order_violation = None
+            return
         self._grid_order_violation = validate_grid_ordering(
             cycle,
             check_take_profit=self.config.rebuild_take_profit_mode != "manual",
@@ -639,6 +640,8 @@ class SnowballStrategy(Strategy):
         ss: SnowballStrategyState,
         tick: Tick,
         cycle: SnowballCycle,
+        *,
+        allow_reentry: bool = True,
     ) -> list[StrategyEvent]:
         """Check if the cycle's R0 TP target is hit.
 
@@ -705,7 +708,7 @@ class SnowballStrategy(Strategy):
             return []
 
         if not cycle.grid.has_counter_entries():
-            return self._close_and_reenter(ss, tick, cycle)
+            return self._close_and_reenter(ss, tick, cycle, allow_reentry=allow_reentry)
 
         # Counter entries are still open while the head TP is hit.
         # Check whether every remaining counter's TP is also reached
@@ -792,7 +795,7 @@ class SnowballStrategy(Strategy):
             if layer_iter.layer_number > 1 and not layer_iter.has_open_entries():
                 cycle.grid.layers.remove(layer_iter)
 
-        events.extend(self._close_and_reenter(ss, tick, cycle))
+        events.extend(self._close_and_reenter(ss, tick, cycle, allow_reentry=allow_reentry))
         return events
 
     def _process_cycle_counter_closes(
@@ -925,8 +928,8 @@ class SnowballStrategy(Strategy):
         head = cycle.initial_entry
 
         # When all live entries have been stop-loss closed, head is None.
-        # Fall back to the R0 pending-rebuild snapshot so counter adds can
-        # still proceed within the same cycle.
+        # Use the R0 pending-rebuild snapshot so counter adds can still
+        # proceed within the same cycle.
         head_entry_price: Decimal | None = None
         head_entry_id: int | None = None
         head_direction: Direction = cycle.direction
@@ -1124,8 +1127,11 @@ class SnowballStrategy(Strategy):
             layer_ref = None
 
         if cfg.counter_tp_mode == "weighted_avg":
-            close_price, formula = layer.weighted_avg_close_price(
-                new_price, units, include_ref=layer_ref
+            close_price, formula = weighted_avg_close_price(
+                layer,
+                new_price=new_price,
+                new_units=units,
+                include_ref=layer_ref,
             )
         else:
             tp = counter_tp_pips(slot.index, cfg)
@@ -1320,10 +1326,9 @@ class SnowballStrategy(Strategy):
             parent_entry_id=head_entry_id,
         )
 
-        close_price, formula = layer.layer_initial_close_price(
-            price,
-            abs(layer_entry.units),
-            prev_layer,
+        close_price, formula = layer_initial_close_price(
+            new_price=price,
+            prev_layer=prev_layer,
             direction=direction,
             pip_size=self.pip_size,
             m_pips=cfg.m_pips,
@@ -1618,9 +1623,6 @@ class SnowballStrategy(Strategy):
         if not self.config.stop_loss_enabled:
             return []
         if not self.config.rebuild_enabled:
-            # No pending_rebuild snapshots are ever produced in this
-            # mode, so there is nothing to do.  Short-circuit to keep
-            # the tick loop cheap.
             return []
 
         events: list[StrategyEvent] = []
@@ -1912,6 +1914,7 @@ class SnowballStrategy(Strategy):
         lock_events = handle_lock(strategy=self, ss=ss, tick=tick, ratio=ratio)
         if lock_events is not None:
             events.extend(lock_events)
+        allow_new_positions = lock_events is None and ss.protection_level != ProtectionLevel.LOCKED
 
         # --- Lock release ---
         if lock_events is None and ss.protection_level == ProtectionLevel.LOCKED:
@@ -1965,7 +1968,14 @@ class SnowballStrategy(Strategy):
             counter_close_events = self._process_cycle_counter_closes(ss, tick, cycle)
             events.extend(counter_close_events)
 
-            events.extend(self._process_cycle_tp(ss, tick, cycle))
+            events.extend(
+                self._process_cycle_tp(
+                    ss,
+                    tick,
+                    cycle,
+                    allow_reentry=allow_new_positions,
+                )
+            )
 
             if self._close_order_violation:
                 state.strategy_state = ss.to_dict()
@@ -1985,7 +1995,7 @@ class SnowballStrategy(Strategy):
             sl_rebuild_events = self._process_stop_loss_rebuilds(ss, tick, cycle)
             events.extend(sl_rebuild_events)
 
-            if not counter_close_events:
+            if allow_new_positions and not counter_close_events:
                 # Apply counter adds repeatedly within the same tick.
                 # A single adverse move can cross multiple retracement
                 # thresholds or even layer boundaries (for example when a
@@ -2004,10 +2014,7 @@ class SnowballStrategy(Strategy):
                     events.extend(add_events)
 
             self._validate_grid_ordering(cycle)
-            if self._grid_order_violation and (
-                self.config.grid_order_validation_enabled
-                or self.config.rebuild_take_profit_mode == "manual"
-            ):
+            if self._grid_order_violation and self.config.grid_order_validation_enabled:
                 state.strategy_state = ss.to_dict()
                 return StrategyResult(
                     state=state,
@@ -2055,6 +2062,8 @@ class SnowballStrategy(Strategy):
         #    have every slot in pending-rebuild state (grid fully saturated).
         active = ss.active_cycles()  # non-completed cycles
         for direction in (Direction.LONG, Direction.SHORT):
+            if not allow_new_positions:
+                break
             if not self._hedging_enabled and direction == Direction.SHORT:
                 continue
             dir_cycles = [c for c in active if c.direction == direction]
@@ -2137,10 +2146,11 @@ class SnowballStrategy(Strategy):
                 for slot in layer.slots:
                     if slot.entry is not None and slot.entry.entry_id == eid:
                         slot.entry.position_id = str(position_id)
-                        self._sync_entry_fill_price(
+                        sync_entry_fill_price(
                             entry=slot.entry,
                             layer=layer,
                             fill_price=binding.fill_price,
+                            counter_tp_mode=self.config.counter_tp_mode,
                         )
                         # Back-fill trade_cycle_id on the cycle when the
                         # initial entry (cycle_id == entry_id) is executed.
@@ -2153,41 +2163,11 @@ class SnowballStrategy(Strategy):
             for entry in cycle.hedge_entries:
                 if entry.entry_id == eid:
                     entry.position_id = str(position_id)
-                    self._sync_entry_fill_price(
+                    sync_entry_fill_price(
                         entry=entry,
                         layer=None,
                         fill_price=binding.fill_price,
+                        counter_tp_mode=self.config.counter_tp_mode,
                     )
 
         state.strategy_state = ss.to_dict()
-
-    def _sync_entry_fill_price(
-        self,
-        *,
-        entry: Entry,
-        layer: Layer | None,
-        fill_price: Decimal | None,
-    ) -> None:
-        """Align in-memory entry pricing with the broker fill price."""
-        if fill_price is None:
-            return
-
-        fill_price = Decimal(str(fill_price))
-        delta = fill_price - entry.entry_price
-        if delta == 0:
-            return
-
-        entry.entry_price = fill_price
-
-        if entry.stop_loss_price is not None:
-            entry.stop_loss_price += delta
-
-        if (
-            layer is not None
-            and entry.role == "counter"
-            and self.config.counter_tp_mode == "weighted_avg"
-        ):
-            sync_weighted_average_counter_take_profits(layer)
-            return
-
-        entry.close_price += delta

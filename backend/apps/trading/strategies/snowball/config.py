@@ -15,6 +15,61 @@ from apps.trading.strategies.snowball.parsing import (
 
 
 @dataclass(frozen=True, slots=True)
+class GridConfig:
+    base_units: int
+    m_pips: Decimal
+    trend_lot_size: int
+    r_max: int
+    f_max: int
+    post_r_max_base_factor: Decimal
+    refill_up_to: int
+    grid_order_validation_enabled: bool
+
+
+@dataclass(frozen=True, slots=True)
+class StopLossConfig:
+    enabled: bool
+    mode: str
+    pips_head: Decimal
+    pips_tail: Decimal
+    pips_flat_steps: int
+    pips_gamma: Decimal
+    manual_pips: list[Decimal]
+    disable_after_rebuild: bool
+    preserve_highest_retracement_enabled: bool
+    preserve_highest_r_from: int
+
+
+@dataclass(frozen=True, slots=True)
+class RebuildConfig:
+    enabled: bool
+    stop_loss_mode: str
+    stop_loss_manual_pips: list[Decimal]
+    take_profit_mode: str
+    take_profit_pips_head: Decimal
+    take_profit_pips_tail: Decimal
+    take_profit_pips_flat_steps: int
+    take_profit_pips_gamma: Decimal
+    take_profit_manual_pips: list[Decimal]
+    price_adjustment_enabled: bool
+    entry_price_buffer_pips: Decimal
+    exit_price_buffer_pips: Decimal
+    complete_cycle_when_empty: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ProtectionConfig:
+    shrink_enabled: bool
+    m_th: Decimal
+    m1_th: Decimal
+    lock_enabled: bool
+    n_th: Decimal
+    cooldown_sec: int
+    emergency_enabled: bool
+    emergency_threshold: Decimal
+
+
+@dataclass(frozen=True, slots=True)
 class SnowballStrategyConfig:
     """Normalised Snowball strategy configuration."""
 
@@ -121,6 +176,65 @@ class SnowballStrategyConfig:
     rebuild_price_adjustment_enabled: bool
     rebuild_entry_price_buffer_pips: Decimal
     rebuild_exit_price_buffer_pips: Decimal
+
+    @property
+    def grid(self) -> GridConfig:
+        return GridConfig(
+            base_units=self.base_units,
+            m_pips=self.m_pips,
+            trend_lot_size=self.trend_lot_size,
+            r_max=self.r_max,
+            f_max=self.f_max,
+            post_r_max_base_factor=self.post_r_max_base_factor,
+            refill_up_to=self.refill_up_to,
+            grid_order_validation_enabled=self.grid_order_validation_enabled,
+        )
+
+    @property
+    def stop_loss(self) -> StopLossConfig:
+        return StopLossConfig(
+            enabled=self.stop_loss_enabled,
+            mode=self.stop_loss_mode,
+            pips_head=self.stop_loss_pips_head,
+            pips_tail=self.stop_loss_pips_tail,
+            pips_flat_steps=self.stop_loss_pips_flat_steps,
+            pips_gamma=self.stop_loss_pips_gamma,
+            manual_pips=self.stop_loss_manual_pips,
+            disable_after_rebuild=self.disable_loss_cut_after_rebuild,
+            preserve_highest_retracement_enabled=self.preserve_highest_retracement_enabled,
+            preserve_highest_r_from=self.preserve_highest_r_from,
+        )
+
+    @property
+    def rebuild(self) -> RebuildConfig:
+        return RebuildConfig(
+            enabled=self.rebuild_enabled,
+            stop_loss_mode=self.rebuild_stop_loss_mode,
+            stop_loss_manual_pips=self.rebuild_stop_loss_manual_pips,
+            take_profit_mode=self.rebuild_take_profit_mode,
+            take_profit_pips_head=self.rebuild_take_profit_pips_head,
+            take_profit_pips_tail=self.rebuild_take_profit_pips_tail,
+            take_profit_pips_flat_steps=self.rebuild_take_profit_pips_flat_steps,
+            take_profit_pips_gamma=self.rebuild_take_profit_pips_gamma,
+            take_profit_manual_pips=self.rebuild_take_profit_manual_pips,
+            price_adjustment_enabled=self.rebuild_price_adjustment_enabled,
+            entry_price_buffer_pips=self.rebuild_entry_price_buffer_pips,
+            exit_price_buffer_pips=self.rebuild_exit_price_buffer_pips,
+            complete_cycle_when_empty=self.complete_cycle_when_empty,
+        )
+
+    @property
+    def protection(self) -> ProtectionConfig:
+        return ProtectionConfig(
+            shrink_enabled=self.shrink_enabled,
+            m_th=self.m_th,
+            m1_th=self.m1_th,
+            lock_enabled=self.lock_enabled,
+            n_th=self.n_th,
+            cooldown_sec=self.cooldown_sec,
+            emergency_enabled=self.emergency_enabled,
+            emergency_threshold=self.emergency_threshold,
+        )
 
     @staticmethod
     def from_dict(raw: dict[str, Any]) -> SnowballStrategyConfig:
@@ -419,11 +533,9 @@ class SnowballStrategyConfig:
                 "grid_order_validation_enabled must be false when "
                 "rebuild_take_profit_mode is 'manual'"
             )
-        # rebuild_enabled is only meaningful when stop_loss is on.  We
-        # silently ignore the flag when SL is off — it simply does not
-        # apply.  complete_cycle_when_empty likewise only does anything
-        # when rebuilds are disabled.
         if self.complete_cycle_when_empty and not self.stop_loss_enabled:
             raise ValueError("complete_cycle_when_empty requires stop_loss_enabled to be true")
         if self.complete_cycle_when_empty and self.rebuild_enabled:
             raise ValueError("complete_cycle_when_empty requires rebuild_enabled to be false")
+        if not self.stop_loss_enabled and not self.rebuild_enabled:
+            raise ValueError("rebuild_enabled=false requires stop_loss_enabled to be true")

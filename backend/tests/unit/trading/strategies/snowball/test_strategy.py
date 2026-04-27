@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -24,6 +25,7 @@ from apps.trading.strategies.snowball.pricing import (
     rebuild_take_profit_price,
     sync_weighted_average_counter_take_profits,
 )
+from apps.trading.strategies.snowball.reconciliation import reconcile_broker_positions
 from apps.trading.strategies.snowball.strategy import SnowballStrategy
 
 # ---------------------------------------------------------------------------
@@ -733,6 +735,61 @@ class TestSnowballPricingHelpers:
         assert layer.slot_at(2).entry.close_price == Decimal("149.600")
 
 
+class TestSnowballReconciliation:
+    def test_reconcile_syncs_fill_price_and_dependent_prices(self):
+        ss = SnowballStrategyState(initialised=True, account_nav=Decimal("100000"))
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        layer = Layer.create(1, 7, 1000)
+        entry = Entry(
+            entry_id=1,
+            step=1,
+            direction=Direction.LONG,
+            entry_price=Decimal("150.00"),
+            close_price=Decimal("150.50"),
+            units=1000,
+            opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+            role="initial",
+            layer_number=1,
+            retracement_count=0,
+            position_id="pos-1",
+            stop_loss_price=Decimal("149.50"),
+        )
+        layer.slot_at(0).fill(entry)
+        cycle.add_layer(layer)
+        ss.cycles.append(cycle)
+        state = DummyState(strategy_state=ss.to_dict())
+        report = SimpleNamespace(
+            removed_open_entries=0,
+            relinked_open_entries=0,
+            synthesized_open_entries=0,
+            blockers=[],
+        )
+        position = SimpleNamespace(
+            id="pos-1",
+            direction="long",
+            units=1000,
+            entry_price=Decimal("150.02"),
+            layer_index=1,
+            retracement_count=0,
+            entry_time=None,
+            unrealized_pnl=Decimal("0"),
+        )
+        strategy_config = SimpleNamespace(config_dict={"counter_tp_mode": "fixed"})
+
+        reconcile_broker_positions(
+            state=state,
+            open_positions=[position],
+            report=report,
+            strategy_config=strategy_config,
+        )
+
+        updated = SnowballStrategyState.from_strategy_state(state.strategy_state)
+        updated_entry = updated.cycles[0].grid.layers[0].slot_at(0).entry
+        assert updated_entry.entry_price == Decimal("150.02")
+        assert updated_entry.close_price == Decimal("150.52")
+        assert updated_entry.stop_loss_price == Decimal("149.52")
+
+
 # ===================================================================
 # Stop-loss rebuild toggle (rebuild_enabled / complete_cycle_when_empty)
 # ===================================================================
@@ -744,7 +801,7 @@ class TestSnowballRebuildDisabled:
     The key invariant is: when a stop-loss fires under this mode, the
     slot is sealed (``slot.close(refillable=False)``), not converted
     into a ``pending_rebuild`` snapshot.  The cycle's
-    ``_process_stop_loss_rebuilds`` pass is a no-op.
+    ``_process_stop_loss_rebuilds`` pass returns no events.
     """
 
     def _make_cycle_with_two_entries(
@@ -813,7 +870,7 @@ class TestSnowballRebuildDisabled:
         """Even if a pending_rebuild somehow existed, the rebuild pass
         does nothing when the feature is off — no events, no state
         changes.  Guards against accidental re-enable by state
-        deserialization of an older run.
+        deserialization of a persisted run.
         """
         from apps.trading.strategies.snowball.models import StopLossClosedEntry
 

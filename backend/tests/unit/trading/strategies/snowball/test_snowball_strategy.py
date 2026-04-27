@@ -844,6 +844,7 @@ class TestLockMode:
 
         assert _signal_events(result, "snowball_locked")
         assert any(e.close_reason == "tp" for e in _close_events(result))
+        assert _open_events(result) == []
         persisted = SnowballStrategyState.from_strategy_state(state.strategy_state)
         assert persisted.protection_level.value == "locked"
 

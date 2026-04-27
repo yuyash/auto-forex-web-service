@@ -451,4 +451,5 @@ class TradingResumeReconciler:
             state=self.state,
             open_positions=open_positions,
             report=report,
+            strategy_config=self.task.config,
         )
