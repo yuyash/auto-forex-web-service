@@ -68,6 +68,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
+      grepInvert: /@mobile-only/,
       use: {
         ...devices['Desktop Chrome'],
         // Additional chromium-specific settings
@@ -82,6 +83,7 @@ export default defineConfig({
 
     {
       name: 'firefox',
+      grepInvert: /@mobile-only/,
       use: {
         ...devices['Desktop Firefox'],
         // Additional firefox-specific settings
@@ -95,17 +97,18 @@ export default defineConfig({
 
     {
       name: 'webkit',
+      grepInvert: /@mobile-only/,
       use: {
         ...devices['Desktop Safari'],
         // Additional webkit-specific settings
       },
     },
 
-    /* Test against mobile viewports (optional, commented out by default) */
-    // {
-    //   name: 'Mobile Chrome',
-    //   use: { ...devices['Pixel 5'] },
-    // },
+    {
+      name: 'mobile-chrome',
+      grep: /@mobile-only/,
+      use: { ...devices['Pixel 5'] },
+    },
     // {
     //   name: 'Mobile Safari',
     //   use: { ...devices['iPhone 12'] },

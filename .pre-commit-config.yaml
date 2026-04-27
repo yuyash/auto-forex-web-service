@@ -35,7 +35,7 @@ repos:
         name: Ruff strict checks for refactored surfaces
         entry: backend/.venv/bin/ruff check --config=backend/pyproject.toml --select B,C4,SIM,UP,RET
         language: system
-        files: ^backend/(apps/(market/services/oanda_transport|trading/services/(task_activity|task_metrics))\.py|scripts/check_openapi_schema\.py|tests/unit/(market/services/test_oanda_transport|trading/(services/test_task_(activity|metrics)|strategies/snowball/test_grid_policy|tasks/test_event_processor))\.py)$
+        files: ^backend/(apps/(market/services/oanda_transport|trading/(services/(task_activity|task_metrics)|tasks/market_session))\.py|scripts/check_openapi_schema\.py|tests/unit/(market/services/test_oanda_transport|trading/(services/test_task_(activity|metrics)|strategies/snowball/test_grid_policy|tasks/test_event_processor))\.py)$
 
       - id: ty
         name: ty

@@ -1,8 +1,13 @@
 import React from 'react';
-import { Box, IconButton, InputAdornment, TextField } from '@mui/material';
+import { IconButton, InputAdornment, TextField } from '@mui/material';
 import { Search as SearchIcon, Clear as ClearIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { DateRangeFilter } from '../../common/DateRangeFilter';
+import { TableFilterBar } from '../../common/TableFilterBar';
+import {
+  tableFilterDateRangeSx,
+  tableFilterFieldSx,
+} from '../../common/tableFilterLayout';
 
 interface TaskPositionFilterBarProps {
   cycleIdFilter: string;
@@ -41,20 +46,7 @@ export const TaskPositionFilterBar: React.FC<TaskPositionFilterBarProps> = ({
     onDateToChange !== undefined;
 
   return (
-    <Box
-      sx={{
-        mb: 2,
-        display: 'flex',
-        gap: 1,
-        flexWrap: 'wrap',
-        alignItems: { xs: 'stretch', sm: 'center' },
-        p: { xs: 1.25, sm: 0 },
-        border: { xs: 1, sm: 0 },
-        borderColor: 'divider',
-        borderRadius: { xs: 1, sm: 0 },
-        bgcolor: { xs: 'background.paper', sm: 'transparent' },
-      }}
-    >
+    <TableFilterBar>
       <TextField
         size="small"
         placeholder={t('tables.positions.cycleIdFilter')}
@@ -66,10 +58,7 @@ export const TaskPositionFilterBar: React.FC<TaskPositionFilterBarProps> = ({
             ? t('tables.positions.invalidCycleId')
             : undefined
         }
-        sx={{
-          flex: { xs: '1 1 100%', sm: '0 1 280px' },
-          minWidth: 0,
-        }}
+        sx={tableFilterFieldSx}
         slotProps={{
           input: {
             startAdornment: (
@@ -102,10 +91,7 @@ export const TaskPositionFilterBar: React.FC<TaskPositionFilterBarProps> = ({
             ? t('tables.positions.invalidPositionId')
             : undefined
         }
-        sx={{
-          flex: { xs: '1 1 100%', sm: '0 1 280px' },
-          minWidth: 0,
-        }}
+        sx={tableFilterFieldSx}
         slotProps={{
           input: {
             startAdornment: (
@@ -133,9 +119,9 @@ export const TaskPositionFilterBar: React.FC<TaskPositionFilterBarProps> = ({
           to={dateTo}
           onFromChange={onDateFromChange}
           onToChange={onDateToChange}
-          sx={{ flex: { xs: '1 1 100%', md: '0 0 auto' } }}
+          sx={tableFilterDateRangeSx}
         />
       )}
-    </Box>
+    </TableFilterBar>
   );
 };

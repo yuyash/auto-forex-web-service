@@ -40,6 +40,11 @@ import { buildCopyHandler } from '../../../utils/tableCopyUtils';
 import { formatAppNumber } from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
 import { DateRangeFilter } from '../../common/DateRangeFilter';
+import { TableFilterBar } from '../../common/TableFilterBar';
+import {
+  tableFilterDateRangeSx,
+  tableFilterFieldSx,
+} from '../../common/tableFilterLayout';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -461,20 +466,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
           />
         </Box>
       </Box>
-      <Box
-        sx={{
-          mb: 2,
-          display: 'flex',
-          gap: 1,
-          flexWrap: 'wrap',
-          alignItems: { xs: 'stretch', sm: 'center' },
-          p: { xs: 1.25, sm: 0 },
-          border: { xs: 1, sm: 0 },
-          borderColor: 'divider',
-          borderRadius: { xs: 1, sm: 0 },
-          bgcolor: { xs: 'background.paper', sm: 'transparent' },
-        }}
-      >
+      <TableFilterBar>
         <TextField
           size="small"
           placeholder={t('tables.trades.cycleIdFilter')}
@@ -486,10 +478,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
               ? t('tables.trades.invalidCycleId')
               : undefined
           }
-          sx={{
-            flex: { xs: '1 1 100%', sm: '0 1 280px' },
-            minWidth: 0,
-          }}
+          sx={tableFilterFieldSx}
           slotProps={{
             input: {
               startAdornment: (
@@ -525,10 +514,7 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
               ? t('tables.trades.invalidTradeId')
               : undefined
           }
-          sx={{
-            flex: { xs: '1 1 100%', sm: '0 1 280px' },
-            minWidth: 0,
-          }}
+          sx={tableFilterFieldSx}
           slotProps={{
             input: {
               startAdornment: (
@@ -561,9 +547,9 @@ export const TaskTradesTable: React.FC<TaskTradesTableProps> = ({
             setDateTo(v);
             setPage(0);
           }}
-          sx={{ flex: { xs: '1 1 100%', md: '0 0 auto' } }}
+          sx={tableFilterDateRangeSx}
         />
-      </Box>
+      </TableFilterBar>
 
       <DataTable
         columns={visibleColumns}

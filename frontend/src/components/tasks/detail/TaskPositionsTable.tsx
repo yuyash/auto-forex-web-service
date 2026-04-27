@@ -18,8 +18,6 @@ import {
   TablePagination,
   IconButton,
   Tooltip,
-  ToggleButtonGroup,
-  ToggleButton,
   Chip,
 } from '@mui/material';
 import {
@@ -51,6 +49,7 @@ import { formatAppNumber } from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
 import { TaskPositionFilterBar } from './TaskPositionFilterBar';
 import { TaskPositionModeViews } from './TaskPositionModeViews';
+import { TaskPositionViewHeader } from './TaskPositionViewHeader';
 import { useTaskPositionFilters } from './useTaskPositionFilters';
 import { useTaskPositionViewMode } from './useTaskPositionViewMode';
 import { useStrategies } from '../../../hooks/useStrategies';
@@ -1585,43 +1584,12 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
 
   return (
     <Box sx={{ p: 3 }}>
-      {/* View mode toggle + PnL summary */}
-      <Box
-        sx={{
-          mb: 3,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 1,
-        }}
-      >
-        <ToggleButtonGroup
-          value={viewMode}
-          exclusive
-          onChange={handleViewModeChange}
-          size="small"
-        >
-          <ToggleButton value="all">
-            {t('tables.positions.viewMode.all')}
-          </ToggleButton>
-          <ToggleButton value="byDirection">
-            {t('tables.positions.viewMode.byDirection')}
-          </ToggleButton>
-          <ToggleButton value="byStatus">
-            {t('tables.positions.viewMode.byStatus')}
-          </ToggleButton>
-        </ToggleButtonGroup>
-        {viewMode !== 'byStatus' && (
-          <Typography
-            variant="subtitle1"
-            fontWeight="bold"
-            color={totalPnl >= 0 ? 'success.main' : 'error.main'}
-          >
-            {t('tables.positions.totalPnl')}: {formatSignedYen(totalPnl)}
-          </Typography>
-        )}
-      </Box>
+      <TaskPositionViewHeader
+        viewMode={viewMode}
+        onViewModeChange={handleViewModeChange}
+        totalPnl={totalPnl}
+        formattedTotalPnl={formatSignedYen(totalPnl)}
+      />
 
       <TaskPositionModeViews
         viewMode={viewMode}

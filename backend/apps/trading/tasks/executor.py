@@ -12,7 +12,7 @@ from decimal import InvalidOperation
 from decimal import Decimal
 from logging import Logger, getLogger
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, List, cast
+from typing import List, cast
 
 from django.utils import timezone as dj_timezone
 
@@ -37,13 +37,11 @@ from apps.trading.tasks.execution_state_store import (
     ExecutionStateStore,
 )
 from apps.trading.tasks.event_processor import TaskEventProcessor
+from apps.trading.tasks.market_session import is_forex_market_closed
 from apps.trading.tasks.market_idle import MarketIdleCoordinator
 from apps.trading.tasks.source import TickDataSource
 from apps.trading.tasks.state import StateManager
 from apps.trading.utils import format_money, quote_to_account_rate
-
-if TYPE_CHECKING:
-    from apps.trading.services.market_schedule import MarketSessionConfig
 
 logger: Logger = getLogger(name=__name__)
 
@@ -58,26 +56,6 @@ class StrategyError(Exception):
     ``should_stop=True`` with ``is_error=True``.  Task runners should
     catch this to transition the task to FAILED with the error message.
     """
-
-
-def is_forex_market_closed(
-    now: datetime | None = None,
-    *,
-    config: "MarketSessionConfig | None" = None,
-) -> bool:
-    """Check if the forex market is currently closed (weekend).
-
-    Forex market closes Friday 21:00 UTC and reopens Sunday 21:00 UTC.
-
-    Delegates to :mod:`apps.trading.services.market_schedule` so the rule
-    lives in a single, testable module.  This function is kept for
-    backwards compatibility with existing callers and tests.  ``config``
-    may be supplied to override the default schedule (e.g. for backtests
-    that customise the close/open weekday-hour pair).
-    """
-    from apps.trading.services.market_schedule import is_forex_market_closed as _impl
-
-    return _impl(now, config=config)
 
 
 @dataclass(slots=True)
