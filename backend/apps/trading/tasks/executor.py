@@ -1797,7 +1797,8 @@ class TradingExecutor(TaskExecutor):
         logger.info(
             "Trading %s reconciliation complete - task_id=%s, execution_id=%s, "
             "open_trades=%d, pending_orders=%d, closed_local=%d, created_local=%d, "
-            "updated_local=%d, removed_entries=%d, synthesized_entries=%d, relinked_entries=%d",
+            "updated_local=%d, removed_entries=%d, synthesized_entries=%d, relinked_entries=%d, "
+            "backfilled_fills=%d",
             lifecycle,
             self.task.pk,
             self.task.execution_id,
@@ -1809,6 +1810,7 @@ class TradingExecutor(TaskExecutor):
             report.removed_open_entries,
             report.synthesized_open_entries,
             report.relinked_open_entries,
+            report.backfilled_broker_fills,
         )
         return state
 

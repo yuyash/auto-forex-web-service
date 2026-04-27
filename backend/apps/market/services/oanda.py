@@ -1451,6 +1451,15 @@ class OandaService:
         )
 
     def _parse_transaction(self, txn: dict[str, Any]) -> Transaction:
+        trade_id = None
+        trade_opened = txn.get("tradeOpened")
+        if isinstance(trade_opened, dict):
+            trade_id = trade_opened.get("tradeID")
+        trades_closed = txn.get("tradesClosed")
+        if trade_id is None and isinstance(trades_closed, list) and trades_closed:
+            first_closed = trades_closed[0]
+            if isinstance(first_closed, dict):
+                trade_id = first_closed.get("tradeID")
         return Transaction(
             transaction_id=str(txn.get("id", "")),
             time=self._parse_iso_datetime(txn.get("time")),
@@ -1460,6 +1469,10 @@ class OandaService:
             price=self._to_decimal(txn.get("price")),
             pl=self._to_decimal(txn.get("pl")),
             account_balance=self._to_decimal(txn.get("accountBalance")),
+            order_id=str(txn.get("orderID")) if txn.get("orderID") is not None else None,
+            trade_id=str(trade_id) if trade_id not in (None, "") else None,
+            reason=str(txn.get("reason")) if txn.get("reason") else None,
+            raw=self._make_jsonable(txn),
         )
 
     def _to_decimal(self, value: Any) -> Decimal | None:

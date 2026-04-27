@@ -55,6 +55,14 @@ function isProtectionTrade(trade: CycleTrade): boolean {
   );
 }
 
+function isBrokerSyncTrade(trade: CycleTrade): boolean {
+  return (
+    trade.execution_method === 'broker_backfill' ||
+    trade.execution_method === 'broker_reconciliation' ||
+    (trade.description?.includes('broker_') ?? false)
+  );
+}
+
 const HIGHLIGHT_COLOR = '#f59e0b';
 
 export function buildCycleMarkers(
@@ -82,25 +90,28 @@ export function buildCycleMarkers(
     const isOpen = trade.execution_method === 'open_position';
     const isBuy = trade.direction === 'buy';
     const isProtection = isProtectionTrade(trade);
+    const isBrokerSync = isBrokerSyncTrade(trade);
     const isRebuild = trade.is_rebuild ?? false;
 
     const baseColor = isProtection
       ? '#e91e63'
-      : isOpen
-        ? isBuy
-          ? '#26a69a'
-          : '#ef5350'
-        : '#ff9800';
+      : isBrokerSync
+        ? '#7b1fa2'
+        : isOpen
+          ? isBuy
+            ? '#26a69a'
+            : '#ef5350'
+          : '#ff9800';
 
     const color = isSelected ? HIGHLIGHT_COLOR : baseColor;
 
-    if (isProtection) {
+    if (isProtection || isBrokerSync) {
       markers.push({
         time: snapped as Time,
         position: 'aboveBar',
         color,
         shape: 'circle',
-        text: `⚠ ${trade.execution_method.replace('_', ' ')} ${trade.units}`,
+        text: `${isProtection ? '!' : 'Sync'} ${trade.execution_method.replace('_', ' ')} ${trade.units}`,
         tradeId: trade.id,
       });
     } else {

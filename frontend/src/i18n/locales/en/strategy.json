@@ -13,6 +13,7 @@
   "types": {
     "snowball": "Snowball Strategy",
     "adaptive_net": "Adaptive Net Strategy",
+    "net_grid": "Net Grid Strategy",
     "trendFollowing": "Trend Following",
     "maCrossover": "MA Crossover",
     "breakout": "Breakout",
@@ -27,7 +28,8 @@
   },
   "descriptions": {
     "snowball": "Dual-basket hedging strategy: rotational profit-taking on the trend side and averaging-down with step-based partial closes on the counter side.",
-    "adaptive_net": "US-compatible net-position strategy that combines pluggable metrics into a target net exposure."
+    "adaptive_net": "US-compatible net-position strategy that combines pluggable metrics into a target net exposure.",
+    "net_grid": "US-compatible grid strategy that adjusts one net position by grid interval and records a fill-based ledger."
   },
   "parameters": {
     "lotSize": "Lot Size",
@@ -162,6 +164,67 @@
       "beforeAfterNet": "{{before}} → {{after}}",
       "deltaAbs": "absolute delta {{value}}",
       "beforeAverageEntry": "before {{value}}"
+    }
+  },
+  "netGrid": {
+    "noState": "Net Grid state will appear after the strategy processes market data.",
+    "directions": {
+      "flat": "Flat",
+      "netLong": "Net Long",
+      "netShort": "Net Short"
+    },
+    "summary": {
+      "title": "Net Grid Position",
+      "description": "Broker-compatible net exposure and the current grid state.",
+      "currentNet": "Current Net",
+      "averageEntry": "Average Entry",
+      "step": "Grid Step",
+      "stepValue": "{{step}} / {{max}} ({{usage}})",
+      "lastGridPrice": "Last Grid Price",
+      "takeProfitPrice": "Net Take Profit",
+      "takeProfitRemaining": "Pips to Take Profit",
+      "nextGridPrice": "Next Add Price",
+      "lastBackfilledTransaction": "Backfilled Transaction",
+      "brokerSyncStatus": "OANDA Sync",
+      "brokerSyncedAt": "Synced At",
+      "backfilledFills": "{{count}} backfilled fills",
+      "openTrades": "{{count}} broker trades",
+      "pendingOrders": "{{count}} pending orders"
+    },
+    "chart": {
+      "title": "Execution Chart",
+      "description": "OHLC price action with grid fills as markers and net-position levels as price lines.",
+      "averageEntry": "Avg",
+      "takeProfit": "TP",
+      "lastGrid": "Grid",
+      "nextGrid": "Next Add",
+      "fillMarkers": "Fills",
+      "syncMarkers": "Broker Sync"
+    },
+    "alerts": {
+      "syncWarning": "OANDA reconciliation completed with warnings. Review the broker audit fields before trusting the run.",
+      "syncBlocked": "OANDA reconciliation is blocked. Review open broker state before placing further orders."
+    },
+    "latestDecision": "{{action}} by {{units}} units ({{reason}})",
+    "ledger": {
+      "title": "Grid Ledger",
+      "description": "Fill-based net-position changes used for analysis and reconciliation.",
+      "empty": "No ledger entries yet.",
+      "action": "Action",
+      "unitsDelta": "Units Delta",
+      "fill": "Fill",
+      "netAfter": "Net After",
+      "pnl": "P&L"
+    },
+    "audit": {
+      "title": "Broker Audit",
+      "description": "OANDA transaction/order/trade IDs captured from reconciliation and transaction-history backfill.",
+      "empty": "No broker audit records yet.",
+      "action": "Action",
+      "transaction": "Transaction ID",
+      "order": "Order ID",
+      "trade": "Trade ID",
+      "units": "Units"
     }
   }
 }

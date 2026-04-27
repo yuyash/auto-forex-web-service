@@ -77,7 +77,7 @@ export interface StrategyCyclesResponse {
     cycle_statuses?: boolean;
     grid?: boolean;
   };
-  strategy_state?: AdaptiveNetStrategyState | null;
+  strategy_state?: AdaptiveNetStrategyState | NetGridStrategyState | null;
   cycles: StrategyCycle[];
   summary: StrategyCyclesSummary;
   last_tick_timestamp: string | null;
@@ -89,6 +89,72 @@ export interface AdaptiveNetMetricSignal {
   confidence: string;
   size_multiplier: string;
   reason?: string;
+}
+
+export interface NetGridLedgerEntry {
+  timestamp?: string | null;
+  action: string;
+  reason?: string | null;
+  units_delta: number;
+  filled_price?: string | null;
+  net_units_before: number;
+  net_units_after: number;
+  avg_price_before?: string | null;
+  avg_price_after?: string | null;
+  realized_pnl?: string | null;
+  realized_pnl_quote?: string | null;
+  source?: string | null;
+  broker_transaction_id?: string | null;
+  broker_order_id?: string | null;
+  oanda_trade_id?: string | null;
+}
+
+export interface NetGridDecision {
+  action: string;
+  reason: string;
+  target_net_units?: number | null;
+  units_delta: number;
+  step_after?: number;
+  [key: string]: unknown;
+}
+
+export interface NetGridStrategyState {
+  current_net_units: number;
+  target_net_units: number;
+  open_units: number;
+  open_direction: string;
+  average_entry_price?: string | null;
+  anchor_price?: string | null;
+  last_grid_price?: string | null;
+  net_take_profit_price?: string | null;
+  next_grid_price?: string | null;
+  take_profit_remaining_pips?: string | null;
+  step: number;
+  step_usage?: string | null;
+  max_steps?: number | null;
+  started_at?: string | null;
+  open_position_id?: string | null;
+  open_entry_id?: number | null;
+  next_entry_id?: number;
+  grid_ledger?: NetGridLedgerEntry[];
+  latest_decision?: NetGridDecision | null;
+  latest_position_transition?: NetGridLedgerEntry | null;
+  pending_execution?: NetGridDecision | null;
+  last_bid?: string | null;
+  last_ask?: string | null;
+  last_mid?: string | null;
+  last_tick_at?: string | null;
+  broker_reconciled_at?: string | null;
+  broker_reconciliation_status?: 'ok' | 'warning' | 'blocked' | string | null;
+  broker_unrealized_pnl?: string | null;
+  broker_open_trade_count?: number | null;
+  broker_pending_order_count?: number | null;
+  broker_backfilled_fill_count?: number | null;
+  broker_backfilled_fill_count_latest?: number | null;
+  broker_last_backfilled_transaction_id?: string | number | null;
+  broker_backfilled_at?: string | null;
+  broker_reconciliation_warnings?: string[];
+  broker_reconciliation_blockers?: string[];
 }
 
 export interface AdaptiveNetDecision {

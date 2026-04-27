@@ -14,9 +14,10 @@ from typing import Any, TypeVar
 from django.db.models import F
 from django.utils import timezone as dj_timezone
 
-from apps.market.services.oanda import OandaService, OrderDirection
+from apps.market.services.oanda import OandaService, OrderDirection, Transaction
 from apps.trading.enums import Direction, TaskType
-from apps.trading.models import Position, TradingTask
+from apps.trading.models import Order, Position, Trade, TradingTask
+from apps.trading.models.orders import OrderStatus, OrderType
 from apps.trading.models.state import ExecutionState
 from apps.trading.services.oanda_retry import OandaRetryPolicy, call_with_retry
 
@@ -42,6 +43,7 @@ class ReconciliationReport:
     removed_open_entries: int = 0
     synthesized_open_entries: int = 0
     relinked_open_entries: int = 0
+    backfilled_broker_fills: int = 0
     blockers: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -62,6 +64,44 @@ def _safe_decimal(value: Any, default: str = "0") -> Decimal:
         return Decimal(str(value))
     except Exception:  # nosec B110
         return Decimal(default)
+
+
+def _net_units_from_broker_trades(broker_trades: list[Any]) -> int:
+    total = 0
+    for trade in broker_trades:
+        units = int(abs(getattr(trade, "units", 0) or 0))
+        if getattr(trade, "direction", None) == OrderDirection.SHORT:
+            units = -units
+        total += units
+    return total
+
+
+def _weighted_average_from_broker_trades(broker_trades: list[Any]) -> Decimal | None:
+    total_units = 0
+    weighted = Decimal("0")
+    for trade in broker_trades:
+        units = int(abs(getattr(trade, "units", 0) or 0))
+        if units <= 0:
+            continue
+        total_units += units
+        weighted += Decimal(str(getattr(trade, "entry_price", "0"))) * Decimal(str(units))
+    if total_units <= 0:
+        return None
+    return weighted / Decimal(str(total_units))
+
+
+def _weighted_average_from_local_positions(positions: list[Position]) -> Decimal | None:
+    total_units = 0
+    weighted = Decimal("0")
+    for position in positions:
+        units = abs(int(position.units or 0))
+        if units <= 0:
+            continue
+        total_units += units
+        weighted += Decimal(str(position.entry_price)) * Decimal(str(units))
+    if total_units <= 0:
+        return None
+    return weighted / Decimal(str(total_units))
 
 
 class TradingResumeReconciler:
@@ -102,6 +142,7 @@ class TradingResumeReconciler:
         self._sync_account_snapshot(report)
         self._check_pending_orders(report)
         open_positions = self._sync_positions_with_broker(report)
+        self._backfill_broker_fills(report)
         self._sync_strategy_state_with_positions(open_positions, report)
         self._validate_safety(report=report, resumed=resumed)
         self._record_reconciliation_metadata(report=report)
@@ -134,6 +175,15 @@ class TradingResumeReconciler:
                 is_open=True,
             ).order_by("entry_time", "created_at")
         )
+        strategy_type = str(getattr(self.task.config, "strategy_type", "") or "").strip().lower()
+        if strategy_type == "net_grid":
+            self._detect_net_grid_runtime_drift(
+                broker_trades=broker_trades,
+                local_open_positions=local_open_positions,
+                report=report,
+            )
+            return report
+
         if any(not position.oanda_trade_id for position in local_open_positions):
             report.blockers.append(
                 "Found local open position(s) without OANDA trade ids while live trading is "
@@ -184,6 +234,37 @@ class TradingResumeReconciler:
             )
 
         return report
+
+    def _detect_net_grid_runtime_drift(
+        self,
+        *,
+        broker_trades: list[Any],
+        local_open_positions: list[Position],
+        report: ReconciliationReport,
+    ) -> None:
+        broker_net = _net_units_from_broker_trades(broker_trades)
+        local_net = sum((int(position.units or 0) for position in local_open_positions), 0)
+        if broker_net != local_net:
+            report.blockers.append(
+                f"OANDA net exposure for {self.task.instrument} changed from local "
+                f"{local_net} to broker {broker_net} while the Net Grid task is running."
+            )
+            return
+
+        broker_avg = _weighted_average_from_broker_trades(broker_trades)
+        local_avg = _weighted_average_from_local_positions(local_open_positions)
+        if broker_avg is None and local_avg is None:
+            return
+        if broker_avg is None or local_avg is None:
+            report.blockers.append(
+                "OANDA and local Net Grid average entry state differ while the task is running."
+            )
+            return
+        if abs(broker_avg - local_avg) > Decimal("0.0000001"):
+            report.blockers.append(
+                f"OANDA average entry for {self.task.instrument} changed from local "
+                f"{local_avg} to broker {broker_avg} while the Net Grid task is running."
+            )
 
     def _sync_account_snapshot(self, report: ReconciliationReport) -> None:
         details = self._oanda_call(
@@ -333,6 +414,135 @@ class TradingResumeReconciler:
 
         return refreshed_open_positions
 
+    def _backfill_broker_fills(self, report: ReconciliationReport) -> None:
+        strategy_type = str(getattr(self.task.config, "strategy_type", "") or "").strip().lower()
+        if strategy_type != "net_grid":
+            return
+
+        strategy_state = (
+            self.state.strategy_state if isinstance(self.state.strategy_state, dict) else {}
+        )
+        from_time = (
+            self.state.last_tick_timestamp
+            or getattr(self.state, "created_at", None)
+            or getattr(self.task, "created_at", None)
+        )
+        last_backfilled_id = _safe_int(strategy_state.get("broker_last_backfilled_transaction_id"))
+        transactions = self._oanda_call(
+            self.oanda_service.get_transaction_history,
+            from_time=from_time,
+            transaction_type="ORDER_FILL",
+            label="Fetch transaction history (net grid backfill)",
+        )
+        fills = [
+            tx
+            for tx in sorted(transactions, key=lambda item: int(item.transaction_id or "0"))
+            if tx.type == "ORDER_FILL"
+            and tx.instrument == self.task.instrument
+            and tx.transaction_id
+            and tx.units not in (None, Decimal("0"))
+            and _safe_int(tx.transaction_id) > last_backfilled_id
+            and not self._broker_fill_already_recorded(tx)
+        ]
+        if not fills:
+            return
+
+        for tx in fills:
+            order = self._create_backfilled_order(tx)
+            self._create_backfilled_trade(tx, order)
+            self._append_backfill_ledger_entry(strategy_state, tx)
+            report.backfilled_broker_fills += 1
+
+        last_tx_id = fills[-1].transaction_id
+        strategy_state["broker_last_backfilled_transaction_id"] = last_tx_id
+        strategy_state["broker_backfilled_fill_count"] = int(
+            strategy_state.get("broker_backfilled_fill_count", 0) or 0
+        ) + len(fills)
+        strategy_state["broker_backfilled_at"] = dj_timezone.now().isoformat()
+        self.state.strategy_state = strategy_state
+        report.warnings.append(
+            f"Backfilled {len(fills)} OANDA fill transaction(s) into Net Grid local history."
+        )
+
+    def _broker_fill_already_recorded(self, tx: Transaction) -> bool:
+        return Order.objects.filter(
+            task_type=TaskType.TRADING,
+            task_id=self.task.pk,
+            execution_id=self.execution_id,
+            broker_order_id=tx.transaction_id,
+        ).exists()
+
+    def _create_backfilled_order(self, tx: Transaction) -> Order:
+        signed_units = int(tx.units or 0)
+        direction = Direction.LONG if signed_units > 0 else Direction.SHORT
+        order = Order.objects.create(
+            task_type=TaskType.TRADING,
+            task_id=self.task.pk,
+            execution_id=self.execution_id,
+            broker_order_id=tx.transaction_id,
+            oanda_trade_id=tx.trade_id,
+            instrument=self.task.instrument,
+            order_type=OrderType.MARKET,
+            direction=direction,
+            units=signed_units,
+            fill_price=tx.price,
+            status=OrderStatus.FILLED,
+            filled_at=tx.time or dj_timezone.now(),
+            is_dry_run=False,
+        )
+        return order
+
+    def _create_backfilled_trade(self, tx: Transaction, order: Order) -> Trade:
+        signed_units = int(tx.units or 0)
+        direction = Direction.LONG if signed_units > 0 else Direction.SHORT
+        return Trade.objects.create(
+            task_type=TaskType.TRADING.value,
+            task_id=self.task.pk,
+            execution_id=self.execution_id,
+            timestamp=tx.time or dj_timezone.now(),
+            direction=direction.value,
+            units=abs(signed_units),
+            instrument=self.task.instrument,
+            price=tx.price or Decimal("0"),
+            execution_method="broker_backfill",
+            oanda_trade_id=tx.trade_id,
+            order=order,
+            description=(
+                f"[BROKER BACKFILL] OANDA ORDER_FILL transaction {tx.transaction_id}"
+                + (f" ({tx.reason})" if tx.reason else "")
+            ),
+        )
+
+    def _append_backfill_ledger_entry(
+        self,
+        strategy_state: dict[str, Any],
+        tx: Transaction,
+    ) -> None:
+        raw_ledger = strategy_state.get("grid_ledger")
+        ledger: list[dict[str, Any]] = raw_ledger if isinstance(raw_ledger, list) else []
+        before_net = _safe_int(strategy_state.get("current_net_units"))
+        units_delta = int(tx.units or 0)
+        after_net = before_net + units_delta
+        entry = {
+            "timestamp": tx.time.isoformat() if tx.time else None,
+            "action": "broker_backfill",
+            "reason": tx.reason or "order_fill",
+            "units_delta": units_delta,
+            "filled_price": str(tx.price) if tx.price is not None else None,
+            "net_units_before": before_net,
+            "net_units_after": after_net,
+            "avg_price_before": strategy_state.get("average_entry_price"),
+            "avg_price_after": strategy_state.get("average_entry_price"),
+            "realized_pnl": str(tx.pl or "0"),
+            "realized_pnl_quote": str(tx.pl or "0"),
+            "source": "broker_transaction_history",
+            "broker_transaction_id": tx.transaction_id,
+            "broker_order_id": tx.order_id,
+            "oanda_trade_id": tx.trade_id,
+        }
+        strategy_state["grid_ledger"] = [*ledger, entry][-500:]
+        strategy_state["latest_position_transition"] = entry
+
     def _validate_safety(self, *, report: ReconciliationReport, resumed: bool) -> None:
         strategy_type = str(getattr(self.task.config, "strategy_type", "") or "").strip().lower()
         strategy_state = (
@@ -404,6 +614,7 @@ class TradingResumeReconciler:
         strategy_state["broker_unrealized_pnl"] = str(unrealized_total)
         strategy_state["broker_open_trade_count"] = report.broker_open_positions
         strategy_state["broker_pending_order_count"] = report.pending_broker_orders
+        strategy_state["broker_backfilled_fill_count_latest"] = report.backfilled_broker_fills
         if report.warnings:
             strategy_state["broker_reconciliation_warnings"] = report.warnings
         if report.blockers:

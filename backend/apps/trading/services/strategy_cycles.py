@@ -170,7 +170,49 @@ def _public_strategy_state(
     strategy_state: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
     """Expose visualization-safe strategy state for non-grid strategy pages."""
-    if strategy_type != "adaptive_net" or not isinstance(strategy_state, dict):
+    if not isinstance(strategy_state, dict):
+        return None
+    if strategy_type == "net_grid":
+        allowed_keys = {
+            "current_net_units",
+            "target_net_units",
+            "open_units",
+            "open_direction",
+            "average_entry_price",
+            "anchor_price",
+            "last_grid_price",
+            "net_take_profit_price",
+            "next_grid_price",
+            "take_profit_remaining_pips",
+            "step",
+            "step_usage",
+            "max_steps",
+            "started_at",
+            "open_position_id",
+            "open_entry_id",
+            "next_entry_id",
+            "grid_ledger",
+            "latest_decision",
+            "latest_position_transition",
+            "pending_execution",
+            "last_bid",
+            "last_ask",
+            "last_mid",
+            "last_tick_at",
+            "broker_reconciled_at",
+            "broker_reconciliation_status",
+            "broker_unrealized_pnl",
+            "broker_open_trade_count",
+            "broker_pending_order_count",
+            "broker_backfilled_fill_count",
+            "broker_backfilled_fill_count_latest",
+            "broker_last_backfilled_transaction_id",
+            "broker_backfilled_at",
+            "broker_reconciliation_warnings",
+            "broker_reconciliation_blockers",
+        }
+        return {key: strategy_state.get(key) for key in allowed_keys if key in strategy_state}
+    if strategy_type != "adaptive_net":
         return None
     allowed_keys = {
         "current_net_units",

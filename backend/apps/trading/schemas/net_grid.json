@@ -1,0 +1,182 @@
+{
+  "display_name": "Net Grid Strategy",
+  "type": "object",
+  "description": "US-compatible net-position grid strategy with a fill-based grid ledger.",
+  "properties": {
+    "direction_mode": {
+      "type": "string",
+      "title": "Direction Mode",
+      "title_ja": "方向モード",
+      "description": "Trading direction for the grid. The MVP supports one-sided net grids.",
+      "description_ja": "グリッドの取引方向。初期版は片方向ネットグリッドをサポートします。",
+      "enum": ["long_only", "short_only"],
+      "enum_labels": {
+        "long_only": "Long Only",
+        "short_only": "Short Only"
+      },
+      "enum_labels_ja": {
+        "long_only": "ロングのみ",
+        "short_only": "ショートのみ"
+      },
+      "default": "long_only",
+      "group": "Core Parameters",
+      "group_ja": "コアパラメータ"
+    },
+    "base_units": {
+      "type": "integer",
+      "title": "Base Units",
+      "title_ja": "基本ユニット数",
+      "description": "Initial order size and fixed sizing unit.",
+      "description_ja": "初回注文サイズおよび固定サイズの単位。",
+      "default": 1000,
+      "minimum": 1,
+      "group": "Position Sizing",
+      "group_ja": "建玉サイズ"
+    },
+    "max_net_units": {
+      "type": "integer",
+      "title": "Max Net Units",
+      "title_ja": "最大ネットユニット数",
+      "description": "Maximum absolute net exposure.",
+      "description_ja": "許容する最大ネット建玉数量。",
+      "default": 10000,
+      "minimum": 1,
+      "group": "Position Sizing",
+      "group_ja": "建玉サイズ"
+    },
+    "min_order_units": {
+      "type": "integer",
+      "title": "Minimum Order Units",
+      "title_ja": "最小注文ユニット数",
+      "description": "Do not emit orders smaller than this size.",
+      "description_ja": "この数量未満の注文は発行しません。",
+      "default": 1,
+      "minimum": 1,
+      "group": "Position Sizing",
+      "group_ja": "建玉サイズ"
+    },
+    "max_steps": {
+      "type": "integer",
+      "title": "Max Grid Steps",
+      "title_ja": "最大グリッド段数",
+      "description": "Maximum number of add steps after the initial entry.",
+      "description_ja": "初回建玉後に追加できる最大段数。",
+      "default": 5,
+      "minimum": 0,
+      "group": "Grid",
+      "group_ja": "グリッド"
+    },
+    "grid_interval_pips": {
+      "type": "number",
+      "title": "Grid Interval (pips)",
+      "title_ja": "グリッド間隔（pips）",
+      "description": "Adverse price distance required before adding the next grid step.",
+      "description_ja": "次の段を追加するために必要な逆行幅。",
+      "default": 30,
+      "minimum": 0.1,
+      "group": "Grid",
+      "group_ja": "グリッド"
+    },
+    "take_profit_pips": {
+      "type": "number",
+      "title": "Take Profit From Average (pips)",
+      "title_ja": "平均建値からの利確幅（pips）",
+      "description": "Close the full net position when price moves this far beyond the average entry.",
+      "description_ja": "価格が平均建値からこの幅だけ有利に動いたらネット建玉を全決済します。",
+      "default": 10,
+      "minimum": 0.1,
+      "group": "Exit",
+      "group_ja": "決済"
+    },
+    "sizing_mode": {
+      "type": "string",
+      "title": "Sizing Mode",
+      "title_ja": "サイズ方式",
+      "description": "How add-step order sizes are calculated.",
+      "description_ja": "追加段の注文数量の計算方法。",
+      "enum": ["fixed", "linear", "multiplier"],
+      "enum_labels": {
+        "fixed": "Fixed",
+        "linear": "Linear",
+        "multiplier": "Multiplier"
+      },
+      "enum_labels_ja": {
+        "fixed": "固定",
+        "linear": "線形",
+        "multiplier": "倍率"
+      },
+      "default": "fixed",
+      "group": "Position Sizing",
+      "group_ja": "建玉サイズ"
+    },
+    "linear_increment_units": {
+      "type": "integer",
+      "title": "Linear Increment Units",
+      "title_ja": "線形増加ユニット数",
+      "description": "Additional units added per step in linear sizing.",
+      "description_ja": "線形サイズ方式で段ごとに増やすユニット数。",
+      "default": 1000,
+      "minimum": 0,
+      "dependsOn": { "field": "sizing_mode", "values": ["linear"] },
+      "group": "Position Sizing",
+      "group_ja": "建玉サイズ"
+    },
+    "multiplier": {
+      "type": "number",
+      "title": "Multiplier",
+      "title_ja": "倍率",
+      "description": "Per-step multiplier used in multiplier sizing. Max Net Units remains the hard cap.",
+      "description_ja": "倍率サイズ方式で段ごとに適用する倍率。最大ネットユニット数が上限です。",
+      "default": 2,
+      "minimum": 1,
+      "dependsOn": { "field": "sizing_mode", "values": ["multiplier"] },
+      "group": "Position Sizing",
+      "group_ja": "建玉サイズ"
+    },
+    "max_spread_pips": {
+      "type": "number",
+      "title": "Max Spread (pips)",
+      "title_ja": "最大スプレッド（pips）",
+      "description": "Do not emit new orders when spread exceeds this value. Set to 0 to disable.",
+      "description_ja": "スプレッドがこの値を超える場合は新規注文を出しません。0で無効化します。",
+      "default": 3,
+      "minimum": 0,
+      "group": "Risk Limits",
+      "group_ja": "リスク制限"
+    },
+    "max_adverse_pips": {
+      "type": "number",
+      "title": "Max Adverse Move (pips)",
+      "title_ja": "最大逆行幅（pips）",
+      "description": "Close the net position when adverse movement from the average entry reaches this value. Set to 0 to disable.",
+      "description_ja": "平均建値からの逆行幅がこの値に達したらネット建玉を決済します。0で無効化します。",
+      "default": 200,
+      "minimum": 0,
+      "group": "Risk Limits",
+      "group_ja": "リスク制限"
+    },
+    "max_loss": {
+      "type": "number",
+      "title": "Max Quote Loss",
+      "title_ja": "最大損失（クォート通貨）",
+      "description": "Close the net position when approximate quote-currency unrealized loss reaches this value. Set to 0 to disable.",
+      "description_ja": "概算のクォート通貨建て含み損がこの値に達したらネット建玉を決済します。0で無効化します。",
+      "default": 0,
+      "minimum": 0,
+      "group": "Risk Limits",
+      "group_ja": "リスク制限"
+    },
+    "cooldown_ticks": {
+      "type": "integer",
+      "title": "Cooldown Ticks",
+      "title_ja": "クールダウン（ティック）",
+      "description": "Minimum processed ticks between orders.",
+      "description_ja": "注文間に空ける最小処理ティック数。",
+      "default": 1,
+      "minimum": 0,
+      "group": "Risk Limits",
+      "group_ja": "リスク制限"
+    }
+  },
+  "additionalProperties": false
+}

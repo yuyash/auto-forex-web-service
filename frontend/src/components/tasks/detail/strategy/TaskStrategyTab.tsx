@@ -29,6 +29,8 @@ import { useTaskStrategyEvents } from '../../../../hooks/useTaskStrategyEvents';
 import { useTaskTrades } from '../../../../hooks/useTaskTrades';
 import type { TaskType } from '../../../../types/common';
 import type {
+  AdaptiveNetStrategyState,
+  NetGridStrategyState,
   StrategyCycle,
   CycleTrade,
   StrategyGridState,
@@ -36,6 +38,7 @@ import type {
 import { StrategyGroupChart } from './StrategyGroupChart';
 import { StrategyGridIndicator } from './StrategyGridIndicator';
 import { AdaptiveNetStrategyPanel } from './AdaptiveNetStrategyPanel';
+import { NetGridStrategyPanel } from './NetGridStrategyPanel';
 import { PositionLifecycleDialog } from '../PositionLifecycleDialog';
 import {
   buildDisplayGridState,
@@ -379,7 +382,9 @@ export function TaskStrategyTab({
     return (
       <Box sx={{ p: 3 }}>
         <AdaptiveNetStrategyPanel
-          state={data?.strategy_state ?? null}
+          state={
+            (data?.strategy_state as AdaptiveNetStrategyState | null) ?? null
+          }
           cycles={cycles}
           summary={
             data?.summary ?? {
@@ -390,6 +395,21 @@ export function TaskStrategyTab({
               total_trades: 0,
             }
           }
+        />
+      </Box>
+    );
+  }
+
+  if (strategyType === 'net_grid' || data?.visualization?.kind === 'net_grid') {
+    return (
+      <Box sx={{ p: 3 }}>
+        <NetGridStrategyPanel
+          state={(data?.strategy_state as NetGridStrategyState | null) ?? null}
+          instrument={instrument}
+          taskId={taskId}
+          taskType={taskType}
+          executionRunId={executionRunId}
+          lastTickTimestamp={data?.last_tick_timestamp ?? null}
         />
       </Box>
     );

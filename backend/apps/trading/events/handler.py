@@ -348,10 +348,12 @@ class EventHandler:
             entry_id=strategy_event.entry_id,
             position_id=str(position.id),
             cycle_id=getattr(self, "_last_open_cycle_id", None),
-            fill_price=position.entry_price,
+            fill_price=getattr(self, "_last_open_fill_price", position.entry_price),
         )
         return EventExecutionResult(
             realized_pnl_delta=Decimal("0"),
+            execution_price=getattr(self, "_last_open_fill_price", position.entry_price),
+            executed_units=strategy_event.units,
             entry_binding=binding,
         )
 
@@ -362,6 +364,8 @@ class EventHandler:
         return EventExecutionResult(
             realized_pnl_delta=realized_delta,
             realized_pnl_delta_quote=realized_delta_quote,
+            execution_price=getattr(self, "_last_close_execution_price", None),
+            executed_units=getattr(self, "_last_close_executed_units", 0),
         )
 
     def _dispatch_rebuild_position(self, strategy_event: StrategyEvent) -> EventExecutionResult:
@@ -570,7 +574,10 @@ class EventHandler:
             OrderServiceError: If order execution fails
         """
         direction = Direction(event.direction)
-        merge_with_existing = str(getattr(event, "strategy_type", "") or "") == "adaptive_net"
+        merge_with_existing = str(getattr(event, "strategy_type", "") or "") in {
+            "adaptive_net",
+            "net_grid",
+        }
         position, order = self.order_service.open_position(
             instrument=self.instrument,
             units=event.units,
@@ -599,6 +606,10 @@ class EventHandler:
             position.save(update_fields=["stop_loss_price"])
 
         self._mark_replay_records(position, order)
+        order_fill_price = getattr(order, "fill_price", None)
+        self._last_open_fill_price = (
+            order_fill_price if isinstance(order_fill_price, Decimal) else position.entry_price
+        )
 
         self._cache_position(event.layer_number, position)
         trade = self._record_trade(
@@ -916,8 +927,7 @@ class EventHandler:
             event: Close position event with close details
 
         Returns:
-            tuple[Decimal, Decimal]: (realized_pnl_delta in account currency,
-                realized_pnl_delta in quote currency)
+            tuple[Decimal, Decimal]: realized PnL in account and quote currency.
 
         Raises:
             OrderServiceError: If order execution fails
@@ -927,6 +937,10 @@ class EventHandler:
         remaining = total_requested
         realized_delta_total = Decimal("0")
         realized_delta_quote_total = Decimal("0")
+        latest_execution_price: Decimal | None = None
+        total_closed_units = 0
+        self._last_close_execution_price = None
+        self._last_close_executed_units = 0
 
         while True:
             position = self._find_close_position_target(event)
@@ -964,9 +978,11 @@ class EventHandler:
                 tick_timestamp=event.timestamp,
             )
             realized_delta_total += realized_delta
+            total_closed_units += int(closed_units)
 
             # Compute quote-currency PnL from the closed position
             exit_px = closed_position.exit_price or override_price or Decimal("0")
+            latest_execution_price = exit_px
             entry_px = Decimal(str(position.entry_price))
             quote_delta = exit_px - entry_px
             if position.direction == "short":
@@ -1080,6 +1096,8 @@ class EventHandler:
             if remaining <= 0:
                 break
 
+        self._last_close_execution_price = latest_execution_price
+        self._last_close_executed_units = total_closed_units
         return realized_delta_total, realized_delta_quote_total
 
     @staticmethod

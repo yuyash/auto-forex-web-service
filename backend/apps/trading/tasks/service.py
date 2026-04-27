@@ -210,6 +210,34 @@ class TaskService:
                 f"Please stop the existing task before starting a new one."
             )
 
+    @staticmethod
+    def _ensure_net_grid_live_preflight(task: TradingTask) -> None:
+        strategy_type = str(getattr(getattr(task, "config", None), "strategy_type", "") or "")
+        if strategy_type != "net_grid" or getattr(task, "dry_run", False):
+            return
+
+        from apps.market.services.oanda import OandaService
+
+        service = OandaService(account=task.oanda_account)
+        if service.get_account_hedging_enabled():
+            raise TaskValidationError(
+                "Net Grid requires an OANDA netting account. This account has hedging enabled."
+            )
+
+        pending_orders = service.get_pending_orders(instrument=task.instrument)
+        if pending_orders:
+            raise TaskValidationError(
+                "Net Grid cannot start while OANDA has pending orders for "
+                f"{task.instrument}. Cancel or reconcile them first."
+            )
+
+        open_positions = service.get_open_positions(instrument=task.instrument)
+        if open_positions:
+            raise TaskValidationError(
+                "Net Grid cannot start with existing unmanaged OANDA positions for "
+                f"{task.instrument}. Close them or use resume/reconciliation flow."
+            )
+
     def _prepare_locked_start_task(
         self,
         task: BacktestTask | TradingTask,
@@ -228,6 +256,7 @@ class TaskService:
             )
             if isinstance(locked_task, TradingTask):
                 self._ensure_trading_account_available(locked_task)
+                self._ensure_net_grid_live_preflight(locked_task)
             self._ensure_worker_capacity_available(locked_task)
 
             is_valid, error_message = locked_task.validate_configuration()
@@ -252,6 +281,7 @@ class TaskService:
         )
         if isinstance(task, TradingTask):
             self._ensure_trading_account_available(task)
+            self._ensure_net_grid_live_preflight(task)
         self._ensure_worker_capacity_available(task)
 
         is_valid, error_message = task.validate_configuration()

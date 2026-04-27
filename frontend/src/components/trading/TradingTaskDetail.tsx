@@ -60,6 +60,7 @@ import { TaskDetailHeader } from '../tasks/detail/TaskDetailHeader';
 import { TaskDetailTabs } from '../tasks/detail/TaskDetailTabs';
 import { TaskStrategyTab } from '../tasks/detail/strategy/TaskStrategyTab';
 import { taskDetailLayout } from '../tasks/detail/detailLayout';
+import { visibleTabsForStrategy } from '../tasks/detail/taskDetailTabs';
 import { TradingOverviewTab } from './detail/TradingOverviewTab';
 import { useTaskMetrics } from '../../hooks/useTaskMetrics';
 import { computeAutoInterval } from '../../utils/autoGranularity';
@@ -113,8 +114,6 @@ export const TradingTaskDetail: React.FC = () => {
     resetToDefaults,
   } = useTabConfig('trading_detail', defaultTabs);
   const tabParam = searchParams.get('tab') || 'overview';
-  const visibleTabIds = visibleTabs.map((tab) => tab.id);
-  const activeTabId = visibleTabIds.includes(tabParam) ? tabParam : 'overview';
 
   const {
     optimisticStatus,
@@ -134,6 +133,12 @@ export const TradingTaskDetail: React.FC = () => {
   const { strategies } = useStrategies();
   const actualStatus = task?.status;
   const currentStatus = optimisticStatus?.status ?? actualStatus;
+  const effectiveVisibleTabs = useMemo(
+    () => visibleTabsForStrategy(visibleTabs, task?.strategy_type),
+    [task?.strategy_type, visibleTabs]
+  );
+  const visibleTabIds = effectiveVisibleTabs.map((tab) => tab.id);
+  const activeTabId = visibleTabIds.includes(tabParam) ? tabParam : 'overview';
 
   useEffect(() => {
     if (!optimisticStatus || !actualStatus) {
@@ -365,7 +370,7 @@ export const TradingTaskDetail: React.FC = () => {
       <Paper sx={taskDetailLayout.tabPaper}>
         <TaskDetailTabs
           activeTabIndex={activeTabIndex}
-          visibleTabs={visibleTabs}
+          visibleTabs={effectiveVisibleTabs}
           onTabChange={handleTabChange}
           onConfigureTabs={() => setTabConfigOpen(true)}
           configureTabsLabel={t('common:tabConfig.configureTabs')}

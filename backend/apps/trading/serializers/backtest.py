@@ -279,6 +279,17 @@ class BacktestTaskCreateSerializer(serializers.ModelSerializer):
         config = attrs.get("config") or getattr(self.instance, "config", None)
         if not config:
             raise serializers.ValidationError({"config": "Strategy configuration is required"})
+        strategy_type = str(getattr(config, "strategy_type", "") or "").strip().lower()
+        if strategy_type == "net_grid":
+            if attrs.get("hedging_enabled") is True:
+                raise serializers.ValidationError(
+                    {
+                        "hedging_enabled": (
+                            "Net Grid requires netting mode. Disable hedging for this strategy."
+                        )
+                    }
+                )
+            attrs["hedging_enabled"] = False
 
         is_valid, error_message = config.validate_parameters()
         if not is_valid:

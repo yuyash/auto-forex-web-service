@@ -203,6 +203,70 @@ class TestStartTask:
             with pytest.raises(ValueError, match="already has an active task"):
                 TaskService().start_task(task)
 
+    @patch("apps.market.services.oanda.OandaService")
+    def test_net_grid_live_preflight_rejects_hedging_account(self, mock_oanda_service):
+        from apps.trading.tasks.service import TaskService, TaskValidationError
+
+        task = MagicMock(spec=TradingTask)
+        task.config.strategy_type = "net_grid"
+        task.dry_run = False
+        task.instrument = "USD_JPY"
+        task.oanda_account = MagicMock()
+        service = mock_oanda_service.return_value
+        service.get_account_hedging_enabled.return_value = True
+
+        with pytest.raises(TaskValidationError, match="netting account"):
+            TaskService._ensure_net_grid_live_preflight(task)
+
+    @patch("apps.market.services.oanda.OandaService")
+    def test_net_grid_live_preflight_rejects_pending_orders(self, mock_oanda_service):
+        from apps.trading.tasks.service import TaskService, TaskValidationError
+
+        task = MagicMock(spec=TradingTask)
+        task.config.strategy_type = "net_grid"
+        task.dry_run = False
+        task.instrument = "USD_JPY"
+        task.oanda_account = MagicMock()
+        service = mock_oanda_service.return_value
+        service.get_account_hedging_enabled.return_value = False
+        service.get_pending_orders.return_value = [MagicMock()]
+
+        with pytest.raises(TaskValidationError, match="pending orders"):
+            TaskService._ensure_net_grid_live_preflight(task)
+
+        service.get_pending_orders.assert_called_once_with(instrument="USD_JPY")
+
+    @patch("apps.market.services.oanda.OandaService")
+    def test_net_grid_live_preflight_rejects_unmanaged_positions(self, mock_oanda_service):
+        from apps.trading.tasks.service import TaskService, TaskValidationError
+
+        task = MagicMock(spec=TradingTask)
+        task.config.strategy_type = "net_grid"
+        task.dry_run = False
+        task.instrument = "USD_JPY"
+        task.oanda_account = MagicMock()
+        service = mock_oanda_service.return_value
+        service.get_account_hedging_enabled.return_value = False
+        service.get_pending_orders.return_value = []
+        service.get_open_positions.return_value = [MagicMock()]
+
+        with pytest.raises(TaskValidationError, match="unmanaged OANDA positions"):
+            TaskService._ensure_net_grid_live_preflight(task)
+
+        service.get_open_positions.assert_called_once_with(instrument="USD_JPY")
+
+    @patch("apps.market.services.oanda.OandaService")
+    def test_net_grid_dry_run_skips_live_preflight(self, mock_oanda_service):
+        from apps.trading.tasks.service import TaskService
+
+        task = MagicMock(spec=TradingTask)
+        task.config.strategy_type = "net_grid"
+        task.dry_run = True
+
+        TaskService._ensure_net_grid_live_preflight(task)
+
+        mock_oanda_service.assert_not_called()
+
 
 class TestRecoverTradingTask:
     @patch("apps.trading.tasks.service.uuid4")

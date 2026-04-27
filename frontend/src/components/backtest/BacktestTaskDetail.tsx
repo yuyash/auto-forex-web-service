@@ -62,6 +62,7 @@ import { TaskDetailHeader } from '../tasks/detail/TaskDetailHeader';
 import { TaskDetailTabs } from '../tasks/detail/TaskDetailTabs';
 import { TaskStrategyTab } from '../tasks/detail/strategy/TaskStrategyTab';
 import { taskDetailLayout } from '../tasks/detail/detailLayout';
+import { visibleTabsForStrategy } from '../tasks/detail/taskDetailTabs';
 import { BacktestOverviewTab } from './detail/BacktestOverviewTab';
 import { useTaskMetrics } from '../../hooks/useTaskMetrics';
 import { computeAutoInterval } from '../../utils/autoGranularity';
@@ -118,8 +119,6 @@ export const BacktestTaskDetail: React.FC = () => {
 
   // Get tab from URL, default to 'overview'
   const tabParam = searchParams.get('tab') || 'overview';
-  const visibleTabIds = visibleTabs.map((t) => t.id);
-  const activeTabId = visibleTabIds.includes(tabParam) ? tabParam : 'overview';
 
   const {
     optimisticStatus,
@@ -139,6 +138,12 @@ export const BacktestTaskDetail: React.FC = () => {
   const { strategies } = useStrategies();
   const actualStatus = task?.status;
   const currentStatus = optimisticStatus?.status ?? actualStatus;
+  const effectiveVisibleTabs = useMemo(
+    () => visibleTabsForStrategy(visibleTabs, task?.strategy_type),
+    [task?.strategy_type, visibleTabs]
+  );
+  const visibleTabIds = effectiveVisibleTabs.map((tab) => tab.id);
+  const activeTabId = visibleTabIds.includes(tabParam) ? tabParam : 'overview';
 
   useEffect(() => {
     if (!optimisticStatus || !actualStatus) {
@@ -415,7 +420,7 @@ export const BacktestTaskDetail: React.FC = () => {
       <Paper sx={taskDetailLayout.tabPaper}>
         <TaskDetailTabs
           activeTabIndex={activeTabIndex}
-          visibleTabs={visibleTabs}
+          visibleTabs={effectiveVisibleTabs}
           onTabChange={handleTabChange}
           onConfigureTabs={() => setTabConfigOpen(true)}
           configureTabsLabel={t('common:tabConfig.configureTabs')}

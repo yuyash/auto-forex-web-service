@@ -14,6 +14,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import {
   CandlestickSeries,
+  LineStyle,
   createChart,
   createSeriesMarkers,
   type IChartApi,
@@ -45,7 +46,16 @@ interface StrategyGroupChartProps {
   executionRunId?: string;
   lastTickTimestamp?: string | null;
   selectedTradeIds?: Set<string>;
+  focusedTradeId?: string | null;
   onMarkerClick?: (tradeId: string) => void;
+  priceLines?: StrategyPriceLine[];
+}
+
+export interface StrategyPriceLine {
+  price: number;
+  title: string;
+  color: string;
+  lineStyle?: LineStyle;
 }
 
 const GRANULARITY_OPTIONS = ['M1', 'M5', 'M15', 'H1', 'H4', 'D'] as const;
@@ -73,7 +83,9 @@ export function StrategyGroupChart({
   executionRunId,
   lastTickTimestamp,
   selectedTradeIds,
+  focusedTradeId,
   onMarkerClick,
+  priceLines = [],
 }: StrategyGroupChartProps) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -84,6 +96,9 @@ export function StrategyGroupChart({
     typeof createSeriesMarkers<Time>
   > | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
+  const priceLinesRef = useRef<
+    ReturnType<ISeriesApi<'Candlestick'>['createPriceLine']>[]
+  >([]);
   const [chartInstance, setChartInstance] = useState<IChartApi | null>(null);
 
   // Marker visibility toggle (default: visible)
@@ -162,6 +177,7 @@ export function StrategyGroupChart({
     chartRef.current = null;
     seriesRef.current = null;
     markersRef.current = null;
+    priceLinesRef.current = [];
     setChartInstance(null);
   }, []);
 
@@ -266,13 +282,38 @@ export function StrategyGroupChart({
       )
     );
     markersRef.current?.setMarkers(markers);
+    for (const line of priceLinesRef.current) {
+      seriesRef.current?.removePriceLine(line);
+    }
+    priceLinesRef.current = [];
+    for (const line of priceLines) {
+      if (!Number.isFinite(line.price)) continue;
+      const created = seriesRef.current?.createPriceLine({
+        price: line.price,
+        color: line.color,
+        lineWidth: 1,
+        lineStyle: line.lineStyle ?? LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: line.title,
+      });
+      if (created) priceLinesRef.current.push(created);
+    }
 
     if (paddedRange && chartRef.current) {
       chartRef.current.timeScale().setVisibleRange(paddedRange);
     } else {
       chartRef.current?.timeScale().fitContent();
     }
-  }, [candles, markers, height, isDark, paddedRange, timezone, onMarkerClick]);
+  }, [
+    candles,
+    markers,
+    height,
+    isDark,
+    paddedRange,
+    timezone,
+    onMarkerClick,
+    priceLines,
+  ]);
 
   useMetricsOverlay({
     taskId: taskId ? String(taskId) : '',
@@ -289,6 +330,27 @@ export function StrategyGroupChart({
       chartRef.current?.timeScale().fitContent();
     }
   }, [paddedRange]);
+
+  useEffect(() => {
+    if (!focusedTradeId || !chartRef.current || candleTimes.length === 0) {
+      return;
+    }
+    const marker = builtMarkersRef.current.find(
+      (item) => item.tradeId === focusedTradeId
+    );
+    if (!marker) return;
+    const markerTime = Number(marker.time);
+    const index = (candleTimes as number[]).findIndex(
+      (time) => time === markerTime
+    );
+    if (index < 0) return;
+    const left = Math.max(0, index - 10);
+    const right = Math.min(candleTimes.length - 1, index + 10);
+    chartRef.current.timeScale().setVisibleRange({
+      from: candleTimes[left] as Time,
+      to: candleTimes[right] as Time,
+    });
+  }, [focusedTradeId, candleTimes]);
 
   const handleReload = useCallback(() => {
     destroyChart();

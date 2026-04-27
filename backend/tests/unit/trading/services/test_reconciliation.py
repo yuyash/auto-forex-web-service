@@ -10,8 +10,9 @@ from uuid import uuid4
 import pytest
 from django.utils import timezone as dj_timezone
 
-from apps.market.services.oanda import AccountDetails, OpenTrade, OrderDirection
+from apps.market.services.oanda import AccountDetails, OpenTrade, OrderDirection, Transaction
 from apps.trading.enums import Direction
+from apps.trading.models import Order, Trade
 from apps.trading.services.reconciliation import (
     ReconciliationReport,
     TradingResumeReconciler,
@@ -123,6 +124,37 @@ def _make_reconciler(
         # Use the default policy; tests override sleep globally.
         reconciler.retry_policy = OandaRetryPolicy.default()
     return reconciler
+
+
+def _make_net_grid_reconciler() -> TradingResumeReconciler:
+    task = MagicMock()
+    task.pk = uuid4()
+    task.instrument = "EUR_USD"
+    task.oanda_account = MagicMock()
+    task.execution_id = uuid4()
+    task.created_at = dj_timezone.now()
+    config = MagicMock()
+    config.strategy_type = "net_grid"
+    config.config_dict = {}
+    task.config = config
+
+    state = MagicMock()
+    state.pk = uuid4()
+    state.state_version = 0
+    state.strategy_state = {
+        "current_net_units": 1000,
+        "average_entry_price": "1.10000",
+        "grid_ledger": [],
+    }
+    state.current_balance = Decimal("10000")
+    state.ticks_processed = 0
+    state.last_tick_timestamp = dj_timezone.now()
+    state.created_at = dj_timezone.now()
+    state.resume_cursor_timestamp = None
+    state.last_tick_price = None
+    state.last_tick_bid = None
+    state.last_tick_ask = None
+    return _make_reconciler(task=task, state=state)
 
 
 @pytest.fixture(autouse=True)
@@ -413,6 +445,89 @@ class TestDetectRuntimeDrift:
         assert any(
             "units changed from local 1000 to broker 2000" in blocker for blocker in report.blockers
         )
+
+    @patch("apps.trading.services.reconciliation.Position")
+    def test_net_grid_runtime_drift_compares_aggregate_exposure(self, mock_pos_model):
+        reconciler = _make_net_grid_reconciler()
+        reconciler.oanda_service.get_pending_orders.return_value = []
+        reconciler.oanda_service.get_open_trades.return_value = [
+            _make_open_trade(trade_id="T100", units=Decimal("1000")),
+            _make_open_trade(trade_id="T101", units=Decimal("1000")),
+        ]
+        local_pos = _make_position(oanda_trade_id="T101", units=2000)
+        mock_pos_model.objects.filter.return_value.order_by.return_value = [local_pos]
+
+        report = reconciler.detect_runtime_drift()
+
+        assert report.has_blockers is False
+
+
+@pytest.mark.django_db
+class TestNetGridBrokerBackfill:
+    def test_backfills_missing_order_fill_transactions(self):
+        reconciler = _make_net_grid_reconciler()
+        tx = Transaction(
+            transaction_id="9001",
+            time=dj_timezone.now(),
+            type="ORDER_FILL",
+            instrument="EUR_USD",
+            units=Decimal("1000"),
+            price=Decimal("1.10100"),
+            pl=Decimal("0"),
+            order_id="8001",
+            trade_id="7001",
+            reason="MARKET_ORDER",
+        )
+        reconciler.oanda_service.get_transaction_history.return_value = [tx]
+
+        report = ReconciliationReport()
+        reconciler._backfill_broker_fills(report)
+
+        assert report.backfilled_broker_fills == 1
+        assert Order.objects.filter(
+            task_id=reconciler.task.pk,
+            execution_id=reconciler.execution_id,
+            broker_order_id="9001",
+        ).exists()
+        assert Trade.objects.filter(
+            task_id=reconciler.task.pk,
+            execution_id=reconciler.execution_id,
+            execution_method="broker_backfill",
+            oanda_trade_id="7001",
+        ).exists()
+        ledger = reconciler.state.strategy_state["grid_ledger"]
+        assert ledger[-1]["action"] == "broker_backfill"
+        assert ledger[-1]["broker_transaction_id"] == "9001"
+
+    def test_skips_already_recorded_backfilled_transactions(self):
+        reconciler = _make_net_grid_reconciler()
+        Order.objects.create(
+            task_type="trading",
+            task_id=reconciler.task.pk,
+            execution_id=reconciler.execution_id,
+            broker_order_id="9001",
+            instrument="EUR_USD",
+            order_type="market",
+            direction="long",
+            units=1000,
+            status="filled",
+            is_dry_run=False,
+        )
+        tx = Transaction(
+            transaction_id="9001",
+            time=dj_timezone.now(),
+            type="ORDER_FILL",
+            instrument="EUR_USD",
+            units=Decimal("1000"),
+            price=Decimal("1.10100"),
+        )
+        reconciler.oanda_service.get_transaction_history.return_value = [tx]
+
+        report = ReconciliationReport()
+        reconciler._backfill_broker_fills(report)
+
+        assert report.backfilled_broker_fills == 0
+        assert Trade.objects.filter(task_id=reconciler.task.pk).count() == 0
 
 
 # ── Tests for reconcile (full flow) ─────────────────────────────────

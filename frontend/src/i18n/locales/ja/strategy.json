@@ -13,6 +13,7 @@
   "types": {
     "snowball": "スノーボール戦略",
     "adaptive_net": "アダプティブ・ネット戦略",
+    "net_grid": "ネットグリッド戦略",
     "trendFollowing": "トレンドフォロー",
     "maCrossover": "移動平均クロスオーバー",
     "breakout": "ブレイクアウト",
@@ -27,7 +28,8 @@
   },
   "descriptions": {
     "snowball": "両建てヘッジ戦略：順行側の回転利確と、逆行側の段別決済によるナンピン平均化。",
-    "adaptive_net": "プラグイン式メトリクスを統合し、目標ネット建玉にリバランスする米国口座対応戦略。"
+    "adaptive_net": "プラグイン式メトリクスを統合し、目標ネット建玉にリバランスする米国口座対応戦略。",
+    "net_grid": "単一のネット建玉をグリッド間隔で段階調整し、実約定ベースの台帳を記録する米国口座対応戦略。"
   },
   "parameters": {
     "lotSize": "ロットサイズ",
@@ -162,6 +164,67 @@
       "beforeAfterNet": "{{before}} → {{after}}",
       "deltaAbs": "絶対差分 {{value}}",
       "beforeAverageEntry": "変更前 {{value}}"
+    }
+  },
+  "netGrid": {
+    "noState": "戦略がマーケットデータを処理すると、ネットグリッドの状態が表示されます。",
+    "directions": {
+      "flat": "フラット",
+      "netLong": "ネットロング",
+      "netShort": "ネットショート"
+    },
+    "summary": {
+      "title": "ネットグリッド建玉",
+      "description": "ブローカー制約に対応したネット建玉と現在のグリッド状態です。",
+      "currentNet": "現在ネット建玉",
+      "averageEntry": "平均建値",
+      "step": "グリッド段数",
+      "stepValue": "{{step}} / {{max}}（{{usage}}）",
+      "lastGridPrice": "直近グリッド価格",
+      "takeProfitPrice": "ネット利確価格",
+      "takeProfitRemaining": "利確までのpips",
+      "nextGridPrice": "次回追加価格",
+      "lastBackfilledTransaction": "反映済み取引ID",
+      "brokerSyncStatus": "OANDA同期状態",
+      "brokerSyncedAt": "同期日時",
+      "backfilledFills": "バックフィル約定 {{count}} 件",
+      "openTrades": "ブローカー建玉 {{count}} 件",
+      "pendingOrders": "未約定注文 {{count}} 件"
+    },
+    "chart": {
+      "title": "約定チャート",
+      "description": "OHLC上にグリッド約定マーカーとネット建玉の基準価格ラインを表示します。",
+      "averageEntry": "平均",
+      "takeProfit": "利確",
+      "lastGrid": "Grid",
+      "nextGrid": "次回追加",
+      "fillMarkers": "約定",
+      "syncMarkers": "ブローカー同期"
+    },
+    "alerts": {
+      "syncWarning": "OANDA同期に警告があります。実行を信頼する前にブローカー監査情報を確認してください。",
+      "syncBlocked": "OANDA同期がブロックされています。追加注文の前にブローカー側の建玉状態を確認してください。"
+    },
+    "latestDecision": "{{action}} / {{units}} units（{{reason}}）",
+    "ledger": {
+      "title": "Grid Ledger",
+      "description": "分析と同期に使用する実約定ベースのネット建玉変更履歴です。",
+      "empty": "台帳エントリはまだありません。",
+      "action": "アクション",
+      "unitsDelta": "数量差分",
+      "fill": "約定価格",
+      "netAfter": "変更後ネット",
+      "pnl": "損益"
+    },
+    "audit": {
+      "title": "ブローカー監査",
+      "description": "照合と取引履歴バックフィルで取得した OANDA transaction / order / trade ID です。",
+      "empty": "ブローカー監査レコードはまだありません。",
+      "action": "アクション",
+      "transaction": "Transaction ID",
+      "order": "Order ID",
+      "trade": "Trade ID",
+      "units": "数量"
     }
   }
 }
