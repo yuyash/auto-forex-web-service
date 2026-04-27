@@ -362,6 +362,10 @@ class SnowballStrategyConfig:
         """Parse a persisted config without silently filling missing fields."""
         defaults = cls.from_dict({}).to_dict()
         missing = sorted(key for key in defaults if key not in raw)
+        if "preserve_highest_r_from" in missing and not _parse_bool(
+            raw.get("preserve_highest_retracement_enabled", False), False
+        ):
+            missing.remove("preserve_highest_r_from")
         if missing:
             raise ValueError(f"Snowball config is missing required field(s): {', '.join(missing)}")
 

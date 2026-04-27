@@ -121,6 +121,14 @@ class TestSnowballStrategyClassMethods:
         assert defaults["stop_loss_mode"] == "auto"
         assert "preserve_highest_r_from" not in defaults
 
+    def test_parse_config_accepts_persisted_default_parameters(self):
+        cfg = SnowballStrategy.parse_config(
+            SimpleNamespace(config_dict=SnowballStrategy.default_parameters())
+        )
+
+        assert cfg.preserve_highest_retracement_enabled is False
+        assert cfg.preserve_highest_r_from == 0
+
     def test_validate_parameters_valid(self):
         """validate_parameters should not raise for valid params + schema."""
         import json
