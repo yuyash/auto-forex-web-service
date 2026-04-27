@@ -276,8 +276,6 @@ class SnowballStrategyConfig:
         grid_order_validation_enabled = _parse_bool(
             raw.get("grid_order_validation_enabled", True), True
         )
-        if rebuild_take_profit_mode == "manual":
-            grid_order_validation_enabled = False
 
         return SnowballStrategyConfig(
             base_units=_parse_int(raw.get("base_units", 1000), 1000),
@@ -358,6 +356,26 @@ class SnowballStrategyConfig:
                 raw.get("rebuild_exit_price_buffer_pips", "0"), "0"
             ),
         )
+
+    @classmethod
+    def strict_from_dict(cls, raw: dict[str, Any]) -> SnowballStrategyConfig:
+        """Parse a persisted config without silently filling missing fields."""
+        defaults = cls.from_dict({}).to_dict()
+        missing = sorted(key for key in defaults if key not in raw)
+        if missing:
+            raise ValueError(f"Snowball config is missing required field(s): {', '.join(missing)}")
+
+        list_fields = {
+            "manual_intervals",
+            "stop_loss_manual_pips",
+            "rebuild_stop_loss_manual_pips",
+            "rebuild_take_profit_manual_pips",
+        }
+        for key in list_fields:
+            if not isinstance(raw[key], list):
+                raise ValueError(f"Snowball config field {key} must be a list")
+
+        return cls.from_dict(raw)
 
     def to_dict(self) -> dict[str, Any]:
         return {

@@ -35,24 +35,18 @@ from apps.trading.events import (
 from apps.trading.models.state import ExecutionState
 from apps.trading.strategies.base import Strategy
 from apps.trading.strategies.registry import register_strategy
-from apps.trading.strategies.snowball.calculators import (
-    counter_interval_pips,
-    counter_tp_pips,
-    round_to_step,
-    stop_loss_pips,
+from apps.trading.strategies.snowball.counter_flow import (
+    entry_take_profit_hit,
+    format_counter_add_description,
+    process_cycle_counter_adds,
+    process_cycle_counter_closes,
 )
 from apps.trading.strategies.snowball.enums import CycleStatus, ProtectionLevel
 from apps.trading.strategies.snowball.events import (
     entry_close_event,
     entry_open_event,
-    entry_rebuild_event,
 )
-from apps.trading.strategies.snowball.grid_policy import (
-    grid_tp_bounds,
-    preceding_entry_bound,
-    propagate_pending_rebuild_tp,
-    validate_grid_ordering,
-)
+from apps.trading.strategies.snowball.grid_policy import validate_grid_ordering
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.models import (
     Entry,
@@ -71,9 +65,7 @@ from apps.trading.strategies.snowball.parameters import (
 )
 from apps.trading.strategies.snowball.pricing import (
     layer_initial_close_price,
-    rebuild_take_profit_price,
     sync_entry_fill_price,
-    weighted_avg_close_price,
 )
 from apps.trading.strategies.snowball.protection import (
     handle_emergency,
@@ -81,6 +73,15 @@ from apps.trading.strategies.snowball.protection import (
     handle_lock_release,
     handle_shrink,
     margin_ratio,
+)
+from apps.trading.strategies.snowball.stop_loss_flow import (
+    assign_auto_stop_loss,
+    assign_configured_stop_loss,
+    assign_rebuild_stop_loss,
+    assign_stop_loss,
+    is_stop_loss_temporarily_protected,
+    process_stop_loss_closes,
+    process_stop_loss_rebuilds,
 )
 from apps.trading.utils import format_money, quote_to_account_rate
 
@@ -695,112 +696,11 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        """Close counter entries from the back (newest first).
-
-        Any entry whose close_price (counter TP) is reached gets closed,
-        regardless of whether it is currently the dynamic head.  The only
-        exception is L1/R0 — the original cycle head — which closes via
-        _process_cycle_tp (cycle TP = R0's active close target).
-
-        After all counter slots in a non-L1 layer are empty, close the
-        layer's R0 (layer-initial) if its TP is hit, then remove the layer.
-        """
-        if cycle.completed:
-            return []
-
-        events: list[StrategyEvent] = []
-        while True:
-            closed_this_pass = False
-            for layer in reversed(list(cycle.grid.layers)):
-                highest = layer.highest_occupied_slot()
-                if highest is None or highest.entry is None:
-                    continue
-
-                entry = highest.entry
-
-                # Skip L1/R0 — it closes via _process_cycle_tp (cycle TP).
-                if entry.layer_number == 1 and entry.retracement_count == 0:
-                    continue
-
-                if not self._entry_take_profit_hit(entry, tick):
-                    continue
-
-                exit_price = entry.exit_price(tick)
-                pips_gained = abs(exit_price - entry.entry_price) / self.pip_size
-
-                logger.info(
-                    "Counter TP (%s): L%s/R%s, +%.1f pips",
-                    entry.direction.value.upper(),
-                    entry.layer_number,
-                    entry.retracement_count,
-                    pips_gained,
-                )
-                layer.close_slot(highest.index)
-                cycle.counter_close_count += 1
-                events.append(
-                    self._close_entry(
-                        tick,
-                        entry,
-                        description=(
-                            f"Counter TP ({entry.direction.value.upper()}) | "
-                            f"L{entry.layer_number}/R{entry.retracement_count}, "
-                            f"entry={entry.entry_price:.3f}, "
-                            f"exit={exit_price:.3f}, +{pips_gained:.1f} pips"
-                        ),
-                        close_reason="counter_tp",
-                        actual_tp_pips=pips_gained,
-                        validation_status="pass",
-                        cycle=cycle,
-                    )
-                )
-
-                # If this was the last counter slot in a non-L1 layer and R0
-                # is also at TP, close it and remove the layer immediately.
-                if layer.layer_number > 1:
-                    remaining = layer.occupied_slots()
-                    if len(remaining) == 1 and remaining[0].index == 0:
-                        r0_entry = remaining[0].entry
-                        if r0_entry is not None and self._entry_take_profit_hit(r0_entry, tick):
-                            r0_exit = r0_entry.exit_price(tick)
-                            r0_pips = abs(r0_exit - r0_entry.entry_price) / self.pip_size
-                            logger.info(
-                                "Layer initial TP (%s): L%s, +%.1f pips; removing layer",
-                                r0_entry.direction.value.upper(),
-                                layer.layer_number,
-                                r0_pips,
-                            )
-                            layer.close_slot(0, refillable=False)
-                            events.append(
-                                self._close_entry(
-                                    tick,
-                                    r0_entry,
-                                    description=(
-                                        f"Layer initial TP ({r0_entry.direction.value.upper()}) | "
-                                        f"L{layer.layer_number}, entry={r0_entry.entry_price:.3f}, "
-                                        f"exit={r0_exit:.3f}, +{r0_pips:.1f} pips"
-                                    ),
-                                    close_reason="layer_initial_tp",
-                                    actual_tp_pips=r0_pips,
-                                    validation_status="pass",
-                                    cycle=cycle,
-                                )
-                            )
-                    if not layer.has_open_entries():
-                        cycle.grid.layers.remove(layer)
-
-                closed_this_pass = True
-                break
-
-            if not closed_this_pass:
-                return events
+        return process_cycle_counter_closes(self, ss, tick, cycle)
 
     @staticmethod
     def _entry_take_profit_hit(entry: Entry, tick: Tick) -> bool:
-        if entry.close_price <= 0:
-            return False
-        if entry.is_long:
-            return tick.bid >= entry.close_price
-        return tick.ask <= entry.close_price
+        return entry_take_profit_hit(entry, tick)
 
     def _process_cycle_counter_adds(
         self,
@@ -808,296 +708,7 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        """Add a new counter entry if adverse distance threshold is met."""
-        if cycle.completed:
-            return []
-        cfg = self.config
-        layer = cycle.current_layer
-        if layer is None:
-            return []
-
-        head = cycle.initial_entry
-
-        # When all live entries have been stop-loss closed, head is None.
-        # Use the R0 pending-rebuild snapshot so counter adds can still
-        # proceed within the same cycle.
-        head_entry_price: Decimal | None = None
-        head_entry_id: int | None = None
-        head_direction: Direction = cycle.direction
-        if head is not None:
-            head_entry_price = head.entry_price
-            head_entry_id = head.entry_id
-        else:
-            r0 = layer.slot_at(0)
-            if r0 is not None and r0.pending_rebuild is not None:
-                head_entry_price = r0.pending_rebuild.entry_price
-                head_entry_id = r0.pending_rebuild.root_entry_id
-            else:
-                return []
-
-        def _head_losing() -> bool:
-            """Check if the cycle head (or its SL snapshot) is in a losing position."""
-            if head is not None:
-                return (
-                    head.unrealised_loss_pips(
-                        self._exit_side_price(head.direction, tick),
-                        self.pip_size,
-                    )
-                    > 0
-                )
-            # Fallback: compute from pending-rebuild entry price
-            assert head_entry_price is not None  # noqa: S101
-            if head_direction == Direction.LONG:
-                return (
-                    head_entry_price - self._exit_side_price(head_direction, tick)
-                ) / self.pip_size > 0
-            return (
-                self._exit_side_price(head_direction, tick) - head_entry_price
-            ) / self.pip_size > 0
-
-        # Need a new layer?
-        if layer.needs_new_layer:
-            if cycle.layer_count >= cfg.f_max:
-                return []
-
-            # Gate: head must be losing
-            if not _head_losing():
-                return []
-
-            # Gate: price must have moved adversely from the highest
-            # present slot (occupied or pending rebuild) in the current
-            # layer.  When the reference slot was filled on *this* tick
-            # (by an earlier same-tick counter-add iteration), compare
-            # against the design cumulative-from-R0 position instead,
-            # otherwise ``adverse`` collapses to zero.
-            direction = cycle.direction
-            highest = layer.highest_present_slot()
-            if highest is not None:
-                ref_price = (
-                    highest.entry.entry_price
-                    if highest.entry is not None
-                    else highest.pending_rebuild.entry_price
-                    if highest.pending_rebuild is not None
-                    else None
-                )
-                fresh_same_tick = (
-                    highest.entry is not None and highest.entry.opened_at == tick.timestamp
-                )
-                if fresh_same_tick:
-                    r0_slot = layer.slot_at(0)
-                    r0_ref_price: Decimal | None = None
-                    if r0_slot is not None:
-                        if r0_slot.entry is not None:
-                            r0_ref_price = r0_slot.entry.entry_price
-                        elif r0_slot.pending_rebuild is not None:
-                            r0_ref_price = r0_slot.pending_rebuild.entry_price
-                    if r0_ref_price is not None:
-                        cumulative_interval = Decimal("0")
-                        for k in range(1, highest.index + 2):
-                            cumulative_interval += counter_interval_pips(k, cfg)
-                        current_entry_price = self._entry_side_price(direction, tick)
-                        if direction == Direction.LONG:
-                            adverse = (r0_ref_price - current_entry_price) / self.pip_size
-                        else:
-                            adverse = (current_entry_price - r0_ref_price) / self.pip_size
-                        if adverse < cumulative_interval:
-                            return []
-                elif ref_price is not None:
-                    current_entry_price = self._entry_side_price(direction, tick)
-                    if direction == Direction.LONG:
-                        adverse = (ref_price - current_entry_price) / self.pip_size
-                    else:
-                        adverse = (current_entry_price - ref_price) / self.pip_size
-                    interval = counter_interval_pips(highest.index + 1, cfg)
-                    if adverse < interval:
-                        return []
-
-            return self._open_layer_initial(ss, tick, cycle)
-
-        # Find the next available counter slot (R1+)
-        slot = layer.next_available_counter_slot()
-        if slot is None:
-            return []
-
-        # Gate: head must be losing
-        if not _head_losing():
-            return []
-
-        # Measure adverse distance from the highest present slot
-        # (occupied or pending rebuild).  SL-closed positions still
-        # count for R-number progression — the next counter must be
-        # placed at the correct interval from the last known position.
-        #
-        # Same-tick counter-add loop special case: when the most recent
-        # previous slot was opened on *this* tick, its market fill price
-        # equals the current tick price, which would collapse ``adverse``
-        # to zero and stall the loop.  In that case, compare against the
-        # layer's R0 + cumulative design interval instead.
-        direction = cycle.direction
-        previous_slot = layer.previous_present_slot(slot.index)
-        current_entry_price = self._entry_side_price(direction, tick)
-        fresh_same_tick = (
-            previous_slot is not None
-            and previous_slot.entry is not None
-            and previous_slot.entry.opened_at == tick.timestamp
-            # Only use the same-tick multi-add shortcut when the
-            # previous slot really filled at the current market price.
-            # Rebuilds are stamped with the current tick timestamp too,
-            # but their entry_price is the rebuild trigger price, which
-            # may differ from the current market. Treating those as
-            # "fresh same-tick" lets a later slot open at a worse price
-            # than the rebuilt slot and flips grid ordering.
-            and previous_slot.entry.entry_price == current_entry_price
-        )
-
-        if fresh_same_tick:
-            r0_slot = layer.slot_at(0)
-            r0_ref_price: Decimal | None = None
-            if r0_slot is not None:
-                if r0_slot.entry is not None:
-                    r0_ref_price = r0_slot.entry.entry_price
-                elif r0_slot.pending_rebuild is not None:
-                    r0_ref_price = r0_slot.pending_rebuild.entry_price
-            if r0_ref_price is None:
-                r0_ref_price = head_entry_price
-            if r0_ref_price is None:
-                return []
-            cumulative_interval = Decimal("0")
-            for k in range(1, slot.index + 1):
-                cumulative_interval += counter_interval_pips(k, cfg)
-            if direction == Direction.LONG:
-                adverse = (r0_ref_price - current_entry_price) / self.pip_size
-            else:
-                adverse = (current_entry_price - r0_ref_price) / self.pip_size
-            interval = counter_interval_pips(slot.index, cfg)
-            if adverse < cumulative_interval:
-                return []
-        else:
-            if previous_slot is not None:
-                ref_price: Decimal | None = (
-                    previous_slot.entry.entry_price
-                    if previous_slot.entry is not None
-                    else previous_slot.pending_rebuild.entry_price
-                    if previous_slot.pending_rebuild is not None
-                    else None
-                )
-            else:
-                # First counter in this layer — measure from R0
-                r0 = layer.slot_at(0)
-                if r0 is not None and r0.entry is not None:
-                    ref_price = r0.entry.entry_price
-                elif r0 is not None and r0.pending_rebuild is not None:
-                    ref_price = r0.pending_rebuild.entry_price
-                else:
-                    ref_price = head_entry_price
-
-            if ref_price is None:
-                return []
-            if direction == Direction.LONG:
-                adverse = (ref_price - current_entry_price) / self.pip_size
-            else:
-                adverse = (current_entry_price - ref_price) / self.pip_size
-
-            interval = counter_interval_pips(slot.index, cfg)
-            if adverse < interval:
-                return []
-
-        # Build the entry
-        units = (slot.index + 1) * layer.base_units
-        new_price = tick.ask if direction == Direction.LONG else tick.bid
-
-        # Reference for weighted avg: do not pass the current layer's R0.
-        # weighted_avg_close_price already includes every live / pending slot
-        # in this layer, so passing R0 again would double-count it.
-        r0 = layer.slot_at(0)
-        if r0 is not None and (r0.entry is not None or r0.pending_rebuild is not None):
-            layer_ref = None
-        elif head is not None:
-            layer_ref = head
-        else:
-            layer_ref = None
-
-        if cfg.counter_tp_mode == "weighted_avg":
-            close_price, formula = weighted_avg_close_price(
-                layer,
-                new_price=new_price,
-                new_units=units,
-                include_ref=layer_ref,
-            )
-        else:
-            tp = counter_tp_pips(slot.index, cfg)
-            if direction == Direction.LONG:
-                close_price = new_price + tp * self.pip_size
-            else:
-                close_price = new_price - tp * self.pip_size
-            op = "+" if direction == Direction.LONG else "-"
-            formula = f"{new_price} {op} {tp} * {self.pip_size}"
-
-        # Use the resolved head entry_id for root/parent references
-        entry = Entry.open(
-            state=ss,
-            tick=tick,
-            direction=direction,
-            units=units,
-            step=slot.index + 1,
-            close_price=close_price,
-            role="counter",
-            layer_number=layer.layer_number,
-            retracement_count=slot.index,
-            root_entry_id=head_entry_id,
-            parent_entry_id=head_entry_id,
-        )
-        entry.expected_interval_pips = interval
-        entry.actual_interval_pips = adverse
-        entry.validation_status = "pass"
-
-        # Compute stop-loss for this entry at creation time
-        if cfg.stop_loss_enabled:
-            self._assign_configured_stop_loss(entry, slot.index + 1)
-
-        logger.info(
-            "Counter add (%s) in cycle %d: L%d/R%d, units=%d, adverse=%.1f pips",
-            direction.value.upper(),
-            cycle.cycle_id,
-            layer.layer_number,
-            slot.index,
-            units,
-            adverse,
-        )
-
-        evt = entry_open_event(
-            entry,
-            timestamp=tick.timestamp,
-            planned_exit_price_formula=formula,
-            description=self._format_counter_add_description(
-                direction=direction,
-                layer=layer,
-                slot=slot,
-                units=units,
-                adverse=adverse,
-                close_price=close_price,
-                stop_loss_price=entry.stop_loss_price,
-            ),
-        )
-        slot.fill(entry)
-
-        # When a refillable slot is re-opened, unseal any higher-numbered
-        # slots so the next adverse move can use them instead of jumping
-        # to a new layer.
-        layer.unseal_slots_above(slot.index)
-
-        # Update close prices for non-weighted_avg modes
-        if cfg.counter_tp_mode != "weighted_avg":
-            for s in layer.slots:
-                if s.index == 0 or s.entry is None or s.entry.is_hedge:
-                    continue
-                step_tp = counter_tp_pips(s.index, cfg)
-                if direction == Direction.LONG:
-                    s.entry.close_price = s.entry.entry_price + step_tp * self.pip_size
-                else:
-                    s.entry.close_price = s.entry.entry_price - step_tp * self.pip_size
-
-        return [evt]
+        return process_cycle_counter_adds(self, ss, tick, cycle)
 
     @staticmethod
     def _format_counter_add_description(
@@ -1110,15 +721,15 @@ class SnowballStrategy(Strategy):
         close_price: Decimal,
         stop_loss_price: Decimal | None,
     ) -> str:
-        """Build the user-facing description for a counter-add event."""
-        description = (
-            f"Counter add ({direction.value.upper()}) | "
-            f"L{layer.layer_number}/R{slot.index}, units={units}, "
-            f"adverse={adverse:.1f} pips, TP={close_price:.3f}"
+        return format_counter_add_description(
+            direction=direction,
+            layer=layer,
+            slot=slot,
+            units=units,
+            adverse=adverse,
+            close_price=close_price,
+            stop_loss_price=stop_loss_price,
         )
-        if stop_loss_price is not None:
-            description += f", SL={stop_loss_price:.3f}"
-        return description
 
     def _open_layer_initial(
         self,
@@ -1283,118 +894,31 @@ class SnowballStrategy(Strategy):
         entry: Entry,
         sl_pips: Decimal,
     ) -> None:
-        """Compute and assign a stop-loss price to *entry* at creation time.
-
-        ``sl_pips`` is the pip distance between the entry price and the
-        stop-loss price, typically supplied by
-        :func:`stop_loss_pips` for the slot's R index.  LONG entries
-        place the SL below the entry; SHORT entries place it above.
-        """
-        if sl_pips <= 0:
-            return
-        if entry.is_long:
-            sl = entry.entry_price - sl_pips * self.pip_size
-        else:
-            sl = entry.entry_price + sl_pips * self.pip_size
-        entry.stop_loss_price = sl
-        logger.debug(
-            "SL assigned: entry_id=%d L%d/R%d, SL=%.5f (sl_pips=%.1f)",
-            entry.entry_id,
-            entry.layer_number,
-            entry.retracement_count,
-            sl,
-            sl_pips,
-        )
+        assign_stop_loss(self, entry, sl_pips)
 
     def _assign_auto_stop_loss(
         self,
         entry: Entry,
         next_interval_pips: Decimal,
     ) -> None:
-        """Apply interval-based stop-loss placement."""
-        tp_pips = abs(entry.close_price - entry.entry_price) / self.pip_size
-        if entry.is_long:
-            next_entry_price = entry.entry_price - next_interval_pips * self.pip_size
-            if entry.retracement_count == 0:
-                sl = next_entry_price
-            elif tp_pips < next_interval_pips:
-                sl = next_entry_price
-            else:
-                sl = next_entry_price - next_interval_pips * self.pip_size
-        else:
-            next_entry_price = entry.entry_price + next_interval_pips * self.pip_size
-            if entry.retracement_count == 0 or tp_pips < next_interval_pips:
-                sl = next_entry_price
-            else:
-                sl = next_entry_price + next_interval_pips * self.pip_size
-        entry.stop_loss_price = sl
-        logger.debug(
-            "Auto SL assigned: entry_id=%d L%d/R%d, SL=%.5f (tp_pips=%.1f, next_interval=%.1f)",
-            entry.entry_id,
-            entry.layer_number,
-            entry.retracement_count,
-            sl,
-            tp_pips,
-            next_interval_pips,
-        )
+        assign_auto_stop_loss(self, entry, next_interval_pips)
 
     def _assign_configured_stop_loss(
         self,
         entry: Entry,
         slot_number: int,
     ) -> None:
-        """Assign stop-loss using the configured mode for a slot number.
-
-        ``slot_number`` is 1-based: R0 => 1, R1 => 2, ...
-        """
-        if self.config.stop_loss_mode == "auto":
-            next_interval = counter_interval_pips(slot_number, self.config)
-            if next_interval > 0:
-                self._assign_auto_stop_loss(entry, next_interval)
-            return
-
-        sl_pips = stop_loss_pips(slot_number, self.config)
-        if sl_pips > 0:
-            self._assign_stop_loss(entry, sl_pips)
+        assign_configured_stop_loss(self, entry, slot_number)
 
     def _assign_rebuild_stop_loss(
         self,
         entry: Entry,
         pending: StopLossClosedEntry,
     ) -> None:
-        """Assign stop-loss to a rebuilt entry using rebuild-specific settings."""
-        if not self.config.stop_loss_enabled or self.config.disable_loss_cut_after_rebuild:
-            return
-
-        if self.config.rebuild_stop_loss_mode == "same":
-            if pending.stop_loss_price is not None:
-                entry.stop_loss_price = pending.stop_loss_price
-            return
-
-        values = self.config.rebuild_stop_loss_manual_pips
-        if not values:
-            return
-        idx = min(max(pending.retracement_count, 0), len(values) - 1)
-        sl_pips = round_to_step(values[idx], self.config.round_step_pips)
-        if sl_pips > 0:
-            self._assign_stop_loss(entry, sl_pips)
+        assign_rebuild_stop_loss(self, entry, pending)
 
     def _is_stop_loss_temporarily_protected(self, layer: Layer, entry: Entry) -> bool:
-        """Return True when the layer's highest live R should ignore stop-loss.
-
-        Protection is dynamic per tick and per layer. Only the current
-        highest occupied slot is eligible, and only when its R-number is at
-        or above the configured threshold. R0 is never protected.
-        """
-        if not self.config.preserve_highest_retracement_enabled:
-            return False
-        threshold = self.config.preserve_highest_r_from
-        highest = layer.highest_occupied_slot()
-        if highest is None or highest.entry is None:
-            return False
-        if highest.index == 0 or highest.index < threshold:
-            return False
-        return highest.entry.entry_id == entry.entry_id
+        return is_stop_loss_temporarily_protected(self.config, layer, entry)
 
     def _process_stop_loss_closes(
         self,
@@ -1402,102 +926,7 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        """Close entries whose stop-loss price has been hit."""
-        if not self.config.stop_loss_enabled:
-            return []
-
-        events: list[StrategyEvent] = []
-        slots_to_close: list[tuple[Slot, Entry, Layer]] = []
-
-        for layer in cycle.grid.layers:
-            for slot in layer.slots:
-                entry = slot.entry
-                if entry is None or entry.stop_loss_price is None:
-                    continue
-                if entry.is_rebuild and self.config.disable_loss_cut_after_rebuild:
-                    continue
-                if entry.is_hedge:
-                    continue
-                if self._is_stop_loss_temporarily_protected(layer, entry):
-                    continue
-
-                hit = False
-                if entry.is_long and tick.bid <= entry.stop_loss_price:
-                    hit = True
-                elif entry.is_short and tick.ask >= entry.stop_loss_price:
-                    hit = True
-
-                if hit:
-                    slots_to_close.append((slot, entry, layer))
-
-        for slot, entry, layer in slots_to_close:
-            exit_price = entry.exit_price(tick)
-            pips_lost = abs(exit_price - entry.entry_price) / self.pip_size
-
-            logger.info(
-                "Stop-loss hit (%s): L%d/R%d, entry=%.5f, SL=%.5f, exit=%.5f, -%.1f pips",
-                entry.direction.value.upper(),
-                entry.layer_number,
-                entry.retracement_count,
-                entry.entry_price,
-                entry.stop_loss_price,
-                exit_price,
-                pips_lost,
-            )
-
-            # Close through the helper so lifecycle P/L is accumulated
-            # consistently (the SL delta needs to flow into the slot's
-            # running total and into the cycle total).
-            close_event = self._close_entry(
-                tick,
-                entry,
-                description=(
-                    f"[PROTECTION] Stop-loss ({entry.direction.value.upper()}) | "
-                    f"L{entry.layer_number}/R{entry.retracement_count}, "
-                    f"entry={entry.entry_price:.5f}, SL={entry.stop_loss_price:.5f}, "
-                    f"exit={exit_price:.5f}, -{pips_lost:.1f} pips"
-                ),
-                close_reason="stop_loss",
-                validation_status="warn",
-                cycle=cycle,
-            )
-
-            # Build the SL snapshot, carrying forward the slot's running
-            # lifecycle P/L (including this SL loss) so a future rebuild
-            # can continue the chain.
-            entry.lifecycle_stop_loss_count += 1
-
-            if self.config.rebuild_enabled:
-                sl_snapshot = StopLossClosedEntry(
-                    entry_price=entry.entry_price,
-                    close_price=entry.close_price,
-                    units=entry.units,
-                    direction=entry.direction,
-                    role=entry.role,
-                    layer_number=entry.layer_number,
-                    retracement_count=entry.retracement_count,
-                    step=entry.step,
-                    root_entry_id=entry.root_entry_id,
-                    parent_entry_id=entry.parent_entry_id,
-                    cycle_id=cycle.cycle_id,
-                    position_id=entry.position_id,
-                    stop_loss_price=entry.stop_loss_price,
-                    lifecycle_realized_pnl=entry.lifecycle_realized_pnl,
-                    lifecycle_stop_loss_count=entry.lifecycle_stop_loss_count,
-                )
-                slot.close_for_stop_loss(sl_snapshot)
-            else:
-                # Rebuilds disabled — close the slot permanently so it
-                # cannot be reused or rebuilt.  The grid shrinks on
-                # every SL instead of recovering; once the cycle loses
-                # its last live entry it will be marked COMPLETED (and,
-                # when ``complete_cycle_when_empty`` is set, a fresh
-                # cycle is re-seeded automatically).
-                slot.close(refillable=False)
-
-            events.append(close_event)
-
-        return events
+        return process_stop_loss_closes(self, ss, tick, cycle)
 
     def _process_stop_loss_rebuilds(
         self,
@@ -1505,253 +934,7 @@ class SnowballStrategy(Strategy):
         tick: Tick,
         cycle: SnowballCycle,
     ) -> list[StrategyEvent]:
-        """Rebuild positions that were closed by stop-loss when price returns.
-
-        Iterates all slots in the cycle's grid that have ``pending_rebuild``
-        set.  When the market price returns to the original entry price the
-        position is re-opened in-place.
-        """
-        if not self.config.stop_loss_enabled:
-            return []
-        if not self.config.rebuild_enabled:
-            return []
-
-        events: list[StrategyEvent] = []
-        any_rebuilt = False
-
-        # Convert buffer pips to price-unit offsets once.
-        cfg = self.config
-        apply_adjustment = (
-            cfg.rebuild_price_adjustment_enabled and cfg.rebuild_take_profit_mode == "same"
-        )
-        entry_buffer_price = cfg.rebuild_entry_price_buffer_pips * self.pip_size
-        exit_buffer_price = cfg.rebuild_exit_price_buffer_pips * self.pip_size
-
-        for layer in cycle.grid.layers:
-            for slot in layer.slots:
-                pending = slot.pending_rebuild
-                if pending is None:
-                    continue
-
-                # Determine the rebuild trigger price: original entry
-                # optionally shifted in the favourable direction by
-                # ``rebuild_entry_price_buffer_pips`` when the adjustment
-                # feature is enabled.
-                if apply_adjustment and entry_buffer_price > 0:
-                    if pending.direction == Direction.LONG:
-                        trigger_price = pending.entry_price + entry_buffer_price
-                    else:
-                        trigger_price = pending.entry_price - entry_buffer_price
-                else:
-                    trigger_price = pending.entry_price
-
-                # Clamp the trigger price so the rebuilt entry does not
-                # violate the monotonic grid ordering that
-                # ``_validate_grid_ordering`` enforces.  For LONG grids
-                # entries must be descending (earlier slots ≥ later
-                # slots); for SHORT grids they must be ascending.  The
-                # entry buffer can push the trigger past a neighboring
-                # occupied entry — especially when the neighbor and this
-                # slot were opened at the same price (grid exhaustion on
-                # a single tick) and the buffer then shifts this slot's
-                # entry beyond the neighbor.
-                entry_bound = preceding_entry_bound(cycle, layer, slot.index)
-                if entry_bound is not None:
-                    if pending.direction == Direction.LONG and trigger_price > entry_bound:
-                        logger.info(
-                            "Rebuild entry clamped to preserve grid ordering: "
-                            "L%d/R%d, trigger=%.5f, bound=%.5f, clamped_to=%.5f",
-                            pending.layer_number,
-                            pending.retracement_count,
-                            trigger_price,
-                            entry_bound,
-                            entry_bound,
-                        )
-                        trigger_price = entry_bound
-                    elif pending.direction == Direction.SHORT and trigger_price < entry_bound:
-                        logger.info(
-                            "Rebuild entry clamped to preserve grid ordering: "
-                            "L%d/R%d, trigger=%.5f, bound=%.5f, clamped_to=%.5f",
-                            pending.layer_number,
-                            pending.retracement_count,
-                            trigger_price,
-                            entry_bound,
-                            entry_bound,
-                        )
-                        trigger_price = entry_bound
-
-                # Check if price has returned to the trigger price
-                hit = False
-                if pending.direction == Direction.LONG and tick.bid >= trigger_price:
-                    hit = True
-                elif pending.direction == Direction.SHORT and tick.ask <= trigger_price:
-                    hit = True
-
-                if not hit:
-                    continue
-
-                # Rebuilt positions normally inherit the original planned
-                # TP. If a rebuild TP mode is selected, derive a fresh TP
-                # from the rebuilt entry price and keep price adjustment
-                # disabled for this rebuild.
-                adjusted_close_price = rebuild_take_profit_price(
-                    pending=pending,
-                    entry_price=trigger_price,
-                    pip_size=self.pip_size,
-                    config=self.config,
-                )
-                if apply_adjustment and exit_buffer_price > 0:
-                    if pending.direction == Direction.LONG:
-                        adjusted_close_price += exit_buffer_price
-                    else:
-                        adjusted_close_price -= exit_buffer_price
-
-                # Preserve the monotonic grid ordering that
-                # ``_validate_grid_ordering`` enforces.  The grid is
-                # traversed layer-by-layer (L1, L2, …) and then
-                # slot-by-slot within each layer, so the rebuilt slot
-                # must respect every present slot in all earlier layers
-                # as well as earlier slots in the same layer.
-                #
-                # We distinguish two classes of predecessor bound:
-                #
-                # - **hard** — bounds from ``occupied`` slots. Their TP
-                #   is already live on an open position and cannot be
-                #   changed, so the rebuild TP is clamped against them.
-                #
-                # - **soft** — bounds from ``pending_rebuild`` slots.
-                #   Their TP is a snapshot that will be re-materialised
-                #   when the slot itself rebuilds, so we can push those
-                #   snapshot TPs outward to match the current rebuild
-                #   and avoid clamping.
-                hard_bound, _soft_bound = grid_tp_bounds(cycle, layer, slot.index)
-                if hard_bound is not None:
-                    if pending.direction == Direction.LONG:
-                        if adjusted_close_price > hard_bound:
-                            logger.info(
-                                "Rebuild TP clamped to upper neighbor: "
-                                "L%d/R%d, pending_tp=%.5f, computed_adj=%.5f, clamped_to=%.5f",
-                                pending.layer_number,
-                                pending.retracement_count,
-                                pending.close_price,
-                                adjusted_close_price,
-                                hard_bound,
-                            )
-                            adjusted_close_price = hard_bound
-                    else:
-                        if adjusted_close_price < hard_bound:
-                            logger.info(
-                                "Rebuild TP clamped to upper neighbor: "
-                                "L%d/R%d, pending_tp=%.5f, computed_adj=%.5f, clamped_to=%.5f",
-                                pending.layer_number,
-                                pending.retracement_count,
-                                pending.close_price,
-                                adjusted_close_price,
-                                hard_bound,
-                            )
-                            adjusted_close_price = hard_bound
-
-                # Now that ``adjusted_close_price`` respects hard
-                # occupied-position bounds, extend any earlier
-                # pending_rebuild snapshot TPs that would otherwise
-                # violate monotonicity against it. Those slots will be
-                # rebuilt later and can absorb the adjustment without
-                # affecting any live position.
-                propagated = propagate_pending_rebuild_tp(
-                    cycle, layer, slot.index, adjusted_close_price
-                )
-                for lno, sidx, old_tp, new_tp in propagated:
-                    logger.info(
-                        "Pending-rebuild TP extended to preserve ordering: "
-                        "L%d/R%d, old_tp=%.5f, new_tp=%.5f "
-                        "(triggered by L%d/R%d rebuild @ TP=%.5f)",
-                        lno,
-                        sidx,
-                        old_tp,
-                        new_tp,
-                        pending.layer_number,
-                        pending.retracement_count,
-                        adjusted_close_price,
-                    )
-
-                # Rebuild the position with the adjusted parameters
-                entry = Entry.open(
-                    state=ss,
-                    tick=tick,
-                    direction=pending.direction,
-                    units=pending.units,
-                    step=pending.step,
-                    close_price=adjusted_close_price,
-                    role=pending.role,
-                    layer_number=pending.layer_number,
-                    retracement_count=pending.retracement_count,
-                    root_entry_id=pending.root_entry_id,
-                    parent_entry_id=pending.parent_entry_id,
-                )
-                # Override entry_price to the (optionally adjusted)
-                # trigger price so downstream accounting uses the same
-                # reference as the rebuild trigger.
-                entry.entry_price = trigger_price
-                entry.validation_status = "pass"
-                entry.is_rebuild = True
-
-                # Carry forward the slot's running lifecycle P/L and SL count.
-                entry.lifecycle_realized_pnl = pending.lifecycle_realized_pnl
-                entry.lifecycle_stop_loss_count = pending.lifecycle_stop_loss_count
-
-                self._assign_rebuild_stop_loss(entry, pending)
-
-                slot.complete_rebuild(entry)
-
-                adjustment_note = ""
-                if adjusted_close_price != pending.close_price or (
-                    apply_adjustment and entry_buffer_price > 0
-                ):
-                    adjustment_note = (
-                        f", adj: entry {pending.entry_price:.5f}→{trigger_price:.5f}"
-                        f", TP {pending.close_price:.5f}→{adjusted_close_price:.5f}"
-                    )
-
-                logger.info(
-                    "Stop-loss rebuild (%s): L%d/R%d, entry=%.5f, TP=%.5f, units=%d%s",
-                    pending.direction.value.upper(),
-                    pending.layer_number,
-                    pending.retracement_count,
-                    trigger_price,
-                    adjusted_close_price,
-                    pending.units,
-                    adjustment_note,
-                )
-
-                evt = entry_rebuild_event(
-                    entry,
-                    timestamp=tick.timestamp,
-                    original_position_id=pending.position_id,
-                    description=(
-                        f"Stop-loss rebuild ({pending.direction.value.upper()}) | "
-                        f"L{pending.layer_number}/R{pending.retracement_count}, "
-                        f"units={pending.units}, TP={adjusted_close_price:.5f}"
-                        + (
-                            f", SL={entry.stop_loss_price:.3f}"
-                            if entry.stop_loss_price is not None
-                            else ""
-                        )
-                        + adjustment_note
-                    ),
-                )
-                events.append(evt)
-                any_rebuilt = True
-
-        # If any entries were rebuilt and the cycle was pending, reactivate it.
-        if any_rebuilt and cycle.is_pending:
-            cycle.status = CycleStatus.ACTIVE
-            logger.info(
-                "Cycle %d (%s) reactivated after stop-loss rebuild",
-                cycle.cycle_id,
-                cycle.direction.value.upper(),
-            )
-
-        return events
+        return process_stop_loss_rebuilds(self, ss, tick, cycle)
 
     # ------------------------------------------------------------------
     # Core tick processing
@@ -1760,6 +943,7 @@ class SnowballStrategy(Strategy):
     def on_tick(self, *, tick: Tick, state: ExecutionState) -> StrategyResult:
         """Process a single tick."""
         self._grid_order_violation = None
+        self._close_order_violation = None
         ss = SnowballStrategyState.from_strategy_state(state.strategy_state)
         ss.last_bid = tick.bid
         ss.last_ask = tick.ask
@@ -1809,7 +993,13 @@ class SnowballStrategy(Strategy):
 
         # --- Lock release ---
         if lock_events is None and ss.protection_level == ProtectionLevel.LOCKED:
-            release_events = handle_lock_release(strategy=self, ss=ss, tick=tick, ratio=ratio)
+            release_events = handle_lock_release(
+                strategy=self,
+                close_entry=self._close_entry,
+                ss=ss,
+                tick=tick,
+                ratio=ratio,
+            )
             state.strategy_state = ss.to_dict()
             return StrategyResult(state=state, events=release_events)
 
@@ -1818,6 +1008,7 @@ class SnowballStrategy(Strategy):
         if lock_events is None:
             shrink_events = handle_shrink(
                 strategy=self,
+                close_entry=self._close_entry,
                 state=state,
                 ss=ss,
                 tick=tick,
@@ -1828,6 +1019,14 @@ class SnowballStrategy(Strategy):
             if shrink_events.close_order_violation:
                 self._close_order_violation = shrink_events.close_order_violation
             state.strategy_state = ss.to_dict()
+            if shrink_events.close_order_violation:
+                return StrategyResult(
+                    state=state,
+                    events=events,
+                    should_stop=True,
+                    stop_reason=f"Close order violation: {shrink_events.close_order_violation}",
+                    is_error=True,
+                )
             return StrategyResult(state=state, events=events)
 
         # Back to normal

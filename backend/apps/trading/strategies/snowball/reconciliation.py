@@ -4,13 +4,29 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any
+from typing import Any, Protocol
 
 from apps.trading.enums import Direction
 from apps.trading.models import Position
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
-from apps.trading.strategies.snowball.models import SnowballStrategyState
+from apps.trading.strategies.snowball.models import Entry, Layer, SnowballStrategyState
 from apps.trading.strategies.snowball.pricing import sync_entry_fill_price
+
+
+class ReconciliationState(Protocol):
+    strategy_state: dict[str, Any] | None
+    current_balance: Any
+
+
+class ReconciliationReport(Protocol):
+    removed_open_entries: int
+    relinked_open_entries: int
+    synthesized_open_entries: int
+    blockers: list[str]
+
+
+class StrategyConfigLike(Protocol):
+    config_dict: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -21,10 +37,10 @@ class PositionMatch:
 
 def reconcile_broker_positions(
     *,
-    state: Any,
+    state: ReconciliationState,
     open_positions: list[Position],
-    report: Any,
-    strategy_config: Any | None = None,
+    report: ReconciliationReport,
+    strategy_config: StrategyConfigLike | None = None,
 ) -> None:
     """Reconcile persisted Snowball entries against broker-backed positions."""
     snowball_state = SnowballStrategyState.from_strategy_state(state.strategy_state)
@@ -133,10 +149,10 @@ def reconcile_broker_positions(
 
 def _apply_position_to_entry(
     *,
-    entry: Any,
-    layer: Any,
+    entry: Entry,
+    layer: Layer | None,
     position: Position,
-    report: Any,
+    report: ReconciliationReport,
     config: SnowballStrategyConfig,
 ) -> None:
     position_id = str(position.id)
@@ -160,7 +176,7 @@ def _apply_position_to_entry(
 
 def _match_position_for_entry(
     *,
-    entry: Any,
+    entry: Entry,
     open_positions: list[Position],
     by_id: dict[str, Position],
     assigned_ids: set[str],
@@ -214,7 +230,7 @@ def _strict_decimal(value: Any, *, field_name: str) -> Decimal:
         raise ValueError(f"Snowball reconciliation field {field_name} must be decimal") from exc
 
 
-def _parse_config(strategy_config: Any | None) -> SnowballStrategyConfig:
+def _parse_config(strategy_config: StrategyConfigLike | None) -> SnowballStrategyConfig:
     if strategy_config is None:
         return SnowballStrategyConfig.from_dict({})
-    return SnowballStrategyConfig.from_dict(getattr(strategy_config, "config_dict", {}) or {})
+    return SnowballStrategyConfig.strict_from_dict(strategy_config.config_dict)

@@ -134,7 +134,7 @@ class TestSnowballStrategyConfig:
             Decimal("26"),
         ]
         assert cfg2.rebuild_price_adjustment_enabled is False
-        assert cfg2.grid_order_validation_enabled is False
+        assert cfg2.grid_order_validation_enabled is True
         assert cfg2.preserve_highest_retracement_enabled is True
         assert cfg2.preserve_highest_r_from == 3
 
@@ -187,7 +187,7 @@ class TestSnowballStrategyConfig:
                 }
             ).validate()
 
-    def test_rebuild_manual_take_profit_disables_conflicting_options(self):
+    def test_rebuild_manual_take_profit_disables_price_adjustment_only(self):
         cfg = SnowballStrategyConfig.from_dict(
             {
                 "rebuild_take_profit_mode": "manual",
@@ -207,7 +207,7 @@ class TestSnowballStrategyConfig:
         )
 
         assert cfg.rebuild_price_adjustment_enabled is False
-        assert cfg.grid_order_validation_enabled is False
+        assert cfg.grid_order_validation_enabled is True
 
     def test_validate_rejects_preserve_highest_r_from_above_r_max(self):
         with pytest.raises(ValueError, match="preserve_highest_r_from"):

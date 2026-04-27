@@ -774,7 +774,9 @@ class TestSnowballReconciliation:
             entry_time=None,
             unrealized_pnl=Decimal("0"),
         )
-        strategy_config = SimpleNamespace(config_dict={"counter_tp_mode": "fixed"})
+        strategy_config = SimpleNamespace(
+            config_dict=SnowballStrategyConfig.from_dict({"counter_tp_mode": "fixed"}).to_dict()
+        )
 
         reconcile_broker_positions(
             state=state,

@@ -19,6 +19,7 @@ from apps.trading.services.reconciliation import (
     _safe_int,
 )
 from apps.trading.services.oanda_retry import is_retryable_oanda_error
+from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 from apps.trading.strategies.snowball.models import (
     Entry,
     Layer,
@@ -475,7 +476,7 @@ class TestSnowballReconciliation:
         task.execution_id = uuid4()
         config = MagicMock()
         config.strategy_type = "snowball"
-        config.config_dict = {}
+        config.config_dict = SnowballStrategyConfig.from_dict({}).to_dict()
         task.config = config
 
         state = MagicMock()
@@ -547,7 +548,7 @@ class TestSnowballReconciliation:
         task.execution_id = uuid4()
         config = MagicMock()
         config.strategy_type = "snowball"
-        config.config_dict = {}
+        config.config_dict = SnowballStrategyConfig.from_dict({}).to_dict()
         task.config = config
 
         state = MagicMock()
@@ -608,7 +609,7 @@ class TestSnowballReconciliation:
         task.execution_id = uuid4()
         config = MagicMock()
         config.strategy_type = "snowball"
-        config.config_dict = {}
+        config.config_dict = SnowballStrategyConfig.from_dict({}).to_dict()
         task.config = config
 
         state = MagicMock()

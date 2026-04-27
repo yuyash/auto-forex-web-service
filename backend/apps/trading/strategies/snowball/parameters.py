@@ -9,7 +9,7 @@ from apps.trading.strategies.snowball.config import SnowballStrategyConfig
 
 
 def parse_config(strategy_config: Any) -> SnowballStrategyConfig:
-    return SnowballStrategyConfig.from_dict(strategy_config.config_dict)
+    return SnowballStrategyConfig.strict_from_dict(strategy_config.config_dict)
 
 
 def config_to_parameters(config: SnowballStrategyConfig) -> dict[str, Any]:

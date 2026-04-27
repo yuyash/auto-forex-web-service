@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -26,8 +27,6 @@ class ProtectionStrategy(Protocol):
     instrument: str
     account_currency: str
     pip_size: Decimal
-
-    def _close_entry(self, *args, **kwargs) -> ClosePositionEvent: ...
 
 
 @dataclass(frozen=True)
@@ -167,6 +166,7 @@ def handle_lock(
 def handle_lock_release(
     *,
     strategy: ProtectionStrategy,
+    close_entry: Callable[..., ClosePositionEvent],
     ss: SnowballStrategyState,
     tick: Tick,
     ratio: Decimal,
@@ -188,7 +188,7 @@ def handle_lock_release(
             for entry in list(cycle.hedge_entries):
                 if entry.entry_id == hid:
                     events.append(
-                        strategy._close_entry(
+                        close_entry(
                             tick,
                             entry,
                             description=f"[PROTECTION] Lock hedge unwound | ratio={ratio:.1f}%",
@@ -216,6 +216,7 @@ def handle_lock_release(
 def handle_shrink(
     *,
     strategy: ProtectionStrategy,
+    close_entry: Callable[..., ClosePositionEvent],
     state: ExecutionState,
     ss: SnowballStrategyState,
     tick: Tick,
@@ -254,7 +255,7 @@ def handle_shrink(
             return ShrinkResult(events=events, close_order_violation=close_order_violation)
 
         events.append(
-            strategy._close_entry(
+            close_entry(
                 tick,
                 entry,
                 description=(
