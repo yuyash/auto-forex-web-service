@@ -3,7 +3,11 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from decimal import Decimal
 
-from apps.trading.strategies.adaptive_net.models import MetricContext, MetricSignal
+from apps.trading.strategies.adaptive_net.models import (
+    AdaptiveNetConfig,
+    MetricContext,
+    MetricSignal,
+)
 
 
 def clamp(value: Decimal, minimum: Decimal, maximum: Decimal) -> Decimal:
@@ -168,14 +172,18 @@ class TimesFMForecastMetric(SignalMetric):
         )
 
 
-def default_metrics(*, include_timesfm: bool) -> list[SignalMetric]:
-    metrics: list[SignalMetric] = [
-        RegimeMetric(),
-        TrendMomentumMetric(),
-        MeanReversionMetric(),
-        RiskConditionMetric(),
-        InventoryExposureMetric(),
-    ]
-    if include_timesfm:
+def enabled_metrics(config: AdaptiveNetConfig) -> list[SignalMetric]:
+    metrics: list[SignalMetric] = []
+    if config.enable_regime_metric:
+        metrics.append(RegimeMetric())
+    if config.enable_trend_momentum_metric:
+        metrics.append(TrendMomentumMetric())
+    if config.enable_mean_reversion_metric:
+        metrics.append(MeanReversionMetric())
+    if config.enable_risk_condition_metric:
+        metrics.append(RiskConditionMetric())
+    if config.enable_inventory_exposure_metric:
+        metrics.append(InventoryExposureMetric())
+    if config.enable_timesfm_forecast_metric:
         metrics.append(TimesFMForecastMetric())
     return metrics

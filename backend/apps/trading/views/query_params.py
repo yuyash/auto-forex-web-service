@@ -218,6 +218,13 @@ INTERVAL_SPEC = QueryFieldSpec(
         "returns one point per N-minute window."
     ),
 )
+METRIC_KEYS_SPEC = QueryFieldSpec(
+    name="metric_keys",
+    kind="string",
+    default="",
+    allow_blank=True,
+    help_text="Optional comma-separated metric keys to include in each metrics object.",
+)
 LEVEL_SPEC = QueryFieldSpec(
     name="level",
     kind="string",
@@ -530,7 +537,7 @@ QUERY_GROUP_SPECS = {
     ),
     "metrics": QueryGroupSpec(
         name="MetricsQueryParamsSchemaSerializer",
-        specs=(*EXECUTION_SCOPED_METRICS_GROUP, UNTIL_SPEC, INTERVAL_SPEC),
+        specs=(*EXECUTION_SCOPED_METRICS_GROUP, UNTIL_SPEC, INTERVAL_SPEC, METRIC_KEYS_SPEC),
         description="OpenAPI serializer for metrics query parameters.",
     ),
     "logs": QueryGroupSpec(
@@ -957,6 +964,7 @@ class MetricsQueryParams:
     execution: ExecutionScopedQuery
     until: datetime | None
     interval: int
+    metric_keys: tuple[str, ...]
 
     @classmethod
     def from_request(
@@ -985,6 +993,9 @@ class MetricsQueryParams:
             execution=execution,
             until=until,
             interval=max(1, cast(int | None, parsed["interval"]) or 1),
+            metric_keys=tuple(
+                key.strip() for key in str(parsed["metric_keys"] or "").split(",") if key.strip()
+            ),
         )
 
 

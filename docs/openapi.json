@@ -2632,6 +2632,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "metric_keys",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional comma-separated metric keys to include in each metrics object."
+                    },
+                    {
+                        "in": "query",
                         "name": "page",
                         "schema": {
                             "type": "integer",
@@ -2895,6 +2903,14 @@
                             "minimum": 1
                         },
                         "description": "Aggregation interval in minutes. Default 1. When greater than 1, returns one point per N-minute window."
+                    },
+                    {
+                        "in": "query",
+                        "name": "metric_keys",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional comma-separated metric keys to include in each metrics object."
                     },
                     {
                         "in": "query",
@@ -4521,6 +4537,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "metric_keys",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional comma-separated metric keys to include in each metrics object."
+                    },
+                    {
+                        "in": "query",
                         "name": "page",
                         "schema": {
                             "type": "integer",
@@ -4784,6 +4808,14 @@
                             "minimum": 1
                         },
                         "description": "Aggregation interval in minutes. Default 1. When greater than 1, returns one point per N-minute window."
+                    },
+                    {
+                        "in": "query",
+                        "name": "metric_keys",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Optional comma-separated metric keys to include in each metrics object."
                     },
                     {
                         "in": "query",

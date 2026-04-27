@@ -84,6 +84,114 @@
       "group": "Signal Window",
       "group_ja": "シグナル期間"
     },
+    "metric_publish_interval_ticks": {
+      "type": "integer",
+      "title": "Metric Publish Interval Ticks",
+      "title_ja": "メトリクス公開間隔（ティック）",
+      "description": "Minimum tick interval between independent metric calculations and publication. Set to 1 to publish every tick.",
+      "description_ja": "独立メトリクスを計算して公開する最小ティック間隔。1にすると毎ティック公開します。",
+      "default": 10,
+      "minimum": 1,
+      "maximum": 1000,
+      "group": "Metric Publishing",
+      "group_ja": "メトリクス公開"
+    },
+    "metric_publish_interval_seconds": {
+      "type": "integer",
+      "title": "Metric Publish Interval Seconds",
+      "title_ja": "メトリクス公開間隔（秒）",
+      "description": "Minimum elapsed market time between independent metric calculations and publication. Set to 0 to rely only on Metric Publish Interval Ticks.",
+      "description_ja": "独立メトリクスを計算して公開する最小マーケット経過時間。0にするとティック間隔のみを使います。",
+      "default": 60,
+      "minimum": 0,
+      "maximum": 86400,
+      "group": "Metric Publishing",
+      "group_ja": "メトリクス公開"
+    },
+    "enable_regime_metric": {
+      "type": "boolean",
+      "title": "Enable Regime Metric",
+      "title_ja": "レジームメトリクスを有効化",
+      "description": "Publish and use the market-regime signal.",
+      "description_ja": "市場レジームシグナルを公開し、戦略判断に使用します。",
+      "default": true,
+      "group": "Metric Publishing",
+      "group_ja": "メトリクス公開"
+    },
+    "decision_interval_metric_publishes": {
+      "type": "integer",
+      "title": "Decision Interval Metrics",
+      "title_ja": "デシジョン間隔（メトリクス回数）",
+      "description": "Run the decision engine after this many metric publications. Set to 1 to evaluate every published metrics snapshot.",
+      "description_ja": "この回数のメトリクス公開ごとにデシジョンエンジンを実行します。1にすると公開メトリクスごとに評価します。",
+      "default": 1,
+      "minimum": 1,
+      "maximum": 1000,
+      "group": "Decision Publishing",
+      "group_ja": "デシジョン公開"
+    },
+    "decision_interval_seconds": {
+      "type": "integer",
+      "title": "Decision Interval Seconds",
+      "title_ja": "デシジョン間隔（秒）",
+      "description": "Minimum elapsed market time between decision publications. Set to 0 to rely only on Decision Interval Metrics.",
+      "description_ja": "デシジョン公開間の最小マーケット経過時間。0にするとメトリクス回数のみを使います。",
+      "default": 0,
+      "minimum": 0,
+      "maximum": 86400,
+      "group": "Decision Publishing",
+      "group_ja": "デシジョン公開"
+    },
+    "enable_trend_momentum_metric": {
+      "type": "boolean",
+      "title": "Enable Trend Momentum Metric",
+      "title_ja": "トレンド・モメンタムメトリクスを有効化",
+      "description": "Publish and use the trend momentum signal.",
+      "description_ja": "トレンド・モメンタムシグナルを公開し、戦略判断に使用します。",
+      "default": true,
+      "group": "Metric Publishing",
+      "group_ja": "メトリクス公開"
+    },
+    "enable_mean_reversion_metric": {
+      "type": "boolean",
+      "title": "Enable Mean Reversion Metric",
+      "title_ja": "平均回帰メトリクスを有効化",
+      "description": "Publish and use the mean-reversion signal.",
+      "description_ja": "平均回帰シグナルを公開し、戦略判断に使用します。",
+      "default": true,
+      "group": "Metric Publishing",
+      "group_ja": "メトリクス公開"
+    },
+    "enable_risk_condition_metric": {
+      "type": "boolean",
+      "title": "Enable Risk Condition Metric",
+      "title_ja": "リスク状態メトリクスを有効化",
+      "description": "Publish and use the spread/risk condition signal.",
+      "description_ja": "スプレッドとリスク状態のシグナルを公開し、戦略判断に使用します。",
+      "default": true,
+      "group": "Metric Publishing",
+      "group_ja": "メトリクス公開"
+    },
+    "enable_inventory_exposure_metric": {
+      "type": "boolean",
+      "title": "Enable Inventory Exposure Metric",
+      "title_ja": "保有量リスクメトリクスを有効化",
+      "description": "Publish and use the inventory exposure signal.",
+      "description_ja": "保有量リスクシグナルを公開し、戦略判断に使用します。",
+      "default": true,
+      "group": "Metric Publishing",
+      "group_ja": "メトリクス公開"
+    },
+    "enable_timesfm_forecast_metric": {
+      "type": "boolean",
+      "title": "Enable TimesFM Forecast Metric",
+      "title_ja": "TimesFM予測メトリクスを有効化",
+      "description": "Publish and use the TimesFM forecast signal when a provider is connected.",
+      "description_ja": "予測プロバイダが接続されている場合にTimesFM予測シグナルを公開し、戦略判断に使用します。",
+      "default": false,
+      "group": "Metric Publishing",
+      "group_ja": "メトリクス公開"
+    },
     "trend_weight": {
       "type": "number",
       "title": "Trend Momentum Weight",
@@ -145,6 +253,54 @@
       "maximum": 1,
       "group": "Metric Weights",
       "group_ja": "メトリクス重み"
+    },
+    "min_decision_confidence": {
+      "type": "number",
+      "title": "Minimum Decision Confidence",
+      "title_ja": "最小デシジョン信頼度",
+      "description": "Hold the current exposure unless the confidence-adjusted signal exceeds this threshold.",
+      "description_ja": "信頼度調整後のシグナルがこの閾値を超えない限り、現在の建玉を維持します。",
+      "default": 0.2,
+      "minimum": 0,
+      "maximum": 1,
+      "group": "Decision Risk Controls",
+      "group_ja": "デシジョンリスク制御"
+    },
+    "no_trade_edge_threshold": {
+      "type": "number",
+      "title": "No-Trade Edge Threshold",
+      "title_ja": "取引停止エッジ閾値",
+      "description": "Hold when absolute directional edge is below this value. This acts as a cost buffer against churn.",
+      "description_ja": "方向エッジの絶対値がこの値未満の場合は建玉を維持します。往復取引を抑えるコストバッファとして機能します。",
+      "default": 0.12,
+      "minimum": 0,
+      "maximum": 1,
+      "group": "Decision Risk Controls",
+      "group_ja": "デシジョンリスク制御"
+    },
+    "reversal_edge_threshold": {
+      "type": "number",
+      "title": "Reversal Edge Threshold",
+      "title_ja": "反転エッジ閾値",
+      "description": "Require at least this much opposite edge before reversing an existing net position.",
+      "description_ja": "既存ネット建玉を反転するには、反対方向のエッジが少なくともこの値を超える必要があります。",
+      "default": 0.28,
+      "minimum": 0,
+      "maximum": 1,
+      "group": "Decision Risk Controls",
+      "group_ja": "デシジョンリスク制御"
+    },
+    "max_position_change_fraction": {
+      "type": "number",
+      "title": "Max Position Change Fraction",
+      "title_ja": "最大建玉変更率",
+      "description": "Maximum fraction of Max Net Units that one decision may change. Lower values reduce overtrading and sudden reversals.",
+      "description_ja": "1回のデシジョンで変更できる最大数量を最大ネットユニット数に対する割合で指定します。小さいほど過剰取引と急反転を抑えます。",
+      "default": 0.5,
+      "minimum": 0.01,
+      "maximum": 1,
+      "group": "Decision Risk Controls",
+      "group_ja": "デシジョンリスク制御"
     },
     "max_spread_pips": {
       "type": "number",

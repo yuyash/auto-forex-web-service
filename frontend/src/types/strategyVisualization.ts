@@ -115,6 +115,24 @@ export interface AdaptiveNetDecisionHistoryPoint {
   probability_short: string;
   risk_multiplier: string;
   metric_signals: AdaptiveNetMetricSignal[];
+  position_transition?: AdaptiveNetPositionTransition | null;
+}
+
+export interface AdaptiveNetPositionTransition {
+  timestamp: string;
+  order_direction: 'buy' | 'sell' | 'hold' | string;
+  order_units: number;
+  order_abs_units: number;
+  order_price: string;
+  position_before_net_units: number;
+  position_before_abs_units: number;
+  position_before_avg_entry_price?: string | null;
+  position_after_net_units: number;
+  position_after_abs_units: number;
+  position_after_avg_entry_price?: string | null;
+  position_delta_net_units: number;
+  position_delta_abs_units: number;
+  action: 'hold' | 'increase' | 'reduce' | 'reverse' | string;
 }
 
 export interface AdaptiveNetStrategyState {
@@ -125,7 +143,15 @@ export interface AdaptiveNetStrategyState {
   open_position_id?: string | null;
   latest_decision?: AdaptiveNetDecision | null;
   metric_signals?: AdaptiveNetMetricSignal[];
+  published_metric_signals?: AdaptiveNetMetricSignal[];
+  published_metric_names?: string[];
   decision_history?: AdaptiveNetDecisionHistoryPoint[];
+  latest_position_transition?: AdaptiveNetPositionTransition | null;
+  metric_publish_count?: number;
+  last_metric_publish_tick?: number;
+  last_metric_publish_at?: string | null;
+  last_decision_metric_publish_count?: number;
+  last_decision_at?: string | null;
   last_price?: string;
   last_spread_pips?: string;
   last_fill_price?: string | null;

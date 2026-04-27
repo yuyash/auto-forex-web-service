@@ -108,6 +108,7 @@
       "description": "Normalized strategy metrics used by the decision engine. Direction score is [-1, +1], confidence is [0, 1], and size multiplier is [0, 1].",
       "count": "{{count}} metrics",
       "window": "{{count}} ticks / {{duration}}",
+      "publishCount": "{{count}} metric publishes",
       "warmingUp": "Metrics are warming up.",
       "score": "score {{value}}",
       "confidence": "conf {{value}}",
@@ -140,6 +141,7 @@
       "title": "Rebalance Decision",
       "description": "Compares the prediction with current net exposure and resolves the final direction and order size.",
       "elapsed": "Since Decision",
+      "direction": "Order Direction",
       "ticks": "{{count}} ticks",
       "actions": {
         "hold": "Hold",
@@ -147,6 +149,19 @@
         "reduce": "Reduce",
         "reverse": "Reverse"
       }
+    },
+    "orderDirections": {
+      "buy": "Buy",
+      "sell": "Sell",
+      "hold": "Hold"
+    },
+    "position": {
+      "deltaNet": "Net Position Delta",
+      "absoluteNet": "Absolute Net Position",
+      "averageEntry": "Average Entry",
+      "beforeAfterNet": "{{before}} → {{after}}",
+      "deltaAbs": "absolute delta {{value}}",
+      "beforeAverageEntry": "before {{value}}"
     }
   }
 }
