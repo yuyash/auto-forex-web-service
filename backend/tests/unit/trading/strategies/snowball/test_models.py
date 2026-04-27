@@ -232,6 +232,24 @@ class TestSnowballStrategyConfig:
         assert cfg.preserve_highest_retracement_enabled is False
         assert cfg.preserve_highest_r_from == 0
 
+    def test_strict_from_dict_allows_omitted_preserve_highest_r_from_when_disabled(self):
+        raw = SnowballStrategyConfig.from_dict({}).to_dict()
+        raw["preserve_highest_retracement_enabled"] = False
+        raw.pop("preserve_highest_r_from")
+
+        cfg = SnowballStrategyConfig.strict_from_dict(raw)
+
+        assert cfg.preserve_highest_retracement_enabled is False
+        assert cfg.preserve_highest_r_from == 0
+
+    def test_strict_from_dict_requires_preserve_highest_r_from_when_enabled(self):
+        raw = SnowballStrategyConfig.from_dict({}).to_dict()
+        raw["preserve_highest_retracement_enabled"] = True
+        raw.pop("preserve_highest_r_from")
+
+        with pytest.raises(ValueError, match="preserve_highest_r_from"):
+            SnowballStrategyConfig.strict_from_dict(raw)
+
 
 class TestEntry:
     def test_to_dict_roundtrip(self):
