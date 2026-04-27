@@ -313,7 +313,7 @@ export function MetricsOhlcChart({
       <Paper
         variant="outlined"
         sx={{
-          p: 1.5,
+          p: { xs: 0.75, sm: 1.5 },
           ...(cardHeight ? { height: cardHeight, overflow: 'hidden' } : {}),
         }}
       >
@@ -332,7 +332,7 @@ export function MetricsOhlcChart({
       <Paper
         variant="outlined"
         sx={{
-          p: 1.5,
+          p: { xs: 0.75, sm: 1.5 },
           ...(cardHeight ? { height: cardHeight, overflow: 'hidden' } : {}),
         }}
       >
@@ -349,7 +349,7 @@ export function MetricsOhlcChart({
       <Paper
         variant="outlined"
         sx={{
-          p: 1.5,
+          p: { xs: 0.75, sm: 1.5 },
           ...(cardHeight ? { height: cardHeight, overflow: 'hidden' } : {}),
         }}
       >
@@ -365,7 +365,7 @@ export function MetricsOhlcChart({
     <Paper
       variant="outlined"
       sx={{
-        p: 1.5,
+        p: { xs: 0.75, sm: 1.5 },
         display: 'flex',
         flexDirection: 'column',
         minWidth: 0,
@@ -415,8 +415,12 @@ export function MetricsOhlcChart({
               <ZoomOutMapIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Reload">
-            <IconButton onClick={handleReload} size="small">
+          <Tooltip title={t('metrics.reloadOhlcChart', 'Reload OHLC chart')}>
+            <IconButton
+              onClick={handleReload}
+              size="small"
+              aria-label={t('metrics.reloadOhlcChart', 'Reload OHLC chart')}
+            >
               <RefreshIcon fontSize="small" />
             </IconButton>
           </Tooltip>

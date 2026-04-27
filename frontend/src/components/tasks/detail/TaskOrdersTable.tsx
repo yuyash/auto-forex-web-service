@@ -428,7 +428,12 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
           display: 'flex',
           gap: 1,
           flexWrap: 'wrap',
-          alignItems: 'center',
+          alignItems: { xs: 'stretch', sm: 'center' },
+          p: { xs: 1.25, sm: 0 },
+          border: { xs: 1, sm: 0 },
+          borderColor: 'divider',
+          borderRadius: { xs: 1, sm: 0 },
+          bgcolor: { xs: 'background.paper', sm: 'transparent' },
         }}
       >
         <TextField
@@ -445,7 +450,10 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
               ? t('tables.orders.invalidOrderId')
               : undefined
           }
-          sx={{ width: 280 }}
+          sx={{
+            flex: { xs: '1 1 100%', sm: '0 1 280px' },
+            minWidth: 0,
+          }}
           slotProps={{
             input: {
               startAdornment: (
@@ -478,6 +486,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
             setDateTo(v);
             setPage(0);
           }}
+          sx={{ flex: { xs: '1 1 100%', md: '0 0 auto' } }}
         />
       </Box>
 
