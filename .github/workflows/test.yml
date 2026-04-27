@@ -336,7 +336,7 @@ jobs:
         env:
           PLAYWRIGHT_BASE_URL: http://localhost:5173
           CI: true
-        run: npx playwright test --project=chromium --reporter=list,html
+        run: npx playwright test --project=chromium --project=mobile-chrome --reporter=list,html
 
       # ── Artifacts ─────────────────────────────────────────
       - name: Upload Playwright report

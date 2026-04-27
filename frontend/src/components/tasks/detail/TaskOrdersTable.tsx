@@ -38,6 +38,11 @@ import { buildCopyHandler } from '../../../utils/tableCopyUtils';
 import { formatAppNumber } from '../../../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../../../utils/timezone';
 import { DateRangeFilter } from '../../common/DateRangeFilter';
+import { TableFilterBar } from '../../common/TableFilterBar';
+import {
+  tableFilterDateRangeSx,
+  tableFilterFieldSx,
+} from '../../common/tableFilterLayout';
 
 interface TaskOrdersTableProps {
   taskId: string | number;
@@ -422,20 +427,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
           />
         </Box>
       </Box>
-      <Box
-        sx={{
-          mb: 2,
-          display: 'flex',
-          gap: 1,
-          flexWrap: 'wrap',
-          alignItems: { xs: 'stretch', sm: 'center' },
-          p: { xs: 1.25, sm: 0 },
-          border: { xs: 1, sm: 0 },
-          borderColor: 'divider',
-          borderRadius: { xs: 1, sm: 0 },
-          bgcolor: { xs: 'background.paper', sm: 'transparent' },
-        }}
-      >
+      <TableFilterBar>
         <TextField
           size="small"
           placeholder={t('tables.orders.orderIdFilter')}
@@ -450,10 +442,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
               ? t('tables.orders.invalidOrderId')
               : undefined
           }
-          sx={{
-            flex: { xs: '1 1 100%', sm: '0 1 280px' },
-            minWidth: 0,
-          }}
+          sx={tableFilterFieldSx}
           slotProps={{
             input: {
               startAdornment: (
@@ -486,9 +475,9 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
             setDateTo(v);
             setPage(0);
           }}
-          sx={{ flex: { xs: '1 1 100%', md: '0 0 auto' } }}
+          sx={tableFilterDateRangeSx}
         />
-      </Box>
+      </TableFilterBar>
 
       <DataTable
         columns={visibleColumns}

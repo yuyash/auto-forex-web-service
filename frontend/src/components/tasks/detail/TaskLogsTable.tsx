@@ -28,6 +28,8 @@ import { Settings as SettingsIcon } from '@mui/icons-material';
 import DataTable, { type Column } from '../../common/DataTable';
 import { TableSelectionToolbar } from '../../common/TableSelectionToolbar';
 import { DateRangeFilter } from '../../common/DateRangeFilter';
+import { TableFilterBar } from '../../common/TableFilterBar';
+import { tableFilterDateRangeSx } from '../../common/tableFilterLayout';
 import { useTableRowSelection } from '../../../hooks/useTableRowSelection';
 import { useTaskLogs, type TaskLog } from '../../../hooks/useTaskLogs';
 import { useTaskLogComponents } from '../../../hooks/useTaskLogComponents';
@@ -341,20 +343,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
           />
         </Box>
       </Box>
-      <Box
-        sx={{
-          mb: 2,
-          display: 'flex',
-          gap: 1,
-          alignItems: { xs: 'stretch', sm: 'center' },
-          flexWrap: 'wrap',
-          p: { xs: 1.25, sm: 0 },
-          border: { xs: 1, sm: 0 },
-          borderColor: 'divider',
-          borderRadius: { xs: 1, sm: 0 },
-          bgcolor: { xs: 'background.paper', sm: 'transparent' },
-        }}
-      >
+      <TableFilterBar>
         <FormControl
           sx={{
             flex: { xs: '1 1 100%', sm: '0 1 200px' },
@@ -436,7 +425,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
           }}
           fromLabel={t('tables.logs.timestampFrom')}
           toLabel={t('tables.logs.timestampTo')}
-          sx={{ flex: { xs: '1 1 100%', md: '0 0 auto' } }}
+          sx={tableFilterDateRangeSx}
         />
         {auditComponents.length > 0 && (
           <Box
@@ -466,7 +455,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
             })}
           </Box>
         )}
-      </Box>
+      </TableFilterBar>
 
       {isMobile ? (
         <Box sx={{ display: 'grid', gap: 1.5 }}>

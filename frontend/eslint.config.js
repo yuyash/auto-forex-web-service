@@ -26,5 +26,21 @@ export default tseslint.config(
         { allowConstantExport: true },
       ],
     },
+  },
+  {
+    files: [
+      'src/components/common/DateRangeFilter.tsx',
+      'src/components/common/TableFilterBar.tsx',
+      'src/components/tasks/detail/ChartPanel.tsx',
+      'src/components/tasks/detail/MetricsToolbar.tsx',
+      'src/components/tasks/detail/Task*FilterBar.tsx',
+      'src/components/tasks/detail/TaskMetricsTab.tsx',
+      'src/components/tasks/detail/TaskPositionViewHeader.tsx',
+      'src/hooks/useTaskMetrics.ts',
+    ],
+    rules: {
+      '@typescript-eslint/consistent-type-imports': 'error',
+      '@typescript-eslint/no-explicit-any': 'error',
+    },
   }
 );

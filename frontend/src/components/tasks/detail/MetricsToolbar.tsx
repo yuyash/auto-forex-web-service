@@ -17,6 +17,8 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { useTranslation } from 'react-i18next';
 import { DateRangeFilter } from '../../common/DateRangeFilter';
+import { TableFilterBar } from '../../common/TableFilterBar';
+import { tableFilterDateRangeSx } from '../../common/tableFilterLayout';
 
 const INTERVAL_OPTIONS = [
   { value: 0, label: 'Auto' },
@@ -148,20 +150,7 @@ export function MetricsToolbar({
       </Box>
 
       <Collapse in={showRange}>
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: { xs: 'stretch', sm: 'center' },
-            gap: 1,
-            mt: 1,
-            flexWrap: 'wrap',
-            p: { xs: 1.25, sm: 0 },
-            border: { xs: 1, sm: 0 },
-            borderColor: 'divider',
-            borderRadius: { xs: 1, sm: 0 },
-            bgcolor: { xs: 'background.paper', sm: 'transparent' },
-          }}
-        >
+        <TableFilterBar sx={{ mt: 1 }}>
           <DateRangeFilter
             from={since}
             to={until}
@@ -169,7 +158,7 @@ export function MetricsToolbar({
             onToChange={onUntilChange}
             fromLabel="From"
             toLabel="To"
-            sx={{ flex: { xs: '1 1 100%', md: '0 0 auto' } }}
+            sx={tableFilterDateRangeSx}
             fieldSx={{ width: { xs: '100%', sm: 220 } }}
           />
           {(since || until) && (
@@ -184,7 +173,7 @@ export function MetricsToolbar({
               Clear
             </Button>
           )}
-        </Box>
+        </TableFilterBar>
       </Collapse>
     </Box>
   );
