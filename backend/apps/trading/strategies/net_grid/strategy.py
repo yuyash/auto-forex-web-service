@@ -44,6 +44,17 @@ class NetGridStrategy(Strategy):
         data = {**DEFAULTS, **dict(parameters)}
         return NetGridConfig.from_dict(data).to_dict()
 
+    @classmethod
+    def validate_parameters(
+        cls,
+        *,
+        parameters: dict[str, Any],
+        config_schema: dict[str, Any] | None = None,
+    ) -> None:
+        super().validate_parameters(parameters=parameters, config_schema=config_schema)
+        cfg = NetGridConfig.from_dict(parameters)
+        _validate_config_relationships(cfg)
+
     @property
     def strategy_type(self) -> StrategyType:
         return StrategyType.NET_GRID
@@ -497,6 +508,25 @@ def _signal_event(tick: Tick, decision: dict[str, Any]) -> GenericStrategyEvent:
 
 def _hold(reason: str, **extra: Any) -> dict[str, Any]:
     return {"action": "hold", "reason": reason, "target_net_units": None, "units_delta": 0, **extra}
+
+
+def _validate_config_relationships(config: NetGridConfig) -> None:
+    if config.auto_fast_ema_ticks >= config.auto_slow_ema_ticks:
+        raise ValueError("auto_fast_ema_ticks must be less than auto_slow_ema_ticks")
+    if config.grid_min_interval_pips > config.grid_max_interval_pips:
+        raise ValueError(
+            "grid_min_interval_pips must be less than or equal to grid_max_interval_pips"
+        )
+    if config.take_profit_min_pips > config.take_profit_max_pips:
+        raise ValueError("take_profit_min_pips must be less than or equal to take_profit_max_pips")
+    if (
+        config.max_adverse_after_full_grid_pips > 0
+        and config.max_adverse_pips > 0
+        and config.max_adverse_after_full_grid_pips > config.max_adverse_pips
+    ):
+        raise ValueError(
+            "max_adverse_after_full_grid_pips must be less than or equal to max_adverse_pips"
+        )
 
 
 def _close_decision(

@@ -2,6 +2,87 @@
   "display_name": "Net Grid Strategy",
   "type": "object",
   "description": "US-compatible net-position grid strategy with a fill-based grid ledger.",
+  "presets": [
+    {
+      "id": "conservative",
+      "label": "Conservative",
+      "label_ja": "保守",
+      "description": "Wider grid, ATR adaptation, smaller high-volatility adds, and stricter regime guards.",
+      "description_ja": "広めのグリッド、ATR連動、高ボラ時の追加縮小、厳しめのレジームガード。",
+      "parameters": {
+        "direction_mode": "auto",
+        "grid_spacing_mode": "atr",
+        "grid_atr_multiplier": 2,
+        "grid_min_interval_pips": 10,
+        "grid_max_interval_pips": 120,
+        "take_profit_mode": "atr",
+        "take_profit_atr_multiplier": 0.7,
+        "take_profit_min_pips": 4,
+        "take_profit_max_pips": 40,
+        "volatility_size_mode": "atr",
+        "volatility_size_atr_threshold_pips": 15,
+        "volatility_size_min_multiplier": 0.5,
+        "regime_filter_enabled": true,
+        "regime_max_atr_pips": 25,
+        "regime_trend_guard_pips": 3,
+        "cooldown_seconds": 30,
+        "max_full_grid_ticks": 500,
+        "max_adverse_after_full_grid_pips": 120
+      }
+    },
+    {
+      "id": "balanced",
+      "label": "Balanced",
+      "label_ja": "標準",
+      "description": "Moderate ATR adaptation while preserving the base grid behavior.",
+      "description_ja": "基本のグリッド挙動を保ちながら、中程度のATR連動を使います。",
+      "parameters": {
+        "direction_mode": "auto",
+        "grid_spacing_mode": "atr",
+        "grid_atr_multiplier": 1.5,
+        "grid_min_interval_pips": 5,
+        "grid_max_interval_pips": 100,
+        "take_profit_mode": "atr",
+        "take_profit_atr_multiplier": 0.5,
+        "take_profit_min_pips": 2,
+        "take_profit_max_pips": 50,
+        "volatility_size_mode": "atr",
+        "volatility_size_atr_threshold_pips": 20,
+        "volatility_size_min_multiplier": 0.6,
+        "regime_filter_enabled": true,
+        "regime_max_atr_pips": 35,
+        "regime_trend_guard_pips": 5,
+        "cooldown_seconds": 10,
+        "max_full_grid_ticks": 0,
+        "max_adverse_after_full_grid_pips": 0
+      }
+    },
+    {
+      "id": "aggressive",
+      "label": "Aggressive",
+      "label_ja": "積極",
+      "description": "Tighter grid and lighter guards for more frequent entries. Requires smaller account risk allocation.",
+      "description_ja": "狭めのグリッドと軽いガードで取引頻度を上げます。口座リスク配分は小さくしてください。",
+      "parameters": {
+        "direction_mode": "auto",
+        "grid_spacing_mode": "atr",
+        "grid_atr_multiplier": 1.1,
+        "grid_min_interval_pips": 3,
+        "grid_max_interval_pips": 70,
+        "take_profit_mode": "atr",
+        "take_profit_atr_multiplier": 0.4,
+        "take_profit_min_pips": 2,
+        "take_profit_max_pips": 35,
+        "volatility_size_mode": "fixed",
+        "regime_filter_enabled": true,
+        "regime_max_atr_pips": 50,
+        "regime_trend_guard_pips": 8,
+        "cooldown_seconds": 0,
+        "max_full_grid_ticks": 0,
+        "max_adverse_after_full_grid_pips": 0
+      }
+    }
+  ],
   "properties": {
     "direction_mode": {
       "type": "string",

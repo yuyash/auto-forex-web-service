@@ -4,6 +4,9 @@
   "configuration": "Configuration",
   "performance": "Performance",
   "noParameters": "This strategy has no configurable parameters.",
+  "presets": {
+    "title": "Presets"
+  },
   "control": {
     "start": "Start Strategy",
     "stop": "Stop Strategy",

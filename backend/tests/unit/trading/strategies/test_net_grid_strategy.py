@@ -4,6 +4,8 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
+import pytest
+
 from apps.trading.dataclasses import EntryExecutionBinding, EventExecutionResult
 from apps.trading.dataclasses.tick import Tick
 from apps.trading.events import ClosePositionEvent, OpenPositionEvent
@@ -65,6 +67,24 @@ def test_initial_tick_opens_one_sided_net_position_and_records_ledger() -> None:
     assert strategy_state["average_entry_price"] == str(open_event.price)
     assert strategy_state["grid_ledger"][-1]["action"] == "open"
     assert strategy_state["grid_ledger"][-1]["source"] == "event_execution"
+
+
+def test_validate_parameters_rejects_invalid_ema_relationship() -> None:
+    params = NetGridStrategy.normalize_parameters(
+        {"direction_mode": "auto", "auto_fast_ema_ticks": 20, "auto_slow_ema_ticks": 5}
+    )
+
+    with pytest.raises(ValueError, match="auto_fast_ema_ticks"):
+        NetGridStrategy.validate_parameters(parameters=params, config_schema=None)
+
+
+def test_validate_parameters_rejects_invalid_adaptive_bounds() -> None:
+    params = NetGridStrategy.normalize_parameters(
+        {"grid_spacing_mode": "atr", "grid_min_interval_pips": 30, "grid_max_interval_pips": 10}
+    )
+
+    with pytest.raises(ValueError, match="grid_min_interval_pips"):
+        NetGridStrategy.validate_parameters(parameters=params, config_schema=None)
 
 
 def test_auto_direction_waits_for_trend_samples_before_initial_entry() -> None:
