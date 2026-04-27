@@ -184,6 +184,44 @@
       "netLong": "ネットロング",
       "netShort": "ネットショート"
     },
+    "logic": {
+      "title": "戦略ロジック",
+      "noPositionAim": "ネット建玉はありません。ロング/ショートを選ぶための方向トレンドシグナルを待っています。",
+      "longAim": "ネットロングです。下落は追加ゾーン、平均建値より上への回復が決済目標です。",
+      "shortAim": "ネットショートです。上昇は追加ゾーン、平均建値より下への回復が決済目標です。",
+      "trendTitle": "トレンド方向",
+      "trendDown": "下落",
+      "trendUp": "上昇",
+      "trendScore": "トレンドスコア",
+      "requiredTrend": "必要トレンド",
+      "priceMapTitle": "価格意図マップ",
+      "waitingForPrice": "価格条件待ち",
+      "addPlan": "追加ロジック",
+      "addPlanValue": "{{distance}} の逆行後、{{price}} 付近で {{units}} を追加します。",
+      "noAddPlan": "グリッド上限、フラット状態、またはリスク制限により現在の追加予定はありません。",
+      "exitPlan": "決済ロジック",
+      "exitPlanValue": "目標 {{tp}}。利益保護が有効な場合は {{trail}} でトレールします。",
+      "guardPlan": "ガードレール",
+      "guardPlanValue": "リスク決済 {{risk}}。最新条件: {{decision}}。",
+      "trendBias": {
+        "up": "上昇トレンド",
+        "down": "下落トレンド",
+        "flat": "中立"
+      },
+      "trendRelation": {
+        "aligned": "トレンドは回復方向",
+        "counter": "トレンドは逆行方向",
+        "neutral": "トレンド中立"
+      },
+      "levels": {
+        "riskExit": "リスク",
+        "nextAdd": "追加",
+        "average": "平均",
+        "current": "現在",
+        "takeProfit": "利確",
+        "trailingStop": "トレール"
+      }
+    },
     "summary": {
       "title": "メトリクス",
       "currentNet": "現在ネット建玉",

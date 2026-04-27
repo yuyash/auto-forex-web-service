@@ -28,6 +28,7 @@ import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import { LineStyle } from 'lightweight-charts';
 import type {
   CycleTrade,
+  NetGridDecision,
   NetGridLedgerEntry,
   NetGridStrategyState,
 } from '../../../../types/strategyVisualization';
@@ -285,6 +286,12 @@ function numericPrice(value?: string | null): number | null {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
+function numericStateValue(value?: string | number | null): number | null {
+  if (value == null || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
 function ledgerToTrades(
   entries: NetGridLedgerEntry[] | undefined,
   options: { fills: boolean; sync: boolean }
@@ -330,6 +337,62 @@ function chartStartTime(state?: NetGridStrategyState | null): string | null {
     (entry) => entry.timestamp
   )?.timestamp;
   return ledgerStart ?? state?.started_at ?? state?.last_tick_at ?? null;
+}
+
+function currentDisplayPrice(
+  state?: NetGridStrategyState | null
+): string | null {
+  return state?.last_mid ?? state?.last_bid ?? state?.last_ask ?? null;
+}
+
+function trendBiasKey(state?: NetGridStrategyState | null): string {
+  const trend = numericStateValue(state?.trend_score_pips) ?? 0;
+  const required = Math.abs(
+    numericStateValue(state?.auto_direction_required_trend_pips) ?? 0
+  );
+  const threshold = required > 0 ? required : 0.1;
+  if (trend >= threshold) return 'up';
+  if (trend <= -threshold) return 'down';
+  return 'flat';
+}
+
+function trendRelationKey(
+  state: NetGridStrategyState | null | undefined,
+  currentNet: number
+): string {
+  const bias = trendBiasKey(state);
+  if (currentNet === 0 || bias === 'flat') return 'neutral';
+  if (
+    (currentNet > 0 && bias === 'up') ||
+    (currentNet < 0 && bias === 'down')
+  ) {
+    return 'aligned';
+  }
+  return 'counter';
+}
+
+function aimKey(
+  state: NetGridStrategyState | null | undefined,
+  currentNet: number
+): string {
+  if (!state || currentNet === 0) return 'noPositionAim';
+  return currentNet > 0 ? 'longAim' : 'shortAim';
+}
+
+function trendMarkerPercent(
+  state: NetGridStrategyState | null | undefined
+): number {
+  const trend = numericStateValue(state?.trend_score_pips) ?? 0;
+  const required = Math.abs(
+    numericStateValue(state?.auto_direction_required_trend_pips) ?? 0
+  );
+  const scale = Math.max(Math.abs(trend), required, 1) * 1.25;
+  return Math.min(Math.max(((trend + scale) / (scale * 2)) * 100, 0), 100);
+}
+
+function levelPercent(value: number, min: number, max: number): number {
+  if (max <= min) return 50;
+  return Math.min(Math.max(((value - min) / (max - min)) * 100, 0), 100);
 }
 
 export function NetGridStrategyPanel({
@@ -653,6 +716,13 @@ export function NetGridStrategyPanel({
       ) : null}
 
       {chartSection}
+
+      <StrategyLogicMap
+        state={state}
+        currentNet={currentNet}
+        quoteCurrencyCode={quoteCurrencyCode}
+        latestDecision={latestDecision}
+      />
 
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Stack spacing={1.5}>
@@ -1182,6 +1252,347 @@ function RiskProgress({
         color={ratio >= 0.9 ? 'error' : ratio >= 0.7 ? 'warning' : 'primary'}
         sx={{ mt: 0.75, height: 6, borderRadius: 1 }}
       />
+    </Box>
+  );
+}
+
+function StrategyLogicMap({
+  state,
+  currentNet,
+  quoteCurrencyCode,
+  latestDecision,
+}: {
+  state?: NetGridStrategyState | null;
+  currentNet: number;
+  quoteCurrencyCode: string | null;
+  latestDecision?: NetGridDecision | null;
+}) {
+  const { t } = useTranslation('strategy');
+  const trendBias = trendBiasKey(state);
+  const relation = trendRelationKey(state, currentNet);
+  const currentPrice = currentDisplayPrice(state);
+  const priceLevels = [
+    {
+      key: 'riskExit',
+      label: t('netGrid.logic.levels.riskExit'),
+      value: numericPrice(state?.risk_exit_price),
+      color: '#616161',
+    },
+    {
+      key: 'nextAdd',
+      label: t('netGrid.logic.levels.nextAdd'),
+      value: numericPrice(state?.next_grid_price),
+      color: '#d32f2f',
+    },
+    {
+      key: 'average',
+      label: t('netGrid.logic.levels.average'),
+      value: numericPrice(state?.average_entry_price),
+      color: '#1976d2',
+    },
+    {
+      key: 'current',
+      label: t('netGrid.logic.levels.current'),
+      value: numericPrice(currentPrice),
+      color: '#111827',
+    },
+    {
+      key: 'takeProfit',
+      label: t('netGrid.logic.levels.takeProfit'),
+      value: numericPrice(state?.net_take_profit_price),
+      color: '#2e7d32',
+    },
+    {
+      key: 'trailingStop',
+      label: t('netGrid.logic.levels.trailingStop'),
+      value: numericPrice(state?.profit_trailing_stop_price),
+      color: '#00897b',
+    },
+  ].filter((level) => level.value != null) as Array<{
+    key: string;
+    label: string;
+    value: number;
+    color: string;
+  }>;
+  const levelValues = priceLevels.map((level) => level.value);
+  const minPrice = levelValues.length > 0 ? Math.min(...levelValues) : 0;
+  const maxPrice = levelValues.length > 0 ? Math.max(...levelValues) : 1;
+  const rangePad = Math.max((maxPrice - minPrice) * 0.12, 0.0001);
+  const railMin = levelValues.length > 1 ? minPrice - rangePad : minPrice - 1;
+  const railMax = levelValues.length > 1 ? maxPrice + rangePad : maxPrice + 1;
+  const decisionReason = latestDecision?.reason
+    ? t(`netGrid.ledger.reasons.${latestDecision.reason}`, {
+        defaultValue: latestDecision.reason,
+      })
+    : t('netGrid.logic.waitingForPrice');
+
+  return (
+    <Paper variant="outlined" sx={{ p: 2 }}>
+      <Stack spacing={1.5}>
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          spacing={1}
+          sx={{ justifyContent: 'space-between', alignItems: 'flex-start' }}
+        >
+          <Box>
+            <Typography variant="h6">{t('netGrid.logic.title')}</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {t(`netGrid.logic.${aimKey(state, currentNet)}`)}
+            </Typography>
+          </Box>
+          <Chip
+            size="small"
+            color={
+              relation === 'aligned'
+                ? 'success'
+                : relation === 'counter'
+                  ? 'warning'
+                  : 'default'
+            }
+            variant="outlined"
+            label={t(`netGrid.logic.trendRelation.${relation}`)}
+          />
+        </Stack>
+
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              lg: 'minmax(0, 0.85fr) minmax(0, 1.15fr)',
+            },
+            gap: 1.5,
+          }}
+        >
+          <Box
+            sx={{
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+              p: 1.5,
+              minWidth: 0,
+            }}
+          >
+            <Stack spacing={1.25}>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+              >
+                <Typography variant="subtitle2">
+                  {t('netGrid.logic.trendTitle')}
+                </Typography>
+                <Chip
+                  size="small"
+                  label={t(`netGrid.logic.trendBias.${trendBias}`)}
+                  color={
+                    trendBias === 'up'
+                      ? 'success'
+                      : trendBias === 'down'
+                        ? 'error'
+                        : 'default'
+                  }
+                  variant="outlined"
+                />
+              </Stack>
+              <Box
+                sx={{
+                  position: 'relative',
+                  height: 26,
+                  borderRadius: 1,
+                  overflow: 'hidden',
+                  background:
+                    'linear-gradient(90deg, rgba(211,47,47,0.20), rgba(117,117,117,0.14) 50%, rgba(46,125,50,0.20))',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                }}
+              >
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    left: `${trendMarkerPercent(state)}%`,
+                    top: 3,
+                    bottom: 3,
+                    width: 3,
+                    bgcolor: 'text.primary',
+                    borderRadius: 1,
+                  }}
+                />
+              </Box>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{ justifyContent: 'space-between' }}
+              >
+                <Typography variant="caption" color="text.secondary">
+                  {t('netGrid.logic.trendDown')}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {t('netGrid.logic.trendUp')}
+                </Typography>
+              </Stack>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                  gap: 1,
+                }}
+              >
+                <SummaryItem
+                  label={t('netGrid.logic.trendScore')}
+                  value={formatPips(state?.trend_score_pips)}
+                />
+                <SummaryItem
+                  label={t('netGrid.logic.requiredTrend')}
+                  value={formatPips(state?.auto_direction_required_trend_pips)}
+                />
+              </Box>
+            </Stack>
+          </Box>
+
+          <Box
+            sx={{
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+              p: 1.5,
+              minWidth: 0,
+            }}
+          >
+            <Stack spacing={1.25}>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{ alignItems: 'center', justifyContent: 'space-between' }}
+              >
+                <Typography variant="subtitle2">
+                  {t('netGrid.logic.priceMapTitle')}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {appendCurrencyUnit(
+                    formatPrice(currentPrice),
+                    quoteCurrencyCode
+                  )}
+                </Typography>
+              </Stack>
+              <Box sx={{ position: 'relative', height: 64, px: 1 }}>
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    left: 8,
+                    right: 8,
+                    top: 30,
+                    height: 6,
+                    borderRadius: 1,
+                    background:
+                      'linear-gradient(90deg, rgba(211,47,47,0.18), rgba(245,124,0,0.18), rgba(46,125,50,0.18))',
+                  }}
+                />
+                {priceLevels.map((level) => (
+                  <Tooltip
+                    key={level.key}
+                    title={`${level.label}: ${appendCurrencyUnit(
+                      formatPrice(String(level.value)),
+                      quoteCurrencyCode
+                    )}`}
+                  >
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        left: `calc(${levelPercent(level.value, railMin, railMax)}% - 5px)`,
+                        top: level.key === 'current' ? 20 : 24,
+                        width: level.key === 'current' ? 14 : 10,
+                        height: level.key === 'current' ? 14 : 10,
+                        borderRadius: '50%',
+                        bgcolor: level.color,
+                        border: '2px solid',
+                        borderColor: 'background.paper',
+                        boxShadow: 1,
+                      }}
+                    />
+                  </Tooltip>
+                ))}
+              </Box>
+              <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap' }}>
+                {priceLevels.map((level) => (
+                  <Chip
+                    key={level.key}
+                    size="small"
+                    variant={level.key === 'current' ? 'filled' : 'outlined'}
+                    label={`${level.label} ${formatPrice(String(level.value))}`}
+                    sx={{ borderColor: level.color }}
+                  />
+                ))}
+              </Stack>
+            </Stack>
+          </Box>
+        </Box>
+
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              md: 'repeat(3, minmax(0, 1fr))',
+            },
+            gap: 1,
+          }}
+        >
+          <LogicStep
+            label={t('netGrid.logic.addPlan')}
+            value={
+              state?.next_grid_price
+                ? t('netGrid.logic.addPlanValue', {
+                    price: formatPrice(state.next_grid_price),
+                    units:
+                      state.next_order_units == null
+                        ? '-'
+                        : formatUnits(state.next_order_units),
+                    distance: formatPips(
+                      state.effective_next_grid_distance_pips
+                    ),
+                  })
+                : t('netGrid.logic.noAddPlan')
+            }
+          />
+          <LogicStep
+            label={t('netGrid.logic.exitPlan')}
+            value={t('netGrid.logic.exitPlanValue', {
+              tp: formatPrice(state?.net_take_profit_price),
+              trail: formatPrice(state?.profit_trailing_stop_price),
+            })}
+          />
+          <LogicStep
+            label={t('netGrid.logic.guardPlan')}
+            value={t('netGrid.logic.guardPlanValue', {
+              risk: formatPrice(state?.risk_exit_price),
+              decision: decisionReason,
+            })}
+          />
+        </Box>
+      </Stack>
+    </Paper>
+  );
+}
+
+function LogicStep({ label, value }: { label: string; value: string }) {
+  return (
+    <Box
+      sx={{
+        border: '1px solid',
+        borderColor: 'divider',
+        borderRadius: 1,
+        p: 1.25,
+        minWidth: 0,
+        bgcolor: 'action.hover',
+      }}
+    >
+      <Typography variant="caption" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography variant="body2" sx={{ mt: 0.5, overflowWrap: 'anywhere' }}>
+        {value}
+      </Typography>
     </Box>
   );
 }

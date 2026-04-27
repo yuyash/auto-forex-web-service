@@ -184,6 +184,44 @@
       "netLong": "Net Long",
       "netShort": "Net Short"
     },
+    "logic": {
+      "title": "Strategy Logic",
+      "noPositionAim": "No net position is open. The strategy is waiting for a directional trend signal before choosing long or short.",
+      "longAim": "The strategy is net long: pullbacks are add zones, recovery above the average entry is the exit objective.",
+      "shortAim": "The strategy is net short: rallies are add zones, recovery below the average entry is the exit objective.",
+      "trendTitle": "Trend Bias",
+      "trendDown": "Down",
+      "trendUp": "Up",
+      "trendScore": "Trend score",
+      "requiredTrend": "Required trend",
+      "priceMapTitle": "Price Intent Map",
+      "waitingForPrice": "Waiting for price condition",
+      "addPlan": "Add Logic",
+      "addPlanValue": "Add {{units}} near {{price}} after {{distance}} adverse pips.",
+      "noAddPlan": "No add is currently planned because the grid is full, flat, or capped by risk.",
+      "exitPlan": "Exit Logic",
+      "exitPlanValue": "Target {{tp}}; trail {{trail}} when profit protection is active.",
+      "guardPlan": "Guardrail",
+      "guardPlanValue": "Risk exit {{risk}}. Latest condition: {{decision}}.",
+      "trendBias": {
+        "up": "Uptrend",
+        "down": "Downtrend",
+        "flat": "Neutral"
+      },
+      "trendRelation": {
+        "aligned": "Trend helps recovery",
+        "counter": "Trend is adverse",
+        "neutral": "Trend neutral"
+      },
+      "levels": {
+        "riskExit": "Risk",
+        "nextAdd": "Add",
+        "average": "Avg",
+        "current": "Now",
+        "takeProfit": "TP",
+        "trailingStop": "Trail"
+      }
+    },
     "summary": {
       "title": "Metrics",
       "currentNet": "Current Net",

@@ -27,7 +27,7 @@ const state: NetGridStrategyState = {
   profit_peak_pips: '6',
   profit_trailing_stop_price: '150.140',
   current_atr_pips: '5',
-  trend_score_pips: '1.5',
+  trend_score_pips: '3',
   auto_direction_required_trend_pips: '2',
   effective_grid_interval_pips: '20',
   effective_next_grid_distance_pips: '24',
@@ -91,6 +91,15 @@ describe('NetGridStrategyPanel', () => {
     renderPanel();
 
     expect(screen.getByText('Next Decision Preview')).toBeInTheDocument();
+    expect(screen.getByText('Strategy Logic')).toBeInTheDocument();
+    expect(screen.getByText('Price Intent Map')).toBeInTheDocument();
+    expect(screen.getByText('Trend helps recovery')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'The strategy is net long: pullbacks are add zones, recovery above the average entry is the exit objective.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByText('Add Logic')).toBeInTheDocument();
     expect(screen.getByText('Risk-exit price')).toBeInTheDocument();
     expect(screen.getByText('Risk Exit')).toBeInTheDocument();
     expect(screen.getByText('Trail')).toBeInTheDocument();
