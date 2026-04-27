@@ -544,6 +544,138 @@
       "itemLabel_ja": "再建 R{index} ロスカット幅（pips）"
     },
 
+    "rebuild_take_profit_mode": {
+      "type": "string",
+      "title": "Rebuild Take-Profit Mode",
+      "title_ja": "再建時 利確幅モード",
+      "description": "How to set the take-profit price on rebuilt positions. Same reuses the original absolute take-profit price. Other modes calculate a fresh take-profit distance from the rebuilt entry price.",
+      "description_ja": "再建ポジションの利確価格の設定方法です。Same は元の絶対利確価格を再利用します。その他のモードでは、再建時の建値から新しい利確幅を計算します。",
+      "enum": [
+        "same",
+        "constant",
+        "additive",
+        "subtractive",
+        "multiplicative",
+        "divisive",
+        "manual"
+      ],
+      "enum_labels": {
+        "same": "Same as Original TP Price",
+        "constant": "Constant",
+        "additive": "Additive",
+        "subtractive": "Subtractive",
+        "multiplicative": "Multiplicative",
+        "divisive": "Divisive",
+        "manual": "Manual"
+      },
+      "enum_labels_ja": {
+        "same": "元の利確価格を再利用",
+        "constant": "固定",
+        "additive": "加算",
+        "subtractive": "減算",
+        "multiplicative": "乗算",
+        "divisive": "除算",
+        "manual": "手動"
+      },
+      "enum_descriptions": {
+        "same": "Reuse the absolute take-profit price from the stopped-out position.",
+        "constant": "Use the same take-profit distance for every rebuilt slot.",
+        "additive": "Use the configured progression to widen the rebuild take-profit distance by slot.",
+        "subtractive": "Use the configured progression to tighten the rebuild take-profit distance by slot.",
+        "multiplicative": "Use the configured progression to scale the rebuild take-profit distance by slot.",
+        "divisive": "Use the configured progression to reduce the rebuild take-profit distance by slot.",
+        "manual": "Use explicit per-slot take-profit distances."
+      },
+      "default": "same",
+      "dependsOn": {
+        "field": "rebuild_enabled",
+        "values": [true],
+        "and": [{ "field": "stop_loss_enabled", "values": [true] }]
+      },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
+    "rebuild_take_profit_pips_head": {
+      "type": "number",
+      "title": "Rebuild Take-Profit Head (pips)",
+      "title_ja": "再建時 利確幅初期値（pips）",
+      "description": "Starting take-profit distance for rebuilt positions when the rebuild take-profit mode is not Same or Manual.",
+      "description_ja": "再建時利確幅モードが Same または Manual 以外のときに使う、再建ポジションの利確幅初期値です。",
+      "default": 25,
+      "minimum": 0.1,
+      "dependsOn": {
+        "field": "rebuild_take_profit_mode",
+        "values": ["constant", "additive", "subtractive", "multiplicative", "divisive"]
+      },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
+    "rebuild_take_profit_pips_tail": {
+      "type": "number",
+      "title": "Rebuild Take-Profit Tail (pips)",
+      "title_ja": "再建時 利確幅終端値（pips）",
+      "description": "Ending take-profit distance for rebuilt-position progression modes.",
+      "description_ja": "再建ポジションの段階的な利確幅モードで使う終端値です。",
+      "default": 10,
+      "minimum": 0.1,
+      "dependsOn": {
+        "field": "rebuild_take_profit_mode",
+        "values": ["additive", "subtractive", "multiplicative", "divisive"]
+      },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
+    "rebuild_take_profit_pips_flat_steps": {
+      "type": "integer",
+      "title": "Rebuild Take-Profit Flat Steps",
+      "title_ja": "再建時 利確幅固定段数",
+      "description": "Number of initial rebuilt slots that keep the head take-profit distance before progression begins.",
+      "description_ja": "段階変化を開始する前に、初期値の利確幅を維持する再建スロット数です。",
+      "default": 0,
+      "minimum": 0,
+      "dependsOn": {
+        "field": "rebuild_take_profit_mode",
+        "values": ["additive", "subtractive", "multiplicative", "divisive"]
+      },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
+    "rebuild_take_profit_pips_gamma": {
+      "type": "number",
+      "title": "Rebuild Take-Profit Gamma",
+      "title_ja": "再建時 利確幅ガンマ係数",
+      "description": "Progression curve coefficient for rebuilt-position take-profit distances. >1 = slow start, <1 = fast start.",
+      "description_ja": "再建ポジションの利確幅進行カーブ係数。1超=緩やかな開始、1未満=急速な開始。",
+      "default": 1.4,
+      "minimum": 0.01,
+      "dependsOn": {
+        "field": "rebuild_take_profit_mode",
+        "values": ["additive", "subtractive", "multiplicative", "divisive"]
+      },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
+    "rebuild_take_profit_manual_pips": {
+      "type": "array",
+      "title": "Rebuild Manual Take-Profit Distances (pips)",
+      "title_ja": "再建時 手動利確幅（pips）",
+      "description": "Per-slot absolute take-profit pip distance for rebuilt positions when rebuild_take_profit_mode is 'manual'. Values are measured from the rebuilt entry price, with the strategy placing them above long entries and below short entries automatically.",
+      "description_ja": "rebuild_take_profit_mode が manual のときに使う、再建ポジション用のスロットごとの絶対利確幅（pips）です。再建ポジションの建値基準で、LONG では上、SHORT では下に自動配置されます。",
+      "default": [],
+      "items": { "type": "number", "minimum": 0.1 },
+      "dependsOn": { "field": "rebuild_take_profit_mode", "values": ["manual"] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護",
+      "linkedCount": { "field": "r_max", "offset": 1 },
+      "itemLabel": "Rebuild slot R{index} take profit (pips)",
+      "itemLabel_ja": "再建 R{index} 利確幅（pips）"
+    },
+
     "grid_order_validation_enabled": {
       "type": "boolean",
       "title": "Fail On Grid Ordering Violation",
@@ -551,6 +683,10 @@
       "description": "When enabled, any detected grid entry/TP ordering violation is logged and stops the task as an error. When disabled, the strategy still logs the violation but continues running.",
       "description_ja": "有効時、グリッドの建玉価格/利確価格の順序違反を検出するとログ出力し、タスクをエラーで停止します。無効時は違反をログ出力しますが、タスクは継続します。",
       "default": true,
+      "dependsOn": {
+        "field": "rebuild_take_profit_mode",
+        "values": ["same", "constant", "additive", "subtractive", "multiplicative", "divisive"]
+      },
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
     },
@@ -615,7 +751,11 @@
       "description": "When enabled, on stop-loss rebuild the rebuild's take-profit is tightened by the deterministic price gap between the original entry price and the stop-loss exit price (including the bid/ask spread). This makes the rebuild close earlier to offset the prior stop-loss loss instead of leaving the slot's lifecycle P/L negative. Requires stop-loss to be enabled.",
       "description_ja": "有効時、ロスカット後の再建では、元の建玉価格とロスカット決済価格の差（Bid/Askスプレッドを含む想定可能なずれ）の分だけ再建ポジションの利確価格を手前に調整します。これにより再建ポジションが早めに決済され、直前のロスカット損失をなるべく相殺します。ロスカットが有効である必要があります。",
       "default": true,
-      "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
+      "dependsOn": {
+        "field": "rebuild_take_profit_mode",
+        "values": ["same"],
+        "and": [{ "field": "stop_loss_enabled", "values": [true] }]
+      },
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
     },

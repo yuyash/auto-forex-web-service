@@ -11,6 +11,13 @@ const FIELD_ORDER_PRIORITY: Record<string, number> = {
   disable_loss_cut_after_rebuild: 109,
   rebuild_stop_loss_mode: 110,
   rebuild_stop_loss_manual_pips: 111,
+  rebuild_take_profit_mode: 112,
+  rebuild_take_profit_pips_head: 113,
+  rebuild_take_profit_pips_tail: 114,
+  rebuild_take_profit_pips_flat_steps: 115,
+  rebuild_take_profit_pips_gamma: 116,
+  rebuild_take_profit_manual_pips: 117,
+  grid_order_validation_enabled: 118,
 };
 
 function fieldPriority(fieldName: string): number {

@@ -5,6 +5,7 @@ from decimal import Decimal
 from apps.trading.strategies.snowball.calculators import (
     counter_interval_pips,
     counter_tp_pips,
+    rebuild_take_profit_pips,
     round_to_step,
     stop_loss_pips,
 )
@@ -155,3 +156,35 @@ class TestStopLossPips:
         # Empty manual list is treated as disabled; the formula falls
         # through to the constant head.
         assert stop_loss_pips(1, cfg) == Decimal("22.0")
+
+
+class TestRebuildTakeProfitPips:
+    def test_constant_mode_uses_same_distance_for_every_rebuild_slot(self):
+        cfg = _cfg(
+            rebuild_take_profit_mode="constant",
+            rebuild_take_profit_pips_head="18",
+        )
+        assert rebuild_take_profit_pips(1, cfg) == Decimal("18.0")
+        assert rebuild_take_profit_pips(5, cfg) == Decimal("18.0")
+
+    def test_decay_progression(self):
+        cfg = _cfg(
+            rebuild_take_profit_mode="additive",
+            rebuild_take_profit_pips_head="40",
+            rebuild_take_profit_pips_tail="10",
+            rebuild_take_profit_pips_flat_steps=1,
+            rebuild_take_profit_pips_gamma="1",
+        )
+        assert rebuild_take_profit_pips(1, cfg) == Decimal("40.0")
+        assert rebuild_take_profit_pips(2, cfg) == Decimal("35.0")
+        assert rebuild_take_profit_pips(7, cfg) == Decimal("10.0")
+
+    def test_manual_mode_uses_slot_distances(self):
+        cfg = _cfg(
+            r_max=3,
+            rebuild_take_profit_mode="manual",
+            rebuild_take_profit_manual_pips=["8", "12", "16", "20"],
+        )
+        assert rebuild_take_profit_pips(1, cfg) == Decimal("8.0")
+        assert rebuild_take_profit_pips(2, cfg) == Decimal("12.0")
+        assert rebuild_take_profit_pips(99, cfg) == Decimal("20.0")

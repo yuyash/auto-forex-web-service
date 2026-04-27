@@ -58,6 +58,8 @@ class TestSnowballStrategyConfig:
         assert cfg.disable_loss_cut_after_rebuild is False
         assert cfg.rebuild_stop_loss_mode == "same"
         assert cfg.rebuild_stop_loss_manual_pips == []
+        assert cfg.rebuild_take_profit_mode == "same"
+        assert cfg.rebuild_take_profit_manual_pips == []
         assert cfg.grid_order_validation_enabled is True
         assert cfg.preserve_highest_retracement_enabled is False
         assert cfg.preserve_highest_r_from == 0
@@ -84,7 +86,10 @@ class TestSnowballStrategyConfig:
                 "disable_loss_cut_after_rebuild": True,
                 "rebuild_stop_loss_mode": "manual",
                 "rebuild_stop_loss_manual_pips": ["11", "12", "13", "14", "15", "16"],
-                "grid_order_validation_enabled": False,
+                "rebuild_take_profit_mode": "manual",
+                "rebuild_take_profit_manual_pips": ["21", "22", "23", "24", "25", "26"],
+                "rebuild_price_adjustment_enabled": True,
+                "grid_order_validation_enabled": True,
                 "preserve_highest_retracement_enabled": True,
                 "preserve_highest_r_from": 3,
             }
@@ -103,6 +108,16 @@ class TestSnowballStrategyConfig:
             Decimal("15"),
             Decimal("16"),
         ]
+        assert cfg2.rebuild_take_profit_mode == "manual"
+        assert cfg2.rebuild_take_profit_manual_pips == [
+            Decimal("21"),
+            Decimal("22"),
+            Decimal("23"),
+            Decimal("24"),
+            Decimal("25"),
+            Decimal("26"),
+        ]
+        assert cfg2.rebuild_price_adjustment_enabled is False
         assert cfg2.grid_order_validation_enabled is False
         assert cfg2.preserve_highest_retracement_enabled is True
         assert cfg2.preserve_highest_r_from == 3
@@ -145,6 +160,38 @@ class TestSnowballStrategyConfig:
                     "rebuild_stop_loss_manual_pips": ["10", "11", "12"],
                 }
             ).validate()
+
+    def test_validate_rebuild_manual_take_profit_requires_all_slots(self):
+        with pytest.raises(ValueError, match="rebuild_take_profit_manual_pips"):
+            SnowballStrategyConfig.from_dict(
+                {
+                    "r_max": 5,
+                    "rebuild_take_profit_mode": "manual",
+                    "rebuild_take_profit_manual_pips": ["10", "11", "12"],
+                }
+            ).validate()
+
+    def test_rebuild_manual_take_profit_disables_conflicting_options(self):
+        cfg = SnowballStrategyConfig.from_dict(
+            {
+                "rebuild_take_profit_mode": "manual",
+                "rebuild_take_profit_manual_pips": [
+                    "10",
+                    "11",
+                    "12",
+                    "13",
+                    "14",
+                    "15",
+                    "16",
+                    "17",
+                ],
+                "rebuild_price_adjustment_enabled": True,
+                "grid_order_validation_enabled": True,
+            }
+        )
+
+        assert cfg.rebuild_price_adjustment_enabled is False
+        assert cfg.grid_order_validation_enabled is False
 
     def test_validate_rejects_preserve_highest_r_from_above_r_max(self):
         with pytest.raises(ValueError, match="preserve_highest_r_from"):

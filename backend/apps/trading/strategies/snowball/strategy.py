@@ -39,6 +39,7 @@ from apps.trading.strategies.registry import register_strategy
 from apps.trading.strategies.snowball.calculators import (
     counter_interval_pips,
     counter_tp_pips,
+    rebuild_take_profit_pips,
     round_to_step,
     stop_loss_pips,
 )
@@ -523,6 +524,9 @@ class SnowballStrategy(Strategy):
 
     def _validate_grid_ordering(self, cycle: SnowballCycle) -> None:
         """Ensure present slots preserve monotonic entry/TP ordering."""
+        if self.config.rebuild_take_profit_mode == "manual":
+            self._grid_order_violation = None
+            return
         self._grid_order_violation = validate_grid_ordering(cycle)
         if self._grid_order_violation:
             logger.error("Grid ordering violation detail: %s", self._grid_order_violation)
@@ -1777,6 +1781,21 @@ class SnowballStrategy(Strategy):
         if sl_pips > 0:
             self._assign_stop_loss(entry, sl_pips)
 
+    def _rebuild_take_profit_price(
+        self,
+        *,
+        pending: StopLossClosedEntry,
+        entry_price: Decimal,
+    ) -> Decimal:
+        """Return the TP price for a rebuilt entry."""
+        if self.config.rebuild_take_profit_mode == "same":
+            return pending.close_price
+
+        tp_pips = rebuild_take_profit_pips(pending.retracement_count + 1, self.config)
+        if pending.direction == Direction.LONG:
+            return entry_price + tp_pips * self.pip_size
+        return entry_price - tp_pips * self.pip_size
+
     def _is_stop_loss_temporarily_protected(self, layer: Layer, entry: Entry) -> bool:
         """Return True when the layer's highest live R should ignore stop-loss.
 
@@ -1930,7 +1949,9 @@ class SnowballStrategy(Strategy):
 
         # Convert buffer pips to price-unit offsets once.
         cfg = self.config
-        apply_adjustment = cfg.rebuild_price_adjustment_enabled
+        apply_adjustment = (
+            cfg.rebuild_price_adjustment_enabled and cfg.rebuild_take_profit_mode == "same"
+        )
         entry_buffer_price = cfg.rebuild_entry_price_buffer_pips * self.pip_size
         exit_buffer_price = cfg.rebuild_exit_price_buffer_pips * self.pip_size
 
@@ -1997,11 +2018,14 @@ class SnowballStrategy(Strategy):
                 if not hit:
                     continue
 
-                # Rebuilt positions inherit the original planned TP. The
-                # only allowed TP movement is the explicit rebuild exit
-                # buffer and any clamping/propagation needed to preserve
-                # grid ordering.
-                adjusted_close_price = pending.close_price
+                # Rebuilt positions normally inherit the original planned
+                # TP. If a rebuild TP mode is selected, derive a fresh TP
+                # from the rebuilt entry price and keep price adjustment
+                # disabled for this rebuild.
+                adjusted_close_price = self._rebuild_take_profit_price(
+                    pending=pending,
+                    entry_price=trigger_price,
+                )
                 if apply_adjustment and exit_buffer_price > 0:
                     if pending.direction == Direction.LONG:
                         adjusted_close_price += exit_buffer_price

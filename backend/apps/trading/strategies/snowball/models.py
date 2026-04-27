@@ -100,6 +100,12 @@ class SnowballStrategyConfig:
     disable_loss_cut_after_rebuild: bool
     rebuild_stop_loss_mode: str
     rebuild_stop_loss_manual_pips: list[Decimal]
+    rebuild_take_profit_mode: str
+    rebuild_take_profit_pips_head: Decimal
+    rebuild_take_profit_pips_tail: Decimal
+    rebuild_take_profit_pips_flat_steps: int
+    rebuild_take_profit_pips_gamma: Decimal
+    rebuild_take_profit_manual_pips: list[Decimal]
     grid_order_validation_enabled: bool
     preserve_highest_retracement_enabled: bool
     preserve_highest_r_from: int
@@ -170,6 +176,12 @@ class SnowballStrategyConfig:
             for v in rebuild_sl_manual_raw:
                 rebuild_stop_loss_manual_pips.append(_parse_decimal(v, "30"))
 
+        rebuild_tp_manual_raw = raw.get("rebuild_take_profit_manual_pips", [])
+        rebuild_take_profit_manual_pips: list[Decimal] = []
+        if isinstance(rebuild_tp_manual_raw, list):
+            for v in rebuild_tp_manual_raw:
+                rebuild_take_profit_manual_pips.append(_parse_decimal(v, "25"))
+
         # Legacy Snowball stop-loss behaviour was derived from the next
         # counter interval and the slot TP, not from a dedicated flat
         # pip-distance progression.  Keep that behaviour as the default
@@ -182,6 +194,13 @@ class SnowballStrategyConfig:
         n_pips_flat_steps = _parse_int(raw.get("n_pips_flat_steps", 2), 2)
         n_pips_gamma = _parse_decimal(raw.get("n_pips_gamma", "1.4"), "1.4")
         interval_mode = _parse_str(raw.get("interval_mode"), "constant")
+        rebuild_take_profit_mode = _parse_str(raw.get("rebuild_take_profit_mode"), "same")
+        rebuild_price_adjustment_enabled = bool(raw.get("rebuild_price_adjustment_enabled", True))
+        if rebuild_take_profit_mode != "same":
+            rebuild_price_adjustment_enabled = False
+        grid_order_validation_enabled = bool(raw.get("grid_order_validation_enabled", True))
+        if rebuild_take_profit_mode == "manual":
+            grid_order_validation_enabled = False
 
         return SnowballStrategyConfig(
             base_units=_parse_int(raw.get("base_units", 1000), 1000),
@@ -220,7 +239,21 @@ class SnowballStrategyConfig:
             disable_loss_cut_after_rebuild=bool(raw.get("disable_loss_cut_after_rebuild", False)),
             rebuild_stop_loss_mode=_parse_str(raw.get("rebuild_stop_loss_mode"), "same"),
             rebuild_stop_loss_manual_pips=rebuild_stop_loss_manual_pips,
-            grid_order_validation_enabled=bool(raw.get("grid_order_validation_enabled", True)),
+            rebuild_take_profit_mode=rebuild_take_profit_mode,
+            rebuild_take_profit_pips_head=_parse_decimal(
+                raw.get("rebuild_take_profit_pips_head", "25"), "25"
+            ),
+            rebuild_take_profit_pips_tail=_parse_decimal(
+                raw.get("rebuild_take_profit_pips_tail", "10"), "10"
+            ),
+            rebuild_take_profit_pips_flat_steps=_parse_int(
+                raw.get("rebuild_take_profit_pips_flat_steps", 0), 0
+            ),
+            rebuild_take_profit_pips_gamma=_parse_decimal(
+                raw.get("rebuild_take_profit_pips_gamma", "1.4"), "1.4"
+            ),
+            rebuild_take_profit_manual_pips=rebuild_take_profit_manual_pips,
+            grid_order_validation_enabled=grid_order_validation_enabled,
             preserve_highest_retracement_enabled=bool(
                 raw.get("preserve_highest_retracement_enabled", False)
             ),
@@ -236,9 +269,7 @@ class SnowballStrategyConfig:
             pip_size=_parse_decimal(raw.get("pip_size", "0.01"), "0.01"),
             reseed_on_all_pending=bool(raw.get("reseed_on_all_pending", False)),
             reseed_on_grid_exhausted=bool(raw.get("reseed_on_grid_exhausted", False)),
-            rebuild_price_adjustment_enabled=bool(
-                raw.get("rebuild_price_adjustment_enabled", True)
-            ),
+            rebuild_price_adjustment_enabled=rebuild_price_adjustment_enabled,
             rebuild_entry_price_buffer_pips=_parse_decimal(
                 raw.get("rebuild_entry_price_buffer_pips", "0"), "0"
             ),
@@ -283,6 +314,14 @@ class SnowballStrategyConfig:
             "disable_loss_cut_after_rebuild": self.disable_loss_cut_after_rebuild,
             "rebuild_stop_loss_mode": self.rebuild_stop_loss_mode,
             "rebuild_stop_loss_manual_pips": [str(v) for v in self.rebuild_stop_loss_manual_pips],
+            "rebuild_take_profit_mode": self.rebuild_take_profit_mode,
+            "rebuild_take_profit_pips_head": str(self.rebuild_take_profit_pips_head),
+            "rebuild_take_profit_pips_tail": str(self.rebuild_take_profit_pips_tail),
+            "rebuild_take_profit_pips_flat_steps": self.rebuild_take_profit_pips_flat_steps,
+            "rebuild_take_profit_pips_gamma": str(self.rebuild_take_profit_pips_gamma),
+            "rebuild_take_profit_manual_pips": [
+                str(v) for v in self.rebuild_take_profit_manual_pips
+            ],
             "grid_order_validation_enabled": self.grid_order_validation_enabled,
             "preserve_highest_retracement_enabled": self.preserve_highest_retracement_enabled,
             "preserve_highest_r_from": self.preserve_highest_r_from,
@@ -374,6 +413,45 @@ class SnowballStrategyConfig:
                 )
             if any(v <= 0 for v in self.rebuild_stop_loss_manual_pips):
                 raise ValueError("All rebuild_stop_loss_manual_pips values must be > 0")
+        if self.rebuild_take_profit_mode not in {
+            "same",
+            "constant",
+            "additive",
+            "subtractive",
+            "multiplicative",
+            "divisive",
+            "manual",
+        }:
+            raise ValueError(
+                "rebuild_take_profit_mode must be one of 'same', 'constant', "
+                "'additive', 'subtractive', 'multiplicative', 'divisive', or 'manual'"
+            )
+        if not self.rebuild_take_profit_pips_head >= self.rebuild_take_profit_pips_tail > 0:
+            raise ValueError(
+                "Must satisfy rebuild_take_profit_pips_head >= rebuild_take_profit_pips_tail > 0"
+            )
+        if not 0 <= self.rebuild_take_profit_pips_flat_steps < max(self.r_max, 1):
+            raise ValueError("rebuild_take_profit_pips_flat_steps must be >= 0 and < r_max")
+        if self.rebuild_take_profit_pips_gamma <= 0:
+            raise ValueError("rebuild_take_profit_pips_gamma must be > 0")
+        if self.rebuild_take_profit_mode == "manual":
+            if len(self.rebuild_take_profit_manual_pips) < self.r_max + 1:
+                raise ValueError(
+                    "rebuild_take_profit_manual_pips must have at least r_max + 1 entries "
+                    f"(got {len(self.rebuild_take_profit_manual_pips)}, need {self.r_max + 1})"
+                )
+            if any(v <= 0 for v in self.rebuild_take_profit_manual_pips):
+                raise ValueError("All rebuild_take_profit_manual_pips values must be > 0")
+        if self.rebuild_take_profit_mode != "same" and self.rebuild_price_adjustment_enabled:
+            raise ValueError(
+                "rebuild_price_adjustment_enabled must be false when "
+                "rebuild_take_profit_mode is not 'same'"
+            )
+        if self.rebuild_take_profit_mode == "manual" and self.grid_order_validation_enabled:
+            raise ValueError(
+                "grid_order_validation_enabled must be false when "
+                "rebuild_take_profit_mode is 'manual'"
+            )
         # rebuild_enabled is only meaningful when stop_loss is on.  We
         # silently ignore the flag when SL is off — it simply does not
         # apply.  complete_cycle_when_empty likewise only does anything

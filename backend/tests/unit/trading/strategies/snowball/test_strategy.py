@@ -17,6 +17,7 @@ from apps.trading.strategies.snowball.models import (
     SnowballCycle,
     SnowballStrategyConfig,
     SnowballStrategyState,
+    Slot,
     StopLossClosedEntry,
 )
 from apps.trading.strategies.snowball.strategy import SnowballStrategy
@@ -95,6 +96,7 @@ class TestSnowballStrategyClassMethods:
         assert result["base_units"] == 2000
         assert result["disable_loss_cut_after_rebuild"] is False
         assert result["rebuild_stop_loss_mode"] == "same"
+        assert result["rebuild_take_profit_mode"] == "same"
         assert result["grid_order_validation_enabled"] is True
         assert result["preserve_highest_retracement_enabled"] is False
         assert result["stop_loss_mode"] == "auto"
@@ -107,6 +109,7 @@ class TestSnowballStrategyClassMethods:
         assert "m_pips" in defaults
         assert "disable_loss_cut_after_rebuild" in defaults
         assert "rebuild_stop_loss_mode" in defaults
+        assert "rebuild_take_profit_mode" in defaults
         assert "grid_order_validation_enabled" in defaults
         assert "preserve_highest_retracement_enabled" in defaults
         assert defaults["stop_loss_mode"] == "auto"
@@ -548,6 +551,126 @@ class TestSnowballRebuildStopLossModes:
         s._assign_rebuild_stop_loss(entry, self._make_pending_rebuild())
 
         assert entry.stop_loss_price == Decimal("154.58")
+
+
+class TestSnowballRebuildTakeProfitModes:
+    def _make_pending_rebuild(
+        self,
+        *,
+        direction: Direction = Direction.LONG,
+        retracement_count: int = 1,
+    ) -> StopLossClosedEntry:
+        return StopLossClosedEntry(
+            entry_price=Decimal("154.70"),
+            close_price=Decimal("155.00") if direction == Direction.LONG else Decimal("154.40"),
+            units=2000,
+            direction=direction,
+            role="counter",
+            layer_number=1,
+            retracement_count=retracement_count,
+            step=2,
+            cycle_id=1,
+        )
+
+    def test_same_mode_reuses_pending_take_profit_price(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "rebuild_take_profit_mode": "same",
+            }
+        )
+
+        tp = s._rebuild_take_profit_price(
+            pending=self._make_pending_rebuild(),
+            entry_price=Decimal("154.70"),
+        )
+
+        assert tp == Decimal("155.00")
+
+    def test_manual_mode_applies_absolute_pips_from_rebuild_entry(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "rebuild_take_profit_mode": "manual",
+                "rebuild_take_profit_manual_pips": [
+                    "8",
+                    "12",
+                    "16",
+                    "20",
+                    "24",
+                    "28",
+                    "32",
+                    "36",
+                ],
+            }
+        )
+
+        long_tp = s._rebuild_take_profit_price(
+            pending=self._make_pending_rebuild(direction=Direction.LONG),
+            entry_price=Decimal("154.70"),
+        )
+        short_tp = s._rebuild_take_profit_price(
+            pending=self._make_pending_rebuild(direction=Direction.SHORT),
+            entry_price=Decimal("154.70"),
+        )
+
+        assert long_tp == Decimal("154.82")
+        assert short_tp == Decimal("154.58")
+
+    def test_manual_take_profit_mode_skips_grid_order_validation(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "rebuild_take_profit_mode": "manual",
+                "rebuild_take_profit_manual_pips": [
+                    "8",
+                    "12",
+                    "16",
+                    "20",
+                    "24",
+                    "28",
+                    "32",
+                    "36",
+                ],
+            }
+        )
+        cycle = SnowballCycle(cycle_id=1, direction=Direction.LONG)
+        layer = Layer(
+            layer_number=1,
+            slots=[Slot(index=0), Slot(index=1)],
+            base_units=1000,
+            refill_up_to=2,
+        )
+        layer.slot_at(0).fill(
+            Entry(
+                entry_id=1,
+                step=1,
+                direction=Direction.LONG,
+                entry_price=Decimal("155.00"),
+                close_price=Decimal("155.50"),
+                units=1000,
+                opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+                role="initial",
+            )
+        )
+        layer.slot_at(1).fill(
+            Entry(
+                entry_id=2,
+                step=2,
+                direction=Direction.LONG,
+                entry_price=Decimal("154.00"),
+                close_price=Decimal("155.60"),
+                units=2000,
+                opened_at=datetime(2026, 1, 1, tzinfo=UTC),
+                role="counter",
+                retracement_count=1,
+            )
+        )
+        cycle.grid.layers.append(layer)
+
+        s._validate_grid_ordering(cycle)
+
+        assert s._grid_order_violation is None
 
 
 # ===================================================================

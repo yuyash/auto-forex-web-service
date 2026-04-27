@@ -137,6 +137,26 @@ def stop_loss_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
     )
 
 
+def rebuild_take_profit_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
+    """Return the rebuilt-position take-profit distance for the *k*-th slot.
+
+    ``k`` is 1-based: R0 uses ``k=1``, R1 uses ``k=2``, and so on.
+    ``same`` is handled by the strategy layer because that mode reuses
+    the pending rebuild snapshot's absolute TP price.
+    """
+    return _progression_pips(
+        k=k,
+        mode=cfg.rebuild_take_profit_mode,
+        head=cfg.rebuild_take_profit_pips_head,
+        tail=cfg.rebuild_take_profit_pips_tail,
+        flat_steps=cfg.rebuild_take_profit_pips_flat_steps,
+        gamma=cfg.rebuild_take_profit_pips_gamma,
+        r_max=cfg.r_max,
+        manual_values=cfg.rebuild_take_profit_manual_pips,
+        round_step=cfg.round_step_pips,
+    )
+
+
 def counter_tp_pips(k: int, cfg: "SnowballStrategyConfig") -> Decimal:
     """Return the take-profit pips for the *k*-th step (1-based).
 
