@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from logging import getLogger
@@ -25,9 +26,14 @@ class ProtectionStrategy(Protocol):
     instrument: str
     account_currency: str
     pip_size: Decimal
-    _close_order_violation: str | None
 
     def _close_entry(self, *args, **kwargs) -> ClosePositionEvent: ...
+
+
+@dataclass(frozen=True)
+class ShrinkResult:
+    events: list[StrategyEvent]
+    close_order_violation: str | None = None
 
 
 def margin_ratio(
@@ -214,7 +220,7 @@ def handle_shrink(
     ss: SnowballStrategyState,
     tick: Tick,
     ratio: Decimal,
-) -> list[StrategyEvent] | None:
+) -> ShrinkResult | None:
     cfg = strategy.config
     if not cfg.shrink_enabled or ratio < cfg.m_th:
         return None
@@ -241,11 +247,11 @@ def handle_shrink(
                 ratio,
                 cfg.m1_th,
             )
-            strategy._close_order_violation = (
+            close_order_violation = (
                 f"Shrink exhausted: ratio={ratio:.1f}%, m1_th={cfg.m1_th}%, "
                 f"no more positions to close"
             )
-            break
+            return ShrinkResult(events=events, close_order_violation=close_order_violation)
 
         events.append(
             strategy._close_entry(
@@ -290,7 +296,7 @@ def handle_shrink(
 
     if ratio < cfg.m1_th:
         ss.protection_level = ProtectionLevel.NORMAL
-    return events
+    return ShrinkResult(events=events)
 
 
 def pick_shrink_target(

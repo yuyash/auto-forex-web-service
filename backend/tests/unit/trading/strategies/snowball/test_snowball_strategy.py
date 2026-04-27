@@ -660,6 +660,20 @@ class TestShrinkMode:
             "close_price": "151.50",
             "units": 1000,
             "opened_at": T0.isoformat(),
+            "role": "counter",
+            "layer_number": 1,
+            "retracement_count": 1,
+            "root_entry_id": 1,
+            "parent_entry_id": 1,
+            "position_id": None,
+            "expected_interval_pips": None,
+            "actual_interval_pips": None,
+            "expected_tp_pips": None,
+            "validation_status": "",
+            "stop_loss_price": None,
+            "is_rebuild": False,
+            "lifecycle_realized_pnl": "0",
+            "lifecycle_stop_loss_count": 0,
         }
         layers = state.strategy_state["cycles"][0]["grid"]["layers"]
         layers[0]["slots"][1]["entry"] = counter_entry

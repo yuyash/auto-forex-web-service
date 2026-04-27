@@ -1100,6 +1100,7 @@ class TestSnowballRebuildTpGridClamp:
 
     def test_upper_neighbor_tp_bound_finds_pending_above(self):
         s = _strategy(stop_loss=True)
+        from apps.trading.strategies.snowball.grid_policy import upper_neighbor_tp_bound
         from apps.trading.strategies.snowball.models import Direction, SnowballCycle
 
         layer = self._build_layer_with_grid(s)
@@ -1108,11 +1109,11 @@ class TestSnowballRebuildTpGridClamp:
 
         # R3 looks up to R2 (pending) and R0 (occupied) — the tighter of
         # the two for LONG (minimum) is R2's 130.87550.
-        assert s._upper_neighbor_tp_bound(cycle, layer, slot_index=3) == Decimal("130.87550")
+        assert upper_neighbor_tp_bound(cycle, layer, slot_index=3) == Decimal("130.87550")
         # R1 only sees R0 (no R2 yet in the predecessor range).
-        assert s._upper_neighbor_tp_bound(cycle, layer, slot_index=1) == Decimal("131.200")
+        assert upper_neighbor_tp_bound(cycle, layer, slot_index=1) == Decimal("131.200")
         # R0 has no predecessor at all.
-        assert s._upper_neighbor_tp_bound(cycle, layer, slot_index=0) is None
+        assert upper_neighbor_tp_bound(cycle, layer, slot_index=0) is None
 
     def test_rebuild_keeps_original_tp(self):
         """A rebuild must inherit the pending TP."""

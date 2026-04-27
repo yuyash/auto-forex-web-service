@@ -32,7 +32,18 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from apps.trading.enums import Direction
 from apps.trading.strategies.snowball.enums import CycleStatus, ProtectionLevel
-from apps.trading.strategies.snowball.parsing import _parse_decimal, _parse_int
+from apps.trading.strategies.snowball.state_parsing import (
+    optional_decimal,
+    optional_int,
+    optional_str,
+    parse_datetime,
+    require,
+    require_dict,
+    require_list,
+    strict_bool,
+    strict_decimal,
+    strict_int,
+)
 
 if TYPE_CHECKING:
     from apps.trading.dataclasses.tick import Tick
@@ -196,70 +207,46 @@ class Entry:
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> "Entry":
-        raw_direction = d.get("direction", "long")
+        d = require_dict(d, field_name="entry")
+        raw_direction = require(d, "direction")
         direction = (
             raw_direction
             if isinstance(raw_direction, Direction)
             else Direction(str(raw_direction).strip().lower())
         )
-        raw_opened = d.get("opened_at", "")
-        if isinstance(raw_opened, datetime):
-            opened_at = raw_opened
-        else:
-            opened_str = str(raw_opened).strip()
-            if not opened_str:
-                from datetime import UTC
-
-                opened_at = datetime(2000, 1, 1, tzinfo=UTC)
-            else:
-                if opened_str.endswith("Z"):
-                    opened_str = opened_str[:-1] + "+00:00"
-                opened_at = datetime.fromisoformat(opened_str)
+        opened_at = parse_datetime(require(d, "opened_at"), field_name="opened_at")
 
         return Entry(
-            entry_id=_parse_int(d.get("entry_id", 0), 0),
-            step=_parse_int(d.get("step", 1), 1),
+            entry_id=strict_int(require(d, "entry_id"), field_name="entry_id"),
+            step=strict_int(require(d, "step"), field_name="step"),
             direction=direction,
-            entry_price=_parse_decimal(d.get("entry_price", "0"), "0"),
-            close_price=_parse_decimal(d.get("close_price", "0"), "0"),
-            units=_parse_int(d.get("units", 0), 0),
+            entry_price=strict_decimal(require(d, "entry_price"), field_name="entry_price"),
+            close_price=strict_decimal(require(d, "close_price"), field_name="close_price"),
+            units=strict_int(require(d, "units"), field_name="units"),
             opened_at=opened_at,
-            role=d.get("role", "counter"),
-            layer_number=_parse_int(d.get("layer_number", 1), 1),
-            retracement_count=_parse_int(d.get("retracement_count", 0), 0),
-            root_entry_id=(
-                _parse_int(d["root_entry_id"], 0) if d.get("root_entry_id") is not None else None
+            role=require(d, "role"),
+            layer_number=strict_int(require(d, "layer_number"), field_name="layer_number"),
+            retracement_count=strict_int(
+                require(d, "retracement_count"),
+                field_name="retracement_count",
             ),
-            parent_entry_id=(
-                _parse_int(d["parent_entry_id"], 0)
-                if d.get("parent_entry_id") is not None
-                else None
+            root_entry_id=optional_int(d, "root_entry_id"),
+            parent_entry_id=optional_int(d, "parent_entry_id"),
+            position_id=optional_str(d, "position_id"),
+            expected_interval_pips=optional_decimal(d, "expected_interval_pips"),
+            actual_interval_pips=optional_decimal(d, "actual_interval_pips"),
+            expected_tp_pips=optional_decimal(d, "expected_tp_pips"),
+            validation_status=str(require(d, "validation_status")),
+            stop_loss_price=optional_decimal(d, "stop_loss_price"),
+            is_rebuild=strict_bool(require(d, "is_rebuild"), field_name="is_rebuild"),
+            lifecycle_realized_pnl=strict_decimal(
+                require(d, "lifecycle_realized_pnl"),
+                field_name="lifecycle_realized_pnl",
             ),
-            position_id=d.get("position_id"),
-            expected_interval_pips=(
-                _parse_decimal(d["expected_interval_pips"], "0")
-                if d.get("expected_interval_pips") not in (None, "")
-                else None
+            lifecycle_stop_loss_count=strict_int(
+                require(d, "lifecycle_stop_loss_count"),
+                field_name="lifecycle_stop_loss_count",
             ),
-            actual_interval_pips=(
-                _parse_decimal(d["actual_interval_pips"], "0")
-                if d.get("actual_interval_pips") not in (None, "")
-                else None
-            ),
-            expected_tp_pips=(
-                _parse_decimal(d["expected_tp_pips"], "0")
-                if d.get("expected_tp_pips") not in (None, "")
-                else None
-            ),
-            validation_status=str(d.get("validation_status", "")),
-            stop_loss_price=(
-                _parse_decimal(d["stop_loss_price"], "0")
-                if d.get("stop_loss_price") not in (None, "")
-                else None
-            ),
-            is_rebuild=bool(d.get("is_rebuild", False)),
-            lifecycle_realized_pnl=_parse_decimal(d.get("lifecycle_realized_pnl", "0"), "0"),
-            lifecycle_stop_loss_count=_parse_int(d.get("lifecycle_stop_loss_count", 0), 0),
         )
 
 
@@ -321,36 +308,36 @@ class StopLossClosedEntry:
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> "StopLossClosedEntry":
-        raw_dir = d.get("direction", "long")
+        d = require_dict(d, field_name="pending_rebuild")
+        raw_dir = require(d, "direction")
         direction = (
             raw_dir if isinstance(raw_dir, Direction) else Direction(str(raw_dir).strip().lower())
         )
         return StopLossClosedEntry(
-            entry_price=_parse_decimal(d.get("entry_price", "0"), "0"),
-            close_price=_parse_decimal(d.get("close_price", "0"), "0"),
-            units=_parse_int(d.get("units", 0), 0),
+            entry_price=strict_decimal(require(d, "entry_price"), field_name="entry_price"),
+            close_price=strict_decimal(require(d, "close_price"), field_name="close_price"),
+            units=strict_int(require(d, "units"), field_name="units"),
             direction=direction,
-            role=d.get("role", "counter"),
-            layer_number=_parse_int(d.get("layer_number", 1), 1),
-            retracement_count=_parse_int(d.get("retracement_count", 0), 0),
-            step=_parse_int(d.get("step", 1), 1),
-            root_entry_id=(
-                _parse_int(d["root_entry_id"], 0) if d.get("root_entry_id") is not None else None
+            role=require(d, "role"),
+            layer_number=strict_int(require(d, "layer_number"), field_name="layer_number"),
+            retracement_count=strict_int(
+                require(d, "retracement_count"),
+                field_name="retracement_count",
             ),
-            parent_entry_id=(
-                _parse_int(d["parent_entry_id"], 0)
-                if d.get("parent_entry_id") is not None
-                else None
+            step=strict_int(require(d, "step"), field_name="step"),
+            root_entry_id=optional_int(d, "root_entry_id"),
+            parent_entry_id=optional_int(d, "parent_entry_id"),
+            cycle_id=strict_int(require(d, "cycle_id"), field_name="cycle_id"),
+            position_id=optional_str(d, "position_id"),
+            stop_loss_price=optional_decimal(d, "stop_loss_price"),
+            lifecycle_realized_pnl=strict_decimal(
+                require(d, "lifecycle_realized_pnl"),
+                field_name="lifecycle_realized_pnl",
             ),
-            cycle_id=_parse_int(d.get("cycle_id", 0), 0),
-            position_id=d.get("position_id"),
-            stop_loss_price=(
-                _parse_decimal(d.get("stop_loss_price", "0"), "0")
-                if d.get("stop_loss_price") is not None
-                else None
+            lifecycle_stop_loss_count=strict_int(
+                require(d, "lifecycle_stop_loss_count"),
+                field_name="lifecycle_stop_loss_count",
             ),
-            lifecycle_realized_pnl=_parse_decimal(d.get("lifecycle_realized_pnl", "0"), "0"),
-            lifecycle_stop_loss_count=_parse_int(d.get("lifecycle_stop_loss_count", 0), 0),
         )
 
 
@@ -459,12 +446,13 @@ class Slot:
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> "Slot":
+        d = require_dict(d, field_name="slot")
         raw_entry = d.get("entry")
         raw_pending = d.get("pending_rebuild")
         return Slot(
-            index=_parse_int(d.get("index", 0), 0),
+            index=strict_int(require(d, "index"), field_name="index"),
             entry=Entry.from_dict(raw_entry) if raw_entry else None,
-            ever_closed=bool(d.get("ever_closed", False)),
+            ever_closed=strict_bool(require(d, "ever_closed"), field_name="ever_closed"),
             pending_rebuild=(StopLossClosedEntry.from_dict(raw_pending) if raw_pending else None),
         )
 
@@ -611,11 +599,14 @@ class Layer:
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> "Layer":
+        d = require_dict(d, field_name="layer")
         return Layer(
-            layer_number=_parse_int(d.get("layer_number", 1), 1),
-            slots=[Slot.from_dict(s) for s in d.get("slots", [])],
-            base_units=_parse_int(d.get("base_units", 1000), 1000),
-            refill_up_to=_parse_int(d.get("refill_up_to", 2), 2),
+            layer_number=strict_int(require(d, "layer_number"), field_name="layer_number"),
+            slots=[
+                Slot.from_dict(s) for s in require_list(require(d, "slots"), field_name="slots")
+            ],
+            base_units=strict_int(require(d, "base_units"), field_name="base_units"),
+            refill_up_to=strict_int(require(d, "refill_up_to"), field_name="refill_up_to"),
         )
 
     @staticmethod
@@ -816,8 +807,9 @@ class PositionGrid:
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "PositionGrid":
-        raw_layers = data.get("layers")
-        layers = [Layer.from_dict(ld) for ld in raw_layers] if raw_layers else []
+        data = require_dict(data, field_name="grid")
+        raw_layers = require_list(require(data, "layers"), field_name="layers")
+        layers = [Layer.from_dict(ld) for ld in raw_layers]
         return PositionGrid(layers=layers)
 
 
@@ -999,27 +991,34 @@ class SnowballCycle:
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "SnowballCycle":
-        raw_direction = data.get("direction", "long")
+        data = require_dict(data, field_name="cycle")
+        raw_direction = require(data, "direction")
         direction = (
             raw_direction
             if isinstance(raw_direction, Direction)
             else Direction(str(raw_direction).strip().lower())
         )
 
-        grid = PositionGrid.from_dict(data["grid"])
+        grid = PositionGrid.from_dict(require(data, "grid"))
 
-        raw_status = data.get("status")
+        raw_status = require(data, "status")
         status = CycleStatus(str(raw_status).strip().lower())
 
         return SnowballCycle(
-            cycle_id=_parse_int(data.get("cycle_id", 0), 0),
+            cycle_id=strict_int(require(data, "cycle_id"), field_name="cycle_id"),
             direction=direction,
             grid=grid,
-            hedge_entries=[Entry.from_dict(e) for e in data.get("hedge_entries", [])],
-            counter_close_count=_parse_int(data.get("counter_close_count", 0), 0),
+            hedge_entries=[
+                Entry.from_dict(e)
+                for e in require_list(require(data, "hedge_entries"), field_name="hedge_entries")
+            ],
+            counter_close_count=strict_int(
+                require(data, "counter_close_count"),
+                field_name="counter_close_count",
+            ),
             status=status,
-            trade_cycle_id=data.get("trade_cycle_id"),
-            realized_pnl=_parse_decimal(data.get("realized_pnl", "0"), "0"),
+            trade_cycle_id=optional_str(data, "trade_cycle_id"),
+            realized_pnl=strict_decimal(require(data, "realized_pnl"), field_name="realized_pnl"),
         )
 
 
@@ -1094,32 +1093,41 @@ class SnowballStrategyState:
 
     @staticmethod
     def from_dict(data: dict[str, Any]) -> "SnowballStrategyState":
-        def _dec_or_none(v: object) -> Decimal | None:
-            return _parse_decimal(v, "0") if v is not None else None
-
-        raw_cycles = data.get("cycles")
-        cycles = [SnowballCycle.from_dict(c) for c in raw_cycles] if raw_cycles is not None else []
+        data = require_dict(data, field_name="strategy_state")
+        raw_cycles = require_list(require(data, "cycles"), field_name="cycles")
+        cycles = [SnowballCycle.from_dict(c) for c in raw_cycles]
+        raw_metrics = require(data, "metrics")
+        if not isinstance(raw_metrics, dict):
+            raise ValueError("Snowball state field metrics must be an object")
 
         return SnowballStrategyState(
-            protection_level=ProtectionLevel(
-                data.get("protection_level", ProtectionLevel.NORMAL.value)
-            ),
-            initialised=bool(data.get("initialised", False)),
+            protection_level=ProtectionLevel(require(data, "protection_level")),
+            initialised=strict_bool(require(data, "initialised"), field_name="initialised"),
             cycles=cycles,
-            next_entry_id=max(1, _parse_int(data.get("next_entry_id", 1), 1)),
-            lock_hedge_ids=[_parse_int(i, 0) for i in (data.get("lock_hedge_ids") or [])],
-            lock_entered_at=data.get("lock_entered_at"),
-            cooldown_until=data.get("cooldown_until"),
-            last_bid=_dec_or_none(data.get("last_bid")),
-            last_ask=_dec_or_none(data.get("last_ask")),
-            last_mid=_dec_or_none(data.get("last_mid")),
-            account_balance=_parse_decimal(data.get("account_balance", "0"), "0"),
-            account_nav=_parse_decimal(data.get("account_nav", "0"), "0"),
-            metrics=dict(data.get("metrics", {})) if isinstance(data.get("metrics"), dict) else {},
+            next_entry_id=max(
+                1, strict_int(require(data, "next_entry_id"), field_name="next_entry_id")
+            ),
+            lock_hedge_ids=[
+                strict_int(i, field_name="lock_hedge_ids")
+                for i in require_list(require(data, "lock_hedge_ids"), field_name="lock_hedge_ids")
+            ],
+            lock_entered_at=optional_str(data, "lock_entered_at"),
+            cooldown_until=optional_str(data, "cooldown_until"),
+            last_bid=optional_decimal(data, "last_bid"),
+            last_ask=optional_decimal(data, "last_ask"),
+            last_mid=optional_decimal(data, "last_mid"),
+            account_balance=strict_decimal(
+                require(data, "account_balance"),
+                field_name="account_balance",
+            ),
+            account_nav=strict_decimal(require(data, "account_nav"), field_name="account_nav"),
+            metrics=dict(raw_metrics),
         )
 
     @classmethod
     def from_strategy_state(cls, raw: dict[str, Any] | None) -> "SnowballStrategyState":
-        if not isinstance(raw, dict):
+        if raw is None or raw == {}:
             return cls()
+        if not isinstance(raw, dict):
+            raise ValueError("Snowball strategy_state must be an object")
         return cls.from_dict(raw)

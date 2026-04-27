@@ -51,7 +51,6 @@ from apps.trading.strategies.snowball.grid_policy import (
     grid_tp_bounds,
     preceding_entry_bound,
     propagate_pending_rebuild_tp,
-    upper_neighbor_tp_bound,
     validate_grid_ordering,
 )
 from apps.trading.strategies.snowball.config import SnowballStrategyConfig
@@ -528,99 +527,6 @@ class SnowballStrategy(Strategy):
         if self._grid_order_violation:
             logger.error("Grid ordering violation detail: %s", self._grid_order_violation)
 
-    def _upper_neighbor_tp_bound(
-        self,
-        cycle: "SnowballCycle",
-        layer: "Layer",
-        slot_index: int,
-    ) -> Decimal | None:
-        """Return the TP bound that ``_validate_grid_ordering`` imposes.
-
-        "Present" means occupied (``slot.entry`` set) or pending rebuild.
-
-        The validator traverses the grid layer-by-layer (L1, L2, …) and,
-        within each layer, slot-by-slot in index order, then enforces
-        monotonic ``(entry_price, close_price)`` pairs across the whole
-        sequence.  A rebuild at ``(layer, slot_index)`` therefore has to
-        respect not only its in-layer predecessors but also every present
-        slot in all earlier layers.
-
-        For LONG the expected TP order is descending: the new TP must
-        not exceed the minimum of all prior TPs, so we return that
-        minimum as an upper (ceiling) bound.
-
-        For SHORT the expected TP order is ascending: the new TP must
-        not fall below the maximum of all prior TPs, so we return that
-        maximum as a lower (floor) bound.
-
-        Both are returned under the same name; the caller interprets the
-        direction and clamps accordingly.  ``None`` is returned when no
-        prior present slot exists, in which case no bound applies.
-        """
-        return upper_neighbor_tp_bound(cycle, layer, slot_index)
-
-    def _grid_tp_bounds(
-        self,
-        cycle: "SnowballCycle",
-        layer: "Layer",
-        slot_index: int,
-    ) -> tuple[Decimal | None, Decimal | None]:
-        """Return (hard_bound, soft_bound) TP limits from preceding slots.
-
-        - ``hard_bound`` derives from **occupied** preceding slots whose
-          TP is already committed on a live position and cannot be
-          modified without disturbing an open trade.
-        - ``soft_bound`` derives from **pending_rebuild** preceding slots
-          whose TP is a snapshot awaiting rebuild and can be pushed
-          outward to accommodate an extended rebuild TP on the current
-          slot.
-
-        Bounds follow the same semantics as :meth:`_upper_neighbor_tp_bound`:
-        LONG uses the tightest ceiling (minimum observed TP), SHORT uses
-        the tightest floor (maximum observed TP).  ``None`` means no
-        bound in that category.
-        """
-        return grid_tp_bounds(cycle, layer, slot_index)
-
-    def _preceding_entry_bound(
-        self,
-        cycle: "SnowballCycle",
-        layer: "Layer",
-        slot_index: int,
-    ) -> Decimal | None:
-        """Return the tightest entry-price bound from preceding occupied slots.
-
-        For a LONG grid, entries must be descending so the bound is the
-        **minimum** entry price among all occupied slots that precede
-        ``(layer, slot_index)`` in grid traversal order.  For SHORT
-        grids, entries must be ascending so the bound is the
-        **maximum**.  Returns ``None`` when no preceding occupied slot
-        exists.
-        """
-        return preceding_entry_bound(cycle, layer, slot_index)
-
-    def _propagate_pending_rebuild_tp(
-        self,
-        cycle: "SnowballCycle",
-        layer: "Layer",
-        slot_index: int,
-        new_tp: Decimal,
-    ) -> list[tuple[int, int, Decimal, Decimal]]:
-        """Extend preceding pending_rebuild TPs to stay monotonic with ``new_tp``.
-
-        This routine walks all preceding pending_rebuild slots (earlier
-        layers plus earlier indices in the same layer) and, for each
-        whose snapshot TP would violate monotonicity against ``new_tp``,
-        pushes the snapshot's ``close_price`` outward to ``new_tp`` so
-        ordering is preserved.  Occupied slots are never touched — their
-        TP is already committed on a live position.
-
-        Returns a list of ``(layer_number, slot_index, old_tp, new_tp)``
-        tuples describing each adjustment performed, useful for logging
-        and tests.
-        """
-        return propagate_pending_rebuild_tp(cycle, layer, slot_index, new_tp)
-
     # ------------------------------------------------------------------
     # Per-cycle tick processing
     # ------------------------------------------------------------------
@@ -747,31 +653,16 @@ class SnowballStrategy(Strategy):
                 counter = slot.entry
                 if counter is None or counter.entry_id == r0_entry.entry_id:
                     continue
-                tp_hit = True
-                if counter.close_price <= 0:
-                    tp_hit = False
-                elif counter.is_long and tick.bid < counter.close_price:
-                    tp_hit = False
-                elif counter.is_short and tick.ask > counter.close_price:
-                    tp_hit = False
-
                 exit_price = counter.exit_price(tick)
                 pips_gained = abs(exit_price - counter.entry_price) / self.pip_size
-                if tp_hit:
-                    label = "Counter TP flush"
-                    reason = "counter_tp"
-                    status = "pass"
-                else:
-                    label = "Counter force-close (head TP)"
-                    reason = "counter_tp"
-                    status = "warn"
+                label = "Counter TP flush"
                 logger.info(
                     "%s (%s): L%s/R%s, %.1f pips",
                     label,
                     counter.direction.value.upper(),
                     counter.layer_number,
                     counter.retracement_count,
-                    pips_gained if tp_hit else -pips_gained,
+                    pips_gained,
                 )
                 layer_iter.close_slot(slot.index)
                 cycle.counter_close_count += 1
@@ -783,11 +674,11 @@ class SnowballStrategy(Strategy):
                             f"{label} ({counter.direction.value.upper()}) | "
                             f"L{counter.layer_number}/R{counter.retracement_count}, "
                             f"entry={counter.entry_price:.3f}, "
-                            f"exit={exit_price:.3f}, {'+' if tp_hit else ''}{pips_gained:.1f} pips"
+                            f"exit={exit_price:.3f}, +{pips_gained:.1f} pips"
                         ),
-                        close_reason=reason,
+                        close_reason="counter_tp",
                         actual_tp_pips=pips_gained,
-                        validation_status=status,
+                        validation_status="pass",
                         cycle=cycle,
                     )
                 )
@@ -1664,7 +1555,7 @@ class SnowballStrategy(Strategy):
                 # slot were opened at the same price (grid exhaustion on
                 # a single tick) and the buffer then shifts this slot's
                 # entry beyond the neighbor.
-                entry_bound = self._preceding_entry_bound(cycle, layer, slot.index)
+                entry_bound = preceding_entry_bound(cycle, layer, slot.index)
                 if entry_bound is not None:
                     if pending.direction == Direction.LONG and trigger_price > entry_bound:
                         logger.info(
@@ -1733,7 +1624,7 @@ class SnowballStrategy(Strategy):
                 #   when the slot itself rebuilds, so we can push those
                 #   snapshot TPs outward to match the current rebuild
                 #   and avoid clamping.
-                hard_bound, _soft_bound = self._grid_tp_bounds(cycle, layer, slot.index)
+                hard_bound, _soft_bound = grid_tp_bounds(cycle, layer, slot.index)
                 if hard_bound is not None:
                     if pending.direction == Direction.LONG:
                         if adjusted_close_price > hard_bound:
@@ -1766,7 +1657,7 @@ class SnowballStrategy(Strategy):
                 # violate monotonicity against it. Those slots will be
                 # rebuilt later and can absorb the adjustment without
                 # affecting any live position.
-                propagated = self._propagate_pending_rebuild_tp(
+                propagated = propagate_pending_rebuild_tp(
                     cycle, layer, slot.index, adjusted_close_price
                 )
                 for lno, sidx, old_tp, new_tp in propagated:
@@ -1933,8 +1824,11 @@ class SnowballStrategy(Strategy):
                 ratio=ratio,
             )
         if shrink_events is not None:
+            events.extend(shrink_events.events)
+            if shrink_events.close_order_violation:
+                self._close_order_violation = shrink_events.close_order_violation
             state.strategy_state = ss.to_dict()
-            return StrategyResult(state=state, events=shrink_events)
+            return StrategyResult(state=state, events=events)
 
         # Back to normal
         if lock_events is None and ss.protection_level != ProtectionLevel.NORMAL:
@@ -1958,8 +1852,9 @@ class SnowballStrategy(Strategy):
                 # must not originate fresh counter entries from stale
                 # pending snapshots.
                 cycle.status = CycleStatus.PENDING
-                sl_rebuild_events = self._process_stop_loss_rebuilds(ss, tick, cycle)
-                events.extend(sl_rebuild_events)
+                if allow_new_positions:
+                    sl_rebuild_events = self._process_stop_loss_rebuilds(ss, tick, cycle)
+                    events.extend(sl_rebuild_events)
                 if cycle.grid.is_empty():
                     self._validate_grid_ordering(cycle)
                     continue
@@ -1992,8 +1887,9 @@ class SnowballStrategy(Strategy):
             events.extend(sl_close_events)
 
             # --- Stop-loss rebuilds ---
-            sl_rebuild_events = self._process_stop_loss_rebuilds(ss, tick, cycle)
-            events.extend(sl_rebuild_events)
+            if allow_new_positions:
+                sl_rebuild_events = self._process_stop_loss_rebuilds(ss, tick, cycle)
+                events.extend(sl_rebuild_events)
 
             if allow_new_positions and not counter_close_events:
                 # Apply counter adds repeatedly within the same tick.
