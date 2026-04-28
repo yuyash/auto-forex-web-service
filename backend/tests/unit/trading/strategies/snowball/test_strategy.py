@@ -573,10 +573,18 @@ class TestSnowballRebuildTakeProfitModes:
         *,
         direction: Direction = Direction.LONG,
         retracement_count: int = 1,
+        stop_loss_loss_pips: Decimal = Decimal("0"),
+        close_price: Decimal | None = None,
     ) -> StopLossClosedEntry:
         return StopLossClosedEntry(
             entry_price=Decimal("154.70"),
-            close_price=Decimal("155.00") if direction == Direction.LONG else Decimal("154.40"),
+            close_price=(
+                close_price
+                if close_price is not None
+                else Decimal("155.00")
+                if direction == Direction.LONG
+                else Decimal("154.40")
+            ),
             units=2000,
             direction=direction,
             role="counter",
@@ -584,6 +592,7 @@ class TestSnowballRebuildTakeProfitModes:
             retracement_count=retracement_count,
             step=2,
             cycle_id=1,
+            stop_loss_loss_pips=stop_loss_loss_pips,
         )
 
     def test_same_mode_reuses_pending_take_profit_price(self):
@@ -636,6 +645,52 @@ class TestSnowballRebuildTakeProfitModes:
 
         assert long_tp == Decimal("154.82")
         assert short_tp == Decimal("154.58")
+
+    def test_recovery_mode_extends_same_take_profit_to_prior_loss_pips(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "rebuild_take_profit_mode": "same",
+                "rebuild_take_profit_recovery_enabled": True,
+                "rebuild_take_profit_recovery_mode": "pips",
+                "rebuild_take_profit_recovery_extra_pips": "0",
+            }
+        )
+
+        short_tp = rebuild_take_profit_price(
+            pending=self._make_pending_rebuild(
+                direction=Direction.SHORT,
+                stop_loss_loss_pips=Decimal("30.1"),
+                close_price=Decimal("157.247"),
+            ),
+            entry_price=Decimal("157.397"),
+            pip_size=Decimal("0.01"),
+            config=s.config,
+        )
+
+        assert short_tp == Decimal("157.096")
+
+    def test_recovery_mode_keeps_farther_existing_take_profit(self):
+        s = _strategy(
+            {
+                "stop_loss_enabled": True,
+                "rebuild_take_profit_mode": "same",
+                "rebuild_take_profit_recovery_enabled": True,
+                "rebuild_take_profit_recovery_extra_pips": "2",
+            }
+        )
+
+        long_tp = rebuild_take_profit_price(
+            pending=self._make_pending_rebuild(
+                direction=Direction.LONG,
+                stop_loss_loss_pips=Decimal("10"),
+            ),
+            entry_price=Decimal("154.70"),
+            pip_size=s.pip_size,
+            config=s.config,
+        )
+
+        assert long_tp == Decimal("155.00")
 
     def test_manual_take_profit_mode_skips_grid_order_validation(self):
         s = _strategy(

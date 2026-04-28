@@ -212,7 +212,7 @@ def process_stop_loss_closes(
 
         entry.lifecycle_stop_loss_count += 1
         if strategy.config.rebuild_enabled:
-            slot.close_for_stop_loss(_stop_loss_snapshot(entry, cycle))
+            slot.close_for_stop_loss(_stop_loss_snapshot(entry, cycle, pips_lost))
         else:
             slot.close(refillable=False)
 
@@ -354,7 +354,11 @@ def _stop_loss_hit(entry: Entry, tick: Tick) -> bool:
     )
 
 
-def _stop_loss_snapshot(entry: Entry, cycle: SnowballCycle) -> StopLossClosedEntry:
+def _stop_loss_snapshot(
+    entry: Entry,
+    cycle: SnowballCycle,
+    pips_lost: Decimal,
+) -> StopLossClosedEntry:
     return StopLossClosedEntry(
         entry_price=entry.entry_price,
         close_price=entry.close_price,
@@ -371,6 +375,7 @@ def _stop_loss_snapshot(entry: Entry, cycle: SnowballCycle) -> StopLossClosedEnt
         stop_loss_price=entry.stop_loss_price,
         lifecycle_realized_pnl=entry.lifecycle_realized_pnl,
         lifecycle_stop_loss_count=entry.lifecycle_stop_loss_count,
+        stop_loss_loss_pips=pips_lost,
     )
 
 

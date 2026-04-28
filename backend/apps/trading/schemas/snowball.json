@@ -676,6 +676,50 @@
       "itemLabel_ja": "再建 R{index} 利確幅（pips）"
     },
 
+    "rebuild_take_profit_recovery_enabled": {
+      "type": "boolean",
+      "title": "Recover Stop-Loss Pips On Rebuild",
+      "title_ja": "再建TPでロスカット分を最低回収",
+      "description": "When enabled, the rebuilt position's take-profit is extended at least far enough to recover the pips lost by the immediately preceding stop-loss. The strategy uses the farther of the normal rebuilt TP and the recovery TP.",
+      "description_ja": "有効時、再建ポジションの利確価格を、直前のロスカットで失った pips を最低限回収できる位置まで延長します。通常の再建TPと回収TPのうち、より遠い方を使います。",
+      "default": false,
+      "dependsOn": {
+        "field": "rebuild_enabled",
+        "values": [true],
+        "and": [{ "field": "stop_loss_enabled", "values": [true] }]
+      },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
+    "rebuild_take_profit_recovery_mode": {
+      "type": "string",
+      "title": "Rebuild Recovery Mode",
+      "title_ja": "再建回収モード",
+      "description": "How to measure the minimum recovery target. Currently only pips is supported.",
+      "description_ja": "最低回収目標の測定方法です。現在は pips のみ対応しています。",
+      "enum": ["pips"],
+      "enum_labels": { "pips": "Pips" },
+      "enum_labels_ja": { "pips": "pips" },
+      "default": "pips",
+      "dependsOn": { "field": "rebuild_take_profit_recovery_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
+    "rebuild_take_profit_recovery_extra_pips": {
+      "type": "number",
+      "title": "Rebuild Recovery Extra (pips)",
+      "title_ja": "再建回収 追加pips",
+      "description": "Additional pips added to the prior stop-loss loss when computing the minimum rebuilt take-profit. 0 means recover only the loss-cut pips.",
+      "description_ja": "最低再建TPを計算するとき、直前のロスカット損失 pips に追加する pips です。0 の場合はロスカット分のみを回収します。",
+      "default": 0,
+      "minimum": 0,
+      "dependsOn": { "field": "rebuild_take_profit_recovery_enabled", "values": [true] },
+      "group": "Margin Protection",
+      "group_ja": "証拠金保護"
+    },
+
     "grid_order_validation_enabled": {
       "type": "boolean",
       "title": "Fail On Grid Ordering Violation",
@@ -748,8 +792,8 @@
       "type": "boolean",
       "title": "Adjust Rebuild Prices",
       "title_ja": "再建時の注文・決済価格を調整",
-      "description": "When enabled, on stop-loss rebuild the rebuild's take-profit is tightened by the deterministic price gap between the original entry price and the stop-loss exit price (including the bid/ask spread). This makes the rebuild close earlier to offset the prior stop-loss loss instead of leaving the slot's lifecycle P/L negative. Requires stop-loss to be enabled.",
-      "description_ja": "有効時、ロスカット後の再建では、元の建玉価格とロスカット決済価格の差（Bid/Askスプレッドを含む想定可能なずれ）の分だけ再建ポジションの利確価格を手前に調整します。これにより再建ポジションが早めに決済され、直前のロスカット損失をなるべく相殺します。ロスカットが有効である必要があります。",
+      "description": "When enabled, optional entry and exit buffers can shift the rebuild trigger and inherited take-profit in the favourable direction while preserving grid ordering. Use Recover Stop-Loss Pips On Rebuild when the rebuild TP must cover the prior stop-loss loss.",
+      "description_ja": "有効時、任意の注文価格・決済価格バッファにより、再建の発動価格と引き継いだ利確価格を利益方向へ調整します。グリッド順序は維持されます。直前のロスカット損失を再建TPで回収したい場合は「再建TPでロスカット分を最低回収」を使います。",
       "default": true,
       "dependsOn": {
         "field": "rebuild_take_profit_mode",
