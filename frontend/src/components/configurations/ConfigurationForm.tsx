@@ -27,6 +27,7 @@ import type { StrategyConfigCreateData } from '../../types/configuration';
 import type { StrategyConfig, ConfigSchema } from '../../types/strategy';
 import { STRATEGY_CONFIG_SCHEMAS } from './strategyConfigSchemas';
 import { isParameterVisible } from '../../utils/strategySchemaDependsOn';
+import { orderConfigEntries } from '../../utils/configFieldOrder';
 
 // Validation schema
 const configurationSchema = z.object({
@@ -383,6 +384,20 @@ const ConfigurationForm = ({
       .replace(/\b\w/g, (char) => char.toUpperCase());
   };
 
+  const formatParameterGroup = (key: string): string => {
+    const prop = strategySchema?.properties?.[key];
+    if (!prop) {
+      return t('configuration:form.otherParameters');
+    }
+    const language = i18n.language;
+    const localizedKey = `group_${language}` as const;
+    return (
+      (prop[localizedKey] as string | undefined) ??
+      prop.group ??
+      t('configuration:form.otherParameters')
+    );
+  };
+
   const formatParameterValue = (value: unknown, key?: string): string => {
     if (Array.isArray(value)) {
       return value.join(', ');
@@ -430,6 +445,33 @@ const ConfigurationForm = ({
         ),
       ]
     : Object.entries(parameters);
+
+  const reviewParameterGroups = (() => {
+    const groups: Array<{
+      name: string;
+      entries: Array<{ key: string; value: unknown }>;
+    }> = [];
+    const groupMap = new Map<string, Array<{ key: string; value: unknown }>>();
+    const seenGroups: string[] = [];
+
+    reviewParameters.forEach(([key, value]) => {
+      const groupName = formatParameterGroup(key);
+      if (!groupMap.has(groupName)) {
+        groupMap.set(groupName, []);
+        seenGroups.push(groupName);
+      }
+      groupMap.get(groupName)!.push({ key, value });
+    });
+
+    seenGroups.forEach((name) => {
+      const entries = groupMap.get(name);
+      if (entries && entries.length > 0) {
+        groups.push({ name, entries: orderConfigEntries(entries) });
+      }
+    });
+
+    return groups;
+  })();
 
   return (
     <Box sx={{ width: '100%' }}>
@@ -704,28 +746,56 @@ const ConfigurationForm = ({
                   {t('common:labels.parameters')}
                 </Typography>
                 <Box sx={{ pl: 2 }}>
-                  {reviewParameters.length === 0 ? (
+                  {reviewParameterGroups.length === 0 ? (
                     <Typography variant="body2" color="text.secondary">
                       {t('configuration:empty.noParametersConfigured')}
                     </Typography>
                   ) : (
-                    reviewParameters.map(([key, value]) => (
-                      <Box
-                        key={key}
-                        sx={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          mb: 1,
-                        }}
-                      >
-                        <Typography variant="body2" color="text.secondary">
-                          {formatParameterLabel(key)}:
-                        </Typography>
-                        <Typography variant="body2" fontWeight={500}>
-                          {formatParameterValue(value, key)}
-                        </Typography>
-                      </Box>
-                    ))
+                    reviewParameterGroups.map(
+                      ({ name: groupName, entries }, groupIdx) => (
+                        <Box key={groupName || '__ungrouped'} sx={{ mb: 1.5 }}>
+                          {groupIdx > 0 && <Divider sx={{ my: 1 }} />}
+                          {groupName && (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{
+                                display: 'block',
+                                fontWeight: 700,
+                                mb: 0.75,
+                              }}
+                            >
+                              {groupName}
+                            </Typography>
+                          )}
+                          {entries.map(({ key, value }) => (
+                            <Box
+                              key={key}
+                              sx={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                gap: 2,
+                                mb: 0.75,
+                              }}
+                            >
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                              >
+                                {formatParameterLabel(key)}:
+                              </Typography>
+                              <Typography
+                                variant="body2"
+                                fontWeight={500}
+                                sx={{ textAlign: 'right' }}
+                              >
+                                {formatParameterValue(value, key)}
+                              </Typography>
+                            </Box>
+                          ))}
+                        </Box>
+                      )
+                    )
                   )}
                 </Box>
               </CardContent>

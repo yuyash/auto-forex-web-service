@@ -317,8 +317,8 @@
       "description_ja": "有効時、各ポジションに建玉時のロスカット価格が設定されます。市場価格がロスカット価格に達するとポジションが決済されます。縮小機能とは同時に使用できません。",
       "default": false,
       "exclusiveWith": "shrink_enabled",
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Stop Loss",
+      "group_ja": "ロスカット"
     },
 
     "stop_loss_mode": {
@@ -366,8 +366,8 @@
       "default": "auto",
       "deferDefaultUntilConfigured": true,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Stop Loss",
+      "group_ja": "ロスカット"
     },
 
     "stop_loss_pips_head": {
@@ -388,8 +388,8 @@
           "divisive"
         ]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Stop Loss",
+      "group_ja": "ロスカット"
     },
 
     "stop_loss_pips_tail": {
@@ -404,8 +404,8 @@
         "field": "stop_loss_mode",
         "values": ["additive", "subtractive", "multiplicative", "divisive"]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Stop Loss",
+      "group_ja": "ロスカット"
     },
 
     "stop_loss_pips_flat_steps": {
@@ -420,8 +420,8 @@
         "field": "stop_loss_mode",
         "values": ["additive", "subtractive", "multiplicative", "divisive"]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Stop Loss",
+      "group_ja": "ロスカット"
     },
 
     "stop_loss_pips_gamma": {
@@ -436,8 +436,8 @@
         "field": "stop_loss_mode",
         "values": ["additive", "subtractive", "multiplicative", "divisive"]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Stop Loss",
+      "group_ja": "ロスカット"
     },
 
     "stop_loss_manual_pips": {
@@ -449,8 +449,8 @@
       "default": [],
       "items": { "type": "number", "minimum": 1 },
       "dependsOn": { "field": "stop_loss_mode", "values": ["manual"] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護",
+      "group": "Stop Loss",
+      "group_ja": "ロスカット",
       "linkedCount": { "field": "r_max", "offset": 0 },
       "itemLabel": "Slot R{index} stop loss (pips)",
       "itemLabel_ja": "R{index} ロスカット幅（pips）"
@@ -464,8 +464,8 @@
       "description_ja": "有効時（既定）、ロスカットされたスロットは価格が元の建玉価格に戻ったときに再建されます。無効にすると、ロスカットはそのスロットを完全に終了し、ロスカットのたびにグリッドが縮小します。",
       "default": true,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "complete_cycle_when_empty": {
@@ -480,8 +480,8 @@
         "values": [false],
         "and": [{ "field": "stop_loss_enabled", "values": [true] }]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "disable_loss_cut_after_rebuild": {
@@ -492,8 +492,8 @@
       "description_ja": "有効時、ロスカット後に再建されたポジションはそのまま保持され、再度ロスカットされません。",
       "default": false,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Stop Loss",
+      "group_ja": "ロスカット"
     },
 
     "rebuild_stop_loss_mode": {
@@ -524,8 +524,8 @@
           { "field": "disable_loss_cut_after_rebuild", "values": [false] }
         ]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_stop_loss_manual_pips": {
@@ -537,8 +537,8 @@
       "default": [],
       "items": { "type": "number", "minimum": 1 },
       "dependsOn": { "field": "rebuild_stop_loss_mode", "values": ["manual"] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護",
+      "group": "Rebuild",
+      "group_ja": "再建",
       "linkedCount": { "field": "r_max", "offset": 1 },
       "itemLabel": "Rebuild slot R{index} stop loss (pips)",
       "itemLabel_ja": "再建 R{index} ロスカット幅（pips）"
@@ -592,8 +592,8 @@
         "values": [true],
         "and": [{ "field": "stop_loss_enabled", "values": [true] }]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_take_profit_pips_head": {
@@ -608,8 +608,8 @@
         "field": "rebuild_take_profit_mode",
         "values": ["constant", "additive", "subtractive", "multiplicative", "divisive"]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_take_profit_pips_tail": {
@@ -624,8 +624,8 @@
         "field": "rebuild_take_profit_mode",
         "values": ["additive", "subtractive", "multiplicative", "divisive"]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_take_profit_pips_flat_steps": {
@@ -640,8 +640,8 @@
         "field": "rebuild_take_profit_mode",
         "values": ["additive", "subtractive", "multiplicative", "divisive"]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_take_profit_pips_gamma": {
@@ -656,8 +656,8 @@
         "field": "rebuild_take_profit_mode",
         "values": ["additive", "subtractive", "multiplicative", "divisive"]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_take_profit_manual_pips": {
@@ -669,8 +669,8 @@
       "default": [],
       "items": { "type": "number", "minimum": 0.1 },
       "dependsOn": { "field": "rebuild_take_profit_mode", "values": ["manual"] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護",
+      "group": "Rebuild",
+      "group_ja": "再建",
       "linkedCount": { "field": "r_max", "offset": 1 },
       "itemLabel": "Rebuild slot R{index} take profit (pips)",
       "itemLabel_ja": "再建 R{index} 利確幅（pips）"
@@ -688,8 +688,8 @@
         "values": [true],
         "and": [{ "field": "stop_loss_enabled", "values": [true] }]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_take_profit_recovery_mode": {
@@ -703,8 +703,8 @@
       "enum_labels_ja": { "pips": "pips" },
       "default": "pips",
       "dependsOn": { "field": "rebuild_take_profit_recovery_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "grid_order_validation_enabled": {
@@ -718,8 +718,8 @@
         "field": "rebuild_take_profit_mode",
         "values": ["same", "constant", "additive", "subtractive", "multiplicative", "divisive"]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "preserve_highest_retracement_enabled": {
@@ -730,8 +730,8 @@
       "description_ja": "有効時、各レイヤーで現在もっとも高いRスロットは、設定した閾値以上であればロスカットを無視できます。",
       "default": false,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Stop Loss",
+      "group_ja": "ロスカット"
     },
 
     "preserve_highest_r_from": {
@@ -747,8 +747,8 @@
         "values": [true],
         "and": [{ "field": "stop_loss_enabled", "values": [true] }]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Stop Loss",
+      "group_ja": "ロスカット"
     },
 
     "reseed_on_all_pending": {
@@ -759,8 +759,8 @@
       "description_ja": "有効時、ある方向のすべてのサイクルでライブポジションがゼロになった場合（少なくとも1つのスロットがロスカット後のリビルド待ちだが、未使用スロットが残っている場合も含む）、新しいサイクルを作成します。「グリッド飽和時に新規サイクル作成」とは排他的です。ロスカットが有効である必要があります。",
       "default": false,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "reseed_on_grid_exhausted": {
@@ -771,8 +771,8 @@
       "description_ja": "有効時、ある方向で f_max までの全レイヤーが作成済みで、かつ全レイヤーの全スロットがリビルド待ち状態になった場合にのみ新しいサイクルを作成します。「保留発生時に新規サイクル作成」より厳格で、設定済みの全レイヤーが完全に使い切られるまで新サイクルを作成しません。「保留発生時に新規サイクル作成」とは排他的です。ロスカットが有効である必要があります。",
       "default": false,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_price_adjustment_enabled": {
@@ -787,8 +787,8 @@
         "values": ["same"],
         "and": [{ "field": "stop_loss_enabled", "values": [true] }]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_entry_price_buffer_pips": {
@@ -803,8 +803,8 @@
         "field": "rebuild_price_adjustment_enabled",
         "values": [true]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_exit_price_buffer_pips": {
@@ -819,8 +819,8 @@
         "field": "rebuild_price_adjustment_enabled",
         "values": [true]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "shrink_enabled": {
