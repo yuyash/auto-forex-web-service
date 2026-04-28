@@ -317,8 +317,8 @@
       "description_ja": "有効時、各ポジションに建玉時のロスカット価格が設定されます。市場価格がロスカット価格に達するとポジションが決済されます。縮小機能とは同時に使用できません。",
       "default": false,
       "exclusiveWith": "shrink_enabled",
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Stop Loss",
+      "group_ja": "ロスカット"
     },
 
     "stop_loss_mode": {
@@ -366,8 +366,8 @@
       "default": "auto",
       "deferDefaultUntilConfigured": true,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Stop Loss",
+      "group_ja": "ロスカット"
     },
 
     "stop_loss_pips_head": {
@@ -388,8 +388,8 @@
           "divisive"
         ]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Stop Loss",
+      "group_ja": "ロスカット"
     },
 
     "stop_loss_pips_tail": {
@@ -404,8 +404,8 @@
         "field": "stop_loss_mode",
         "values": ["additive", "subtractive", "multiplicative", "divisive"]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Stop Loss",
+      "group_ja": "ロスカット"
     },
 
     "stop_loss_pips_flat_steps": {
@@ -420,8 +420,8 @@
         "field": "stop_loss_mode",
         "values": ["additive", "subtractive", "multiplicative", "divisive"]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Stop Loss",
+      "group_ja": "ロスカット"
     },
 
     "stop_loss_pips_gamma": {
@@ -436,8 +436,8 @@
         "field": "stop_loss_mode",
         "values": ["additive", "subtractive", "multiplicative", "divisive"]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Stop Loss",
+      "group_ja": "ロスカット"
     },
 
     "stop_loss_manual_pips": {
@@ -449,8 +449,8 @@
       "default": [],
       "items": { "type": "number", "minimum": 1 },
       "dependsOn": { "field": "stop_loss_mode", "values": ["manual"] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護",
+      "group": "Stop Loss",
+      "group_ja": "ロスカット",
       "linkedCount": { "field": "r_max", "offset": 0 },
       "itemLabel": "Slot R{index} stop loss (pips)",
       "itemLabel_ja": "R{index} ロスカット幅（pips）"
@@ -464,8 +464,8 @@
       "description_ja": "有効時（既定）、ロスカットされたスロットは価格が元の建玉価格に戻ったときに再建されます。無効にすると、ロスカットはそのスロットを完全に終了し、ロスカットのたびにグリッドが縮小します。",
       "default": true,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "complete_cycle_when_empty": {
@@ -480,8 +480,8 @@
         "values": [false],
         "and": [{ "field": "stop_loss_enabled", "values": [true] }]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "disable_loss_cut_after_rebuild": {
@@ -492,8 +492,8 @@
       "description_ja": "有効時、ロスカット後に再建されたポジションはそのまま保持され、再度ロスカットされません。",
       "default": false,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Stop Loss",
+      "group_ja": "ロスカット"
     },
 
     "rebuild_stop_loss_mode": {
@@ -524,8 +524,8 @@
           { "field": "disable_loss_cut_after_rebuild", "values": [false] }
         ]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_stop_loss_manual_pips": {
@@ -537,8 +537,8 @@
       "default": [],
       "items": { "type": "number", "minimum": 1 },
       "dependsOn": { "field": "rebuild_stop_loss_mode", "values": ["manual"] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護",
+      "group": "Rebuild",
+      "group_ja": "再建",
       "linkedCount": { "field": "r_max", "offset": 1 },
       "itemLabel": "Rebuild slot R{index} stop loss (pips)",
       "itemLabel_ja": "再建 R{index} ロスカット幅（pips）"
@@ -592,8 +592,8 @@
         "values": [true],
         "and": [{ "field": "stop_loss_enabled", "values": [true] }]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_take_profit_pips_head": {
@@ -608,8 +608,8 @@
         "field": "rebuild_take_profit_mode",
         "values": ["constant", "additive", "subtractive", "multiplicative", "divisive"]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_take_profit_pips_tail": {
@@ -624,8 +624,8 @@
         "field": "rebuild_take_profit_mode",
         "values": ["additive", "subtractive", "multiplicative", "divisive"]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_take_profit_pips_flat_steps": {
@@ -640,8 +640,8 @@
         "field": "rebuild_take_profit_mode",
         "values": ["additive", "subtractive", "multiplicative", "divisive"]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_take_profit_pips_gamma": {
@@ -656,8 +656,8 @@
         "field": "rebuild_take_profit_mode",
         "values": ["additive", "subtractive", "multiplicative", "divisive"]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_take_profit_manual_pips": {
@@ -669,11 +669,42 @@
       "default": [],
       "items": { "type": "number", "minimum": 0.1 },
       "dependsOn": { "field": "rebuild_take_profit_mode", "values": ["manual"] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護",
+      "group": "Rebuild",
+      "group_ja": "再建",
       "linkedCount": { "field": "r_max", "offset": 1 },
       "itemLabel": "Rebuild slot R{index} take profit (pips)",
       "itemLabel_ja": "再建 R{index} 利確幅（pips）"
+    },
+
+    "rebuild_take_profit_recovery_enabled": {
+      "type": "boolean",
+      "title": "Recover Stop-Loss Pips On Rebuild",
+      "title_ja": "再建TPでロスカット分を最低回収",
+      "description": "When enabled, the rebuilt position's take-profit is extended at least far enough to recover the pips lost by the immediately preceding stop-loss. The strategy uses the farther of the normal rebuilt TP and the recovery TP, then applies the Rebuild Exit Buffer once.",
+      "description_ja": "有効時、再建ポジションの利確価格を、直前のロスカットで失った pips を最低限回収できる位置まで延長します。通常の再建TPと回収TPのうち、より遠い方を使い、その後に再建時 決済価格バッファを一度だけ適用します。",
+      "default": false,
+      "dependsOn": {
+        "field": "rebuild_enabled",
+        "values": [true],
+        "and": [{ "field": "stop_loss_enabled", "values": [true] }]
+      },
+      "group": "Rebuild",
+      "group_ja": "再建"
+    },
+
+    "rebuild_take_profit_recovery_mode": {
+      "type": "string",
+      "title": "Rebuild Recovery Mode",
+      "title_ja": "再建回収モード",
+      "description": "How to measure the minimum recovery target. Currently only pips is supported.",
+      "description_ja": "最低回収目標の測定方法です。現在は pips のみ対応しています。",
+      "enum": ["pips"],
+      "enum_labels": { "pips": "Pips" },
+      "enum_labels_ja": { "pips": "pips" },
+      "default": "pips",
+      "dependsOn": { "field": "rebuild_take_profit_recovery_enabled", "values": [true] },
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "grid_order_validation_enabled": {
@@ -687,8 +718,8 @@
         "field": "rebuild_take_profit_mode",
         "values": ["same", "constant", "additive", "subtractive", "multiplicative", "divisive"]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "preserve_highest_retracement_enabled": {
@@ -699,8 +730,8 @@
       "description_ja": "有効時、各レイヤーで現在もっとも高いRスロットは、設定した閾値以上であればロスカットを無視できます。",
       "default": false,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Stop Loss",
+      "group_ja": "ロスカット"
     },
 
     "preserve_highest_r_from": {
@@ -716,8 +747,8 @@
         "values": [true],
         "and": [{ "field": "stop_loss_enabled", "values": [true] }]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Stop Loss",
+      "group_ja": "ロスカット"
     },
 
     "reseed_on_all_pending": {
@@ -728,8 +759,8 @@
       "description_ja": "有効時、ある方向のすべてのサイクルでライブポジションがゼロになった場合（少なくとも1つのスロットがロスカット後のリビルド待ちだが、未使用スロットが残っている場合も含む）、新しいサイクルを作成します。「グリッド飽和時に新規サイクル作成」とは排他的です。ロスカットが有効である必要があります。",
       "default": false,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "reseed_on_grid_exhausted": {
@@ -740,24 +771,24 @@
       "description_ja": "有効時、ある方向で f_max までの全レイヤーが作成済みで、かつ全レイヤーの全スロットがリビルド待ち状態になった場合にのみ新しいサイクルを作成します。「保留発生時に新規サイクル作成」より厳格で、設定済みの全レイヤーが完全に使い切られるまで新サイクルを作成しません。「保留発生時に新規サイクル作成」とは排他的です。ロスカットが有効である必要があります。",
       "default": false,
       "dependsOn": { "field": "stop_loss_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_price_adjustment_enabled": {
       "type": "boolean",
       "title": "Adjust Rebuild Prices",
       "title_ja": "再建時の注文・決済価格を調整",
-      "description": "When enabled, on stop-loss rebuild the rebuild's take-profit is tightened by the deterministic price gap between the original entry price and the stop-loss exit price (including the bid/ask spread). This makes the rebuild close earlier to offset the prior stop-loss loss instead of leaving the slot's lifecycle P/L negative. Requires stop-loss to be enabled.",
-      "description_ja": "有効時、ロスカット後の再建では、元の建玉価格とロスカット決済価格の差（Bid/Askスプレッドを含む想定可能なずれ）の分だけ再建ポジションの利確価格を手前に調整します。これにより再建ポジションが早めに決済され、直前のロスカット損失をなるべく相殺します。ロスカットが有効である必要があります。",
+      "description": "When enabled, optional entry and exit buffers can shift the rebuild trigger and inherited take-profit in the favourable direction while preserving grid ordering. Use Recover Stop-Loss Pips On Rebuild when the rebuild TP must cover the prior stop-loss loss.",
+      "description_ja": "有効時、任意の注文価格・決済価格バッファにより、再建の発動価格と引き継いだ利確価格を利益方向へ調整します。グリッド順序は維持されます。直前のロスカット損失を再建TPで回収したい場合は「再建TPでロスカット分を最低回収」を使います。",
       "default": true,
       "dependsOn": {
         "field": "rebuild_take_profit_mode",
         "values": ["same"],
         "and": [{ "field": "stop_loss_enabled", "values": [true] }]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_entry_price_buffer_pips": {
@@ -772,24 +803,24 @@
         "field": "rebuild_price_adjustment_enabled",
         "values": [true]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "rebuild_exit_price_buffer_pips": {
       "type": "number",
       "title": "Rebuild Exit Buffer (pips)",
       "title_ja": "再建時 決済価格バッファ（pips）",
-      "description": "Additional safety buffer (in pips) applied to the rebuild take-profit in the favourable direction on top of the stop-loss offset. The rebuild will close this many pips earlier than strictly break-even to absorb unavoidable slippage. 0 means no buffer.",
-      "description_ja": "再建ポジションの利確価格に対して、ロスカット損失の相殺分に加えて利益方向へ追加する安全バッファ（pips）。完全な損益分岐点よりこの pips 分だけ早く決済することで、スリッページによるズレを吸収します。0 はバッファなし。",
+      "description": "Additional safety buffer (in pips) applied once to the final rebuild take-profit in the favourable direction. When stop-loss recovery is enabled, this buffer is added after choosing the farther of the normal rebuilt TP and recovery TP. 0 means no buffer.",
+      "description_ja": "最終的な再建ポジションの利確価格に対して、利益方向へ一度だけ追加する安全バッファ（pips）です。ロスカット回収が有効な場合は、通常の再建TPと回収TPのうち遠い方を選んだ後に適用されます。0 はバッファなし。",
       "default": 0,
       "minimum": 0,
       "dependsOn": {
         "field": "rebuild_price_adjustment_enabled",
         "values": [true]
       },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
+      "group": "Rebuild",
+      "group_ja": "再建"
     },
 
     "shrink_enabled": {

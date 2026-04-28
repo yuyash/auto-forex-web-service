@@ -51,6 +51,8 @@ class RebuildConfig:
     take_profit_pips_flat_steps: int
     take_profit_pips_gamma: Decimal
     take_profit_manual_pips: list[Decimal]
+    take_profit_recovery_enabled: bool
+    take_profit_recovery_mode: str
     price_adjustment_enabled: bool
     entry_price_buffer_pips: Decimal
     exit_price_buffer_pips: Decimal
@@ -127,6 +129,8 @@ class SnowballStrategyConfig:
     rebuild_take_profit_pips_flat_steps: int
     rebuild_take_profit_pips_gamma: Decimal
     rebuild_take_profit_manual_pips: list[Decimal]
+    rebuild_take_profit_recovery_enabled: bool
+    rebuild_take_profit_recovery_mode: str
     grid_order_validation_enabled: bool
     preserve_highest_retracement_enabled: bool
     preserve_highest_r_from: int
@@ -217,6 +221,8 @@ class SnowballStrategyConfig:
             take_profit_pips_flat_steps=self.rebuild_take_profit_pips_flat_steps,
             take_profit_pips_gamma=self.rebuild_take_profit_pips_gamma,
             take_profit_manual_pips=self.rebuild_take_profit_manual_pips,
+            take_profit_recovery_enabled=self.rebuild_take_profit_recovery_enabled,
+            take_profit_recovery_mode=self.rebuild_take_profit_recovery_mode,
             price_adjustment_enabled=self.rebuild_price_adjustment_enabled,
             entry_price_buffer_pips=self.rebuild_entry_price_buffer_pips,
             exit_price_buffer_pips=self.rebuild_exit_price_buffer_pips,
@@ -330,6 +336,12 @@ class SnowballStrategyConfig:
                 raw.get("rebuild_take_profit_pips_gamma", "1.4"), "1.4"
             ),
             rebuild_take_profit_manual_pips=rebuild_take_profit_manual_pips,
+            rebuild_take_profit_recovery_enabled=_parse_bool(
+                raw.get("rebuild_take_profit_recovery_enabled", False), False
+            ),
+            rebuild_take_profit_recovery_mode=_parse_str(
+                raw.get("rebuild_take_profit_recovery_mode"), "pips"
+            ),
             grid_order_validation_enabled=grid_order_validation_enabled,
             preserve_highest_retracement_enabled=_parse_bool(
                 raw.get("preserve_highest_retracement_enabled", False), False
@@ -366,6 +378,12 @@ class SnowballStrategyConfig:
             raw.get("preserve_highest_retracement_enabled", False), False
         ):
             missing.remove("preserve_highest_r_from")
+        for key in (
+            "rebuild_take_profit_recovery_enabled",
+            "rebuild_take_profit_recovery_mode",
+        ):
+            if key in missing:
+                missing.remove(key)
         if missing:
             raise ValueError(f"Snowball config is missing required field(s): {', '.join(missing)}")
 
@@ -425,6 +443,8 @@ class SnowballStrategyConfig:
             "rebuild_take_profit_manual_pips": [
                 str(v) for v in self.rebuild_take_profit_manual_pips
             ],
+            "rebuild_take_profit_recovery_enabled": self.rebuild_take_profit_recovery_enabled,
+            "rebuild_take_profit_recovery_mode": self.rebuild_take_profit_recovery_mode,
             "grid_order_validation_enabled": self.grid_order_validation_enabled,
             "preserve_highest_retracement_enabled": self.preserve_highest_retracement_enabled,
             "preserve_highest_r_from": self.preserve_highest_r_from,
@@ -545,6 +565,8 @@ class SnowballStrategyConfig:
                 )
             if any(v <= 0 for v in self.rebuild_take_profit_manual_pips):
                 raise ValueError("All rebuild_take_profit_manual_pips values must be > 0")
+        if self.rebuild_take_profit_recovery_mode != "pips":
+            raise ValueError("rebuild_take_profit_recovery_mode must be 'pips'")
         if self.rebuild_take_profit_mode != "same" and self.rebuild_price_adjustment_enabled:
             raise ValueError(
                 "rebuild_price_adjustment_enabled must be false when "

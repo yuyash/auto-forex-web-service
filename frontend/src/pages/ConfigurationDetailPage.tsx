@@ -22,6 +22,7 @@ import { useStrategies, getStrategyDisplayName } from '../hooks/useStrategies';
 import { STRATEGY_CONFIG_SCHEMAS } from '../components/configurations/strategyConfigSchemas';
 import type { ConfigProperty, ConfigSchema } from '../types/strategy';
 import { orderConfigEntries } from '../utils/configFieldOrder';
+import { isParameterVisible } from '../utils/strategySchemaDependsOn';
 
 /** Keys excluded from the detail view (not user-facing). */
 const HIDDEN_KEYS = new Set(['pip_size']);
@@ -130,8 +131,9 @@ export default function ConfigurationDetailPage() {
     if (schema?.properties) {
       Object.entries(schema.properties).forEach(([key, prop]) => {
         if (HIDDEN_KEYS.has(key)) return;
+        if (!isParameterVisible(key, params, schema.properties)) return;
         // Use saved value, or fall back to schema defaults so details and
-        // snapshots always expose every configured field.
+        // snapshots expose every active configured field.
         const value =
           key in params
             ? params[key]

@@ -258,6 +258,7 @@ class StopLossClosedEntry:
     # currency.
     lifecycle_realized_pnl: Decimal = field(default_factory=lambda: Decimal("0"))
     lifecycle_stop_loss_count: int = 0
+    stop_loss_loss_pips: Decimal = field(default_factory=lambda: Decimal("0"))
 
     def to_dict(self) -> dict[str, Any]:
         result = {
@@ -274,6 +275,7 @@ class StopLossClosedEntry:
             "cycle_id": self.cycle_id,
             "lifecycle_realized_pnl": str(self.lifecycle_realized_pnl),
             "lifecycle_stop_loss_count": self.lifecycle_stop_loss_count,
+            "stop_loss_loss_pips": str(self.stop_loss_loss_pips),
         }
         if self.position_id is not None:
             result["position_id"] = self.position_id
@@ -313,4 +315,5 @@ class StopLossClosedEntry:
                 require(d, "lifecycle_stop_loss_count"),
                 field_name="lifecycle_stop_loss_count",
             ),
+            stop_loss_loss_pips=optional_decimal(d, "stop_loss_loss_pips") or Decimal("0"),
         )
