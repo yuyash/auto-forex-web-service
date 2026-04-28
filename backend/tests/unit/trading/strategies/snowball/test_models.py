@@ -61,7 +61,6 @@ class TestSnowballStrategyConfig:
         assert cfg.rebuild_take_profit_manual_pips == []
         assert cfg.rebuild_take_profit_recovery_enabled is False
         assert cfg.rebuild_take_profit_recovery_mode == "pips"
-        assert cfg.rebuild_take_profit_recovery_extra_pips == Decimal("0")
         assert cfg.grid_order_validation_enabled is True
         assert cfg.preserve_highest_retracement_enabled is False
         assert cfg.preserve_highest_r_from == 0
@@ -109,7 +108,6 @@ class TestSnowballStrategyConfig:
                 "rebuild_take_profit_manual_pips": ["21", "22", "23", "24", "25", "26"],
                 "rebuild_take_profit_recovery_enabled": True,
                 "rebuild_take_profit_recovery_mode": "pips",
-                "rebuild_take_profit_recovery_extra_pips": "1.5",
                 "rebuild_price_adjustment_enabled": True,
                 "grid_order_validation_enabled": True,
                 "preserve_highest_retracement_enabled": True,
@@ -141,7 +139,6 @@ class TestSnowballStrategyConfig:
         ]
         assert cfg2.rebuild_take_profit_recovery_enabled is True
         assert cfg2.rebuild_take_profit_recovery_mode == "pips"
-        assert cfg2.rebuild_take_profit_recovery_extra_pips == Decimal("1.5")
         assert cfg2.rebuild_price_adjustment_enabled is False
         assert cfg2.grid_order_validation_enabled is True
         assert cfg2.preserve_highest_retracement_enabled is True
@@ -224,12 +221,6 @@ class TestSnowballStrategyConfig:
                 {"rebuild_take_profit_recovery_mode": "money"}
             ).validate()
 
-    def test_validate_rejects_negative_rebuild_recovery_extra_pips(self):
-        with pytest.raises(ValueError, match="rebuild_take_profit_recovery_extra_pips"):
-            SnowballStrategyConfig.from_dict(
-                {"rebuild_take_profit_recovery_extra_pips": "-0.1"}
-            ).validate()
-
     def test_validate_rejects_preserve_highest_r_from_above_r_max(self):
         with pytest.raises(ValueError, match="preserve_highest_r_from"):
             SnowballStrategyConfig.from_dict(
@@ -275,13 +266,11 @@ class TestSnowballStrategyConfig:
         raw = SnowballStrategyConfig.from_dict({}).to_dict()
         raw.pop("rebuild_take_profit_recovery_enabled")
         raw.pop("rebuild_take_profit_recovery_mode")
-        raw.pop("rebuild_take_profit_recovery_extra_pips")
 
         cfg = SnowballStrategyConfig.strict_from_dict(raw)
 
         assert cfg.rebuild_take_profit_recovery_enabled is False
         assert cfg.rebuild_take_profit_recovery_mode == "pips"
-        assert cfg.rebuild_take_profit_recovery_extra_pips == Decimal("0")
 
 
 class TestEntry:

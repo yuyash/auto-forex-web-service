@@ -680,8 +680,8 @@
       "type": "boolean",
       "title": "Recover Stop-Loss Pips On Rebuild",
       "title_ja": "再建TPでロスカット分を最低回収",
-      "description": "When enabled, the rebuilt position's take-profit is extended at least far enough to recover the pips lost by the immediately preceding stop-loss. The strategy uses the farther of the normal rebuilt TP and the recovery TP.",
-      "description_ja": "有効時、再建ポジションの利確価格を、直前のロスカットで失った pips を最低限回収できる位置まで延長します。通常の再建TPと回収TPのうち、より遠い方を使います。",
+      "description": "When enabled, the rebuilt position's take-profit is extended at least far enough to recover the pips lost by the immediately preceding stop-loss. The strategy uses the farther of the normal rebuilt TP and the recovery TP, then applies the Rebuild Exit Buffer once.",
+      "description_ja": "有効時、再建ポジションの利確価格を、直前のロスカットで失った pips を最低限回収できる位置まで延長します。通常の再建TPと回収TPのうち、より遠い方を使い、その後に再建時 決済価格バッファを一度だけ適用します。",
       "default": false,
       "dependsOn": {
         "field": "rebuild_enabled",
@@ -702,19 +702,6 @@
       "enum_labels": { "pips": "Pips" },
       "enum_labels_ja": { "pips": "pips" },
       "default": "pips",
-      "dependsOn": { "field": "rebuild_take_profit_recovery_enabled", "values": [true] },
-      "group": "Margin Protection",
-      "group_ja": "証拠金保護"
-    },
-
-    "rebuild_take_profit_recovery_extra_pips": {
-      "type": "number",
-      "title": "Rebuild Recovery Extra (pips)",
-      "title_ja": "再建回収 追加pips",
-      "description": "Additional pips added to the prior stop-loss loss when computing the minimum rebuilt take-profit. 0 means recover only the loss-cut pips.",
-      "description_ja": "最低再建TPを計算するとき、直前のロスカット損失 pips に追加する pips です。0 の場合はロスカット分のみを回収します。",
-      "default": 0,
-      "minimum": 0,
       "dependsOn": { "field": "rebuild_take_profit_recovery_enabled", "values": [true] },
       "group": "Margin Protection",
       "group_ja": "証拠金保護"
@@ -824,8 +811,8 @@
       "type": "number",
       "title": "Rebuild Exit Buffer (pips)",
       "title_ja": "再建時 決済価格バッファ（pips）",
-      "description": "Additional safety buffer (in pips) applied to the rebuild take-profit in the favourable direction on top of the stop-loss offset. The rebuild will close this many pips earlier than strictly break-even to absorb unavoidable slippage. 0 means no buffer.",
-      "description_ja": "再建ポジションの利確価格に対して、ロスカット損失の相殺分に加えて利益方向へ追加する安全バッファ（pips）。完全な損益分岐点よりこの pips 分だけ早く決済することで、スリッページによるズレを吸収します。0 はバッファなし。",
+      "description": "Additional safety buffer (in pips) applied once to the final rebuild take-profit in the favourable direction. When stop-loss recovery is enabled, this buffer is added after choosing the farther of the normal rebuilt TP and recovery TP. 0 means no buffer.",
+      "description_ja": "最終的な再建ポジションの利確価格に対して、利益方向へ一度だけ追加する安全バッファ（pips）です。ロスカット回収が有効な場合は、通常の再建TPと回収TPのうち遠い方を選んだ後に適用されます。0 はバッファなし。",
       "default": 0,
       "minimum": 0,
       "dependsOn": {

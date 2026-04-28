@@ -653,7 +653,6 @@ class TestSnowballRebuildTakeProfitModes:
                 "rebuild_take_profit_mode": "same",
                 "rebuild_take_profit_recovery_enabled": True,
                 "rebuild_take_profit_recovery_mode": "pips",
-                "rebuild_take_profit_recovery_extra_pips": "0",
             }
         )
 
@@ -676,7 +675,6 @@ class TestSnowballRebuildTakeProfitModes:
                 "stop_loss_enabled": True,
                 "rebuild_take_profit_mode": "same",
                 "rebuild_take_profit_recovery_enabled": True,
-                "rebuild_take_profit_recovery_extra_pips": "2",
             }
         )
 

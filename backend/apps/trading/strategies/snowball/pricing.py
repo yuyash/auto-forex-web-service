@@ -36,7 +36,7 @@ def rebuild_take_profit_price(
     if not config.rebuild_take_profit_recovery_enabled:
         return price
 
-    recovery_pips = pending.stop_loss_loss_pips + config.rebuild_take_profit_recovery_extra_pips
+    recovery_pips = pending.stop_loss_loss_pips
     if recovery_pips <= 0:
         return price
 
