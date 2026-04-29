@@ -48,6 +48,7 @@ interface UseTaskPositionsOptions {
   rangeFrom?: string;
   rangeTo?: string;
   includeTradeIds?: boolean;
+  ordering?: string;
   /** Filter positions by cycle ID (via related trades). */
   cycleId?: string;
   /** Filter positions by position ID prefix (e.g. first 8 chars of UUID). */
@@ -89,6 +90,7 @@ export const useTaskPositions = ({
   rangeFrom,
   rangeTo,
   includeTradeIds = false,
+  ordering = '-entry_time',
   cycleId,
   positionId,
   since,
@@ -109,6 +111,7 @@ export const useTaskPositions = ({
         rangeFrom ?? '',
         rangeTo ?? '',
         includeTradeIds,
+        ordering,
         cycleId ?? '',
         positionId ?? '',
         since ?? '',
@@ -124,6 +127,7 @@ export const useTaskPositions = ({
       rangeFrom,
       rangeTo,
       includeTradeIds,
+      ordering,
       cycleId,
       positionId,
       since,
@@ -138,6 +142,7 @@ export const useTaskPositions = ({
     if (rangeFrom) params.range_from = rangeFrom;
     if (rangeTo) params.range_to = rangeTo;
     if (includeTradeIds) params.include_trade_ids = 'true';
+    if (ordering) params.ordering = ordering;
     if (cycleId) params.cycle_id = cycleId;
     if (positionId) params.position_id = positionId;
     return params;
@@ -148,6 +153,7 @@ export const useTaskPositions = ({
     rangeFrom,
     rangeTo,
     includeTradeIds,
+    ordering,
     cycleId,
     positionId,
   ]);

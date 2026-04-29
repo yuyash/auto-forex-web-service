@@ -11,6 +11,7 @@
   "accounts": {
     "title": "OANDAアカウント",
     "placeholder": "アカウント管理は今後のタスクで実装されます",
+    "searchAccounts": "アカウントを検索...",
     "addAccount": "アカウントを追加",
     "editAccount": "アカウントを編集",
     "deleteAccount": "アカウントを削除",

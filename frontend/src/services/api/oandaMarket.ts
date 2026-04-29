@@ -60,6 +60,11 @@ export const oandaMarketApi = {
     status?: string;
     page?: number;
     page_size?: number;
+    ordering?: string;
+    range_from?: string;
+    range_to?: string;
+    timestamp_from?: string;
+    timestamp_to?: string;
   }) => {
     return withRetry(() =>
       api.get<PaginatedResponse<OandaPosition>>(
@@ -90,6 +95,11 @@ export const oandaMarketApi = {
     status?: string;
     page?: number;
     page_size?: number;
+    ordering?: string;
+    timestamp_from?: string;
+    timestamp_to?: string;
+    create_time_from?: string;
+    create_time_to?: string;
   }) => {
     return withRetry(() =>
       api.get<PaginatedResponse<OandaOrder>>(

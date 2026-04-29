@@ -90,6 +90,122 @@ export interface StrategyCyclesResponse {
   last_tick_timestamp: string | null;
 }
 
+export interface StrategySnapshotCard {
+  id: string;
+  label_key?: string | null;
+  value: unknown;
+}
+
+export interface StrategySnapshotResponse {
+  execution_id: string | null;
+  strategy_type: string;
+  instrument?: string | null;
+  timestamp?: string | null;
+  snapshot: {
+    status?: string | null;
+    cards: StrategySnapshotCard[];
+    state: Record<string, unknown>;
+  };
+}
+
+export interface StrategyHistoryEntry {
+  id: string;
+  timestamp?: string | null;
+  t?: number | null;
+  source: string;
+  category: string;
+  action?: string | null;
+  label?: string | null;
+  severity?: string | null;
+  details: Record<string, unknown>;
+}
+
+export interface StrategyHistoryResponse {
+  execution_id: string | null;
+  strategy_type: string;
+  instrument?: string | null;
+  count: number;
+  next: string | null;
+  previous: string | null;
+  page: number;
+  page_size: number;
+  ordering: string;
+  granularity: string;
+  results: StrategyHistoryEntry[];
+}
+
+export interface StrategyMetricsResponse {
+  execution_id: string | null;
+  strategy_type: string;
+  instrument?: string | null;
+  count: number;
+  next: string | null;
+  previous: string | null;
+  page: number;
+  page_size: number;
+  ordering: string;
+  granularity: string;
+  data_source: string;
+  resume_cursor_timestamp: string | null;
+  consistency_warnings: Array<Record<string, unknown>>;
+  ohlc_layers?: StrategyOhlcLayers | null;
+  results: Array<{
+    t: number;
+    timestamp?: string;
+    metrics: Record<string, unknown>;
+  }>;
+}
+
+export type StrategyOhlcLineStyle =
+  | 'solid'
+  | 'dashed'
+  | 'dotted'
+  | 'large_dashed'
+  | 'sparse_dotted'
+  | number;
+
+export interface StrategyOhlcPoint {
+  time: string | number;
+  value: number | string;
+}
+
+export interface StrategyOhlcPriceSeries {
+  id: string;
+  label?: string | null;
+  label_key?: string | null;
+  color: string;
+  line_style?: StrategyOhlcLineStyle;
+  points: StrategyOhlcPoint[];
+}
+
+export interface StrategyOhlcBandPoint {
+  time: string | number;
+  from: number | string;
+  to: number | string;
+}
+
+export interface StrategyOhlcPriceBandSeries {
+  id: string;
+  label?: string | null;
+  label_key?: string | null;
+  color: string;
+  points: StrategyOhlcBandPoint[];
+}
+
+export interface StrategyOhlcLayers {
+  price_series: StrategyOhlcPriceSeries[];
+  price_band_series: StrategyOhlcPriceBandSeries[];
+  pagination?: {
+    count: number;
+    page: number;
+    page_size: number;
+    ordering: string;
+    granularity?: string | null;
+    since?: string | null;
+    until?: string | null;
+  };
+}
+
 export interface AdaptiveNetMetricSignal {
   name: string;
   direction_score: string;
@@ -131,6 +247,18 @@ export interface NetGridTrendRelationPoint {
   trend_score_pips?: string | null;
   net_units?: number | null;
   relation?: 'aligned' | 'counter' | 'neutral' | string | null;
+}
+
+export interface NetGridLevelHistoryPoint {
+  timestamp?: string | null;
+  current_net_units?: number | null;
+  current_display_price?: string | null;
+  average_entry_price?: string | null;
+  net_take_profit_price?: string | null;
+  profit_trailing_stop_price?: string | null;
+  last_grid_price?: string | null;
+  next_grid_price?: string | null;
+  risk_exit_price?: string | null;
 }
 
 export interface NetGridStrategyState {
@@ -182,6 +310,7 @@ export interface NetGridStrategyState {
   latest_decision?: NetGridDecision | null;
   decision_history?: NetGridDecision[];
   trend_relation_history?: NetGridTrendRelationPoint[];
+  level_history?: NetGridLevelHistoryPoint[];
   latest_position_transition?: NetGridLedgerEntry | null;
   pending_execution?: NetGridDecision | null;
   last_bid?: string | null;

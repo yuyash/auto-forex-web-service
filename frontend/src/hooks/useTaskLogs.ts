@@ -30,6 +30,7 @@ interface UseTaskLogsOptions {
   positionId?: string;
   timestampFrom?: string;
   timestampTo?: string;
+  ordering?: string;
   page?: number;
   pageSize?: number;
   enableRealTimeUpdates?: boolean;
@@ -65,12 +66,13 @@ export const useTaskLogs = ({
   positionId,
   timestampFrom,
   timestampTo,
+  ordering = '-timestamp',
   page = 1,
   pageSize = 100,
   enableRealTimeUpdates = false,
   refreshInterval = 5_000,
 }: UseTaskLogsOptions): UseTaskLogsResult => {
-  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${(level || []).join(',')}-${(component || []).join(',')}-${positionId ?? ''}-${timestampFrom ?? ''}-${timestampTo ?? ''}-${page}-${pageSize}`;
+  const paramsKey = `${taskId}-${taskType}-${executionRunId ?? ''}-${(level || []).join(',')}-${(component || []).join(',')}-${positionId ?? ''}-${timestampFrom ?? ''}-${timestampTo ?? ''}-${ordering}-${page}-${pageSize}`;
   const {
     items: logs,
     totalCount,
@@ -102,6 +104,7 @@ export const useTaskLogs = ({
       if (positionId) params.position_id = positionId;
       if (timestampFrom) params.timestamp_from = timestampFrom;
       if (timestampTo) params.timestamp_to = timestampTo;
+      if (ordering) params.ordering = ordering;
       return params;
     },
     getLatestCursor: getLatestTimestamp,

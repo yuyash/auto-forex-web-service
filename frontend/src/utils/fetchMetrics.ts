@@ -64,6 +64,7 @@ export async function fetchMetrics(opts: {
   until?: string;
   executionRunId?: string;
   interval?: number;
+  granularity?: string;
   page?: number;
   pageSize?: number;
 }): Promise<MetricsPage> {
@@ -74,13 +75,15 @@ export async function fetchMetrics(opts: {
   if (opts.until) searchParams.set('until', opts.until);
   if (opts.executionRunId != null)
     searchParams.set('execution_id', String(opts.executionRunId));
-  if (opts.interval && opts.interval > 1)
-    searchParams.set('interval', String(opts.interval));
+  const granularity =
+    opts.granularity ??
+    (opts.interval && opts.interval > 1 ? `M${opts.interval}` : undefined);
+  if (granularity) searchParams.set('granularity', granularity);
   if (opts.page) searchParams.set('page', String(opts.page));
   if (opts.pageSize) searchParams.set('page_size', String(opts.pageSize));
 
   const body = await api.get<Partial<MetricsPage>>(
-    `${prefix}/${opts.taskId}/metrics/`,
+    `${prefix}/${opts.taskId}/strategy/metrics/`,
     Object.fromEntries(searchParams.entries())
   );
 
@@ -110,14 +113,18 @@ export async function fetchLatestMetrics(opts: {
   taskType: TaskType;
   executionRunId?: string;
 }): Promise<LatestMetricsResponse> {
-  const query =
-    opts.executionRunId != null
-      ? { execution_id: String(opts.executionRunId) }
-      : undefined;
-  const body = await api.get<Partial<LatestMetricsResponse>>(
-    `${buildTaskPrefix(opts.taskType)}/${opts.taskId}/latest-metrics/`,
-    query
+  const body = await api.get<Partial<MetricsPage>>(
+    `${buildTaskPrefix(opts.taskType)}/${opts.taskId}/strategy/metrics/`,
+    {
+      ...(opts.executionRunId != null
+        ? { execution_id: String(opts.executionRunId) }
+        : {}),
+      page: 1,
+      page_size: 1,
+      ordering: '-timestamp',
+    }
   );
+  const first = (body.results ?? [])[0];
 
   return {
     data_source:
@@ -129,7 +136,7 @@ export async function fetchLatestMetrics(opts: {
     consistency_warnings: Array.isArray(body.consistency_warnings)
       ? (body.consistency_warnings as Array<Record<string, unknown>>)
       : [],
-    result: body.result ? normalizeMetricPoint(body.result) : null,
+    result: first ? normalizeMetricPoint(first) : null,
   };
 }
 
@@ -140,6 +147,7 @@ export async function fetchPaginatedMetrics(opts: {
   until?: string;
   executionRunId?: string;
   interval?: number;
+  granularity?: string;
   pageSize?: number;
   /** Maximum number of pages to fetch (default: unlimited). */
   maxPages?: number;

@@ -5,11 +5,24 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django.db import models
-from django.db.models import Q
+from django.db.models import (
+    Case,
+    CharField,
+    DecimalField,
+    Exists,
+    ExpressionWrapper,
+    F,
+    OuterRef,
+    Q,
+    Subquery,
+    Value,
+    When,
+)
 from django.db.models.fields.json import KeyTextTransform
-from django.db.models.functions import Cast
+from django.db.models.functions import Abs, Cast
 from rest_framework.request import Request
 
+from apps.common.querying import OrderingConfig, apply_queryset_ordering
 from apps.trading.enums import EventType, LogLevel
 from apps.trading.models import TradingEvent
 from apps.trading.models.logs import TaskLog
@@ -24,6 +37,116 @@ from apps.trading.views.query_params import (
     OrdersQueryParams,
     PositionQuery,
     TradesQueryParams,
+)
+
+PROTECTION_CLOSE_METHODS = frozenset(
+    {"volatility_lock", "margin_protection", "shrink", "stop_loss"}
+)
+
+LOG_ORDERING = OrderingConfig(
+    fields={
+        "id": "id",
+        "timestamp": "timestamp",
+        "level": "level",
+        "component": "component",
+        "message": "message",
+    },
+    default="-timestamp",
+)
+EVENT_ORDERING = OrderingConfig(
+    fields={
+        "id": "id",
+        "created_at": "created_at",
+        "event_timestamp": "event_timestamp",
+        "event_type": "event_type",
+        "severity": "severity",
+        "description": "description",
+        "sequence_number": "sequence_number",
+        "instrument": "instrument",
+        "direction": "direction",
+        "close_reason": "close_reason",
+        "root_entry_id": "root_entry_id",
+        "position_id": "position_id",
+    },
+    default="-created_at",
+)
+TRADE_ORDERING = OrderingConfig(
+    fields={
+        "id": "id",
+        "timestamp": "timestamp",
+        "instrument": "instrument",
+        "direction": "direction",
+        "units": "units",
+        "price": "price",
+        "execution_method": "execution_method",
+        "layer_index": "layer_index",
+        "retracement_count": "retracement_count",
+        "description": "description",
+        "position_id": "position_id",
+        "order_id": "order_id",
+        "oanda_trade_id": "oanda_trade_id",
+        "cycle_id": "cycle_id",
+        "stop_loss_price": "position__stop_loss_price",
+        "replayed_at": "replayed_at",
+        "updated_at": "updated_at",
+        "is_rebuild": "is_rebuild",
+        "sequence_number": "sequence_number",
+    },
+    default="-timestamp",
+    tie_breakers=("sequence_number", "id"),
+    legacy_direction_field="timestamp",
+)
+POSITION_ORDERING = OrderingConfig(
+    fields={
+        "id": "id",
+        "instrument": "instrument",
+        "direction": "direction",
+        "units": "units",
+        "entry_price": "entry_price",
+        "entry_time": "entry_time",
+        "exit_price": "exit_price",
+        "exit_time": "exit_time",
+        "is_open": "is_open",
+        "layer_index": "layer_index",
+        "retracement_count": "retracement_count",
+        "planned_exit_price": "planned_exit_price",
+        "planned_exit_price_formula": "planned_exit_price_formula",
+        "adverse_pips": "adverse_pips",
+        "stop_loss_price": "stop_loss_price",
+        "is_rebuild": "is_rebuild",
+        "oanda_trade_id": "oanda_trade_id",
+        "replayed_at": "replayed_at",
+        "updated_at": "updated_at",
+        "unrealized_pnl": "unrealized_pnl",
+        "realized_pnl": "_realized_pnl",
+        "pnl": "_pnl",
+        "pips": "_pips",
+        "close_reason": "_close_reason",
+    },
+    default="-entry_time",
+)
+ORDER_ORDERING = OrderingConfig(
+    fields={
+        "id": "id",
+        "submitted_at": "submitted_at",
+        "instrument": "instrument",
+        "order_type": "order_type",
+        "direction": "direction",
+        "units": "units",
+        "status": "status",
+        "broker_order_id": "broker_order_id",
+        "oanda_trade_id": "oanda_trade_id",
+        "requested_price": "requested_price",
+        "fill_price": "fill_price",
+        "filled_at": "filled_at",
+        "cancelled_at": "cancelled_at",
+        "stop_loss": "stop_loss",
+        "error_message": "error_message",
+        "replayed_at": "replayed_at",
+        "updated_at": "updated_at",
+        "is_dry_run": "is_dry_run",
+    },
+    default="-submitted_at",
 )
 
 
@@ -64,7 +187,7 @@ class TaskActivityQueryService:
             queryset = queryset.filter(timestamp__lte=query.timestamp_range.end)
         if query.execution.since:
             queryset = queryset.filter(timestamp__gt=query.execution.since)
-        return queryset.order_by("-timestamp")
+        return apply_queryset_ordering(queryset, query.ordering, LOG_ORDERING)
 
     @staticmethod
     def log_components(*, request: Request, task, task_type_label: str) -> list[str]:
@@ -92,7 +215,7 @@ class TaskActivityQueryService:
             task_type=task_type_label,
             task_id=task.pk,
             execution_id=query.execution.execution_id,
-        ).order_by("-created_at")
+        )
         if query.event_type:
             queryset = queryset.filter(event_type=query.event_type)
         if query.severity:
@@ -113,7 +236,7 @@ class TaskActivityQueryService:
             queryset = queryset.filter(created_at__gte=query.created_range.start)
         if query.created_range.end:
             queryset = queryset.filter(created_at__lte=query.created_range.end)
-        return queryset
+        return apply_queryset_ordering(queryset, query.ordering, EVENT_ORDERING)
 
     @staticmethod
     def orders_queryset(*, request: Request, task, task_type_label: str):
@@ -127,7 +250,7 @@ class TaskActivityQueryService:
             task_type=task_type_label,
             task_id=task.pk,
             execution_id=query.execution.execution_id,
-        ).order_by("-submitted_at")
+        )
         if query.status:
             queryset = queryset.filter(status=query.status)
         if query.order_type:
@@ -140,7 +263,11 @@ class TaskActivityQueryService:
             ).filter(_id_str__istartswith=query.order_id)
         if query.execution.since:
             queryset = queryset.filter(updated_at__gt=query.execution.since)
-        return queryset
+        if query.timestamp_range.start:
+            queryset = queryset.filter(submitted_at__gte=query.timestamp_range.start)
+        if query.timestamp_range.end:
+            queryset = queryset.filter(submitted_at__lte=query.timestamp_range.end)
+        return apply_queryset_ordering(queryset, query.ordering, ORDER_ORDERING)
 
     def trades(
         self, *, request: Request, task, task_type_label: str
@@ -175,10 +302,7 @@ class TaskActivityQueryService:
                 _id_str=Cast("id", output_field=models.CharField())
             ).filter(_id_str__istartswith=query.trade_id)
 
-        ordering = ("-timestamp", "-sequence_number")
-        if query.ordering == "asc":
-            ordering = ("timestamp", "sequence_number")
-        queryset = queryset.order_by(*ordering)
+        queryset = apply_queryset_ordering(queryset, query.ordering, TRADE_ORDERING)
 
         total_count = queryset.count()
         page = query.execution.pagination.page
@@ -215,15 +339,11 @@ class TaskActivityQueryService:
             default_page_size=TradePositionPagination.page_size,
             max_page_size=TradePositionPagination.max_page_size,
         )
-        queryset = (
-            Position.objects.filter(
-                task_type=task_type_label,
-                task_id=task.pk,
-                execution_id=query.execution.execution_id,
-            )
-            .prefetch_related("trades")
-            .order_by("-entry_time")
-        )
+        queryset = Position.objects.filter(
+            task_type=task_type_label,
+            task_id=task.pk,
+            execution_id=query.execution.execution_id,
+        ).prefetch_related("trades")
 
         if query.position_status == "open":
             queryset = queryset.filter(is_open=True)
@@ -246,6 +366,8 @@ class TaskActivityQueryService:
                 _id_str=Cast("id", output_field=models.CharField())
             ).filter(_id_str__istartswith=query.position_id)
 
+        queryset = _with_position_sort_annotations(queryset)
+        queryset = apply_queryset_ordering(queryset, query.ordering, POSITION_ORDERING)
         return queryset, query
 
     @staticmethod
@@ -277,3 +399,95 @@ class TaskActivityQueryService:
                 trade.pop("entry_price", None)
             normalized.append(trade)
         return normalized
+
+
+def _with_position_sort_annotations(queryset):
+    protection_reason = (
+        Trade.objects.filter(
+            position_id=OuterRef("pk"),
+            execution_method__in=PROTECTION_CLOSE_METHODS,
+        )
+        .order_by("timestamp", "sequence_number")
+        .values("execution_method")[:1]
+    )
+    protection_description_exists = Trade.objects.filter(
+        position_id=OuterRef("pk"),
+        description__startswith="[PROTECTION]",
+    )
+    decimal_field = DecimalField(max_digits=24, decimal_places=10)
+    long_realized_pnl = ExpressionWrapper(
+        (F("exit_price") - F("entry_price")) * Abs(F("units")),
+        output_field=decimal_field,
+    )
+    short_realized_pnl = ExpressionWrapper(
+        (F("entry_price") - F("exit_price")) * Abs(F("units")),
+        output_field=decimal_field,
+    )
+    long_pips = ExpressionWrapper(
+        F("exit_price") - F("entry_price"),
+        output_field=decimal_field,
+    )
+    short_pips = ExpressionWrapper(
+        F("entry_price") - F("exit_price"),
+        output_field=decimal_field,
+    )
+    return queryset.annotate(
+        _protection_reason=Subquery(protection_reason, output_field=CharField()),
+        _has_protection_description=Exists(protection_description_exists),
+        _close_reason=Case(
+            When(is_open=True, then=Value("", output_field=CharField())),
+            When(_protection_reason__isnull=False, then=F("_protection_reason")),
+            When(_has_protection_description=True, then=Value("shrink")),
+            default=Value("normal"),
+            output_field=CharField(),
+        ),
+        _realized_pnl=Case(
+            When(
+                is_open=False,
+                direction="long",
+                exit_price__isnull=False,
+                then=long_realized_pnl,
+            ),
+            When(
+                is_open=False,
+                direction="short",
+                exit_price__isnull=False,
+                then=short_realized_pnl,
+            ),
+            default=Value(None, output_field=decimal_field),
+            output_field=decimal_field,
+        ),
+        _pnl=Case(
+            When(is_open=True, then=F("unrealized_pnl")),
+            When(
+                is_open=False,
+                direction="long",
+                exit_price__isnull=False,
+                then=long_realized_pnl,
+            ),
+            When(
+                is_open=False,
+                direction="short",
+                exit_price__isnull=False,
+                then=short_realized_pnl,
+            ),
+            default=Value(None, output_field=decimal_field),
+            output_field=decimal_field,
+        ),
+        _pips=Case(
+            When(
+                is_open=False,
+                direction="long",
+                exit_price__isnull=False,
+                then=long_pips,
+            ),
+            When(
+                is_open=False,
+                direction="short",
+                exit_price__isnull=False,
+                then=short_pips,
+            ),
+            default=F("unrealized_pnl"),
+            output_field=decimal_field,
+        ),
+    )

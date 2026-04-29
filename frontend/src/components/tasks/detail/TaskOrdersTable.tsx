@@ -51,6 +51,11 @@ interface TaskOrdersTableProps {
   enableRealTimeUpdates?: boolean;
 }
 
+type SortOrder = 'asc' | 'desc';
+
+const toOrdering = (field: string, order: SortOrder): string =>
+  order === 'desc' ? `-${field}` : field;
+
 export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
   taskId,
   taskType,
@@ -61,6 +66,8 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
   const { user } = useAuth();
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(50);
+  const [sortField, setSortField] = useState('submitted_at');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [isReloading, setIsReloading] = useState(false);
   const selection = useTableRowSelection();
 
@@ -83,6 +90,7 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     executionRunId,
     page: page + 1,
     pageSize: rowsPerPage,
+    ordering: toOrdering(sortField, sortOrder),
     orderId: effectiveOrderId || undefined,
     timestampFrom: dateFrom ? new Date(dateFrom).toISOString() : undefined,
     timestampTo: dateTo ? new Date(dateTo).toISOString() : undefined,
@@ -105,6 +113,12 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
     await refresh();
     setIsReloading(false);
   }, [refresh]);
+
+  const handleSortChange = useCallback((field: string, order: SortOrder) => {
+    setSortField(field);
+    setSortOrder(order);
+    setPage(0);
+  }, []);
 
   const formatTimestamp = useCallback(
     (timestamp: string): string =>
@@ -495,8 +509,10 @@ export const TaskOrdersTable: React.FC<TaskOrdersTableProps> = ({
         allPageSelected={selection.isAllPageSelected(pageRowIds)}
         indeterminate={selection.isIndeterminate(pageRowIds)}
         onToggleAll={handleToggleAll}
-        defaultOrderBy="submitted_at"
-        defaultOrder="desc"
+        sortMode="server"
+        orderBy={sortField}
+        order={sortOrder}
+        onSortChange={handleSortChange}
         fillEmptyRows
       />
 

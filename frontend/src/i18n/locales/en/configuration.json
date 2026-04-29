@@ -11,7 +11,13 @@
   "filters": {
     "searchConfigurations": "Search configurations...",
     "strategyType": "Strategy Type",
-    "allTypes": "All Types"
+    "allTypes": "All Types",
+    "sortBy": "Sort By",
+    "newestFirst": "Newest First",
+    "oldestFirst": "Oldest First",
+    "nameAZ": "Name (A-Z)",
+    "nameZA": "Name (Z-A)",
+    "recentlyUpdated": "Recently Updated"
   },
   "empty": {
     "noConfigurationsFound": "No configurations found",

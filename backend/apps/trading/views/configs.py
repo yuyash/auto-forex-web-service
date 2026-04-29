@@ -6,12 +6,18 @@ from uuid import UUID
 
 from django.db import IntegrityError, models
 from django.db.models import ProtectedError
-from drf_spectacular.utils import extend_schema, inline_serializer
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import generics, serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from apps.common.querying import (
+    OrderingConfig,
+    apply_queryset_ordering,
+    invalid_query_param,
+    parse_datetime_param,
+)
 from apps.trading.models import StrategyConfiguration
 from apps.trading.serializers import (
     StrategyConfigCreateSerializer,
@@ -22,6 +28,17 @@ from apps.trading.services.config_usage import list_configuration_tasks
 from apps.trading.views.pagination import StandardPagination
 
 logger = logging.getLogger(__name__)
+
+CONFIG_ORDERING = OrderingConfig(
+    fields={
+        "id": "id",
+        "name": "name",
+        "strategy_type": "strategy_type",
+        "created_at": "created_at",
+        "updated_at": "updated_at",
+    },
+    default="-created_at",
+)
 
 
 def _integrity_constraint_id(exc: IntegrityError) -> str:
@@ -50,6 +67,26 @@ class StrategyConfigView(generics.ListCreateAPIView):
 
         strategy_type = request.query_params.get("strategy_type")
         search = request.query_params.get("search")
+        created_from = parse_datetime_param(
+            request.query_params.get("created_from"),
+            field_name="created_from",
+        )
+        created_to = parse_datetime_param(
+            request.query_params.get("created_to"),
+            field_name="created_to",
+        )
+        updated_from = parse_datetime_param(
+            request.query_params.get("updated_from"),
+            field_name="updated_from",
+        )
+        updated_to = parse_datetime_param(
+            request.query_params.get("updated_to"),
+            field_name="updated_to",
+        )
+        if created_from and created_to and created_from > created_to:
+            raise invalid_query_param("created_from must be earlier than or equal to created_to")
+        if updated_from and updated_to and updated_from > updated_to:
+            raise invalid_query_param("updated_from must be earlier than or equal to updated_to")
 
         queryset = StrategyConfiguration.objects.filter(user=request.user.pk)
         if strategy_type:
@@ -58,7 +95,19 @@ class StrategyConfigView(generics.ListCreateAPIView):
             queryset = queryset.filter(
                 models.Q(name__icontains=search) | models.Q(description__icontains=search)
             )
-        return queryset.order_by("-created_at")
+        if created_from:
+            queryset = queryset.filter(created_at__gte=created_from)
+        if created_to:
+            queryset = queryset.filter(created_at__lte=created_to)
+        if updated_from:
+            queryset = queryset.filter(updated_at__gte=updated_from)
+        if updated_to:
+            queryset = queryset.filter(updated_at__lte=updated_to)
+        return apply_queryset_ordering(
+            queryset,
+            request.query_params.get("ordering"),
+            CONFIG_ORDERING,
+        )
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -68,6 +117,17 @@ class StrategyConfigView(generics.ListCreateAPIView):
     @extend_schema(
         operation_id="trading_strategy_configs_list",
         tags=["Trading"],
+        parameters=[
+            OpenApiParameter(name="page", type=int, required=False),
+            OpenApiParameter(name="page_size", type=int, required=False),
+            OpenApiParameter(name="ordering", type=str, required=False),
+            OpenApiParameter(name="strategy_type", type=str, required=False),
+            OpenApiParameter(name="search", type=str, required=False),
+            OpenApiParameter(name="created_from", type=str, required=False),
+            OpenApiParameter(name="created_to", type=str, required=False),
+            OpenApiParameter(name="updated_from", type=str, required=False),
+            OpenApiParameter(name="updated_to", type=str, required=False),
+        ],
         responses={
             200: inline_serializer(
                 "StrategyConfigPaginatedResponse",

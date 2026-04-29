@@ -20,6 +20,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import {
   CandlestickSeries,
+  LineSeries,
   LineStyle,
   createChart,
   createSeriesMarkers,
@@ -27,6 +28,7 @@ import {
   type ISeriesApi,
   type CandlestickData,
   type Time,
+  type UTCTimestamp,
 } from 'lightweight-charts';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
@@ -38,6 +40,7 @@ import {
   createTooltipTimeFormatter,
 } from '../../../../utils/adaptiveTimeScalePlugin';
 import type { CycleTrade } from '../../../../types/strategyVisualization';
+import type { StrategyOhlcLineStyle } from '../../../../types/strategyVisualization';
 import type { TaskType } from '../../../../types/common';
 import { buildCycleMarkers } from './buildCycleMarkers';
 import { useMetricsOverlay } from '../MetricsOverlayChart';
@@ -55,8 +58,15 @@ interface StrategyGroupChartProps {
   selectedTradeIds?: Set<string>;
   focusedTradeId?: string | null;
   onMarkerClick?: (tradeId: string) => void;
+  onVisibleRangeChange?: (range: {
+    from: string;
+    to: string;
+    granularity: string;
+  }) => void;
   priceLines?: StrategyPriceLine[];
   priceBands?: StrategyPriceBand[];
+  priceSeries?: StrategyPriceSeries[];
+  priceBandSeries?: StrategyPriceBandSeries[];
 }
 
 export interface StrategyPriceLine {
@@ -66,6 +76,22 @@ export interface StrategyPriceLine {
   lineStyle?: LineStyle;
 }
 
+export interface StrategyPriceSeriesPoint {
+  time: string | number;
+  value: number | string;
+}
+
+export interface StrategyPriceSeries {
+  id?: string;
+  title?: string;
+  label?: string | null;
+  label_key?: string | null;
+  color: string;
+  lineStyle?: LineStyle;
+  line_style?: StrategyOhlcLineStyle;
+  points: StrategyPriceSeriesPoint[];
+}
+
 export interface StrategyPriceBand {
   from: number;
   to: number;
@@ -73,9 +99,31 @@ export interface StrategyPriceBand {
   color: string;
 }
 
+export interface StrategyPriceBandSeriesPoint {
+  time: string | number;
+  from: number | string;
+  to: number | string;
+}
+
+export interface StrategyPriceBandSeries {
+  id?: string;
+  title?: string;
+  label?: string | null;
+  label_key?: string | null;
+  color: string;
+  points: StrategyPriceBandSeriesPoint[];
+}
+
 interface RenderedPriceBand extends StrategyPriceBand {
   top: number;
   height: number;
+}
+
+interface RenderedPriceBandSeries {
+  id: string;
+  title: string;
+  color: string;
+  polygonPoints: string;
 }
 
 const GRANULARITY_OPTIONS = [
@@ -186,6 +234,65 @@ function isValidCandle(candle: {
   );
 }
 
+function pointTimeToSec(value: string | number): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? Math.floor(value) : null;
+  }
+  return isoToSec(value);
+}
+
+function numericChartValue(value: number | string): number | null {
+  const numeric = typeof value === 'number' ? value : Number.parseFloat(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function chartLineStyle(value?: LineStyle | StrategyOhlcLineStyle): LineStyle {
+  if (typeof value === 'number') return value as LineStyle;
+  if (value === 'solid') return LineStyle.Solid;
+  if (value === 'dotted') return LineStyle.Dotted;
+  if (value === 'large_dashed') return LineStyle.LargeDashed;
+  if (value === 'sparse_dotted') return LineStyle.SparseDotted;
+  return LineStyle.Dashed;
+}
+
+function cleanSeriesPoints(points: StrategyPriceSeriesPoint[]) {
+  const map = new Map<number, number>();
+  for (const point of points) {
+    const time = pointTimeToSec(point.time);
+    const value = numericChartValue(point.value);
+    if (time == null || value == null || value <= 0) {
+      continue;
+    }
+    map.set(time, value);
+  }
+  return Array.from(map.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([time, value]) => ({ time: time as UTCTimestamp, value }));
+}
+
+function cleanBandSeriesPoints(points: StrategyPriceBandSeriesPoint[]) {
+  const map = new Map<number, { from: number; to: number }>();
+  for (const point of points) {
+    const time = pointTimeToSec(point.time);
+    const from = numericChartValue(point.from);
+    const to = numericChartValue(point.to);
+    if (
+      time == null ||
+      from == null ||
+      to == null ||
+      from <= 0 ||
+      to <= 0 ||
+      from === to
+    ) {
+      continue;
+    }
+    map.set(time, { from, to });
+  }
+  return Array.from(map.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([time, value]) => ({ time: time as UTCTimestamp, ...value }));
+}
+
 export function StrategyGroupChart({
   instrument,
   startTime,
@@ -199,8 +306,11 @@ export function StrategyGroupChart({
   selectedTradeIds,
   focusedTradeId,
   onMarkerClick,
+  onVisibleRangeChange,
   priceLines = [],
   priceBands = [],
+  priceSeries = [],
+  priceBandSeries = [],
 }: StrategyGroupChartProps) {
   const theme = useTheme();
   const { t } = useTranslation('strategy');
@@ -215,9 +325,13 @@ export function StrategyGroupChart({
   const priceLinesRef = useRef<
     ReturnType<ISeriesApi<'Candlestick'>['createPriceLine']>[]
   >([]);
+  const priceSeriesRef = useRef<ISeriesApi<'Line'>[]>([]);
   const [chartInstance, setChartInstance] = useState<IChartApi | null>(null);
   const [renderedPriceBands, setRenderedPriceBands] = useState<
     RenderedPriceBand[]
+  >([]);
+  const [renderedPriceBandSeries, setRenderedPriceBandSeries] = useState<
+    RenderedPriceBandSeries[]
   >([]);
   const shouldApplyRangeRef = useRef(true);
   const rangeLoadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -374,14 +488,18 @@ export function StrategyGroupChart({
     seriesRef.current = null;
     markersRef.current = null;
     priceLinesRef.current = [];
+    priceSeriesRef.current = [];
     setRenderedPriceBands([]);
+    setRenderedPriceBandSeries([]);
     setChartInstance(null);
   }, []);
 
   const refreshPriceBands = useCallback(() => {
     const series = seriesRef.current;
-    if (!series) {
+    const chart = chartRef.current;
+    if (!series || !chart) {
       setRenderedPriceBands([]);
+      setRenderedPriceBandSeries([]);
       return;
     }
     const nextBands: RenderedPriceBand[] = [];
@@ -398,7 +516,39 @@ export function StrategyGroupChart({
       nextBands.push({ ...band, top: y1, height: y2 - y1 });
     }
     setRenderedPriceBands(nextBands);
-  }, [priceBands]);
+    const nextBandSeries: RenderedPriceBandSeries[] = [];
+    for (const band of priceBandSeries) {
+      const points = cleanBandSeriesPoints(band.points);
+      if (points.length < 2) continue;
+      const topPoints: string[] = [];
+      const bottomPoints: string[] = [];
+      for (const point of points) {
+        const x = chart.timeScale().timeToCoordinate(point.time);
+        const top = series.priceToCoordinate(Math.max(point.from, point.to));
+        const bottom = series.priceToCoordinate(Math.min(point.from, point.to));
+        if (
+          x == null ||
+          top == null ||
+          bottom == null ||
+          !Number.isFinite(x) ||
+          !Number.isFinite(top) ||
+          !Number.isFinite(bottom)
+        ) {
+          continue;
+        }
+        topPoints.push(`${x},${top}`);
+        bottomPoints.push(`${x},${bottom}`);
+      }
+      if (topPoints.length < 2 || bottomPoints.length < 2) continue;
+      nextBandSeries.push({
+        id: band.id ?? band.title ?? band.label_key ?? band.label ?? band.color,
+        title: chartLayerLabel(band, t),
+        color: band.color,
+        polygonPoints: [...topPoints, ...bottomPoints.reverse()].join(' '),
+      });
+    }
+    setRenderedPriceBandSeries(nextBandSeries);
+  }, [priceBands, priceBandSeries, t]);
 
   useEffect(() => {
     destroyChart();
@@ -463,6 +613,11 @@ export function StrategyGroupChart({
         if (Number.isFinite(from) && Number.isFinite(to) && to > from) {
           currentVisibleRangeRef.current = { from, to };
           refreshPriceBands();
+          onVisibleRangeChange?.({
+            from: secToIso(from),
+            to: secToIso(to),
+            granularity: effectiveGranularity,
+          });
           if (granularityRef.current === 'AUTO') {
             setAutoGranularityValue(
               autoGranularity(secToIso(from), secToIso(to))
@@ -529,6 +684,28 @@ export function StrategyGroupChart({
       });
       if (created) priceLinesRef.current.push(created);
     }
+    if (chartRef.current) {
+      for (const series of priceSeriesRef.current) {
+        chartRef.current.removeSeries(series);
+      }
+      priceSeriesRef.current = [];
+      for (const line of priceSeries) {
+        const points = cleanSeriesPoints(line.points);
+        if (points.length < 2) continue;
+        const created = chartRef.current.addSeries(LineSeries, {
+          color: line.color,
+          lineWidth: 1,
+          lineStyle: chartLineStyle(line.lineStyle ?? line.line_style),
+          title: chartLayerLabel(line, t),
+          priceScaleId: 'right',
+          crosshairMarkerVisible: false,
+          lastValueVisible: true,
+          priceLineVisible: false,
+        });
+        created.setData(points);
+        priceSeriesRef.current.push(created);
+      }
+    }
     refreshPriceBands();
 
     if (shouldApplyRangeRef.current && paddedRange && chartRef.current) {
@@ -547,9 +724,13 @@ export function StrategyGroupChart({
     isDark,
     paddedRange,
     timezone,
+    t,
     onMarkerClick,
+    onVisibleRangeChange,
     priceLines,
     priceBands,
+    priceSeries,
+    priceBandSeries,
     effectiveGranularity,
     ensureRange,
     refreshPriceBands,
@@ -846,6 +1027,32 @@ export function StrategyGroupChart({
             />
           </Tooltip>
         ))}
+        {renderedPriceBandSeries.length > 0 && (
+          <svg
+            width="100%"
+            height={height}
+            viewBox={`0 0 ${containerRef.current?.clientWidth || 1} ${height}`}
+            preserveAspectRatio="none"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              pointerEvents: 'none',
+              zIndex: 1,
+            }}
+          >
+            {renderedPriceBandSeries.map((band) => (
+              <polygon
+                key={band.id}
+                points={band.polygonPoints}
+                fill={band.color}
+                stroke={band.color}
+                strokeWidth="1"
+              >
+                <title>{band.title}</title>
+              </polygon>
+            ))}
+          </svg>
+        )}
       </Box>
       {isInitialLoading && (
         <Box
@@ -864,4 +1071,19 @@ export function StrategyGroupChart({
       )}
     </Box>
   );
+}
+
+function chartLayerLabel(
+  overlay: StrategyPriceSeries | StrategyPriceBandSeries | StrategyPriceBand,
+  t: (key: string, options?: { defaultValue?: string }) => string
+): string {
+  if ('label_key' in overlay && overlay.label_key) {
+    return t(overlay.label_key, {
+      defaultValue: overlay.label ?? overlay.title ?? overlay.label_key,
+    });
+  }
+  if ('label' in overlay && overlay.label) {
+    return overlay.label;
+  }
+  return overlay.title ?? '';
 }

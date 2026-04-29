@@ -12,6 +12,7 @@ import {
   MenuItem,
   CircularProgress,
   Alert,
+  Pagination,
 } from '@mui/material';
 
 import SearchIcon from '@mui/icons-material/Search';
@@ -29,8 +30,9 @@ const ConfigurationsPage = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [strategyTypeFilter, setStrategyTypeFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState('-updated_at');
   const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const [pageSize, setPageSize] = useState(20);
 
   // Fetch configurations with filters
   const { data, isLoading, error } = useConfigurations({
@@ -38,6 +40,7 @@ const ConfigurationsPage = () => {
     strategy_type:
       strategyTypeFilter !== 'all' ? strategyTypeFilter : undefined,
     page_size: pageSize,
+    ordering: sortBy,
     page,
   });
 
@@ -46,17 +49,15 @@ const ConfigurationsPage = () => {
     return data?.results || [];
   }, [data]);
 
-  const hasNextPage = data?.next !== null;
-  const hasPreviousPage = data?.previous !== null;
+  const totalPages = data ? Math.ceil(data.count / pageSize) : 0;
 
   // Fetch strategies for display names
   const { strategies } = useStrategies();
 
   // Get unique strategy types for filter
   const strategyTypes = useMemo(() => {
-    const types = new Set(configurations.map((config) => config.strategy_type));
-    return Array.from(types).sort();
-  }, [configurations]);
+    return strategies.map((strategy) => strategy.id).sort();
+  }, [strategies]);
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearch(event.target.value);
@@ -68,20 +69,25 @@ const ConfigurationsPage = () => {
     setPage(1);
   };
 
+  const handleSortChange = (event: SelectChangeEvent<string>) => {
+    setSortBy(event.target.value);
+    setPage(1);
+  };
+
+  const handlePageSizeChange = (event: SelectChangeEvent<string>) => {
+    setPageSize(Number(event.target.value));
+    setPage(1);
+  };
+
   const handleCreateNew = () => {
     navigate('/configurations/new');
   };
 
-  const handleNextPage = () => {
-    if (hasNextPage) {
-      setPage((prev) => prev + 1);
-    }
-  };
-
-  const handlePreviousPage = () => {
-    if (hasPreviousPage) {
-      setPage((prev) => prev - 1);
-    }
+  const handlePageChange = (
+    _event: React.ChangeEvent<unknown>,
+    value: number
+  ) => {
+    setPage(value);
   };
 
   return (
@@ -122,7 +128,10 @@ const ConfigurationsPage = () => {
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+            gridTemplateColumns: {
+              xs: '1fr',
+              md: 'minmax(0, 1fr) 220px 200px 160px',
+            },
             gap: 2,
             alignItems: 'center',
           }}
@@ -156,6 +165,44 @@ const ConfigurationsPage = () => {
               {strategyTypes.map((type) => (
                 <MenuItem key={type} value={type}>
                   {getStrategyDisplayName(strategies, type)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl fullWidth>
+            <InputLabel>{t('configuration:filters.sortBy')}</InputLabel>
+            <Select
+              value={sortBy}
+              label={t('configuration:filters.sortBy')}
+              onChange={handleSortChange}
+            >
+              <MenuItem value="-updated_at">
+                {t('configuration:filters.recentlyUpdated')}
+              </MenuItem>
+              <MenuItem value="-created_at">
+                {t('configuration:filters.newestFirst')}
+              </MenuItem>
+              <MenuItem value="created_at">
+                {t('configuration:filters.oldestFirst')}
+              </MenuItem>
+              <MenuItem value="name">
+                {t('configuration:filters.nameAZ')}
+              </MenuItem>
+              <MenuItem value="-name">
+                {t('configuration:filters.nameZA')}
+              </MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl fullWidth>
+            <InputLabel>{t('common:labels.pageSize')}</InputLabel>
+            <Select
+              value={String(pageSize)}
+              label={t('common:labels.pageSize')}
+              onChange={handlePageSizeChange}
+            >
+              {[10, 20, 50, 100].map((size) => (
+                <MenuItem key={size} value={String(size)}>
+                  {size}
                 </MenuItem>
               ))}
             </Select>
@@ -254,24 +301,15 @@ const ConfigurationsPage = () => {
           </Box>
 
           {/* Pagination Controls */}
-          {(hasNextPage || hasPreviousPage) && (
-            <Box
-              sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 4 }}
-            >
-              <Button
-                variant="outlined"
-                onClick={handlePreviousPage}
-                disabled={!hasPreviousPage || isLoading}
-              >
-                {t('common:actions.previous')}
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={handleNextPage}
-                disabled={!hasNextPage || isLoading}
-              >
-                {t('common:actions.next')}
-              </Button>
+          {totalPages > 1 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+              <Pagination
+                count={totalPages}
+                page={page}
+                onChange={handlePageChange}
+                color="primary"
+                disabled={isLoading}
+              />
             </Box>
           )}
         </>

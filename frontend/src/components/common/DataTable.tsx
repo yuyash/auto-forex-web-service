@@ -69,6 +69,14 @@ interface DataTableProps<T> {
   defaultOrderBy?: keyof T | string;
   /** Default sort direction */
   defaultOrder?: Order;
+  /** Sorting mode. Use server when the parent fetches a sorted page. */
+  sortMode?: 'client' | 'server';
+  /** Controlled sort column for server-side sorting. */
+  orderBy?: keyof T | string;
+  /** Controlled sort direction for server-side sorting. */
+  order?: Order;
+  /** Called when a sortable header is clicked in server-side sorting mode. */
+  onSortChange?: (orderBy: string, order: Order) => void;
   /** Fill remaining rows with empty placeholder rows to keep table height stable */
   fillEmptyRows?: boolean;
 }
@@ -108,6 +116,10 @@ function DataTable<T extends object>({
   onToggleAll,
   defaultOrderBy,
   defaultOrder,
+  sortMode = 'client',
+  orderBy: controlledOrderBy,
+  order: controlledOrder,
+  onSortChange,
   fillEmptyRows = false,
 }: DataTableProps<T>): React.ReactElement {
   const [page, setPage] = useState(0);
@@ -117,6 +129,8 @@ function DataTable<T extends object>({
   );
   const [order, setOrder] = useState<Order>(defaultOrder ?? 'asc');
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const activeOrderBy = controlledOrderBy ?? orderBy;
+  const activeOrder = controlledOrder ?? order;
 
   // Column widths state for resizing
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>(
@@ -203,8 +217,13 @@ function DataTable<T extends object>({
   );
 
   const handleRequestSort = (property: keyof T | string) => {
-    const isAsc = orderBy === property && order === 'asc';
-    setOrder(isAsc ? 'desc' : 'asc');
+    const isAsc = activeOrderBy === property && activeOrder === 'asc';
+    const nextOrder: Order = isAsc ? 'desc' : 'asc';
+    if (sortMode === 'server') {
+      onSortChange?.(String(property), nextOrder);
+      return;
+    }
+    setOrder(nextOrder);
     setOrderBy(property);
   };
 
@@ -250,11 +269,12 @@ function DataTable<T extends object>({
   }, [data, filters, getNestedValue]);
 
   const sortedData = useMemo(() => {
-    if (!orderBy) return filteredData;
+    if (sortMode === 'server') return filteredData;
+    if (!activeOrderBy) return filteredData;
 
     return [...filteredData].sort((a, b) => {
-      const aValue = getNestedValue(a, orderBy as string);
-      const bValue = getNestedValue(b, orderBy as string);
+      const aValue = getNestedValue(a, activeOrderBy as string);
+      const bValue = getNestedValue(b, activeOrderBy as string);
 
       if (aValue === undefined || aValue === null) return 1;
       if (bValue === undefined || bValue === null) return -1;
@@ -266,9 +286,9 @@ function DataTable<T extends object>({
         comparison = 1;
       }
 
-      return order === 'asc' ? comparison : -comparison;
+      return activeOrder === 'asc' ? comparison : -comparison;
     });
-  }, [filteredData, orderBy, order, getNestedValue]);
+  }, [filteredData, activeOrderBy, activeOrder, getNestedValue, sortMode]);
 
   const paginatedData = useMemo(() => {
     if (hidePagination) return sortedData;
@@ -471,8 +491,10 @@ function DataTable<T extends object>({
                   >
                     {column.sortable !== false ? (
                       <TableSortLabel
-                        active={orderBy === column.id}
-                        direction={orderBy === column.id ? order : 'asc'}
+                        active={activeOrderBy === column.id}
+                        direction={
+                          activeOrderBy === column.id ? activeOrder : 'asc'
+                        }
                         onClick={() => handleRequestSort(column.id)}
                       >
                         {column.label}

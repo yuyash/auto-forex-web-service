@@ -83,7 +83,7 @@ export default function TradingTasksPage() {
   const [sortBy, setSortBy] = useState('-created_at');
   const [configFilter, setConfigFilter] = useState<string | ''>('');
   const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const [pageSize, setPageSize] = useState(20);
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 400);
 
   // Determine status filter based on active tab
@@ -179,6 +179,11 @@ export default function TradingTasksPage() {
 
   const handleSortChange = (event: { target: { value: string } }) => {
     setSortBy(event.target.value);
+    setPage(1);
+  };
+
+  const handlePageSizeChange = (event: { target: { value: string } }) => {
+    setPageSize(Number(event.target.value));
     setPage(1);
   };
 
@@ -298,7 +303,7 @@ export default function TradingTasksPage() {
         {/* Filters */}
         <Paper sx={{ p: 2, mb: 3 }}>
           <Grid container spacing={2} alignItems="center">
-            <Grid size={{ xs: 12, md: 4 }}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <TextField
                 fullWidth
                 placeholder={t('trading:filters.searchTasks')}
@@ -313,7 +318,7 @@ export default function TradingTasksPage() {
                 }}
               />
             </Grid>
-            <Grid size={{ xs: 12, md: 4 }}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <ConfigurationSelector
                 value={configFilter}
                 onChange={(value) => {
@@ -325,7 +330,7 @@ export default function TradingTasksPage() {
                 emptySelectionLabel={t('trading:filters.allConfigurations')}
               />
             </Grid>
-            <Grid size={{ xs: 12, md: 4 }}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <FormControl fullWidth>
                 <InputLabel>{t('trading:filters.sortBy')}</InputLabel>
                 <Select
@@ -348,6 +353,24 @@ export default function TradingTasksPage() {
                   <MenuItem value="-updated_at">
                     {t('trading:filters.recentlyUpdated')}
                   </MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <FormControl fullWidth>
+                <InputLabel>
+                  {t('common:labels.pageSize', 'Page size')}
+                </InputLabel>
+                <Select
+                  value={String(pageSize)}
+                  onChange={handlePageSizeChange}
+                  label={t('common:labels.pageSize', 'Page size')}
+                >
+                  {[10, 20, 50, 100].map((size) => (
+                    <MenuItem key={size} value={String(size)}>
+                      {size}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>

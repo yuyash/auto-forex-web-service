@@ -1,4 +1,10 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Alert,
   Box,
@@ -9,7 +15,13 @@ import {
   InputAdornment,
   Paper,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
   TablePagination,
+  TableRow,
   TextField,
   Tooltip,
   Typography,
@@ -26,6 +38,11 @@ import SelectAllIcon from '@mui/icons-material/SelectAll';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { useTaskStrategyEvents } from '../../../../hooks/useTaskStrategyEvents';
+import {
+  useStrategyHistory,
+  useStrategyMetrics,
+  useStrategySnapshot,
+} from '../../../../hooks/useStrategyData';
 import { useTaskTrades } from '../../../../hooks/useTaskTrades';
 import type { TaskType } from '../../../../types/common';
 import type {
@@ -34,6 +51,10 @@ import type {
   StrategyCycle,
   CycleTrade,
   StrategyGridState,
+  StrategyHistoryEntry,
+  StrategyOhlcLayers,
+  StrategySnapshotCard,
+  StrategySnapshotResponse,
 } from '../../../../types/strategyVisualization';
 import { StrategyGroupChart } from './StrategyGroupChart';
 import { StrategyGridIndicator } from './StrategyGridIndicator';
@@ -137,6 +158,7 @@ export function TaskStrategyTab({
   strategyType,
   instrument,
   executionRunId,
+  enableRealTimeUpdates = false,
   timezone = 'UTC',
 }: TaskStrategyTabProps) {
   const { t } = useTranslation(['common']);
@@ -150,17 +172,33 @@ export function TaskStrategyTab({
   const [sidebarWidth, setSidebarWidth] = useState(400);
   const isDragging = useRef(false);
   const [showOhlcChart, setShowOhlcChart] = useState(false);
+  const [strategyHistoryPage, setStrategyHistoryPage] = useState(0);
+  const [strategyHistoryRowsPerPage, setStrategyHistoryRowsPerPage] =
+    useState(50);
+  const [strategyHistoryCategory, setStrategyHistoryCategory] = useState('all');
+  const [strategyOhlcWindow, setStrategyOhlcWindow] = useState<{
+    from: string;
+    to: string;
+    granularity: string;
+  } | null>(null);
+  const strategyOhlcRangeTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isMobile = useMediaQuery(theme.breakpoints.down('lg'));
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
   const [tradePage, setTradePage] = useState(0);
   const [tradeRowsPerPage, setTradeRowsPerPage] = useState(50);
+  const usesStrategyDataApi =
+    strategyType === 'net_grid' || strategyType === 'snowball';
+  const strategyDataRefetchInterval = enableRealTimeUpdates ? 5_000 : false;
 
   const { data, isLoading, error, refresh } = useTaskStrategyEvents({
     taskId,
     taskType,
     executionRunId,
-    enableRealTimeUpdates: true,
+    enabled: !usesStrategyDataApi,
+    enableRealTimeUpdates,
     refreshInterval: 5_000,
   });
   const {
@@ -173,12 +211,50 @@ export function TaskStrategyTab({
     taskType,
     executionRunId,
     cycleId: selectedCycleId ?? undefined,
-    enabled: Boolean(selectedCycleId),
-    enableRealTimeUpdates: true,
+    enabled: !usesStrategyDataApi && Boolean(selectedCycleId),
+    enableRealTimeUpdates,
     refreshInterval: 5_000,
   });
 
   const cycles = useMemo<StrategyCycle[]>(() => data?.cycles ?? [], [data]);
+  const strategySnapshot = useStrategySnapshot({
+    taskId,
+    taskType,
+    executionRunId,
+    enabled: usesStrategyDataApi,
+    refetchInterval: strategyDataRefetchInterval,
+  });
+  const strategyHistory = useStrategyHistory({
+    taskId,
+    taskType,
+    executionRunId,
+    enabled: usesStrategyDataApi,
+    refetchInterval: strategyDataRefetchInterval,
+    params: {
+      page: strategyHistoryPage + 1,
+      page_size: strategyHistoryRowsPerPage,
+      ordering: '-timestamp',
+      category: strategyHistoryCategory,
+    },
+  });
+  const strategyMetrics = useStrategyMetrics({
+    taskId,
+    taskType,
+    executionRunId,
+    enabled:
+      usesStrategyDataApi && showOhlcChart && Boolean(strategyOhlcWindow),
+    refetchInterval: strategyDataRefetchInterval,
+    params: strategyOhlcWindow
+      ? {
+          since: strategyOhlcWindow.from,
+          until: strategyOhlcWindow.to,
+          granularity: strategyOhlcWindow.granularity,
+          page: 1,
+          page_size: 5000,
+          ordering: 'timestamp',
+        }
+      : undefined,
+  });
   const supportsGridVisualization = data?.visualization?.grid !== false;
   const pnlCurrencyCode = useMemo(
     () => getPnlCurrencyCode(instrument),
@@ -243,6 +319,36 @@ export function TaskStrategyTab({
       document.addEventListener('pointerup', onUp);
     },
     [sidebarWidth]
+  );
+
+  const handleStrategyOhlcRangeChange = useCallback(
+    (range: { from: string; to: string; granularity: string }) => {
+      if (strategyOhlcRangeTimerRef.current) {
+        clearTimeout(strategyOhlcRangeTimerRef.current);
+      }
+      strategyOhlcRangeTimerRef.current = setTimeout(() => {
+        setStrategyOhlcWindow((current) => {
+          if (
+            current?.from === range.from &&
+            current?.to === range.to &&
+            current?.granularity === range.granularity
+          ) {
+            return current;
+          }
+          return range;
+        });
+      }, 250);
+    },
+    []
+  );
+
+  useEffect(
+    () => () => {
+      if (strategyOhlcRangeTimerRef.current) {
+        clearTimeout(strategyOhlcRangeTimerRef.current);
+      }
+    },
+    []
   );
 
   const displayedCycles = useMemo(() => {
@@ -350,8 +456,24 @@ export function TaskStrategyTab({
   );
 
   const handleRefreshDetail = useCallback(async () => {
+    if (usesStrategyDataApi) {
+      await Promise.all([
+        strategySnapshot.refetch(),
+        strategyHistory.refetch(),
+        strategyMetrics.refetch(),
+      ]);
+      return;
+    }
     await Promise.all([refresh(), refreshDetail(), refreshPagedTrades()]);
-  }, [refresh, refreshDetail, refreshPagedTrades]);
+  }, [
+    refresh,
+    refreshDetail,
+    refreshPagedTrades,
+    strategyHistory,
+    strategyMetrics,
+    strategySnapshot,
+    usesStrategyDataApi,
+  ]);
 
   const handleSelectAllTrades = useCallback(() => {
     setSelectedTradeIds(new Set(pagedTrades.map((t) => t.id)));
@@ -372,6 +494,43 @@ export function TaskStrategyTab({
       <Box sx={{ p: 3 }}>
         <Alert severity="error">{error.message}</Alert>
       </Box>
+    );
+  }
+
+  if (usesStrategyDataApi) {
+    const snapshotTime = strategySnapshot.data?.timestamp ?? null;
+    const chartEnd = snapshotTime ?? new Date().toISOString();
+    const chartStart =
+      strategyOhlcWindow?.from ??
+      new Date(new Date(chartEnd).getTime() - 3600_000).toISOString();
+    return (
+      <StrategyDataPanel
+        taskId={taskId}
+        taskType={taskType}
+        executionRunId={executionRunId}
+        instrument={instrument}
+        timezone={timezone}
+        showOhlcChart={showOhlcChart}
+        setShowOhlcChart={setShowOhlcChart}
+        snapshot={strategySnapshot.data ?? null}
+        snapshotLoading={strategySnapshot.isLoading}
+        snapshotError={strategySnapshot.error}
+        history={strategyHistory.data?.results ?? []}
+        historyLoading={strategyHistory.isLoading}
+        historyError={strategyHistory.error}
+        historyCount={strategyHistory.data?.count ?? 0}
+        historyPage={strategyHistoryPage}
+        setHistoryPage={setStrategyHistoryPage}
+        historyRowsPerPage={strategyHistoryRowsPerPage}
+        setHistoryRowsPerPage={setStrategyHistoryRowsPerPage}
+        historyCategory={strategyHistoryCategory}
+        setHistoryCategory={setStrategyHistoryCategory}
+        chartStart={chartStart}
+        chartEnd={chartEnd}
+        ohlcLayers={strategyMetrics.data?.ohlc_layers ?? null}
+        onOhlcRangeChange={handleStrategyOhlcRangeChange}
+        onRefresh={handleRefreshDetail}
+      />
     );
   }
 
@@ -411,6 +570,7 @@ export function TaskStrategyTab({
           executionRunId={executionRunId}
           lastTickTimestamp={data?.last_tick_timestamp ?? null}
           timezone={timezone}
+          ohlcLayers={null}
         />
       </Box>
     );
@@ -1046,6 +1206,297 @@ export function TaskStrategyTab({
       />
     </Box>
   );
+}
+
+interface StrategyDataPanelProps {
+  taskId: string | number;
+  taskType: TaskType;
+  executionRunId?: string;
+  instrument?: string;
+  timezone: string;
+  showOhlcChart: boolean;
+  setShowOhlcChart: (value: boolean | ((current: boolean) => boolean)) => void;
+  snapshot: StrategySnapshotResponse | null;
+  snapshotLoading: boolean;
+  snapshotError: Error | null;
+  history: StrategyHistoryEntry[];
+  historyLoading: boolean;
+  historyError: Error | null;
+  historyCount: number;
+  historyPage: number;
+  setHistoryPage: (page: number) => void;
+  historyRowsPerPage: number;
+  setHistoryRowsPerPage: (pageSize: number) => void;
+  historyCategory: string;
+  setHistoryCategory: (category: string) => void;
+  chartStart: string;
+  chartEnd: string;
+  ohlcLayers: StrategyOhlcLayers | null;
+  onOhlcRangeChange: (range: {
+    from: string;
+    to: string;
+    granularity: string;
+  }) => void;
+  onRefresh: () => void;
+}
+
+function StrategyDataPanel({
+  taskId,
+  taskType,
+  executionRunId,
+  instrument,
+  timezone,
+  showOhlcChart,
+  setShowOhlcChart,
+  snapshot,
+  snapshotLoading,
+  snapshotError,
+  history,
+  historyLoading,
+  historyError,
+  historyCount,
+  historyPage,
+  setHistoryPage,
+  historyRowsPerPage,
+  setHistoryRowsPerPage,
+  historyCategory,
+  setHistoryCategory,
+  chartStart,
+  chartEnd,
+  ohlcLayers,
+  onOhlcRangeChange,
+  onRefresh,
+}: StrategyDataPanelProps) {
+  const { t } = useTranslation(['common', 'strategy']);
+  const strategyTypeLabel = snapshot?.strategy_type
+    ? t(`strategy:types.${snapshot.strategy_type}`, {
+        defaultValue: snapshot.strategy_type,
+      })
+    : t('strategy:title');
+
+  return (
+    <Box sx={{ p: 3, display: 'grid', gap: 2 }}>
+      {snapshotError ? (
+        <Alert severity="error">{snapshotError.message}</Alert>
+      ) : null}
+      {snapshotLoading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+          <CircularProgress size={24} />
+        </Box>
+      ) : null}
+      <Paper variant="outlined" sx={{ p: 2 }}>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 2 }}
+        >
+          <Box>
+            <Typography variant="h6">{strategyTypeLabel}</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {snapshot?.snapshot.status ?? '-'} ·{' '}
+              {formatDateTime(snapshot?.timestamp, timezone)}
+            </Typography>
+          </Box>
+          {instrument ? (
+            <Stack direction="row" spacing={0.5}>
+              <Tooltip title={t('common:actions.refresh')}>
+                <IconButton
+                  size="small"
+                  onClick={onRefresh}
+                  aria-label={t('common:actions.refresh')}
+                >
+                  <RefreshIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip
+                title={
+                  showOhlcChart
+                    ? t('common:strategyVisualization.hideOhlcChart')
+                    : t('common:strategyVisualization.showOhlcChart')
+                }
+              >
+                <IconButton
+                  size="small"
+                  onClick={() => setShowOhlcChart((value) => !value)}
+                  color={showOhlcChart ? 'primary' : 'default'}
+                >
+                  <CandlestickChartIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Stack>
+          ) : null}
+        </Stack>
+        <Box
+          sx={{
+            display: 'grid',
+            gap: 1,
+            gridTemplateColumns: {
+              xs: 'repeat(2, minmax(0, 1fr))',
+              md: 'repeat(4, minmax(0, 1fr))',
+              xl: 'repeat(6, minmax(0, 1fr))',
+            },
+          }}
+        >
+          {(snapshot?.snapshot.cards ?? []).map((card) => (
+            <SnapshotCard key={card.id} card={card} />
+          ))}
+        </Box>
+      </Paper>
+
+      {instrument && showOhlcChart ? (
+        <Paper variant="outlined" sx={{ p: 2 }}>
+          <StrategyGroupChart
+            instrument={instrument}
+            startTime={chartStart}
+            endTime={chartEnd}
+            trades={[]}
+            height={360}
+            taskId={taskId}
+            taskType={taskType}
+            executionRunId={executionRunId}
+            lastTickTimestamp={snapshot?.timestamp ?? null}
+            priceSeries={ohlcLayers?.price_series ?? []}
+            priceBandSeries={ohlcLayers?.price_band_series ?? []}
+            onVisibleRangeChange={onOhlcRangeChange}
+          />
+        </Paper>
+      ) : null}
+
+      <Paper variant="outlined">
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{ p: 2, alignItems: 'center', flexWrap: 'wrap' }}
+        >
+          <Typography variant="h6" sx={{ mr: 1 }}>
+            {t('strategy:data.history')}
+          </Typography>
+          {['all', 'event', 'trade', 'operation', 'calculation'].map(
+            (category) => (
+              <Chip
+                key={category}
+                size="small"
+                clickable
+                label={t(`strategy:data.categories.${category}`, {
+                  defaultValue: category,
+                })}
+                color={historyCategory === category ? 'primary' : 'default'}
+                variant={historyCategory === category ? 'filled' : 'outlined'}
+                onClick={() => {
+                  setHistoryCategory(category);
+                  setHistoryPage(0);
+                }}
+              />
+            )
+          )}
+        </Stack>
+        <Divider />
+        {historyError ? (
+          <Alert severity="error">{historyError.message}</Alert>
+        ) : null}
+        {historyLoading ? (
+          <Box sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
+            <CircularProgress size={24} />
+          </Box>
+        ) : history.length === 0 ? (
+          <Box sx={{ p: 2 }}>
+            <Alert severity="info">{t('strategy:data.emptyHistory')}</Alert>
+          </Box>
+        ) : (
+          <TableContainer>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ width: 180 }}>
+                    {t('strategy:data.columns.time')}
+                  </TableCell>
+                  <TableCell sx={{ width: 140 }}>
+                    {t('strategy:data.columns.source')}
+                  </TableCell>
+                  <TableCell>{t('strategy:data.columns.event')}</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {history.map((entry) => (
+                  <TableRow key={entry.id} hover>
+                    <TableCell sx={{ verticalAlign: 'top' }}>
+                      <Typography variant="caption" color="text.secondary">
+                        {formatDateTime(entry.timestamp, timezone)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={{ verticalAlign: 'top' }}>
+                      <Chip size="small" label={entry.source} />
+                    </TableCell>
+                    <TableCell sx={{ verticalAlign: 'top' }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {entry.label ?? entry.action ?? entry.category}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {entry.category}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+        <TablePagination
+          component="div"
+          count={historyCount}
+          page={historyPage}
+          onPageChange={(_event, page) => setHistoryPage(page)}
+          rowsPerPage={historyRowsPerPage}
+          onRowsPerPageChange={(event) => {
+            setHistoryRowsPerPage(parseInt(event.target.value, 10));
+            setHistoryPage(0);
+          }}
+          rowsPerPageOptions={[25, 50, 100, 250, 500]}
+        />
+      </Paper>
+    </Box>
+  );
+}
+
+function SnapshotCard({ card }: { card: StrategySnapshotCard }) {
+  const { t } = useTranslation('strategy');
+  const fallbackLabel = card.id.replace(/_/g, ' ');
+  const labelKey = normalizeStrategyLabelKey(card.label_key);
+
+  return (
+    <Box
+      sx={{
+        border: 1,
+        borderColor: 'divider',
+        borderRadius: 1,
+        p: 1.25,
+        minWidth: 0,
+      }}
+    >
+      <Typography variant="caption" color="text.secondary" noWrap>
+        {labelKey
+          ? t(labelKey, { defaultValue: fallbackLabel })
+          : fallbackLabel}
+      </Typography>
+      <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+        {formatSnapshotValue(card.value)}
+      </Typography>
+    </Box>
+  );
+}
+
+function normalizeStrategyLabelKey(labelKey?: string | null): string | null {
+  if (!labelKey) return null;
+  return labelKey.startsWith('strategy.')
+    ? labelKey.slice('strategy.'.length)
+    : labelKey;
+}
+
+function formatSnapshotValue(value: unknown): string {
+  if (value == null || value === '') return '-';
+  if (Array.isArray(value)) return value.length === 0 ? '-' : value.join(', ');
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
 }
 
 /** Individual trade row — extracted for clarity. */

@@ -182,7 +182,9 @@ class TestTradingTasks:
         assert events.status_code == 200
 
         # ── Metrics ───────────────────────────────────────────────────────
-        metrics = authenticated_client.get(f"/api/trading/tasks/trading/{task_id}/metrics/")
+        metrics = authenticated_client.get(
+            f"/api/trading/tasks/trading/{task_id}/strategy/metrics/"
+        )
         assert metrics.status_code == 200
         assert "results" in metrics.data
         assert "count" in metrics.data
@@ -215,7 +217,9 @@ class TestTradingTasks:
             "orders",
             "summary",
             "executions",
-            "metrics",
+            "strategy/snapshot",
+            "strategy/history",
+            "strategy/metrics",
         ):
             resp = authenticated_client.get(f"/api/trading/tasks/trading/{task_id}/{ep}/")
             assert resp.status_code == 200, f"{ep} returned {resp.status_code}"

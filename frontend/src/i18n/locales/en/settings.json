@@ -11,6 +11,7 @@
   "accounts": {
     "title": "OANDA Accounts",
     "placeholder": "Account management will be implemented in a future task",
+    "searchAccounts": "Search accounts...",
     "addAccount": "Add Account",
     "editAccount": "Edit Account",
     "deleteAccount": "Delete Account",

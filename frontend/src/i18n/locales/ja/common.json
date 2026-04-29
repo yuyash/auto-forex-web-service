@@ -131,7 +131,9 @@
     "live": "本番",
     "liveAccount": "本番アカウント",
     "total": "合計",
-    "parameters": "パラメータ"
+    "parameters": "パラメータ",
+    "strategySnapshot": "戦略スナップショット",
+    "pageSize": "ページサイズ"
   },
   "messages": {
     "loading": "読み込み中...",

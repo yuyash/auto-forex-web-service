@@ -26,22 +26,18 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import TrendingDownIcon from '@mui/icons-material/TrendingDown';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
-import { LineStyle } from 'lightweight-charts';
 import type {
   CycleTrade,
   NetGridDecision,
   NetGridLedgerEntry,
   NetGridStrategyState,
+  StrategyOhlcLayers,
 } from '../../../../types/strategyVisualization';
 import type { TaskType } from '../../../../types/common';
 import { formatAppNumber } from '../../../../utils/numberFormat';
 import { useTranslation } from 'react-i18next';
 import { useTaskStrategyEvents } from '../../../../hooks/useTaskStrategyEvents';
-import {
-  StrategyGroupChart,
-  type StrategyPriceBand,
-  type StrategyPriceLine,
-} from './StrategyGroupChart';
+import { StrategyGroupChart } from './StrategyGroupChart';
 import { formatDateTimeInTimezone } from '../../../../utils/timezone';
 import { ColumnConfigDialog } from '../../../common/ColumnConfigDialog';
 import { useColumnConfig } from '../../../../hooks/useColumnConfig';
@@ -54,6 +50,7 @@ interface NetGridStrategyPanelProps {
   executionRunId?: string;
   lastTickTimestamp?: string | null;
   timezone?: string;
+  ohlcLayers?: StrategyOhlcLayers | null;
 }
 
 interface NetGridMetricPoint {
@@ -99,6 +96,15 @@ const LEDGER_ORDERING_OPTIONS = [
   '-realized_pnl',
   'realized_pnl',
 ] as const;
+
+const OHLC_LAYER_OVERLAY_KEYS = {
+  average_entry_price: 'averageEntry',
+  net_take_profit_price: 'takeProfit',
+  profit_trailing_stop_price: 'trailingStop',
+  last_grid_price: 'lastGrid',
+  next_grid_price: 'nextGrid',
+  risk_exit_price: 'riskExit',
+} as const;
 
 function formatUnits(value?: number | null): string {
   return formatAppNumber(value ?? 0, {
@@ -439,55 +445,6 @@ function inferPipSize(state?: NetGridStrategyState | null): number {
   return 0.01;
 }
 
-function buildNetGridPriceBands(
-  state: NetGridStrategyState | null | undefined,
-  currentNet: number,
-  t: (key: string) => string
-): StrategyPriceBand[] {
-  if (!state || currentNet === 0) return [];
-  const average = numericPrice(state.average_entry_price);
-  const nextAdd = numericPrice(state.next_grid_price);
-  const takeProfit = numericPrice(state.net_take_profit_price);
-  const trailing = numericPrice(state.profit_trailing_stop_price);
-  const risk = numericPrice(state.risk_exit_price);
-  const current = numericPrice(currentDisplayPrice(state));
-  const bands: StrategyPriceBand[] = [];
-  const addOuter = risk ?? current;
-  if (nextAdd != null && addOuter != null && nextAdd !== addOuter) {
-    bands.push({
-      from: nextAdd,
-      to: addOuter,
-      title: t('netGrid.chartBands.addZone'),
-      color: 'rgba(211, 47, 47, 0.12)',
-    });
-  }
-  if (average != null && takeProfit != null && average !== takeProfit) {
-    bands.push({
-      from: average,
-      to: takeProfit,
-      title: t('netGrid.chartBands.recoveryZone'),
-      color: 'rgba(46, 125, 50, 0.10)',
-    });
-  }
-  if (trailing != null && takeProfit != null && trailing !== takeProfit) {
-    bands.push({
-      from: trailing,
-      to: takeProfit,
-      title: t('netGrid.chartBands.trailingZone'),
-      color: 'rgba(0, 137, 123, 0.12)',
-    });
-  }
-  if (risk != null && nextAdd != null && risk !== nextAdd) {
-    bands.push({
-      from: risk,
-      to: nextAdd,
-      title: t('netGrid.chartBands.riskZone'),
-      color: 'rgba(97, 97, 97, 0.10)',
-    });
-  }
-  return bands;
-}
-
 export function NetGridStrategyPanel({
   state,
   instrument,
@@ -496,6 +453,7 @@ export function NetGridStrategyPanel({
   executionRunId,
   lastTickTimestamp,
   timezone = 'UTC',
+  ohlcLayers,
 }: NetGridStrategyPanelProps) {
   const { t } = useTranslation('strategy');
   const [selectedLedgerId, setSelectedLedgerId] = useState<string | null>(null);
@@ -577,68 +535,19 @@ export function NetGridStrategyPanel({
     [selectedLedgerId]
   );
   const syncStatus = state?.broker_reconciliation_status;
-  const priceLines: StrategyPriceLine[] = [
-    {
-      price: numericPrice(state?.average_entry_price) ?? Number.NaN,
-      title: t('netGrid.chart.averageEntry'),
-      color: '#1976d2',
-      lineStyle: LineStyle.Solid,
-    },
-    {
-      price: numericPrice(state?.net_take_profit_price) ?? Number.NaN,
-      title: t('netGrid.chart.takeProfit'),
-      color: '#2e7d32',
-      lineStyle: LineStyle.Dashed,
-    },
-    {
-      price: numericPrice(state?.profit_trailing_stop_price) ?? Number.NaN,
-      title: t('netGrid.chart.trailingStop'),
-      color: '#00897b',
-      lineStyle: LineStyle.Dashed,
-    },
-    {
-      price: numericPrice(state?.last_grid_price) ?? Number.NaN,
-      title: t('netGrid.chart.lastGrid'),
-      color: '#f57c00',
-      lineStyle: LineStyle.Dotted,
-    },
-    {
-      price: numericPrice(state?.next_grid_price) ?? Number.NaN,
-      title: t('netGrid.chart.nextGrid'),
-      color: '#d32f2f',
-      lineStyle: LineStyle.Dashed,
-    },
-    {
-      price: numericPrice(state?.risk_exit_price) ?? Number.NaN,
-      title: t('netGrid.chart.riskExit'),
-      color: '#616161',
-      lineStyle: LineStyle.Dashed,
-    },
-  ].filter((line) => {
-    if (line.title === t('netGrid.chart.averageEntry')) {
-      return visibleOverlays.averageEntry;
-    }
-    if (line.title === t('netGrid.chart.takeProfit')) {
-      return visibleOverlays.takeProfit;
-    }
-    if (line.title === t('netGrid.chart.trailingStop')) {
-      return visibleOverlays.trailingStop;
-    }
-    if (line.title === t('netGrid.chart.lastGrid')) {
-      return visibleOverlays.lastGrid;
-    }
-    if (line.title === t('netGrid.chart.nextGrid')) {
-      return visibleOverlays.nextGrid;
-    }
-    if (line.title === t('netGrid.chart.riskExit')) {
-      return visibleOverlays.riskExit;
-    }
-    return true;
-  });
-  const priceBands = useMemo(
-    () => buildNetGridPriceBands(state, currentNet, t),
-    [currentNet, state, t]
+  const activeOhlcLayers = ohlcLayers;
+  const priceSeries = useMemo(
+    () =>
+      (activeOhlcLayers?.price_series ?? []).filter((series) => {
+        const key =
+          OHLC_LAYER_OVERLAY_KEYS[
+            series.id as keyof typeof OHLC_LAYER_OVERLAY_KEYS
+          ];
+        return key ? visibleOverlays[key] : true;
+      }),
+    [activeOhlcLayers, visibleOverlays]
   );
+  const priceBandSeries = activeOhlcLayers?.price_band_series ?? [];
   const toggleOverlay = (key: keyof typeof visibleOverlays) => {
     setVisibleOverlays((current) => ({ ...current, [key]: !current[key] }));
   };
@@ -742,8 +651,8 @@ export function NetGridStrategyPanel({
                 taskType={taskType}
                 executionRunId={executionRunId}
                 lastTickTimestamp={lastTickTimestamp}
-                priceLines={priceLines}
-                priceBands={priceBands}
+                priceSeries={priceSeries}
+                priceBandSeries={priceBandSeries}
                 selectedTradeIds={selectedTradeIds}
                 focusedTradeId={selectedLedgerId}
                 onMarkerClick={setSelectedLedgerId}

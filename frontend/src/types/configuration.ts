@@ -32,6 +32,10 @@ export interface StrategyConfigListParams {
   search?: string;
   strategy_type?: string;
   ordering?: string;
+  created_from?: string;
+  created_to?: string;
+  updated_from?: string;
+  updated_to?: string;
 }
 
 export interface ConfigurationTask {

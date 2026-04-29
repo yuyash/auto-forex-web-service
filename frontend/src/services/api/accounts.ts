@@ -1,12 +1,23 @@
 import { api } from '../../api/apiClient';
 import { withRetry } from '../../api/client';
 import type { BackendAccount } from './contracts';
+import type { PaginatedResponse } from '../../types/common';
 import type { Account, AccountUpsertData } from '../../types/strategy';
 
 export interface AccountListParams {
   page?: number;
   page_size?: number;
   search?: string;
+  ordering?: string;
+  created_from?: string;
+  created_to?: string;
+}
+
+interface PaginatedAccounts {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: BackendAccount[];
 }
 
 function toAccount(account: BackendAccount): Account {
@@ -25,15 +36,33 @@ function toAccount(account: BackendAccount): Account {
 }
 
 export const accountsApi = {
-  list: async (params?: AccountListParams) => {
-    return (
-      await withRetry(() =>
-        api.get<BackendAccount[]>(
-          '/api/market/accounts/',
-          params as Record<string, unknown>
-        )
+  listPage: async (
+    params?: AccountListParams
+  ): Promise<PaginatedResponse<Account>> => {
+    const response = await withRetry(() =>
+      api.get<BackendAccount[] | PaginatedAccounts>(
+        '/api/market/accounts/',
+        params as Record<string, unknown>
       )
-    ).map(toAccount);
+    );
+    if (Array.isArray(response)) {
+      return {
+        count: response.length,
+        next: null,
+        previous: null,
+        results: response.map(toAccount),
+      };
+    }
+    return {
+      count: response.count,
+      next: response.next,
+      previous: response.previous,
+      results: response.results.map(toAccount),
+    };
+  },
+
+  list: async (params?: AccountListParams) => {
+    return (await accountsApi.listPage(params)).results;
   },
 
   get: async (id: number) => {

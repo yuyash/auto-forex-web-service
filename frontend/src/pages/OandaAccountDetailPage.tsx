@@ -134,6 +134,11 @@ const fmtTs = (ts: string | null): string => {
   });
 };
 
+type SortOrder = 'asc' | 'desc';
+
+const toOrdering = (field: string, order: SortOrder): string =>
+  order === 'desc' ? `-${field}` : field;
+
 // --- Positions Table ---
 
 function PositionsTable({ accountDbId }: { accountDbId: number }) {
@@ -143,6 +148,8 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
   const { instruments } = useSupportedInstruments();
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [sortField, setSortField] = useState('open_time');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [isReloading, setIsReloading] = useState(false);
   const [colConfigOpen, setColConfigOpen] = useState(false);
   const [positionStatusFilter, setPositionStatusFilter] = useState<
@@ -178,6 +185,8 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
       'oanda-positions',
       accountDbId,
       positionStatusFilter,
+      sortField,
+      sortOrder,
       page,
       rowsPerPage,
     ],
@@ -185,6 +194,7 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
       oandaMarketApi.getPositions({
         account_id: accountDbId,
         status: positionStatusFilter,
+        ordering: toOrdering(sortField, sortOrder),
         page: page + 1,
         page_size: rowsPerPage,
       }),
@@ -208,6 +218,12 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
     await refetch();
     setIsReloading(false);
   }, [refetch]);
+
+  const handleSortChange = useCallback((field: string, order: SortOrder) => {
+    setSortField(field);
+    setSortOrder(order);
+    setPage(0);
+  }, []);
 
   const columns: Column<OandaPosition>[] = [
     {
@@ -517,6 +533,10 @@ function PositionsTable({ accountDbId }: { accountDbId: number }) {
         allPageSelected={selection.isAllPageSelected(pageRowIds)}
         indeterminate={selection.isIndeterminate(pageRowIds)}
         onToggleAll={handleToggleAll}
+        sortMode="server"
+        orderBy={sortField}
+        order={sortOrder}
+        onSortChange={handleSortChange}
         emptyMessage={t('common:tables.positions.noPositions')}
         storageKey="oanda_positions_table"
         fillEmptyRows
@@ -745,6 +765,8 @@ function OrdersTable({ accountDbId }: { accountDbId: number }) {
   const { t } = useTranslation('common');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [sortField, setSortField] = useState('create_time');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [isReloading, setIsReloading] = useState(false);
   const [colConfigOpen, setColConfigOpen] = useState(false);
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | 'pending'>(
@@ -761,6 +783,8 @@ function OrdersTable({ accountDbId }: { accountDbId: number }) {
       'oanda-orders',
       accountDbId,
       orderStatusFilter,
+      sortField,
+      sortOrder,
       page,
       rowsPerPage,
     ],
@@ -768,6 +792,7 @@ function OrdersTable({ accountDbId }: { accountDbId: number }) {
       oandaMarketApi.getOrders({
         account_id: accountDbId,
         status: orderStatusFilter,
+        ordering: toOrdering(sortField, sortOrder),
         page: page + 1,
         page_size: rowsPerPage,
       }),
@@ -791,6 +816,12 @@ function OrdersTable({ accountDbId }: { accountDbId: number }) {
     await refetch();
     setIsReloading(false);
   }, [refetch]);
+
+  const handleSortChange = useCallback((field: string, order: SortOrder) => {
+    setSortField(field);
+    setSortOrder(order);
+    setPage(0);
+  }, []);
 
   const columns: Column<OandaOrder>[] = [
     { id: 'id', label: t('tables.orders.orderId'), width: 100, minWidth: 80 },
@@ -932,6 +963,10 @@ function OrdersTable({ accountDbId }: { accountDbId: number }) {
         allPageSelected={selection.isAllPageSelected(pageRowIds)}
         indeterminate={selection.isIndeterminate(pageRowIds)}
         onToggleAll={handleToggleAll}
+        sortMode="server"
+        orderBy={sortField}
+        order={sortOrder}
+        onSortChange={handleSortChange}
         emptyMessage={t('tables.orders.noOrders')}
         storageKey="oanda_orders_table"
         fillEmptyRows

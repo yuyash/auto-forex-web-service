@@ -134,6 +134,7 @@ class NetGridStrategy(Strategy):
 
         events: list[Any] = []
         if strategy_state.get("pending_execution"):
+            _append_level_history(strategy_state, tick.timestamp.isoformat())
             state.strategy_state = strategy_state
             return StrategyResult.from_state(state)
 
@@ -145,6 +146,7 @@ class NetGridStrategy(Strategy):
             decision=signal,
         )
         _append_trend_relation_history(strategy_state)
+        _append_level_history(strategy_state, tick.timestamp.isoformat())
         if signal["action"] == "hold":
             events.append(_signal_event(tick, signal))
             state.strategy_state = strategy_state
@@ -516,6 +518,7 @@ class NetGridStrategy(Strategy):
         strategy_state["latest_position_transition"] = strategy_state["grid_ledger"][-1]
         strategy_state["pending_execution"] = None
         _update_derived_levels(strategy_state, self.config, self.pip_size)
+        _append_level_history(strategy_state, str(pending.get("created_at") or ""))
         state.strategy_state = strategy_state
 
     def on_start(self, *, state: ExecutionState) -> StrategyResult:
@@ -567,6 +570,7 @@ def _initial_state(raw: Any) -> dict[str, Any]:
     state.setdefault("open_entry_id", None)
     state.setdefault("next_entry_id", 1)
     state.setdefault("grid_ledger", [])
+    state.setdefault("level_history", [])
     state.setdefault("auto_direction_window", [])
     state.setdefault("latest_decision", None)
     state.setdefault("decision_history", [])
@@ -629,6 +633,34 @@ def _append_trend_relation_history(strategy_state: dict[str, Any]) -> None:
         "relation": relation,
     }
     strategy_state["trend_relation_history"] = [*history, entry][-80:]
+
+
+def _append_level_history(strategy_state: dict[str, Any], timestamp: str) -> None:
+    if not timestamp:
+        return
+    raw_history = strategy_state.get("level_history")
+    history: list[Any] = raw_history if isinstance(raw_history, list) else []
+    entry = {
+        "timestamp": timestamp,
+        "current_net_units": strategy_state.get("current_net_units", 0),
+        "current_display_price": (
+            strategy_state.get("last_bid")
+            if int(strategy_state.get("current_net_units", 0) or 0) > 0
+            else strategy_state.get("last_ask")
+            if int(strategy_state.get("current_net_units", 0) or 0) < 0
+            else strategy_state.get("last_mid")
+        ),
+        "average_entry_price": strategy_state.get("average_entry_price"),
+        "net_take_profit_price": strategy_state.get("net_take_profit_price"),
+        "profit_trailing_stop_price": strategy_state.get("profit_trailing_stop_price"),
+        "last_grid_price": strategy_state.get("last_grid_price"),
+        "next_grid_price": strategy_state.get("next_grid_price"),
+        "risk_exit_price": strategy_state.get("risk_exit_price"),
+    }
+    if history and history[-1].get("timestamp") == timestamp:
+        strategy_state["level_history"] = [*history[:-1], entry][-500:]
+    else:
+        strategy_state["level_history"] = [*history, entry][-500:]
 
 
 def _validate_config_relationships(config: NetGridConfig) -> None:

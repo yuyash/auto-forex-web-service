@@ -64,6 +64,11 @@ interface TaskPositionsTableProps {
   strategyType?: string;
 }
 
+type SortOrder = 'asc' | 'desc';
+
+const toOrdering = (field: string, order: SortOrder): string =>
+  order === 'desc' ? `-${field}` : field;
+
 export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   taskId,
   taskType,
@@ -106,6 +111,9 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
   // --- Pagination state (all mode — 1 table) ---
   const [allPage, setAllPage] = useState(0);
   const [allRpp, setAllRpp] = useState(25);
+  const [sortField, setSortField] = useState('entry_time');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const positionsOrdering = toOrdering(sortField, sortOrder);
 
   // --- Reload state ---
   const [reloading, setReloading] = useState<Record<string, boolean>>({});
@@ -158,6 +166,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     positionId: effectivePositionId || undefined,
     rangeFrom,
     rangeTo,
+    ordering: positionsOrdering,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
   });
   const {
@@ -178,6 +187,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     positionId: effectivePositionId || undefined,
     rangeFrom,
     rangeTo,
+    ordering: positionsOrdering,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
   });
   const {
@@ -198,6 +208,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     positionId: effectivePositionId || undefined,
     rangeFrom,
     rangeTo,
+    ordering: positionsOrdering,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
   });
   const {
@@ -218,6 +229,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     positionId: effectivePositionId || undefined,
     rangeFrom,
     rangeTo,
+    ordering: positionsOrdering,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byStatus',
   });
 
@@ -239,6 +251,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     positionId: effectivePositionId || undefined,
     rangeFrom,
     rangeTo,
+    ordering: positionsOrdering,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byDirection',
   });
   const {
@@ -258,6 +271,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     positionId: effectivePositionId || undefined,
     rangeFrom,
     rangeTo,
+    ordering: positionsOrdering,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'byDirection',
   });
 
@@ -278,6 +292,7 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
     positionId: effectivePositionId || undefined,
     rangeFrom,
     rangeTo,
+    ordering: positionsOrdering,
     enableRealTimeUpdates: enableRealTimeUpdates && viewMode === 'all',
   });
 
@@ -984,6 +999,18 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
       setReloading((p) => ({ ...p, [key]: false }));
     };
 
+  const handleSortChange = useCallback((field: string, order: SortOrder) => {
+    setSortField(field);
+    setSortOrder(order);
+    setClosedLongPage(0);
+    setClosedShortPage(0);
+    setOpenLongPage(0);
+    setOpenShortPage(0);
+    setLongPage(0);
+    setShortPage(0);
+    setAllPage(0);
+  }, []);
+
   const makeCopy =
     (
       positions: TaskPosition[],
@@ -1267,8 +1294,10 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
               allPageSelected={longSelObj.isAllPageSelected(longIds)}
               indeterminate={longSelObj.isIndeterminate(longIds)}
               onToggleAll={makeToggleAll(longSelObj, longIds)}
-              defaultOrderBy="entry_time"
-              defaultOrder="desc"
+              sortMode="server"
+              orderBy={sortField}
+              order={sortOrder}
+              onSortChange={handleSortChange}
               fillEmptyRows
             />
             <TablePagination
@@ -1344,8 +1373,10 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
               allPageSelected={shortSelObj.isAllPageSelected(shortIds)}
               indeterminate={shortSelObj.isIndeterminate(shortIds)}
               onToggleAll={makeToggleAll(shortSelObj, shortIds)}
-              defaultOrderBy="entry_time"
-              defaultOrder="desc"
+              sortMode="server"
+              orderBy={sortField}
+              order={sortOrder}
+              onSortChange={handleSortChange}
               fillEmptyRows
             />
             <TablePagination
@@ -1468,8 +1499,10 @@ export const TaskPositionsTable: React.FC<TaskPositionsTableProps> = ({
           allPageSelected={selObj.isAllPageSelected(ids)}
           indeterminate={selObj.isIndeterminate(ids)}
           onToggleAll={makeToggleAll(selObj, ids)}
-          defaultOrderBy="entry_time"
-          defaultOrder="desc"
+          sortMode="server"
+          orderBy={sortField}
+          order={sortOrder}
+          onSortChange={handleSortChange}
           fillEmptyRows
         />
         <TablePagination

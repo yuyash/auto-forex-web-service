@@ -7,6 +7,7 @@ from importlib import import_module
 from typing import Any
 
 from django.db.models import Q, QuerySet
+from drf_spectacular.utils import OpenApiParameter
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -14,6 +15,12 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
+from apps.common.querying import (
+    OrderingConfig,
+    apply_queryset_ordering,
+    invalid_query_param,
+    parse_datetime_param,
+)
 from apps.trading.enums import TaskStatus
 from apps.trading.tasks.service import (
     TaskCapacityError,
@@ -24,9 +31,38 @@ from apps.trading.tasks.service import (
 )
 from apps.trading.views.errors import api_error
 from apps.trading.views.mixins import TaskSubResourceMixin
+from apps.trading.views.pagination import StandardPagination
 from apps.trading.views.throttles import TaskDataRateThrottle
 
 logger = logging.getLogger(__name__)
+
+TASK_ORDERING = OrderingConfig(
+    fields={
+        "id": "id",
+        "name": "name",
+        "status": "status",
+        "instrument": "instrument",
+        "created_at": "created_at",
+        "updated_at": "updated_at",
+        "started_at": "started_at",
+        "completed_at": "completed_at",
+        "config_id": "config_id",
+    },
+    default="-created_at",
+)
+
+TASK_LIST_PARAMETERS = [
+    OpenApiParameter(name="page", type=int, required=False),
+    OpenApiParameter(name="page_size", type=int, required=False),
+    OpenApiParameter(name="ordering", type=str, required=False),
+    OpenApiParameter(name="search", type=str, required=False),
+    OpenApiParameter(name="status", type=str, required=False),
+    OpenApiParameter(name="config_id", type=str, required=False),
+    OpenApiParameter(name="created_from", type=str, required=False),
+    OpenApiParameter(name="created_to", type=str, required=False),
+    OpenApiParameter(name="updated_from", type=str, required=False),
+    OpenApiParameter(name="updated_to", type=str, required=False),
+]
 
 
 class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
@@ -39,6 +75,7 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
 
     permission_classes = [IsAuthenticated]
     throttle_classes = [TaskDataRateThrottle]
+    pagination_class = StandardPagination
     detail_serializer_class = None
     list_serializer_class = None
     create_serializer_class = None
@@ -91,10 +128,43 @@ class TaskViewSetBase(TaskSubResourceMixin, ModelViewSet):
         if search:
             queryset = queryset.filter(Q(name__icontains=search) | Q(description__icontains=search))
 
-        ordering = "-created_at"
         if self.action == "list":
-            ordering = self.request.query_params.get("ordering", ordering)
-        return queryset.order_by(ordering)
+            created_from = parse_datetime_param(
+                self.request.query_params.get("created_from"),
+                field_name="created_from",
+            )
+            created_to = parse_datetime_param(
+                self.request.query_params.get("created_to"),
+                field_name="created_to",
+            )
+            updated_from = parse_datetime_param(
+                self.request.query_params.get("updated_from"),
+                field_name="updated_from",
+            )
+            updated_to = parse_datetime_param(
+                self.request.query_params.get("updated_to"),
+                field_name="updated_to",
+            )
+            if created_from and created_to and created_from > created_to:
+                raise invalid_query_param(
+                    "created_from must be earlier than or equal to created_to"
+                )
+            if updated_from and updated_to and updated_from > updated_to:
+                raise invalid_query_param(
+                    "updated_from must be earlier than or equal to updated_to"
+                )
+            if created_from:
+                queryset = queryset.filter(created_at__gte=created_from)
+            if created_to:
+                queryset = queryset.filter(created_at__lte=created_to)
+            if updated_from:
+                queryset = queryset.filter(updated_at__gte=updated_from)
+            if updated_to:
+                queryset = queryset.filter(updated_at__lte=updated_to)
+            ordering = self.request.query_params.get("ordering")
+            return apply_queryset_ordering(queryset, ordering, TASK_ORDERING)
+
+        return queryset.order_by("-created_at")
 
     # ------------------------------------------------------------------
     # CRUD overrides

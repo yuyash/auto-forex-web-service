@@ -78,7 +78,7 @@ export default function BacktestTasksPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('-created_at');
   const [page, setPage] = useState(1);
-  const pageSize = 20;
+  const [pageSize, setPageSize] = useState(20);
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 400);
 
   // Determine status filter based on active tab
@@ -167,6 +167,11 @@ export default function BacktestTasksPage() {
 
   const handleSortChange = (event: SelectChangeEvent<string>) => {
     setSortBy(event.target.value);
+    setPage(1);
+  };
+
+  const handlePageSizeChange = (event: SelectChangeEvent<string>) => {
+    setPageSize(Number(event.target.value));
     setPage(1);
   };
 
@@ -296,6 +301,24 @@ export default function BacktestTasksPage() {
                   <MenuItem value="-updated_at">
                     {t('trading:filters.recentlyUpdated', 'Recently Updated')}
                   </MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <FormControl fullWidth>
+                <InputLabel>
+                  {t('common:labels.pageSize', 'Page size')}
+                </InputLabel>
+                <Select
+                  value={String(pageSize)}
+                  onChange={handlePageSizeChange}
+                  label={t('common:labels.pageSize', 'Page size')}
+                >
+                  {[10, 20, 50, 100].map((size) => (
+                    <MenuItem key={size} value={String(size)}>
+                      {size}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>

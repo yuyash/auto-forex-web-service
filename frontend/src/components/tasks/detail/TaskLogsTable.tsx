@@ -51,6 +51,11 @@ interface TaskLogsTableProps {
   strategyType?: string;
 }
 
+type SortOrder = 'asc' | 'desc';
+
+const toOrdering = (field: string, order: SortOrder): string =>
+  order === 'desc' ? `-${field}` : field;
+
 export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
   taskId,
   taskType,
@@ -67,6 +72,8 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
   const [timestampTo, setTimestampTo] = useState<string>('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(100);
+  const [sortField, setSortField] = useState('timestamp');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [isReloading, setIsReloading] = useState(false);
   const { strategies } = useStrategies();
   const strategyEventLabels = useMemo(
@@ -92,6 +99,7 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
       ? new Date(timestampFrom).toISOString()
       : undefined,
     timestampTo: timestampTo ? new Date(timestampTo).toISOString() : undefined,
+    ordering: toOrdering(sortField, sortOrder),
     page: page + 1,
     pageSize: rowsPerPage,
     enableRealTimeUpdates,
@@ -116,6 +124,12 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
     await refresh();
     setIsReloading(false);
   }, [refresh]);
+
+  const handleSortChange = useCallback((field: string, order: SortOrder) => {
+    setSortField(field);
+    setSortOrder(order);
+    setPage(0);
+  }, []);
 
   const handleLevelFilterChange = (event: SelectChangeEvent<string[]>) => {
     const value = event.target.value;
@@ -576,6 +590,10 @@ export const TaskLogsTable: React.FC<TaskLogsTableProps> = ({
           allPageSelected={selection.isAllPageSelected(pageRowIds)}
           indeterminate={selection.isIndeterminate(pageRowIds)}
           onToggleAll={handleToggleAll}
+          sortMode="server"
+          orderBy={sortField}
+          order={sortOrder}
+          onSortChange={handleSortChange}
           fillEmptyRows
         />
       )}

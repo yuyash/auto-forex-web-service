@@ -5,7 +5,12 @@ from logging import Logger
 from typing import Any
 
 from django.db import IntegrityError
-from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    extend_schema,
+    extend_schema_view,
+    inline_serializer,
+)
 from rest_framework import serializers, status
 from rest_framework.exceptions import APIException
 from rest_framework.request import Request
@@ -16,7 +21,7 @@ from apps.trading.serializers.trading import (
     TradingTaskListSerializer,
     TradingTaskSerializer,
 )
-from apps.trading.views.task_base import TaskViewSetBase
+from apps.trading.views.task_base import TASK_LIST_PARAMETERS, TaskViewSetBase
 
 logger: Logger = logging.getLogger(name=__name__)
 
@@ -43,7 +48,13 @@ class ConflictError(APIException):
 
 
 @extend_schema_view(
-    list=extend_schema(tags=["Trading"]),
+    list=extend_schema(
+        tags=["Trading"],
+        parameters=[
+            *TASK_LIST_PARAMETERS,
+            OpenApiParameter(name="account_id", type=str, required=False),
+        ],
+    ),
     create=extend_schema(tags=["Trading"], responses={201: TradingTaskSerializer}),
     retrieve=extend_schema(tags=["Trading"], responses={200: TradingTaskSerializer}),
     update=extend_schema(tags=["Trading"], responses={200: TradingTaskSerializer}),

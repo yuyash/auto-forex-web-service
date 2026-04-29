@@ -190,9 +190,7 @@ export class TaskHelper {
    * Check if metrics panel is visible
    */
   async isMetricsPanelVisible(): Promise<boolean> {
-    const metricsPanel = this.page.locator(
-      '[data-testid="metrics-panel"], [data-testid="latest-metrics"]'
-    );
+    const metricsPanel = this.page.locator('[data-testid="task-metrics-tab"]');
     return await metricsPanel.isVisible({ timeout: 5000 }).catch(() => false);
   }
 

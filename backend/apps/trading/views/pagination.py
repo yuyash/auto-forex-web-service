@@ -16,22 +16,6 @@ class StandardPagination(PageNumberPagination):
     max_page_size = 200
 
 
-class TaskSubResourcePagination(PageNumberPagination):
-    """Pagination for task sub-resources: logs, events, trades (page_size=100, max=1000)."""
-
-    page_size = 100
-    page_size_query_param = "page_size"
-    max_page_size = 1000
-
-
-class MetricsPagination(PageNumberPagination):
-    """Pagination for metrics and compact time-series payloads."""
-
-    page_size = 100
-    page_size_query_param = "page_size"
-    max_page_size = 500
-
-
 class ActivityPagination(PageNumberPagination):
     """Pagination for logs and event activity streams."""
 

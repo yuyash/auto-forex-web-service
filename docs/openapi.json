@@ -308,6 +308,41 @@
                 "parameters": [
                     {
                         "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "timestamp_from",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "timestamp_to",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
                         "name": "unread_only",
                         "schema": {
                             "type": "boolean"
@@ -556,6 +591,50 @@
             "get": {
                 "operationId": "market_accounts_list",
                 "description": "API endpoint for OANDA accounts.\n\nGET /api/market/accounts/\n- List all OANDA accounts for the authenticated user\n\nPOST /api/market/accounts/\n- Add a new OANDA account",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "created_from",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "created_to",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "search",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
                 "tags": [
                     "Market"
                 ],
@@ -569,10 +648,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/components/schemas/OandaAccounts"
-                                    }
+                                    "$ref": "#/components/schemas/OandaAccountPaginatedResponse"
                                 }
                             }
                         },
@@ -760,7 +836,8 @@
                         "schema": {
                             "type": "integer",
                             "default": 100
-                        }
+                        },
+                        "description": "Deprecated alias for page_size."
                     },
                     {
                         "in": "query",
@@ -784,6 +861,21 @@
                             "type": "string"
                         },
                         "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer",
+                            "default": 100
+                        }
                     },
                     {
                         "in": "query",
@@ -1028,10 +1120,45 @@
                     },
                     {
                         "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
                         "name": "status",
                         "schema": {
                             "type": "string",
                             "default": "all"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "timestamp_from",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "timestamp_to",
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 ],
@@ -1192,6 +1319,41 @@
                     {
                         "in": "query",
                         "name": "instrument",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "range_from",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "range_to",
                         "schema": {
                             "type": "string"
                         }
@@ -1382,6 +1544,22 @@
                         "schema": {
                             "type": "integer"
                         },
+                        "description": "Deprecated alias for page_size (1-5000, default 5000)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "timestamp or -timestamp"
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        },
                         "description": "Page size (1-5000, default 5000)"
                     },
                     {
@@ -1456,10 +1634,22 @@
                 "description": "Read-only list of automatic task recovery audit records.",
                 "parameters": [
                     {
-                        "name": "ordering",
-                        "required": false,
                         "in": "query",
-                        "description": "Which field to use when ordering the results.",
+                        "name": "created_from",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "created_to",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "ordering",
                         "schema": {
                             "type": "string"
                         }
@@ -1469,6 +1659,15 @@
                         "required": false,
                         "in": "query",
                         "description": "A page number within the paginated result set.",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "name": "page_size",
+                        "required": false,
+                        "in": "query",
+                        "description": "Number of results to return per page.",
                         "schema": {
                             "type": "integer"
                         }
@@ -1528,7 +1727,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/PaginatedRecoveryAttemptList"
+                                    "$ref": "#/components/schemas/PaginatedRecoveryAttemptPaginatedResponseList"
                                 }
                             }
                         },
@@ -1615,37 +1814,64 @@
                 "description": "List and create strategy configurations.",
                 "parameters": [
                     {
-                        "name": "ordering",
-                        "required": false,
                         "in": "query",
-                        "description": "Which field to use when ordering the results.",
+                        "name": "created_from",
                         "schema": {
                             "type": "string"
                         }
                     },
                     {
+                        "in": "query",
+                        "name": "created_to",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
                         "name": "page",
-                        "required": false,
-                        "in": "query",
-                        "description": "A page number within the paginated result set.",
                         "schema": {
                             "type": "integer"
                         }
                     },
                     {
+                        "in": "query",
                         "name": "page_size",
-                        "required": false,
-                        "in": "query",
-                        "description": "Number of results to return per page.",
                         "schema": {
                             "type": "integer"
                         }
                     },
                     {
-                        "name": "search",
-                        "required": false,
                         "in": "query",
-                        "description": "A search term.",
+                        "name": "search",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "strategy_type",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "updated_from",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "updated_to",
                         "schema": {
                             "type": "string"
                         }
@@ -1960,28 +2186,71 @@
                 "description": "ViewSet for BacktestTask operations with task-centric API.",
                 "parameters": [
                     {
-                        "name": "ordering",
-                        "required": false,
                         "in": "query",
-                        "description": "Which field to use when ordering the results.",
+                        "name": "config_id",
                         "schema": {
                             "type": "string"
                         }
                     },
                     {
-                        "name": "page",
-                        "required": false,
                         "in": "query",
-                        "description": "A page number within the paginated result set.",
+                        "name": "created_from",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "created_to",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
                         "schema": {
                             "type": "integer"
                         }
                     },
                     {
-                        "name": "search",
-                        "required": false,
                         "in": "query",
-                        "description": "A search term.",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "search",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "status",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "updated_from",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "updated_to",
                         "schema": {
                             "type": "string"
                         }
@@ -2304,6 +2573,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Sort field. Prefix with '-' for descending."
+                    },
+                    {
+                        "in": "query",
                         "name": "page",
                         "schema": {
                             "type": "integer",
@@ -2595,111 +2872,6 @@
                 }
             }
         },
-        "/api/trading/tasks/backtest/{id}/latest-metrics/": {
-            "get": {
-                "operationId": "trading_tasks_backtest_latest_metrics_retrieve",
-                "description": "Retrieve the latest time-series metric point for the task.",
-                "parameters": [
-                    {
-                        "in": "query",
-                        "name": "execution_id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "nullable": true
-                        },
-                        "description": "Filter by execution ID (UUID)."
-                    },
-                    {
-                        "in": "path",
-                        "name": "id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "description": "Unique identifier for this record"
-                        },
-                        "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "interval",
-                        "schema": {
-                            "type": "integer",
-                            "maximum": 1440,
-                            "minimum": 1
-                        },
-                        "description": "Aggregation interval in minutes. Default 1. When greater than 1, returns one point per N-minute window."
-                    },
-                    {
-                        "in": "query",
-                        "name": "metric_keys",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Optional comma-separated metric keys to include in each metrics object."
-                    },
-                    {
-                        "in": "query",
-                        "name": "page",
-                        "schema": {
-                            "type": "integer",
-                            "minimum": 1
-                        },
-                        "description": "Page number (1-based)."
-                    },
-                    {
-                        "in": "query",
-                        "name": "page_size",
-                        "schema": {
-                            "type": "integer",
-                            "maximum": 500,
-                            "minimum": 1
-                        },
-                        "description": "Results per page. Default 100, maximum 500."
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string",
-                            "format": "date-time",
-                            "nullable": true
-                        },
-                        "description": "RFC3339 timestamp for incremental fetch."
-                    },
-                    {
-                        "in": "query",
-                        "name": "until",
-                        "schema": {
-                            "type": "string",
-                            "format": "date-time",
-                            "nullable": true
-                        },
-                        "description": "RFC3339 upper-bound timestamp (exclusive)."
-                    }
-                ],
-                "tags": [
-                    "Trading"
-                ],
-                "security": [
-                    {
-                        "JWTAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/TaskLatestMetricResponse"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
         "/api/trading/tasks/backtest/{id}/log-components/": {
             "get": {
                 "operationId": "trading_tasks_backtest_log_components_retrieve",
@@ -2791,6 +2963,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Sort field. Prefix with '-' for descending."
+                    },
+                    {
+                        "in": "query",
                         "name": "page",
                         "schema": {
                             "type": "integer",
@@ -2869,111 +3049,6 @@
                 }
             }
         },
-        "/api/trading/tasks/backtest/{id}/metrics/": {
-            "get": {
-                "operationId": "trading_tasks_backtest_metrics_retrieve",
-                "description": "Retrieve paginated time-series metrics for the task.",
-                "parameters": [
-                    {
-                        "in": "query",
-                        "name": "execution_id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "nullable": true
-                        },
-                        "description": "Filter by execution ID (UUID)."
-                    },
-                    {
-                        "in": "path",
-                        "name": "id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "description": "Unique identifier for this record"
-                        },
-                        "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "interval",
-                        "schema": {
-                            "type": "integer",
-                            "maximum": 1440,
-                            "minimum": 1
-                        },
-                        "description": "Aggregation interval in minutes. Default 1. When greater than 1, returns one point per N-minute window."
-                    },
-                    {
-                        "in": "query",
-                        "name": "metric_keys",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Optional comma-separated metric keys to include in each metrics object."
-                    },
-                    {
-                        "in": "query",
-                        "name": "page",
-                        "schema": {
-                            "type": "integer",
-                            "minimum": 1
-                        },
-                        "description": "Page number (1-based)."
-                    },
-                    {
-                        "in": "query",
-                        "name": "page_size",
-                        "schema": {
-                            "type": "integer",
-                            "maximum": 500,
-                            "minimum": 1
-                        },
-                        "description": "Results per page. Default 100, maximum 500."
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string",
-                            "format": "date-time",
-                            "nullable": true
-                        },
-                        "description": "RFC3339 timestamp for incremental fetch."
-                    },
-                    {
-                        "in": "query",
-                        "name": "until",
-                        "schema": {
-                            "type": "string",
-                            "format": "date-time",
-                            "nullable": true
-                        },
-                        "description": "RFC3339 upper-bound timestamp (exclusive)."
-                    }
-                ],
-                "tags": [
-                    "Trading"
-                ],
-                "security": [
-                    {
-                        "JWTAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/TaskMetricsResponse"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
         "/api/trading/tasks/backtest/{id}/orders/": {
             "get": {
                 "operationId": "trading_tasks_backtest_orders_retrieve",
@@ -3025,6 +3100,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Sort field. Prefix with '-' for descending."
+                    },
+                    {
+                        "in": "query",
                         "name": "page",
                         "schema": {
                             "type": "integer",
@@ -3059,6 +3142,26 @@
                             "type": "string"
                         },
                         "description": "Order status filter."
+                    },
+                    {
+                        "in": "query",
+                        "name": "timestamp_from",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "Filter records from this RFC3339 timestamp (inclusive)."
+                    },
+                    {
+                        "in": "query",
+                        "name": "timestamp_to",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "Filter records until this RFC3339 timestamp (inclusive)."
                     }
                 ],
                 "tags": [
@@ -3237,6 +3340,14 @@
                             "type": "boolean"
                         },
                         "description": "Include position trade_ids in the response."
+                    },
+                    {
+                        "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Sort field. Prefix with '-' for descending."
                     },
                     {
                         "in": "query",
@@ -3622,6 +3733,239 @@
                 }
             }
         },
+        "/api/trading/tasks/backtest/{id}/strategy/history/": {
+            "get": {
+                "operationId": "trading_tasks_backtest_strategy_history_retrieve",
+                "description": "Retrieve paginated strategy calculations, actions, and operation history.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "category",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "granularity",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "until",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskStrategyHistoryResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/backtest/{id}/strategy/metrics/": {
+            "get": {
+                "operationId": "trading_tasks_backtest_strategy_metrics_retrieve",
+                "description": "Retrieve paginated strategy metrics aligned to OHLC chart granularity.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "granularity",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "metric_keys",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "until",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskStrategyMetricsResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/backtest/{id}/strategy/snapshot/": {
+            "get": {
+                "operationId": "trading_tasks_backtest_strategy_snapshot_retrieve",
+                "description": "Retrieve the current strategy snapshot for a task execution.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskStrategySnapshotResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/backtest/{id}/summary/": {
             "get": {
                 "operationId": "trading_tasks_backtest_summary_retrieve",
@@ -3717,14 +4061,9 @@
                         "in": "query",
                         "name": "ordering",
                         "schema": {
-                            "enum": [
-                                "asc",
-                                "desc"
-                            ],
-                            "type": "string",
-                            "minLength": 1
+                            "type": "string"
                         },
-                        "description": "Trade ordering by timestamp/sequence_number.\n\n* `asc` - asc\n* `desc` - desc"
+                        "description": "Trade ordering field. Prefix with '-' for descending. Legacy values 'asc' and 'desc' are accepted for timestamp ordering."
                     },
                     {
                         "in": "query",
@@ -3806,131 +4145,84 @@
                 }
             }
         },
-        "/api/trading/tasks/backtest/{id}/trend-replay/": {
-            "get": {
-                "operationId": "trading_tasks_backtest_trend_replay_retrieve",
-                "description": "Retrieve chart-oriented trades and positions for task trend replay.",
-                "parameters": [
-                    {
-                        "in": "query",
-                        "name": "execution_id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "nullable": true
-                        },
-                        "description": "Filter by execution ID (UUID)."
-                    },
-                    {
-                        "in": "path",
-                        "name": "id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "description": "Unique identifier for this record"
-                        },
-                        "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "page",
-                        "schema": {
-                            "type": "integer",
-                            "minimum": 1
-                        },
-                        "description": "Page number (1-based)."
-                    },
-                    {
-                        "in": "query",
-                        "name": "page_size",
-                        "schema": {
-                            "type": "integer",
-                            "maximum": 1000,
-                            "minimum": 1
-                        },
-                        "description": "Results per page. Default 100, maximum 1000."
-                    },
-                    {
-                        "in": "query",
-                        "name": "range_from",
-                        "schema": {
-                            "type": "string",
-                            "format": "date-time",
-                            "nullable": true
-                        },
-                        "description": "RFC3339 lower bound for the chart window."
-                    },
-                    {
-                        "in": "query",
-                        "name": "range_to",
-                        "schema": {
-                            "type": "string",
-                            "format": "date-time",
-                            "nullable": true
-                        },
-                        "description": "RFC3339 upper bound for the chart window."
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string",
-                            "format": "date-time",
-                            "nullable": true
-                        },
-                        "description": "RFC3339 timestamp for incremental fetch."
-                    }
-                ],
-                "tags": [
-                    "Trading"
-                ],
-                "security": [
-                    {
-                        "JWTAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/TaskTrendReplay"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
         "/api/trading/tasks/trading/": {
             "get": {
                 "operationId": "trading_tasks_trading_list",
                 "description": "ViewSet for TradingTask operations with task-centric API.",
                 "parameters": [
                     {
-                        "name": "ordering",
-                        "required": false,
                         "in": "query",
-                        "description": "Which field to use when ordering the results.",
+                        "name": "account_id",
                         "schema": {
                             "type": "string"
                         }
                     },
                     {
-                        "name": "page",
-                        "required": false,
                         "in": "query",
-                        "description": "A page number within the paginated result set.",
+                        "name": "config_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "created_from",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "created_to",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
                         "schema": {
                             "type": "integer"
                         }
                     },
                     {
-                        "name": "search",
-                        "required": false,
                         "in": "query",
-                        "description": "A search term.",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "search",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "status",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "updated_from",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "updated_to",
                         "schema": {
                             "type": "string"
                         }
@@ -4251,6 +4543,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Sort field. Prefix with '-' for descending."
+                    },
+                    {
+                        "in": "query",
                         "name": "page",
                         "schema": {
                             "type": "integer",
@@ -4542,111 +4842,6 @@
                 }
             }
         },
-        "/api/trading/tasks/trading/{id}/latest-metrics/": {
-            "get": {
-                "operationId": "trading_tasks_trading_latest_metrics_retrieve",
-                "description": "Retrieve the latest time-series metric point for the task.",
-                "parameters": [
-                    {
-                        "in": "query",
-                        "name": "execution_id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "nullable": true
-                        },
-                        "description": "Filter by execution ID (UUID)."
-                    },
-                    {
-                        "in": "path",
-                        "name": "id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "description": "Unique identifier for this record"
-                        },
-                        "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "interval",
-                        "schema": {
-                            "type": "integer",
-                            "maximum": 1440,
-                            "minimum": 1
-                        },
-                        "description": "Aggregation interval in minutes. Default 1. When greater than 1, returns one point per N-minute window."
-                    },
-                    {
-                        "in": "query",
-                        "name": "metric_keys",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Optional comma-separated metric keys to include in each metrics object."
-                    },
-                    {
-                        "in": "query",
-                        "name": "page",
-                        "schema": {
-                            "type": "integer",
-                            "minimum": 1
-                        },
-                        "description": "Page number (1-based)."
-                    },
-                    {
-                        "in": "query",
-                        "name": "page_size",
-                        "schema": {
-                            "type": "integer",
-                            "maximum": 500,
-                            "minimum": 1
-                        },
-                        "description": "Results per page. Default 100, maximum 500."
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string",
-                            "format": "date-time",
-                            "nullable": true
-                        },
-                        "description": "RFC3339 timestamp for incremental fetch."
-                    },
-                    {
-                        "in": "query",
-                        "name": "until",
-                        "schema": {
-                            "type": "string",
-                            "format": "date-time",
-                            "nullable": true
-                        },
-                        "description": "RFC3339 upper-bound timestamp (exclusive)."
-                    }
-                ],
-                "tags": [
-                    "Trading"
-                ],
-                "security": [
-                    {
-                        "JWTAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/TaskLatestMetricResponse"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
         "/api/trading/tasks/trading/{id}/log-components/": {
             "get": {
                 "operationId": "trading_tasks_trading_log_components_retrieve",
@@ -4738,6 +4933,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Sort field. Prefix with '-' for descending."
+                    },
+                    {
+                        "in": "query",
                         "name": "page",
                         "schema": {
                             "type": "integer",
@@ -4816,111 +5019,6 @@
                 }
             }
         },
-        "/api/trading/tasks/trading/{id}/metrics/": {
-            "get": {
-                "operationId": "trading_tasks_trading_metrics_retrieve",
-                "description": "Retrieve paginated time-series metrics for the task.",
-                "parameters": [
-                    {
-                        "in": "query",
-                        "name": "execution_id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "nullable": true
-                        },
-                        "description": "Filter by execution ID (UUID)."
-                    },
-                    {
-                        "in": "path",
-                        "name": "id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "description": "Unique identifier for this record"
-                        },
-                        "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "interval",
-                        "schema": {
-                            "type": "integer",
-                            "maximum": 1440,
-                            "minimum": 1
-                        },
-                        "description": "Aggregation interval in minutes. Default 1. When greater than 1, returns one point per N-minute window."
-                    },
-                    {
-                        "in": "query",
-                        "name": "metric_keys",
-                        "schema": {
-                            "type": "string"
-                        },
-                        "description": "Optional comma-separated metric keys to include in each metrics object."
-                    },
-                    {
-                        "in": "query",
-                        "name": "page",
-                        "schema": {
-                            "type": "integer",
-                            "minimum": 1
-                        },
-                        "description": "Page number (1-based)."
-                    },
-                    {
-                        "in": "query",
-                        "name": "page_size",
-                        "schema": {
-                            "type": "integer",
-                            "maximum": 500,
-                            "minimum": 1
-                        },
-                        "description": "Results per page. Default 100, maximum 500."
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string",
-                            "format": "date-time",
-                            "nullable": true
-                        },
-                        "description": "RFC3339 timestamp for incremental fetch."
-                    },
-                    {
-                        "in": "query",
-                        "name": "until",
-                        "schema": {
-                            "type": "string",
-                            "format": "date-time",
-                            "nullable": true
-                        },
-                        "description": "RFC3339 upper-bound timestamp (exclusive)."
-                    }
-                ],
-                "tags": [
-                    "Trading"
-                ],
-                "security": [
-                    {
-                        "JWTAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/TaskMetricsResponse"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
         "/api/trading/tasks/trading/{id}/orders/": {
             "get": {
                 "operationId": "trading_tasks_trading_orders_retrieve",
@@ -4972,6 +5070,14 @@
                     },
                     {
                         "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Sort field. Prefix with '-' for descending."
+                    },
+                    {
+                        "in": "query",
                         "name": "page",
                         "schema": {
                             "type": "integer",
@@ -5006,6 +5112,26 @@
                             "type": "string"
                         },
                         "description": "Order status filter."
+                    },
+                    {
+                        "in": "query",
+                        "name": "timestamp_from",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "Filter records from this RFC3339 timestamp (inclusive)."
+                    },
+                    {
+                        "in": "query",
+                        "name": "timestamp_to",
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                        },
+                        "description": "Filter records until this RFC3339 timestamp (inclusive)."
                     }
                 ],
                 "tags": [
@@ -5184,6 +5310,14 @@
                             "type": "boolean"
                         },
                         "description": "Include position trade_ids in the response."
+                    },
+                    {
+                        "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Sort field. Prefix with '-' for descending."
                     },
                     {
                         "in": "query",
@@ -5568,6 +5702,239 @@
                 }
             }
         },
+        "/api/trading/tasks/trading/{id}/strategy/history/": {
+            "get": {
+                "operationId": "trading_tasks_trading_strategy_history_retrieve",
+                "description": "Retrieve paginated strategy calculations, actions, and operation history.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "category",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "granularity",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "until",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskStrategyHistoryResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/trading/{id}/strategy/metrics/": {
+            "get": {
+                "operationId": "trading_tasks_trading_strategy_metrics_retrieve",
+                "description": "Retrieve paginated strategy metrics aligned to OHLC chart granularity.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "granularity",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "metric_keys",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "ordering",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "since",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "until",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskStrategyMetricsResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/trading/tasks/trading/{id}/strategy/snapshot/": {
+            "get": {
+                "operationId": "trading_tasks_trading_strategy_snapshot_retrieve",
+                "description": "Retrieve the current strategy snapshot for a task execution.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "execution_id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier for this record"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Trading"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/TaskStrategySnapshotResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/trading/tasks/trading/{id}/summary/": {
             "get": {
                 "operationId": "trading_tasks_trading_summary_retrieve",
@@ -5663,14 +6030,9 @@
                         "in": "query",
                         "name": "ordering",
                         "schema": {
-                            "enum": [
-                                "asc",
-                                "desc"
-                            ],
-                            "type": "string",
-                            "minLength": 1
+                            "type": "string"
                         },
-                        "description": "Trade ordering by timestamp/sequence_number.\n\n* `asc` - asc\n* `desc` - desc"
+                        "description": "Trade ordering field. Prefix with '-' for descending. Legacy values 'asc' and 'desc' are accepted for timestamp ordering."
                     },
                     {
                         "in": "query",
@@ -5744,103 +6106,6 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/TaskTradePaginatedResponse"
-                                }
-                            }
-                        },
-                        "description": ""
-                    }
-                }
-            }
-        },
-        "/api/trading/tasks/trading/{id}/trend-replay/": {
-            "get": {
-                "operationId": "trading_tasks_trading_trend_replay_retrieve",
-                "description": "Retrieve chart-oriented trades and positions for task trend replay.",
-                "parameters": [
-                    {
-                        "in": "query",
-                        "name": "execution_id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "nullable": true
-                        },
-                        "description": "Filter by execution ID (UUID)."
-                    },
-                    {
-                        "in": "path",
-                        "name": "id",
-                        "schema": {
-                            "type": "string",
-                            "format": "uuid",
-                            "description": "Unique identifier for this record"
-                        },
-                        "required": true
-                    },
-                    {
-                        "in": "query",
-                        "name": "page",
-                        "schema": {
-                            "type": "integer",
-                            "minimum": 1
-                        },
-                        "description": "Page number (1-based)."
-                    },
-                    {
-                        "in": "query",
-                        "name": "page_size",
-                        "schema": {
-                            "type": "integer",
-                            "maximum": 1000,
-                            "minimum": 1
-                        },
-                        "description": "Results per page. Default 100, maximum 1000."
-                    },
-                    {
-                        "in": "query",
-                        "name": "range_from",
-                        "schema": {
-                            "type": "string",
-                            "format": "date-time",
-                            "nullable": true
-                        },
-                        "description": "RFC3339 lower bound for the chart window."
-                    },
-                    {
-                        "in": "query",
-                        "name": "range_to",
-                        "schema": {
-                            "type": "string",
-                            "format": "date-time",
-                            "nullable": true
-                        },
-                        "description": "RFC3339 upper bound for the chart window."
-                    },
-                    {
-                        "in": "query",
-                        "name": "since",
-                        "schema": {
-                            "type": "string",
-                            "format": "date-time",
-                            "nullable": true
-                        },
-                        "description": "RFC3339 timestamp for incremental fetch."
-                    }
-                ],
-                "tags": [
-                    "Trading"
-                ],
-                "security": [
-                    {
-                        "JWTAuth": []
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/TaskTrendReplay"
                                 }
                             }
                         },
@@ -7318,6 +7583,20 @@
                         "type": "string",
                         "format": "date-time",
                         "nullable": true
+                    },
+                    "take_profit": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "stop_loss": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "account_name": {
+                        "type": "string"
+                    },
+                    "account_db_id": {
+                        "type": "integer"
                     }
                 },
                 "required": [
@@ -7619,6 +7898,7 @@
             },
             "OandaAccountDetailResponse": {
                 "type": "object",
+                "description": "Schema serializer for OANDA account responses with optional live snapshot fields.",
                 "properties": {
                     "id": {
                         "type": "integer"
@@ -7700,6 +7980,34 @@
                     "is_default",
                     "jurisdiction",
                     "updated_at"
+                ]
+            },
+            "OandaAccountPaginatedResponse": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer"
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/OandaAccountDetailResponse"
+                        }
+                    }
+                },
+                "required": [
+                    "count",
+                    "next",
+                    "previous",
+                    "results"
                 ]
             },
             "OandaAccountUpdateRequestRequest": {
@@ -8338,7 +8646,7 @@
                     }
                 }
             },
-            "PaginatedRecoveryAttemptList": {
+            "PaginatedRecoveryAttemptPaginatedResponseList": {
                 "type": "object",
                 "required": [
                     "count",
@@ -8364,7 +8672,7 @@
                     "results": {
                         "type": "array",
                         "items": {
-                            "$ref": "#/components/schemas/RecoveryAttempt"
+                            "$ref": "#/components/schemas/RecoveryAttemptPaginatedResponse"
                         }
                     }
                 }
@@ -9110,6 +9418,34 @@
                     "task_type"
                 ]
             },
+            "RecoveryAttemptPaginatedResponse": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer"
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RecoveryAttempt"
+                        }
+                    }
+                },
+                "required": [
+                    "count",
+                    "next",
+                    "previous",
+                    "results"
+                ]
+            },
             "RegisteredUser": {
                 "type": "object",
                 "properties": {
@@ -9790,30 +10126,6 @@
                     "stop_reason"
                 ]
             },
-            "TaskLatestMetricResponse": {
-                "type": "object",
-                "properties": {
-                    "data_source": {
-                        "type": "string"
-                    },
-                    "resume_cursor_timestamp": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "consistency_warnings": {
-                        "type": "array",
-                        "items": {}
-                    },
-                    "result": {
-                        "nullable": true
-                    }
-                },
-                "required": [
-                    "data_source",
-                    "result",
-                    "resume_cursor_timestamp"
-                ]
-            },
             "TaskLog": {
                 "type": "object",
                 "description": "Serializer for TaskLog model.\n\nProvides access to task execution logs with timestamp, level, and message.",
@@ -9919,63 +10231,6 @@
                     "next",
                     "previous",
                     "results"
-                ]
-            },
-            "TaskMetricPoint": {
-                "type": "object",
-                "properties": {
-                    "t": {
-                        "type": "integer"
-                    },
-                    "metrics": {
-                        "type": "object",
-                        "additionalProperties": {}
-                    }
-                },
-                "required": [
-                    "metrics",
-                    "t"
-                ]
-            },
-            "TaskMetricsResponse": {
-                "type": "object",
-                "properties": {
-                    "count": {
-                        "type": "integer"
-                    },
-                    "next": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "previous": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "data_source": {
-                        "type": "string"
-                    },
-                    "resume_cursor_timestamp": {
-                        "type": "string",
-                        "nullable": true
-                    },
-                    "consistency_warnings": {
-                        "type": "array",
-                        "items": {}
-                    },
-                    "results": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/TaskMetricPoint"
-                        }
-                    }
-                },
-                "required": [
-                    "count",
-                    "data_source",
-                    "next",
-                    "previous",
-                    "results",
-                    "resume_cursor_timestamp"
                 ]
             },
             "TaskOrderPaginatedResponse": {
@@ -10090,6 +10345,129 @@
                     "summary"
                 ]
             },
+            "TaskStrategyHistoryResponse": {
+                "type": "object",
+                "properties": {
+                    "execution_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "strategy_type": {
+                        "type": "string"
+                    },
+                    "instrument": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "count": {
+                        "type": "integer"
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {}
+                    }
+                },
+                "required": [
+                    "count",
+                    "execution_id",
+                    "instrument",
+                    "next",
+                    "previous",
+                    "results",
+                    "strategy_type"
+                ]
+            },
+            "TaskStrategyMetricsResponse": {
+                "type": "object",
+                "properties": {
+                    "execution_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "strategy_type": {
+                        "type": "string"
+                    },
+                    "instrument": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "data_source": {
+                        "type": "string"
+                    },
+                    "resume_cursor_timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "consistency_warnings": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "ohlc_layers": {},
+                    "count": {
+                        "type": "integer"
+                    },
+                    "next": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {}
+                    }
+                },
+                "required": [
+                    "count",
+                    "data_source",
+                    "execution_id",
+                    "instrument",
+                    "next",
+                    "ohlc_layers",
+                    "previous",
+                    "results",
+                    "resume_cursor_timestamp",
+                    "strategy_type"
+                ]
+            },
+            "TaskStrategySnapshotResponse": {
+                "type": "object",
+                "properties": {
+                    "execution_id": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "strategy_type": {
+                        "type": "string"
+                    },
+                    "instrument": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "timestamp": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "snapshot": {}
+                },
+                "required": [
+                    "execution_id",
+                    "instrument",
+                    "snapshot",
+                    "strategy_type",
+                    "timestamp"
+                ]
+            },
             "TaskSummary": {
                 "type": "object",
                 "description": "Serializer for structured task summary response.\n\nReturns comprehensive task summary grouped into logical sections:\n- timestamp: Common timestamp from the last tick\n- pnl: Realized and unrealized PnL\n- counts: Trade and position counts\n- execution: Balance and ticks processed\n- tick: Last tick prices (bid, ask, mid)\n- task: Status, timing, and progress",
@@ -10149,82 +10527,6 @@
                     "next",
                     "previous",
                     "results"
-                ]
-            },
-            "TaskTrendReplay": {
-                "type": "object",
-                "description": "Combined trend replay payload for the chart view.",
-                "properties": {
-                    "trades": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/Trade"
-                        }
-                    },
-                    "positions": {
-                        "type": "array",
-                        "items": {
-                            "$ref": "#/components/schemas/Position"
-                        }
-                    },
-                    "meta": {
-                        "$ref": "#/components/schemas/TaskTrendReplayMeta"
-                    }
-                },
-                "required": [
-                    "meta",
-                    "positions",
-                    "trades"
-                ]
-            },
-            "TaskTrendReplayMeta": {
-                "type": "object",
-                "description": "Metadata for a trend replay payload.",
-                "properties": {
-                    "mode": {
-                        "type": "string"
-                    },
-                    "page": {
-                        "type": "integer"
-                    },
-                    "page_size": {
-                        "type": "integer"
-                    },
-                    "total_trades": {
-                        "type": "integer"
-                    },
-                    "returned_trades": {
-                        "type": "integer"
-                    },
-                    "has_more_trades": {
-                        "type": "boolean"
-                    },
-                    "latest_trade_updated_at": {
-                        "type": "string",
-                        "format": "date-time",
-                        "nullable": true
-                    },
-                    "range_from": {
-                        "type": "string",
-                        "format": "date-time",
-                        "nullable": true
-                    },
-                    "range_to": {
-                        "type": "string",
-                        "format": "date-time",
-                        "nullable": true
-                    }
-                },
-                "required": [
-                    "has_more_trades",
-                    "latest_trade_updated_at",
-                    "mode",
-                    "page",
-                    "page_size",
-                    "range_from",
-                    "range_to",
-                    "returned_trades",
-                    "total_trades"
                 ]
             },
             "TaskTypeEnum": {

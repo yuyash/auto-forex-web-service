@@ -566,6 +566,7 @@ export function TaskMetricsTab({
 
   return (
     <Box
+      data-testid="task-metrics-tab"
       sx={{
         px: { xs: 0, sm: 2, md: 3 },
         py: { xs: 0.5, sm: 1.5 },

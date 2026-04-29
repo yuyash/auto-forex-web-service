@@ -6,7 +6,7 @@ used by both BacktestTaskViewSet and TradingTaskViewSet.
 
 from __future__ import annotations
 
-from drf_spectacular.utils import extend_schema, inline_serializer
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -25,11 +25,9 @@ from apps.trading.services.task_activity import TaskActivityQueryService
 from apps.trading.serializers.execution import TaskExecutionSerializer
 from apps.trading.serializers.summary import TaskSummarySerializer
 from apps.trading.serializers.task import TaskLogSerializer
-from apps.trading.serializers.trend_replay import TaskTrendReplaySerializer
 from apps.trading.services.task_metrics import (
     paginated_envelope as _paginated_envelope,
 )
-from apps.trading.services.task_metrics import TaskMetricsQueryService
 from apps.trading.views.query_params import (
     ExecutionDetailQueryParams,
     ExecutionDetailQueryParamsSchemaSerializer,
@@ -38,7 +36,6 @@ from apps.trading.views.query_params import (
     EventsQueryParamsSchemaSerializer,
     LogComponentsQueryParamsSchemaSerializer,
     LogsQueryParamsSchemaSerializer,
-    MetricsQueryParamsSchemaSerializer,
     OrdersQueryParamsSchemaSerializer,
     PositionLifecycleQueryParams,
     PositionLifecycleQueryParamsSchemaSerializer,
@@ -48,8 +45,6 @@ from apps.trading.views.query_params import (
     SummaryQueryParams,
     SummaryQueryParamsSchemaSerializer,
     TradesQueryParamsSchemaSerializer,
-    TrendReplayQueryParams,
-    TrendReplayQueryParamsSchemaSerializer,
 )
 from apps.trading.views.pagination import (
     ActivityPagination,
@@ -64,77 +59,138 @@ class TaskSubResourceMixin:
 
     @extend_schema(
         tags=["Trading"],
-        parameters=[MetricsQueryParamsSchemaSerializer],
+        parameters=[
+            OpenApiParameter("execution_id", str, required=False),
+        ],
         responses={
             200: inline_serializer(
-                "TaskMetricsResponse",
+                "TaskStrategySnapshotResponse",
                 fields={
-                    "count": serializers.IntegerField(),
-                    "next": serializers.CharField(allow_null=True),
-                    "previous": serializers.CharField(allow_null=True),
-                    "data_source": serializers.CharField(),
-                    "resume_cursor_timestamp": serializers.CharField(allow_null=True),
-                    "consistency_warnings": serializers.ListField(
-                        child=serializers.JSONField(), required=False
-                    ),
-                    "results": serializers.ListField(
-                        child=inline_serializer(
-                            "TaskMetricPoint",
-                            fields={
-                                "t": serializers.IntegerField(),
-                                "metrics": serializers.DictField(),
-                            },
-                        )
-                    ),
+                    "execution_id": serializers.CharField(allow_null=True),
+                    "strategy_type": serializers.CharField(),
+                    "instrument": serializers.CharField(allow_null=True),
+                    "timestamp": serializers.CharField(allow_null=True),
+                    "snapshot": serializers.JSONField(),
                 },
             )
         },
-        description="Retrieve paginated time-series metrics for the task.",
-    )
-    @action(
-        detail=True, methods=["get"], url_path="metrics", throttle_classes=[TaskDataRateThrottle]
-    )
-    def metrics(self, request: Request, pk: int | None = None) -> Response:
-        task = self.get_object()  # type: ignore[attr-defined]
-        payload = TaskMetricsQueryService().list_metrics(
-            request=request,
-            task=task,
-            task_type_label=self.task_type_label,
-        )
-        return Response(payload)
-
-    @extend_schema(
-        tags=["Trading"],
-        parameters=[MetricsQueryParamsSchemaSerializer],
-        responses={
-            200: inline_serializer(
-                "TaskLatestMetricResponse",
-                fields={
-                    "data_source": serializers.CharField(),
-                    "resume_cursor_timestamp": serializers.CharField(allow_null=True),
-                    "consistency_warnings": serializers.ListField(
-                        child=serializers.JSONField(), required=False
-                    ),
-                    "result": serializers.JSONField(allow_null=True),
-                },
-            )
-        },
-        description="Retrieve the latest time-series metric point for the task.",
+        description="Retrieve the current strategy snapshot for a task execution.",
     )
     @action(
         detail=True,
         methods=["get"],
-        url_path="latest-metrics",
+        url_path="strategy/snapshot",
         throttle_classes=[TaskDataRateThrottle],
     )
-    def latest_metrics(self, request: Request, pk: int | None = None) -> Response:
+    def strategy_snapshot(self, request: Request, pk: int | None = None) -> Response:
+        from apps.trading.services.strategy_data import StrategyDataService
+
         task = self.get_object()  # type: ignore[attr-defined]
-        payload = TaskMetricsQueryService().latest_metric(
-            request=request,
-            task=task,
-            task_type_label=self.task_type_label,
+        return Response(
+            StrategyDataService().snapshot(
+                request=request,
+                task=task,
+                task_type_label=self.task_type_label,
+            )
         )
-        return Response(payload)
+
+    @extend_schema(
+        tags=["Trading"],
+        parameters=[
+            OpenApiParameter("execution_id", str, required=False),
+            OpenApiParameter("since", str, required=False),
+            OpenApiParameter("until", str, required=False),
+            OpenApiParameter("page", int, required=False),
+            OpenApiParameter("page_size", int, required=False),
+            OpenApiParameter("ordering", str, required=False),
+            OpenApiParameter("granularity", str, required=False),
+            OpenApiParameter("category", str, required=False),
+        ],
+        responses={
+            200: inline_serializer(
+                "TaskStrategyHistoryResponse",
+                fields={
+                    "execution_id": serializers.CharField(allow_null=True),
+                    "strategy_type": serializers.CharField(),
+                    "instrument": serializers.CharField(allow_null=True),
+                    "count": serializers.IntegerField(),
+                    "next": serializers.CharField(allow_null=True),
+                    "previous": serializers.CharField(allow_null=True),
+                    "results": serializers.ListField(child=serializers.JSONField()),
+                },
+            )
+        },
+        description="Retrieve paginated strategy calculations, actions, and operation history.",
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="strategy/history",
+        throttle_classes=[TaskDataRateThrottle],
+    )
+    def strategy_history(self, request: Request, pk: int | None = None) -> Response:
+        from apps.trading.services.strategy_data import StrategyDataService
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        return Response(
+            StrategyDataService().history(
+                request=request,
+                task=task,
+                task_type_label=self.task_type_label,
+            )
+        )
+
+    @extend_schema(
+        tags=["Trading"],
+        parameters=[
+            OpenApiParameter("execution_id", str, required=False),
+            OpenApiParameter("since", str, required=False),
+            OpenApiParameter("until", str, required=False),
+            OpenApiParameter("page", int, required=False),
+            OpenApiParameter("page_size", int, required=False),
+            OpenApiParameter("ordering", str, required=False),
+            OpenApiParameter("granularity", str, required=False),
+            OpenApiParameter("metric_keys", str, required=False),
+        ],
+        responses={
+            200: inline_serializer(
+                "TaskStrategyMetricsResponse",
+                fields={
+                    "execution_id": serializers.CharField(allow_null=True),
+                    "strategy_type": serializers.CharField(),
+                    "instrument": serializers.CharField(allow_null=True),
+                    "data_source": serializers.CharField(),
+                    "resume_cursor_timestamp": serializers.CharField(allow_null=True),
+                    "consistency_warnings": serializers.ListField(
+                        child=serializers.JSONField(), required=False
+                    ),
+                    "ohlc_layers": serializers.JSONField(),
+                    "count": serializers.IntegerField(),
+                    "next": serializers.CharField(allow_null=True),
+                    "previous": serializers.CharField(allow_null=True),
+                    "results": serializers.ListField(child=serializers.JSONField()),
+                },
+            )
+        },
+        description="Retrieve paginated strategy metrics aligned to OHLC chart granularity.",
+    )
+    @action(
+        detail=True,
+        methods=["get"],
+        url_path="strategy/metrics",
+        throttle_classes=[TaskDataRateThrottle],
+    )
+    def strategy_metrics(self, request: Request, pk: int | None = None) -> Response:
+        from apps.trading.services.strategy_data import StrategyDataService
+
+        task = self.get_object()  # type: ignore[attr-defined]
+        return Response(
+            StrategyDataService().metrics(
+                request=request,
+                task=task,
+                task_type_label=self.task_type_label,
+            )
+        )
 
     @extend_schema(
         tags=["Trading"],
@@ -370,53 +426,6 @@ class TaskSubResourceMixin:
                 {"code": "invalid_query_param", "detail": "Invalid query parameters."}
             ) from exc
         return Response(payload)
-
-    @extend_schema(
-        tags=["Trading"],
-        parameters=[TrendReplayQueryParamsSchemaSerializer],
-        responses={200: TaskTrendReplaySerializer},
-        description="Retrieve chart-oriented trades and positions for task trend replay.",
-    )
-    @action(
-        detail=True,
-        methods=["get"],
-        url_path="trend-replay",
-        throttle_classes=[TaskDataRateThrottle],
-    )
-    def trend_replay(self, request: Request, pk: str | None = None) -> Response:
-        from apps.trading.services.trend_replay import (
-            DEFAULT_TREND_REPLAY_PAGE_SIZE,
-            MAX_TREND_REPLAY_PAGE_SIZE,
-            TrendReplayQuery,
-            build_trend_replay_payload,
-        )
-
-        task = self.get_object()  # type: ignore[attr-defined]
-        query = TrendReplayQueryParams.from_request(
-            request,
-            default_execution_id=task.execution_id,
-            default_page_size=DEFAULT_TREND_REPLAY_PAGE_SIZE,
-            max_page_size=MAX_TREND_REPLAY_PAGE_SIZE,
-        )
-
-        payload = build_trend_replay_payload(
-            TrendReplayQuery(
-                task_type=self.task_type_label,
-                task_id=str(task.pk),
-                execution_id=(
-                    str(query.execution.execution_id)
-                    if query.execution.execution_id is not None
-                    else None
-                ),
-                range_from=query.range.start,
-                range_to=query.range.end,
-                since=query.execution.since,
-                page=query.execution.pagination.page,
-                page_size=query.execution.pagination.page_size,
-            )
-        )
-        serializer = TaskTrendReplaySerializer(payload)
-        return Response(serializer.data)
 
     # ------------------------------------------------------------------
     # orders (with incremental fetching via `since`)

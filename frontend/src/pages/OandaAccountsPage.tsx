@@ -18,8 +18,11 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Pagination,
+  InputAdornment,
   CircularProgress,
   Alert,
+  type SelectChangeEvent,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -28,6 +31,7 @@ import {
   Visibility,
   VisibilityOff,
   Refresh as RefreshIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -40,10 +44,11 @@ import {
   useDeleteAccount,
   useUpdateAccount,
 } from '../hooks/useAccountMutations';
-import { useAccounts, useAccount } from '../hooks/useAccounts';
+import { useAccounts, useAccountPage, useAccount } from '../hooks/useAccounts';
 import { useQueryClient } from '@tanstack/react-query';
 import { logger } from '../utils/logger';
 import { formatAppNumber } from '../utils/numberFormat';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
 
 interface AccountFormData {
   account_id: string;
@@ -176,11 +181,19 @@ function LiveAccountCard({
           </Box>
           <Box display="flex" gap={1}>
             <Chip
-              label={a.is_active ? 'Active' : 'Inactive'}
+              label={
+                a.is_active
+                  ? t('common:labels.active')
+                  : t('common:labels.inactive')
+              }
               color={a.is_active ? 'success' : 'default'}
             />
             {a.is_default && (
-              <Chip label="Default" color="primary" variant="outlined" />
+              <Chip
+                label={t('common:labels.default')}
+                color="primary"
+                variant="outlined"
+              />
             )}
           </Box>
         </CardContent>
@@ -212,15 +225,31 @@ function LiveAccountCard({
 }
 
 export default function OandaAccountsPage() {
-  const { t } = useTranslation(['settings', 'common']);
+  const { t } = useTranslation(['settings', 'common', 'trading']);
   const { showSuccess, showError } = useToast();
   const queryClient = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('-created_at');
+  const debouncedSearchQuery = useDebouncedValue(searchQuery, 300);
   const {
-    data: rawAccounts,
+    data: accountsPage,
     isLoading: loading,
     error: accountsError,
-  } = useAccounts();
-  const accounts = rawAccounts ?? [];
+  } = useAccountPage({
+    page,
+    page_size: pageSize,
+    search: debouncedSearchQuery || undefined,
+    ordering: sortBy,
+  });
+  const { data: allAccountsForDefault } = useAccounts({ page_size: 200 });
+  const accounts = accountsPage?.results ?? [];
+  const totalPages = accountsPage
+    ? Math.ceil(accountsPage.count / pageSize)
+    : 0;
+  const hasAnyAccount =
+    (allAccountsForDefault?.length ?? accountsPage?.count ?? 0) > 0;
   const createAccount = useCreateAccount();
   const updateAccount = useUpdateAccount();
   const deleteAccount = useDeleteAccount();
@@ -240,10 +269,15 @@ export default function OandaAccountsPage() {
     Partial<Record<keyof AccountFormData, string>>
   >({});
 
+  const handlePageSizeChange = (event: SelectChangeEvent<string>) => {
+    setPageSize(Number(event.target.value));
+    setPage(1);
+  };
+
   const handleAddClick = () => {
     setEditingAccount(null);
     setFormData({ account_id: '', api_token: '', api_type: 'practice' });
-    setIsDefault(accounts.length === 0);
+    setIsDefault(!hasAnyAccount);
     setFormErrors({});
     setShowApiToken(false);
     setDialogOpen(true);
@@ -399,6 +433,85 @@ export default function OandaAccountsPage() {
         </Typography>
       </Alert>
 
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 2,
+              gridTemplateColumns: {
+                xs: '1fr',
+                md: 'minmax(0, 1fr) 220px 160px',
+              },
+              alignItems: 'center',
+            }}
+          >
+            <TextField
+              fullWidth
+              placeholder={t(
+                'settings:accounts.searchAccounts',
+                'Search accounts...'
+              )}
+              value={searchQuery}
+              onChange={(event) => {
+                setSearchQuery(event.target.value);
+                setPage(1);
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <FormControl fullWidth>
+              <InputLabel>{t('trading:filters.sortBy', 'Sort By')}</InputLabel>
+              <Select
+                value={sortBy}
+                label={t('trading:filters.sortBy', 'Sort By')}
+                onChange={(event) => {
+                  setSortBy(event.target.value);
+                  setPage(1);
+                }}
+              >
+                <MenuItem value="-created_at">
+                  {t('trading:filters.newestFirst', 'Newest First')}
+                </MenuItem>
+                <MenuItem value="created_at">
+                  {t('trading:filters.oldestFirst', 'Oldest First')}
+                </MenuItem>
+                <MenuItem value="account_id">
+                  {t('settings:accounts.accountId')} A-Z
+                </MenuItem>
+                <MenuItem value="-account_id">
+                  {t('settings:accounts.accountId')} Z-A
+                </MenuItem>
+                <MenuItem value="-updated_at">
+                  {t('trading:filters.recentlyUpdated', 'Recently Updated')}
+                </MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>
+                {t('common:labels.pageSize', 'Page size')}
+              </InputLabel>
+              <Select
+                value={String(pageSize)}
+                label={t('common:labels.pageSize', 'Page size')}
+                onChange={handlePageSizeChange}
+              >
+                {[6, 12, 24, 48].map((size) => (
+                  <MenuItem key={size} value={String(size)}>
+                    {size}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Box>
+        </CardContent>
+      </Card>
+
       {loading && (
         <Box display="flex" justifyContent="center" py={4}>
           <CircularProgress />
@@ -414,27 +527,39 @@ export default function OandaAccountsPage() {
       )}
 
       {!loading && accounts.length > 0 && (
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: {
-              xs: '1fr',
-              sm: 'repeat(2, 1fr)',
-              md: 'repeat(3, 1fr)',
-            },
-            gap: 2,
-          }}
-        >
-          {accounts.map((account) => (
-            <Box key={account.id}>
-              <LiveAccountCard
-                account={account}
-                onEdit={handleEditClick}
-                onDelete={handleDeleteClick}
+        <>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'repeat(2, 1fr)',
+                md: 'repeat(3, 1fr)',
+              },
+              gap: 2,
+            }}
+          >
+            {accounts.map((account) => (
+              <Box key={account.id}>
+                <LiveAccountCard
+                  account={account}
+                  onEdit={handleEditClick}
+                  onDelete={handleDeleteClick}
+                />
+              </Box>
+            ))}
+          </Box>
+          {totalPages > 1 ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+              <Pagination
+                count={totalPages}
+                page={page}
+                onChange={(_event, value) => setPage(value)}
+                color="primary"
               />
             </Box>
-          ))}
-        </Box>
+          ) : null}
+        </>
       )}
 
       {/* Add/Edit Dialog */}
@@ -519,7 +644,7 @@ export default function OandaAccountsPage() {
                   id="is-default-checkbox"
                   checked={isDefault}
                   onChange={(e) => setIsDefault(e.target.checked)}
-                  disabled={accounts.length === 0 && !editingAccount}
+                  disabled={!hasAnyAccount && !editingAccount}
                 />
                 <label htmlFor="is-default-checkbox">
                   <Typography variant="body2">

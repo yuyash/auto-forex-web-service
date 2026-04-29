@@ -42,6 +42,52 @@
     "adaptive_net": "US-compatible net-position strategy that combines pluggable metrics into a target net exposure.",
     "net_grid": "US-compatible grid strategy that adjusts one net position by grid interval and records a fill-based ledger."
   },
+  "snapshot": {
+    "current_net_units": "Current Net Units",
+    "target_net_units": "Target Net Units",
+    "open_direction": "Open Direction",
+    "average_entry_price": "Average Entry",
+    "last_grid_price": "Last Grid Price",
+    "next_grid_price": "Next Grid Price",
+    "net_take_profit_price": "Net Take Profit",
+    "risk_exit_price": "Risk Exit",
+    "current_adverse_pips": "Adverse Move",
+    "current_favorable_pips": "Favorable Move",
+    "current_unrealized_pnl": "Unrealized P&L",
+    "step": "Grid Step",
+    "step_usage": "Grid Usage",
+    "max_steps": "Max Grid Steps",
+    "broker_reconciliation_status": "OANDA Sync",
+    "broker_reconciliation_warnings": "OANDA Warnings",
+    "broker_reconciliation_blockers": "OANDA Blockers",
+    "protection_level": "Protection Level",
+    "active_cycles": "Active Cycles",
+    "pending_cycles": "Pending Cycles",
+    "completed_cycles": "Completed Cycles",
+    "open_entries": "Open Entries",
+    "account_balance": "Account Balance",
+    "account_nav": "Account NAV",
+    "last_mid": "Last Mid",
+    "lock_entered_at": "Lock Entered At",
+    "cooldown_until": "Cooldown Until",
+    "margin_ratio": "Margin Ratio"
+  },
+  "data": {
+    "history": "History",
+    "emptyHistory": "No strategy history rows found.",
+    "columns": {
+      "time": "Time",
+      "source": "Source",
+      "event": "Event"
+    },
+    "categories": {
+      "all": "All",
+      "event": "Events",
+      "trade": "Trades",
+      "operation": "Operations",
+      "calculation": "Calculations"
+    }
+  },
   "parameters": {
     "lotSize": "Lot Size",
     "scalingMode": "Scaling Mode",

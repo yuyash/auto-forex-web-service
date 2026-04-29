@@ -42,6 +42,52 @@
     "adaptive_net": "プラグイン式メトリクスを統合し、目標ネット建玉にリバランスする米国口座対応戦略。",
     "net_grid": "単一のネット建玉をグリッド間隔で段階調整し、実約定ベースの台帳を記録する米国口座対応戦略。"
   },
+  "snapshot": {
+    "current_net_units": "現在ネット建玉",
+    "target_net_units": "目標ネット建玉",
+    "open_direction": "建玉方向",
+    "average_entry_price": "平均建値",
+    "last_grid_price": "直近グリッド価格",
+    "next_grid_price": "次回グリッド価格",
+    "net_take_profit_price": "ネット利確価格",
+    "risk_exit_price": "リスク決済価格",
+    "current_adverse_pips": "逆行幅",
+    "current_favorable_pips": "順行幅",
+    "current_unrealized_pnl": "含み損益",
+    "step": "グリッド段数",
+    "step_usage": "グリッド使用率",
+    "max_steps": "最大グリッド段数",
+    "broker_reconciliation_status": "OANDA同期",
+    "broker_reconciliation_warnings": "OANDA警告",
+    "broker_reconciliation_blockers": "OANDAブロッカー",
+    "protection_level": "保護レベル",
+    "active_cycles": "進行中サイクル",
+    "pending_cycles": "保留サイクル",
+    "completed_cycles": "完了サイクル",
+    "open_entries": "未決済エントリ",
+    "account_balance": "口座残高",
+    "account_nav": "口座NAV",
+    "last_mid": "最新仲値",
+    "lock_entered_at": "ロック開始日時",
+    "cooldown_until": "クールダウン終了",
+    "margin_ratio": "証拠金割合"
+  },
+  "data": {
+    "history": "履歴",
+    "emptyHistory": "戦略履歴はありません。",
+    "columns": {
+      "time": "時刻",
+      "source": "ソース",
+      "event": "イベント"
+    },
+    "categories": {
+      "all": "すべて",
+      "event": "イベント",
+      "trade": "取引",
+      "operation": "操作",
+      "calculation": "計算"
+    }
+  },
   "parameters": {
     "lotSize": "ロットサイズ",
     "scalingMode": "スケーリングモード",
@@ -319,7 +365,7 @@
       "show": "約定チャートを表示",
       "hide": "約定チャートを非表示",
       "toggle": "約定チャートの表示切替",
-      "averageEntry": "平均",
+      "averageEntry": "平均建値",
       "takeProfit": "利確",
       "trailingStop": "トレール",
       "lastGrid": "Grid",
