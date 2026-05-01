@@ -18,7 +18,9 @@ from apps.common.querying import (
 from apps.market.models import OandaAccounts
 from apps.market.serializers import OandaAccountsSerializer
 from apps.market.services.accounts import (
+    OANDA_ACCOUNT_SNAPSHOT_STATE_CHOICES,
     apply_cached_oanda_account_snapshot,
+    build_oanda_account_snapshot_state_filter,
     create_oanda_account,
     delete_oanda_account,
     enqueue_oanda_account_snapshot_refresh,
@@ -139,6 +141,18 @@ class OandaAccountView(APIView):
             OpenApiParameter(name="search", type=str, required=False),
             OpenApiParameter(name="created_from", type=str, required=False),
             OpenApiParameter(name="created_to", type=str, required=False),
+            OpenApiParameter(
+                name="snapshot_refresh_status",
+                type=str,
+                required=False,
+                enum=OandaAccounts.SnapshotRefreshStatus.values,
+            ),
+            OpenApiParameter(
+                name="snapshot_state",
+                type=str,
+                required=False,
+                enum=list(OANDA_ACCOUNT_SNAPSHOT_STATE_CHOICES),
+            ),
         ],
         responses={
             200: inline_serializer(
@@ -171,6 +185,18 @@ class OandaAccountView(APIView):
             accounts = accounts.filter(created_at__gte=created_from)
         if created_to:
             accounts = accounts.filter(created_at__lte=created_to)
+        snapshot_refresh_status = request.query_params.get("snapshot_refresh_status")
+        if snapshot_refresh_status:
+            if snapshot_refresh_status not in OandaAccounts.SnapshotRefreshStatus.values:
+                valid_values = ", ".join(OandaAccounts.SnapshotRefreshStatus.values)
+                raise invalid_query_param(f"snapshot_refresh_status must be one of: {valid_values}")
+            accounts = accounts.filter(snapshot_refresh_status=snapshot_refresh_status)
+        snapshot_state = request.query_params.get("snapshot_state")
+        if snapshot_state:
+            if snapshot_state not in OANDA_ACCOUNT_SNAPSHOT_STATE_CHOICES:
+                valid_values = ", ".join(OANDA_ACCOUNT_SNAPSHOT_STATE_CHOICES)
+                raise invalid_query_param(f"snapshot_state must be one of: {valid_values}")
+            accounts = accounts.filter(build_oanda_account_snapshot_state_filter(snapshot_state))
         accounts = apply_queryset_ordering(
             accounts,
             request.query_params.get("ordering"),

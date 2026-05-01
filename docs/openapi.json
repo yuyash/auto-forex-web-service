@@ -634,6 +634,32 @@
                         "schema": {
                             "type": "string"
                         }
+                    },
+                    {
+                        "in": "query",
+                        "name": "snapshot_refresh_status",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "completed",
+                                "failed",
+                                "idle",
+                                "queued",
+                                "running"
+                            ]
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "snapshot_state",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "failed",
+                                "healthy",
+                                "stale"
+                            ]
+                        }
                     }
                 ],
                 "tags": [

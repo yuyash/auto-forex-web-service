@@ -70,6 +70,97 @@ class TestOandaAccountView:
         assert account["position_mode"] == "netting"
         mock_oanda_service.assert_not_called()
 
+    def test_list_accounts_filters_by_snapshot_refresh_status(self, user: Any) -> None:
+        """Test filtering accounts by manual snapshot refresh status."""
+        failed_account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-021",
+            api_type=ApiType.PRACTICE,
+            snapshot_refresh_status=OandaAccounts.SnapshotRefreshStatus.FAILED,
+            snapshot_refresh_error="Broker unavailable.",
+        )
+        OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-022",
+            api_type=ApiType.PRACTICE,
+            snapshot_refresh_status=OandaAccounts.SnapshotRefreshStatus.COMPLETED,
+            snapshot_refreshed_at=timezone.now(),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.get(
+            "/api/market/accounts/",
+            {"snapshot_refresh_status": OandaAccounts.SnapshotRefreshStatus.FAILED},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 1
+        assert response.data["results"][0]["account_id"] == failed_account.account_id
+
+    def test_list_accounts_filters_by_snapshot_state(self, user: Any, settings: Any) -> None:
+        """Test operator snapshot state filters for failed, stale, and healthy accounts."""
+        settings.OANDA_ACCOUNT_SNAPSHOT_STALE_SECONDS = 300
+        now = timezone.now()
+        healthy_account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-023",
+            api_type=ApiType.PRACTICE,
+            snapshot_refreshed_at=now,
+        )
+        failed_account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-024",
+            api_type=ApiType.PRACTICE,
+            snapshot_refreshed_at=now,
+            snapshot_refresh_error="Broker unavailable.",
+        )
+        stale_account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-025",
+            api_type=ApiType.PRACTICE,
+            snapshot_refreshed_at=now - timedelta(seconds=301),
+        )
+        missing_snapshot_account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-026",
+            api_type=ApiType.PRACTICE,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        expected_account_ids = {
+            "failed": {failed_account.account_id},
+            "stale": {stale_account.account_id, missing_snapshot_account.account_id},
+            "healthy": {healthy_account.account_id},
+        }
+        for snapshot_state, account_ids in expected_account_ids.items():
+            response = client.get("/api/market/accounts/", {"snapshot_state": snapshot_state})
+
+            assert response.status_code == status.HTTP_200_OK
+            assert {account["account_id"] for account in response.data["results"]} == account_ids
+            assert response.data["count"] == len(account_ids)
+
+    def test_list_accounts_rejects_invalid_snapshot_filters(self, user: Any) -> None:
+        """Test invalid snapshot filter values return a query validation error."""
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.get("/api/market/accounts/", {"snapshot_state": "outdated"})
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["code"] == "invalid_query_param"
+
+        response = client.get(
+            "/api/market/accounts/",
+            {"snapshot_refresh_status": "finished"},
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["code"] == "invalid_query_param"
+
     def test_list_accounts_unauthenticated(self) -> None:
         """Test listing accounts without authentication."""
         client = APIClient()

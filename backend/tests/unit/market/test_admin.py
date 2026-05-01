@@ -7,6 +7,7 @@ from apps.market.admin import (
     CeleryTaskStatusAdmin,
     MarketEventAdmin,
     OandaAccountAdmin,
+    OandaAccountSnapshotStateFilter,
     OandaApiHealthStatusAdmin,
 )
 from apps.market.models import (
@@ -32,6 +33,10 @@ class TestOandaAccountAdmin:
         admin_instance = OandaAccountAdmin(OandaAccounts, admin.site)
         assert hasattr(admin_instance, "list_display")
         assert len(admin_instance.list_display) > 0
+        assert "snapshot_refresh_status" in admin_instance.list_display
+        assert "snapshot_refresh_status_updated_at" in admin_instance.list_display
+        assert OandaAccountSnapshotStateFilter in admin_instance.list_filter
+        assert "snapshot_refresh_task_id" in admin_instance.readonly_fields
 
 
 @pytest.mark.django_db

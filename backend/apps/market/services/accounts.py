@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.market.models import OandaAccounts
@@ -49,6 +50,14 @@ ACTIVE_SNAPSHOT_REFRESH_STATUSES = frozenset(
         OandaAccounts.SnapshotRefreshStatus.QUEUED,
         OandaAccounts.SnapshotRefreshStatus.RUNNING,
     }
+)
+OANDA_ACCOUNT_SNAPSHOT_STATE_FAILED = "failed"
+OANDA_ACCOUNT_SNAPSHOT_STATE_STALE = "stale"
+OANDA_ACCOUNT_SNAPSHOT_STATE_HEALTHY = "healthy"
+OANDA_ACCOUNT_SNAPSHOT_STATE_CHOICES = (
+    OANDA_ACCOUNT_SNAPSHOT_STATE_FAILED,
+    OANDA_ACCOUNT_SNAPSHOT_STATE_STALE,
+    OANDA_ACCOUNT_SNAPSHOT_STATE_HEALTHY,
 )
 
 
@@ -326,6 +335,32 @@ def is_oanda_account_snapshot_stale(account: OandaAccounts) -> bool:
 
     stale_before = timezone.now() - timedelta(seconds=stale_seconds)
     return account.snapshot_refreshed_at < stale_before
+
+
+def build_oanda_account_snapshot_state_filter(snapshot_state: str) -> Q:
+    """Build a queryset filter for operator-facing account snapshot states."""
+    if snapshot_state == OANDA_ACCOUNT_SNAPSHOT_STATE_FAILED:
+        return _oanda_account_snapshot_failed_query()
+    if snapshot_state == OANDA_ACCOUNT_SNAPSHOT_STATE_STALE:
+        return _oanda_account_snapshot_stale_query()
+    if snapshot_state == OANDA_ACCOUNT_SNAPSHOT_STATE_HEALTHY:
+        return ~_oanda_account_snapshot_failed_query() & ~_oanda_account_snapshot_stale_query()
+    valid_values = ", ".join(OANDA_ACCOUNT_SNAPSHOT_STATE_CHOICES)
+    raise ValueError(f"snapshot_state must be one of: {valid_values}")
+
+
+def _oanda_account_snapshot_failed_query() -> Q:
+    return Q(snapshot_refresh_status=OandaAccounts.SnapshotRefreshStatus.FAILED) | (
+        Q(snapshot_refresh_error__isnull=False) & ~Q(snapshot_refresh_error="")
+    )
+
+
+def _oanda_account_snapshot_stale_query() -> Q:
+    stale_seconds = int(getattr(settings, "OANDA_ACCOUNT_SNAPSHOT_STALE_SECONDS", 300))
+    if stale_seconds <= 0:
+        return Q(snapshot_refreshed_at__isnull=True)
+    stale_before = timezone.now() - timedelta(seconds=stale_seconds)
+    return Q(snapshot_refreshed_at__isnull=True) | Q(snapshot_refreshed_at__lt=stale_before)
 
 
 def refresh_oanda_account_snapshot(account: OandaAccounts) -> OandaAccounts:

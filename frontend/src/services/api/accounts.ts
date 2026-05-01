@@ -5,7 +5,13 @@ import type {
   BackendAccountSnapshotRefreshResponse,
 } from './contracts';
 import type { PaginatedResponse } from '../../types/common';
-import type { Account, AccountUpsertData } from '../../types/strategy';
+import type {
+  Account,
+  AccountSnapshotRefreshStatus,
+  AccountUpsertData,
+} from '../../types/strategy';
+
+export type AccountSnapshotState = 'failed' | 'stale' | 'healthy';
 
 export interface AccountListParams {
   page?: number;
@@ -14,6 +20,8 @@ export interface AccountListParams {
   ordering?: string;
   created_from?: string;
   created_to?: string;
+  snapshot_refresh_status?: AccountSnapshotRefreshStatus;
+  snapshot_state?: AccountSnapshotState;
 }
 
 interface PaginatedAccounts {
