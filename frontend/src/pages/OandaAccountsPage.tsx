@@ -33,6 +33,7 @@ import {
   VisibilityOff,
   Refresh as RefreshIcon,
   Search as SearchIcon,
+  FilterAltOff as ClearFiltersIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -58,6 +59,7 @@ import { queryKeys } from '../config/reactQuery';
 import { logger } from '../utils/logger';
 import { formatAppNumber } from '../utils/numberFormat';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import type { AccountSnapshotState } from '../services/api/accounts';
 import type { AccountSnapshotRefreshStatus } from '../types/strategy';
 
 interface AccountFormData {
@@ -101,6 +103,18 @@ interface SnapshotRefreshTaskState {
   status: AccountSnapshotRefreshStatus;
 }
 
+type SnapshotStateFilterValue = 'all' | AccountSnapshotState;
+type SnapshotRefreshStatusFilterValue = 'all' | AccountSnapshotRefreshStatus;
+
+const SNAPSHOT_STATE_FILTER_OPTIONS: readonly AccountSnapshotState[] = [
+  'failed',
+  'stale',
+  'healthy',
+];
+
+const SNAPSHOT_REFRESH_STATUS_FILTER_OPTIONS: readonly AccountSnapshotRefreshStatus[] =
+  ['idle', 'queued', 'running', 'completed', 'failed'];
+
 const snapshotRefreshStatusLabel = (
   t: TFunction,
   status: AccountSnapshotRefreshStatus
@@ -118,6 +132,16 @@ const snapshotRefreshStatusLabel = (
     return t('settings:accounts.snapshotRefreshFailed', 'Refresh failed');
   }
   return t('settings:accounts.snapshotRefreshIdle', 'Refresh idle');
+};
+
+const snapshotStateLabel = (t: TFunction, state: AccountSnapshotState) => {
+  if (state === 'failed') {
+    return t('settings:accounts.snapshotStateFailed', 'Failed');
+  }
+  if (state === 'stale') {
+    return t('settings:accounts.snapshotStateStale', 'Stale');
+  }
+  return t('settings:accounts.snapshotStateHealthy', 'Healthy');
 };
 
 function AccountCard({
@@ -348,7 +372,15 @@ export default function OandaAccountsPage() {
   const [pageSize, setPageSize] = useState(12);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('-created_at');
+  const [snapshotStateFilter, setSnapshotStateFilter] =
+    useState<SnapshotStateFilterValue>('all');
+  const [snapshotRefreshStatusFilter, setSnapshotRefreshStatusFilter] =
+    useState<SnapshotRefreshStatusFilterValue>('all');
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 300);
+  const hasActiveAccountFilters =
+    searchQuery.trim().length > 0 ||
+    snapshotStateFilter !== 'all' ||
+    snapshotRefreshStatusFilter !== 'all';
   const {
     data: accountsPage,
     isLoading: loading,
@@ -358,6 +390,12 @@ export default function OandaAccountsPage() {
     page_size: pageSize,
     search: debouncedSearchQuery || undefined,
     ordering: sortBy,
+    snapshot_state:
+      snapshotStateFilter === 'all' ? undefined : snapshotStateFilter,
+    snapshot_refresh_status:
+      snapshotRefreshStatusFilter === 'all'
+        ? undefined
+        : snapshotRefreshStatusFilter,
   });
   const { data: allAccountsForDefault } = useAccounts({ page_size: 200 });
   const accounts = accountsPage?.results ?? [];
@@ -394,6 +432,13 @@ export default function OandaAccountsPage() {
 
   const handlePageSizeChange = (event: SelectChangeEvent<string>) => {
     setPageSize(Number(event.target.value));
+    setPage(1);
+  };
+
+  const handleClearAccountFilters = () => {
+    setSearchQuery('');
+    setSnapshotStateFilter('all');
+    setSnapshotRefreshStatusFilter('all');
     setPage(1);
   };
 
@@ -618,7 +663,9 @@ export default function OandaAccountsPage() {
               gap: 2,
               gridTemplateColumns: {
                 xs: '1fr',
-                md: 'minmax(0, 1fr) 220px 160px',
+                sm: 'repeat(2, minmax(0, 1fr))',
+                md: 'repeat(3, minmax(0, 1fr))',
+                xl: 'minmax(220px, 1fr) 180px 190px 160px 130px 150px',
               },
               alignItems: 'center',
             }}
@@ -642,6 +689,66 @@ export default function OandaAccountsPage() {
                 ),
               }}
             />
+            <FormControl fullWidth>
+              <InputLabel>
+                {t('settings:accounts.snapshotStateFilter', 'Snapshot state')}
+              </InputLabel>
+              <Select
+                value={snapshotStateFilter}
+                label={t(
+                  'settings:accounts.snapshotStateFilter',
+                  'Snapshot state'
+                )}
+                onChange={(event) => {
+                  setSnapshotStateFilter(
+                    event.target.value as SnapshotStateFilterValue
+                  );
+                  setPage(1);
+                }}
+              >
+                <MenuItem value="all">
+                  {t('settings:accounts.allSnapshotStates', 'All states')}
+                </MenuItem>
+                {SNAPSHOT_STATE_FILTER_OPTIONS.map((state) => (
+                  <MenuItem key={state} value={state}>
+                    {snapshotStateLabel(t, state)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>
+                {t(
+                  'settings:accounts.snapshotRefreshStatusFilter',
+                  'Refresh status'
+                )}
+              </InputLabel>
+              <Select
+                value={snapshotRefreshStatusFilter}
+                label={t(
+                  'settings:accounts.snapshotRefreshStatusFilter',
+                  'Refresh status'
+                )}
+                onChange={(event) => {
+                  setSnapshotRefreshStatusFilter(
+                    event.target.value as SnapshotRefreshStatusFilterValue
+                  );
+                  setPage(1);
+                }}
+              >
+                <MenuItem value="all">
+                  {t(
+                    'settings:accounts.allRefreshStatuses',
+                    'All refresh statuses'
+                  )}
+                </MenuItem>
+                {SNAPSHOT_REFRESH_STATUS_FILTER_OPTIONS.map((refreshStatus) => (
+                  <MenuItem key={refreshStatus} value={refreshStatus}>
+                    {snapshotRefreshStatusLabel(t, refreshStatus)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             <FormControl fullWidth>
               <InputLabel>{t('trading:filters.sortBy', 'Sort By')}</InputLabel>
               <Select
@@ -685,6 +792,16 @@ export default function OandaAccountsPage() {
                 ))}
               </Select>
             </FormControl>
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={<ClearFiltersIcon />}
+              disabled={!hasActiveAccountFilters}
+              onClick={handleClearAccountFilters}
+              sx={{ minHeight: 56 }}
+            >
+              {t('settings:accounts.clearAccountFilters', 'Clear filters')}
+            </Button>
           </Box>
         </CardContent>
       </Card>
