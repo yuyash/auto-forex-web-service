@@ -21,6 +21,8 @@ from apps.market.services.accounts import (
     apply_cached_oanda_account_snapshot,
     create_oanda_account,
     delete_oanda_account,
+    enqueue_oanda_account_snapshot_refresh,
+    is_oanda_account_snapshot_stale,
     update_oanda_account,
 )
 from apps.trading.views.pagination import StandardPagination
@@ -75,6 +77,18 @@ class OandaAccountDetailResponseSerializer(serializers.Serializer):  # pylint: d
     snapshot_refresh_error = serializers.CharField(required=False, allow_blank=True)
 
 
+class OandaAccountSnapshotRefreshResponseSerializer(serializers.Serializer):  # pylint: disable=abstract-method
+    """Schema serializer for queued OANDA account snapshot refreshes."""
+
+    id = serializers.IntegerField()
+    account_id = serializers.CharField()
+    task_id = serializers.CharField()
+    status = serializers.CharField()
+    snapshot_refreshed_at = serializers.DateTimeField(allow_null=True)
+    snapshot_stale = serializers.BooleanField()
+    snapshot_refresh_error = serializers.CharField(allow_blank=True)
+
+
 OandaAccountUpdateRequestSerializer = inline_serializer(
     "OandaAccountUpdateRequest",
     fields={
@@ -87,6 +101,10 @@ OandaAccountUpdateRequestSerializer = inline_serializer(
         "is_default": serializers.BooleanField(required=False),
     },
 )
+
+
+def _get_owned_oanda_account(request: Request, account_id: int) -> OandaAccounts | None:
+    return OandaAccounts.objects.filter(id=account_id, user_id=request.user.id).first()
 
 
 class OandaAccountView(APIView):
@@ -223,10 +241,7 @@ class OandaAccountDetailView(APIView):
     serializer_class = OandaAccountsSerializer
 
     def get_object(self, request: Request, account_id: int) -> OandaAccounts | None:
-        try:
-            return OandaAccounts.objects.get(id=account_id, user_id=request.user.id)
-        except OandaAccounts.DoesNotExist:
-            return None
+        return _get_owned_oanda_account(request, account_id)
 
     @extend_schema(
         operation_id="market_account_detail",
@@ -335,3 +350,67 @@ class OandaAccountDetailView(APIView):
             },
         )
         return Response({"message": "Account deleted successfully."}, status=status.HTTP_200_OK)
+
+
+class OandaAccountSnapshotRefreshView(APIView):
+    """Queue a refresh for a cached OANDA account snapshot."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        operation_id="market_account_snapshot_refresh",
+        tags=["Market"],
+        request=None,
+        responses={
+            202: OandaAccountSnapshotRefreshResponseSerializer,
+            400: inline_serializer(
+                "OandaAccountSnapshotRefreshBadRequest",
+                fields={"error": serializers.CharField()},
+            ),
+            404: inline_serializer(
+                "OandaAccountSnapshotRefreshNotFound",
+                fields={"error": serializers.CharField()},
+            ),
+            503: inline_serializer(
+                "OandaAccountSnapshotRefreshUnavailable",
+                fields={"error": serializers.CharField()},
+            ),
+        },
+    )
+    def post(self, request: Request, account_id: int) -> Response:
+        account = _get_owned_oanda_account(request, account_id)
+        if account is None:
+            return Response(
+                {"error": "Account not found or you don't have permission to access it."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if not account.is_active:
+            return Response(
+                {"error": "Cannot refresh an inactive OANDA account."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            task_id = enqueue_oanda_account_snapshot_refresh(account)
+        except Exception:
+            logger.exception(
+                "Failed to queue OANDA account snapshot refresh for account %s",
+                account.account_id,
+            )
+            return Response(
+                {"error": "Failed to queue account snapshot refresh."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return Response(
+            {
+                "id": account.pk,
+                "account_id": account.account_id,
+                "task_id": task_id,
+                "status": "queued",
+                "snapshot_refreshed_at": account.snapshot_refreshed_at,
+                "snapshot_stale": is_oanda_account_snapshot_stale(account),
+                "snapshot_refresh_error": account.snapshot_refresh_error,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )

@@ -48,6 +48,17 @@ def delete_oanda_account(account: OandaAccounts) -> None:
     account.delete()
 
 
+def enqueue_oanda_account_snapshot_refresh(account: OandaAccounts) -> str:
+    """Queue an asynchronous refresh for a single OANDA account snapshot."""
+    from apps.market.tasks.accounts import refresh_oanda_account_snapshots
+
+    async_result = refresh_oanda_account_snapshots.apply_async(
+        kwargs={"account_id": account.pk},
+        queue="market",
+    )
+    return str(async_result.id or "")
+
+
 def apply_cached_oanda_account_snapshot(
     *,
     account: OandaAccounts,

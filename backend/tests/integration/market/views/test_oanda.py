@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -252,3 +252,94 @@ class TestOandaAccountDetailView:
         response = client.get(f"/api/market/accounts/{account.id}/")
 
         assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.django_db
+class TestOandaAccountSnapshotRefreshView:
+    """Test OandaAccountSnapshotRefreshView."""
+
+    @patch("apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async")
+    def test_post_queues_snapshot_refresh(self, mock_apply_async: Any, user: Any) -> None:
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-013",
+            api_type=ApiType.PRACTICE,
+            is_active=True,
+        )
+        mock_apply_async.return_value = MagicMock(id="task-123")
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.post(f"/api/market/accounts/{account.id}/refresh/")
+
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        assert response.data["id"] == account.pk
+        assert response.data["account_id"] == account.account_id
+        assert response.data["task_id"] == "task-123"
+        assert response.data["status"] == "queued"
+        assert response.data["snapshot_stale"] is True
+        mock_apply_async.assert_called_once_with(
+            kwargs={"account_id": account.pk},
+            queue="market",
+        )
+
+    @patch("apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async")
+    def test_post_rejects_inactive_account(self, mock_apply_async: Any, user: Any) -> None:
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-014",
+            api_type=ApiType.PRACTICE,
+            is_active=False,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.post(f"/api/market/accounts/{account.id}/refresh/")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "inactive" in response.data["error"].lower()
+        mock_apply_async.assert_not_called()
+
+    @patch("apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async")
+    def test_post_does_not_queue_other_users_account(
+        self, mock_apply_async: Any, user: Any, another_user: Any
+    ) -> None:
+        account = OandaAccounts.objects.create(
+            user=another_user,
+            account_id="101-001-1234567-015",
+            api_type=ApiType.PRACTICE,
+            is_active=True,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.post(f"/api/market/accounts/{account.id}/refresh/")
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        mock_apply_async.assert_not_called()
+
+    @patch(
+        "apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async",
+        side_effect=ConnectionError("broker down"),
+    )
+    def test_post_returns_unavailable_when_queueing_fails(
+        self, mock_apply_async: Any, user: Any
+    ) -> None:
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-016",
+            api_type=ApiType.PRACTICE,
+            is_active=True,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.post(f"/api/market/accounts/{account.id}/refresh/")
+
+        assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+        assert response.data["error"] == "Failed to queue account snapshot refresh."
+        mock_apply_async.assert_called_once()

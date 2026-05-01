@@ -9,6 +9,7 @@ from apps.market.services.accounts import (
     apply_cached_oanda_account_snapshot,
     create_oanda_account,
     delete_oanda_account,
+    enqueue_oanda_account_snapshot_refresh,
     is_oanda_account_snapshot_stale,
     refresh_oanda_account_snapshot,
     update_oanda_account,
@@ -43,6 +44,20 @@ class TestMarketAccountService:
         delete_oanda_account(account)
 
         account.delete.assert_called_once_with()
+
+    def test_enqueue_oanda_account_snapshot_refresh_queues_market_task(self) -> None:
+        account = MagicMock()
+        account.pk = 123
+
+        with patch(
+            "apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async"
+        ) as apply_async:
+            apply_async.return_value.id = "task-123"
+
+            task_id = enqueue_oanda_account_snapshot_refresh(account)
+
+        assert task_id == "task-123"
+        apply_async.assert_called_once_with(kwargs={"account_id": 123}, queue="market")
 
     def test_apply_cached_snapshot_marks_missing_snapshot_stale(self) -> None:
         account = MagicMock()

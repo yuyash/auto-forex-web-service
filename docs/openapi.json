@@ -805,6 +805,72 @@
                 }
             }
         },
+        "/api/market/accounts/{account_id}/refresh/": {
+            "post": {
+                "operationId": "market_account_snapshot_refresh",
+                "description": "Queue a refresh for a cached OANDA account snapshot.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "account_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Market"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OandaAccountSnapshotRefreshResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OandaAccountSnapshotRefreshBadRequest"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OandaAccountSnapshotRefreshNotFound"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OandaAccountSnapshotRefreshUnavailable"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/market/candles/": {
             "get": {
                 "operationId": "market_candles",
@@ -8020,6 +8086,77 @@
                     "next",
                     "previous",
                     "results"
+                ]
+            },
+            "OandaAccountSnapshotRefreshBadRequest": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
+                ]
+            },
+            "OandaAccountSnapshotRefreshNotFound": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
+                ]
+            },
+            "OandaAccountSnapshotRefreshResponse": {
+                "type": "object",
+                "description": "Schema serializer for queued OANDA account snapshot refreshes.",
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "account_id": {
+                        "type": "string"
+                    },
+                    "task_id": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "snapshot_refreshed_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
+                    },
+                    "snapshot_stale": {
+                        "type": "boolean"
+                    },
+                    "snapshot_refresh_error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "account_id",
+                    "id",
+                    "snapshot_refresh_error",
+                    "snapshot_refreshed_at",
+                    "snapshot_stale",
+                    "status",
+                    "task_id"
+                ]
+            },
+            "OandaAccountSnapshotRefreshUnavailable": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
                 ]
             },
             "OandaAccountUpdateRequestRequest": {

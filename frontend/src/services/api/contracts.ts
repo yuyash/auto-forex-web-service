@@ -181,6 +181,16 @@ export interface BackendAccount {
   oanda_account?: Record<string, unknown>;
 }
 
+export interface BackendAccountSnapshotRefreshResponse {
+  id: number;
+  account_id: string;
+  task_id: string;
+  status: 'queued';
+  snapshot_refreshed_at: string | null;
+  snapshot_stale: boolean;
+  snapshot_refresh_error: string;
+}
+
 export type BackendPaginatedBacktestTasks =
   PaginatedApiResponse<BackendBacktestTask>;
 export type BackendPaginatedTradingTasks =
