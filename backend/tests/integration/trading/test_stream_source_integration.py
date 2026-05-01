@@ -326,20 +326,9 @@ class TestRedisStreamTickDataSourceIter:
             fake_client = fakeredis.FakeRedis(server=server, decode_responses=True)
             mock_from_url.return_value = fake_client
 
-            # Also force the celery-always-eager branch to False so the
-            # trigger runs synchronously (more deterministic under
-            # fakeredis).  Restore in ``finally`` so we never leak the
-            # override to other tests in the session.
-            from celery import current_app
-
-            previous_task_always_eager = current_app.conf.task_always_eager
-            current_app.conf.task_always_eager = False
-            try:
-                received: list = []
-                for batch in source:
-                    received.extend(batch)
-            finally:
-                current_app.conf.task_always_eager = previous_task_always_eager
+            received: list = []
+            for batch in source:
+                received.extend(batch)
 
         assert trigger_called["count"] == 1
         assert len(received) == 1
@@ -451,6 +440,7 @@ class TestNoGroupRecovery:
             def xreadgroup(self, *args, **kwargs):
                 if not self._raised:
                     self._raised = True
+                    self._inner.xgroup_destroy(stream_key, "backtest")
                     raise redis_module.ResponseError(
                         f"NOGROUP No such key '{stream_key}' or consumer group "
                         "'backtest' in XREADGROUP with GROUP option"
@@ -473,5 +463,75 @@ class TestNoGroupRecovery:
                 received.extend(batch)
 
         # The NOGROUP was recovered and the retry reads the entry.
+        assert len(received) == 1
+        assert received[0].bid == Decimal("150.0")
+
+    def test_xreadgroup_recovers_after_publisher_finished_before_group_recreate(self):
+        """Recover queued entries when NOGROUP fires after publication.
+
+        In eager-mode e2e tests the publisher can write the tick entries
+        and EOF marker before the subscriber handles a NOGROUP response.
+        Recreating the group at ``$`` skips those already-written entries
+        and leaves the subscriber blocked forever waiting for a future EOF.
+        """
+        import redis as redis_module
+
+        server = fakeredis.FakeServer()
+        stream_key = "test:backtest:stream:nogroup-after-publish"
+
+        seed = fakeredis.FakeRedis(server=server, decode_responses=True)
+        seed.xadd(
+            stream_key,
+            {
+                "type": "tick",
+                "instrument": "USD_JPY",
+                "timestamp": "2024-01-01T00:00:00Z",
+                "bid": "150.0",
+                "ask": "150.02",
+                "mid": "150.01",
+            },
+        )
+        seed.xadd(stream_key, {"type": "eof"})
+        seed.close()
+
+        inner = fakeredis.FakeRedis(server=server, decode_responses=True)
+
+        class NoGroupOnceClient:
+            """Raise NOGROUP once while the stream already has entries."""
+
+            def __init__(self, inner_client):
+                self._inner = inner_client
+                self._raised = False
+
+            def __getattr__(self, name):
+                return getattr(self._inner, name)
+
+            def xreadgroup(self, *args, **kwargs):
+                if not self._raised:
+                    self._raised = True
+                    self._inner.xgroup_destroy(stream_key, "backtest")
+                    raise redis_module.ResponseError(
+                        f"NOGROUP No such key '{stream_key}' or consumer group "
+                        "'backtest' in XREADGROUP with GROUP option"
+                    )
+                return self._inner.xreadgroup(*args, **kwargs)
+
+        source = RedisStreamTickDataSource(
+            stream_key=stream_key,
+            batch_size=10,
+            block_ms=1,
+            read_count=10,
+            idle_timeout_reads=1,
+        )
+        source._consumer_caught_up_with_publisher = lambda: True  # type: ignore[method-assign]
+
+        with patch(
+            "apps.trading.tasks.source.redis.Redis.from_url",
+            return_value=NoGroupOnceClient(inner),
+        ):
+            received: list = []
+            for batch in source:
+                received.extend(batch)
+
         assert len(received) == 1
         assert received[0].bid == Decimal("150.0")

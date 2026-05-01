@@ -22,10 +22,15 @@ from config.settings import *  # noqa: F403
 # Test Database Configuration
 # =============================================================================
 
+PYTEST_XDIST_WORKER = os.environ.get("PYTEST_XDIST_WORKER")
+SQLITE_TEST_DB_NAME = (
+    f"test_db_{PYTEST_XDIST_WORKER}.sqlite3" if PYTEST_XDIST_WORKER else "test_db.sqlite3"
+)
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": str(BASE_DIR / "test_db.sqlite3"),  # noqa: F405
+        "NAME": str(BASE_DIR / SQLITE_TEST_DB_NAME),  # noqa: F405
     }
 }
 

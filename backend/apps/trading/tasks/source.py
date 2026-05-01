@@ -469,20 +469,14 @@ class RedisStreamTickDataSource(TickDataSource):
         # responsible for creating a fresh consumer group via XGROUP CREATE
         # MKSTREAM before its first ``XADD`` (see
         # ``BacktestTickPublisherRunner.run``), so the subscriber does not
-        # need to do any cleanup of its own.  In
-        # Celery eager mode (used by some tests) ``apply_async`` runs
-        # synchronously, so run the trigger in a background thread to
-        # avoid deadlocking.
+        # need to do any cleanup of its own.  Unlike the legacy pub/sub
+        # source, Redis Stream entries persist until consumed; eager-mode
+        # tests can run the publisher synchronously without losing ticks.
+        # This also avoids a second SQLite connection trying to write from
+        # a background thread while the test transaction is open.
         if self.trigger_publisher:
             logger.info(f"Triggering publisher for stream: {self.stream_key}")
-            from celery import current_app
-
-            if getattr(current_app.conf, "task_always_eager", False):
-                import threading
-
-                threading.Thread(target=self.trigger_publisher, daemon=True).start()
-            else:
-                self.trigger_publisher()
+            self.trigger_publisher()
 
         # The publisher creates the consumer group; but if the subscriber
         # is racing ahead (eager-mode tests) or running stand-alone (unit
@@ -543,17 +537,13 @@ class RedisStreamTickDataSource(TickDataSource):
                 except redis.ResponseError as exc:
                     # NOGROUP means the publisher has not yet created
                     # the consumer group, or a concurrent run destroyed
-                    # it (e.g., the publisher just called
-                    # ``XGROUP DESTROY`` to reset the group in the
-                    # eager-mode tests).  Recreate the group at the
-                    # stream tip (``$``) instead of ``0`` — we never
-                    # want to pull in entries that existed before the
-                    # current run, since the publisher is the only
-                    # source of ticks for this execution and it begins
-                    # writing from a clean state.  Using ``0`` here
-                    # was how simulated time previously jumped across
-                    # stale entries left over from an earlier
-                    # execution on the same task id.
+                    # it (e.g. the publisher just called
+                    # ``XGROUP DESTROY`` to reset the group in
+                    # eager-mode tests).  Recreate the group at ``0``:
+                    # the stream key is execution-scoped for normal
+                    # runs, and starting at ``$`` here can skip ticks
+                    # and the EOF marker if the eager-mode publisher
+                    # already finished before this recovery path runs.
                     if "NOGROUP" in str(exc):
                         logger.info(
                             "RedisStreamTickDataSource: NOGROUP on %s, "
@@ -561,7 +551,7 @@ class RedisStreamTickDataSource(TickDataSource):
                             self.stream_key,
                             self.consumer_group,
                         )
-                        self._ensure_consumer_group(from_start=False)
+                        self._ensure_consumer_group(from_start=True)
                         continue
                     raise
                 except (redis.ConnectionError, ConnectionError) as exc:

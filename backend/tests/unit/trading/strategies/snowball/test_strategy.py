@@ -1050,6 +1050,9 @@ class TestSnowballLifecycle:
         state = DummyState()
         result = s.on_start(state=state)
         assert any(ev.event_type == EventType.STRATEGY_STARTED for ev in result.events)
+        ss = SnowballStrategyState.from_strategy_state(result.state.strategy_state)
+        assert ss.cycles == []
+        assert result.state.strategy_state["cycles"] == []
 
     def test_on_stop(self):
         s = _strategy()
