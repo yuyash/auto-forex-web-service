@@ -87,6 +87,17 @@ export const accountsApi = {
     );
   },
 
+  getSnapshotRefreshStatus: async (
+    id: number,
+    taskId: string
+  ): Promise<BackendAccountSnapshotRefreshResponse> => {
+    return withRetry(() =>
+      api.get<BackendAccountSnapshotRefreshResponse>(
+        `/api/market/accounts/${id}/refresh/${taskId}/`
+      )
+    );
+  },
+
   create: async (data: AccountUpsertData) => {
     return toAccount(
       await withRetry(() =>

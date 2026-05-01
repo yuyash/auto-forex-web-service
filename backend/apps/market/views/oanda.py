@@ -75,10 +75,12 @@ class OandaAccountDetailResponseSerializer(serializers.Serializer):  # pylint: d
     snapshot_refreshed_at = serializers.DateTimeField(required=False, allow_null=True)
     snapshot_stale = serializers.BooleanField(required=False)
     snapshot_refresh_error = serializers.CharField(required=False, allow_blank=True)
+    snapshot_refresh_task_id = serializers.CharField(required=False, allow_blank=True)
+    snapshot_refresh_status = serializers.CharField(required=False)
 
 
 class OandaAccountSnapshotRefreshResponseSerializer(serializers.Serializer):  # pylint: disable=abstract-method
-    """Schema serializer for queued OANDA account snapshot refreshes."""
+    """Schema serializer for OANDA account snapshot refresh task status."""
 
     id = serializers.IntegerField()
     account_id = serializers.CharField()
@@ -407,10 +409,48 @@ class OandaAccountSnapshotRefreshView(APIView):
                 "id": account.pk,
                 "account_id": account.account_id,
                 "task_id": task_id,
-                "status": "queued",
+                "status": account.snapshot_refresh_status,
                 "snapshot_refreshed_at": account.snapshot_refreshed_at,
                 "snapshot_stale": is_oanda_account_snapshot_stale(account),
                 "snapshot_refresh_error": account.snapshot_refresh_error,
             },
             status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class OandaAccountSnapshotRefreshStatusView(APIView):
+    """Return the status for the latest cached OANDA account snapshot refresh."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        operation_id="market_account_snapshot_refresh_status",
+        tags=["Market"],
+        responses={
+            200: OandaAccountSnapshotRefreshResponseSerializer,
+            404: inline_serializer(
+                "OandaAccountSnapshotRefreshStatusNotFound",
+                fields={"error": serializers.CharField()},
+            ),
+        },
+    )
+    def get(self, request: Request, account_id: int, task_id: str) -> Response:
+        account = _get_owned_oanda_account(request, account_id)
+        if account is None or account.snapshot_refresh_task_id != task_id:
+            return Response(
+                {"error": "Account refresh task not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            {
+                "id": account.pk,
+                "account_id": account.account_id,
+                "task_id": account.snapshot_refresh_task_id,
+                "status": account.snapshot_refresh_status,
+                "snapshot_refreshed_at": account.snapshot_refreshed_at,
+                "snapshot_stale": is_oanda_account_snapshot_stale(account),
+                "snapshot_refresh_error": account.snapshot_refresh_error,
+            },
+            status=status.HTTP_200_OK,
         )

@@ -871,6 +871,60 @@
                 }
             }
         },
+        "/api/market/accounts/{account_id}/refresh/{task_id}/": {
+            "get": {
+                "operationId": "market_account_snapshot_refresh_status",
+                "description": "Return the status for the latest cached OANDA account snapshot refresh.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "account_id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "task_id",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "Market"
+                ],
+                "security": [
+                    {
+                        "JWTAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OandaAccountSnapshotRefreshResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OandaAccountSnapshotRefreshStatusNotFound"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/market/candles/": {
             "get": {
                 "operationId": "market_candles",
@@ -8046,6 +8100,12 @@
                     },
                     "snapshot_refresh_error": {
                         "type": "string"
+                    },
+                    "snapshot_refresh_task_id": {
+                        "type": "string"
+                    },
+                    "snapshot_refresh_status": {
+                        "type": "string"
                     }
                 },
                 "required": [
@@ -8112,7 +8172,7 @@
             },
             "OandaAccountSnapshotRefreshResponse": {
                 "type": "object",
-                "description": "Schema serializer for queued OANDA account snapshot refreshes.",
+                "description": "Schema serializer for OANDA account snapshot refresh task status.",
                 "properties": {
                     "id": {
                         "type": "integer"
@@ -8146,6 +8206,17 @@
                     "snapshot_stale",
                     "status",
                     "task_id"
+                ]
+            },
+            "OandaAccountSnapshotRefreshStatusNotFound": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "error"
                 ]
             },
             "OandaAccountSnapshotRefreshUnavailable": {
@@ -8293,6 +8364,20 @@
                         "readOnly": true,
                         "description": "Last safe error message from refreshing the OANDA account snapshot"
                     },
+                    "snapshot_refresh_task_id": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Latest manual OANDA account snapshot refresh Celery task ID"
+                    },
+                    "snapshot_refresh_status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/SnapshotRefreshStatusEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "Latest manual OANDA account snapshot refresh task status\n\n* `idle` - Idle\n* `queued` - Queued\n* `running` - Running\n* `completed` - Completed\n* `failed` - Failed"
+                    },
                     "is_active": {
                         "type": "boolean",
                         "description": "Whether the account is active"
@@ -8327,6 +8412,8 @@
                     "open_trade_count",
                     "pending_order_count",
                     "snapshot_refresh_error",
+                    "snapshot_refresh_status",
+                    "snapshot_refresh_task_id",
                     "snapshot_refreshed_at",
                     "unrealized_pnl",
                     "updated_at"
@@ -9751,6 +9838,17 @@
                 "required": [
                     "message"
                 ]
+            },
+            "SnapshotRefreshStatusEnum": {
+                "enum": [
+                    "idle",
+                    "queued",
+                    "running",
+                    "completed",
+                    "failed"
+                ],
+                "type": "string",
+                "description": "* `idle` - Idle\n* `queued` - Queued\n* `running` - Running\n* `completed` - Completed\n* `failed` - Failed"
             },
             "StatusEnum": {
                 "enum": [

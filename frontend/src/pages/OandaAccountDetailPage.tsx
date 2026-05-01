@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Alert,
   Box,
@@ -34,7 +34,12 @@ import {
 } from '@mui/icons-material';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useAccount } from '../hooks/useAccounts';
+import type { TFunction } from 'i18next';
+import {
+  isAccountSnapshotRefreshActive,
+  useAccount,
+  useAccountSnapshotRefreshStatus,
+} from '../hooks/useAccounts';
 import { useRefreshAccountSnapshot } from '../hooks/useAccountMutations';
 import { useToast } from '../components/common/useToast';
 import { Breadcrumbs, PageContainer } from '../components/common';
@@ -58,6 +63,7 @@ import { useSupportedInstruments } from '../hooks/useMarketConfig';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatAppNumber } from '../utils/numberFormat';
 import { formatDateTimeInTimezone } from '../utils/timezone';
+import type { AccountSnapshotRefreshStatus } from '../types/strategy';
 
 const DEFAULT_CURRENCY = 'USD';
 
@@ -133,6 +139,25 @@ const fmtTs = (ts: string | null): string => {
     includeSeconds: true,
     includeTimezone: true,
   });
+};
+
+const snapshotRefreshStatusLabel = (
+  t: TFunction,
+  status: AccountSnapshotRefreshStatus
+) => {
+  if (status === 'queued') {
+    return t('settings:accounts.snapshotRefreshQueued', 'Refresh queued');
+  }
+  if (status === 'running') {
+    return t('settings:accounts.snapshotRefreshRunning', 'Refreshing');
+  }
+  if (status === 'completed') {
+    return t('settings:accounts.snapshotRefreshCompleted', 'Refresh complete');
+  }
+  if (status === 'failed') {
+    return t('settings:accounts.snapshotRefreshFailed', 'Refresh failed');
+  }
+  return t('settings:accounts.snapshotRefreshIdle', 'Refresh idle');
 };
 
 type SortOrder = 'asc' | 'desc';
@@ -1002,6 +1027,9 @@ export default function OandaAccountDetailPage() {
   const params = useParams();
   const queryClient = useQueryClient();
   const [rawDataOpen, setRawDataOpen] = useState(false);
+  const [snapshotRefreshTaskId, setSnapshotRefreshTaskId] = useState<
+    string | null
+  >(null);
 
   const containerSx = useMemo(() => ({ mt: 4, mb: 4 }), []);
 
@@ -1017,6 +1045,28 @@ export default function OandaAccountDetailPage() {
     error: queryError,
   } = useAccount(accountId ?? 0, { enabled: accountId !== null });
   const refreshSnapshot = useRefreshAccountSnapshot();
+  const activeAccountSnapshotTaskId = isAccountSnapshotRefreshActive(
+    account?.snapshot_refresh_status
+  )
+    ? account?.snapshot_refresh_task_id
+    : undefined;
+  const trackedSnapshotRefreshTaskId =
+    snapshotRefreshTaskId ?? activeAccountSnapshotTaskId ?? null;
+  const snapshotRefreshStatus = useAccountSnapshotRefreshStatus(
+    accountId ?? 0,
+    trackedSnapshotRefreshTaskId,
+    {
+      enabled: accountId !== null && Boolean(trackedSnapshotRefreshTaskId),
+    }
+  );
+  const trackedSnapshotRefreshStatus =
+    snapshotRefreshStatus.data?.status ??
+    (trackedSnapshotRefreshTaskId
+      ? account?.snapshot_refresh_status
+      : undefined);
+  const isSnapshotRefreshInFlight =
+    refreshSnapshot.isLoading ||
+    isAccountSnapshotRefreshActive(trackedSnapshotRefreshStatus);
 
   const { data: marketStatus } = useQuery({
     queryKey: ['market-status'],
@@ -1044,10 +1094,21 @@ export default function OandaAccountDetailPage() {
     }
   };
 
+  useEffect(() => {
+    const status = snapshotRefreshStatus.data?.status;
+    if (!status || isAccountSnapshotRefreshActive(status)) return;
+
+    queryClient.invalidateQueries({
+      queryKey: ['accounts'],
+      refetchType: 'active',
+    });
+  }, [queryClient, snapshotRefreshStatus.data?.status]);
+
   const handleRefreshSnapshot = async () => {
     if (!account) return;
     try {
-      await refreshSnapshot.mutate(account.id);
+      const result = await refreshSnapshot.mutate(account.id);
+      setSnapshotRefreshTaskId(result.task_id);
       showSuccess(
         t('settings:messages.snapshotRefreshQueued', 'Snapshot refresh queued')
       );
@@ -1127,26 +1188,31 @@ export default function OandaAccountDetailPage() {
         )}
         <Tooltip
           title={
-            account.is_active
-              ? t('settings:accounts.refreshSnapshot', 'Refresh snapshot')
-              : t(
-                  'settings:accounts.inactiveRefreshDisabled',
-                  'Inactive accounts cannot be refreshed'
+            isSnapshotRefreshInFlight
+              ? snapshotRefreshStatusLabel(
+                  t,
+                  trackedSnapshotRefreshStatus ?? 'queued'
                 )
+              : account.is_active
+                ? t('settings:accounts.refreshSnapshot', 'Refresh snapshot')
+                : t(
+                    'settings:accounts.inactiveRefreshDisabled',
+                    'Inactive accounts cannot be refreshed'
+                  )
           }
         >
           <span>
             <Button
               variant="outlined"
               startIcon={
-                refreshSnapshot.isLoading ? (
+                isSnapshotRefreshInFlight ? (
                   <CircularProgress size={18} />
                 ) : (
                   <RefreshIcon />
                 )
               }
               onClick={handleRefreshSnapshot}
-              disabled={!account.is_active || refreshSnapshot.isLoading}
+              disabled={!account.is_active || isSnapshotRefreshInFlight}
             >
               {t('settings:accounts.refreshSnapshot', 'Refresh snapshot')}
             </Button>
@@ -1187,6 +1253,17 @@ export default function OandaAccountDetailPage() {
               <Chip
                 label="Default"
                 color="primary"
+                variant="outlined"
+                size="small"
+              />
+            )}
+            {isAccountSnapshotRefreshActive(trackedSnapshotRefreshStatus) && (
+              <Chip
+                label={snapshotRefreshStatusLabel(
+                  t,
+                  trackedSnapshotRefreshStatus
+                )}
+                color="info"
                 variant="outlined"
                 size="small"
               />

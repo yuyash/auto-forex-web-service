@@ -6,6 +6,7 @@ from collections.abc import MutableMapping
 from datetime import timedelta
 from logging import getLogger
 from typing import Any
+from uuid import uuid4
 
 from django.conf import settings
 from django.utils import timezone
@@ -33,6 +34,14 @@ SNAPSHOT_UPDATE_FIELDS = [
 ]
 
 
+SNAPSHOT_REFRESH_STATUS_UPDATE_FIELDS = [
+    "snapshot_refresh_task_id",
+    "snapshot_refresh_status",
+    "snapshot_refresh_error",
+    "updated_at",
+]
+
+
 def create_oanda_account(serializer: OandaAccountsSerializer) -> OandaAccounts:
     """Persist a new OANDA account from a validated serializer."""
     return serializer.save()
@@ -52,11 +61,90 @@ def enqueue_oanda_account_snapshot_refresh(account: OandaAccounts) -> str:
     """Queue an asynchronous refresh for a single OANDA account snapshot."""
     from apps.market.tasks.accounts import refresh_oanda_account_snapshots
 
-    async_result = refresh_oanda_account_snapshots.apply_async(
-        kwargs={"account_id": account.pk},
-        queue="market",
+    task_id = str(uuid4())
+    mark_oanda_account_snapshot_refresh_queued(account, task_id)
+    try:
+        refresh_oanda_account_snapshots.apply_async(
+            kwargs={"account_id": account.pk},
+            queue="market",
+            task_id=task_id,
+        )
+    except Exception:
+        account.snapshot_refresh_status = OandaAccounts.SnapshotRefreshStatus.FAILED
+        account.snapshot_refresh_error = "Failed to queue account snapshot refresh."
+        account.save(
+            update_fields=[
+                "snapshot_refresh_status",
+                "snapshot_refresh_error",
+                "updated_at",
+            ]
+        )
+        raise
+    return task_id
+
+
+def mark_oanda_account_snapshot_refresh_queued(
+    account: OandaAccounts,
+    task_id: str,
+) -> None:
+    """Persist that a manual account snapshot refresh has been queued."""
+    account.snapshot_refresh_task_id = task_id
+    account.snapshot_refresh_status = OandaAccounts.SnapshotRefreshStatus.QUEUED
+    account.snapshot_refresh_error = ""
+    account.save(update_fields=SNAPSHOT_REFRESH_STATUS_UPDATE_FIELDS)
+
+
+def mark_oanda_account_snapshot_refresh_running(
+    account: OandaAccounts,
+    task_id: str,
+) -> None:
+    """Persist that a manual account snapshot refresh has started."""
+    _mark_oanda_account_snapshot_refresh_status(
+        account=account,
+        task_id=task_id,
+        refresh_status=OandaAccounts.SnapshotRefreshStatus.RUNNING,
     )
-    return str(async_result.id or "")
+
+
+def mark_oanda_account_snapshot_refresh_completed(
+    account: OandaAccounts,
+    task_id: str,
+) -> None:
+    """Persist that a manual account snapshot refresh finished successfully."""
+    _mark_oanda_account_snapshot_refresh_status(
+        account=account,
+        task_id=task_id,
+        refresh_status=OandaAccounts.SnapshotRefreshStatus.COMPLETED,
+    )
+
+
+def mark_oanda_account_snapshot_refresh_failed(
+    account: OandaAccounts,
+    task_id: str,
+) -> None:
+    """Persist that a manual account snapshot refresh finished unsuccessfully."""
+    _mark_oanda_account_snapshot_refresh_status(
+        account=account,
+        task_id=task_id,
+        refresh_status=OandaAccounts.SnapshotRefreshStatus.FAILED,
+    )
+
+
+def _mark_oanda_account_snapshot_refresh_status(
+    *,
+    account: OandaAccounts,
+    task_id: str,
+    refresh_status: OandaAccounts.SnapshotRefreshStatus,
+) -> None:
+    if task_id and account.snapshot_refresh_task_id and account.snapshot_refresh_task_id != task_id:
+        return
+
+    update_fields = ["snapshot_refresh_status", "updated_at"]
+    if task_id and not account.snapshot_refresh_task_id:
+        account.snapshot_refresh_task_id = task_id
+        update_fields.append("snapshot_refresh_task_id")
+    account.snapshot_refresh_status = refresh_status
+    account.save(update_fields=update_fields)
 
 
 def apply_cached_oanda_account_snapshot(

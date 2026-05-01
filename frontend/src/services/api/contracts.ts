@@ -176,16 +176,25 @@ export interface BackendAccount {
   snapshot_refreshed_at?: string | null;
   snapshot_stale?: boolean;
   snapshot_refresh_error?: string;
+  snapshot_refresh_task_id?: string;
+  snapshot_refresh_status?: BackendAccountSnapshotRefreshStatus;
   hedging_enabled?: boolean;
   position_mode?: 'hedging' | 'netting';
   oanda_account?: Record<string, unknown>;
 }
 
+export type BackendAccountSnapshotRefreshStatus =
+  | 'idle'
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'failed';
+
 export interface BackendAccountSnapshotRefreshResponse {
   id: number;
   account_id: string;
   task_id: string;
-  status: 'queued';
+  status: BackendAccountSnapshotRefreshStatus;
   snapshot_refreshed_at: string | null;
   snapshot_stale: boolean;
   snapshot_refresh_error: string;

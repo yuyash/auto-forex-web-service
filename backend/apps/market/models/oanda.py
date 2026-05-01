@@ -16,6 +16,13 @@ class OandaAccounts(models.Model):
     OANDA trading account with encrypted API token.
     """
 
+    class SnapshotRefreshStatus(models.TextChoices):
+        IDLE = "idle", "Idle"
+        QUEUED = "queued", "Queued"
+        RUNNING = "running", "Running"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+
     user = models.ForeignKey(
         "accounts.User",
         on_delete=models.CASCADE,
@@ -104,6 +111,20 @@ class OandaAccounts(models.Model):
         blank=True,
         default="",
         help_text="Last safe error message from refreshing the OANDA account snapshot",
+    )
+    snapshot_refresh_task_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Latest manual OANDA account snapshot refresh Celery task ID",
+    )
+    snapshot_refresh_status = models.CharField(
+        max_length=20,
+        choices=SnapshotRefreshStatus.choices,
+        default=SnapshotRefreshStatus.IDLE,
+        db_index=True,
+        help_text="Latest manual OANDA account snapshot refresh task status",
     )
     is_active = models.BooleanField(
         default=True,

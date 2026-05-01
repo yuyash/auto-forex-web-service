@@ -9,6 +9,7 @@ from apps.market.views.instruments import InstrumentDetailView, SupportedInstrum
 from apps.market.views.market import MarketStatusView
 from apps.market.views.oanda import (
     OandaAccountDetailView,
+    OandaAccountSnapshotRefreshStatusView,
     OandaAccountSnapshotRefreshView,
     OandaAccountView,
 )
@@ -21,6 +22,7 @@ __all__: List[str] = [
     "InstrumentDetailView",
     "MarketStatusView",
     "OandaAccountDetailView",
+    "OandaAccountSnapshotRefreshStatusView",
     "OandaAccountSnapshotRefreshView",
     "OandaAccountView",
     "OandaApiHealthView",

@@ -276,13 +276,17 @@ class TestOandaAccountSnapshotRefreshView:
         assert response.status_code == status.HTTP_202_ACCEPTED
         assert response.data["id"] == account.pk
         assert response.data["account_id"] == account.account_id
-        assert response.data["task_id"] == "task-123"
+        assert response.data["task_id"]
         assert response.data["status"] == "queued"
         assert response.data["snapshot_stale"] is True
         mock_apply_async.assert_called_once_with(
             kwargs={"account_id": account.pk},
             queue="market",
+            task_id=response.data["task_id"],
         )
+        account.refresh_from_db()
+        assert account.snapshot_refresh_task_id == response.data["task_id"]
+        assert account.snapshot_refresh_status == OandaAccounts.SnapshotRefreshStatus.QUEUED
 
     @patch("apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async")
     def test_post_rejects_inactive_account(self, mock_apply_async: Any, user: Any) -> None:
@@ -343,3 +347,43 @@ class TestOandaAccountSnapshotRefreshView:
         assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
         assert response.data["error"] == "Failed to queue account snapshot refresh."
         mock_apply_async.assert_called_once()
+        account.refresh_from_db()
+        assert account.snapshot_refresh_status == OandaAccounts.SnapshotRefreshStatus.FAILED
+
+    def test_get_refresh_status_for_owned_account_task(self, user: Any) -> None:
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-017",
+            api_type=ApiType.PRACTICE,
+            is_active=True,
+            snapshot_refresh_task_id="task-123",
+            snapshot_refresh_status=OandaAccounts.SnapshotRefreshStatus.RUNNING,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.get(f"/api/market/accounts/{account.id}/refresh/task-123/")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["id"] == account.pk
+        assert response.data["account_id"] == account.account_id
+        assert response.data["task_id"] == "task-123"
+        assert response.data["status"] == "running"
+
+    def test_get_refresh_status_rejects_unknown_task(self, user: Any) -> None:
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-018",
+            api_type=ApiType.PRACTICE,
+            is_active=True,
+            snapshot_refresh_task_id="task-123",
+            snapshot_refresh_status=OandaAccounts.SnapshotRefreshStatus.RUNNING,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.get(f"/api/market/accounts/{account.id}/refresh/task-456/")
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND

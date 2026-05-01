@@ -49,15 +49,31 @@ class TestMarketAccountService:
         account = MagicMock()
         account.pk = 123
 
-        with patch(
-            "apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async"
-        ) as apply_async:
-            apply_async.return_value.id = "task-123"
-
+        with (
+            patch(
+                "apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async"
+            ) as apply_async,
+            patch("apps.market.services.accounts.uuid4", return_value="task-123"),
+        ):
             task_id = enqueue_oanda_account_snapshot_refresh(account)
 
         assert task_id == "task-123"
-        apply_async.assert_called_once_with(kwargs={"account_id": 123}, queue="market")
+        assert account.snapshot_refresh_task_id == "task-123"
+        assert account.snapshot_refresh_status == "queued"
+        assert account.snapshot_refresh_error == ""
+        account.save.assert_called_once_with(
+            update_fields=[
+                "snapshot_refresh_task_id",
+                "snapshot_refresh_status",
+                "snapshot_refresh_error",
+                "updated_at",
+            ]
+        )
+        apply_async.assert_called_once_with(
+            kwargs={"account_id": 123},
+            queue="market",
+            task_id="task-123",
+        )
 
     def test_apply_cached_snapshot_marks_missing_snapshot_stale(self) -> None:
         account = MagicMock()

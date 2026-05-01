@@ -177,6 +177,8 @@ export interface Account {
   snapshot_refreshed_at?: string | null;
   snapshot_stale?: boolean;
   snapshot_refresh_error?: string;
+  snapshot_refresh_task_id?: string;
+  snapshot_refresh_status?: AccountSnapshotRefreshStatus;
   hedging_enabled?: boolean;
   position_mode?: 'hedging' | 'netting';
   oanda_account?: Record<string, unknown>;
@@ -184,6 +186,13 @@ export interface Account {
   is_default?: boolean;
   jurisdiction?: string;
 }
+
+export type AccountSnapshotRefreshStatus =
+  | 'idle'
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'failed';
 
 export interface AccountUpsertData {
   account_id: string;

@@ -39,6 +39,8 @@ class OandaAccountsSerializer(serializers.ModelSerializer):
             "hedging_enabled",
             "snapshot_refreshed_at",
             "snapshot_refresh_error",
+            "snapshot_refresh_task_id",
+            "snapshot_refresh_status",
             "is_active",
             "is_default",
             "created_at",
@@ -57,6 +59,8 @@ class OandaAccountsSerializer(serializers.ModelSerializer):
             "hedging_enabled",
             "snapshot_refreshed_at",
             "snapshot_refresh_error",
+            "snapshot_refresh_task_id",
+            "snapshot_refresh_status",
             "created_at",
             "updated_at",
         ]

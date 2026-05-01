@@ -103,6 +103,29 @@ describe('API service contracts', () => {
     );
   });
 
+  it('loads account snapshot refresh status from the task endpoint', async () => {
+    mockApi.get.mockResolvedValue({
+      id: 1,
+      account_id: '101-001-1234567-001',
+      task_id: 'task-123',
+      status: 'running',
+      snapshot_refreshed_at: null,
+      snapshot_stale: true,
+      snapshot_refresh_error: '',
+    });
+
+    await expect(
+      accountsApi.getSnapshotRefreshStatus(1, 'task-123')
+    ).resolves.toMatchObject({
+      task_id: 'task-123',
+      status: 'running',
+    });
+
+    expect(mockApi.get).toHaveBeenCalledWith(
+      '/api/market/accounts/1/refresh/task-123/'
+    );
+  });
+
   it('sends stop mode for trading task stop requests', async () => {
     mockApi.post.mockResolvedValue({
       message: 'Task stop requested',

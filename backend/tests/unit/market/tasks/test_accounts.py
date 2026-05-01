@@ -47,3 +47,40 @@ class TestRefreshOandaAccountSnapshots:
             result = refresh_oanda_account_snapshots()
 
         assert result == {"refreshed": 0, "failed": 1}
+
+    def test_single_account_refresh_marks_completed(self, user) -> None:
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-004",
+            api_type=ApiType.PRACTICE,
+            is_active=True,
+            snapshot_refresh_task_id="task-123",
+            snapshot_refresh_status=OandaAccounts.SnapshotRefreshStatus.QUEUED,
+        )
+
+        with patch("apps.market.tasks.accounts.refresh_oanda_account_snapshot"):
+            result = refresh_oanda_account_snapshots(account_id=account.pk)
+
+        account.refresh_from_db()
+        assert result == {"refreshed": 1, "failed": 0}
+        assert account.snapshot_refresh_status == OandaAccounts.SnapshotRefreshStatus.COMPLETED
+
+    def test_single_account_refresh_marks_failed(self, user) -> None:
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-005",
+            api_type=ApiType.PRACTICE,
+            is_active=True,
+            snapshot_refresh_task_id="task-123",
+            snapshot_refresh_status=OandaAccounts.SnapshotRefreshStatus.QUEUED,
+        )
+
+        with patch(
+            "apps.market.tasks.accounts.refresh_oanda_account_snapshot",
+            side_effect=RuntimeError("fail"),
+        ):
+            result = refresh_oanda_account_snapshots(account_id=account.pk)
+
+        account.refresh_from_db()
+        assert result == {"refreshed": 0, "failed": 1}
+        assert account.snapshot_refresh_status == OandaAccounts.SnapshotRefreshStatus.FAILED
