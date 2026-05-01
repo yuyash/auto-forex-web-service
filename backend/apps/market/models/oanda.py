@@ -162,6 +162,14 @@ class OandaAccounts(models.Model):
             models.Index(fields=["account_id"]),
             models.Index(fields=["user", "is_default"]),
             models.Index(fields=["created_at"]),
+            models.Index(
+                fields=["user", "snapshot_refresh_status"],
+                name="oanda_user_refresh_stat_idx",
+            ),
+            models.Index(
+                fields=["user", "snapshot_refreshed_at"],
+                name="oanda_user_snap_ref_idx",
+            ),
         ]
         ordering = ["-created_at"]
 
