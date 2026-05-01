@@ -37,8 +37,6 @@ const TEST_USER: User = {
   language: 'en',
 };
 
-const TEST_TOKEN = 'access-token-abc';
-
 /** Helper component that exposes auth context values for assertions. */
 function AuthConsumer({
   onRender,
@@ -59,10 +57,7 @@ function AuthConsumer({
           ? String(auth.systemSettings.login_enabled)
           : 'null'}
       </span>
-      <button
-        data-testid="login-btn"
-        onClick={() => auth.login(TEST_TOKEN, TEST_USER)}
-      >
+      <button data-testid="login-btn" onClick={() => auth.login(TEST_USER)}>
         Login
       </button>
       <button data-testid="logout-btn" onClick={() => void auth.logout()}>
@@ -202,7 +197,7 @@ describe('AuthContext', () => {
   it('restores auth state by refreshing on mount', async () => {
     localStorage.setItem('user', JSON.stringify(TEST_USER));
     authApiMock.refresh.mockResolvedValueOnce({
-      token: TEST_TOKEN,
+      authenticated: true,
       user: TEST_USER,
     });
 
@@ -236,7 +231,7 @@ describe('AuthContext', () => {
         new ApiError('/api/accounts/auth/refresh', 401, 'Unauthorized', null)
       )
       .mockResolvedValueOnce({
-        token: 'new-token',
+        authenticated: true,
         user: newUser,
       });
 
