@@ -46,7 +46,7 @@ import {
   useRefreshAccountSnapshot,
   useUpdateAccount,
 } from '../hooks/useAccountMutations';
-import { useAccounts, useAccountPage, useAccount } from '../hooks/useAccounts';
+import { useAccounts, useAccountPage } from '../hooks/useAccounts';
 import { useQueryClient } from '@tanstack/react-query';
 import { logger } from '../utils/logger';
 import { formatAppNumber } from '../utils/numberFormat';
@@ -88,8 +88,7 @@ const formatBalance = (
   }
 };
 
-// Card that fetches live data for each account
-function LiveAccountCard({
+function AccountCard({
   account,
   onEdit,
   onDelete,
@@ -103,10 +102,7 @@ function LiveAccountCard({
   isRefreshingSnapshot: boolean;
 }) {
   const { t } = useTranslation(['settings', 'common']);
-  const { data: liveAccount, isLoading } = useAccount(account.id, {
-    enabled: true,
-  });
-  const a = liveAccount ?? account;
+  const a = account;
 
   return (
     <Card>
@@ -126,7 +122,6 @@ function LiveAccountCard({
               <Typography variant="h6" component="div" noWrap>
                 {a.account_id}
               </Typography>
-              {isLoading && <CircularProgress size={14} />}
             </Box>
             <Chip
               label={
@@ -626,7 +621,7 @@ export default function OandaAccountsPage() {
           >
             {accounts.map((account) => (
               <Box key={account.id}>
-                <LiveAccountCard
+                <AccountCard
                   account={account}
                   onEdit={handleEditClick}
                   onDelete={handleDeleteClick}
