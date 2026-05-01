@@ -1,5 +1,6 @@
 """Unit tests for OANDA account views."""
 
+from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -278,6 +279,7 @@ class TestOandaAccountSnapshotRefreshView:
         assert response.data["account_id"] == account.account_id
         assert response.data["task_id"]
         assert response.data["status"] == "queued"
+        assert response.data["snapshot_refresh_status_updated_at"] is not None
         assert response.data["snapshot_stale"] is True
         mock_apply_async.assert_called_once_with(
             kwargs={"account_id": account.pk},
@@ -287,9 +289,11 @@ class TestOandaAccountSnapshotRefreshView:
         account.refresh_from_db()
         assert account.snapshot_refresh_task_id == response.data["task_id"]
         assert account.snapshot_refresh_status == OandaAccounts.SnapshotRefreshStatus.QUEUED
+        assert account.snapshot_refresh_status_updated_at is not None
 
     @patch("apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async")
     def test_post_reuses_active_snapshot_refresh(self, mock_apply_async: Any, user: Any) -> None:
+        status_updated_at = timezone.now()
         account = OandaAccounts.objects.create(
             user=user,
             account_id="101-001-1234567-019",
@@ -297,6 +301,7 @@ class TestOandaAccountSnapshotRefreshView:
             is_active=True,
             snapshot_refresh_task_id="task-active",
             snapshot_refresh_status=OandaAccounts.SnapshotRefreshStatus.RUNNING,
+            snapshot_refresh_status_updated_at=status_updated_at,
         )
 
         client = APIClient()
@@ -308,7 +313,40 @@ class TestOandaAccountSnapshotRefreshView:
         assert response.data["id"] == account.pk
         assert response.data["task_id"] == "task-active"
         assert response.data["status"] == "running"
+        assert response.data["snapshot_refresh_status_updated_at"] is not None
         mock_apply_async.assert_not_called()
+
+    @patch("apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async")
+    def test_post_replaces_expired_snapshot_refresh(
+        self,
+        mock_apply_async: Any,
+        user: Any,
+        settings: Any,
+    ) -> None:
+        settings.OANDA_ACCOUNT_SNAPSHOT_REFRESH_ACTIVE_TTL_SECONDS = 60
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-020",
+            api_type=ApiType.PRACTICE,
+            is_active=True,
+            snapshot_refresh_task_id="task-expired",
+            snapshot_refresh_status=OandaAccounts.SnapshotRefreshStatus.RUNNING,
+            snapshot_refresh_status_updated_at=timezone.now() - timedelta(seconds=61),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=user)
+
+        response = client.post(f"/api/market/accounts/{account.id}/refresh/")
+
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        assert response.data["task_id"] != "task-expired"
+        assert response.data["status"] == "queued"
+        mock_apply_async.assert_called_once_with(
+            kwargs={"account_id": account.pk},
+            queue="market",
+            task_id=response.data["task_id"],
+        )
 
     @patch("apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async")
     def test_post_rejects_inactive_account(self, mock_apply_async: Any, user: Any) -> None:

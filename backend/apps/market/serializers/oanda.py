@@ -41,6 +41,7 @@ class OandaAccountsSerializer(serializers.ModelSerializer):
             "snapshot_refresh_error",
             "snapshot_refresh_task_id",
             "snapshot_refresh_status",
+            "snapshot_refresh_status_updated_at",
             "is_active",
             "is_default",
             "created_at",
@@ -61,6 +62,7 @@ class OandaAccountsSerializer(serializers.ModelSerializer):
             "snapshot_refresh_error",
             "snapshot_refresh_task_id",
             "snapshot_refresh_status",
+            "snapshot_refresh_status_updated_at",
             "created_at",
             "updated_at",
         ]

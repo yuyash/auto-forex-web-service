@@ -38,6 +38,7 @@ SNAPSHOT_UPDATE_FIELDS = [
 SNAPSHOT_REFRESH_STATUS_UPDATE_FIELDS = [
     "snapshot_refresh_task_id",
     "snapshot_refresh_status",
+    "snapshot_refresh_status_updated_at",
     "snapshot_refresh_error",
     "updated_at",
 ]
@@ -88,10 +89,12 @@ def enqueue_oanda_account_snapshot_refresh(account: OandaAccounts) -> str:
         )
     except Exception:
         account.snapshot_refresh_status = OandaAccounts.SnapshotRefreshStatus.FAILED
+        account.snapshot_refresh_status_updated_at = timezone.now()
         account.snapshot_refresh_error = "Failed to queue account snapshot refresh."
         account.save(
             update_fields=[
                 "snapshot_refresh_status",
+                "snapshot_refresh_status_updated_at",
                 "snapshot_refresh_error",
                 "updated_at",
             ]
@@ -105,7 +108,24 @@ def has_active_oanda_account_snapshot_refresh(account: OandaAccounts) -> bool:
     return (
         bool(account.snapshot_refresh_task_id)
         and account.snapshot_refresh_status in ACTIVE_SNAPSHOT_REFRESH_STATUSES
+        and not is_oanda_account_snapshot_refresh_expired(account)
     )
+
+
+def is_oanda_account_snapshot_refresh_expired(account: OandaAccounts) -> bool:
+    """Return whether an active manual refresh record is old enough to replace."""
+    if account.snapshot_refresh_status not in ACTIVE_SNAPSHOT_REFRESH_STATUSES:
+        return False
+
+    ttl_seconds = int(getattr(settings, "OANDA_ACCOUNT_SNAPSHOT_REFRESH_ACTIVE_TTL_SECONDS", 900))
+    if ttl_seconds <= 0:
+        return False
+
+    updated_at = account.snapshot_refresh_status_updated_at
+    if updated_at is None:
+        return True
+
+    return updated_at < timezone.now() - timedelta(seconds=ttl_seconds)
 
 
 def _copy_snapshot_refresh_state(
@@ -115,6 +135,7 @@ def _copy_snapshot_refresh_state(
 ) -> None:
     target.snapshot_refresh_task_id = source.snapshot_refresh_task_id
     target.snapshot_refresh_status = source.snapshot_refresh_status
+    target.snapshot_refresh_status_updated_at = source.snapshot_refresh_status_updated_at
     target.snapshot_refresh_error = source.snapshot_refresh_error
 
 
@@ -125,6 +146,7 @@ def mark_oanda_account_snapshot_refresh_queued(
     """Persist that a manual account snapshot refresh has been queued."""
     account.snapshot_refresh_task_id = task_id
     account.snapshot_refresh_status = OandaAccounts.SnapshotRefreshStatus.QUEUED
+    account.snapshot_refresh_status_updated_at = timezone.now()
     account.snapshot_refresh_error = ""
     account.save(update_fields=SNAPSHOT_REFRESH_STATUS_UPDATE_FIELDS)
 
@@ -174,11 +196,16 @@ def _mark_oanda_account_snapshot_refresh_status(
     if task_id and account.snapshot_refresh_task_id and account.snapshot_refresh_task_id != task_id:
         return
 
-    update_fields = ["snapshot_refresh_status", "updated_at"]
+    update_fields = [
+        "snapshot_refresh_status",
+        "snapshot_refresh_status_updated_at",
+        "updated_at",
+    ]
     if task_id and not account.snapshot_refresh_task_id:
         account.snapshot_refresh_task_id = task_id
         update_fields.append("snapshot_refresh_task_id")
     account.snapshot_refresh_status = refresh_status
+    account.snapshot_refresh_status_updated_at = timezone.now()
     account.save(update_fields=update_fields)
 
 

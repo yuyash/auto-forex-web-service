@@ -77,6 +77,10 @@ class OandaAccountDetailResponseSerializer(serializers.Serializer):  # pylint: d
     snapshot_refresh_error = serializers.CharField(required=False, allow_blank=True)
     snapshot_refresh_task_id = serializers.CharField(required=False, allow_blank=True)
     snapshot_refresh_status = serializers.CharField(required=False)
+    snapshot_refresh_status_updated_at = serializers.DateTimeField(
+        required=False,
+        allow_null=True,
+    )
 
 
 class OandaAccountSnapshotRefreshResponseSerializer(serializers.Serializer):  # pylint: disable=abstract-method
@@ -89,6 +93,7 @@ class OandaAccountSnapshotRefreshResponseSerializer(serializers.Serializer):  # 
     snapshot_refreshed_at = serializers.DateTimeField(allow_null=True)
     snapshot_stale = serializers.BooleanField()
     snapshot_refresh_error = serializers.CharField(allow_blank=True)
+    snapshot_refresh_status_updated_at = serializers.DateTimeField(allow_null=True)
 
 
 OandaAccountUpdateRequestSerializer = inline_serializer(
@@ -413,6 +418,7 @@ class OandaAccountSnapshotRefreshView(APIView):
                 "snapshot_refreshed_at": account.snapshot_refreshed_at,
                 "snapshot_stale": is_oanda_account_snapshot_stale(account),
                 "snapshot_refresh_error": account.snapshot_refresh_error,
+                "snapshot_refresh_status_updated_at": account.snapshot_refresh_status_updated_at,
             },
             status=status.HTTP_202_ACCEPTED,
         )
@@ -451,6 +457,7 @@ class OandaAccountSnapshotRefreshStatusView(APIView):
                 "snapshot_refreshed_at": account.snapshot_refreshed_at,
                 "snapshot_stale": is_oanda_account_snapshot_stale(account),
                 "snapshot_refresh_error": account.snapshot_refresh_error,
+                "snapshot_refresh_status_updated_at": account.snapshot_refresh_status_updated_at,
             },
             status=status.HTTP_200_OK,
         )

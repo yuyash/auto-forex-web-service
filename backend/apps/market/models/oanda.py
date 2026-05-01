@@ -126,6 +126,11 @@ class OandaAccounts(models.Model):
         db_index=True,
         help_text="Latest manual OANDA account snapshot refresh task status",
     )
+    snapshot_refresh_status_updated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when the manual OANDA account snapshot refresh status changed",
+    )
     is_active = models.BooleanField(
         default=True,
         help_text="Whether the account is active",

@@ -179,6 +179,7 @@ export interface Account {
   snapshot_refresh_error?: string;
   snapshot_refresh_task_id?: string;
   snapshot_refresh_status?: AccountSnapshotRefreshStatus;
+  snapshot_refresh_status_updated_at?: string | null;
   hedging_enabled?: boolean;
   position_mode?: 'hedging' | 'netting';
   oanda_account?: Record<string, unknown>;

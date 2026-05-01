@@ -178,6 +178,7 @@ export interface BackendAccount {
   snapshot_refresh_error?: string;
   snapshot_refresh_task_id?: string;
   snapshot_refresh_status?: BackendAccountSnapshotRefreshStatus;
+  snapshot_refresh_status_updated_at?: string | null;
   hedging_enabled?: boolean;
   position_mode?: 'hedging' | 'netting';
   oanda_account?: Record<string, unknown>;
@@ -198,6 +199,7 @@ export interface BackendAccountSnapshotRefreshResponse {
   snapshot_refreshed_at: string | null;
   snapshot_stale: boolean;
   snapshot_refresh_error: string;
+  snapshot_refresh_status_updated_at: string | null;
 }
 
 export type BackendPaginatedBacktestTasks =

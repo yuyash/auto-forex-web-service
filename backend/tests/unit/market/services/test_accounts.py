@@ -12,6 +12,7 @@ from apps.market.services.accounts import (
     create_oanda_account,
     delete_oanda_account,
     enqueue_oanda_account_snapshot_refresh,
+    is_oanda_account_snapshot_refresh_expired,
     is_oanda_account_snapshot_stale,
     refresh_oanda_account_snapshot,
     update_oanda_account,
@@ -67,6 +68,7 @@ class TestMarketAccountService:
         assert task_id == "task-123"
         assert account.snapshot_refresh_task_id == "task-123"
         assert account.snapshot_refresh_status == OandaAccounts.SnapshotRefreshStatus.QUEUED
+        assert account.snapshot_refresh_status_updated_at is not None
         assert account.snapshot_refresh_error == ""
         apply_async.assert_called_once_with(
             kwargs={"account_id": account.pk},
@@ -76,9 +78,11 @@ class TestMarketAccountService:
         account.refresh_from_db()
         assert account.snapshot_refresh_task_id == "task-123"
         assert account.snapshot_refresh_status == OandaAccounts.SnapshotRefreshStatus.QUEUED
+        assert account.snapshot_refresh_status_updated_at is not None
 
     @pytest.mark.django_db
     def test_enqueue_oanda_account_snapshot_refresh_reuses_active_task(self, user) -> None:
+        status_updated_at = timezone.now()
         account = OandaAccounts.objects.create(
             user=user,
             account_id="101-001-1234567-102",
@@ -86,6 +90,7 @@ class TestMarketAccountService:
             is_active=True,
             snapshot_refresh_task_id="task-active",
             snapshot_refresh_status=OandaAccounts.SnapshotRefreshStatus.RUNNING,
+            snapshot_refresh_status_updated_at=status_updated_at,
         )
 
         with patch(
@@ -98,6 +103,53 @@ class TestMarketAccountService:
         account.refresh_from_db()
         assert account.snapshot_refresh_task_id == "task-active"
         assert account.snapshot_refresh_status == OandaAccounts.SnapshotRefreshStatus.RUNNING
+        assert account.snapshot_refresh_status_updated_at == status_updated_at
+
+    @pytest.mark.django_db
+    def test_enqueue_oanda_account_snapshot_refresh_replaces_expired_active_task(
+        self,
+        user,
+        settings,
+    ) -> None:
+        settings.OANDA_ACCOUNT_SNAPSHOT_REFRESH_ACTIVE_TTL_SECONDS = 60
+        expired_at = timezone.now() - timedelta(seconds=61)
+        account = OandaAccounts.objects.create(
+            user=user,
+            account_id="101-001-1234567-103",
+            api_type=ApiType.PRACTICE,
+            is_active=True,
+            snapshot_refresh_task_id="task-expired",
+            snapshot_refresh_status=OandaAccounts.SnapshotRefreshStatus.RUNNING,
+            snapshot_refresh_status_updated_at=expired_at,
+        )
+
+        with (
+            patch(
+                "apps.market.tasks.accounts.refresh_oanda_account_snapshots.apply_async"
+            ) as apply_async,
+            patch("apps.market.services.accounts.uuid4", return_value="task-new"),
+        ):
+            task_id = enqueue_oanda_account_snapshot_refresh(account)
+
+        assert task_id == "task-new"
+        apply_async.assert_called_once_with(
+            kwargs={"account_id": account.pk},
+            queue="market",
+            task_id="task-new",
+        )
+        account.refresh_from_db()
+        assert account.snapshot_refresh_task_id == "task-new"
+        assert account.snapshot_refresh_status == OandaAccounts.SnapshotRefreshStatus.QUEUED
+        assert account.snapshot_refresh_status_updated_at is not None
+        assert account.snapshot_refresh_status_updated_at > expired_at
+
+    def test_active_snapshot_refresh_without_timestamp_is_expired(self, settings) -> None:
+        settings.OANDA_ACCOUNT_SNAPSHOT_REFRESH_ACTIVE_TTL_SECONDS = 60
+        account = MagicMock()
+        account.snapshot_refresh_status = OandaAccounts.SnapshotRefreshStatus.QUEUED
+        account.snapshot_refresh_status_updated_at = None
+
+        assert is_oanda_account_snapshot_refresh_expired(account) is True
 
     def test_apply_cached_snapshot_marks_missing_snapshot_stale(self) -> None:
         account = MagicMock()

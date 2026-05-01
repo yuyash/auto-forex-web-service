@@ -8106,6 +8106,11 @@
                     },
                     "snapshot_refresh_status": {
                         "type": "string"
+                    },
+                    "snapshot_refresh_status_updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
                     }
                 },
                 "required": [
@@ -8196,12 +8201,18 @@
                     },
                     "snapshot_refresh_error": {
                         "type": "string"
+                    },
+                    "snapshot_refresh_status_updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "nullable": true
                     }
                 },
                 "required": [
                     "account_id",
                     "id",
                     "snapshot_refresh_error",
+                    "snapshot_refresh_status_updated_at",
                     "snapshot_refreshed_at",
                     "snapshot_stale",
                     "status",
@@ -8378,6 +8389,13 @@
                         "readOnly": true,
                         "description": "Latest manual OANDA account snapshot refresh task status\n\n* `idle` - Idle\n* `queued` - Queued\n* `running` - Running\n* `completed` - Completed\n* `failed` - Failed"
                     },
+                    "snapshot_refresh_status_updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Timestamp when the manual OANDA account snapshot refresh status changed"
+                    },
                     "is_active": {
                         "type": "boolean",
                         "description": "Whether the account is active"
@@ -8413,6 +8431,7 @@
                     "pending_order_count",
                     "snapshot_refresh_error",
                     "snapshot_refresh_status",
+                    "snapshot_refresh_status_updated_at",
                     "snapshot_refresh_task_id",
                     "snapshot_refreshed_at",
                     "unrealized_pnl",
